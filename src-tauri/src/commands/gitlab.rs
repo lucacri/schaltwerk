@@ -1,12 +1,16 @@
 use crate::get_project_manager;
-use log::error;
+use log::{error, info, warn};
 use schaltwerk::domains::git::gitlab_cli::{
-    format_cli_error, CreateMrParams, GitlabCli, GitlabCliError, GitlabIssueDetails,
-    GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary, GitlabNote, GitlabPipelineDetails,
+    format_cli_error, CreateMrParams, CreateSessionMrOptions, GitlabCli, GitlabCliError,
+    GitlabIssueDetails, GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary, GitlabNote,
+    GitlabPipelineDetails, MrCommitMode,
 };
+use schaltwerk::domains::git::service::rename_branch;
+use schaltwerk::infrastructure::events::{SchaltEvent, emit_event};
 use schaltwerk::schaltwerk_core::db_project_config::{
     GitlabSource, ProjectConfigMethods, ProjectGitlabConfig,
 };
+use schaltwerk::shared::session_metadata_gateway::SessionMetadataGateway;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
@@ -496,6 +500,171 @@ pub async fn gitlab_comment_on_mr(
     .map_err(|err| {
         error!("GitLab MR comment failed: {err}");
         format_cli_error(err)
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateGitlabSessionMrArgs {
+    pub session_name: String,
+    pub mr_title: String,
+    pub mr_body: Option<String>,
+    pub base_branch: Option<String>,
+    pub mr_branch_name: Option<String>,
+    pub commit_message: Option<String>,
+    pub source_project: String,
+    pub source_hostname: Option<String>,
+    pub squash: bool,
+    pub mode: String,
+    #[serde(default)]
+    pub cancel_after_mr: bool,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitlabSessionMrResultPayload {
+    pub url: String,
+    pub source_branch: String,
+}
+
+#[tauri::command]
+pub async fn gitlab_create_session_mr(
+    app: AppHandle,
+    args: CreateGitlabSessionMrArgs,
+) -> Result<GitlabSessionMrResultPayload, String> {
+    use crate::commands::schaltwerk_core::schaltwerk_core_cancel_session;
+
+    let cli = GitlabCli::new();
+    if let Err(err) = cli.ensure_installed() {
+        return Err(format_cli_error(err));
+    }
+
+    let project_manager = get_project_manager().await;
+    let project = project_manager
+        .current_project()
+        .await
+        .map_err(|e| format!("No active project: {e}"))?;
+    let project_path = project.path.clone();
+
+    let (session_worktree, session_branch, parent_branch, session_state) = {
+        let core = project.schaltwerk_core.read().await;
+        let session = core
+            .session_manager()
+            .get_session(&args.session_name)
+            .map_err(|e| format!("Session not found: {e}"))?;
+        (
+            session.worktree_path.clone(),
+            session.branch.clone(),
+            session.parent_branch.clone(),
+            session.session_state,
+        )
+    };
+
+    if session_state == schaltwerk::domains::sessions::SessionState::Spec {
+        return Err("Cannot create MR for a spec session. Start the session first.".to_string());
+    }
+
+    let base_branch = args
+        .base_branch
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            let trimmed = parent_branch.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
+        .unwrap_or_else(|| "main".to_string());
+
+    let mr_branch_name = args
+        .mr_branch_name
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| session_branch.clone());
+
+    let mr_mode = match args.mode.as_str() {
+        "squash" => MrCommitMode::Squash,
+        _ => MrCommitMode::Reapply,
+    };
+
+    info!(
+        "Creating GitLab MR for session '{}' (branch='{}', base='{}', head='{}')",
+        args.session_name, session_branch, base_branch, mr_branch_name
+    );
+
+    let mr_result = cli
+        .create_session_mr(CreateSessionMrOptions {
+            repo_path: &project_path,
+            session_worktree_path: &session_worktree,
+            session_slug: &args.session_name,
+            session_branch: &session_branch,
+            base_branch: &base_branch,
+            mr_branch_name: &mr_branch_name,
+            title: &args.mr_title,
+            description: args.mr_body.as_deref(),
+            gitlab_project: &args.source_project,
+            hostname: args.source_hostname.as_deref(),
+            squash: args.squash,
+            mode: mr_mode,
+            commit_message: args.commit_message.as_deref(),
+        })
+        .map_err(|err| {
+            error!("GitLab MR creation failed: {err}");
+            format_cli_error(err)
+        })?;
+
+    if mr_result.source_branch != session_branch {
+        info!(
+            "MR branch '{}' differs from session branch '{}', updating session",
+            mr_result.source_branch, session_branch
+        );
+
+        if let Err(e) = rename_branch(&session_worktree, &session_branch, &mr_result.source_branch)
+        {
+            warn!(
+                "Failed to rename local branch from '{}' to '{}': {e}",
+                session_branch, mr_result.source_branch
+            );
+        }
+
+        {
+            let core = project.schaltwerk_core.read().await;
+            let session = core
+                .session_manager()
+                .get_session(&args.session_name)
+                .map_err(|e| format!("Failed to get session for branch update: {e}"))?;
+
+            if let Err(e) = SessionMetadataGateway::new(core.database())
+                .update_session_branch(&session.id, &mr_result.source_branch)
+            {
+                warn!(
+                    "Failed to update session branch in database to '{}': {e}",
+                    mr_result.source_branch
+                );
+            }
+        }
+
+        emit_event(&app, SchaltEvent::SessionsRefreshed, &project_path)
+            .map_err(|e| format!("Failed to emit sessions refresh: {e}"))?;
+    }
+
+    if args.cancel_after_mr
+        && let Err(err) =
+            schaltwerk_core_cancel_session(app.clone(), args.session_name.clone()).await
+    {
+        error!(
+            "MR created but auto-cancel failed for session '{}': {err}",
+            args.session_name
+        );
+    }
+
+    Ok(GitlabSessionMrResultPayload {
+        url: mr_result.url,
+        source_branch: mr_result.source_branch,
     })
 }
 

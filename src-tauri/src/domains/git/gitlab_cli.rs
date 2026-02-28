@@ -7,6 +7,7 @@ use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 
 use super::github_cli::{CommandRunner, SystemCommandRunner};
+use super::operations::has_uncommitted_changes;
 
 #[derive(Debug)]
 pub enum GitlabCliError {
@@ -171,6 +172,37 @@ pub struct CreateMrParams<'a> {
     pub source_branch: &'a str,
     pub target_branch: &'a str,
     pub hostname: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MrCommitMode {
+    Squash,
+    Reapply,
+}
+
+impl MrCommitMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            MrCommitMode::Squash => "squash",
+            MrCommitMode::Reapply => "reapply",
+        }
+    }
+}
+
+pub struct CreateSessionMrOptions<'a> {
+    pub repo_path: &'a Path,
+    pub session_worktree_path: &'a Path,
+    pub session_slug: &'a str,
+    pub session_branch: &'a str,
+    pub base_branch: &'a str,
+    pub mr_branch_name: &'a str,
+    pub title: &'a str,
+    pub description: Option<&'a str>,
+    pub gitlab_project: &'a str,
+    pub hostname: Option<&'a str>,
+    pub squash: bool,
+    pub mode: MrCommitMode,
+    pub commit_message: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -832,6 +864,184 @@ impl<R: CommandRunner> GitlabCli<R> {
         info!("[GitlabCli] Comment added to MR {iid}");
         Ok(())
     }
+
+    pub fn create_session_mr(
+        &self,
+        opts: CreateSessionMrOptions<'_>,
+    ) -> Result<GitlabMrResult, GitlabCliError> {
+        info!(
+            "[GitlabCli] Creating session MR for '{}' (mode={})",
+            opts.session_slug,
+            opts.mode.as_str()
+        );
+
+        ensure_git_remote(&self.runner, opts.repo_path)?;
+
+        let commit_msg = opts
+            .commit_message
+            .map(|m| m.trim())
+            .filter(|m| !m.is_empty())
+            .unwrap_or(opts.title.trim());
+
+        match opts.mode {
+            MrCommitMode::Squash => {
+                if commit_msg.is_empty() {
+                    return Err(GitlabCliError::InvalidInput(
+                        "Commit message is required for squash mode.".to_string(),
+                    ));
+                }
+
+                let merge_base =
+                    resolve_merge_base(&self.runner, opts.session_worktree_path, opts.base_branch)?;
+
+                run_git_cmd(
+                    &self.runner,
+                    opts.session_worktree_path,
+                    &["reset".to_string(), "--soft".to_string(), merge_base],
+                    &[],
+                )?;
+
+                run_git_cmd(
+                    &self.runner,
+                    opts.session_worktree_path,
+                    &["add".to_string(), "-A".to_string()],
+                    &[],
+                )?;
+
+                run_git_cmd(
+                    &self.runner,
+                    opts.session_worktree_path,
+                    &[
+                        "commit".to_string(),
+                        "--no-verify".to_string(),
+                        "-m".to_string(),
+                        commit_msg.to_string(),
+                    ],
+                    &[],
+                )?;
+            }
+            MrCommitMode::Reapply => {
+                let has_uncommitted = has_uncommitted_changes(opts.session_worktree_path)
+                    .map_err(GitlabCliError::Git)?;
+
+                if has_uncommitted {
+                    if commit_msg.is_empty() {
+                        return Err(GitlabCliError::InvalidInput(
+                            "Commit message is required when committing uncommitted changes."
+                                .to_string(),
+                        ));
+                    }
+
+                    run_git_cmd(
+                        &self.runner,
+                        opts.session_worktree_path,
+                        &["add".to_string(), "-A".to_string()],
+                        &[],
+                    )?;
+
+                    run_git_cmd(
+                        &self.runner,
+                        opts.session_worktree_path,
+                        &[
+                            "commit".to_string(),
+                            "--no-verify".to_string(),
+                            "-m".to_string(),
+                            commit_msg.to_string(),
+                        ],
+                        &[],
+                    )?;
+                }
+            }
+        }
+
+        if let Err(push_err) =
+            push_head_to_remote_branch(&self.runner, opts.session_worktree_path, opts.mr_branch_name)
+        {
+            let err_str = push_err.to_string();
+            if err_str.contains("non-fast-forward") || err_str.contains("[rejected]") {
+                return Err(GitlabCliError::InvalidInput(format!(
+                    "[rejected] Branch '{}' already exists on remote with different commits (non-fast-forward).",
+                    opts.mr_branch_name
+                )));
+            }
+            return Err(push_err);
+        }
+
+        if let Err(e) =
+            set_upstream_tracking(&self.runner, opts.session_worktree_path, opts.mr_branch_name)
+        {
+            warn!(
+                "[GitlabCli] Failed to set upstream tracking for '{}': {e}",
+                opts.mr_branch_name
+            );
+        }
+
+        let mut args_vec = vec![
+            "mr".to_string(),
+            "create".to_string(),
+            "-t".to_string(),
+            opts.title.to_string(),
+            "-b".to_string(),
+            opts.base_branch.to_string(),
+            "-s".to_string(),
+            opts.mr_branch_name.to_string(),
+            "-R".to_string(),
+            opts.gitlab_project.to_string(),
+            "--yes".to_string(),
+            "--no-editor".to_string(),
+        ];
+
+        if let Some(desc) = opts.description {
+            args_vec.push("-d".to_string());
+            args_vec.push(desc.to_string());
+        }
+
+        if opts.squash {
+            let squash_msg = opts
+                .commit_message
+                .unwrap_or(opts.title)
+                .trim();
+            if !squash_msg.is_empty() {
+                args_vec.push("--squash-message-body".to_string());
+                args_vec.push(squash_msg.to_string());
+            }
+        }
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = opts.hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(
+                &self.program,
+                &arg_refs,
+                Some(opts.session_worktree_path),
+                &env_vec,
+            )
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        let combined = format!("{}\n{}", output.stdout, output.stderr);
+        let url = extract_mr_url(&combined).ok_or_else(|| {
+            GitlabCliError::InvalidOutput(
+                "Could not extract merge request URL from glab output.".to_string(),
+            )
+        })?;
+
+        info!("[GitlabCli] Session MR created: {url}");
+
+        Ok(GitlabMrResult {
+            source_branch: opts.mr_branch_name.to_string(),
+            url,
+        })
+    }
 }
 
 fn extract_mr_url(text: &str) -> Option<String> {
@@ -842,6 +1052,107 @@ fn extract_mr_url(text: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn run_git_cmd<R: CommandRunner>(
+    runner: &R,
+    cwd: &Path,
+    args: &[String],
+    extra_env: &[(&str, &str)],
+) -> Result<super::github_cli::CommandOutput, GitlabCliError> {
+    let env_base = [("GIT_TERMINAL_PROMPT", "0")];
+    let mut env = Vec::with_capacity(env_base.len() + extra_env.len());
+    env.extend_from_slice(&env_base);
+    env.extend_from_slice(extra_env);
+
+    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let output = runner
+        .run("git", &arg_refs, Some(cwd), &env)
+        .map_err(map_runner_error)?;
+    if output.success() {
+        return Ok(output);
+    }
+    Err(command_failure("git", args, output))
+}
+
+fn resolve_merge_base<R: CommandRunner>(
+    runner: &R,
+    worktree_path: &Path,
+    base_branch: &str,
+) -> Result<String, GitlabCliError> {
+    let origin_ref = format!("origin/{base_branch}");
+    let attempt_origin_args = vec![
+        "merge-base".to_string(),
+        "HEAD".to_string(),
+        origin_ref,
+    ];
+    if let Ok(output) = run_git_cmd(runner, worktree_path, &attempt_origin_args, &[]) {
+        let mb = output.stdout.trim().to_string();
+        if !mb.is_empty() {
+            return Ok(mb);
+        }
+    }
+
+    let attempt_local_args = vec![
+        "merge-base".to_string(),
+        "HEAD".to_string(),
+        base_branch.to_string(),
+    ];
+    let output = run_git_cmd(runner, worktree_path, &attempt_local_args, &[])?;
+    let mb = output.stdout.trim().to_string();
+    if mb.is_empty() {
+        return Err(GitlabCliError::InvalidOutput(format!(
+            "Could not compute merge-base for base branch '{base_branch}'"
+        )));
+    }
+    Ok(mb)
+}
+
+fn push_head_to_remote_branch<R: CommandRunner>(
+    runner: &R,
+    worktree_path: &Path,
+    remote_branch: &str,
+) -> Result<(), GitlabCliError> {
+    let push_refspec = format!("HEAD:refs/heads/{remote_branch}");
+    let args = vec![
+        "push".to_string(),
+        "--no-verify".to_string(),
+        "origin".to_string(),
+        push_refspec,
+    ];
+    run_git_cmd(runner, worktree_path, &args, &[])?;
+    debug!("Pushed HEAD to remote branch '{remote_branch}'");
+    Ok(())
+}
+
+fn set_upstream_tracking<R: CommandRunner>(
+    runner: &R,
+    worktree_path: &Path,
+    branch_name: &str,
+) -> Result<(), GitlabCliError> {
+    let upstream = format!("origin/{branch_name}");
+    let args = vec![
+        "branch".to_string(),
+        "--set-upstream-to".to_string(),
+        upstream,
+    ];
+    run_git_cmd(runner, worktree_path, &args, &[])?;
+    debug!("Set upstream tracking to origin/{branch_name}");
+    Ok(())
+}
+
+fn ensure_git_remote<R: CommandRunner>(
+    runner: &R,
+    project_path: &Path,
+) -> Result<(), GitlabCliError> {
+    let args = vec!["remote".to_string()];
+    let output = run_git_cmd(runner, project_path, &args, &[])?;
+    let has_remote = output.stdout.lines().any(|line| !line.trim().is_empty());
+    if has_remote {
+        Ok(())
+    } else {
+        Err(GitlabCliError::NoGitRemote)
+    }
 }
 
 pub fn map_runner_error(err: io::Error) -> GitlabCliError {
@@ -1857,5 +2168,314 @@ mod tests {
         );
 
         assert!(matches!(result, Err(GitlabCliError::CommandFailed { .. })));
+    }
+
+    fn ok_output(stdout: &str) -> io::Result<CommandOutput> {
+        Ok(CommandOutput {
+            status: Some(0),
+            stdout: stdout.to_string(),
+            stderr: String::new(),
+        })
+    }
+
+    fn fail_output(stderr: &str) -> io::Result<CommandOutput> {
+        Ok(CommandOutput {
+            status: Some(1),
+            stdout: String::new(),
+            stderr: stderr.to_string(),
+        })
+    }
+
+    fn create_temp_git_repo() -> tempfile::TempDir {
+        use git2::{Repository, Signature};
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo = Repository::init(temp_dir.path()).unwrap();
+        let sig = Signature::now("Test", "test@test.com").unwrap();
+        let tree_id = {
+            let mut index = repo.index().unwrap();
+            index.write_tree().unwrap()
+        };
+        let tree = repo.find_tree(tree_id).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])
+            .unwrap();
+        temp_dir
+    }
+
+    #[test]
+    fn create_session_mr_reapply_mode() {
+        let temp_dir = create_temp_git_repo();
+        let runner = MockRunner::default();
+        // 1. ensure_git_remote: git remote
+        runner.push_response(ok_output("origin\n"));
+        // 2. push HEAD to remote
+        runner.push_response(ok_output(""));
+        // 3. set upstream tracking
+        runner.push_response(ok_output(""));
+        // 4. glab mr create
+        runner.push_response(ok_output(
+            "Creating merge request...\nhttps://gitlab.com/group/project/-/merge_requests/42\n",
+        ));
+
+        let cli = GitlabCli::with_runner(runner);
+        let result = cli
+            .create_session_mr(CreateSessionMrOptions {
+                repo_path: temp_dir.path(),
+                session_worktree_path: temp_dir.path(),
+                session_slug: "test-session",
+                session_branch: "schaltwerk/test-session",
+                base_branch: "main",
+                mr_branch_name: "schaltwerk/test-session",
+                title: "Test MR",
+                description: None,
+                gitlab_project: "group/project",
+                hostname: None,
+                squash: false,
+                mode: MrCommitMode::Reapply,
+                commit_message: None,
+            })
+            .unwrap();
+
+        assert_eq!(
+            result.url,
+            "https://gitlab.com/group/project/-/merge_requests/42"
+        );
+        assert_eq!(result.source_branch, "schaltwerk/test-session");
+    }
+
+    #[test]
+    fn create_session_mr_squash_mode() {
+        let runner = MockRunner::default();
+        // 1. ensure_git_remote: git remote
+        runner.push_response(ok_output("origin\n"));
+        // 2. resolve merge-base (origin/main)
+        runner.push_response(ok_output("abc123\n"));
+        // 3. git reset --soft
+        runner.push_response(ok_output(""));
+        // 4. git add -A
+        runner.push_response(ok_output(""));
+        // 5. git commit
+        runner.push_response(ok_output(""));
+        // 6. push HEAD to remote
+        runner.push_response(ok_output(""));
+        // 7. set upstream tracking
+        runner.push_response(ok_output(""));
+        // 8. glab mr create
+        runner.push_response(ok_output(
+            "https://gitlab.com/group/project/-/merge_requests/55\n",
+        ));
+
+        let cli = GitlabCli::with_runner(runner);
+        let result = cli
+            .create_session_mr(CreateSessionMrOptions {
+                repo_path: Path::new("/tmp/repo"),
+                session_worktree_path: Path::new("/tmp/worktree"),
+                session_slug: "test-session",
+                session_branch: "schaltwerk/test-session",
+                base_branch: "main",
+                mr_branch_name: "schaltwerk/test-session",
+                title: "Test MR",
+                description: None,
+                gitlab_project: "group/project",
+                hostname: None,
+                squash: false,
+                mode: MrCommitMode::Squash,
+                commit_message: Some("squash commit"),
+            })
+            .unwrap();
+
+        assert_eq!(
+            result.url,
+            "https://gitlab.com/group/project/-/merge_requests/55"
+        );
+    }
+
+    #[test]
+    fn create_session_mr_with_description() {
+        let temp_dir = create_temp_git_repo();
+        let runner = MockRunner::default();
+        // 1. ensure_git_remote
+        runner.push_response(ok_output("origin\n"));
+        // 2. push HEAD
+        runner.push_response(ok_output(""));
+        // 3. set upstream
+        runner.push_response(ok_output(""));
+        // 4. glab mr create
+        runner.push_response(ok_output(
+            "https://gitlab.com/group/project/-/merge_requests/77\n",
+        ));
+
+        let cli = GitlabCli::with_runner(runner);
+        let result = cli
+            .create_session_mr(CreateSessionMrOptions {
+                repo_path: temp_dir.path(),
+                session_worktree_path: temp_dir.path(),
+                session_slug: "test-session",
+                session_branch: "schaltwerk/test-session",
+                base_branch: "main",
+                mr_branch_name: "schaltwerk/test-session",
+                title: "Test MR",
+                description: Some("MR description body"),
+                gitlab_project: "group/project",
+                hostname: None,
+                squash: false,
+                mode: MrCommitMode::Reapply,
+                commit_message: None,
+            })
+            .unwrap();
+
+        assert_eq!(
+            result.url,
+            "https://gitlab.com/group/project/-/merge_requests/77"
+        );
+    }
+
+    #[test]
+    fn create_session_mr_with_hostname() {
+        let temp_dir = create_temp_git_repo();
+        let runner = MockRunner::default();
+        // 1. ensure_git_remote
+        runner.push_response(ok_output("origin\n"));
+        // 2. push HEAD
+        runner.push_response(ok_output(""));
+        // 3. set upstream
+        runner.push_response(ok_output(""));
+        // 4. glab mr create
+        runner.push_response(ok_output(
+            "https://gitlab.mycompany.com/team/repo/-/merge_requests/10\n",
+        ));
+
+        let cli = GitlabCli::with_runner(runner);
+        let result = cli
+            .create_session_mr(CreateSessionMrOptions {
+                repo_path: temp_dir.path(),
+                session_worktree_path: temp_dir.path(),
+                session_slug: "test-session",
+                session_branch: "schaltwerk/test-session",
+                base_branch: "main",
+                mr_branch_name: "schaltwerk/test-session",
+                title: "Test MR",
+                description: None,
+                gitlab_project: "group/project",
+                hostname: Some("gitlab.mycompany.com"),
+                squash: false,
+                mode: MrCommitMode::Reapply,
+                commit_message: None,
+            })
+            .unwrap();
+
+        assert_eq!(
+            result.url,
+            "https://gitlab.mycompany.com/team/repo/-/merge_requests/10"
+        );
+    }
+
+    #[test]
+    fn create_session_mr_push_fails_non_fast_forward() {
+        let temp_dir = create_temp_git_repo();
+        let runner = MockRunner::default();
+        // 1. ensure_git_remote
+        runner.push_response(ok_output("origin\n"));
+        // 2. push HEAD fails with non-fast-forward
+        runner.push_response(fail_output(
+            "error: failed to push some refs: non-fast-forward",
+        ));
+
+        let cli = GitlabCli::with_runner(runner);
+        let result = cli.create_session_mr(CreateSessionMrOptions {
+            repo_path: temp_dir.path(),
+            session_worktree_path: temp_dir.path(),
+            session_slug: "test-session",
+            session_branch: "schaltwerk/test-session",
+            base_branch: "main",
+            mr_branch_name: "schaltwerk/test-session",
+            title: "Test MR",
+            description: None,
+            gitlab_project: "group/project",
+            hostname: None,
+            squash: false,
+            mode: MrCommitMode::Reapply,
+            commit_message: None,
+        });
+
+        match result {
+            Err(GitlabCliError::InvalidInput(msg)) => {
+                assert!(msg.contains("[rejected]"), "Expected [rejected] in: {msg}");
+            }
+            other => panic!("Expected InvalidInput, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn create_session_mr_no_remote_fails() {
+        let runner = MockRunner::default();
+        runner.push_response(ok_output(""));
+
+        let cli = GitlabCli::with_runner(runner);
+        let result = cli.create_session_mr(CreateSessionMrOptions {
+            repo_path: Path::new("/tmp/repo"),
+            session_worktree_path: Path::new("/tmp/worktree"),
+            session_slug: "test-session",
+            session_branch: "schaltwerk/test-session",
+            base_branch: "main",
+            mr_branch_name: "schaltwerk/test-session",
+            title: "Test MR",
+            description: None,
+            gitlab_project: "group/project",
+            hostname: None,
+            squash: false,
+            mode: MrCommitMode::Reapply,
+            commit_message: None,
+        });
+
+        assert!(matches!(result, Err(GitlabCliError::NoGitRemote)));
+    }
+
+    #[test]
+    fn resolve_merge_base_tries_origin_first() {
+        let runner = MockRunner::default();
+        runner.push_response(ok_output("deadbeef\n"));
+
+        let result = resolve_merge_base(&runner, Path::new("/tmp/wt"), "main").unwrap();
+        assert_eq!(result, "deadbeef");
+    }
+
+    #[test]
+    fn resolve_merge_base_falls_back_to_local() {
+        let runner = MockRunner::default();
+        // origin/main fails
+        runner.push_response(fail_output("not found"));
+        // local main succeeds
+        runner.push_response(ok_output("cafebabe\n"));
+
+        let result = resolve_merge_base(&runner, Path::new("/tmp/wt"), "main").unwrap();
+        assert_eq!(result, "cafebabe");
+    }
+
+    #[test]
+    fn resolve_merge_base_fails_when_both_fail() {
+        let runner = MockRunner::default();
+        runner.push_response(fail_output("not found"));
+        runner.push_response(fail_output("not found either"));
+
+        let result = resolve_merge_base(&runner, Path::new("/tmp/wt"), "main");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ensure_git_remote_fails_on_empty() {
+        let runner = MockRunner::default();
+        runner.push_response(ok_output(""));
+
+        let result = ensure_git_remote(&runner, Path::new("/tmp/repo"));
+        assert!(matches!(result, Err(GitlabCliError::NoGitRemote)));
+    }
+
+    #[test]
+    fn ensure_git_remote_succeeds_with_remote() {
+        let runner = MockRunner::default();
+        runner.push_response(ok_output("origin\n"));
+
+        let result = ensure_git_remote(&runner, Path::new("/tmp/repo"));
+        assert!(result.is_ok());
     }
 }

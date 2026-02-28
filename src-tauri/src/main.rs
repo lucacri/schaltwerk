@@ -1180,6 +1180,7 @@ fn main() {
             gitlab_approve_mr,
             gitlab_merge_mr,
             gitlab_comment_on_mr,
+            gitlab_create_session_mr,
             // Permission commands
             permissions::check_folder_access,
             permissions::trigger_folder_permission_request,
