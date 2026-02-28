@@ -26,6 +26,7 @@ export enum SchaltEvent {
   GitOperationFailed = 'schaltwerk:git-operation-failed',
   ProjectFilesUpdated = 'schaltwerk:project-files-updated',
   GitHubStatusChanged = 'schaltwerk:github-status-changed',
+  GitLabStatusChanged = 'schaltwerk:gitlab-status-changed',
   AppUpdateResult = 'schaltwerk:app-update-result',
   DevBackendError = 'schaltwerk:dev-backend-error',
   SetupScriptRequested = 'schaltwerk:setup-script-request',
@@ -122,6 +123,13 @@ export interface GitHubStatusPayload {
   authenticated: boolean
   userLogin?: string | null
   repository?: GitHubRepositoryPayload | null
+}
+
+export interface GitLabStatusPayload {
+  installed: boolean
+  authenticated: boolean
+  userLogin?: string | null
+  hostname?: string | null
 }
 
 export interface GitHubPrPayload {
@@ -250,6 +258,7 @@ export type EventPayloadMap = {
   [SchaltEvent.GitOperationFailed]: GitOperationFailedPayload
   [SchaltEvent.ProjectFilesUpdated]: string[]
   [SchaltEvent.GitHubStatusChanged]: GitHubStatusPayload
+  [SchaltEvent.GitLabStatusChanged]: GitLabStatusPayload
   [SchaltEvent.AppUpdateResult]: AppUpdateResultPayload
   [SchaltEvent.DevBackendError]: DevBackendErrorPayload
   [SchaltEvent.SetupScriptRequested]: SetupScriptRequestPayload
