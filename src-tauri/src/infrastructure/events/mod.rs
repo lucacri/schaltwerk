@@ -37,6 +37,7 @@ pub enum SchaltEvent {
     ProjectValidationError,
     OpenPrModal,
     OpenMergeModal,
+    OpenGitlabMrModal,
     SelectAllRequested,
 }
 
@@ -79,6 +80,7 @@ impl SchaltEvent {
             SchaltEvent::ProjectValidationError => "schaltwerk:project-validation-error",
             SchaltEvent::OpenPrModal => "schaltwerk:open-pr-modal",
             SchaltEvent::OpenMergeModal => "schaltwerk:open-merge-modal",
+            SchaltEvent::OpenGitlabMrModal => "schaltwerk:open-gitlab-mr-modal",
             SchaltEvent::SelectAllRequested => "schaltwerk:select-all-requested",
         }
     }
