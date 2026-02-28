@@ -1275,7 +1275,6 @@ export interface Translations {
     mergeFailed: string
     commentSuccess: string
     commentFailed: string
-    addComment: string
     commentPlaceholder: string
     send: string
     cancel: string

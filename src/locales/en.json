@@ -1265,7 +1265,6 @@
     "mergeFailed": "Failed to merge MR",
     "commentSuccess": "Comment added",
     "commentFailed": "Failed to add comment",
-    "addComment": "Add a comment",
     "commentPlaceholder": "Write a comment...",
     "send": "Send",
     "cancel": "Cancel",
