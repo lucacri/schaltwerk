@@ -71,6 +71,7 @@ import { useAgentBinarySnapshot } from './hooks/useAgentBinarySnapshot'
 import { useDiffPreloader } from './hooks/useDiffPreloader'
 import { theme } from './common/theme'
 import { GithubIntegrationProvider, useGithubIntegrationContext } from './contexts/GithubIntegrationContext'
+import { GitlabIntegrationProvider } from './contexts/GitlabIntegrationContext'
 import { resolveOpenPathForOpenButton } from './utils/resolveOpenPath'
 import { TauriCommands } from './common/tauriCommands'
 import { validatePanelPercentage } from './utils/panel'
@@ -2193,7 +2194,9 @@ export default function App() {
   return (
     <PierreDiffProvider>
       <GithubIntegrationProvider>
-        <AppContent />
+        <GitlabIntegrationProvider>
+          <AppContent />
+        </GitlabIntegrationProvider>
       </GithubIntegrationProvider>
     </PierreDiffProvider>
   )
