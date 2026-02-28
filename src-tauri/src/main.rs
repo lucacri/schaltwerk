@@ -1176,6 +1176,10 @@ fn main() {
             gitlab_get_mr_pipeline,
             gitlab_get_sources,
             gitlab_set_sources,
+            gitlab_create_mr,
+            gitlab_approve_mr,
+            gitlab_merge_mr,
+            gitlab_comment_on_mr,
             // Permission commands
             permissions::check_folder_access,
             permissions::trigger_folder_permission_request,

@@ -1,13 +1,13 @@
 use crate::get_project_manager;
 use log::error;
 use schaltwerk::domains::git::gitlab_cli::{
-    format_cli_error, GitlabCli, GitlabCliError, GitlabIssueDetails, GitlabIssueSummary,
-    GitlabMrDetails, GitlabMrSummary, GitlabNote, GitlabPipelineDetails,
+    format_cli_error, CreateMrParams, GitlabCli, GitlabCliError, GitlabIssueDetails,
+    GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary, GitlabNote, GitlabPipelineDetails,
 };
 use schaltwerk::schaltwerk_core::db_project_config::{
     GitlabSource, ProjectConfigMethods, ProjectGitlabConfig,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 const SEARCH_DEFAULT_LIMIT: usize = 50;
@@ -346,6 +346,157 @@ pub async fn gitlab_set_sources(
     }
 
     Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateGitlabMrArgs {
+    pub source_project: String,
+    pub source_hostname: Option<String>,
+    pub title: String,
+    pub description: Option<String>,
+    pub source_branch: String,
+    pub target_branch: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitlabMrResultPayload {
+    pub source_branch: String,
+    pub url: String,
+}
+
+#[tauri::command]
+pub async fn gitlab_create_mr(
+    _app: AppHandle,
+    args: CreateGitlabMrArgs,
+) -> Result<GitlabMrResultPayload, String> {
+    let manager = get_project_manager().await;
+    let project = manager
+        .current_project()
+        .await
+        .map_err(|e| format!("No active project: {e}"))?;
+
+    let cli = GitlabCli::new();
+    if let Err(err) = cli.ensure_installed() {
+        return Err(format_cli_error(err));
+    }
+
+    let result = cli
+        .create_mr(CreateMrParams {
+            project_path: &project.path,
+            gitlab_project: &args.source_project,
+            title: &args.title,
+            description: args.description.as_deref(),
+            source_branch: &args.source_branch,
+            target_branch: &args.target_branch,
+            hostname: args.source_hostname.as_deref(),
+        })
+        .map_err(|err| {
+            error!("GitLab MR creation failed: {err}");
+            format_cli_error(err)
+        })?;
+
+    Ok(GitlabMrResultPayload {
+        source_branch: result.source_branch,
+        url: result.url,
+    })
+}
+
+#[tauri::command]
+pub async fn gitlab_approve_mr(
+    _app: AppHandle,
+    iid: u64,
+    source_project: String,
+    source_hostname: Option<String>,
+) -> Result<(), String> {
+    let manager = get_project_manager().await;
+    let project = manager
+        .current_project()
+        .await
+        .map_err(|e| format!("No active project: {e}"))?;
+
+    let cli = GitlabCli::new();
+    if let Err(err) = cli.ensure_installed() {
+        return Err(format_cli_error(err));
+    }
+
+    cli.approve_mr(
+        &project.path,
+        iid,
+        &source_project,
+        source_hostname.as_deref(),
+    )
+    .map_err(|err| {
+        error!("GitLab MR approval failed: {err}");
+        format_cli_error(err)
+    })
+}
+
+#[tauri::command]
+pub async fn gitlab_merge_mr(
+    _app: AppHandle,
+    iid: u64,
+    source_project: String,
+    source_hostname: Option<String>,
+    squash: bool,
+    remove_source_branch: bool,
+) -> Result<(), String> {
+    let manager = get_project_manager().await;
+    let project = manager
+        .current_project()
+        .await
+        .map_err(|e| format!("No active project: {e}"))?;
+
+    let cli = GitlabCli::new();
+    if let Err(err) = cli.ensure_installed() {
+        return Err(format_cli_error(err));
+    }
+
+    cli.merge_mr(
+        &project.path,
+        iid,
+        &source_project,
+        squash,
+        remove_source_branch,
+        source_hostname.as_deref(),
+    )
+    .map_err(|err| {
+        error!("GitLab MR merge failed: {err}");
+        format_cli_error(err)
+    })
+}
+
+#[tauri::command]
+pub async fn gitlab_comment_on_mr(
+    _app: AppHandle,
+    iid: u64,
+    source_project: String,
+    source_hostname: Option<String>,
+    message: String,
+) -> Result<(), String> {
+    let manager = get_project_manager().await;
+    let project = manager
+        .current_project()
+        .await
+        .map_err(|e| format!("No active project: {e}"))?;
+
+    let cli = GitlabCli::new();
+    if let Err(err) = cli.ensure_installed() {
+        return Err(format_cli_error(err));
+    }
+
+    cli.comment_on_mr(
+        &project.path,
+        iid,
+        &source_project,
+        &message,
+        source_hostname.as_deref(),
+    )
+    .map_err(|err| {
+        error!("GitLab MR comment failed: {err}");
+        format_cli_error(err)
+    })
 }
 
 fn map_issue_summary_payload(
