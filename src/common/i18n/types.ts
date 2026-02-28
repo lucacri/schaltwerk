@@ -1216,6 +1216,54 @@ export interface Translations {
     specsTitle: string
     preview: string
     previewTitle: string
+    gitlabIssues: string
+    gitlabIssuesTitle: string
+    gitlabMrs: string
+    gitlabMrsTitle: string
+  }
+  gitlabIssueTab: {
+    searchPlaceholder: string
+    loading: string
+    noIssuesFound: string
+    adjustSearch: string
+    back: string
+    openInGitlab: string
+    opened: string
+    closed: string
+    source: string
+    updated: string
+    description: string
+    notes: string
+    noNotes: string
+    labels: string
+  }
+  gitlabMrTab: {
+    searchPlaceholder: string
+    loading: string
+    noMrsFound: string
+    adjustSearch: string
+    back: string
+    openInGitlab: string
+    opened: string
+    merged: string
+    closed: string
+    source: string
+    updated: string
+    description: string
+    notes: string
+    noNotes: string
+    labels: string
+    sourceBranch: string
+    targetBranch: string
+    pipeline: string
+    mergeStatus: string
+    reviewers: string
+    noReviewers: string
+    refreshPipeline: string
+    pipelineSuccess: string
+    pipelineFailed: string
+    pipelineRunning: string
+    pipelinePending: string
   }
   historySearch: {
     placeholder: string
