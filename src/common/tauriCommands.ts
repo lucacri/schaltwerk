@@ -31,6 +31,7 @@ export const TauriCommands = {
   GitLabApproveMr: 'gitlab_approve_mr',
   GitLabMergeMr: 'gitlab_merge_mr',
   GitLabCommentOnMr: 'gitlab_comment_on_mr',
+  GitLabCreateSessionMr: 'gitlab_create_session_mr',
   CreateNewProject: 'create_new_project',
   CreateRunTerminal: 'create_run_terminal',
   CreateTerminal: 'create_terminal',
