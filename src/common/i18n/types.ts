@@ -1405,5 +1405,37 @@ export interface Translations {
     runSpec: string
     deleteSpec: string
     createPrShortcut: string
+    createGitlabMr: string
+    createGitlabMrShortcut: string
+    noGitlabSources: string
+  }
+  gitlabMrModal: {
+    title: string
+    selectSource: string
+    noSourcesConfigured: string
+    strategy: string
+    squashChanges: string
+    useExistingCommits: string
+    squashDesc: string
+    reapplyDesc: string
+    commitMessage: string
+    mrTitle: string
+    mrTitlePlaceholder: string
+    description: string
+    descriptionPlaceholder: string
+    targetBranch: string
+    targetBranchHint: string
+    useCustomBranch: string
+    customBranchHint: string
+    squashOnMerge: string
+    autoCancelAfterMr: string
+    cancel: string
+    createMr: string
+    creatingMr: string
+    shortcutHint: string
+    created: string
+    createdDesc: string
+    openInGitlab: string
+    failed: string
   }
 }
