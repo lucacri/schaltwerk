@@ -5,6 +5,7 @@ use schaltwerk::domains::git::service::{
     GitlabCliError, GitlabIssueDetails, GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary,
     GitlabNote, GitlabPipelineDetails, MrCommitMode,
 };
+use schaltwerk::domains::merge::types::MergeMode;
 use schaltwerk::infrastructure::events::{SchaltEvent, emit_event};
 use schaltwerk::schaltwerk_core::db_project_config::{
     GitlabSource, ProjectConfigMethods, ProjectGitlabConfig,
@@ -514,7 +515,7 @@ pub struct CreateGitlabSessionMrArgs {
     pub source_project: String,
     pub source_hostname: Option<String>,
     pub squash: bool,
-    pub mode: String,
+    pub mode: MergeMode,
     #[serde(default)]
     pub cancel_after_mr: bool,
 }
@@ -585,9 +586,9 @@ pub async fn gitlab_create_session_mr(
         .map(|s| s.to_string())
         .unwrap_or_else(|| session_branch.clone());
 
-    let mr_mode = match args.mode.as_str() {
-        "squash" => MrCommitMode::Squash,
-        _ => MrCommitMode::Reapply,
+    let mr_mode = match args.mode {
+        MergeMode::Squash => MrCommitMode::Squash,
+        MergeMode::Reapply => MrCommitMode::Reapply,
     };
 
     info!(

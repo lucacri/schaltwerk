@@ -1378,14 +1378,24 @@ mod tests {
     use std::path::Path;
     use std::sync::{Arc, Mutex};
 
+    #[derive(Debug, Clone)]
+    struct CommandLog {
+        args: Vec<String>,
+    }
+
     #[derive(Default, Clone)]
     struct MockRunner {
         responses: Arc<Mutex<VecDeque<io::Result<CommandOutput>>>>,
+        calls: Arc<Mutex<Vec<CommandLog>>>,
     }
 
     impl MockRunner {
         fn push_response(&self, response: io::Result<CommandOutput>) {
             self.responses.lock().unwrap().push_back(response);
+        }
+
+        fn calls(&self) -> Vec<CommandLog> {
+            self.calls.lock().unwrap().clone()
         }
     }
 
@@ -1393,10 +1403,13 @@ mod tests {
         fn run(
             &self,
             _program: &str,
-            _args: &[&str],
+            args: &[&str],
             _current_dir: Option<&Path>,
             _env: &[(&str, &str)],
         ) -> io::Result<CommandOutput> {
+            self.calls.lock().unwrap().push(CommandLog {
+                args: args.iter().map(|s| s.to_string()).collect(),
+            });
             self.responses
                 .lock()
                 .unwrap()
@@ -2286,6 +2299,57 @@ mod tests {
         assert_eq!(
             result.url,
             "https://gitlab.com/group/project/-/merge_requests/55"
+        );
+    }
+
+    #[test]
+    fn create_session_mr_squash_flag_adds_squash_message() {
+        let runner = MockRunner::default();
+        runner.push_response(ok_output("origin\n"));
+        runner.push_response(ok_output("abc123\n"));
+        runner.push_response(ok_output(""));
+        runner.push_response(ok_output(""));
+        runner.push_response(ok_output(""));
+        runner.push_response(ok_output(""));
+        runner.push_response(ok_output(""));
+        runner.push_response(ok_output(
+            "https://gitlab.com/group/project/-/merge_requests/60\n",
+        ));
+
+        let cli = GitlabCli::with_runner(runner.clone());
+        let result = cli
+            .create_session_mr(CreateSessionMrOptions {
+                repo_path: Path::new("/tmp/repo"),
+                session_worktree_path: Path::new("/tmp/worktree"),
+                session_slug: "test-session",
+                session_branch: "schaltwerk/test-session",
+                base_branch: "main",
+                mr_branch_name: "schaltwerk/test-session",
+                title: "Test MR",
+                description: None,
+                gitlab_project: "group/project",
+                hostname: None,
+                squash: true,
+                mode: MrCommitMode::Squash,
+                commit_message: Some("my squash commit"),
+            })
+            .unwrap();
+
+        assert_eq!(
+            result.url,
+            "https://gitlab.com/group/project/-/merge_requests/60"
+        );
+
+        let calls = runner.calls();
+        let glab_call = calls.last().unwrap();
+        let args_str = glab_call.args.join(" ");
+        assert!(
+            args_str.contains("--squash-message-body"),
+            "Expected --squash-message-body in glab args: {args_str}"
+        );
+        assert!(
+            args_str.contains("my squash commit"),
+            "Expected squash commit message in glab args: {args_str}"
         );
     }
 
