@@ -1265,7 +1265,6 @@
     "mergeFailed": "合并 MR 失败",
     "commentSuccess": "评论已添加",
     "commentFailed": "添加评论失败",
-    "addComment": "添加评论",
     "commentPlaceholder": "写评论...",
     "send": "发送",
     "cancel": "取消",

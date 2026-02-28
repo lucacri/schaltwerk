@@ -229,9 +229,9 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
     setApprovePending(true)
     try {
       await invoke(TauriCommands.GitLabApproveMr, {
-        project: sourceProject,
-        mrIid: details.iid,
-        hostname: sourceHostname ?? null,
+        iid: details.iid,
+        sourceProject,
+        sourceHostname: sourceHostname ?? null,
       })
       pushToast({ tone: 'success', title: t.gitlabMrTab.approveSuccess })
     } catch (error) {
@@ -247,9 +247,9 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
     setMergePending(true)
     try {
       await invoke(TauriCommands.GitLabMergeMr, {
-        project: sourceProject,
-        mrIid: details.iid,
-        hostname: sourceHostname ?? null,
+        iid: details.iid,
+        sourceProject,
+        sourceHostname: sourceHostname ?? null,
         squash,
         removeSourceBranch,
       })
@@ -268,10 +268,10 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
     setCommentPending(true)
     try {
       await invoke(TauriCommands.GitLabCommentOnMr, {
-        project: sourceProject,
-        mrIid: details.iid,
-        body: commentText,
-        hostname: sourceHostname ?? null,
+        iid: details.iid,
+        sourceProject,
+        sourceHostname: sourceHostname ?? null,
+        message: commentText,
       })
       pushToast({ tone: 'success', title: t.gitlabMrTab.commentSuccess })
       setCommentText('')
@@ -543,24 +543,26 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
                 <span>{approvePending ? t.gitlabMrTab.approving : t.gitlabMrTab.approve}</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => { void handleMerge() }}
-                disabled={mergePending}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded"
-                style={{
-                  fontSize: theme.fontSize.caption,
-                  fontFamily: theme.fontFamily.sans,
-                  color: mergePending ? 'var(--color-text-muted)' : 'var(--color-accent-violet)',
-                  backgroundColor: 'transparent',
-                  border: '1px solid var(--color-border-default)',
-                  cursor: mergePending ? 'default' : 'pointer',
-                  opacity: mergePending ? 0.6 : 1,
-                }}
-              >
-                <VscGitMerge className="w-3.5 h-3.5" />
-                <span>{mergePending ? t.gitlabMrTab.merging : t.gitlabMrTab.merge}</span>
-              </button>
+              {details.mergeStatus === 'can_be_merged' && (
+                <button
+                  type="button"
+                  onClick={() => { void handleMerge() }}
+                  disabled={mergePending}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded"
+                  style={{
+                    fontSize: theme.fontSize.caption,
+                    fontFamily: theme.fontFamily.sans,
+                    color: mergePending ? 'var(--color-text-muted)' : 'var(--color-accent-violet)',
+                    backgroundColor: 'transparent',
+                    border: '1px solid var(--color-border-default)',
+                    cursor: mergePending ? 'default' : 'pointer',
+                    opacity: mergePending ? 0.6 : 1,
+                  }}
+                >
+                  <VscGitMerge className="w-3.5 h-3.5" />
+                  <span>{mergePending ? t.gitlabMrTab.merging : t.gitlabMrTab.merge}</span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -580,43 +582,45 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
               </button>
             </div>
 
-            <div className="flex items-center gap-3">
-              <label
-                className="flex items-center gap-1.5"
-                style={{
-                  fontSize: theme.fontSize.caption,
-                  fontFamily: theme.fontFamily.sans,
-                  color: 'var(--color-text-secondary)',
-                  cursor: 'pointer',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={squash}
-                  onChange={(e) => setSquash(e.target.checked)}
-                  style={{ accentColor: 'var(--color-accent-blue)' }}
-                />
-                {t.gitlabMrTab.squashCommits}
-              </label>
+            {details.mergeStatus === 'can_be_merged' && (
+              <div className="flex items-center gap-3">
+                <label
+                  className="flex items-center gap-1.5"
+                  style={{
+                    fontSize: theme.fontSize.caption,
+                    fontFamily: theme.fontFamily.sans,
+                    color: 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={squash}
+                    onChange={(e) => setSquash(e.target.checked)}
+                    style={{ accentColor: 'var(--color-accent-blue)' }}
+                  />
+                  {t.gitlabMrTab.squashCommits}
+                </label>
 
-              <label
-                className="flex items-center gap-1.5"
-                style={{
-                  fontSize: theme.fontSize.caption,
-                  fontFamily: theme.fontFamily.sans,
-                  color: 'var(--color-text-secondary)',
-                  cursor: 'pointer',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={removeSourceBranch}
-                  onChange={(e) => setRemoveSourceBranch(e.target.checked)}
-                  style={{ accentColor: 'var(--color-accent-blue)' }}
-                />
-                {t.gitlabMrTab.removeSourceBranch}
-              </label>
-            </div>
+                <label
+                  className="flex items-center gap-1.5"
+                  style={{
+                    fontSize: theme.fontSize.caption,
+                    fontFamily: theme.fontFamily.sans,
+                    color: 'var(--color-text-secondary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={removeSourceBranch}
+                    onChange={(e) => setRemoveSourceBranch(e.target.checked)}
+                    style={{ accentColor: 'var(--color-accent-blue)' }}
+                  />
+                  {t.gitlabMrTab.removeSourceBranch}
+                </label>
+              </div>
+            )}
 
             {showCommentInput && (
               <div className="flex flex-col gap-2 mt-1">
