@@ -36,6 +36,7 @@ export enum SchaltEvent {
   ProjectValidationError = 'schaltwerk:project-validation-error',
   OpenPrModal = 'schaltwerk:open-pr-modal',
   OpenMergeModal = 'schaltwerk:open-merge-modal',
+  OpenGitlabMrModal = 'schaltwerk:open-gitlab-mr-modal',
   SelectAllRequested = 'schaltwerk:select-all-requested',
 }
 
@@ -202,6 +203,14 @@ export interface OpenMergeModalPayload {
   commitMessage?: string
 }
 
+export interface OpenGitlabMrModalPayload {
+  sessionName: string
+  suggestedTitle?: string
+  suggestedBody?: string
+  suggestedBaseBranch?: string
+  suggestedSourceProject?: string
+}
+
 import { type EnrichedSession, type Epic } from '../types/session'
 
 export interface SessionsRefreshedEventPayload {
@@ -268,5 +277,6 @@ export type EventPayloadMap = {
   [SchaltEvent.ProjectValidationError]: ProjectValidationErrorPayload
   [SchaltEvent.OpenPrModal]: OpenPrModalPayload
   [SchaltEvent.OpenMergeModal]: OpenMergeModalPayload
+  [SchaltEvent.OpenGitlabMrModal]: OpenGitlabMrModalPayload
   [SchaltEvent.SelectAllRequested]: null
 }

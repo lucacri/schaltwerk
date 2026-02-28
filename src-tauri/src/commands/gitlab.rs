@@ -1,11 +1,10 @@
 use crate::get_project_manager;
 use log::{error, info, warn};
-use schaltwerk::domains::git::gitlab_cli::{
-    format_cli_error, CreateMrParams, CreateSessionMrOptions, GitlabCli, GitlabCliError,
-    GitlabIssueDetails, GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary, GitlabNote,
-    GitlabPipelineDetails, MrCommitMode,
+use schaltwerk::domains::git::service::{
+    format_cli_error, rename_branch, CreateMrParams, CreateSessionMrOptions, GitlabCli,
+    GitlabCliError, GitlabIssueDetails, GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary,
+    GitlabNote, GitlabPipelineDetails, MrCommitMode,
 };
-use schaltwerk::domains::git::service::rename_branch;
 use schaltwerk::infrastructure::events::{SchaltEvent, emit_event};
 use schaltwerk::schaltwerk_core::db_project_config::{
     GitlabSource, ProjectConfigMethods, ProjectGitlabConfig,
