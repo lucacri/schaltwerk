@@ -1,9 +1,10 @@
 use std::env;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use log::{debug, info, warn};
+use serde::{Deserialize, Serialize};
 
 use super::github_cli::{CommandRunner, SystemCommandRunner};
 
@@ -67,6 +68,112 @@ impl From<serde_json::Error> for GitlabCliError {
     }
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct GitlabAuthStatus {
+    pub authenticated: bool,
+    pub hostname: Option<String>,
+    pub user_login: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitlabUser {
+    pub username: String,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitlabNote {
+    pub author: Option<GitlabUser>,
+    pub created_at: String,
+    pub body: String,
+    #[serde(default)]
+    pub system: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitlabIssueSummary {
+    pub iid: u64,
+    pub title: String,
+    pub state: String,
+    pub updated_at: String,
+    pub author: Option<GitlabUser>,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    pub web_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitlabIssueDetails {
+    pub iid: u64,
+    pub title: String,
+    pub web_url: String,
+    pub description: Option<String>,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    pub state: String,
+    pub author: Option<GitlabUser>,
+    #[serde(default)]
+    pub notes: Vec<GitlabNote>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitlabPipelineSummary {
+    pub id: u64,
+    pub status: String,
+    pub web_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitlabMrSummary {
+    pub iid: u64,
+    pub title: String,
+    pub state: String,
+    pub updated_at: String,
+    pub author: Option<GitlabUser>,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    pub web_url: String,
+    pub source_branch: String,
+    pub target_branch: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitlabMrDetails {
+    pub iid: u64,
+    pub title: String,
+    pub web_url: String,
+    pub description: Option<String>,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    pub state: String,
+    pub source_branch: String,
+    pub target_branch: String,
+    pub author: Option<GitlabUser>,
+    pub merge_status: Option<String>,
+    pub pipeline: Option<GitlabPipelineSummary>,
+    #[serde(default)]
+    pub notes: Vec<GitlabNote>,
+    #[serde(default)]
+    pub reviewers: Vec<GitlabUser>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GitlabMrResult {
+    pub source_branch: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitlabPipelineDetails {
+    pub id: u64,
+    pub status: String,
+    pub web_url: Option<String>,
+    pub source: Option<String>,
+    pub duration: Option<f64>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
 pub struct GitlabCli<R: CommandRunner = SystemCommandRunner> {
     runner: R,
     program: String,
@@ -127,6 +234,391 @@ impl<R: CommandRunner> GitlabCli<R> {
                 Err(GitlabCliError::Io(err))
             }
         }
+    }
+
+    pub fn check_auth(
+        &self,
+        hostname: Option<&str>,
+    ) -> Result<GitlabAuthStatus, GitlabCliError> {
+        let env = [("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        let mut args_vec = vec!["auth".to_string(), "status".to_string()];
+        if let Some(host) = hostname {
+            args_vec.push("--hostname".to_string());
+            args_vec.push(host.to_string());
+        }
+
+        debug!("[GitlabCli] Running glab auth status check");
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, None, &env)
+            .map_err(map_runner_error)?;
+
+        debug!(
+            "[GitlabCli] glab auth status result: exit={:?}, stdout_len={}, stderr_len={}",
+            output.status,
+            output.stdout.len(),
+            output.stderr.len()
+        );
+
+        if !output.success() {
+            debug!("[GitlabCli] glab auth status indicates unauthenticated");
+            return Ok(GitlabAuthStatus {
+                authenticated: false,
+                hostname: None,
+                user_login: None,
+            });
+        }
+
+        let combined = format!("{}\n{}", output.stdout, output.stderr);
+        let clean = strip_ansi_codes(&combined);
+
+        let mut parsed_hostname: Option<String> = None;
+        let mut parsed_user: Option<String> = None;
+
+        for line in clean.lines() {
+            let trimmed = line.trim();
+            if trimmed.contains("Logged in to")
+                && trimmed.contains(" as ")
+                && let Some(after_to) = trimmed.split("Logged in to ").nth(1)
+            {
+                if let Some(host_part) = after_to.split(" as ").next() {
+                    parsed_hostname = Some(host_part.trim().to_string());
+                }
+                if let Some(after_as) = after_to.split(" as ").nth(1) {
+                    let user = after_as
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or("")
+                        .trim()
+                        .to_string();
+                    if !user.is_empty() {
+                        parsed_user = Some(user);
+                    }
+                }
+            }
+        }
+
+        info!(
+            "[GitlabCli] Authentication verified: hostname={parsed_hostname:?}, user={parsed_user:?}"
+        );
+
+        Ok(GitlabAuthStatus {
+            authenticated: true,
+            hostname: parsed_hostname,
+            user_login: parsed_user,
+        })
+    }
+
+    pub fn search_issues(
+        &self,
+        project_path: &Path,
+        query: &str,
+        limit: usize,
+        gitlab_project: &str,
+        hostname: Option<&str>,
+    ) -> Result<Vec<GitlabIssueSummary>, GitlabCliError> {
+        debug!(
+            "[GitlabCli] Searching issues: project={}, query='{}', limit={}",
+            project_path.display(),
+            query,
+            limit
+        );
+
+        let constrained_limit = limit.clamp(1, 100);
+        let trimmed_query = query.trim();
+
+        let mut args_vec = vec![
+            "issue".to_string(),
+            "list".to_string(),
+            "--output".to_string(),
+            "json".to_string(),
+            "--per-page".to_string(),
+            constrained_limit.to_string(),
+            "-R".to_string(),
+            gitlab_project.to_string(),
+        ];
+
+        if !trimmed_query.is_empty() {
+            args_vec.push("--search".to_string());
+            args_vec.push(trimmed_query.to_string());
+        }
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, Some(project_path), &env_vec)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        let clean_output = strip_ansi_codes(&output.stdout);
+        let trimmed = clean_output.trim();
+
+        if trimmed.is_empty() || trimmed == "null" || trimmed == "[]" {
+            return Ok(Vec::new());
+        }
+
+        let issues: Vec<GitlabIssueSummary> =
+            serde_json::from_str(trimmed).map_err(|err| {
+                log::error!(
+                    "[GitlabCli] Failed to parse issue search response: {err}; raw={trimmed}"
+                );
+                GitlabCliError::InvalidOutput(
+                    "GitLab CLI returned issue data in an unexpected format.".to_string(),
+                )
+            })?;
+
+        Ok(issues)
+    }
+
+    pub fn get_issue_details(
+        &self,
+        project_path: &Path,
+        iid: u64,
+        gitlab_project: &str,
+        hostname: Option<&str>,
+    ) -> Result<GitlabIssueDetails, GitlabCliError> {
+        debug!(
+            "[GitlabCli] Fetching issue details: project={}, iid={}",
+            project_path.display(),
+            iid
+        );
+
+        let args_vec = vec![
+            "issue".to_string(),
+            "view".to_string(),
+            iid.to_string(),
+            "--output".to_string(),
+            "json".to_string(),
+            "--comments".to_string(),
+            "-R".to_string(),
+            gitlab_project.to_string(),
+        ];
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, Some(project_path), &env_vec)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        let clean_output = strip_ansi_codes(&output.stdout);
+        let details: GitlabIssueDetails =
+            serde_json::from_str(clean_output.trim()).map_err(|err| {
+                log::error!(
+                    "[GitlabCli] Failed to parse issue detail response: {err}; raw={}",
+                    clean_output.trim()
+                );
+                GitlabCliError::InvalidOutput(
+                    "GitLab CLI returned issue detail data in an unexpected format."
+                        .to_string(),
+                )
+            })?;
+
+        Ok(details)
+    }
+
+    pub fn search_mrs(
+        &self,
+        project_path: &Path,
+        query: &str,
+        limit: usize,
+        gitlab_project: &str,
+        hostname: Option<&str>,
+    ) -> Result<Vec<GitlabMrSummary>, GitlabCliError> {
+        debug!(
+            "[GitlabCli] Searching MRs: project={}, query='{}', limit={}",
+            project_path.display(),
+            query,
+            limit
+        );
+
+        let constrained_limit = limit.clamp(1, 100);
+        let trimmed_query = query.trim();
+
+        let mut args_vec = vec![
+            "mr".to_string(),
+            "list".to_string(),
+            "--output".to_string(),
+            "json".to_string(),
+            "--per-page".to_string(),
+            constrained_limit.to_string(),
+            "-R".to_string(),
+            gitlab_project.to_string(),
+        ];
+
+        if !trimmed_query.is_empty() {
+            args_vec.push("--search".to_string());
+            args_vec.push(trimmed_query.to_string());
+        }
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, Some(project_path), &env_vec)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        let clean_output = strip_ansi_codes(&output.stdout);
+        let trimmed = clean_output.trim();
+
+        if trimmed.is_empty() || trimmed == "null" || trimmed == "[]" {
+            return Ok(Vec::new());
+        }
+
+        let mrs: Vec<GitlabMrSummary> =
+            serde_json::from_str(trimmed).map_err(|err| {
+                log::error!(
+                    "[GitlabCli] Failed to parse MR search response: {err}; raw={trimmed}"
+                );
+                GitlabCliError::InvalidOutput(
+                    "GitLab CLI returned MR data in an unexpected format.".to_string(),
+                )
+            })?;
+
+        Ok(mrs)
+    }
+
+    pub fn get_mr_details(
+        &self,
+        project_path: &Path,
+        iid: u64,
+        gitlab_project: &str,
+        hostname: Option<&str>,
+    ) -> Result<GitlabMrDetails, GitlabCliError> {
+        debug!(
+            "[GitlabCli] Fetching MR details: project={}, iid={}",
+            project_path.display(),
+            iid
+        );
+
+        let args_vec = vec![
+            "mr".to_string(),
+            "view".to_string(),
+            iid.to_string(),
+            "--output".to_string(),
+            "json".to_string(),
+            "--comments".to_string(),
+            "-R".to_string(),
+            gitlab_project.to_string(),
+        ];
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, Some(project_path), &env_vec)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        let clean_output = strip_ansi_codes(&output.stdout);
+        let details: GitlabMrDetails =
+            serde_json::from_str(clean_output.trim()).map_err(|err| {
+                log::error!(
+                    "[GitlabCli] Failed to parse MR detail response: {err}; raw={}",
+                    clean_output.trim()
+                );
+                GitlabCliError::InvalidOutput(
+                    "GitLab CLI returned MR detail data in an unexpected format."
+                        .to_string(),
+                )
+            })?;
+
+        Ok(details)
+    }
+
+    pub fn get_mr_pipeline_status(
+        &self,
+        project_path: &Path,
+        branch: &str,
+        gitlab_project: &str,
+        hostname: Option<&str>,
+    ) -> Result<Option<GitlabPipelineDetails>, GitlabCliError> {
+        debug!(
+            "[GitlabCli] Fetching pipeline status: project={}, branch={}",
+            project_path.display(),
+            branch
+        );
+
+        let branch_str = branch.to_string();
+        let project_str = gitlab_project.to_string();
+        let args_arr = [
+            "ci", "get", "--branch", &branch_str, "--output", "json", "-R", &project_str,
+        ];
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let output = self
+            .runner
+            .run(&self.program, &args_arr, Some(project_path), &env_vec)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            debug!(
+                "[GitlabCli] Pipeline status command failed (pipeline may not exist): stderr={}",
+                output.stderr
+            );
+            return Ok(None);
+        }
+
+        let clean_output = strip_ansi_codes(&output.stdout);
+        let trimmed = clean_output.trim();
+
+        if trimmed.is_empty() || trimmed == "null" {
+            return Ok(None);
+        }
+
+        let pipeline: GitlabPipelineDetails =
+            serde_json::from_str(trimmed).map_err(|err| {
+                log::error!(
+                    "[GitlabCli] Failed to parse pipeline response: {err}; raw={trimmed}"
+                );
+                GitlabCliError::InvalidOutput(
+                    "GitLab CLI returned pipeline data in an unexpected format."
+                        .to_string(),
+                )
+            })?;
+
+        Ok(Some(pipeline))
     }
 }
 
@@ -600,5 +1092,345 @@ mod tests {
         }));
         let cli = GitlabCli::with_runner(runner);
         assert_eq!(cli.program, "glab");
+    }
+
+    #[test]
+    fn check_auth_returns_authenticated_when_logged_in() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: "gitlab.com\n  ✓ Logged in to gitlab.com as testuser (keyring)\n  ✓ Git operations for gitlab.com configured to use https protocol.\n".to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let result = cli.check_auth(None).unwrap();
+        assert!(result.authenticated);
+        assert_eq!(result.hostname.as_deref(), Some("gitlab.com"));
+        assert_eq!(result.user_login.as_deref(), Some("testuser"));
+    }
+
+    #[test]
+    fn check_auth_returns_unauthenticated_when_not_logged_in() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(1),
+            stdout: String::new(),
+            stderr: "No token provided".to_string(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let result = cli.check_auth(None).unwrap();
+        assert!(!result.authenticated);
+        assert!(result.hostname.is_none());
+        assert!(result.user_login.is_none());
+    }
+
+    #[test]
+    fn search_issues_parses_json_response() {
+        let runner = MockRunner::default();
+        let json = r#"[
+            {
+                "iid": 42,
+                "title": "Fix login bug",
+                "state": "opened",
+                "updated_at": "2024-01-15T10:30:00Z",
+                "author": {"username": "alice", "name": "Alice"},
+                "labels": ["bug", "high-priority"],
+                "web_url": "https://gitlab.com/group/project/-/issues/42"
+            },
+            {
+                "iid": 43,
+                "title": "Add dark mode",
+                "state": "closed",
+                "updated_at": "2024-01-14T08:00:00Z",
+                "author": {"username": "bob", "name": null},
+                "labels": [],
+                "web_url": "https://gitlab.com/group/project/-/issues/43"
+            }
+        ]"#;
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: json.to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let issues = cli
+            .search_issues(
+                Path::new("/tmp/repo"),
+                "bug",
+                10,
+                "group/project",
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(issues.len(), 2);
+        assert_eq!(issues[0].iid, 42);
+        assert_eq!(issues[0].title, "Fix login bug");
+        assert_eq!(issues[0].state, "opened");
+        assert_eq!(
+            issues[0].author.as_ref().unwrap().username,
+            "alice"
+        );
+        assert_eq!(issues[0].labels, vec!["bug", "high-priority"]);
+        assert_eq!(issues[1].iid, 43);
+        assert_eq!(issues[1].labels.len(), 0);
+    }
+
+    #[test]
+    fn search_issues_returns_empty_for_null_response() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: "null".to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let issues = cli
+            .search_issues(
+                Path::new("/tmp/repo"),
+                "",
+                10,
+                "group/project",
+                None,
+            )
+            .unwrap();
+
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn get_issue_details_parses_json_with_notes() {
+        let runner = MockRunner::default();
+        let json = r#"{
+            "iid": 42,
+            "title": "Fix login bug",
+            "web_url": "https://gitlab.com/group/project/-/issues/42",
+            "description": "Login fails on Safari",
+            "labels": ["bug"],
+            "state": "opened",
+            "author": {"username": "alice", "name": "Alice"},
+            "notes": [
+                {
+                    "author": {"username": "bob", "name": "Bob"},
+                    "created_at": "2024-01-15T11:00:00Z",
+                    "body": "I can reproduce this",
+                    "system": false
+                },
+                {
+                    "author": {"username": "alice", "name": "Alice"},
+                    "created_at": "2024-01-15T12:00:00Z",
+                    "body": "assigned to @charlie",
+                    "system": true
+                }
+            ]
+        }"#;
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: json.to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let details = cli
+            .get_issue_details(Path::new("/tmp/repo"), 42, "group/project", None)
+            .unwrap();
+
+        assert_eq!(details.iid, 42);
+        assert_eq!(details.title, "Fix login bug");
+        assert_eq!(
+            details.description.as_deref(),
+            Some("Login fails on Safari")
+        );
+        assert_eq!(details.notes.len(), 2);
+        assert_eq!(
+            details.notes[0].author.as_ref().unwrap().username,
+            "bob"
+        );
+        assert_eq!(details.notes[0].body, "I can reproduce this");
+        assert!(!details.notes[0].system);
+        assert!(details.notes[1].system);
+    }
+
+    #[test]
+    fn search_mrs_parses_json_response() {
+        let runner = MockRunner::default();
+        let json = r#"[
+            {
+                "iid": 101,
+                "title": "Add feature X",
+                "state": "merged",
+                "updated_at": "2024-02-01T09:00:00Z",
+                "author": {"username": "carol", "name": "Carol"},
+                "labels": ["feature"],
+                "web_url": "https://gitlab.com/group/project/-/merge_requests/101",
+                "source_branch": "feature-x",
+                "target_branch": "main"
+            }
+        ]"#;
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: json.to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let mrs = cli
+            .search_mrs(
+                Path::new("/tmp/repo"),
+                "feature",
+                10,
+                "group/project",
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(mrs.len(), 1);
+        assert_eq!(mrs[0].iid, 101);
+        assert_eq!(mrs[0].title, "Add feature X");
+        assert_eq!(mrs[0].state, "merged");
+        assert_eq!(mrs[0].source_branch, "feature-x");
+        assert_eq!(mrs[0].target_branch, "main");
+        assert_eq!(
+            mrs[0].author.as_ref().unwrap().username,
+            "carol"
+        );
+    }
+
+    #[test]
+    fn get_mr_details_parses_pipeline_and_reviewers() {
+        let runner = MockRunner::default();
+        let json = r#"{
+            "iid": 101,
+            "title": "Add feature X",
+            "web_url": "https://gitlab.com/group/project/-/merge_requests/101",
+            "description": "Implements feature X with tests",
+            "labels": ["feature", "reviewed"],
+            "state": "opened",
+            "source_branch": "feature-x",
+            "target_branch": "main",
+            "author": {"username": "carol", "name": "Carol"},
+            "merge_status": "can_be_merged",
+            "pipeline": {
+                "id": 999,
+                "status": "success",
+                "web_url": "https://gitlab.com/group/project/-/pipelines/999"
+            },
+            "notes": [
+                {
+                    "author": {"username": "dave", "name": "Dave"},
+                    "created_at": "2024-02-02T10:00:00Z",
+                    "body": "LGTM",
+                    "system": false
+                }
+            ],
+            "reviewers": [
+                {"username": "dave", "name": "Dave"},
+                {"username": "eve", "name": "Eve"}
+            ]
+        }"#;
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: json.to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let details = cli
+            .get_mr_details(Path::new("/tmp/repo"), 101, "group/project", None)
+            .unwrap();
+
+        assert_eq!(details.iid, 101);
+        assert_eq!(
+            details.description.as_deref(),
+            Some("Implements feature X with tests")
+        );
+        assert_eq!(
+            details.merge_status.as_deref(),
+            Some("can_be_merged")
+        );
+
+        let pipeline = details.pipeline.as_ref().unwrap();
+        assert_eq!(pipeline.id, 999);
+        assert_eq!(pipeline.status, "success");
+        assert_eq!(
+            pipeline.web_url.as_deref(),
+            Some("https://gitlab.com/group/project/-/pipelines/999")
+        );
+
+        assert_eq!(details.reviewers.len(), 2);
+        assert_eq!(details.reviewers[0].username, "dave");
+        assert_eq!(details.reviewers[1].username, "eve");
+
+        assert_eq!(details.notes.len(), 1);
+        assert_eq!(details.notes[0].body, "LGTM");
+    }
+
+    #[test]
+    fn get_mr_pipeline_status_returns_pipeline_details() {
+        let runner = MockRunner::default();
+        let json = r#"{
+            "id": 555,
+            "status": "running",
+            "web_url": "https://gitlab.com/group/project/-/pipelines/555",
+            "source": "push",
+            "duration": 120.5,
+            "created_at": "2024-03-01T08:00:00Z",
+            "updated_at": "2024-03-01T08:02:00Z"
+        }"#;
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: json.to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let result = cli
+            .get_mr_pipeline_status(
+                Path::new("/tmp/repo"),
+                "feature-branch",
+                "group/project",
+                None,
+            )
+            .unwrap();
+
+        let pipeline = result.unwrap();
+        assert_eq!(pipeline.id, 555);
+        assert_eq!(pipeline.status, "running");
+        assert_eq!(
+            pipeline.web_url.as_deref(),
+            Some("https://gitlab.com/group/project/-/pipelines/555")
+        );
+        assert_eq!(pipeline.source.as_deref(), Some("push"));
+        assert_eq!(pipeline.duration, Some(120.5));
+        assert_eq!(
+            pipeline.created_at.as_deref(),
+            Some("2024-03-01T08:00:00Z")
+        );
+    }
+
+    #[test]
+    fn get_mr_pipeline_status_returns_none_on_failure() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(1),
+            stdout: String::new(),
+            stderr: "no pipeline found".to_string(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let result = cli
+            .get_mr_pipeline_status(
+                Path::new("/tmp/repo"),
+                "no-pipeline-branch",
+                "group/project",
+                None,
+            )
+            .unwrap();
+
+        assert!(result.is_none());
     }
 }
