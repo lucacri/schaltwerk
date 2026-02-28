@@ -163,6 +163,16 @@ pub struct GitlabMrResult {
     pub url: String,
 }
 
+pub struct CreateMrParams<'a> {
+    pub project_path: &'a Path,
+    pub gitlab_project: &'a str,
+    pub title: &'a str,
+    pub description: Option<&'a str>,
+    pub source_branch: &'a str,
+    pub target_branch: &'a str,
+    pub hostname: Option<&'a str>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitlabPipelineDetails {
     pub id: u64,
@@ -620,6 +630,218 @@ impl<R: CommandRunner> GitlabCli<R> {
 
         Ok(Some(pipeline))
     }
+
+    pub fn create_mr(&self, params: CreateMrParams<'_>) -> Result<GitlabMrResult, GitlabCliError> {
+        debug!(
+            "[GitlabCli] Creating MR: project={}, source={}, target={}",
+            params.project_path.display(),
+            params.source_branch,
+            params.target_branch
+        );
+
+        let mut args_vec = vec![
+            "mr".to_string(),
+            "create".to_string(),
+            "-t".to_string(),
+            params.title.to_string(),
+            "-s".to_string(),
+            params.source_branch.to_string(),
+            "-b".to_string(),
+            params.target_branch.to_string(),
+            "-R".to_string(),
+            params.gitlab_project.to_string(),
+            "--yes".to_string(),
+            "--no-editor".to_string(),
+        ];
+
+        if let Some(desc) = params.description {
+            args_vec.push("-d".to_string());
+            args_vec.push(desc.to_string());
+        }
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = params.hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(
+                &self.program,
+                &arg_refs,
+                Some(params.project_path),
+                &env_vec,
+            )
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        let combined = format!("{}\n{}", output.stdout, output.stderr);
+        let url = extract_mr_url(&combined).ok_or_else(|| {
+            GitlabCliError::InvalidOutput(
+                "Could not extract merge request URL from glab output.".to_string(),
+            )
+        })?;
+
+        info!("[GitlabCli] MR created: {url}");
+
+        Ok(GitlabMrResult {
+            source_branch: params.source_branch.to_string(),
+            url,
+        })
+    }
+
+    pub fn approve_mr(
+        &self,
+        project_path: &Path,
+        iid: u64,
+        gitlab_project: &str,
+        hostname: Option<&str>,
+    ) -> Result<(), GitlabCliError> {
+        debug!(
+            "[GitlabCli] Approving MR: project={}, iid={}",
+            project_path.display(),
+            iid
+        );
+
+        let args_vec = vec![
+            "mr".to_string(),
+            "approve".to_string(),
+            iid.to_string(),
+            "-R".to_string(),
+            gitlab_project.to_string(),
+        ];
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, Some(project_path), &env_vec)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        info!("[GitlabCli] MR {iid} approved");
+        Ok(())
+    }
+
+    pub fn merge_mr(
+        &self,
+        project_path: &Path,
+        iid: u64,
+        gitlab_project: &str,
+        squash: bool,
+        remove_source_branch: bool,
+        hostname: Option<&str>,
+    ) -> Result<(), GitlabCliError> {
+        debug!(
+            "[GitlabCli] Merging MR: project={}, iid={}, squash={}, remove_source={}",
+            project_path.display(),
+            iid,
+            squash,
+            remove_source_branch
+        );
+
+        let mut args_vec = vec![
+            "mr".to_string(),
+            "merge".to_string(),
+            iid.to_string(),
+            "-R".to_string(),
+            gitlab_project.to_string(),
+            "--yes".to_string(),
+        ];
+
+        if squash {
+            args_vec.push("--squash".to_string());
+        }
+        if remove_source_branch {
+            args_vec.push("-d".to_string());
+        }
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, Some(project_path), &env_vec)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        info!("[GitlabCli] MR {iid} merged");
+        Ok(())
+    }
+
+    pub fn comment_on_mr(
+        &self,
+        project_path: &Path,
+        iid: u64,
+        gitlab_project: &str,
+        message: &str,
+        hostname: Option<&str>,
+    ) -> Result<(), GitlabCliError> {
+        debug!(
+            "[GitlabCli] Commenting on MR: project={}, iid={}",
+            project_path.display(),
+            iid
+        );
+
+        let args_vec = vec![
+            "mr".to_string(),
+            "note".to_string(),
+            iid.to_string(),
+            "-m".to_string(),
+            message.to_string(),
+            "-R".to_string(),
+            gitlab_project.to_string(),
+        ];
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, Some(project_path), &env_vec)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        info!("[GitlabCli] Comment added to MR {iid}");
+        Ok(())
+    }
+}
+
+fn extract_mr_url(text: &str) -> Option<String> {
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("https://") && trimmed.contains("/-/merge_requests/") {
+            return Some(trimmed.to_string());
+        }
+    }
+    None
 }
 
 pub fn map_runner_error(err: io::Error) -> GitlabCliError {
@@ -1432,5 +1654,208 @@ mod tests {
             .unwrap();
 
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn extract_mr_url_finds_url_in_output() {
+        let output = "Creating merge request...\nhttps://gitlab.com/group/project/-/merge_requests/123\n!123 opened\n";
+        assert_eq!(
+            extract_mr_url(output),
+            Some("https://gitlab.com/group/project/-/merge_requests/123".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_mr_url_returns_none_when_missing() {
+        let output = "Creating merge request...\nDone!\n";
+        assert_eq!(extract_mr_url(output), None);
+    }
+
+    #[test]
+    fn extract_mr_url_handles_self_hosted() {
+        let output = "  https://gitlab.mycompany.com/team/repo/-/merge_requests/42  \n";
+        assert_eq!(
+            extract_mr_url(output),
+            Some("https://gitlab.mycompany.com/team/repo/-/merge_requests/42".to_string())
+        );
+    }
+
+    #[test]
+    fn create_mr_extracts_url_from_output() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: "Creating merge request for feature-branch into main in group/project\nhttps://gitlab.com/group/project/-/merge_requests/99\n".to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let result = cli
+            .create_mr(CreateMrParams {
+                project_path: Path::new("/tmp/repo"),
+                gitlab_project: "group/project",
+                title: "My MR Title",
+                description: Some("Description here"),
+                source_branch: "feature-branch",
+                target_branch: "main",
+                hostname: None,
+            })
+            .unwrap();
+
+        assert_eq!(result.source_branch, "feature-branch");
+        assert_eq!(
+            result.url,
+            "https://gitlab.com/group/project/-/merge_requests/99"
+        );
+    }
+
+    #[test]
+    fn create_mr_fails_when_no_url_in_output() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: "Created successfully".to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let result = cli.create_mr(CreateMrParams {
+            project_path: Path::new("/tmp/repo"),
+            gitlab_project: "group/project",
+            title: "Title",
+            description: None,
+            source_branch: "branch",
+            target_branch: "main",
+            hostname: None,
+        });
+
+        assert!(matches!(result, Err(GitlabCliError::InvalidOutput(_))));
+    }
+
+    #[test]
+    fn approve_mr_succeeds_on_exit_zero() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: "Approved".to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let result = cli.approve_mr(
+            Path::new("/tmp/repo"),
+            42,
+            "group/project",
+            None,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn approve_mr_fails_on_nonzero_exit() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(1),
+            stdout: String::new(),
+            stderr: "permission denied".to_string(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let result = cli.approve_mr(
+            Path::new("/tmp/repo"),
+            42,
+            "group/project",
+            None,
+        );
+
+        assert!(matches!(result, Err(GitlabCliError::CommandFailed { .. })));
+    }
+
+    #[test]
+    fn merge_mr_passes_squash_flag() {
+        let runner = MockRunner::default();
+        let runner_clone = runner.clone();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: "Merged".to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner_clone);
+
+        let result = cli.merge_mr(
+            Path::new("/tmp/repo"),
+            55,
+            "group/project",
+            true,
+            true,
+            None,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn merge_mr_fails_on_nonzero_exit() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(1),
+            stdout: String::new(),
+            stderr: "merge conflict".to_string(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let result = cli.merge_mr(
+            Path::new("/tmp/repo"),
+            55,
+            "group/project",
+            false,
+            false,
+            None,
+        );
+
+        assert!(matches!(result, Err(GitlabCliError::CommandFailed { .. })));
+    }
+
+    #[test]
+    fn comment_on_mr_succeeds() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: "Note added".to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let result = cli.comment_on_mr(
+            Path::new("/tmp/repo"),
+            10,
+            "group/project",
+            "LGTM!",
+            None,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn comment_on_mr_fails_on_nonzero_exit() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(1),
+            stdout: String::new(),
+            stderr: "not found".to_string(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let result = cli.comment_on_mr(
+            Path::new("/tmp/repo"),
+            10,
+            "group/project",
+            "Hello",
+            None,
+        );
+
+        assert!(matches!(result, Err(GitlabCliError::CommandFailed { .. })));
     }
 }
