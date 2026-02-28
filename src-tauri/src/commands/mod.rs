@@ -1,6 +1,7 @@
 pub mod agent_binaries;
 pub mod attention;
 pub mod clone;
+pub mod docker;
 pub mod git;
 pub mod github;
 pub mod mcp;
@@ -24,6 +25,7 @@ mod tests;
 pub use agent_binaries::*;
 pub use attention::*;
 pub use clone::*;
+pub use docker::*;
 pub use git::*;
 pub use github::*;
 pub use mcp::*;

@@ -204,4 +204,8 @@ export const TauriCommands = {
   ClipboardReadText: 'clipboard_read_text',
   CheckForUpdatesNow: 'check_for_updates_now',
   RestartApp: 'restart_app',
+  GetDockerStatus: 'get_docker_status',
+  SetDockerSandboxEnabled: 'set_docker_sandbox_enabled',
+  BuildDockerImage: 'build_docker_image',
+  RebuildDockerImage: 'rebuild_docker_image',
 } as const

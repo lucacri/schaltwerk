@@ -293,6 +293,8 @@ async fn set_default_open_app(app_id: String) -> Result<(), String> {
 pub static PROJECT_MANAGER: OnceCell<Arc<ProjectManager>> = OnceCell::const_new();
 pub static SETTINGS_MANAGER: OnceCell<Arc<Mutex<SettingsManager>>> = OnceCell::const_new();
 pub static ATTENTION_REGISTRY: OnceCell<Arc<Mutex<AttentionStateRegistry>>> = OnceCell::const_new();
+pub static DOCKER_MANAGER: OnceCell<Arc<schaltwerk::domains::docker::DockerManager>> =
+    OnceCell::const_new();
 pub static FILE_WATCHER_MANAGER: OnceCell<Arc<schaltwerk::domains::workspace::FileWatcherManager>> =
     OnceCell::const_new();
 static LAST_CORE_WRITE: Lazy<StdMutex<Option<(Uuid, std::time::Instant)>>> =
@@ -1390,12 +1392,26 @@ fn main() {
             get_amp_mcp_servers,
             set_amp_mcp_servers,
             get_agent_command_prefix,
-            set_agent_command_prefix
+            set_agent_command_prefix,
+            // Docker sandbox commands
+            get_docker_status,
+            set_docker_sandbox_enabled,
+            build_docker_image,
+            rebuild_docker_image
         ])
         .setup(move |app| {
             if ATTENTION_REGISTRY.get().is_none() {
                 let registry = Arc::new(Mutex::new(AttentionStateRegistry::default()));
                 let _ = ATTENTION_REGISTRY.set(registry);
+            }
+
+            if DOCKER_MANAGER.get().is_none() {
+                let docker_manager = Arc::new(
+                    schaltwerk::domains::docker::DockerManager::new(
+                        "schaltwerk-sandbox:latest".to_string(),
+                    ),
+                );
+                let _ = DOCKER_MANAGER.set(docker_manager);
             }
 
             // Initialize session attention state global in library crate
@@ -1613,6 +1629,12 @@ fn main() {
                 tauri::async_runtime::block_on(async {
                     let manager = get_project_manager().await;
                     manager.force_kill_all().await;
+
+                    if let Some(docker_manager) = DOCKER_MANAGER.get()
+                        && let Err(e) = docker_manager.stop_all().await
+                    {
+                        log::warn!("Failed to stop Docker containers on exit: {e}");
+                    }
                 });
 
                 // Stop MCP server if running

@@ -36,6 +36,8 @@ export enum SchaltEvent {
   OpenPrModal = 'schaltwerk:open-pr-modal',
   OpenMergeModal = 'schaltwerk:open-merge-modal',
   SelectAllRequested = 'schaltwerk:select-all-requested',
+  DockerStatusChanged = 'schaltwerk:docker-status-changed',
+  DockerImageBuildProgress = 'schaltwerk:docker-image-build-progress',
 }
 
 
@@ -208,6 +210,18 @@ export interface SelectionPayload {
   sessionState?: 'spec' | 'processing' | 'running' | 'reviewed'
 }
 
+export interface DockerStatusChangedPayload {
+  available: boolean
+  imageExists: boolean
+  sandboxEnabled: boolean
+}
+
+export interface DockerImageBuildProgressPayload {
+  message: string
+  complete: boolean
+  success: boolean
+}
+
 export type EventPayloadMap = {
   [SchaltEvent.SessionsRefreshed]: SessionsRefreshedEventPayload
   [SchaltEvent.SessionAdded]: {
@@ -260,4 +274,6 @@ export type EventPayloadMap = {
   [SchaltEvent.OpenPrModal]: OpenPrModalPayload
   [SchaltEvent.OpenMergeModal]: OpenMergeModalPayload
   [SchaltEvent.SelectAllRequested]: null
+  [SchaltEvent.DockerStatusChanged]: DockerStatusChangedPayload
+  [SchaltEvent.DockerImageBuildProgress]: DockerImageBuildProgressPayload
 }

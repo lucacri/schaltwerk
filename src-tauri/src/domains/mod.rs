@@ -1,5 +1,6 @@
 pub mod agents;
 pub mod attention;
+pub mod docker;
 pub mod git;
 pub mod merge;
 pub mod power;

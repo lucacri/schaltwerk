@@ -97,6 +97,8 @@ pub trait ProjectConfigMethods {
         config: &ProjectGithubConfig,
     ) -> Result<()>;
     fn clear_project_github_config(&self, repo_path: &Path) -> Result<()>;
+    fn get_docker_sandbox_enabled(&self, repo_path: &Path) -> Result<bool>;
+    fn set_docker_sandbox_enabled(&self, repo_path: &Path, enabled: bool) -> Result<()>;
 }
 
 impl ProjectConfigMethods for Database {
@@ -660,6 +662,49 @@ impl ProjectConfigMethods for Database {
 
         Ok(())
     }
+
+    fn get_docker_sandbox_enabled(&self, repo_path: &Path) -> Result<bool> {
+        let conn = self.get_conn()?;
+
+        let canonical_path =
+            std::fs::canonicalize(repo_path).unwrap_or_else(|_| repo_path.to_path_buf());
+
+        let result: rusqlite::Result<i64> = conn.query_row(
+            "SELECT docker_sandbox_enabled FROM project_config WHERE repository_path = ?1",
+            params![canonical_path.to_string_lossy()],
+            |row| row.get(0),
+        );
+
+        match result {
+            Ok(value) => Ok(value != 0),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn set_docker_sandbox_enabled(&self, repo_path: &Path, enabled: bool) -> Result<()> {
+        let conn = self.get_conn()?;
+        let now = Utc::now().timestamp();
+
+        let canonical_path =
+            std::fs::canonicalize(repo_path).unwrap_or_else(|_| repo_path.to_path_buf());
+        let value = if enabled { 1 } else { 0 };
+
+        conn.execute(
+            "INSERT INTO project_config (repository_path, auto_cancel_after_merge,
+                                            docker_sandbox_enabled, created_at, updated_at)
+                VALUES (?1, COALESCE(
+                    (SELECT auto_cancel_after_merge FROM project_config WHERE repository_path = ?1),
+                    1
+                ), ?2, ?3, ?3)
+                ON CONFLICT(repository_path) DO UPDATE SET
+                    docker_sandbox_enabled = excluded.docker_sandbox_enabled,
+                    updated_at = excluded.updated_at",
+            params![canonical_path.to_string_lossy(), value, now],
+        )?;
+
+        Ok(())
+    }
 }
 
 impl Database {
@@ -814,5 +859,37 @@ mod tests {
             .expect("load branch prefix");
 
         assert_eq!(loaded, "custom-prefix");
+    }
+
+    #[test]
+    fn docker_sandbox_disabled_by_default() {
+        let db = Database::new_in_memory().expect("db");
+        let (_tmp, repo_path) = create_temp_repo_path();
+
+        let enabled = db
+            .get_docker_sandbox_enabled(&repo_path)
+            .expect("load docker sandbox");
+
+        assert!(!enabled);
+    }
+
+    #[test]
+    fn docker_sandbox_round_trip() {
+        let db = Database::new_in_memory().expect("db");
+        let (_tmp, repo_path) = create_temp_repo_path();
+
+        db.set_docker_sandbox_enabled(&repo_path, true)
+            .expect("enable docker sandbox");
+        let enabled = db
+            .get_docker_sandbox_enabled(&repo_path)
+            .expect("load docker sandbox");
+        assert!(enabled);
+
+        db.set_docker_sandbox_enabled(&repo_path, false)
+            .expect("disable docker sandbox");
+        let enabled = db
+            .get_docker_sandbox_enabled(&repo_path)
+            .expect("load docker sandbox");
+        assert!(!enabled);
     }
 }

@@ -10,6 +10,7 @@ import { useSessions } from '../../hooks/useSessions'
 import { useActionButtons } from '../../hooks/useActionButtons'
 import type { HeaderActionConfig } from '../../types/actionButton'
 import { SpecContentModal } from '../SpecContentModal'
+import { DockerSandboxPanel } from '../settings/DockerSandboxPanel'
 import { MCPConfigPanel } from '../settings/MCPConfigPanel'
 import { SettingsArchivesSection } from '../settings/SettingsArchivesSection'
 import { ThemeSettings } from '../settings/ThemeSettings'
@@ -1332,6 +1333,8 @@ fi`}
                             </div>
                         </div>
                     </div>
+
+                    <DockerSandboxPanel />
                 </div>
             </div>
         </div>
