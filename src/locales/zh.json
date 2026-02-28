@@ -953,6 +953,28 @@
       "refreshFailed": "刷新状态失败"
     }
   },
+  "gitlabMenu": {
+    "title": "GitLab CLI",
+    "installed": "已安装",
+    "authenticated": "已认证",
+    "hostname": "主机名",
+    "account": "账户",
+    "sources": "数据源",
+    "installCliHint": "安装 glab CLI 以启用 GitLab 集成。",
+    "authHint": "请在终端中运行 glab auth login 进行认证，然后刷新状态。",
+    "configureSources": "配置数据源",
+    "refreshStatus": "刷新状态",
+    "statusLabels": {
+      "sourcesCount": "{count} 个数据源",
+      "configureGitlab": "配置 GitLab",
+      "notAuthenticated": "未认证",
+      "cliNotInstalled": "CLI 未安装"
+    },
+    "toasts": {
+      "statusRefreshed": "GitLab 状态已刷新",
+      "refreshFailed": "刷新 GitLab 状态失败"
+    }
+  },
   "agentDefaults": {
     "title": "高级代理设置",
     "descriptionWithArgs": "配置 {agent} 的可选参数和环境变量。",
