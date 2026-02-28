@@ -955,6 +955,28 @@ export interface Translations {
       refreshFailed: string
     }
   }
+  gitlabMenu: {
+    title: string
+    installed: string
+    authenticated: string
+    hostname: string
+    account: string
+    sources: string
+    installCliHint: string
+    authHint: string
+    configureSources: string
+    refreshStatus: string
+    statusLabels: {
+      sourcesCount: string
+      configureGitlab: string
+      notAuthenticated: string
+      cliNotInstalled: string
+    }
+    toasts: {
+      statusRefreshed: string
+      refreshFailed: string
+    }
+  }
   agentDefaults: {
     title: string
     descriptionWithArgs: string

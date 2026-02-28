@@ -953,6 +953,28 @@
       "refreshFailed": "Failed to refresh status"
     }
   },
+  "gitlabMenu": {
+    "title": "GitLab CLI",
+    "installed": "Installed",
+    "authenticated": "Authenticated",
+    "hostname": "Hostname",
+    "account": "Account",
+    "sources": "Sources",
+    "installCliHint": "Install the glab CLI to enable GitLab integration.",
+    "authHint": "To authenticate, run glab auth login in your terminal, then refresh status.",
+    "configureSources": "Configure sources",
+    "refreshStatus": "Refresh status",
+    "statusLabels": {
+      "sourcesCount": "{count} source",
+      "configureGitlab": "Configure GitLab",
+      "notAuthenticated": "Not authenticated",
+      "cliNotInstalled": "CLI not installed"
+    },
+    "toasts": {
+      "statusRefreshed": "GitLab status refreshed",
+      "refreshFailed": "Failed to refresh GitLab status"
+    }
+  },
   "agentDefaults": {
     "title": "Advanced agent settings",
     "descriptionWithArgs": "Configure optional arguments and environment variables for {agent}.",
