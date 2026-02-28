@@ -1,7 +1,10 @@
 import { useState, useCallback } from 'react'
-import { VscArrowLeft, VscLinkExternal, VscRefresh } from 'react-icons/vsc'
+import { invoke } from '@tauri-apps/api/core'
+import { VscArrowLeft, VscLinkExternal, VscRefresh, VscCheck, VscGitMerge, VscComment } from 'react-icons/vsc'
 import type { GitlabMrDetails, GitlabPipelinePayload } from '../../types/gitlabTypes'
 import { useTranslation } from '../../common/i18n'
+import { TauriCommands } from '../../common/tauriCommands'
+import { useToast } from '../../common/toast/ToastProvider'
 import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
@@ -185,9 +188,17 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProject, sourceHostname }: GitlabMrDetailProps) {
   const { t } = useTranslation()
+  const { pushToast } = useToast()
   const userNotes = details.notes.filter(n => n.body && n.body.trim().length > 0)
   const [pipelineOverride, setPipelineOverride] = useState<GitlabPipelinePayload | null>(null)
   const [refreshingPipeline, setRefreshingPipeline] = useState(false)
+  const [approvePending, setApprovePending] = useState(false)
+  const [mergePending, setMergePending] = useState(false)
+  const [commentPending, setCommentPending] = useState(false)
+  const [showCommentInput, setShowCommentInput] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [squash, setSquash] = useState(false)
+  const [removeSourceBranch, setRemoveSourceBranch] = useState(false)
 
   const effectivePipelineStatus = pipelineOverride?.status ?? details.pipelineStatus
   const effectivePipelineUrl = pipelineOverride?.url ?? details.pipelineUrl
@@ -213,6 +224,66 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
       setRefreshingPipeline(false)
     }
   }, [details.sourceBranch, sourceProject, sourceHostname, onRefreshPipeline])
+
+  const handleApprove = useCallback(async () => {
+    setApprovePending(true)
+    try {
+      await invoke(TauriCommands.GitLabApproveMr, {
+        project: sourceProject,
+        mrIid: details.iid,
+        hostname: sourceHostname ?? null,
+      })
+      pushToast({ tone: 'success', title: t.gitlabMrTab.approveSuccess })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      logger.warn('[GitlabMrDetail] Failed to approve MR', error)
+      pushToast({ tone: 'error', title: t.gitlabMrTab.approveFailed, description: message })
+    } finally {
+      setApprovePending(false)
+    }
+  }, [sourceProject, details.iid, sourceHostname, pushToast, t])
+
+  const handleMerge = useCallback(async () => {
+    setMergePending(true)
+    try {
+      await invoke(TauriCommands.GitLabMergeMr, {
+        project: sourceProject,
+        mrIid: details.iid,
+        hostname: sourceHostname ?? null,
+        squash,
+        removeSourceBranch,
+      })
+      pushToast({ tone: 'success', title: t.gitlabMrTab.mergeSuccess })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      logger.warn('[GitlabMrDetail] Failed to merge MR', error)
+      pushToast({ tone: 'error', title: t.gitlabMrTab.mergeFailed, description: message })
+    } finally {
+      setMergePending(false)
+    }
+  }, [sourceProject, details.iid, sourceHostname, squash, removeSourceBranch, pushToast, t])
+
+  const handleComment = useCallback(async () => {
+    if (!commentText.trim()) return
+    setCommentPending(true)
+    try {
+      await invoke(TauriCommands.GitLabCommentOnMr, {
+        project: sourceProject,
+        mrIid: details.iid,
+        body: commentText,
+        hostname: sourceHostname ?? null,
+      })
+      pushToast({ tone: 'success', title: t.gitlabMrTab.commentSuccess })
+      setCommentText('')
+      setShowCommentInput(false)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      logger.warn('[GitlabMrDetail] Failed to comment on MR', error)
+      pushToast({ tone: 'error', title: t.gitlabMrTab.commentFailed, description: message })
+    } finally {
+      setCommentPending(false)
+    }
+  }, [sourceProject, details.iid, commentText, sourceHostname, pushToast, t])
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -446,6 +517,165 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
             </div>
           )}
         </div>
+
+        {details.state === 'opened' && (
+          <div
+            className="mt-4 pt-3 flex flex-col gap-2"
+            style={{ borderTop: '1px solid var(--color-border-default)' }}
+          >
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { void handleApprove() }}
+                disabled={approvePending}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded"
+                style={{
+                  fontSize: theme.fontSize.caption,
+                  fontFamily: theme.fontFamily.sans,
+                  color: approvePending ? 'var(--color-text-muted)' : 'var(--color-accent-green)',
+                  backgroundColor: 'transparent',
+                  border: '1px solid var(--color-border-default)',
+                  cursor: approvePending ? 'default' : 'pointer',
+                  opacity: approvePending ? 0.6 : 1,
+                }}
+              >
+                <VscCheck className="w-3.5 h-3.5" />
+                <span>{approvePending ? t.gitlabMrTab.approving : t.gitlabMrTab.approve}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { void handleMerge() }}
+                disabled={mergePending}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded"
+                style={{
+                  fontSize: theme.fontSize.caption,
+                  fontFamily: theme.fontFamily.sans,
+                  color: mergePending ? 'var(--color-text-muted)' : 'var(--color-accent-violet)',
+                  backgroundColor: 'transparent',
+                  border: '1px solid var(--color-border-default)',
+                  cursor: mergePending ? 'default' : 'pointer',
+                  opacity: mergePending ? 0.6 : 1,
+                }}
+              >
+                <VscGitMerge className="w-3.5 h-3.5" />
+                <span>{mergePending ? t.gitlabMrTab.merging : t.gitlabMrTab.merge}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowCommentInput(prev => !prev)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded"
+                style={{
+                  fontSize: theme.fontSize.caption,
+                  fontFamily: theme.fontFamily.sans,
+                  color: showCommentInput ? 'var(--color-accent-blue)' : 'var(--color-text-secondary)',
+                  backgroundColor: 'transparent',
+                  border: '1px solid var(--color-border-default)',
+                  cursor: 'pointer',
+                }}
+              >
+                <VscComment className="w-3.5 h-3.5" />
+                <span>{t.gitlabMrTab.comment}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label
+                className="flex items-center gap-1.5"
+                style={{
+                  fontSize: theme.fontSize.caption,
+                  fontFamily: theme.fontFamily.sans,
+                  color: 'var(--color-text-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={squash}
+                  onChange={(e) => setSquash(e.target.checked)}
+                  style={{ accentColor: 'var(--color-accent-blue)' }}
+                />
+                {t.gitlabMrTab.squashCommits}
+              </label>
+
+              <label
+                className="flex items-center gap-1.5"
+                style={{
+                  fontSize: theme.fontSize.caption,
+                  fontFamily: theme.fontFamily.sans,
+                  color: 'var(--color-text-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={removeSourceBranch}
+                  onChange={(e) => setRemoveSourceBranch(e.target.checked)}
+                  style={{ accentColor: 'var(--color-accent-blue)' }}
+                />
+                {t.gitlabMrTab.removeSourceBranch}
+              </label>
+            </div>
+
+            {showCommentInput && (
+              <div className="flex flex-col gap-2 mt-1">
+                <textarea
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder={t.gitlabMrTab.commentPlaceholder}
+                  rows={3}
+                  style={{
+                    fontSize: theme.fontSize.caption,
+                    fontFamily: theme.fontFamily.sans,
+                    color: 'var(--color-text-primary)',
+                    backgroundColor: 'var(--color-bg-tertiary)',
+                    border: '1px solid var(--color-border-default)',
+                    borderRadius: 6,
+                    padding: '8px 10px',
+                    resize: 'vertical',
+                    lineHeight: theme.lineHeight.body,
+                    outline: 'none',
+                  }}
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { void handleComment() }}
+                    disabled={commentPending || !commentText.trim()}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded"
+                    style={{
+                      fontSize: theme.fontSize.caption,
+                      fontFamily: theme.fontFamily.sans,
+                      color: commentPending || !commentText.trim() ? 'var(--color-text-muted)' : 'var(--color-accent-blue)',
+                      backgroundColor: 'transparent',
+                      border: '1px solid var(--color-border-default)',
+                      cursor: commentPending || !commentText.trim() ? 'default' : 'pointer',
+                      opacity: commentPending || !commentText.trim() ? 0.6 : 1,
+                    }}
+                  >
+                    <span>{commentPending ? t.gitlabMrTab.commenting : t.gitlabMrTab.send}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowCommentInput(false); setCommentText('') }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded"
+                    style={{
+                      fontSize: theme.fontSize.caption,
+                      fontFamily: theme.fontFamily.sans,
+                      color: 'var(--color-text-muted)',
+                      backgroundColor: 'transparent',
+                      border: '1px solid var(--color-border-default)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span>{t.gitlabMrTab.cancel}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -1264,6 +1264,24 @@ export interface Translations {
     pipelineFailed: string
     pipelineRunning: string
     pipelinePending: string
+    approve: string
+    merge: string
+    comment: string
+    squashCommits: string
+    removeSourceBranch: string
+    approveSuccess: string
+    approveFailed: string
+    mergeSuccess: string
+    mergeFailed: string
+    commentSuccess: string
+    commentFailed: string
+    addComment: string
+    commentPlaceholder: string
+    send: string
+    cancel: string
+    merging: string
+    approving: string
+    commenting: string
   }
   historySearch: {
     placeholder: string
