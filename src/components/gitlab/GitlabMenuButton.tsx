@@ -140,7 +140,7 @@ export function GitlabMenuButton({ className, onConfigureSources }: GitlabMenuBu
     <div className={`relative ${className ?? ''}`} ref={menuRef}>
       <button
         type="button"
-        className="flex items-center gap-2 px-2 h-[22px] border rounded-md text-xs"
+        className="flex items-center gap-2 px-2 h-[22px] border rounded-md text-caption"
         style={{
           backgroundColor: 'var(--color-bg-elevated)',
           borderColor: 'var(--color-border-subtle)',
@@ -152,7 +152,7 @@ export function GitlabMenuButton({ className, onConfigureSources }: GitlabMenuBu
         aria-expanded={open}
         title="GitLab integration"
       >
-        <FaGitlab className="text-[12px]" />
+        <FaGitlab className="text-caption" />
         <span className="truncate max-w-[120px]">{statusLabel}</span>
         <span
           aria-hidden="true"
@@ -172,9 +172,9 @@ export function GitlabMenuButton({ className, onConfigureSources }: GitlabMenuBu
           className="absolute right-0 mt-2 min-w-[240px] z-30 rounded-lg overflow-hidden"
           style={menuContainerStyle}
         >
-          <div className="px-3 py-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+          <div className="px-3 py-2 text-caption" style={{ color: 'var(--color-text-secondary)' }}>
             <div className="flex items-center gap-2">
-              <FaGitlab className="text-[14px]" />
+              <FaGitlab className="text-body" />
               <span style={{ color: 'var(--color-text-primary)' }}>{t.gitlabMenu.title}</span>
             </div>
             <div className="mt-2 space-y-1">
@@ -190,14 +190,14 @@ export function GitlabMenuButton({ className, onConfigureSources }: GitlabMenuBu
             </div>
             {!installed && (
               <div className="mt-3 pt-2 border-t" style={{ borderColor: 'var(--color-border-subtle)' }}>
-                <div className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                <div className="text-caption" style={{ color: 'var(--color-text-muted)' }}>
                   {t.gitlabMenu.installCliHint}
                 </div>
               </div>
             )}
             {installed && !authenticated && (
               <div className="mt-3 pt-2 border-t" style={{ borderColor: 'var(--color-border-subtle)' }}>
-                <div className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                <div className="text-caption" style={{ color: 'var(--color-text-muted)' }}>
                   {t.gitlabMenu.authHint}
                 </div>
               </div>
@@ -212,7 +212,7 @@ export function GitlabMenuButton({ className, onConfigureSources }: GitlabMenuBu
               role="menuitem"
               onClick={() => { closeMenu(); onConfigureSources?.() }}
               disabled={!installed || !authenticated}
-              className="text-left text-xs"
+              className="text-left text-caption"
               style={buildMenuButtonStyle('configure', { disabled: !installed || !authenticated })}
               onMouseEnter={() => installed && authenticated && setHoveredButton('configure')}
               onMouseLeave={() => setHoveredButton((prev) => (prev === 'configure' ? null : prev))}
@@ -226,14 +226,14 @@ export function GitlabMenuButton({ className, onConfigureSources }: GitlabMenuBu
               type="button"
               role="menuitem"
               onClick={() => { void handleRefreshStatus() }}
-              className="text-left text-xs"
+              className="text-left text-caption"
               style={buildMenuButtonStyle('refresh', { withIcon: true })}
               onMouseEnter={() => setHoveredButton('refresh')}
               onMouseLeave={() => setHoveredButton((prev) => (prev === 'refresh' ? null : prev))}
               onFocus={() => setFocusedButton('refresh')}
               onBlur={() => setFocusedButton((prev) => (prev === 'refresh' ? null : prev))}
             >
-              <VscRefresh className="text-[13px]" />
+              <VscRefresh className="text-label" />
               <span>{t.gitlabMenu.refreshStatus}</span>
             </button>
           </div>

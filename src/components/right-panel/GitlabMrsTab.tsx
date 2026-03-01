@@ -78,7 +78,7 @@ export function GitlabMrsTab() {
           placeholder={t.gitlabMrTab.searchPlaceholder}
           className="flex-1 bg-transparent border-none outline-none"
           style={{
-            fontSize: theme.fontSize.caption,
+            fontSize: theme.fontSize.body,
             color: 'var(--color-text-primary)',
             fontFamily: theme.fontFamily.sans,
           }}
@@ -209,7 +209,7 @@ function MrRow({ mr, onSelect }: { mr: GitlabMrSummary; onSelect: (mr: GitlabMrS
       <div
         className="truncate"
         style={{
-          fontSize: theme.fontSize.caption,
+          fontSize: theme.fontSize.body,
           color: 'var(--color-text-primary)',
           fontFamily: theme.fontFamily.sans,
           lineHeight: theme.lineHeight.body,

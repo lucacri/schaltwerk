@@ -40,7 +40,7 @@ const modalContainerStyle: React.CSSProperties = {
 
 const fieldLabelStyle: React.CSSProperties = {
   color: 'var(--color-text-secondary)',
-  fontSize: theme.fontSize?.label || '0.75rem',
+  fontSize: theme.fontSize.label,
 }
 
 export function GitlabMrSessionModal({
@@ -222,13 +222,13 @@ export function GitlabMrSessionModal({
       >
         <div className="flex justify-between items-start gap-4 border-b px-6 py-4 flex-shrink-0" style={{ borderColor: 'var(--color-border-subtle)' }}>
           <div>
-            <h2 id="gitlab-mr-session-title" className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+            <h2 id="gitlab-mr-session-title" className="text-heading font-semibold" style={{ color: 'var(--color-text-primary)' }}>
               {t.gitlabMrModal.title}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-sm"
+            className="text-body"
             style={{ color: 'var(--color-text-secondary)' }}
             aria-label={t.ariaLabels.close}
           >
@@ -240,7 +240,7 @@ export function GitlabMrSessionModal({
           <div>
             <span style={fieldLabelStyle}>{t.gitlabMrModal.selectSource}</span>
             {sources.length === 0 ? (
-              <p className="mt-1 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+              <p className="mt-1 text-body" style={{ color: 'var(--color-text-tertiary)' }}>
                 {t.gitlabMrModal.noSourcesConfigured}
               </p>
             ) : (
@@ -250,7 +250,7 @@ export function GitlabMrSessionModal({
                   const source = sources.find(s => s.id === e.target.value)
                   setSelectedSource(source ?? null)
                 }}
-                className="mt-1 w-full rounded px-3 py-2 text-sm"
+                className="mt-1 w-full rounded px-3 py-2 text-body"
                 style={{
                   backgroundColor: 'var(--color-bg-tertiary)',
                   border: '1px solid var(--color-border-subtle)',
@@ -272,7 +272,7 @@ export function GitlabMrSessionModal({
               <button
                 type="button"
                 onClick={() => setMode('squash')}
-                className="px-3 py-2 rounded text-sm"
+                className="px-3 py-2 rounded text-body"
                 style={{
                   backgroundColor:
                     mode === 'squash' ? 'var(--color-accent-green-bg)' : 'var(--color-bg-tertiary)',
@@ -287,7 +287,7 @@ export function GitlabMrSessionModal({
               <button
                 type="button"
                 onClick={() => setMode('reapply')}
-                className="px-3 py-2 rounded text-sm"
+                className="px-3 py-2 rounded text-body"
                 style={{
                   backgroundColor:
                     mode === 'reapply' ? 'var(--color-accent-blue-bg)' : 'var(--color-bg-tertiary)',
@@ -300,7 +300,7 @@ export function GitlabMrSessionModal({
                 {t.gitlabMrModal.useExistingCommits}
               </button>
             </div>
-            <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            <p className="mt-2 text-body" style={{ color: 'var(--color-text-secondary)' }}>
               {mode === 'squash'
                 ? t.gitlabMrModal.squashDesc
                 : t.gitlabMrModal.reapplyDesc}
@@ -316,7 +316,7 @@ export function GitlabMrSessionModal({
                 id="gitlab-mr-commit-message"
                 value={commitMessage}
                 onChange={(event) => setCommitMessage(event.target.value)}
-                className="mt-1 w-full rounded px-3 py-2 text-sm"
+                className="mt-1 w-full rounded px-3 py-2 text-body"
                 style={{
                   backgroundColor: 'var(--color-bg-tertiary)',
                   border: '1px solid var(--color-border-subtle)',
@@ -337,7 +337,7 @@ export function GitlabMrSessionModal({
               autoFocus
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              className="mt-1 w-full rounded px-3 py-2 text-sm"
+              className="mt-1 w-full rounded px-3 py-2 text-body"
               style={{
                 backgroundColor: 'var(--color-bg-tertiary)',
                 border: '1px solid var(--color-border-subtle)',
@@ -356,7 +356,7 @@ export function GitlabMrSessionModal({
               value={body}
               onChange={(event) => setBody(event.target.value)}
               rows={6}
-              className="mt-1 w-full rounded px-3 py-2 text-sm resize-y"
+              className="mt-1 w-full rounded px-3 py-2 text-body resize-y"
               style={{
                 backgroundColor: 'var(--color-bg-tertiary)',
                 border: '1px solid var(--color-border-subtle)',
@@ -374,7 +374,7 @@ export function GitlabMrSessionModal({
               id="gitlab-mr-target-branch"
               value={baseBranch}
               onChange={(event) => setBaseBranch(event.target.value)}
-              className="mt-1 w-full rounded px-3 py-2 text-sm"
+              className="mt-1 w-full rounded px-3 py-2 text-body"
               style={{
                 backgroundColor: 'var(--color-bg-tertiary)',
                 border: '1px solid var(--color-border-subtle)',
@@ -382,13 +382,13 @@ export function GitlabMrSessionModal({
               }}
               placeholder="main"
             />
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+            <p className="mt-1 text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
               {t.gitlabMrModal.targetBranchHint}
             </p>
           </div>
 
           <div>
-            <label className="flex items-center gap-2 text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+            <label className="flex items-center gap-2 text-body mb-2" style={{ color: 'var(--color-text-secondary)' }}>
               <input
                 type="checkbox"
                 checked={useMrBranchName}
@@ -403,7 +403,7 @@ export function GitlabMrSessionModal({
                   id="gitlab-mr-branch-name"
                   value={mrBranchName}
                   onChange={(event) => setMrBranchName(event.target.value)}
-                  className="mt-1 w-full rounded px-3 py-2 text-sm"
+                  className="mt-1 w-full rounded px-3 py-2 text-body"
                   style={{
                     backgroundColor: 'var(--color-bg-tertiary)',
                     border: '1px solid var(--color-border-subtle)',
@@ -411,7 +411,7 @@ export function GitlabMrSessionModal({
                   }}
                   placeholder={`mr/${sessionName}`}
                 />
-                <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                <p className="mt-1 text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
                   {t.gitlabMrModal.customBranchHint}
                 </p>
               </>
@@ -419,7 +419,7 @@ export function GitlabMrSessionModal({
           </div>
 
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            <label className="flex items-center gap-2 text-body" style={{ color: 'var(--color-text-secondary)' }}>
               <input
                 type="checkbox"
                 checked={squashOnMerge}
@@ -428,7 +428,7 @@ export function GitlabMrSessionModal({
               />
               <span>{t.gitlabMrModal.squashOnMerge}</span>
             </label>
-            <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            <label className="flex items-center gap-2 text-body" style={{ color: 'var(--color-text-secondary)' }}>
               <input
                 type="checkbox"
                 checked={cancelAfterMr}
@@ -441,7 +441,7 @@ export function GitlabMrSessionModal({
 
           {error && (
             <div
-              className="rounded-md px-3 py-2 text-sm"
+              className="rounded-md px-3 py-2 text-body"
               style={{
                 backgroundColor: 'var(--color-accent-red-bg)',
                 border: '1px solid var(--color-accent-red-border)',
@@ -454,14 +454,14 @@ export function GitlabMrSessionModal({
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t px-6 py-4 flex-shrink-0" style={{ borderColor: 'var(--color-border-subtle)' }}>
-          <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+          <div className="text-caption" style={{ color: 'var(--color-text-secondary)' }}>
             {t.gitlabMrModal.shortcutHint}
           </div>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm rounded border group inline-flex items-center gap-2"
+              className="px-4 py-2 text-body rounded border group inline-flex items-center gap-2"
               style={{
                 backgroundColor: 'var(--color-bg-tertiary)',
                 borderColor: 'var(--color-border-subtle)',
@@ -469,13 +469,13 @@ export function GitlabMrSessionModal({
               }}
             >
               <span>{t.gitlabMrModal.cancel}</span>
-              <span className="text-xs opacity-60 group-hover:opacity-100">Esc</span>
+              <span className="text-caption opacity-60 group-hover:opacity-100">Esc</span>
             </button>
             <button
               type="button"
               onClick={() => { void handleConfirm() }}
               disabled={confirmDisabled}
-              className="px-4 py-2 text-sm font-medium rounded group inline-flex items-center gap-2"
+              className="px-4 py-2 text-body font-medium rounded group inline-flex items-center gap-2"
               style={{
                 backgroundColor: confirmDisabled
                   ? 'var(--color-bg-hover)'
@@ -487,7 +487,7 @@ export function GitlabMrSessionModal({
               }}
             >
               <span>{status === 'creating' ? t.gitlabMrModal.creatingMr : t.gitlabMrModal.createMr}</span>
-              <span className="text-xs opacity-60 group-hover:opacity-100">{'\u2318\u21B5'}</span>
+              <span className="text-caption opacity-60 group-hover:opacity-100">{'\u2318\u21B5'}</span>
             </button>
           </div>
         </div>

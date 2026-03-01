@@ -442,7 +442,7 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
             <SectionLabel>{t.gitlabMrTab.description}</SectionLabel>
             <div
               style={{
-                fontSize: theme.fontSize.caption,
+                fontSize: theme.fontSize.body,
                 color: 'var(--color-text-secondary)',
                 lineHeight: theme.lineHeight.body,
                 whiteSpace: 'pre-wrap',
@@ -502,7 +502,7 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
                   </div>
                   <div
                     style={{
-                      fontSize: theme.fontSize.caption,
+                      fontSize: theme.fontSize.body,
                       color: 'var(--color-text-secondary)',
                       lineHeight: theme.lineHeight.body,
                       whiteSpace: 'pre-wrap',
@@ -630,7 +630,7 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
                   placeholder={t.gitlabMrTab.commentPlaceholder}
                   rows={3}
                   style={{
-                    fontSize: theme.fontSize.caption,
+                    fontSize: theme.fontSize.body,
                     fontFamily: theme.fontFamily.sans,
                     color: 'var(--color-text-primary)',
                     backgroundColor: 'var(--color-bg-tertiary)',

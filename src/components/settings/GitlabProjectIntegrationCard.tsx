@@ -115,11 +115,11 @@ export function GitlabProjectIntegrationCard({ onNotify }: GitlabProjectIntegrat
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-body font-medium" style={{ color: 'var(--color-text-primary)' }}>
-            <FaGitlab className="text-base" />
+            <FaGitlab className="text-body-large" />
             <span>GitLab</span>
           </div>
           <div
-            className="inline-flex rounded-md px-3 py-2 text-xs"
+            className="inline-flex rounded-md px-3 py-2 text-caption"
             style={{
               backgroundColor: tonePalette.bg,
               border: `1px solid ${tonePalette.border}`,
@@ -128,12 +128,12 @@ export function GitlabProjectIntegrationCard({ onNotify }: GitlabProjectIntegrat
             }}
           >
             <div className="flex items-start gap-2 text-left">
-              <ToneIcon className="text-sm mt-[2px]" style={{ color: tonePalette.DEFAULT }} />
+              <ToneIcon className="text-body mt-[2px]" style={{ color: tonePalette.DEFAULT }} />
               <div className="space-y-1">
                 <div className="font-medium" style={{ color: tonePalette.light }}>
                   {statusDetails.title}
                 </div>
-                <div className="text-[11px] leading-snug" style={{ color: 'var(--color-text-secondary)' }}>
+                <div className="text-caption leading-snug" style={{ color: 'var(--color-text-secondary)' }}>
                   {statusDetails.description}
                 </div>
               </div>
@@ -144,9 +144,9 @@ export function GitlabProjectIntegrationCard({ onNotify }: GitlabProjectIntegrat
           <button
             onClick={() => { void handleRefresh() }}
             disabled={isRefreshing}
-            className="settings-btn px-3 py-2 text-xs font-medium rounded-md flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="settings-btn px-3 py-2 text-caption font-medium rounded-md flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <VscRefresh className="text-[13px]" />
+            <VscRefresh className="text-label" />
             <span>{t.settings.common.refresh}</span>
           </button>
         </div>

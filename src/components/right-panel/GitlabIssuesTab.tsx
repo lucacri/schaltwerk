@@ -70,7 +70,7 @@ export function GitlabIssuesTab() {
           placeholder={t.gitlabIssueTab.searchPlaceholder}
           className="flex-1 bg-transparent border-none outline-none"
           style={{
-            fontSize: theme.fontSize.caption,
+            fontSize: theme.fontSize.body,
             color: 'var(--color-text-primary)',
             fontFamily: theme.fontFamily.sans,
           }}
@@ -182,7 +182,7 @@ function IssueRow({ issue, onSelect }: { issue: GitlabIssueSummary; onSelect: (i
       <div
         className="truncate"
         style={{
-          fontSize: theme.fontSize.caption,
+          fontSize: theme.fontSize.body,
           color: 'var(--color-text-primary)',
           fontFamily: theme.fontFamily.sans,
           lineHeight: theme.lineHeight.body,

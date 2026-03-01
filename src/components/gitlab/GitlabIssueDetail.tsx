@@ -161,7 +161,7 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
             </div>
             <div
               style={{
-                fontSize: theme.fontSize.caption,
+                fontSize: theme.fontSize.body,
                 color: 'var(--color-text-secondary)',
                 lineHeight: theme.lineHeight.body,
                 whiteSpace: 'pre-wrap',
@@ -230,7 +230,7 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
                   </div>
                   <div
                     style={{
-                      fontSize: theme.fontSize.caption,
+                      fontSize: theme.fontSize.body,
                       color: 'var(--color-text-secondary)',
                       lineHeight: theme.lineHeight.body,
                       whiteSpace: 'pre-wrap',
