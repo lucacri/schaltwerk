@@ -37,6 +37,8 @@ pub enum SchaltEvent {
     OpenMergeModal,
     OpenGitlabMrModal,
     SelectAllRequested,
+    DockerStatusChanged,
+    DockerImageBuildProgress,
 }
 
 impl SchaltEvent {
@@ -78,8 +80,26 @@ impl SchaltEvent {
             SchaltEvent::OpenMergeModal => "schaltwerk:open-merge-modal",
             SchaltEvent::OpenGitlabMrModal => "schaltwerk:open-gitlab-mr-modal",
             SchaltEvent::SelectAllRequested => "schaltwerk:select-all-requested",
+            SchaltEvent::DockerStatusChanged => "schaltwerk:docker-status-changed",
+            SchaltEvent::DockerImageBuildProgress => "schaltwerk:docker-image-build-progress",
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerBuildProgressPayload {
+    pub message: String,
+    pub complete: bool,
+    pub success: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerStatusChangedPayload {
+    pub available: bool,
+    pub image_exists: bool,
+    pub sandbox_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

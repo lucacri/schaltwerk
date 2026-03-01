@@ -15,6 +15,8 @@ import { KeyboardShortcutAction } from "../../keyboardShortcuts/config";
 import { detectPlatformSafe } from "../../keyboardShortcuts/helpers";
 import { useEpics } from "../../hooks/useEpics";
 import { useTranslation } from "../../common/i18n/useTranslation";
+import { useAtomValue } from "jotai";
+import { dockerSandboxEnabledAtom } from "../../store/atoms/docker";
 
 interface SessionCardProps {
   session: {
@@ -249,6 +251,7 @@ export const SessionCard = memo<SessionCardProps>(
     onLinkPr,
   }) => {
     const { t } = useTranslation();
+    const dockerSandboxEnabled = useAtomValue(dockerSandboxEnabledAtom);
     const { setItemEpic } = useEpics();
     const shortcuts = useMultipleShortcutDisplays([
       KeyboardShortcutAction.OpenDiffViewer,
@@ -554,6 +557,20 @@ export const SessionCard = memo<SessionCardProps>(
                     }}
                   />
                   {agentLabel}
+                </span>
+              )}
+              {dockerSandboxEnabled && sessionState === "running" && (
+                <span
+                  className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded border"
+                  style={{
+                    ...sessionText.badge,
+                    backgroundColor: "var(--color-accent-violet-bg)",
+                    color: "var(--color-accent-violet-light)",
+                    borderColor: "var(--color-accent-violet-border)",
+                  }}
+                  title={t.sessionCard.dockerBadgeTitle}
+                >
+                  {t.sessionCard.dockerBadge}
                 </span>
               )}
               <span style={{ color: "var(--color-accent-green-light)" }}>+{additions}</span>

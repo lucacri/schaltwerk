@@ -797,6 +797,7 @@ pub(crate) async fn perform_orchestrator_index_refresh_for_tests(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::fs;
     use std::process::Command;
     use std::sync::{Arc, Mutex as StdMutex};
@@ -1382,6 +1383,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn orchestrator_refresh_triggers_on_commit_signals() {
         let collector = Arc::new(TestRefreshCollector::default());
         let provider: Arc<dyn OrchestratorIndexRefresh> = collector.clone();
@@ -1406,6 +1408,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn orchestrator_refresh_ignores_worktree_only_changes() {
         let collector = Arc::new(TestRefreshCollector::default());
         let provider: Arc<dyn OrchestratorIndexRefresh> = collector.clone();

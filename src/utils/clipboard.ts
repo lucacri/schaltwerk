@@ -22,3 +22,22 @@ export async function writeClipboard(text: string): Promise<boolean> {
 
   return false
 }
+
+export async function readClipboard(): Promise<string | null> {
+  try {
+    return await invoke<string>(TauriCommands.ClipboardReadText)
+  } catch (err) {
+    logger.warn('[clipboard] Native clipboard read failed, falling back to browser API', err)
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+    try {
+      return await navigator.clipboard.readText()
+    } catch (browserErr) {
+      logger.error('[clipboard] Browser clipboard read failed', browserErr)
+      return null
+    }
+  }
+
+  return null
+}
