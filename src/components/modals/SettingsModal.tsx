@@ -2095,6 +2095,29 @@ fi`}
                             </label>
                         </div>
 
+                        <div className="mt-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-body font-medium text-text-primary">{t.settings.appearance.resetWindowSizes}</h3>
+                                    <div className="mt-1 text-caption text-text-muted">
+                                        {t.settings.appearance.resetWindowSizesDesc}
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        const keys = Object.keys(localStorage).filter(k => k.startsWith('modal-size-'))
+                                        for (const key of keys) {
+                                            localStorage.removeItem(key)
+                                        }
+                                        showNotification(t.settings.appearance.resetWindowSizesDone, 'success')
+                                    }}
+                                    className="settings-btn px-3 py-1.5 text-caption rounded-lg shrink-0 ml-4"
+                                >
+                                    {t.settings.common.reset}
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="mt-6 p-3 bg-bg-elevated rounded">
                             <div className="text-caption text-text-tertiary">
                                 <strong>{t.settings.appearance.keyboardShortcuts}</strong>

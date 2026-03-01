@@ -95,6 +95,9 @@ export interface Translations {
       devDiagnostics: string
       devDiagnosticsDesc: string
       showErrorToasts: string
+      resetWindowSizes: string
+      resetWindowSizesDesc: string
+      resetWindowSizesDone: string
       keyboardShortcuts: string
       increaseFontSize: string
       decreaseFontSize: string
