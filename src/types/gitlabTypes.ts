@@ -8,13 +8,6 @@ export interface GitlabSource {
   pipelinesEnabled: boolean
 }
 
-export interface GitlabStatusPayload {
-  installed: boolean
-  authenticated: boolean
-  userLogin?: string | null
-  hostname?: string | null
-}
-
 export interface GitlabIssueSummary {
   iid: number
   title: string

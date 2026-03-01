@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { VscEdit, VscTrash, VscAdd } from 'react-icons/vsc'
+import { VscEdit, VscTrash, VscAdd, VscClose } from 'react-icons/vsc'
 import type { GitlabSource } from '../../types/gitlabTypes'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
+import { logger } from '../../utils/logger'
 
 interface GitlabSourcesSettingsProps {
   sources: GitlabSource[]
@@ -47,6 +49,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<SourceFormData>(defaultFormData)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleAdd = () => {
     setEditingId(null)
@@ -69,8 +72,12 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
 
   const handleDelete = async (id: string) => {
     setSaving(true)
+    setError(null)
     try {
       await onSave(sources.filter((s) => s.id !== id))
+    } catch (err) {
+      logger.error('[GitlabSourcesSettings] Failed to delete source', err)
+      setError(t.gitlabSources.saveError)
     } finally {
       setSaving(false)
     }
@@ -86,6 +93,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
     if (!formData.label.trim() || !formData.projectPath.trim()) return
 
     setSaving(true)
+    setError(null)
     try {
       const updated = editingId
         ? sources.map((s) =>
@@ -102,6 +110,9 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
       setFormVisible(false)
       setEditingId(null)
       setFormData(defaultFormData)
+    } catch (err) {
+      logger.error('[GitlabSourcesSettings] Failed to save sources', err)
+      setError(t.gitlabSources.saveError)
     } finally {
       setSaving(false)
     }
@@ -128,6 +139,27 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
           </button>
         )}
       </div>
+
+      {error && (
+        <div
+          className="flex items-center justify-between px-3 py-2 rounded-md"
+          style={{
+            fontSize: theme.fontSize.caption,
+            color: 'var(--color-accent-red)',
+            backgroundColor: 'var(--color-accent-red-bg)',
+            border: '1px solid var(--color-accent-red-border)',
+          }}
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            style={{ color: 'var(--color-accent-red)', flexShrink: 0 }}
+          >
+            <VscClose className="w-3 h-3" />
+          </button>
+        </div>
+      )}
 
       {sources.length === 0 && !formVisible && (
         <div

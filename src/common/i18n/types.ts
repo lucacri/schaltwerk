@@ -1455,5 +1455,6 @@ export interface Translations {
     pipelines: string
     editSource: string
     deleteSource: string
+    saveError: string
   }
 }
