@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { remToPx } from '../../common/remScale'
 import { ResizableModal } from '../shared/ResizableModal'
 import { theme } from '../../common/theme'
 import { Dropdown, type DropdownItem } from '../inputs/Dropdown'
@@ -138,10 +139,10 @@ export function EpicModal({ open, mode, initialName = '', initialColor = null, o
             onClose={onClose}
             title={title}
             storageKey="epic-modal"
-            defaultWidth={420}
-            defaultHeight={260}
-            minWidth={380}
-            minHeight={240}
+            defaultWidth={remToPx(30)}
+            defaultHeight={remToPx(19)}
+            minWidth={remToPx(27)}
+            minHeight={remToPx(17)}
             footer={footer}
         >
             <form

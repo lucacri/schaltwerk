@@ -53,7 +53,7 @@ export function AgentCliMissingModal({ open, onClose, onOpenSettings, loading, s
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70" />
-      <div className="relative z-10 w-[640px] max-w-[95vw] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 space-y-4">
+      <div className="relative z-10 w-[46rem] max-w-[95vw] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-100">{t.agentCliMissing.title}</h2>
           <button

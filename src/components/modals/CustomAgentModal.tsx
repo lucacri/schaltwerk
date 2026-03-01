@@ -89,7 +89,7 @@ export function CustomAgentModal({
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
-            <div className="w-[480px] max-w-[95vw] bg-slate-900 border border-slate-700 rounded-xl shadow-xl">
+            <div className="w-[34rem] max-w-[95vw] bg-slate-900 border border-slate-700 rounded-xl shadow-xl">
                 <h2 className="px-4 py-3 border-b border-slate-800 text-slate-200 font-medium">
                     {t.customAgentModal.title}
                 </h2>

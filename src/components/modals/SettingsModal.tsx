@@ -39,6 +39,7 @@ import type { SettingsCategory } from '../../types/settings'
 import { requestDockBounce } from '../../utils/attentionBridge'
 import { MarkdownEditor } from '../specs/MarkdownEditor'
 import { useModal } from '../../contexts/ModalContext'
+import { remToPx } from '../../common/remScale'
 import { ResizableModal } from '../shared/ResizableModal'
 
 const shortcutArraysEqual = (a: string[] = [], b: string[] = []) => {
@@ -2585,10 +2586,10 @@ fi`}
                 onClose={onClose}
                 title={t.settings.title}
                 storageKey="settings"
-                defaultWidth={1200}
-                defaultHeight={800}
-                minWidth={900}
-                minHeight={600}
+                defaultWidth={remToPx(86)}
+                defaultHeight={Math.round(window.innerHeight * 0.85)}
+                minWidth={remToPx(64)}
+                minHeight={remToPx(43)}
                 footer={settingsFooter}
             >
                 {loading ? (

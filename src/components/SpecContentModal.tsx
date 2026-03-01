@@ -1,5 +1,6 @@
 import React from 'react'
 import { theme } from '../common/theme'
+import { remToPx } from '../common/remScale'
 import { ResizableModal } from './shared/ResizableModal'
 
 interface SpecContentModalProps {
@@ -19,10 +20,10 @@ export const SpecContentModal: React.FC<SpecContentModalProps> = ({
       onClose={onClose}
       title={specName}
       storageKey="spec-content"
-      defaultWidth={900}
-      defaultHeight={600}
-      minWidth={500}
-      minHeight={400}
+      defaultWidth={remToPx(64)}
+      defaultHeight={remToPx(43)}
+      minWidth={remToPx(36)}
+      minHeight={remToPx(29)}
     >
       <div className="p-6">
         <pre

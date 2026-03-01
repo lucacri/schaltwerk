@@ -571,8 +571,8 @@ export function UnifiedSearchModal({
         style={{
           backgroundColor: 'var(--color-bg-elevated)',
           border: '1px solid var(--color-border-default)',
-          width: '560px',
-          maxHeight: '500px',
+          width: '40rem',
+          maxHeight: '36rem',
         }}
       >
         <div className="p-3 border-b" style={{ borderColor: 'var(--color-border-subtle)' }}>

@@ -25,6 +25,7 @@ import {
 import { AgentDefaultsSection } from '../shared/AgentDefaultsSection'
 import { useProjectFileIndex } from '../../hooks/useProjectFileIndex'
 import { MarkdownEditor, type MarkdownEditorRef } from '../specs/MarkdownEditor'
+import { remToPx } from '../../common/remScale'
 import { ResizableModal } from '../shared/ResizableModal'
 import { UnifiedSearchModal } from './UnifiedSearchModal'
 import type { GithubIssueSelectionResult, GithubPrSelectionResult } from '../../types/githubIssues'
@@ -1280,10 +1281,10 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             onClose={onClose}
             title={createAsDraft ? t.newSessionModal.createNewSpec : t.newSessionModal.startNewAgent}
             storageKey="new-session"
-            defaultWidth={720}
-            defaultHeight={700}
-            minWidth={600}
-            minHeight={500}
+            defaultWidth={remToPx(51)}
+            defaultHeight={remToPx(50)}
+            minWidth={remToPx(43)}
+            minHeight={remToPx(36)}
             footer={footer}
             escapeDisabled={unifiedSearchOpen}
 	        >
