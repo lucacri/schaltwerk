@@ -1,5 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const mockWriteClipboard = vi.fn().mockResolvedValue(true)
+const mockReadClipboard = vi.fn().mockResolvedValue(null)
+
+vi.mock('../../utils/clipboard', () => ({
+  writeClipboard: (...args: unknown[]) => mockWriteClipboard(...args),
+  readClipboard: (...args: unknown[]) => mockReadClipboard(...args),
+}))
+
+const mockWriteTerminalBackend = vi.fn().mockResolvedValue(undefined)
+
+vi.mock('../transport/backend', () => ({
+  writeTerminalBackend: (...args: unknown[]) => mockWriteTerminalBackend(...args),
+}))
+
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
 }))
@@ -64,6 +78,9 @@ vi.mock('./xtermAddonImporter', () => ({
 
 beforeEach(() => {
   registerMock.mockClear()
+  mockWriteClipboard.mockClear()
+  mockReadClipboard.mockClear()
+  mockWriteTerminalBackend.mockClear()
 })
 
 describe('XtermTerminal wrapper', () => {
@@ -102,8 +119,8 @@ describe('XtermTerminal wrapper', () => {
     expect(registerMock).toHaveBeenCalledWith('fit', expect.any(Function))
     expect(registerMock).toHaveBeenCalledWith('search', expect.any(Function))
     expect(registerMock).toHaveBeenCalledWith('webLinks', expect.any(Function))
-    expect(instance.parser.registerOscHandler).toHaveBeenCalledTimes(9)
-    for (const code of [10, 11, 12, 13, 14, 15, 16, 17, 19]) {
+    expect(instance.parser.registerOscHandler).toHaveBeenCalledTimes(10)
+    for (const code of [10, 11, 12, 13, 14, 15, 16, 17, 19, 52]) {
       expect(instance.parser.registerOscHandler).toHaveBeenCalledWith(code, expect.any(Function))
     }
 
@@ -268,6 +285,142 @@ describe('XtermTerminal wrapper', () => {
       { final: 'J' },
       expect.any(Function)
     )
+  })
+
+  it('registers an OSC 52 handler that returns true to consume the sequence', async () => {
+    const { XtermTerminal } = await import('./XtermTerminal')
+
+    new XtermTerminal({
+      terminalId: 'osc52-consume',
+      config: {
+        scrollback: 4000,
+        fontSize: 12,
+        fontFamily: 'Menlo',
+        readOnly: false,
+        minimumContrastRatio: 1.0,
+        smoothScrolling: false,
+      },
+    })
+
+    const { Terminal: MockTerminal } = await import('@xterm/xterm') as unknown as {
+      Terminal: { __instances: Array<{ parser: { registerOscHandler: ReturnType<typeof vi.fn> } }> }
+    }
+    const instance = MockTerminal.__instances.at(-1)!
+
+    const osc52Call = instance.parser.registerOscHandler.mock.calls.find(
+      (call: unknown[]) => call[0] === 52
+    )
+    expect(osc52Call).toBeDefined()
+
+    const handler = osc52Call![1] as (payload: string) => boolean
+    const result = handler('c;SGVsbG8=')
+    expect(result).toBe(true)
+  })
+
+  it('decodes OSC 52 write payload and calls writeClipboard', async () => {
+    const { XtermTerminal } = await import('./XtermTerminal')
+
+    new XtermTerminal({
+      terminalId: 'osc52-write',
+      config: {
+        scrollback: 4000,
+        fontSize: 12,
+        fontFamily: 'Menlo',
+        readOnly: false,
+        minimumContrastRatio: 1.0,
+        smoothScrolling: false,
+      },
+    })
+
+    const { Terminal: MockTerminal } = await import('@xterm/xterm') as unknown as {
+      Terminal: { __instances: Array<{ parser: { registerOscHandler: ReturnType<typeof vi.fn> } }> }
+    }
+    const instance = MockTerminal.__instances.at(-1)!
+
+    const osc52Call = instance.parser.registerOscHandler.mock.calls.find(
+      (call: unknown[]) => call[0] === 52
+    )
+    const handler = osc52Call![1] as (payload: string) => boolean
+    handler('c;SGVsbG8gV29ybGQ=')
+
+    await vi.waitFor(() => {
+      expect(mockWriteClipboard).toHaveBeenCalledWith('Hello World')
+    })
+  })
+
+  it('responds to OSC 52 read query with base64-encoded clipboard content', async () => {
+    mockReadClipboard.mockResolvedValue('Test Content')
+
+    const { XtermTerminal } = await import('./XtermTerminal')
+
+    new XtermTerminal({
+      terminalId: 'osc52-read',
+      config: {
+        scrollback: 4000,
+        fontSize: 12,
+        fontFamily: 'Menlo',
+        readOnly: false,
+        minimumContrastRatio: 1.0,
+        smoothScrolling: false,
+      },
+    })
+
+    const { Terminal: MockTerminal } = await import('@xterm/xterm') as unknown as {
+      Terminal: { __instances: Array<{ parser: { registerOscHandler: ReturnType<typeof vi.fn> } }> }
+    }
+    const instance = MockTerminal.__instances.at(-1)!
+
+    const osc52Call = instance.parser.registerOscHandler.mock.calls.find(
+      (call: unknown[]) => call[0] === 52
+    )
+    const handler = osc52Call![1] as (payload: string) => boolean
+    handler('c;?')
+
+    await vi.waitFor(() => {
+      expect(mockReadClipboard).toHaveBeenCalled()
+    })
+
+    await vi.waitFor(() => {
+      expect(mockWriteTerminalBackend).toHaveBeenCalledWith(
+        'osc52-read',
+        `\x1b]52;c;${btoa('Test Content')}\x07`
+      )
+    })
+  })
+
+  it('does not write back when readClipboard returns null', async () => {
+    mockReadClipboard.mockResolvedValue(null)
+
+    const { XtermTerminal } = await import('./XtermTerminal')
+
+    new XtermTerminal({
+      terminalId: 'osc52-null',
+      config: {
+        scrollback: 4000,
+        fontSize: 12,
+        fontFamily: 'Menlo',
+        readOnly: false,
+        minimumContrastRatio: 1.0,
+        smoothScrolling: false,
+      },
+    })
+
+    const { Terminal: MockTerminal } = await import('@xterm/xterm') as unknown as {
+      Terminal: { __instances: Array<{ parser: { registerOscHandler: ReturnType<typeof vi.fn> } }> }
+    }
+    const instance = MockTerminal.__instances.at(-1)!
+
+    const osc52Call = instance.parser.registerOscHandler.mock.calls.find(
+      (call: unknown[]) => call[0] === 52
+    )
+    const handler = osc52Call![1] as (payload: string) => boolean
+    handler('c;?')
+
+    await vi.waitFor(() => {
+      expect(mockReadClipboard).toHaveBeenCalled()
+    })
+
+    expect(mockWriteTerminalBackend).not.toHaveBeenCalled()
   })
 
   it('saves and restores scroll position on detach/attach', async () => {

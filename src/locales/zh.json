@@ -319,6 +319,21 @@
       "usingDefault": "使用默认值",
       "customized": "已自定义"
     },
+    "docker": {
+      "title": "Docker 沙盒",
+      "description": "在 Docker 容器中运行代理会话以实现文件系统隔离。代理只能访问挂载的项目目录。",
+      "notAvailable": "Docker 不可用",
+      "notAvailableDesc": "请安装 Docker Desktop 并确保守护进程正在运行以使用沙盒模式。",
+      "enableSandbox": "启用沙盒",
+      "enableSandboxDesc": "将代理进程包装在 Docker 容器中",
+      "sandboxImage": "沙盒镜像",
+      "imageReady": "lucode-sandbox:latest \u2014 就绪",
+      "imageNotBuilt": "尚未构建",
+      "building": "构建中\u2026",
+      "rebuild": "重新构建",
+      "buildImage": "构建镜像",
+      "credentialsHint": "可以通过将配置文件放在 ~/.config/lucode/docker-mounts/ 中来为容器准备凭证。子目录（claude/、codex/、gemini/）以只读方式挂载到容器中。"
+    },
     "mcp": {
       "title": "MCP 服务器配置",
       "enableMcp": "启用 MCP",
@@ -534,7 +549,9 @@
     "opening": "打开中..."
   },
   "sessionCard": {
-    "newFollowUp": "收到新的后续消息"
+    "newFollowUp": "收到新的后续消息",
+    "dockerBadge": "沙盒",
+    "dockerBadgeTitle": "在 Docker 沙盒中运行"
   },
   "permissionPrompt": {
     "title": "需要文件夹访问权限",

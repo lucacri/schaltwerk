@@ -39,6 +39,8 @@ export enum SchaltEvent {
   OpenMergeModal = 'schaltwerk:open-merge-modal',
   OpenGitlabMrModal = 'schaltwerk:open-gitlab-mr-modal',
   SelectAllRequested = 'schaltwerk:select-all-requested',
+  DockerStatusChanged = 'schaltwerk:docker-status-changed',
+  DockerImageBuildProgress = 'schaltwerk:docker-image-build-progress',
 }
 
 
@@ -212,6 +214,18 @@ export interface OpenGitlabMrModalPayload {
   suggestedSourceProject?: string
 }
 
+export interface DockerStatusChangedPayload {
+  available: boolean
+  imageExists: boolean
+  sandboxEnabled: boolean
+}
+
+export interface DockerImageBuildProgressPayload {
+  message: string
+  complete: boolean
+  success: boolean
+}
+
 import { type EnrichedSession, type Epic } from '../types/session'
 import { type ForgeStatusPayload } from '../types/forgeTypes'
 
@@ -282,4 +296,6 @@ export type EventPayloadMap = {
   [SchaltEvent.OpenMergeModal]: OpenMergeModalPayload
   [SchaltEvent.OpenGitlabMrModal]: OpenGitlabMrModalPayload
   [SchaltEvent.SelectAllRequested]: null
+  [SchaltEvent.DockerStatusChanged]: DockerStatusChangedPayload
+  [SchaltEvent.DockerImageBuildProgress]: DockerImageBuildProgressPayload
 }

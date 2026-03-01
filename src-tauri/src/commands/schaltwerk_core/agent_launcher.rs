@@ -1,5 +1,9 @@
 use super::{agent_ctx, terminals};
-use crate::{SETTINGS_MANAGER, get_terminal_manager};
+use crate::{DOCKER_MANAGER, SETTINGS_MANAGER, get_terminal_manager};
+use lucode::domains::docker::service::{
+    DockerCommandTransformer, DockerImageManager, build_mount_config,
+};
+use lucode::infrastructure::database::db_project_config::ProjectConfigMethods;
 use lucode::services::CreateTerminalWithAppAndSizeParams;
 use lucode::services::{AgentLaunchSpec, parse_agent_command};
 use std::collections::HashMap;
@@ -77,6 +81,9 @@ pub async fn launch_in_terminal(
         let final_args =
             agent_ctx::build_final_args(&agent_kind, agent_args, &cli_text, &preferences);
 
+        let (cwd, agent_name, final_args, merged_env) =
+            apply_docker_if_enabled(cwd, agent_name, final_args, merged_env, db, repo_path).await;
+
         let (final_agent_name, final_agent_args) =
             apply_command_prefix(command_prefix, agent_name.clone(), final_args.clone());
 
@@ -139,6 +146,66 @@ pub async fn launch_in_terminal(
             Err("Agent launch exceeded 12 seconds and was cancelled. Please retry.".to_string())
         }
     }
+}
+
+async fn apply_docker_if_enabled(
+    cwd: String,
+    agent_name: String,
+    agent_args: Vec<String>,
+    env_vars: Vec<(String, String)>,
+    db: &lucode::schaltwerk_core::Database,
+    repo_path: &std::path::Path,
+) -> (String, String, Vec<String>, Vec<(String, String)>) {
+    let enabled = db
+        .get_docker_sandbox_enabled(repo_path)
+        .unwrap_or(false);
+
+    if !enabled {
+        return (cwd, agent_name, agent_args, env_vars);
+    }
+
+    if let Err(e) = DockerImageManager::docker_available().await {
+        log::warn!("Docker sandbox enabled but Docker not available: {e}");
+        return (cwd, agent_name, agent_args, env_vars);
+    }
+
+    let image_manager = DockerImageManager::new();
+    if !image_manager.image_exists().await {
+        log::warn!(
+            "Docker sandbox enabled but image not built — falling back to native execution. Build image from Settings."
+        );
+        return (cwd, agent_name, agent_args, env_vars);
+    }
+
+    let mount_config = build_mount_config(repo_path);
+
+    let docker_manager = match DOCKER_MANAGER.get() {
+        Some(dm) => dm.clone(),
+        None => {
+            log::error!("Docker manager not initialized");
+            return (cwd, agent_name, agent_args, env_vars);
+        }
+    };
+
+    let container_name = match docker_manager
+        .ensure_container_for_project(repo_path, &mount_config)
+        .await
+    {
+        Ok(name) => name,
+        Err(e) => {
+            log::error!("Failed to start Docker container: {e}");
+            return (cwd, agent_name, agent_args, env_vars);
+        }
+    };
+
+    log::info!(
+        "Docker sandbox active: wrapping agent in container {container_name}"
+    );
+
+    let transformer = DockerCommandTransformer::new(container_name);
+    let (docker_program, docker_args) =
+        transformer.transform(&agent_name, &agent_args, &cwd, &env_vars);
+    (cwd, docker_program, docker_args, vec![])
 }
 
 fn merge_env_vars(

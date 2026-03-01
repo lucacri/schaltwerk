@@ -96,6 +96,19 @@ pub async fn clipboard_write_text(text: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn clipboard_read_text() -> Result<String, String> {
+    tokio::task::spawn_blocking(move || -> Result<String, String> {
+        let mut clipboard = arboard::Clipboard::new()
+            .map_err(|err| format!("Failed to access system clipboard: {err}"))?;
+        clipboard
+            .get_text()
+            .map_err(|err| format!("Failed to read text from clipboard: {err}"))
+    })
+    .await
+    .map_err(|err| format!("Clipboard read task failed: {err}"))?
+}
+
+#[tauri::command]
 pub fn schaltwerk_core_log_frontend_message(level: String, message: String) -> Result<(), String> {
     match level.as_str() {
         "error" => log::error!("{message}"),
