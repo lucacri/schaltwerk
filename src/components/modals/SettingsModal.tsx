@@ -18,6 +18,7 @@ import { useTranslation } from '../../common/i18n/useTranslation'
 import { logger } from '../../utils/logger'
 import { FontPicker } from './FontPicker'
 import { GithubProjectIntegrationCard } from '../settings/GithubProjectIntegrationCard'
+import { GitlabProjectIntegrationCard } from '../settings/GitlabProjectIntegrationCard'
 import { AGENT_TYPES, createAgentRecord } from '../../types/session'
 import { DEFAULT_AGENT } from '../../constants/agents'
 import { displayNameForAgent } from '../shared/agentDefaults'
@@ -1082,6 +1083,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
             <div className="flex-1 overflow-y-auto p-6">
                 <div className="space-y-6">
                     <GithubProjectIntegrationCard projectPath={projectPath} onNotify={showNotification} />
+                    <GitlabProjectIntegrationCard onNotify={showNotification} />
 
                     <div>
                         <h3 className="text-body font-medium text-text-primary mb-2">{t.settings.projectGeneral.branchPrefix}</h3>

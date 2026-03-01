@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { VscEdit, VscTrash, VscAdd } from 'react-icons/vsc'
 import type { GitlabSource } from '../../types/gitlabTypes'
+import { useTranslation } from '../../common/i18n'
 
 interface GitlabSourcesSettingsProps {
   sources: GitlabSource[]
@@ -41,6 +42,7 @@ function FeatureBadge({ label, enabled }: { label: string; enabled: boolean }) {
 }
 
 export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettingsProps) {
+  const { t } = useTranslation()
   const [formVisible, setFormVisible] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<SourceFormData>(defaultFormData)
@@ -114,7 +116,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
           className="text-body font-medium"
           style={{ color: 'var(--color-text-primary)' }}
         >
-          GitLab Sources
+          {t.gitlabSources.title}
         </h3>
         {!formVisible && (
           <button
@@ -122,7 +124,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
             className="settings-btn px-2 py-1 rounded text-caption flex items-center gap-1"
           >
             <VscAdd className="text-caption" />
-            Add Source
+            {t.gitlabSources.addSource}
           </button>
         )}
       </div>
@@ -132,7 +134,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
           className="text-body py-4 text-center"
           style={{ color: 'var(--color-text-muted)' }}
         >
-          No GitLab sources configured.
+          {t.gitlabSources.noSources}
         </div>
       )}
 
@@ -168,9 +170,9 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
                 {source.hostname}
               </span>
               <div className="flex items-center gap-1">
-                <FeatureBadge label="Issues" enabled={source.issuesEnabled} />
-                <FeatureBadge label="MRs" enabled={source.mrsEnabled} />
-                <FeatureBadge label="Pipelines" enabled={source.pipelinesEnabled} />
+                <FeatureBadge label={t.gitlabSources.issues} enabled={source.issuesEnabled} />
+                <FeatureBadge label={t.gitlabSources.mergeRequests} enabled={source.mrsEnabled} />
+                <FeatureBadge label={t.gitlabSources.pipelines} enabled={source.pipelinesEnabled} />
               </div>
             </div>
           </div>
@@ -178,7 +180,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
             <button
               onClick={() => handleEdit(source)}
               className="settings-btn p-1.5 rounded"
-              title="Edit source"
+              title={t.gitlabSources.editSource}
             >
               <VscEdit className="text-body" />
             </button>
@@ -186,7 +188,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
               onClick={() => { void handleDelete(source.id) }}
               disabled={saving}
               className="settings-btn-danger p-1.5 rounded disabled:opacity-50"
-              title="Delete source"
+              title={t.gitlabSources.deleteSource}
             >
               <VscTrash className="text-body" />
             </button>
@@ -206,7 +208,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
             className="text-body font-medium"
             style={{ color: 'var(--color-text-primary)' }}
           >
-            {editingId ? 'Edit Source' : 'Add Source'}
+            {editingId ? t.gitlabSources.editSourceTitle : t.gitlabSources.addSourceTitle}
           </h4>
 
           <div className="space-y-2">
@@ -215,13 +217,13 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
                 className="text-caption block mb-1"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
-                Label
+                {t.gitlabSources.labelField}
               </span>
               <input
                 type="text"
                 value={formData.label}
                 onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                placeholder="My Project"
+                placeholder={t.gitlabSources.labelPlaceholder}
                 className="w-full px-2 py-1.5 rounded text-body"
                 style={{
                   backgroundColor: 'var(--color-bg-primary)',
@@ -236,13 +238,13 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
                 className="text-caption block mb-1"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
-                Project Path
+                {t.gitlabSources.projectPathField}
               </span>
               <input
                 type="text"
                 value={formData.projectPath}
                 onChange={(e) => setFormData({ ...formData, projectPath: e.target.value })}
-                placeholder="group/project"
+                placeholder={t.gitlabSources.projectPathPlaceholder}
                 className="w-full px-2 py-1.5 rounded text-body font-mono"
                 style={{
                   backgroundColor: 'var(--color-bg-primary)',
@@ -257,13 +259,13 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
                 className="text-caption block mb-1"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
-                Hostname
+                {t.gitlabSources.hostnameField}
               </span>
               <input
                 type="text"
                 value={formData.hostname}
                 onChange={(e) => setFormData({ ...formData, hostname: e.target.value })}
-                placeholder="gitlab.com"
+                placeholder={t.gitlabSources.hostnamePlaceholder}
                 className="w-full px-2 py-1.5 rounded text-body"
                 style={{
                   backgroundColor: 'var(--color-bg-primary)',
@@ -287,7 +289,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
                 className="text-caption"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
-                Issues
+                {t.gitlabSources.issues}
               </span>
             </label>
             <label className="flex items-center gap-2">
@@ -302,7 +304,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
                 className="text-caption"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
-                Merge Requests
+                {t.gitlabSources.mergeRequests}
               </span>
             </label>
             <label className="flex items-center gap-2">
@@ -317,7 +319,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
                 className="text-caption"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
-                Pipelines
+                {t.gitlabSources.pipelines}
               </span>
             </label>
           </div>
@@ -328,13 +330,13 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
               disabled={!isFormValid || saving}
               className="settings-btn-success px-3 py-1.5 rounded text-caption font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? t.settings.common.saving : t.settings.common.save}
             </button>
             <button
               onClick={handleCancel}
               className="settings-btn px-3 py-1.5 rounded text-caption"
             >
-              Cancel
+              {t.settings.common.cancel}
             </button>
           </div>
         </div>

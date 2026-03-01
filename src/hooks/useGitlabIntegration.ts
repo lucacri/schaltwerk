@@ -4,6 +4,7 @@ import { listenEvent, SchaltEvent } from '../common/eventSystem'
 import { TauriCommands } from '../common/tauriCommands'
 import type { GitlabSource, GitlabStatusPayload } from '../types/gitlabTypes'
 import { logger } from '../utils/logger'
+import { resolveErrorMessage } from '../utils/resolveErrorMessage'
 
 export interface GitlabIntegrationValue {
   status: GitlabStatusPayload | null
@@ -14,16 +15,6 @@ export interface GitlabIntegrationValue {
   refreshStatus: () => Promise<void>
   loadSources: () => Promise<void>
   saveSources: (sources: GitlabSource[]) => Promise<void>
-}
-
-function resolveErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'string') return error
-  try {
-    return JSON.stringify(error)
-  } catch {
-    return String(error)
-  }
 }
 
 export function useGitlabIntegration(): GitlabIntegrationValue {

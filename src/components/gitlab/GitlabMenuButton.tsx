@@ -7,10 +7,11 @@ import { useGitlabIntegrationContext } from '../../contexts/GitlabIntegrationCon
 import { useToast } from '../../common/toast/ToastProvider'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
+import { useOutsideDismiss } from '../../hooks/useOutsideDismiss'
 
 interface GitlabMenuButtonProps {
   className?: string
-  hasActiveProject?: boolean
+  onConfigureSources?: () => void
 }
 
 const menuContainerStyle: CSSProperties = {
@@ -28,20 +29,7 @@ const dividerStyle: CSSProperties = {
 
 type MenuButtonKey = 'configure' | 'refresh'
 
-function useOutsideDismiss(ref: React.RefObject<HTMLElement | null>, onDismiss: () => void) {
-  useEffect(() => {
-    const listener = (event: MouseEvent) => {
-      if (!ref.current || ref.current.contains(event.target as Node)) {
-        return
-      }
-      onDismiss()
-    }
-    document.addEventListener('mousedown', listener)
-    return () => document.removeEventListener('mousedown', listener)
-  }, [ref, onDismiss])
-}
-
-export function GitlabMenuButton({ className }: GitlabMenuButtonProps) {
+export function GitlabMenuButton({ className, onConfigureSources }: GitlabMenuButtonProps) {
   const { t } = useTranslation()
   const { pushToast } = useToast()
   const gitlab = useGitlabIntegrationContext()
@@ -222,7 +210,7 @@ export function GitlabMenuButton({ className }: GitlabMenuButtonProps) {
             <button
               type="button"
               role="menuitem"
-              onClick={closeMenu}
+              onClick={() => { closeMenu(); onConfigureSources?.() }}
               disabled={!installed || !authenticated}
               className="text-left text-xs"
               style={buildMenuButtonStyle('configure', { disabled: !installed || !authenticated })}
