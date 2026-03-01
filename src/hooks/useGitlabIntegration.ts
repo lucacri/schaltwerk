@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listenEvent, SchaltEvent } from '../common/eventSystem'
+import { type GitLabStatusPayload } from '../common/events'
 import { TauriCommands } from '../common/tauriCommands'
-import type { GitlabSource, GitlabStatusPayload } from '../types/gitlabTypes'
+import type { GitlabSource } from '../types/gitlabTypes'
 import { logger } from '../utils/logger'
 import { resolveErrorMessage } from '../utils/resolveErrorMessage'
 
 export interface GitlabIntegrationValue {
-  status: GitlabStatusPayload | null
+  status: GitLabStatusPayload | null
   sources: GitlabSource[]
   loading: boolean
   isGlabMissing: boolean
@@ -18,7 +19,7 @@ export interface GitlabIntegrationValue {
 }
 
 export function useGitlabIntegration(): GitlabIntegrationValue {
-  const [status, setStatus] = useState<GitlabStatusPayload | null>(null)
+  const [status, setStatus] = useState<GitLabStatusPayload | null>(null)
   const [sources, setSources] = useState<GitlabSource[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const unlistenRef = useRef<(() => void) | null>(null)
@@ -26,7 +27,7 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
   const refreshStatus = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await invoke<GitlabStatusPayload>(TauriCommands.GitLabGetStatus)
+      const result = await invoke<GitLabStatusPayload>(TauriCommands.GitLabGetStatus)
       setStatus(result)
     } catch (error) {
       logger.error('[useGitlabIntegration] Failed to fetch GitLab status', error)

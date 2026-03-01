@@ -47,6 +47,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<SourceFormData>(defaultFormData)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleAdd = () => {
     setEditingId(null)
@@ -69,8 +70,11 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
 
   const handleDelete = async (id: string) => {
     setSaving(true)
+    setError(null)
     try {
       await onSave(sources.filter((s) => s.id !== id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.gitlabSources.saveError)
     } finally {
       setSaving(false)
     }
@@ -80,12 +84,14 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
     setFormVisible(false)
     setEditingId(null)
     setFormData(defaultFormData)
+    setError(null)
   }
 
   const handleSubmit = async () => {
     if (!formData.label.trim() || !formData.projectPath.trim()) return
 
     setSaving(true)
+    setError(null)
     try {
       const updated = editingId
         ? sources.map((s) =>
@@ -102,6 +108,8 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
       setFormVisible(false)
       setEditingId(null)
       setFormData(defaultFormData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.gitlabSources.saveError)
     } finally {
       setSaving(false)
     }
@@ -128,6 +136,19 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
           </button>
         )}
       </div>
+
+      {error && (
+        <div
+          className="text-caption px-3 py-2 rounded"
+          style={{
+            color: 'var(--color-accent-red-light)',
+            backgroundColor: 'var(--color-accent-red-bg)',
+            border: '1px solid var(--color-accent-red-border)',
+          }}
+        >
+          {error}
+        </div>
+      )}
 
       {sources.length === 0 && !formVisible && (
         <div

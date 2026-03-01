@@ -8,6 +8,7 @@ import { useToast } from '../../common/toast/ToastProvider'
 import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
+import { LabelChip } from './GitlabLabelChip'
 
 interface GitlabMrDetailProps {
   details: GitlabMrDetails
@@ -145,26 +146,6 @@ function BranchPill({ branch }: { branch: string }) {
       }}
     >
       {branch}
-    </span>
-  )
-}
-
-function LabelChip({ label }: { label: string }) {
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        fontSize: theme.fontSize.caption,
-        fontWeight: 500,
-        color: 'var(--color-text-secondary)',
-        backgroundColor: 'var(--color-bg-elevated)',
-        border: '1px solid var(--color-border-default)',
-        borderRadius: 9999,
-        padding: '1px 8px',
-        lineHeight: theme.lineHeight.badge,
-      }}
-    >
-      {label}
     </span>
   )
 }

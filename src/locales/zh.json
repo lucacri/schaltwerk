@@ -1444,6 +1444,7 @@
     "mergeRequests": "Merge Requests",
     "pipelines": "Pipelines",
     "editSource": "Edit source",
-    "deleteSource": "Delete source"
+    "deleteSource": "Delete source",
+    "saveError": "保存失败，请重试。"
   }
 }
