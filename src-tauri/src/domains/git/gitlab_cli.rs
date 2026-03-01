@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use super::github_cli::{CommandRunner, SystemCommandRunner};
 use super::operations::has_uncommitted_changes;
+use super::strip_ansi_codes;
 
 #[derive(Debug)]
 pub enum GitlabCliError {
@@ -1221,28 +1222,6 @@ pub fn format_cli_error(err: GitlabCliError) -> String {
             "No Git remotes configured for this project. Add a remote (e.g. `git remote add origin ...`) and try again.".to_string()
         }
     }
-}
-
-pub fn strip_ansi_codes(text: &str) -> String {
-    let mut result = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-
-    while let Some(ch) = chars.next() {
-        if ch == '\x1b' {
-            if chars.peek() == Some(&'[') {
-                chars.next();
-                for ch in chars.by_ref() {
-                    if ch.is_ascii_alphabetic() {
-                        break;
-                    }
-                }
-            }
-        } else {
-            result.push(ch);
-        }
-    }
-
-    result
 }
 
 static GLAB_PROGRAM_CACHE: OnceLock<String> = OnceLock::new();

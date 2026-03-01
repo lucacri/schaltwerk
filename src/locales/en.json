@@ -1427,5 +1427,23 @@
     "createdDesc": "MR created successfully",
     "openInGitlab": "Open in GitLab",
     "failed": "Failed to create merge request"
+  },
+  "gitlabSources": {
+    "title": "GitLab Sources",
+    "addSource": "Add Source",
+    "noSources": "No GitLab sources configured.",
+    "editSourceTitle": "Edit Source",
+    "addSourceTitle": "Add Source",
+    "labelField": "Label",
+    "labelPlaceholder": "My Project",
+    "projectPathField": "Project Path",
+    "projectPathPlaceholder": "group/project",
+    "hostnameField": "Hostname",
+    "hostnamePlaceholder": "gitlab.com",
+    "issues": "Issues",
+    "mergeRequests": "Merge Requests",
+    "pipelines": "Pipelines",
+    "editSource": "Edit source",
+    "deleteSource": "Delete source"
   }
 }

@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../common/tauriCommands'
 import type { GitlabIssueDetails, GitlabIssueSummary, GitlabSource } from '../types/gitlabTypes'
 import { logger } from '../utils/logger'
+import { resolveErrorMessage } from '../utils/resolveErrorMessage'
 
 export interface UseGitlabIssueSearchResult {
   results: GitlabIssueSummary[]
@@ -13,16 +14,6 @@ export interface UseGitlabIssueSearchResult {
   refresh: () => void
   fetchDetails: (iid: number, sourceProject: string, sourceHostname?: string, sourceLabel?: string) => Promise<GitlabIssueDetails>
   clearError: () => void
-}
-
-function resolveErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'string') return error
-  try {
-    return JSON.stringify(error)
-  } catch {
-    return String(error)
-  }
 }
 
 interface UseGitlabIssueSearchOptions {

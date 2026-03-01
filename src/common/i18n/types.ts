@@ -1438,4 +1438,22 @@ export interface Translations {
     openInGitlab: string
     failed: string
   }
+  gitlabSources: {
+    title: string
+    addSource: string
+    noSources: string
+    editSourceTitle: string
+    addSourceTitle: string
+    labelField: string
+    labelPlaceholder: string
+    projectPathField: string
+    projectPathPlaceholder: string
+    hostnameField: string
+    hostnamePlaceholder: string
+    issues: string
+    mergeRequests: string
+    pipelines: string
+    editSource: string
+    deleteSource: string
+  }
 }

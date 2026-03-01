@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../common/tauriCommands'
 import type { GitlabMrDetails, GitlabMrSummary, GitlabPipelinePayload, GitlabSource } from '../types/gitlabTypes'
 import { logger } from '../utils/logger'
+import { resolveErrorMessage } from '../utils/resolveErrorMessage'
 
 export interface UseGitlabMrSearchResult {
   results: GitlabMrSummary[]
@@ -14,16 +15,6 @@ export interface UseGitlabMrSearchResult {
   fetchDetails: (iid: number, sourceProject: string, sourceHostname?: string, sourceLabel?: string) => Promise<GitlabMrDetails>
   fetchPipeline: (sourceBranch: string, sourceProject: string, sourceHostname?: string) => Promise<GitlabPipelinePayload | null>
   clearError: () => void
-}
-
-function resolveErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'string') return error
-  try {
-    return JSON.stringify(error)
-  } catch {
-    return String(error)
-  }
 }
 
 interface UseGitlabMrSearchOptions {

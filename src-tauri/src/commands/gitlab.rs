@@ -5,7 +5,7 @@ use schaltwerk::domains::git::service::{
     GitlabCliError, GitlabIssueDetails, GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary,
     GitlabNote, GitlabPipelineDetails, MrCommitMode,
 };
-use schaltwerk::domains::merge::types::MergeMode;
+use schaltwerk::services::MergeMode;
 use schaltwerk::infrastructure::events::{SchaltEvent, emit_event};
 use schaltwerk::schaltwerk_core::db_project_config::{
     GitlabSource, ProjectConfigMethods, ProjectGitlabConfig,
@@ -103,7 +103,7 @@ pub struct GitlabPipelinePayload {
 }
 
 #[tauri::command]
-pub async fn gitlab_get_status() -> Result<GitlabStatusPayload, String> {
+pub async fn gitlab_get_status(app: AppHandle) -> Result<GitlabStatusPayload, String> {
     let cli = GitlabCli::new();
 
     let installed = match cli.ensure_installed() {
@@ -122,12 +122,16 @@ pub async fn gitlab_get_status() -> Result<GitlabStatusPayload, String> {
         (false, None, None)
     };
 
-    Ok(GitlabStatusPayload {
+    let payload = GitlabStatusPayload {
         installed,
         authenticated,
         user_login,
         hostname,
-    })
+    };
+
+    emit_gitlab_status(&app, &payload)?;
+
+    Ok(payload)
 }
 
 #[tauri::command]
@@ -331,6 +335,15 @@ pub async fn gitlab_set_sources(
     _app: AppHandle,
     sources: Vec<GitlabSource>,
 ) -> Result<(), String> {
+    for source in &sources {
+        if source.project_path.trim().is_empty() {
+            return Err(format!(
+                "GitLab source '{}' has an empty project path",
+                source.label
+            ));
+        }
+    }
+
     let manager = get_project_manager().await;
     let project = manager
         .current_project()
@@ -666,6 +679,11 @@ pub async fn gitlab_create_session_mr(
         url: mr_result.url,
         source_branch: mr_result.source_branch,
     })
+}
+
+fn emit_gitlab_status(app: &AppHandle, status: &GitlabStatusPayload) -> Result<(), String> {
+    emit_event(app, SchaltEvent::GitLabStatusChanged, status)
+        .map_err(|e| format!("Failed to emit GitLab status event: {e}"))
 }
 
 fn map_issue_summary_payload(

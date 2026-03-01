@@ -124,6 +124,29 @@ describe('GitlabMenuButton', () => {
     expect(screen.getByText('myuser')).toBeInTheDocument()
   })
 
+  it('calls onConfigureSources when configure button is clicked', () => {
+    const onConfigureSources = vi.fn()
+    renderWithProviders(
+      <GitlabMenuButton onConfigureSources={onConfigureSources} />, {
+        gitlabOverrides: {
+          status: { installed: true, authenticated: true, userLogin: 'dev', hostname: 'gitlab.com' },
+          sources: [],
+          loading: false,
+          isGlabMissing: false,
+          hasSources: false,
+          refreshStatus: vi.fn(),
+          loadSources: vi.fn(),
+          saveSources: vi.fn(),
+        }
+      }
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /configure gitlab/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /configure/i }))
+
+    expect(onConfigureSources).toHaveBeenCalledOnce()
+  })
+
   it('closes menu on outside click', () => {
     renderWithProviders(
       <GitlabMenuButton />, {
