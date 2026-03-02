@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { VscCheck, VscDiscard, VscComment, VscLinkExternal } from 'react-icons/vsc'
 import type { EnrichedSession } from '../../types/session'
 import { TauriCommands } from '../../common/tauriCommands'
+import { theme } from '../../common/theme'
 import { ConfirmResetDialog } from '../common/ConfirmResetDialog'
 import { logger } from '../../utils/logger'
 import { UiEvent, emitUiEvent } from '../../common/uiEvents'
@@ -92,41 +93,45 @@ export function DiffSessionActions({
           <>
             <button
               onClick={() => { void handleFetchAndPasteComments() }}
-              className="px-2 py-1 bg-blue-600/80 hover:bg-blue-600 rounded-md text-sm font-medium flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="px-2 py-1 bg-blue-600/80 hover:bg-blue-600 rounded-md font-medium flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ fontSize: theme.fontSize.button }}
               title={t.diffSessionActions.sendPrComments.replace('{number}', String(prNumber))}
               disabled={fetchingComments}
             >
-              <VscComment className="text-lg" />
+              <VscComment style={{ fontSize: theme.fontSize.heading }} />
               {fetchingComments ? t.diffSessionActions.fetching : t.diffSessionActions.prComments.replace('{number}', String(prNumber))}
             </button>
             {prUrl && (
               <button
                 onClick={() => { void invoke(TauriCommands.OpenExternalUrl, { url: prUrl }) }}
-                className="px-2 py-1 bg-blue-600/80 hover:bg-blue-600 rounded-md text-sm font-medium flex items-center gap-2"
+                className="px-2 py-1 bg-blue-600/80 hover:bg-blue-600 rounded-md font-medium flex items-center gap-2"
+                style={{ fontSize: theme.fontSize.button }}
                 title={t.diffSessionActions.openPrInBrowser.replace('{number}', String(prNumber))}
               >
-                <VscLinkExternal className="text-lg" />
+                <VscLinkExternal style={{ fontSize: theme.fontSize.heading }} />
               </button>
             )}
           </>
         )}
         <button
           onClick={() => setConfirmResetOpen(true)}
-          className="px-2 py-1 bg-red-600/80 hover:bg-red-600 rounded-md text-sm font-medium flex items-center gap-2"
+          className="px-2 py-1 bg-red-600/80 hover:bg-red-600 rounded-md font-medium flex items-center gap-2"
+          style={{ fontSize: theme.fontSize.button }}
           title={t.diffSessionActions.discardAllChanges}
           disabled={isResetting}
         >
-          <VscDiscard className="text-lg" />
+          <VscDiscard style={{ fontSize: theme.fontSize.heading }} />
           {t.diffSessionActions.resetSession}
         </button>
         {canMarkReviewed && (
           <button
             onClick={() => { void handleMarkReviewedClick() }}
-            className="px-2 py-1 bg-green-600/80 hover:bg-green-600 rounded-md text-sm font-medium flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="px-2 py-1 bg-green-600/80 hover:bg-green-600 rounded-md font-medium flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ fontSize: theme.fontSize.button }}
             title={t.diffSessionActions.markAsReviewedTitle}
             disabled={isMarkingReviewed}
           >
-            <VscCheck className="text-lg" />
+            <VscCheck style={{ fontSize: theme.fontSize.heading }} />
             {t.diffSessionActions.markAsReviewed}
           </button>
         )}

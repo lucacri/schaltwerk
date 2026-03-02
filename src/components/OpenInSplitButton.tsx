@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { VscFolder, VscChevronDown, VscCheck, VscChevronRight, VscCode, VscTerminal } from 'react-icons/vsc'
 import { logger } from '../utils/logger'
 import { useTranslation } from '../common/i18n'
+import { theme } from '../common/theme'
 
 export type OpenApp = {
   id: 'finder' | 'cursor' | 'vscode' | 'code' | 'ghostty' | 'warp' | 'terminal' | 'intellij' | 'zed'
@@ -156,13 +157,14 @@ export function OpenInSplitButton({ resolvePath, onOpenReady, filter }: OpenInSp
     }
   }
 
+  const iconStyle = { fontSize: theme.fontSize.body }
   const iconFor = (id: OpenApp['id']) => {
-    if (id === 'vscode' || id === 'code') return <VscCode className="text-[14px]" />
-    if (id === 'cursor') return <VscCode className="text-[14px]" />
-    if (id === 'intellij') return <VscCode className="text-[14px]" />
-    if (id === 'zed') return <VscCode className="text-[14px]" />
-    if (id === 'finder') return <VscFolder className="text-[14px]" />
-    return <VscTerminal className="text-[14px]" />
+    if (id === 'vscode' || id === 'code') return <VscCode style={iconStyle} />
+    if (id === 'cursor') return <VscCode style={iconStyle} />
+    if (id === 'intellij') return <VscCode style={iconStyle} />
+    if (id === 'zed') return <VscCode style={iconStyle} />
+    if (id === 'finder') return <VscFolder style={iconStyle} />
+    return <VscTerminal style={iconStyle} />
   }
 
   if (filter && filteredApps.length === 0) {
@@ -175,10 +177,11 @@ export function OpenInSplitButton({ resolvePath, onOpenReady, filter }: OpenInSp
         <button
           onClick={() => { void handleMainClick() }}
           disabled={isOpening}
-          className="flex items-center gap-1.5 px-2 text-xs text-slate-200 hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-2 text-slate-200 hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ fontSize: theme.fontSize.caption }}
           title={t.openInSplit.openIn.replace('{app}', defaultAppLabel)}
         >
-          <VscFolder className="text-[12px] opacity-90" />
+          <VscFolder className="opacity-90" style={{ fontSize: theme.fontSize.caption }} />
           <span>{isOpening ? t.openInSplit.opening : t.openInSplit.open}</span>
         </button>
         <div className="w-px bg-slate-700/60" />
@@ -189,7 +192,7 @@ export function OpenInSplitButton({ resolvePath, onOpenReady, filter }: OpenInSp
           aria-haspopup="menu"
           aria-expanded={open}
         >
-          <VscChevronDown className="text-[12px]" />
+          <VscChevronDown style={{ fontSize: theme.fontSize.caption }} />
         </button>
       </div>
 
@@ -209,9 +212,9 @@ export function OpenInSplitButton({ resolvePath, onOpenReady, filter }: OpenInSp
               <span className="w-4 inline-flex items-center justify-center">{iconFor(app.id)}</span>
               <span className="flex-1">{app.name}</span>
               {app.id === effectiveDefaultApp ? (
-                <VscCheck className="text-[14px] text-slate-400" />
+                <VscCheck className="text-slate-400" style={{ fontSize: theme.fontSize.body }} />
               ) : (
-                <VscChevronRight className="text-[14px] text-slate-500 opacity-60" />
+                <VscChevronRight className="text-slate-500 opacity-60" style={{ fontSize: theme.fontSize.body }} />
               )}
             </button>
           ))}

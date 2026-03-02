@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 
 interface SearchMatch {
   element: Element
@@ -190,11 +191,12 @@ export function SearchBox({ targetRef, isVisible, onClose, className = '' }: Sea
         onChange={(e) => handleSearch(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={t.searchBox.placeholder}
-        className="bg-transparent text-sm text-slate-200 outline-none w-40 placeholder:text-slate-500"
+        className="bg-transparent text-slate-200 outline-none w-40 placeholder:text-slate-500"
+        style={{ fontSize: theme.fontSize.input }}
       />
 
       {totalMatches > 0 && (
-        <div className="text-xs text-slate-400 ml-2 whitespace-nowrap">
+        <div className="text-slate-400 ml-2 whitespace-nowrap" style={{ fontSize: theme.fontSize.caption }}>
           {currentMatchIndex + 1}/{totalMatches}
         </div>
       )}

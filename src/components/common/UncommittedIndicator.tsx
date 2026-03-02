@@ -53,12 +53,13 @@ export function UncommittedIndicator({
                 onBlur={handleMouseLeave}
                 onClick={(event) => event.stopPropagation()}
                 className={clsx(
-                    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs transition-colors',
+                    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors',
                     'bg-rose-900/30 text-rose-200 border-rose-700/60 hover:bg-rose-800/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60',
                     className
                 )}
                 aria-label={`Worktree for ${sessionName} has uncommitted changes`}
                 title={tooltipText}
+                style={{ fontSize: theme.fontSize.caption }}
             >
                 <span className="relative flex items-center">
                     <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
@@ -68,7 +69,7 @@ export function UncommittedIndicator({
             {showTooltip && (
                 <div
                     role="tooltip"
-                    className="fixed z-50 px-2 py-1 text-xs rounded shadow-lg pointer-events-none"
+                    className="fixed z-50 px-2 py-1 rounded shadow-lg pointer-events-none"
                     style={{
                         top: `${tooltipPosition.top}px`,
                         left: `${tooltipPosition.left}px`,
@@ -76,6 +77,7 @@ export function UncommittedIndicator({
                         backgroundColor: 'var(--color-bg-elevated)',
                         color: 'var(--color-text-primary)',
                         border: '1px solid var(--color-border-subtle)',
+                        fontSize: theme.fontSize.caption,
                     }}
                 >
                     {tooltipText.split('\n').map((line, index) => (

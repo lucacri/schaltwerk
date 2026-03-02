@@ -61,7 +61,7 @@ const modalContainerStyle: React.CSSProperties = {
 
 const fieldLabelStyle: React.CSSProperties = {
   color: 'var(--color-text-secondary)',
-  fontSize: theme.fontSize?.label || '0.75rem',
+  fontSize: theme.fontSize.label,
 }
 
 export function PrSessionModal({
@@ -222,15 +222,15 @@ export function PrSessionModal({
       >
         <div className="flex justify-between items-start gap-4 border-b px-6 py-4 flex-shrink-0" style={{ borderColor: 'var(--color-border-subtle)' }}>
           <div>
-            <h2 id="pr-session-title" className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+            <h2 id="pr-session-title" className="font-semibold" style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.heading }}>
               {t.prModal.title}
             </h2>
-            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
               {sessionBranch} → {baseBranch || preview?.parentBranch || '—'}
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            <label className="flex items-center gap-2" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>
               <input
                 type="checkbox"
                 checked={autoCancelEnabled}
@@ -242,8 +242,7 @@ export function PrSessionModal({
             </label>
             <button
               onClick={onClose}
-              className="text-sm"
-              style={{ color: 'var(--color-text-secondary)' }}
+              style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}
               aria-label={t.ariaLabels.closePrDialog}
               title={t.prModal.closeEsc}
             >
@@ -263,11 +262,12 @@ export function PrSessionModal({
             <>
               {preview.branchConflictWarning && !usePrBranchName && (
                 <div
-                  className="rounded-md px-3 py-2 text-sm"
+                  className="rounded-md px-3 py-2"
                   style={{
                     backgroundColor: 'var(--color-accent-red-bg)',
                     border: '1px solid var(--color-accent-red-border)',
                     color: 'var(--color-text-primary)',
+                    fontSize: theme.fontSize.body,
                   }}
                 >
                   <p className="font-medium">{t.prModal.branchConflict}</p>
@@ -277,11 +277,12 @@ export function PrSessionModal({
 
               {hasSquashConflict && (
                 <div
-                  className="rounded-md px-3 py-2 text-sm"
+                  className="rounded-md px-3 py-2"
                   style={{
                     backgroundColor: 'var(--color-accent-amber-bg)',
                     border: '1px solid var(--color-accent-amber-border)',
                     color: 'var(--color-text-primary)',
+                    fontSize: theme.fontSize.body,
                   }}
                 >
                   <p className="font-medium">{t.prModal.cannotSquashPushed}</p>
@@ -291,11 +292,12 @@ export function PrSessionModal({
 
               {hasUncommittedConflict && !hasSquashConflict && (
                 <div
-                  className="rounded-md px-3 py-2 text-sm"
+                  className="rounded-md px-3 py-2"
                   style={{
                     backgroundColor: 'var(--color-accent-red-bg)',
                     border: '1px solid var(--color-accent-red-border)',
                     color: 'var(--color-text-primary)',
+                    fontSize: theme.fontSize.body,
                   }}
                 >
                   <p className="font-medium">{t.prModal.uncommittedConflict}</p>
@@ -305,11 +307,12 @@ export function PrSessionModal({
 
               {hasUncommittedChanges && !hasUncommittedConflict && (
                 <div
-                  className="rounded-md px-3 py-2 text-sm"
+                  className="rounded-md px-3 py-2"
                   style={{
                     backgroundColor: 'var(--color-accent-amber-bg)',
                     border: '1px solid var(--color-accent-amber-border)',
                     color: 'var(--color-text-primary)',
+                    fontSize: theme.fontSize.body,
                   }}
                 >
                   <p className="font-medium">{t.prModal.uncommittedChanges}</p>
@@ -328,7 +331,7 @@ export function PrSessionModal({
                   border: '1px solid var(--color-border-subtle)',
                 }}
               >
-                <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                <span style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
                   {mode === 'squash'
                     ? t.prModal.squashHint
                     : `${t.prModal.commitsHint.replace('{count}', String(commitCount))}${
@@ -344,7 +347,7 @@ export function PrSessionModal({
                   <button
                     type="button"
                     onClick={() => setMode('squash')}
-                    className="px-3 py-2 rounded text-sm"
+                    className="px-3 py-2 rounded"
                     style={{
                       backgroundColor:
                         mode === 'squash' ? 'var(--color-accent-green-bg)' : 'var(--color-bg-tertiary)',
@@ -352,6 +355,7 @@ export function PrSessionModal({
                         mode === 'squash' ? 'var(--color-accent-green-border)' : 'var(--color-border-subtle)'
                       }`,
                       color: 'var(--color-text-primary)',
+                      fontSize: theme.fontSize.button,
                     }}
                   >
                     {t.prModal.squashChanges}
@@ -359,7 +363,7 @@ export function PrSessionModal({
                   <button
                     type="button"
                     onClick={() => setMode('reapply')}
-                    className="px-3 py-2 rounded text-sm"
+                    className="px-3 py-2 rounded"
                     style={{
                       backgroundColor:
                         mode === 'reapply' ? 'var(--color-accent-blue-bg)' : 'var(--color-bg-tertiary)',
@@ -367,12 +371,13 @@ export function PrSessionModal({
                         mode === 'reapply' ? 'var(--color-accent-blue-border)' : 'var(--color-border-subtle)'
                       }`,
                       color: 'var(--color-text-primary)',
+                      fontSize: theme.fontSize.button,
                     }}
                   >
                     {t.prModal.useExistingCommits}
                   </button>
                 </div>
-                <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                <p className="mt-2" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
                   {mode === 'squash'
                     ? t.prModal.squashDesc
                     : t.prModal.reapplyDesc}
@@ -388,11 +393,12 @@ export function PrSessionModal({
                     id="pr-commit-message"
                     value={commitMessage}
                     onChange={(event) => setCommitMessage(event.target.value)}
-                    className="mt-1 w-full rounded px-3 py-2 text-sm"
+                    className="mt-1 w-full rounded px-3 py-2"
                     style={{
                       backgroundColor: 'var(--color-bg-tertiary)',
                       border: '1px solid var(--color-border-subtle)',
                       color: 'var(--color-text-primary)',
+                      fontSize: theme.fontSize.input,
                     }}
                     placeholder={title || 'Describe the changes'}
                   />
@@ -409,11 +415,12 @@ export function PrSessionModal({
                   autoFocus
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
-                  className="mt-1 w-full rounded px-3 py-2 text-sm"
+                  className="mt-1 w-full rounded px-3 py-2"
                   style={{
                     backgroundColor: 'var(--color-bg-tertiary)',
                     border: '1px solid var(--color-border-subtle)',
                     color: 'var(--color-text-primary)',
+                    fontSize: theme.fontSize.input,
                   }}
                   placeholder={t.prModal.prTitlePlaceholder}
                 />
@@ -428,11 +435,12 @@ export function PrSessionModal({
                   value={body}
                   onChange={(event) => setBody(event.target.value)}
                   rows={8}
-                  className="mt-1 w-full rounded px-3 py-2 text-sm resize-y"
+                  className="mt-1 w-full rounded px-3 py-2 resize-y"
                   style={{
                     backgroundColor: 'var(--color-bg-tertiary)',
                     border: '1px solid var(--color-border-subtle)',
                     color: 'var(--color-text-primary)',
+                    fontSize: theme.fontSize.input,
                   }}
                   placeholder={t.prModal.descriptionPlaceholder}
                 />
@@ -446,21 +454,22 @@ export function PrSessionModal({
                   id="pr-base-branch"
                   value={baseBranch}
                   onChange={(event) => setBaseBranch(event.target.value)}
-                  className="mt-1 w-full rounded px-3 py-2 text-sm"
+                  className="mt-1 w-full rounded px-3 py-2"
                   style={{
                     backgroundColor: 'var(--color-bg-tertiary)',
                     border: '1px solid var(--color-border-subtle)',
                     color: 'var(--color-text-primary)',
+                    fontSize: theme.fontSize.input,
                   }}
                   placeholder={preview.parentBranch}
                 />
-                <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                <p className="mt-1" style={{ color: 'var(--color-text-tertiary)', fontSize: theme.fontSize.caption }}>
                   {t.prModal.baseBranchHint}
                 </p>
               </div>
 
               <div>
-                <label className="flex items-center gap-2 text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                <label className="flex items-center gap-2 mb-2" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>
                   <input
                     type="checkbox"
                     checked={usePrBranchName}
@@ -475,15 +484,16 @@ export function PrSessionModal({
                       id="pr-branch-name"
                       value={prBranchName}
                       onChange={(event) => setPrBranchName(event.target.value)}
-                      className="mt-1 w-full rounded px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded px-3 py-2"
                       style={{
                         backgroundColor: 'var(--color-bg-tertiary)',
                         border: '1px solid var(--color-border-subtle)',
                         color: 'var(--color-text-primary)',
+                        fontSize: theme.fontSize.input,
                       }}
                       placeholder={`pr/${sessionName}`}
                     />
-                    <p className="mt-1 text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                    <p className="mt-1" style={{ color: 'var(--color-text-tertiary)', fontSize: theme.fontSize.caption }}>
                       {t.prModal.customBranchHint}
                     </p>
                   </>
@@ -495,11 +505,12 @@ export function PrSessionModal({
 
           {error && (
             <div
-              className="rounded-md px-3 py-2 text-sm"
+              className="rounded-md px-3 py-2"
               style={{
                 backgroundColor: 'var(--color-accent-red-bg)',
                 border: '1px solid var(--color-accent-red-border)',
                 color: 'var(--color-text-primary)',
+                fontSize: theme.fontSize.body,
               }}
             >
               {error}
@@ -508,29 +519,30 @@ export function PrSessionModal({
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t px-6 py-4 flex-shrink-0" style={{ borderColor: 'var(--color-border-subtle)' }}>
-          <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+          <div style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}>
             {t.prModal.shortcutHint}
           </div>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm rounded border group inline-flex items-center gap-2"
+              className="px-4 py-2 rounded border group inline-flex items-center gap-2"
               style={{
                 backgroundColor: 'var(--color-bg-tertiary)',
                 borderColor: 'var(--color-border-subtle)',
                 color: 'var(--color-text-secondary)',
+                fontSize: theme.fontSize.button,
               }}
               title={`${t.prModal.cancel} (Esc)`}
             >
               <span>{t.prModal.cancel}</span>
-              <span className="text-xs opacity-60 group-hover:opacity-100">Esc</span>
+              <span className="opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>Esc</span>
             </button>
             <button
               type="button"
               onClick={handleConfirm}
               disabled={confirmDisabled}
-              className="px-4 py-2 text-sm font-medium rounded group inline-flex items-center gap-2"
+              className="px-4 py-2 font-medium rounded group inline-flex items-center gap-2"
               title={confirmTitle}
               style={{
                 backgroundColor: confirmDisabled
@@ -540,10 +552,11 @@ export function PrSessionModal({
                 color: confirmDisabled ? 'var(--color-text-secondary)' : 'var(--color-text-inverse)',
                 cursor: confirmDisabled ? 'not-allowed' : 'pointer',
                 opacity: confirmDisabled ? 0.6 : 1,
+                fontSize: theme.fontSize.button,
               }}
             >
               <span>{status === 'running' ? t.prModal.creatingPr : t.prModal.createPr}</span>
-              <span className="text-xs opacity-60 group-hover:opacity-100">⌘↵</span>
+              <span className="opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>⌘↵</span>
             </button>
           </div>
         </div>

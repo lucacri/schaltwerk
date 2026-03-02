@@ -73,7 +73,7 @@ export const UnifiedBottomBar = forwardRef<HTMLDivElement, UnifiedBottomBarProps
         borderBottomColor: isFocused ? 'var(--color-accent-blue-border)' : 'var(--color-border-default)',
         fontSize: theme.fontSize.body,
       }}
-      className={`h-10 px-4 text-xs border-b cursor-pointer flex-shrink-0 flex items-center ${
+      className={`h-10 px-4 border-b cursor-pointer flex-shrink-0 flex items-center ${
         isFocused
           ? 'hover:bg-opacity-60'
           : 'hover:bg-elevated'
@@ -137,8 +137,9 @@ export const UnifiedBottomBar = forwardRef<HTMLDivElement, UnifiedBottomBarProps
             style={{
               backgroundColor: runButtonColors.background,
               color: runButtonColors.text,
+              fontSize: theme.fontSize.button,
             }}
-            className={`px-1.5 py-1 flex items-center gap-0.5 rounded text-xs ${
+            className={`px-1.5 py-1 flex items-center gap-0.5 rounded ${
               isRunning
                 ? isFocused
                   ? 'hover:opacity-80'
@@ -148,9 +149,9 @@ export const UnifiedBottomBar = forwardRef<HTMLDivElement, UnifiedBottomBarProps
                   : 'hover:opacity-70'
             }`}
           >
-            <span className="text-[11px]">{getRunButtonIcon(isRunning)}</span>
-            <span className="text-[11px] font-medium">{getRunButtonLabel(isRunning)}</span>
-            <span className="text-[9px] opacity-60 ml-0.5">
+            <span style={{ fontSize: theme.fontSize.caption }}>{getRunButtonIcon(isRunning)}</span>
+            <span className="font-medium" style={{ fontSize: theme.fontSize.caption }}>{getRunButtonLabel(isRunning)}</span>
+            <span className="opacity-60 ml-0.5" style={{ fontSize: theme.fontSize.caption }}>
               {shortcuts[KeyboardShortcutAction.ToggleRunMode] || '⌘E'}
             </span>
           </button>
@@ -160,8 +161,9 @@ export const UnifiedBottomBar = forwardRef<HTMLDivElement, UnifiedBottomBarProps
           style={{
             backgroundColor: isFocused ? 'var(--color-accent-blue-bg)' : 'var(--color-bg-hover)',
             color: isFocused ? 'var(--color-accent-blue-light)' : 'var(--color-text-tertiary)',
+            fontSize: theme.fontSize.caption,
           }}
-          className="text-[10px] px-1.5 py-0.5 rounded"
+          className="px-1.5 py-0.5 rounded"
           title={t.terminalComponents.focusTerminal.replace('{shortcut}', shortcuts[KeyboardShortcutAction.FocusTerminal] || '⌘/')}
         >
           {shortcuts[KeyboardShortcutAction.FocusTerminal] || '⌘/'}

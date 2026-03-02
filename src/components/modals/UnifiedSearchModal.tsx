@@ -214,7 +214,7 @@ export function UnifiedSearchModal({
   const renderBranchList = () => {
     if (branchSearch.loading) {
       return (
-        <div data-testid="unified-search-loading" className="flex flex-col items-center justify-center gap-2 py-10 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        <div data-testid="unified-search-loading" className="flex flex-col items-center justify-center gap-2 py-10" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
           <span className="h-4 w-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--color-accent-blue)' }} />
           {t.newSessionModal.unifiedSearch.loading}
         </div>
@@ -223,7 +223,7 @@ export function UnifiedSearchModal({
 
     if (branchSearch.filteredBranches.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        <div className="flex flex-col items-center justify-center gap-2 py-10" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
           {t.newSessionModal.unifiedSearch.noBranchesFound}
         </div>
       )
@@ -244,7 +244,7 @@ export function UnifiedSearchModal({
                   onSelectBranch(branch)
                   onClose()
                 }}
-                className="w-full text-left px-3 py-2 rounded text-sm"
+                className="w-full text-left px-3 py-2 rounded"
                 style={{
                   backgroundColor: isHighlighted ? 'var(--color-bg-hover)' : 'transparent',
                   color: 'var(--color-text-primary)',
@@ -264,7 +264,7 @@ export function UnifiedSearchModal({
   const renderIssueList = () => {
     if (!githubReady) {
       return (
-        <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        <div className="flex flex-col items-center justify-center gap-2 py-10" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
           {t.newSessionModal.unifiedSearch.githubNotConnected}
         </div>
       )
@@ -272,7 +272,7 @@ export function UnifiedSearchModal({
 
     if (issueSearch.loading) {
       return (
-        <div data-testid="unified-search-loading" className="flex flex-col items-center justify-center gap-2 py-10 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        <div data-testid="unified-search-loading" className="flex flex-col items-center justify-center gap-2 py-10" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
           <span className="h-4 w-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--color-accent-blue)' }} />
           {t.newSessionModal.unifiedSearch.loading}
         </div>
@@ -281,7 +281,7 @@ export function UnifiedSearchModal({
 
     if (issueSearch.results.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        <div className="flex flex-col items-center justify-center gap-2 py-10" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
           {t.newSessionModal.unifiedSearch.noIssuesFound}
         </div>
       )
@@ -387,7 +387,7 @@ export function UnifiedSearchModal({
                   )}
                 </div>
                 {isItemLoading && (
-                  <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  <span style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}>
                     {t.githubIssue.loading}
                   </span>
                 )}
@@ -402,7 +402,7 @@ export function UnifiedSearchModal({
   const renderPrList = () => {
     if (!githubReady) {
       return (
-        <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        <div className="flex flex-col items-center justify-center gap-2 py-10" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
           {t.newSessionModal.unifiedSearch.githubNotConnected}
         </div>
       )
@@ -410,7 +410,7 @@ export function UnifiedSearchModal({
 
     if (prSearch.loading) {
       return (
-        <div data-testid="unified-search-loading" className="flex flex-col items-center justify-center gap-2 py-10 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        <div data-testid="unified-search-loading" className="flex flex-col items-center justify-center gap-2 py-10" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
           <span className="h-4 w-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--color-accent-blue)' }} />
           {t.newSessionModal.unifiedSearch.loading}
         </div>
@@ -419,7 +419,7 @@ export function UnifiedSearchModal({
 
     if (prSearch.results.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        <div className="flex flex-col items-center justify-center gap-2 py-10" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
           {t.newSessionModal.unifiedSearch.noPrsFound}
         </div>
       )
@@ -542,7 +542,7 @@ export function UnifiedSearchModal({
                   )}
                 </div>
                 {isItemLoading && (
-                  <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  <span style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}>
                     {t.githubPr.loading}
                   </span>
                 )}
@@ -583,11 +583,12 @@ export function UnifiedSearchModal({
             value={searchQuery}
             onChange={e => handleSearchChange(e.target.value)}
             placeholder={t.newSessionModal.unifiedSearch.searchPlaceholder}
-            className="w-full px-3 py-2 text-sm rounded"
+            className="w-full px-3 py-2 rounded"
             style={{
               backgroundColor: 'var(--color-bg-primary)',
               color: 'var(--color-text-primary)',
               border: '1px solid var(--color-border-default)',
+              fontSize: theme.fontSize.input,
             }}
           />
         </div>
@@ -601,8 +602,9 @@ export function UnifiedSearchModal({
               aria-selected={activeTab === tab.id}
               aria-disabled={tab.disabled}
               onClick={() => handleTabChange(tab.id)}
-              className="flex-1 px-3 py-2 text-sm text-center transition-colors"
+              className="flex-1 px-3 py-2 text-center transition-colors"
               style={{
+                fontSize: theme.fontSize.body,
                 color: tab.disabled
                   ? 'var(--color-text-muted)'
                   : activeTab === tab.id

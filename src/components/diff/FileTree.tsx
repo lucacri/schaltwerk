@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, ReactNode } from 'react'
 import { VscFolder, VscFolderOpened } from 'react-icons/vsc'
 import { buildFolderTree, getAllFolderPaths, type TreeNode, type FolderNode, type FileNode } from '../../utils/folderTree'
 import type { ChangedFile } from '../../common/events'
+import { theme } from '../../common/theme'
 
 interface FileTreeProps {
   files: ChangedFile[]
@@ -46,13 +47,13 @@ export function FileTree({ files, renderFileNode, renderFolderContent }: FileTre
             <VscFolder size={14} style={{ color: 'var(--color-text-muted)' }} />
           )}
           <div className="flex-1 flex items-center gap-2 min-w-0">
-            <span className="text-sm font-medium truncate" style={{ color: 'var(--color-text-secondary)' }}>
+            <span className="font-medium truncate" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
               {node.name}
             </span>
             {renderFolderContent ? (
               renderFolderContent(node)
             ) : (
-              <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+              <span className="flex-shrink-0" style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                 ({node.fileCount})
               </span>
             )}

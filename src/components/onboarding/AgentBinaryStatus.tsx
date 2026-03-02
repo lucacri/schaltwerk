@@ -59,25 +59,26 @@ export function AgentBinaryStatus() {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <div className="text-slate-200 text-sm font-semibold">{t.agentBinaryStatus.selectDefault}</div>
+        <div className="text-slate-200 font-semibold" style={{ fontSize: theme.fontSize.body }}>{t.agentBinaryStatus.selectDefault}</div>
         <button
           onClick={() => { void refresh() }}
-          className="px-2 py-1 text-xs rounded border"
+          className="px-2 py-1 rounded border"
           style={{
             borderColor: 'var(--color-border-subtle)',
             color: 'var(--color-text-secondary)',
             backgroundColor: 'var(--color-bg-elevated)',
+            fontSize: theme.fontSize.caption,
           }}
         >
           {t.agentBinaryStatus.refresh}
         </button>
-        {loading && <span className="text-xs text-slate-400">{t.agentBinaryStatus.scanning}</span>}
-        {error && <span className="text-xs text-red-400">{t.agentBinaryStatus.failed.replace('{error}', error)}</span>}
+        {loading && <span className="text-slate-400" style={{ fontSize: theme.fontSize.caption }}>{t.agentBinaryStatus.scanning}</span>}
+        {error && <span className="text-red-400" style={{ fontSize: theme.fontSize.caption }}>{t.agentBinaryStatus.failed.replace('{error}', error)}</span>}
         {!loading && !error && allMissing && (
-          <span className="text-xs text-amber-400">{t.agentBinaryStatus.noClis}</span>
+          <span className="text-amber-400" style={{ fontSize: theme.fontSize.caption }}>{t.agentBinaryStatus.noClis}</span>
         )}
       </div>
-      <p className="text-xs text-slate-400">
+      <p className="text-slate-400" style={{ fontSize: theme.fontSize.caption }}>
         {t.agentBinaryStatus.clickToSetDefault}
       </p>
       <div className="grid grid-cols-2 gap-2.5">
@@ -110,25 +111,26 @@ export function AgentBinaryStatus() {
                 color: 'var(--color-text-primary)',
               }}
             >
-              <div className="flex items-center justify-between text-sm font-semibold">
+              <div className="flex items-center justify-between font-semibold" style={{ fontSize: theme.fontSize.body }}>
                 <span className="flex items-center gap-2">
                   <StatusIcon status={status} />
                   {displayNameForAgent(agent)}
                 </span>
                 {isSelected ? (
                   <span
-                    className="text-xs px-2.5 py-0.5 rounded-full"
+                    className="px-2.5 py-0.5 rounded-full"
                     style={{
                       backgroundColor: 'rgba(var(--color-accent-blue-rgb), 0.2)',
                       color: 'var(--color-accent-blue-light)',
                       border: '1px solid rgba(var(--color-accent-blue-rgb), 0.5)',
+                      fontSize: theme.fontSize.caption,
                     }}
                   >
                     {t.agentBinaryStatus.default}
                   </span>
                 ) : (
                   <span
-                    className="text-xs px-2.5 py-0.5 rounded-full"
+                    className="px-2.5 py-0.5 rounded-full"
                     style={{
                       backgroundColor:
                         status === 'present'
@@ -136,6 +138,7 @@ export function AgentBinaryStatus() {
                           : 'rgba(var(--color-border-subtle-rgb), 0.35)',
                       color: status === 'present' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
                       border: `1px solid ${status === 'present' ? 'rgba(var(--color-accent-green-rgb), 0.5)' : 'rgba(var(--color-border-subtle-rgb), 0.6)'}`,
+                      fontSize: theme.fontSize.caption,
                     }}
                   >
                     {status === 'present' ? t.agentBinaryStatus.found : t.agentBinaryStatus.missing}
@@ -143,8 +146,8 @@ export function AgentBinaryStatus() {
                 )}
               </div>
               <div
-                className="text-xs break-all"
-                style={{ color: 'var(--color-text-secondary)' }}
+                className="break-all"
+                style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}
               >
                 {preferred ?? t.agentBinaryStatus.noPathDetected}
               </div>

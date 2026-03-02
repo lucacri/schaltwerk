@@ -228,7 +228,7 @@ export const HistoryItemRow = memo(({ viewModel, isSelected, onSelect, onContext
   const detailContent = (() => {
     if (detailIsLoading) {
       return (
-        <div className="flex items-center text-xs text-slate-300" style={{ minHeight: detailMessageHeight }}>
+        <div className="flex items-center text-slate-300" style={{ minHeight: detailMessageHeight, fontSize: theme.fontSize.caption }}>
           Loading changes…
         </div>
       )
@@ -236,7 +236,7 @@ export const HistoryItemRow = memo(({ viewModel, isSelected, onSelect, onContext
 
     if (detailError) {
       return (
-        <div className="flex flex-col gap-1 text-xs" style={{ minHeight: detailMessageHeight }}>
+        <div className="flex flex-col gap-1" style={{ minHeight: detailMessageHeight, fontSize: theme.fontSize.caption }}>
           <span className="text-red-400">Failed to load changes</span>
           <span className="text-slate-400 truncate" title={detailError}>
             {detailError}
@@ -247,14 +247,14 @@ export const HistoryItemRow = memo(({ viewModel, isSelected, onSelect, onContext
 
     if (!detailHasFiles) {
       return (
-        <div className="flex items-center text-xs text-slate-300" style={{ minHeight: detailMessageHeight }}>
+        <div className="flex items-center text-slate-300" style={{ minHeight: detailMessageHeight, fontSize: theme.fontSize.caption }}>
           No file changes in this commit
         </div>
       )
     }
 
     return (
-      <div className="flex flex-col gap-1 text-xs text-slate-200">
+      <div className="flex flex-col gap-1 text-slate-200" style={{ fontSize: theme.fontSize.caption }}>
         {detailFiles.map(file => {
           const segments = file.path.split('/')
           const fileName = segments.pop() ?? file.path
@@ -290,13 +290,14 @@ export const HistoryItemRow = memo(({ viewModel, isSelected, onSelect, onContext
               </span>
               <div className="flex items-baseline gap-2 min-w-0 flex-1">
                 <span
-                  className={`${isCurrent ? 'font-semibold' : 'font-medium'} text-slate-200 text-sm truncate`}
+                  className={`${isCurrent ? 'font-semibold' : 'font-medium'} text-slate-200 truncate`}
+                  style={{ fontSize: theme.fontSize.body }}
                   title={fileName}
                 >
                   {fileName}
                 </span>
                 {parentPath && (
-                  <span className="text-slate-400 text-xs truncate" title={parentPath}>
+                  <span className="text-slate-400 truncate" style={{ fontSize: theme.fontSize.caption }} title={parentPath}>
                     {parentPath}
                   </span>
                 )}
@@ -311,13 +312,13 @@ export const HistoryItemRow = memo(({ viewModel, isSelected, onSelect, onContext
   return (
     <div className="flex flex-col transition-colors">
       <div
-        className="flex items-center px-2 text-sm h-[22px] leading-[22px] gap-2 w-full hover:bg-[color:var(--hover-bg)] transition-colors"
+        className="flex items-center px-2 h-[22px] leading-[22px] gap-2 w-full hover:bg-[color:var(--hover-bg)] transition-colors"
+        style={{ ...headerStyles, fontSize: theme.fontSize.body }}
         onClick={handleRowClick}
         onKeyDown={handleKeyDown}
         onContextMenu={handleContextMenu}
         role="button"
         tabIndex={0}
-        style={headerStyles}
       >
         <div className="flex-shrink-0 flex items-center h-[22px]">
           <GitGraphRow viewModel={viewModel} />
@@ -331,8 +332,8 @@ export const HistoryItemRow = memo(({ viewModel, isSelected, onSelect, onContext
             {historyItem.subject}
           </span>
           <span
-            className="text-slate-400 text-xs whitespace-nowrap overflow-hidden text-ellipsis min-w-0"
-            style={{ flexShrink: 3 }}
+            className="text-slate-400 whitespace-nowrap overflow-hidden text-ellipsis min-w-0"
+            style={{ flexShrink: 3, fontSize: theme.fontSize.caption }}
           >
             {historyItem.author}
           </span>

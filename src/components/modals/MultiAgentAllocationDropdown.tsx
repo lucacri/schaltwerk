@@ -154,12 +154,12 @@ export function MultiAgentAllocationDropdown({
                         style={{ borderColor: 'var(--color-border-subtle)' }}
                     >
                         <span
-                            className="text-xs font-medium uppercase tracking-wide"
-                            style={{ color: 'var(--color-text-secondary)' }}
+                            className="font-medium uppercase tracking-wide"
+                            style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}
                         >
                             {t.multiAgentAllocation.multiAgentSetup}
                         </span>
-                        <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                        <span style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}>
                             {totalCount}/{maxCount}
                         </span>
                     </div>
@@ -178,8 +178,8 @@ export function MultiAgentAllocationDropdown({
                                 <div key={agent} className="flex items-center justify-between gap-3">
                                     <label
                                         htmlFor={checkboxId}
-                                        className="flex items-center gap-2 text-sm"
-                                        style={{ color: textColor }}
+                                        className="flex items-center gap-2"
+                                        style={{ color: textColor, fontSize: theme.fontSize.label }}
                                     >
                                         <input
                                             id={checkboxId}
@@ -293,11 +293,12 @@ function AgentCountSelector({ agent, count, maxCount, onChange }: AgentCountSele
                     type="button"
                     data-testid={`agent-count-${agent}`}
                     onClick={toggle}
-                    className="px-2 h-8 rounded inline-flex items-center gap-1 text-sm hover:opacity-90"
+                    className="px-2 h-8 rounded inline-flex items-center gap-1 hover:opacity-90"
                     style={{
                         backgroundColor: dropdownOpen ? 'var(--color-bg-hover)' : 'var(--color-bg-primary)',
                         color: 'var(--color-text-primary)',
                         border: `1px solid ${dropdownOpen ? 'var(--color-border-default)' : 'var(--color-border-subtle)'}`,
+                        fontSize: theme.fontSize.body,
                     }}
                 >
                     <span>{normalizedCount}x</span>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../../common/tauriCommands'
+import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
 import { VscSettings } from 'react-icons/vsc'
 import { BranchAutocomplete } from '../inputs/BranchAutocomplete'
@@ -165,7 +166,7 @@ export function BranchSelectorPopover({
         {isUpdating ? (
           <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
         ) : (
-          <VscSettings className="text-base" />
+          <VscSettings style={{ fontSize: theme.fontSize.bodyLarge }} />
         )}
         {hasCustomCompare && !isUpdating && (
           <span
@@ -189,8 +190,9 @@ export function BranchSelectorPopover({
               type="button"
               onClick={() => void handleResetToDefault()}
               disabled={isUpdating}
-              className="w-full text-left text-xs px-2 py-1.5 mb-2 rounded border transition-colors hover:opacity-80"
+              className="w-full text-left px-2 py-1.5 mb-2 rounded border transition-colors hover:opacity-80"
               style={{
+                fontSize: theme.fontSize.caption,
                 backgroundColor: 'var(--color-bg-primary)',
                 borderColor: 'var(--color-accent-amber-border)',
                 color: 'var(--color-text-primary)'
@@ -200,13 +202,14 @@ export function BranchSelectorPopover({
               <span style={{ color: 'var(--color-accent-amber)' }}>{originalBaseBranch}</span>
             </button>
           )}
-          <div className="text-xs mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
+          <div className="mb-1.5" style={{ fontSize: theme.fontSize.label, color: 'var(--color-text-secondary)' }}>
             {t.branchSelectorPopover.compareAgainst}
           </div>
           {isLoading ? (
             <div
-              className="w-full rounded px-2 py-1.5 border text-xs"
+              className="w-full rounded px-2 py-1.5 border"
               style={{
+                fontSize: theme.fontSize.caption,
                 backgroundColor: 'var(--color-bg-primary)',
                 borderColor: 'var(--color-border-default)',
                 color: 'var(--color-text-muted)'
@@ -222,7 +225,8 @@ export function BranchSelectorPopover({
               branches={branches}
               disabled={isUpdating || branches.length === 0}
               placeholder={branches.length === 0 ? t.sessionConfig.noBranches : t.branchSelectorPopover.search}
-              className="text-xs py-1"
+              className="py-1"
+              style={{ fontSize: theme.fontSize.caption }}
               autoFocus
             />
           )}

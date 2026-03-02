@@ -3,6 +3,7 @@ import { VscChromeMinimize, VscChromeMaximize, VscChromeClose } from 'react-icon
 import { useState, useEffect } from 'react'
 import { logger } from '../utils/logger'
 import { useTranslation } from '../common/i18n'
+import { theme } from '../common/theme'
 
 export function WindowControls() {
   const [isMaximized, setIsMaximized] = useState(false)
@@ -72,7 +73,7 @@ export function WindowControls() {
         aria-label={t.windowControls.minimizeWindow}
         data-testid="window-minimize"
       >
-        <VscChromeMinimize className="text-[14px]" />
+        <VscChromeMinimize style={{ fontSize: theme.fontSize.body }} />
       </button>
       <button
         onClick={() => { void handleMaximize() }}
@@ -81,7 +82,7 @@ export function WindowControls() {
         aria-label={isMaximized ? t.windowControls.restoreWindow : t.windowControls.maximizeWindow}
         data-testid="window-maximize"
       >
-        <VscChromeMaximize className="text-[14px]" />
+        <VscChromeMaximize style={{ fontSize: theme.fontSize.body }} />
       </button>
       <button
         onClick={() => { void handleClose() }}
@@ -90,7 +91,7 @@ export function WindowControls() {
         aria-label={t.windowControls.closeWindow}
         data-testid="window-close"
       >
-        <VscChromeClose className="text-[14px]" />
+        <VscChromeClose style={{ fontSize: theme.fontSize.body }} />
       </button>
     </div>
   )

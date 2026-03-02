@@ -107,7 +107,7 @@ export function ModelSelector({
             key: model.value,
             disabled: !canSelect,
             label: (
-                <span className="flex items-center gap-2 text-sm">
+                <span className="flex items-center gap-2" style={{ fontSize: theme.fontSize.body }}>
                     {loading ? (
                         <span className="inline-block h-2 w-2 animate-spin rounded-full border border-current border-t-transparent" />
                     ) : (
@@ -170,7 +170,7 @@ export function ModelSelector({
                         type="button"
                         onClick={() => !dropdownDisabled && toggle()}
                         disabled={dropdownDisabled}
-                        className={`w-full px-3 py-1.5 text-sm rounded border flex items-center justify-between ${
+                        className={`w-full px-3 py-1.5 rounded border flex items-center justify-between ${
                             dropdownDisabled
                                 ? 'cursor-not-allowed'
                                 : 'cursor-pointer'
@@ -184,7 +184,8 @@ export function ModelSelector({
                         style={{
                             backgroundColor: 'var(--color-bg-elevated)',
                             borderColor: 'var(--color-border-default)',
-                            color: selectedDisabled && !loading ? 'var(--color-text-muted)' : 'var(--color-text-primary)'
+                            color: selectedDisabled && !loading ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
+                            fontSize: theme.fontSize.body
                         }}
                         title={getTooltipText(selectedModel.value)}
                         aria-label={selectedModel.label}
@@ -213,11 +214,12 @@ export function ModelSelector({
                         onClick={handleRequirePermissions}
                         disabled={disabled}
                         aria-pressed={!skipPermissions}
-                        className="flex-1 px-3 py-1.5 rounded border text-xs"
+                        className="flex-1 px-3 py-1.5 rounded border"
                         style={{
                             backgroundColor: skipPermissions ? 'var(--color-bg-elevated)' : 'var(--color-accent-blue)',
                             borderColor: skipPermissions ? 'var(--color-border-default)' : 'var(--color-accent-blue)',
-                            color: disabled ? 'var(--color-text-muted)' : (skipPermissions ? 'var(--color-text-secondary)' : 'var(--color-accent-blue-text)')
+                            color: disabled ? 'var(--color-text-muted)' : (skipPermissions ? 'var(--color-text-secondary)' : 'var(--color-accent-blue-text)'),
+                            fontSize: theme.fontSize.caption
                         }}
                         title={t.sessionConfig.requirePermissionsTitle}
                     >
@@ -228,11 +230,12 @@ export function ModelSelector({
                         onClick={handleSkipPermissions}
                         disabled={disabled}
                         aria-pressed={!!skipPermissions}
-                        className="flex-1 px-3 py-1.5 rounded border text-xs"
+                        className="flex-1 px-3 py-1.5 rounded border"
                         style={{
                             backgroundColor: skipPermissions ? 'var(--color-accent-blue)' : 'var(--color-bg-elevated)',
                             borderColor: skipPermissions ? 'var(--color-accent-blue)' : 'var(--color-border-default)',
-                            color: disabled ? 'var(--color-text-muted)' : (skipPermissions ? 'var(--color-accent-blue-text)' : 'var(--color-text-secondary)')
+                            color: disabled ? 'var(--color-text-muted)' : (skipPermissions ? 'var(--color-accent-blue-text)' : 'var(--color-text-secondary)'),
+                            fontSize: theme.fontSize.caption
                         }}
                         title={t.sessionConfig.skipPermissionsTitle}
                     >

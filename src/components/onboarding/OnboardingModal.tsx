@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { ONBOARDING_STEPS } from './steps'
 import { TauriCommands } from '../../common/tauriCommands'
 import { logger } from '../../utils/logger'
+import { theme } from '../../common/theme'
 
 function SmartModalOverlay({ highlightElement, highlightRect }: { highlightElement: Element | null, highlightRect: DOMRect | null }) {
     if (!highlightElement || !highlightRect) {
@@ -222,8 +223,8 @@ export function OnboardingModal({ open, onClose, onComplete }: Props) {
                                 </svg>
                             </div>
                             <div>
-                                <h2 className="text-lg font-semibold text-slate-200">{step.title}</h2>
-                                <div className="text-sm text-slate-400">
+                                <h2 className="font-semibold text-slate-200" style={{ fontSize: theme.fontSize.heading }}>{step.title}</h2>
+                                <div className="text-slate-400" style={{ fontSize: theme.fontSize.body }}>
                                     Step {currentStep + 1} of {ONBOARDING_STEPS.length}
                                 </div>
                             </div>
@@ -258,7 +259,8 @@ export function OnboardingModal({ open, onClose, onComplete }: Props) {
                     <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between">
                         <button
                             onClick={handleSkip}
-                            className="text-slate-400 hover:text-slate-300 text-sm transition-colors"
+                            className="text-slate-400 hover:text-slate-300 transition-colors"
+                            style={{ fontSize: theme.fontSize.body }}
                         >
                             Skip tutorial
                         </button>
@@ -267,15 +269,17 @@ export function OnboardingModal({ open, onClose, onComplete }: Props) {
                             <button
                                 onClick={handlePrevious}
                                 disabled={currentStep === 0}
-                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-700 rounded text-sm transition-colors text-slate-300"
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-700 rounded transition-colors text-slate-300"
+                                style={{ fontSize: theme.fontSize.button }}
                             >
                                 Previous
                             </button>
                             <button
                                 onClick={handleNext}
-                                className="px-4 py-1.5 text-white rounded text-sm transition-colors flex items-center gap-2"
+                                className="px-4 py-1.5 text-white rounded transition-colors flex items-center gap-2"
                                 style={{
                                     backgroundColor: 'var(--color-accent-blue-dark)',
+                                    fontSize: theme.fontSize.button,
                                 }}
                             >
                                 {isLastStep ? 'Get Started' : 'Next'}
@@ -289,7 +293,7 @@ export function OnboardingModal({ open, onClose, onComplete }: Props) {
                     </div>
 
                     <div className="px-6 pb-3">
-                        <div className="text-xs text-slate-500 text-center">
+                        <div className="text-slate-500 text-center" style={{ fontSize: theme.fontSize.caption }}>
                             Use <kbd className="px-1 py-0.5 bg-slate-700 rounded">←</kbd> <kbd className="px-1 py-0.5 bg-slate-700 rounded">→</kbd> or <kbd className="px-1 py-0.5 bg-slate-700 rounded">Enter</kbd> to navigate • <kbd className="px-1 py-0.5 bg-slate-700 rounded">Esc</kbd> to close
                         </div>
                     </div>

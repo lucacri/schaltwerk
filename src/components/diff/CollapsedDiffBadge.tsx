@@ -1,5 +1,6 @@
 import { VscChevronRight } from 'react-icons/vsc'
 import { DiffFilterResult, formatDiffSize } from '../../domains/diff/diffFilters'
+import { theme } from '../../common/theme'
 import { useTranslation } from '../../common/i18n'
 
 interface CollapsedDiffBadgeProps {
@@ -45,12 +46,12 @@ export function CollapsedDiffBadge({ filterResult, onClick }: CollapsedDiffBadge
           e.currentTarget.style.borderColor = 'var(--color-border-subtle)'
         }}
       >
-        <VscChevronRight className="text-lg" />
+        <VscChevronRight style={{ fontSize: theme.fontSize.heading }} />
         <div className="flex flex-col items-center gap-1">
-          <div className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+          <div className="font-medium" style={{ fontSize: theme.fontSize.body, color: 'var(--color-text-primary)' }}>
             {badgeText}
           </div>
-          <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+          <div style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-tertiary)' }}>
             {t.collapsedDiffBadge.clickToExpand}
           </div>
         </div>

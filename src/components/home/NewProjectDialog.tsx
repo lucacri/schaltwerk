@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { VscFolderOpened, VscClose, VscNewFolder } from 'react-icons/vsc'
 import { homeDir } from '@tauri-apps/api/path'
+import { theme } from '../../common/theme'
 import { AnimatedText } from '../common/AnimatedText'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
@@ -141,27 +142,27 @@ export function NewProjectDialog({ isOpen, onClose, onProjectCreated }: NewProje
       >
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <VscNewFolder className="text-cyan-400 text-2xl" />
-            <h2 className="text-xl font-semibold text-slate-200">{t.newProject.title}</h2>
+            <VscNewFolder className="text-cyan-400" style={{ fontSize: theme.fontSize.headingXLarge }} />
+            <h2 className="font-semibold text-slate-200" style={{ fontSize: theme.fontSize.headingLarge }}>{t.newProject.title}</h2>
           </div>
           <button
             onClick={onClose}
             className="text-slate-500 hover:text-slate-300 transition-colors"
             disabled={isCreating}
           >
-            <VscClose className="text-xl" />
+            <VscClose style={{ fontSize: theme.fontSize.headingLarge }} />
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-950/50 border border-red-800 rounded text-red-300 text-sm">
+          <div className="mb-4 p-3 bg-red-950/50 border border-red-800 rounded text-red-300" style={{ fontSize: theme.fontSize.body }}>
             {error}
           </div>
         )}
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">
+            <label className="block font-medium text-slate-400 mb-2" style={{ fontSize: theme.fontSize.label }}>
               {t.newProject.projectName}
             </label>
             <input
@@ -179,7 +180,7 @@ export function NewProjectDialog({ isOpen, onClose, onProjectCreated }: NewProje
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">
+            <label className="block font-medium text-slate-400 mb-2" style={{ fontSize: theme.fontSize.label }}>
               {t.newProject.parentDirectory}
             </label>
             <div className="flex gap-2">
@@ -196,16 +197,16 @@ export function NewProjectDialog({ isOpen, onClose, onProjectCreated }: NewProje
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg flex items-center gap-2 transition-colors"
                 disabled={isCreating}
               >
-                <VscFolderOpened className="text-lg" />
+                <VscFolderOpened style={{ fontSize: theme.fontSize.heading }} />
                 {t.newProject.browse}
               </button>
             </div>
           </div>
 
-          <div className="bg-slate-950/30 border border-slate-800 rounded-lg p-3 text-sm text-slate-400">
+          <div className="bg-slate-950/30 border border-slate-800 rounded-lg p-3 text-slate-400" style={{ fontSize: theme.fontSize.body }}>
             <p>{t.newProject.createInfo}</p>
             {projectName && parentPath && (
-              <p className="mt-2 text-cyan-300 font-mono text-xs">
+              <p className="mt-2 text-cyan-300 font-mono" style={{ fontSize: theme.fontSize.code }}>
                 {parentPath}/{projectName}
               </p>
             )}

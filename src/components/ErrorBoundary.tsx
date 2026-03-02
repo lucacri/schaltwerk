@@ -1,6 +1,7 @@
 import { Component, ReactNode, ErrorInfo } from 'react'
 import { AsciiBuilderLogo } from './home/AsciiBuilderLogo'
 import { logger } from '../utils/logger'
+import { theme } from '../common/theme'
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -79,22 +80,22 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 />
               </div>
               
-              <h2 className="text-xl font-semibold mb-2 text-slate-100">
+              <h2 className="font-semibold mb-2 text-slate-100" style={{ fontSize: theme.fontSize.headingLarge }}>
                 Well, that's unexpected
               </h2>
               
-              <p className="text-sm text-slate-300">
+              <p className="text-slate-300" style={{ fontSize: theme.fontSize.body }}>
                 Don't worry - this happens sometimes. Let's get things back on track.
               </p>
             </div>
 
             {/* Error details section */}
             <details className="mb-6 bg-slate-800 border border-slate-700 rounded-md">
-              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-300 hover:text-slate-100 hover:bg-slate-700/50 border-b border-slate-700 select-none rounded-t-md">
+              <summary className="cursor-pointer px-4 py-3 font-medium text-slate-300 hover:text-slate-100 hover:bg-slate-700/50 border-b border-slate-700 select-none rounded-t-md" style={{ fontSize: theme.fontSize.body }}>
                 ▼ Error details
               </summary>
               <div className="p-4">
-                <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap break-words max-h-60 overflow-auto bg-slate-950 p-3 rounded border border-slate-700">
+                <pre className="font-mono text-slate-300 whitespace-pre-wrap break-words max-h-60 overflow-auto bg-slate-950 p-3 rounded border border-slate-700" style={{ fontSize: theme.fontSize.code }}>
                   {this.state.error.toString()}
                   {this.state.errorInfo && '\n\nComponent Stack:\n' + this.state.errorInfo.componentStack}
                 </pre>
@@ -105,12 +106,13 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => window.location.reload()}
-                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 group"
+                className="px-4 py-2 font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 group"
                 title="Reload App"
                 style={{
                   backgroundColor: 'var(--color-bg-elevated)',
                   borderColor: 'var(--color-border-default)',
-                  color: 'var(--color-text-secondary)'
+                  color: 'var(--color-text-secondary)',
+                  fontSize: theme.fontSize.button,
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)'
@@ -120,17 +122,18 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 }}
               >
                 Reload App
-                <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">⇧⌘R</span>
+                <span className="ml-1.5 opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>⇧⌘R</span>
               </button>
               
               <button
                 onClick={this.resetError}
-                className="px-4 py-2 text-sm font-medium rounded-md group inline-flex items-center gap-2 focus:outline-none focus:ring-2"
+                className="px-4 py-2 font-medium rounded-md group inline-flex items-center gap-2 focus:outline-none focus:ring-2"
                 title="Try Again (Enter)"
                 autoFocus
                 style={{
                   backgroundColor: 'var(--color-accent-blue)',
-                  color: 'var(--color-text-inverse)'
+                  color: 'var(--color-text-inverse)',
+                  fontSize: theme.fontSize.button,
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = 'var(--color-accent-blue-dark)'
@@ -140,7 +143,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 }}
               >
                 <span>Try Again</span>
-                <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">↵</span>
+                <span className="ml-1.5 opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>↵</span>
               </button>
             </div>
           </div>

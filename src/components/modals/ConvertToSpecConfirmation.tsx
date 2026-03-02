@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { theme } from '../../common/theme'
 import { TauriCommands } from '../../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
 import { ConfirmModal } from './ConfirmModal'
@@ -57,11 +58,11 @@ export function ConvertToSpecConfirmation({
       </p>
       {hasUncommittedChanges && (
         <div className="bg-amber-950/50 border border-amber-800 rounded p-3 mb-4">
-          <p className="text-amber-200 text-sm font-semibold mb-2">{t.dialogs.convertToSpec.warningTitle}</p>
-          <p className="text-amber-100 text-sm">
+          <p className="text-amber-200 font-semibold mb-2" style={{ fontSize: theme.fontSize.body }}>{t.dialogs.convertToSpec.warningTitle}</p>
+          <p className="text-amber-100" style={{ fontSize: theme.fontSize.body }}>
             {t.dialogs.convertToSpec.warningBody}
           </p>
-          <ul className="text-amber-100 text-sm mt-2 ml-4 list-disc">
+          <ul className="text-amber-100 mt-2 ml-4 list-disc" style={{ fontSize: theme.fontSize.body }}>
             <li>{t.dialogs.convertToSpec.warningItem1}</li>
             <li>{t.dialogs.convertToSpec.warningItem2}</li>
             <li>{t.dialogs.convertToSpec.warningItem3}</li>
@@ -70,17 +71,17 @@ export function ConvertToSpecConfirmation({
       )}
       {!hasUncommittedChanges && (
         <div className="bg-slate-800/50 border border-slate-700 rounded p-3 mb-4">
-          <p className="text-slate-300 text-sm">
+          <p className="text-slate-300" style={{ fontSize: theme.fontSize.body }}>
             {t.dialogs.convertToSpec.normalBody}
           </p>
-          <ul className="text-slate-300 text-sm mt-2 ml-4 list-disc">
+          <ul className="text-slate-300 mt-2 ml-4 list-disc" style={{ fontSize: theme.fontSize.body }}>
             <li>{t.dialogs.convertToSpec.normalItem1}</li>
             <li>{t.dialogs.convertToSpec.warningItem2}</li>
             <li>{t.dialogs.convertToSpec.warningItem3}</li>
           </ul>
         </div>
       )}
-      <p className="text-slate-400 text-sm">
+      <p className="text-slate-400" style={{ fontSize: theme.fontSize.body }}>
         {t.dialogs.convertToSpec.footnote}
       </p>
     </div>

@@ -113,12 +113,12 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
   speedMultiplier = 1,
   colorClassName,
 }) => {
-  const sizeClasses: Record<string, string> = {
-    xs: 'text-[3px]',
-    sm: 'text-[4px]',
-    md: 'text-[5px]',
-    lg: 'text-[6px]',
-    xl: 'text-[7px]'
+  const sizeStyles: Record<string, string> = {
+    xs: '3px',
+    sm: '4px',
+    md: '5px',
+    lg: '6px',
+    xl: '7px'
   }
 
   // First check if we have a predefined ASCII art for this text
@@ -154,7 +154,7 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
         idleArtifactMagnitude={2.8}
         idleArtifactMinDelayMs={1200 / speedMultiplier}
         idleArtifactMaxDelayMs={2000 / speedMultiplier}
-        textSizeClass={size ? sizeClasses[size] : undefined}
+        textSizeOverride={size ? sizeStyles[size] : undefined}
       />
     </div>
   )

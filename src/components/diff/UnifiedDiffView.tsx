@@ -26,6 +26,7 @@ import { useReviewComments } from "../../hooks/useReviewComments";
 import { DiffFileExplorer, ChangedFile } from "./DiffFileExplorer";
 import { PierreDiffViewer } from "./PierreDiffViewer";
 import { resolvedThemeAtom } from "../../store/atoms/theme";
+import { theme } from "../../common/theme";
 import type { SchaltwerkThemeId } from "../../adapters/pierreThemeAdapter";
 import {
   VscSend,
@@ -3045,7 +3046,7 @@ export function UnifiedDiffView({
           title={`Finish Review (${currentReview.comments.length} comments)`}
         >
           <VscCheck />
-          <span className="text-xs font-medium">Finish ({currentReview.comments.length})</span>
+          <span className="font-medium" style={{ fontSize: theme.fontSize.button }}>Finish ({currentReview.comments.length})</span>
         </button>
       )}
       <button
@@ -3077,9 +3078,9 @@ export function UnifiedDiffView({
           data-testid="diff-layout-toggle"
         >
           {diffLayoutPreference === "unified" ? (
-            <VscSplitHorizontal className="text-xl" />
+            <VscSplitHorizontal style={{ fontSize: theme.fontSize.headingLarge }} />
           ) : (
-            <VscDiff className="text-xl" />
+            <VscDiff style={{ fontSize: theme.fontSize.headingLarge }} />
           )}
         </button>
       )}
@@ -3096,9 +3097,9 @@ export function UnifiedDiffView({
           }
         >
           {continuousScroll ? (
-            <VscListFlat className="text-xl" />
+            <VscListFlat style={{ fontSize: theme.fontSize.headingLarge }} />
           ) : (
-            <VscListSelection className="text-xl" />
+            <VscListSelection style={{ fontSize: theme.fontSize.headingLarge }} />
           )}
         </button>
       )}
@@ -3172,9 +3173,9 @@ export function UnifiedDiffView({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-sm mb-3 text-slate-300">
+            <div className="mb-3 text-slate-300" style={{ fontSize: theme.fontSize.body }}>
               <div className="font-medium mb-1">{editingCommentId ? "Edit Review Comment" : "Add Review Comment"}</div>
-              <div className="text-xs text-slate-500">
+              <div className="text-slate-500" style={{ fontSize: theme.fontSize.caption }}>
                 {lineSelection.selection.startLine ===
                 lineSelection.selection.endLine
                   ? `Line ${lineSelection.selection.startLine}`
@@ -3212,11 +3213,11 @@ export function UnifiedDiffView({
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-3">
           <span>Commit Diff Viewer</span>
-          <span className="text-xs text-slate-400 font-mono">
+          <span className="text-slate-400 font-mono" style={{ fontSize: theme.fontSize.code }}>
             {historyHeader.hash.slice(0, 12)}
           </span>
         </div>
-        <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2">
+        <div className="text-slate-500 flex flex-wrap items-center gap-2" style={{ fontSize: theme.fontSize.caption }}>
           <span className="font-medium text-slate-300 truncate">
             {historyHeader.subject}
           </span>
@@ -3230,7 +3231,7 @@ export function UnifiedDiffView({
           )}
         </div>
         {selectedFile && (
-          <div className="text-xs text-slate-500 truncate max-w-md">
+          <div className="text-slate-500 truncate max-w-md" style={{ fontSize: theme.fontSize.caption }}>
             {selectedFile}
           </div>
         )}
@@ -3354,7 +3355,7 @@ export function UnifiedDiffView({
   const sessionTitle = selectedFile ? (
     <div className="flex items-center gap-4">
       <span>Git Diff Viewer</span>
-      <div className="text-sm text-slate-400 font-mono">{selectedFile}</div>
+      <div className="text-slate-400 font-mono" style={{ fontSize: theme.fontSize.body }}>{selectedFile}</div>
     </div>
   ) : (
     "Git Diff Viewer"
@@ -3647,7 +3648,8 @@ function CommentForm({
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="Write your comment..."
-        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm focus:outline-none focus:border-cyan-400 resize-none"
+        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded focus:outline-none focus:border-cyan-400 resize-none"
+        style={{ fontSize: theme.fontSize.input }}
         rows={4}
         onKeyDown={(e) => {
           const nativeEvent = e.nativeEvent as KeyboardEvent;
@@ -3668,14 +3670,16 @@ function CommentForm({
       <div className="mt-3 flex justify-end gap-2">
         <button
           onClick={onCancel}
-          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-sm"
+          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded"
+          style={{ fontSize: theme.fontSize.button }}
         >
           Cancel
         </button>
         <button
           onClick={handleSubmit}
           disabled={!text.trim()}
-          className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 rounded text-sm font-medium flex items-center gap-2"
+          className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 rounded font-medium flex items-center gap-2"
+          style={{ fontSize: theme.fontSize.button }}
         >
           <VscSend />
           {isEditing ? "Update" : "Submit"}

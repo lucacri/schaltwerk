@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../../common/tauriCommands'
 import { useToast } from '../../common/toast/ToastProvider'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
 import type { ChangedFile, SessionsRefreshedEventPayload } from '../../common/events'
 import { logger } from '../../utils/logger'
@@ -445,11 +446,12 @@ export function CopyContextBar({ sessionName }: CopyContextBarProps) {
     }
   }, [assembleBundle, nothingSelected, pushToast, selectedChangedFilesCount])
 
-  const pillBaseStyle = "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer select-none border"
+  const pillBaseStyle = "flex items-center gap-2 px-3 py-1.5 rounded-md font-medium transition-all cursor-pointer select-none border"
 
   const getPillStyle = (active: boolean, disabled: boolean) => {
     if (disabled) {
       return {
+        fontSize: theme.fontSize.caption,
         borderColor: 'transparent',
         backgroundColor: 'transparent',
         color: 'var(--color-text-muted)',
@@ -459,6 +461,7 @@ export function CopyContextBar({ sessionName }: CopyContextBarProps) {
     }
     if (active) {
       return {
+        fontSize: theme.fontSize.caption,
         borderColor: 'var(--color-accent-blue-border)',
         backgroundColor: 'var(--color-accent-blue-bg)',
         color: 'var(--color-accent-blue)',
@@ -466,6 +469,7 @@ export function CopyContextBar({ sessionName }: CopyContextBarProps) {
       }
     }
     return {
+      fontSize: theme.fontSize.caption,
       borderColor: 'transparent',
       backgroundColor: 'transparent',
       color: 'var(--color-text-secondary)',
@@ -539,8 +543,9 @@ export function CopyContextBar({ sessionName }: CopyContextBarProps) {
           <span>{t.copyContextBar.diff}</span>
           {availability.diff && (
             <span
-              className="flex items-center justify-center h-4 min-w-[16px] px-1 rounded-sm text-[9px] font-bold"
+              className="flex items-center justify-center h-4 min-w-[16px] px-1 rounded-sm font-bold"
               style={{
+                fontSize: theme.fontSize.caption,
                 backgroundColor: selection.diff ? 'var(--color-accent-blue)' : 'var(--color-bg-elevated)',
                 color: selection.diff ? 'var(--color-bg-primary)' : 'var(--color-text-muted)',
               }}
@@ -574,8 +579,9 @@ export function CopyContextBar({ sessionName }: CopyContextBarProps) {
           <span>{t.copyContextBar.files}</span>
           {availability.files && (
             <span
-              className="flex items-center justify-center h-4 min-w-[16px] px-1 rounded-sm text-[9px] font-bold"
+              className="flex items-center justify-center h-4 min-w-[16px] px-1 rounded-sm font-bold"
               style={{
+                fontSize: theme.fontSize.caption,
                 backgroundColor: selection.files ? 'var(--color-accent-blue)' : 'var(--color-bg-elevated)',
                 color: selection.files ? 'var(--color-bg-primary)' : 'var(--color-text-muted)',
               }}
@@ -588,8 +594,8 @@ export function CopyContextBar({ sessionName }: CopyContextBarProps) {
 
       <div className="flex items-center gap-4">
         <div
-          className="text-xs font-mono tracking-wide uppercase"
-          style={{ color: 'var(--color-text-secondary)' }}
+          className="font-mono tracking-wide uppercase"
+          style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}
           title={tokenCount !== null ? t.copyContextBar.tokens.replace('{count}', tokenCount.toLocaleString()) : t.copyContextBar.tokenCountUnavailable}
         >
           {tokenCount !== null ? `${tokenCount.toLocaleString()} TOKENS` : '—'}
@@ -600,8 +606,9 @@ export function CopyContextBar({ sessionName }: CopyContextBarProps) {
           onClick={() => { void handleCopy() }}
           disabled={isCopying || nothingSelected}
           title={t.copyContextBar.copyTitle}
-          className="flex items-center gap-2 px-4 py-1.5 text-xs font-semibold transition-all rounded-md shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+          className="flex items-center gap-2 px-4 py-1.5 font-semibold transition-all rounded-md shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
           style={{
+            fontSize: theme.fontSize.button,
             backgroundColor: 'var(--color-accent-blue)',
             color: 'var(--color-bg-primary)',
             boxShadow: '0 0 15px -3px var(--color-accent-blue-bg)',

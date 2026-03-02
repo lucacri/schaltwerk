@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useState } from 'react'
+import { theme } from '../../common/theme'
 import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationContext'
 import { useGithubPrSearch } from '../../hooks/useGithubPrSearch'
 import type { GithubPrSummary } from '../../types/githubIssues'
@@ -68,10 +69,10 @@ export function LinkPrModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 border-b border-slate-700">
-          <h2 className="text-lg font-semibold text-slate-100 mb-3">{t.linkPrModal.title}</h2>
+          <h2 className="font-semibold text-slate-100 mb-3" style={{ fontSize: theme.fontSize.heading }}>{t.linkPrModal.title}</h2>
 
           {!integrationReady ? (
-            <p className="text-sm text-slate-400">
+            <p className="text-slate-400" style={{ fontSize: theme.fontSize.body }}>
               {t.linkPrModal.integrationNotAvailable}
             </p>
           ) : (
@@ -81,18 +82,19 @@ export function LinkPrModal({
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t.linkPrModal.searchPlaceholder}
               autoFocus
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              style={{ fontSize: theme.fontSize.input }}
             />
           )}
         </div>
 
         <div className="flex-1 overflow-auto min-h-0">
           {!integrationReady ? (
-            <div className="p-4 text-center text-slate-500 text-sm">
+            <div className="p-4 text-center text-slate-500" style={{ fontSize: theme.fontSize.body }}>
               {t.linkPrModal.connectToGithub}
             </div>
           ) : loading ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-slate-400">
+            <div className="flex flex-col items-center justify-center gap-2 py-8 text-slate-400" style={{ fontSize: theme.fontSize.body }}>
               <span
                 className="h-4 w-4 rounded-full border-2 border-t-transparent animate-spin"
                 style={{ borderColor: 'var(--color-accent-blue)' }}
@@ -100,9 +102,9 @@ export function LinkPrModal({
               {t.linkPrModal.loadingPrs}
             </div>
           ) : results.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-slate-400">
+            <div className="flex flex-col items-center justify-center gap-2 py-8 text-slate-400" style={{ fontSize: theme.fontSize.body }}>
               <span>{t.linkPrModal.noPrsFound}</span>
-              <span className="text-xs text-slate-500">
+              <span className="text-slate-500" style={{ fontSize: theme.fontSize.caption }}>
                 {query ? t.linkPrModal.tryDifferentSearch : t.linkPrModal.noOpenPrs}
               </span>
             </div>
@@ -132,8 +134,9 @@ export function LinkPrModal({
                     >
                       <div className="flex items-start gap-2">
                         <span
-                          className="shrink-0 mt-1 text-xs font-medium px-1.5 py-0.5 rounded"
+                          className="shrink-0 mt-1 font-medium px-1.5 py-0.5 rounded"
                           style={{
+                            fontSize: theme.fontSize.caption,
                             backgroundColor: `var(--color-accent-${statusTone}-bg)`,
                             color: `var(--color-accent-${statusTone})`,
                           }}
@@ -141,10 +144,10 @@ export function LinkPrModal({
                           {state.charAt(0).toUpperCase() + state.slice(1)}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-slate-200 truncate">
+                          <div className="font-medium text-slate-200 truncate" style={{ fontSize: theme.fontSize.body }}>
                             {pr.title}
                           </div>
-                          <div className="text-xs text-slate-500 mt-0.5">
+                          <div className="text-slate-500 mt-0.5" style={{ fontSize: theme.fontSize.caption }}>
                             #{pr.number} · {t.linkPrModal.updated.replace('{time}', formatRelativeDate(pr.updatedAt))}
                             {pr.author && ` · ${pr.author}`}
                           </div>
@@ -161,7 +164,8 @@ export function LinkPrModal({
         <div className="p-3 border-t border-slate-700 flex justify-end">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            className="px-4 py-2 font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500"
+            style={{ fontSize: theme.fontSize.button }}
           >
             {t.linkPrModal.cancel}
           </button>

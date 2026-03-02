@@ -4,6 +4,7 @@ import { VscRefresh, VscWarning, VscCheck, VscInfo } from 'react-icons/vsc'
 import { useTranslation } from '../../common/i18n/useTranslation'
 import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationContext'
 import { logger } from '../../utils/logger'
+import { theme } from '../../common/theme'
 
 interface GithubProjectIntegrationCardProps {
   projectPath: string
@@ -174,26 +175,27 @@ export function GithubProjectIntegrationCard({ projectPath, onNotify }: GithubPr
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-body font-medium" style={{ color: 'var(--color-text-primary)' }}>
-            <FaGithub className="text-base" />
+            <FaGithub style={{ fontSize: theme.fontSize.bodyLarge }} />
             <span>{t.settings.github.title}</span>
           </div>
           <div
             data-testid="github-auth-status"
-            className="inline-flex rounded-md px-3 py-2 text-xs"
+            className="inline-flex rounded-md px-3 py-2"
             style={{
               backgroundColor: tonePalette.bg,
               border: `1px solid ${tonePalette.border}`,
               color: 'var(--color-text-primary)',
               maxWidth: '360px',
+              fontSize: theme.fontSize.caption,
             }}
           >
             <div className="flex items-start gap-2 text-left">
-              <ToneIcon className="text-sm mt-[2px]" style={{ color: tonePalette.DEFAULT }} />
+              <ToneIcon className="mt-[2px]" style={{ color: tonePalette.DEFAULT, fontSize: theme.fontSize.body }} />
               <div className="space-y-1">
                 <div className="font-medium" style={{ color: tonePalette.light }}>
                   {statusDetails.title}
                 </div>
-                <div className="text-[11px] leading-snug" style={{ color: 'var(--color-text-secondary)' }}>
+                <div className="leading-snug" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}>
                   {statusDetails.description}
                 </div>
               </div>
@@ -204,22 +206,25 @@ export function GithubProjectIntegrationCard({ projectPath, onNotify }: GithubPr
           <button
             onClick={() => { void handleAuthenticate() }}
             disabled={!installed || github.isAuthenticating}
-            className="settings-btn px-3 py-2 text-xs font-medium rounded-md disabled:opacity-60 disabled:cursor-not-allowed"
+            className="settings-btn px-3 py-2 font-medium rounded-md disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ fontSize: theme.fontSize.button }}
           >
             {authenticateLabel}
           </button>
           <button
             onClick={() => { void handleConnect() }}
             disabled={!canConnectProject || github.isConnecting}
-            className="settings-btn px-3 py-2 text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            className="settings-btn px-3 py-2 font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ fontSize: theme.fontSize.button }}
           >
             {connectLabel}
           </button>
           <button
             onClick={() => { void handleRefresh() }}
-            className="settings-btn px-3 py-2 text-xs font-medium rounded-md flex items-center gap-1"
+            className="settings-btn px-3 py-2 font-medium rounded-md flex items-center gap-1"
+            style={{ fontSize: theme.fontSize.button }}
           >
-            <VscRefresh className="text-[13px]" />
+            <VscRefresh style={{ fontSize: theme.fontSize.label }} />
             <span>{t.settings.common.refresh}</span>
           </button>
         </div>
@@ -227,7 +232,7 @@ export function GithubProjectIntegrationCard({ projectPath, onNotify }: GithubPr
       {feedback && (
         <div
           data-testid="github-auth-feedback"
-          className="mt-3 inline-flex rounded-md px-3 py-2 text-xs"
+          className="mt-3 inline-flex rounded-md px-3 py-2"
           style={{
             backgroundColor:
               feedback.tone === 'success'
@@ -244,20 +249,21 @@ export function GithubProjectIntegrationCard({ projectPath, onNotify }: GithubPr
             }`,
             color: 'var(--color-text-primary)',
             maxWidth: '380px',
+            fontSize: theme.fontSize.caption,
           }}
         >
           <div className="flex items-start gap-2 text-left">
             {feedback.tone === 'success' ? (
-              <VscCheck className="text-sm mt-[2px]" style={{ color: 'var(--color-accent-green)' }} />
+              <VscCheck className="mt-[2px]" style={{ color: 'var(--color-accent-green)', fontSize: theme.fontSize.body }} />
             ) : feedback.tone === 'error' ? (
-              <VscWarning className="text-sm mt-[2px]" style={{ color: 'var(--color-accent-red)' }} />
+              <VscWarning className="mt-[2px]" style={{ color: 'var(--color-accent-red)', fontSize: theme.fontSize.body }} />
             ) : (
-              <VscInfo className="text-sm mt-[2px]" style={{ color: 'var(--color-accent-blue)' }} />
+              <VscInfo className="mt-[2px]" style={{ color: 'var(--color-accent-blue)', fontSize: theme.fontSize.body }} />
             )}
             <div className="space-y-1">
               <div className="font-medium">{feedback.title}</div>
               {formatFeedbackLines(feedback.description).map((line, index) => (
-                <div key={`${line}-${index}`} className="text-[11px] leading-snug" style={{ color: 'var(--color-text-secondary)' }}>
+                <div key={`${line}-${index}`} className="leading-snug" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}>
                   {line}
                 </div>
               ))}

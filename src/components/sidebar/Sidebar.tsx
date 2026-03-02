@@ -1414,12 +1414,12 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
         >
             <div className={clsx('flex items-center shrink-0 h-9', isCollapsed ? 'justify-center px-0' : 'justify-between px-2 pt-2')}>
                 {!isCollapsed && (
-                    <span className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1">{t.sidebar.header}</span>
+                    <span className="font-medium text-slate-400 uppercase tracking-wider ml-1" style={{ fontSize: theme.fontSize.caption }}>{t.sidebar.header}</span>
                 )}
                 {onToggleSidebar && (
                     <div className="flex items-center gap-2">
                         {!isCollapsed && leftSidebarShortcut && (
-                            <span className="text-[11px] text-slate-500" aria-hidden="true">
+                            <span className="text-slate-500" style={{ fontSize: theme.fontSize.caption }} aria-hidden="true">
                                 {leftSidebarShortcut}
                             </span>
                         )}
@@ -1506,10 +1506,10 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                                             disabled={orchestratorResetting}
                                         />
                                     </div>
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400">
+                                    <span className="px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400" style={{ fontSize: theme.fontSize.caption }}>
                                         {orchestratorShortcut || '⌘1'}
                                     </span>
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400">{orchestratorBranch}</span>
+                                    <span className="px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400" style={{ fontSize: theme.fontSize.caption }}>{orchestratorBranch}</span>
                                 </div>
                             </>
                         )}
@@ -1520,7 +1520,7 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                                     </svg>
                                 </div>
-                                <span className="text-[9px] text-blue-400 font-mono max-w-full truncate">
+                                <span className="text-blue-400 font-mono max-w-full truncate" style={{ fontSize: theme.fontSize.caption }}>
                                     {(orchestratorBranch === 'main' || orchestratorBranch === 'master') ? 'main' : (orchestratorBranch || 'brch')}
                                 </span>
                                 {orchestratorRunning && (
@@ -1556,7 +1556,8 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
 
             {!isCollapsed && (
                 <div
-                    className="h-8 px-3 border-t border-b text-xs flex items-center bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)]"
+                    className="h-8 px-3 border-t border-b flex items-center bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)]"
+                    style={{ fontSize: theme.fontSize.caption }}
                     data-onboarding="session-filter-row"
                 >
                     <div className="flex items-center gap-2 w-full">
@@ -1596,7 +1597,7 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                             </button>
                             <button
                                 className={clsx(
-                                    'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
+                                    'px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
                                     filterMode === FilterMode.Spec
                                         ? 'bg-[var(--color-bg-hover)] text-[var(--color-text-primary)] border-[var(--color-border-default)]'
                                         : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
@@ -1609,7 +1610,7 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                             </button>
                             <button
                                 className={clsx(
-                                    'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
+                                    'px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
                                     filterMode === FilterMode.Running
                                         ? 'bg-[var(--color-bg-hover)] text-[var(--color-text-primary)] border-[var(--color-border-default)]'
                                         : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
@@ -1622,7 +1623,7 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                             </button>
                             <button
                                 className={clsx(
-                                    'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
+                                    'px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
                                     filterMode === FilterMode.Reviewed
                                         ? 'bg-[var(--color-bg-hover)] text-[var(--color-text-primary)] border-[var(--color-border-default)]'
                                         : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
@@ -1667,11 +1668,12 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                                 }
                             }}
                             placeholder={t.sidebar.search.placeholder}
-                            className="flex-1 bg-transparent text-xs text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)]"
+                            className="flex-1 bg-transparent text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)]"
+                            style={{ fontSize: theme.fontSize.input }}
                             autoFocus
                         />
                         {searchQuery && (
-                            <span className="text-xs text-[var(--color-text-muted)] whitespace-nowrap">
+                            <span className="text-[var(--color-text-muted)] whitespace-nowrap" style={{ fontSize: theme.fontSize.caption }}>
                                 {sessions.length} {sessions.length !== 1 ? t.sidebar.search.results : t.sidebar.search.result}
                             </span>
                         )}

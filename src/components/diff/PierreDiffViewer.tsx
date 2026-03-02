@@ -4,6 +4,7 @@ import { VscComment, VscDiscard, VscEdit, VscTrash } from 'react-icons/vsc'
 import { FileDiff, type DiffLineAnnotation, type FileDiffMetadata } from '@pierre/diffs/react'
 import { getHunkSeparatorSlotName, type GetHoveredLineResult, type ThemesType, type FileDiffOptions, type SelectedLineRange, type HunkData } from '@pierre/diffs'
 
+import { theme as appTheme } from '../../common/theme'
 import { getFileIcon } from '../../utils/fileIcons'
 import { AnimatedText } from '../common/AnimatedText'
 import type { ReviewCommentThread } from '../../types/review'
@@ -170,7 +171,8 @@ const MemoizedFileDiff = memo(function MemoizedFileDiff({
     container.style.cssText = 'background: var(--color-bg-secondary); border-top: 1px solid var(--color-border-subtle); border-bottom: 1px solid var(--color-border-subtle);'
 
     const button = document.createElement('button')
-    button.className = 'text-xs px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 flex items-center gap-1'
+    button.className = 'px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 flex items-center gap-1'
+    button.style.fontSize = appTheme.fontSize.caption
     button.innerHTML = `<span>⋯</span><span>${hunk.lines} unchanged line${hunk.lines === 1 ? '' : 's'}</span>`
 
     if (onExpandSection) {
@@ -238,15 +240,15 @@ const MemoizedFileDiff = memo(function MemoizedFileDiff({
             />
             <div className="flex-1 min-w-0">
               <div
-                className="text-sm leading-relaxed"
-                style={{ color: 'var(--color-text-primary)' }}
+                className="leading-relaxed"
+                style={{ color: 'var(--color-text-primary)', fontSize: appTheme.fontSize.body }}
               >
                 {comment.comment}
               </div>
               {rangeLength > 1 && (
                 <div
-                  className="text-xs mt-1"
-                  style={{ color: 'var(--color-text-tertiary)' }}
+                  className="mt-1"
+                  style={{ color: 'var(--color-text-tertiary)', fontSize: appTheme.fontSize.caption }}
                 >
                   Lines {comment.lineRange.start}–{comment.lineRange.end}
                 </div>
@@ -624,9 +626,9 @@ export function PierreDiffViewer({
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center px-8">
-          <div className="text-6xl mb-4 text-slate-600">&#x26A0;&#xFE0F;</div>
-          <div className="text-lg font-medium text-slate-400 mb-2">{t.diffViewer.cannotDisplayDiff}</div>
-          <div className="text-sm text-slate-500">{fileError}</div>
+          <div className="mb-4 text-slate-600" style={{ fontSize: appTheme.fontSize.display }}>&#x26A0;&#xFE0F;</div>
+          <div className="font-medium text-slate-400 mb-2" style={{ fontSize: appTheme.fontSize.heading }}>{t.diffViewer.cannotDisplayDiff}</div>
+          <div className="text-slate-500" style={{ fontSize: appTheme.fontSize.body }}>{fileError}</div>
         </div>
       </div>
     )
@@ -635,16 +637,16 @@ export function PierreDiffViewer({
   return (
     <>
       {branchInfo && (
-        <div className="px-4 py-2 text-xs text-slate-400 border-b border-slate-700 bg-slate-950">
+        <div className="px-4 py-2 text-slate-400 border-b border-slate-700 bg-slate-950" style={{ fontSize: appTheme.fontSize.caption }}>
           {branchInfo.baseBranch} ({branchInfo.baseCommit.slice(0, 7)}) &rarr; {branchInfo.currentBranch} ({branchInfo.headCommit.slice(0, 7)})
         </div>
       )}
 
       <div
         ref={externalScrollRef ? undefined : internalContainerRef}
-        className={clsx("flex-1 overflow-auto min-h-0 w-full font-mono text-sm bg-slate-900/30", className)}
+        className={clsx("flex-1 overflow-auto min-h-0 w-full font-mono bg-slate-900/30", className)}
         data-testid="diff-scroll-container"
-        style={{ contain: 'strict' }}
+        style={{ contain: 'strict', fontSize: appTheme.fontSize.code }}
       >
         {filesToRender.map((file) => {
           const fileDiff = allFileDiffs.get(file.path)
@@ -697,8 +699,8 @@ export function PierreDiffViewer({
                 <div className="flex items-center gap-3 min-w-0">
                   {getFileIcon(file.change_type, file.path)}
                   <div className="min-w-0">
-                    <div className="font-medium text-sm text-slate-100 truncate">{file.path}</div>
-                    <div className="text-xs text-slate-400">
+                    <div className="font-medium text-slate-100 truncate" style={{ fontSize: appTheme.fontSize.body }}>{file.path}</div>
+                    <div className="text-slate-400" style={{ fontSize: appTheme.fontSize.caption }}>
                       {file.change_type === 'added' && t.diffViewer.newFile}
                       {file.change_type === 'deleted' && t.diffViewer.deletedFile}
                       {file.change_type === 'modified' && t.diffViewer.modified}
@@ -711,8 +713,8 @@ export function PierreDiffViewer({
                 <div className="flex items-center gap-3 flex-shrink-0">
                   {commentCount > 0 && (
                     <div
-                      className="flex items-center gap-1 text-xs font-medium"
-                      style={{ color: 'var(--color-accent-blue-light)' }}
+                      className="flex items-center gap-1 font-medium"
+                      style={{ color: 'var(--color-accent-blue-light)', fontSize: appTheme.fontSize.caption }}
                     >
                       <VscComment />
                       <span>
@@ -731,7 +733,7 @@ export function PierreDiffViewer({
                         setDiscardOpen(true)
                       }}
                     >
-                      <VscDiscard className="text-base" />
+                      <VscDiscard style={{ fontSize: appTheme.fontSize.bodyLarge }} />
                     </button>
                   )}
                   {onOpenFile && (
@@ -760,8 +762,8 @@ export function PierreDiffViewer({
                 />
               ) : fileDiff.isBinary ? (
                 <div className="px-4 py-10 text-center text-slate-400">
-                  <div className="text-lg font-medium text-slate-200">{t.diffViewer.binaryFile}</div>
-                  <div className="text-sm text-slate-400">
+                  <div className="font-medium text-slate-200" style={{ fontSize: appTheme.fontSize.heading }}>{t.diffViewer.binaryFile}</div>
+                  <div className="text-slate-400" style={{ fontSize: appTheme.fontSize.body }}>
                     {fileDiff.unsupportedReason || t.diffViewer.fileCannotDisplay}
                   </div>
                 </div>
@@ -834,8 +836,8 @@ export function PierreDiffViewer({
           {onCopyLine && (
             <button
               role="menuitem"
-              className="w-full text-left px-4 py-2 text-sm hover:bg-slate-700"
-              style={{ color: 'var(--color-text-secondary)' }}
+              className="w-full text-left px-4 py-2 hover:bg-slate-700"
+              style={{ color: 'var(--color-text-secondary)', fontSize: appTheme.fontSize.body }}
               onClick={() => {
                 onCopyLine({
                   filePath: contextMenu.filePath,
@@ -851,8 +853,8 @@ export function PierreDiffViewer({
           {contextMenu.content && onCopyCode && (
             <button
               role="menuitem"
-              className="w-full text-left px-4 py-2 text-sm hover:bg-slate-700"
-              style={{ color: 'var(--color-text-secondary)' }}
+              className="w-full text-left px-4 py-2 hover:bg-slate-700"
+              style={{ color: 'var(--color-text-secondary)', fontSize: appTheme.fontSize.body }}
               onClick={() => {
                 onCopyCode({ filePath: contextMenu.filePath, text: contextMenu.content! })
                 closeContextMenu()
@@ -864,8 +866,8 @@ export function PierreDiffViewer({
           {onStartCommentFromContext && (
             <button
               role="menuitem"
-              className="w-full text-left px-4 py-2 text-sm hover:bg-slate-700"
-              style={{ color: 'var(--color-text-secondary)' }}
+              className="w-full text-left px-4 py-2 hover:bg-slate-700"
+              style={{ color: 'var(--color-text-secondary)', fontSize: appTheme.fontSize.body }}
               onClick={() => {
                 onStartCommentFromContext({
                   filePath: contextMenu.filePath,

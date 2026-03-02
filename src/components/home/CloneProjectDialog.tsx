@@ -5,6 +5,7 @@ import { homeDir } from '@tauri-apps/api/path'
 import { VscClose, VscFolderOpened, VscRepoClone } from 'react-icons/vsc'
 import { TauriCommands } from '../../common/tauriCommands'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
+import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
 import { parseGitRemote, sanitizeFolderName } from '../../utils/gitRemote'
 import { useTranslation } from '../../common/i18n'
@@ -215,10 +216,10 @@ export function CloneProjectDialog({ isOpen, onClose, onProjectCloned }: ClonePr
       >
         <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border-default)' }}>
           <div className="flex items-center gap-3">
-            <VscRepoClone className="text-2xl" style={{ color: 'var(--color-accent-blue)' }} />
+            <VscRepoClone style={{ color: 'var(--color-accent-blue)', fontSize: theme.fontSize.headingXLarge }} />
             <div>
-              <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>{t.cloneProject.title}</h2>
-              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{t.cloneProject.subtitle}</p>
+              <h2 className="font-semibold" style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.headingLarge }}>{t.cloneProject.title}</h2>
+              <p style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.body }}>{t.cloneProject.subtitle}</p>
             </div>
           </div>
           <button
@@ -227,18 +228,19 @@ export function CloneProjectDialog({ isOpen, onClose, onProjectCloned }: ClonePr
             style={{ color: 'var(--color-text-muted)' }}
             disabled={isCloning}
           >
-            <VscClose className="text-lg" />
+            <VscClose style={{ fontSize: theme.fontSize.heading }} />
           </button>
         </div>
 
         <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
           {error && (
             <div
-              className="p-3 rounded text-sm"
+              className="p-3 rounded"
               style={{
                 backgroundColor: 'var(--color-accent-red-bg)',
                 border: '1px solid var(--color-accent-red-border)',
-                color: 'var(--color-accent-red)'
+                color: 'var(--color-accent-red)',
+                fontSize: theme.fontSize.body,
               }}
             >
               {error}
@@ -247,8 +249,8 @@ export function CloneProjectDialog({ isOpen, onClose, onProjectCloned }: ClonePr
 
           <div className="space-y-2">
             <label
-              className="text-sm font-medium"
-              style={{ color: 'var(--color-text-secondary)' }}
+              className="font-medium"
+              style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}
               htmlFor="clone-remote-url"
             >
               {t.cloneProject.remoteUrl}
@@ -269,15 +271,15 @@ export function CloneProjectDialog({ isOpen, onClose, onProjectCloned }: ClonePr
               spellCheck={false}
               disabled={isCloning}
             />
-            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
               {helperText}
             </p>
           </div>
 
           <div className="space-y-2">
             <label
-              className="text-sm font-medium"
-              style={{ color: 'var(--color-text-secondary)' }}
+              className="font-medium"
+              style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}
               htmlFor="clone-parent-directory"
             >
               {t.cloneProject.parentDirectory}
@@ -305,7 +307,7 @@ export function CloneProjectDialog({ isOpen, onClose, onProjectCloned }: ClonePr
                 }}
                 disabled={isCloning}
               >
-                <VscFolderOpened className="text-lg" />
+                <VscFolderOpened style={{ fontSize: theme.fontSize.heading }} />
                 {t.cloneProject.browse}
               </button>
             </div>
@@ -318,23 +320,24 @@ export function CloneProjectDialog({ isOpen, onClose, onProjectCloned }: ClonePr
               border: '1px solid var(--color-border-subtle)'
             }}
           >
-            <p className="text-xs uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+            <p className="uppercase tracking-wide" style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
               {t.cloneProject.destinationFolder}
             </p>
-            <p className="font-mono text-sm truncate" style={{ color: 'var(--color-text-primary)' }}>
+            <p className="font-mono truncate" style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.code }}>
               {targetPath || t.cloneProject.selectValidRemote}
             </p>
-            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
               {t.cloneProject.folderNameNote}
             </p>
           </div>
 
           {progressMessage && (
             <div
-              className="text-sm font-mono px-3 py-2 rounded overflow-y-auto max-h-32"
+              className="font-mono px-3 py-2 rounded overflow-y-auto max-h-32"
               style={{
                 backgroundColor: 'var(--color-bg-secondary)',
-                color: 'var(--color-text-secondary)'
+                color: 'var(--color-text-secondary)',
+                fontSize: theme.fontSize.code,
               }}
             >
               {progressMessage}

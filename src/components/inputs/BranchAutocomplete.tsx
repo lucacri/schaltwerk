@@ -15,6 +15,7 @@ interface BranchAutocompleteProps {
     onConfirm?: (value: string) => void
     autoFocus?: boolean
     hasError?: boolean
+    style?: React.CSSProperties
 }
 
 export function BranchAutocomplete({
@@ -27,7 +28,8 @@ export function BranchAutocomplete({
     onValidationChange,
     onConfirm,
     autoFocus = false,
-    hasError = false
+    hasError = false,
+    style,
 }: BranchAutocompleteProps) {
     const [isOpen, setIsOpen] = useState(false)
     const [filteredBranches, setFilteredBranches] = useState<string[]>([])
@@ -287,7 +289,8 @@ export function BranchAutocomplete({
                 style={{
                     backgroundColor: 'var(--color-bg-elevated)',
                     color: 'var(--color-text-primary)',
-                    borderColor: hasError || (value && !branches.includes(value)) ? undefined : 'var(--color-border-default)'
+                    borderColor: hasError || (value && !branches.includes(value)) ? undefined : 'var(--color-border-default)',
+                    ...style,
                 }}
                 autoComplete="off"
                 autoCapitalize="off"
@@ -335,13 +338,13 @@ export function BranchAutocomplete({
                                         {highlightMatch(branch, value)}
                                     </span>
                                     {branch === branches[0] && (
-                                        <span className="text-xs ml-2" style={{ color: 'var(--color-text-muted)' }}>default</span>
+                                        <span className="ml-2" style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>default</span>
                                     )}
                                 </div>
                             </div>
                         ))}
                         {filteredBranches.length === 0 && value && (
-                            <div className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                            <div className="px-3 py-2" style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.body }}>
                                 No branches found matching "{value}"
                             </div>
                         )}
@@ -354,7 +357,7 @@ export function BranchAutocomplete({
                     className="absolute z-50 w-full mt-1 border border-red-500/50 rounded-md shadow-lg p-2.5"
                     style={{ backgroundColor: 'var(--color-bg-primary)' }}
                 >
-                    <div className="text-red-400 text-sm flex items-center gap-2">
+                    <div className="text-red-400 flex items-center gap-2" style={{ fontSize: theme.fontSize.body }}>
                         <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                         </svg>

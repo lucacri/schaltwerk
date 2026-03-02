@@ -55,6 +55,7 @@ import { safeTerminalFocus } from '../../utils/safeFocus'
 import { UiEvent, emitUiEvent, listenUiEvent, TerminalResetDetail } from '../../common/uiEvents'
 import { beginSplitDrag, endSplitDrag } from '../../utils/splitDragCoordinator'
 import { useToast } from '../../common/toast/ToastProvider'
+import { theme } from '../../common/theme'
 import { resolveWorkingDirectory } from './resolveWorkingDirectory'
 import type { HeaderActionConfig } from '../../types/actionButton'
 import { mapRunScriptPreviewConfig, type AutoPreviewConfig } from '../../utils/runScriptPreviewConfig'
@@ -1438,8 +1439,9 @@ const TerminalGridComponent = () => {
                             backgroundColor: localFocus === 'claude' ? 'var(--color-accent-blue-bg)' : undefined,
                             color: localFocus === 'claude' ? 'var(--color-accent-blue-light)' : 'var(--color-text-tertiary)',
                             borderBottomColor: localFocus === 'claude' ? 'var(--color-accent-blue-border)' : 'var(--color-border-default)',
+                            fontSize: theme.fontSize.caption,
                         }}
-                        className={`h-10 px-4 text-xs border-b cursor-pointer flex-shrink-0 flex items-center ${
+                        className={`h-10 px-4 border-b cursor-pointer flex-shrink-0 flex items-center ${
                                 localFocus === 'claude'
                                     ? 'hover:bg-opacity-60'
                                     : 'hover:bg-elevated'
@@ -1456,7 +1458,8 @@ const TerminalGridComponent = () => {
                                                 e.stopPropagation()
                                                 handleActionButtonInvoke(action)
                                             }}
-                                            className={`px-2 py-1 text-[10px] rounded flex items-center gap-1 ${getActionButtonColorClasses(action.color)}`}
+                                            className={`px-2 py-1 rounded flex items-center gap-1 ${getActionButtonColorClasses(action.color)}`}
+                                            style={{ fontSize: theme.fontSize.caption }}
                                             title={action.label}
                                         >
                                             <span>{action.label}</span>
@@ -1476,7 +1479,8 @@ const TerminalGridComponent = () => {
                             {selection.kind === 'orchestrator' && (
                                 <button
                                     onClick={(e) => { e.stopPropagation(); setConfigureAgentsOpen(true) }}
-                                    className="px-2 py-1 text-[10px] rounded border border-subtle hover:bg-elevated"
+                                    className="px-2 py-1 rounded border border-subtle hover:bg-elevated"
+                                    style={{ fontSize: theme.fontSize.caption }}
                                     title={t.terminalComponents.changeAgent}
                                 >
                                     {t.terminalComponents.configureAgent}
@@ -1489,7 +1493,7 @@ const TerminalGridComponent = () => {
                                     title={t.terminalComponents.resetSession}
                                     aria-label={t.terminalComponents.resetSession}
                                 >
-                                    <VscDiscard className="text-base" />
+                                    <VscDiscard style={{ fontSize: theme.fontSize.bodyLarge }} />
                                 </button>
                             )}
                         </div>
@@ -1497,8 +1501,9 @@ const TerminalGridComponent = () => {
                             style={{
                                 backgroundColor: localFocus === 'claude' ? 'var(--color-accent-blue-bg)' : 'var(--color-bg-hover)',
                                 color: localFocus === 'claude' ? 'var(--color-accent-blue-light)' : 'var(--color-text-tertiary)',
+                                fontSize: theme.fontSize.caption,
                             }}
-                            className={`${selection.kind === 'session' ? '' : 'ml-auto'} text-[10px] px-1.5 py-0.5 rounded`}
+                            className={`${selection.kind === 'session' ? '' : 'ml-auto'} px-1.5 py-0.5 rounded`}
                             title={t.terminalComponents.focusClaude.replace('{shortcut}', focusClaudeShortcut || '⌘T')}
                         >{focusClaudeShortcut || '⌘T'}</span>
                     </div>

@@ -82,7 +82,7 @@ export function CompareModeToggle({ sessionName, onModeChange }: CompareModeTogg
       }
       aria-label={isUnpushedMode ? t.compareModeToggle.showingLocalOnlyLabel : t.compareModeToggle.showLocalOnlyLabel}
     >
-      <VscCloudUpload className="text-base" />
+      <VscCloudUpload style={{ fontSize: theme.fontSize.bodyLarge }} />
     </button>
   )
 }

@@ -12,6 +12,7 @@ import {
 import { formatDateTime } from '../../utils/dateTime'
 import { detectPlatformSafe } from '../../keyboardShortcuts/helpers'
 import { useRecentProjects } from '../../hooks/useRecentProjects'
+import { theme } from '../../common/theme'
 import { useTranslation } from '../../common/i18n'
 
 const RECENT_PROJECT_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
@@ -122,8 +123,8 @@ export function HomeScreen({ onOpenProject, initialError, onClearInitialError }:
         >
           {displayError && (
             <div className="p-4 bg-red-950/50 border border-red-800 rounded-lg flex items-start gap-3">
-              <VscWarning className="text-red-400 text-xl flex-shrink-0 mt-0.5" />
-              <p className="text-red-300 text-sm">{displayError}</p>
+              <VscWarning className="text-red-400 flex-shrink-0 mt-0.5" style={{ fontSize: theme.fontSize.headingLarge }} />
+              <p className="text-red-300" style={{ fontSize: theme.fontSize.body }}>{displayError}</p>
             </div>
           )}
 
@@ -137,8 +138,8 @@ export function HomeScreen({ onOpenProject, initialError, onClearInitialError }:
                 color: 'var(--color-accent-green)'
               }}
             >
-              <VscNewFolder className="text-2xl" />
-              <span className="text-lg font-medium">{t.homeScreen.newProject}</span>
+              <VscNewFolder style={{ fontSize: theme.fontSize.headingXLarge }} />
+              <span className="font-medium" style={{ fontSize: theme.fontSize.heading }}>{t.homeScreen.newProject}</span>
             </button>
             <button
               onClick={() => { void handleSelectDirectory() }}
@@ -149,8 +150,8 @@ export function HomeScreen({ onOpenProject, initialError, onClearInitialError }:
                 color: 'var(--color-accent-blue)'
               }}
             >
-              <VscFolderOpened className="text-2xl" />
-              <span className="text-lg font-medium">{t.homeScreen.openRepository}</span>
+              <VscFolderOpened style={{ fontSize: theme.fontSize.headingXLarge }} />
+              <span className="font-medium" style={{ fontSize: theme.fontSize.heading }}>{t.homeScreen.openRepository}</span>
             </button>
             <button
               onClick={() => setShowCloneDialog(true)}
@@ -161,8 +162,8 @@ export function HomeScreen({ onOpenProject, initialError, onClearInitialError }:
                 color: 'var(--color-accent-purple)'
               }}
             >
-              <VscRepoClone className="text-2xl" />
-              <span className="text-lg font-medium">{t.homeScreen.cloneFromGit}</span>
+              <VscRepoClone style={{ fontSize: theme.fontSize.headingXLarge }} />
+              <span className="font-medium" style={{ fontSize: theme.fontSize.heading }}>{t.homeScreen.cloneFromGit}</span>
             </button>
           </div>
 
@@ -172,8 +173,8 @@ export function HomeScreen({ onOpenProject, initialError, onClearInitialError }:
                 className="flex items-center gap-2"
                 style={{ color: 'var(--color-text-muted)' }}
               >
-                <VscHistory className="text-lg" />
-                <h2 className="text-sm font-medium uppercase tracking-wider">{t.homeScreen.recentProjects}</h2>
+                <VscHistory style={{ fontSize: theme.fontSize.heading }} />
+                <h2 className="font-medium uppercase tracking-wider" style={{ fontSize: theme.fontSize.label }}>{t.homeScreen.recentProjects}</h2>
               </div>
 
               <div
@@ -200,10 +201,11 @@ export function HomeScreen({ onOpenProject, initialError, onClearInitialError }:
                     {index < 9 && (
                       <div className="absolute top-2 right-2 transition-opacity group-hover:opacity-0">
                         <span
-                          className="text-xs px-1.5 py-0.5 rounded"
+                          className="px-1.5 py-0.5 rounded"
                           style={{
                             backgroundColor: 'rgb(var(--color-bg-hover-rgb) / 0.6)',
-                            color: 'var(--color-text-tertiary)'
+                            color: 'var(--color-text-tertiary)',
+                            fontSize: theme.fontSize.caption,
                           }}
                         >
                           {platform === 'mac' ? `⌘${index + 1}` : `Ctrl+${index + 1}`}
@@ -216,29 +218,30 @@ export function HomeScreen({ onOpenProject, initialError, onClearInitialError }:
                     >
                       <div className="flex items-start gap-3">
                         <VscFolderOpened
-                          className="transition-colors text-lg flex-shrink-0 mt-0.5"
+                          className="transition-colors flex-shrink-0 mt-0.5"
                           style={{
                             color: 'var(--color-text-muted)',
+                            fontSize: theme.fontSize.heading,
                           }}
                           onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-accent-blue)' }}
                           onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)' }}
                         />
                         <div className="flex-1 min-w-0 pr-8">
                           <h3
-                            className="font-semibold truncate text-sm"
-                            style={{ color: 'var(--color-text-primary)' }}
+                            className="font-semibold truncate"
+                            style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.body }}
                           >
                             {project.name}
                           </h3>
                           <p
-                            className="text-xs truncate mt-1"
-                            style={{ color: 'var(--color-text-tertiary)' }}
+                            className="truncate mt-1"
+                            style={{ color: 'var(--color-text-tertiary)', fontSize: theme.fontSize.caption }}
                           >
                             {project.path}
                           </p>
                           <p
-                            className="text-xs mt-1.5"
-                            style={{ color: 'var(--color-text-muted)' }}
+                            className="mt-1.5"
+                            style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}
                           >
                             {formatDateTime(project.lastOpened, RECENT_PROJECT_DATE_OPTIONS)}
                           </p>
@@ -253,7 +256,7 @@ export function HomeScreen({ onOpenProject, initialError, onClearInitialError }:
                       onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-tertiary)' }}
                       title={t.homeScreen.removeFromRecent.replace('{name}', project.name)}
                     >
-                      <VscTrash className="text-sm" />
+                      <VscTrash style={{ fontSize: theme.fontSize.body }} />
                     </button>
                   </div>
                 ))}

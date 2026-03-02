@@ -1,5 +1,6 @@
 import { AnimatedText } from './AnimatedText'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 
 interface ConfirmResetDialogProps {
   open: boolean
@@ -16,15 +17,15 @@ export function ConfirmResetDialog({ open, onConfirm, onCancel, isBusy }: Confir
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
       <div className="relative bg-slate-900 border border-slate-700 rounded-lg p-4 w-[460px] shadow-xl">
         <div className="text-slate-100 font-semibold mb-1">{t.dialogs.resetSession.title}</div>
-        <div className="text-slate-300 text-sm mb-3">
+        <div className="text-slate-300 mb-3" style={{ fontSize: theme.fontSize.body }}>
           {t.dialogs.resetSession.body}
         </div>
         {isBusy ? (
           <div className="py-2 text-slate-300"><AnimatedText text="resetting" size="xs" /></div>
         ) : (
           <div className="flex justify-end gap-2">
-            <button onClick={onCancel} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-sm">{t.dialogs.resetSession.cancel}</button>
-            <button onClick={onConfirm} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm font-medium">{t.dialogs.resetSession.reset}</button>
+            <button onClick={onCancel} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded" style={{ fontSize: theme.fontSize.button }}>{t.dialogs.resetSession.cancel}</button>
+            <button onClick={onConfirm} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded font-medium" style={{ fontSize: theme.fontSize.button }}>{t.dialogs.resetSession.reset}</button>
           </div>
         )}
       </div>

@@ -109,10 +109,11 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
         <div className="flex items-center justify-center w-full">
           {shortcutLabel && (
             <span
-              className="text-[11px] px-1.5 py-0.5 rounded"
+              className="px-1.5 py-0.5 rounded"
               style={{
                 color: 'var(--color-text-secondary)',
                 backgroundColor: 'rgba(var(--color-bg-hover-rgb), 0.6)',
+                fontSize: theme.fontSize.caption,
               }}
             >
               {shortcutLabel}

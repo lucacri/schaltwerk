@@ -6,6 +6,7 @@ import { isSpec, mapSessionUiState } from '../../utils/sessionFilters'
 import { SessionSelection } from '../../hooks/useSessionManagement'
 import { ProgressIndicator } from '../common/ProgressIndicator'
 import type { MergeStatus } from '../../store/atoms/sessions'
+import { theme } from '../../common/theme'
 
 interface SessionVersionGroupProps {
   group: SessionVersionGroupType
@@ -165,8 +166,8 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
       icon: (
         <span
           aria-hidden="true"
-          className="text-xs font-semibold"
-          style={{ color: 'var(--color-accent-amber-light)' }}
+          className="font-semibold"
+          style={{ color: 'var(--color-accent-amber-light)', fontSize: theme.fontSize.caption }}
         >
           ⏸
         </span>
@@ -225,15 +226,17 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
             </svg>
             <span className="font-medium text-[var(--color-text-primary)]">{group.baseName}</span>
             <span
-              className="text-xs px-2 py-0.5 rounded-full font-medium ml-2"
+              className="px-2 py-0.5 rounded-full font-medium ml-2"
               style={hasSelectedVersion ? {
                 backgroundColor: 'var(--color-accent-blue-bg)',
                 color: 'var(--color-accent-blue-light)',
-                borderColor: 'var(--color-accent-blue-border)'
+                borderColor: 'var(--color-accent-blue-border)',
+                fontSize: theme.fontSize.caption,
               } : {
                 backgroundColor: 'rgba(var(--color-bg-hover-rgb), 0.5)',
                 color: 'var(--color-text-secondary)',
-                borderColor: 'rgba(var(--color-border-subtle-rgb), 0.5)'
+                borderColor: 'rgba(var(--color-border-subtle-rgb), 0.5)',
+                fontSize: theme.fontSize.caption,
               }}
             >
               {group.versions.length}x
@@ -249,8 +252,8 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
 
               return (
                 <>
-                  <span className="text-[var(--color-text-muted)] text-xs">|</span>
-                  <span className="text-xs text-[var(--color-text-muted)]">← {baseBranch}</span>
+                  <span className="text-[var(--color-text-muted)]" style={{ fontSize: theme.fontSize.caption }}>|</span>
+                  <span className="text-[var(--color-text-muted)]" style={{ fontSize: theme.fontSize.caption }}>← {baseBranch}</span>
                 </>
               )
             })()}
@@ -263,12 +266,13 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
             {statusPills.map(pill => (
               <span
                 key={pill.key}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold tracking-tight whitespace-nowrap flex-shrink-0"
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border font-semibold tracking-tight whitespace-nowrap flex-shrink-0"
                 aria-label={`${pill.count} ${pill.label} ${pill.count === 1 ? 'session' : 'sessions'}`}
                 style={{
                   backgroundColor: pill.color.bg,
                   color: pill.color.light,
-                  borderColor: pill.color.border
+                  borderColor: pill.color.border,
+                  fontSize: theme.fontSize.caption,
                 }}
               >
                 {pill.icon}

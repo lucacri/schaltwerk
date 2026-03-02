@@ -17,6 +17,7 @@ import { getPlatform } from '../utils/platform'
 import { detectPlatformSafe } from '../keyboardShortcuts/helpers'
 import { GlobalKeepAwakeButton } from './GlobalKeepAwakeButton'
 import { useTranslation } from '../common/i18n'
+import { theme } from '../common/theme'
 
 type UiPlatform = 'mac' | 'linux' | 'windows'
 
@@ -148,7 +149,7 @@ export function TopBar({
           data-no-drag
           style={{ pointerEvents: 'auto' } as React.CSSProperties}
         >
-          <VscHome className="text-[14px]" />
+          <VscHome style={{ fontSize: theme.fontSize.body }} />
         </button>
         
         {tabs.length > 0 && (
@@ -210,9 +211,9 @@ export function TopBar({
             aria-label={isRightPanelCollapsed ? t.topBar.showRightPanel : t.topBar.hideRightPanel}
           >
             {isRightPanelCollapsed ? (
-              <VscLayoutSidebarRightOff className="text-[14px]" />
+              <VscLayoutSidebarRightOff style={{ fontSize: theme.fontSize.body }} />
             ) : (
-              <VscLayoutSidebarRight className="text-[14px]" />
+              <VscLayoutSidebarRight style={{ fontSize: theme.fontSize.body }} />
             )}
           </button>
         )}
@@ -224,7 +225,7 @@ export function TopBar({
           title={t.topBar.settings}
           aria-label={t.topBar.settingsLabel}
         >
-          <VscSettingsGear className="text-[14px]" />
+          <VscSettingsGear style={{ fontSize: theme.fontSize.body }} />
         </button>
 
         {/* Window controls for non-macOS */}

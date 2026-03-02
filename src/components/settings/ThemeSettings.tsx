@@ -229,7 +229,7 @@ function ThemePreviewCard({
           {option.experimental && (
             <span
               style={{
-                fontSize: '9px',
+                fontSize: theme.fontSize.caption,
                 color: 'var(--color-accent-amber)',
                 fontWeight: 500,
                 padding: '1px 3px',

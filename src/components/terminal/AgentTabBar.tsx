@@ -71,8 +71,9 @@ export const AgentTabBar: React.FC<AgentTabBarProps> = ({
                 backgroundColor: isFocused ? 'var(--color-accent-blue-bg)' : undefined,
                 color: isFocused ? 'var(--color-accent-blue-light)' : 'var(--color-text-tertiary)',
                 borderBottomColor: isFocused ? 'var(--color-accent-blue-border)' : 'var(--color-border-default)',
+                fontSize: theme.fontSize.caption,
             }}
-            className={`h-9 px-2 text-xs border-b flex items-center gap-1 overflow-hidden z-10 relative ${
+            className={`h-9 px-2 border-b flex items-center gap-1 overflow-hidden z-10 relative ${
                 isFocused
                     ? 'hover:bg-opacity-60'
                     : 'hover:bg-elevated'
@@ -133,7 +134,8 @@ export const AgentTabBar: React.FC<AgentTabBarProps> = ({
                                     e.stopPropagation()
                                     onAction?.(action)
                                 }}
-                                className={`px-2 py-1 text-[10px] rounded flex items-center gap-1 whitespace-nowrap ${getActionButtonColorClasses(action.color)}`}
+                                className={`px-2 py-1 rounded flex items-center gap-1 whitespace-nowrap ${getActionButtonColorClasses(action.color)}`}
+                                style={{ fontSize: theme.fontSize.caption }}
                                 title={action.label}
                             >
                                 <span>{action.label}</span>
@@ -152,7 +154,7 @@ export const AgentTabBar: React.FC<AgentTabBarProps> = ({
                         className="p-1 rounded hover:bg-hover mr-1"
                         title={t.terminalComponents.resetSession}
                     >
-                        <VscDiscard className="text-base" />
+                        <VscDiscard style={{ fontSize: theme.fontSize.bodyLarge }} />
                     </button>
                 )}
 
@@ -166,8 +168,9 @@ export const AgentTabBar: React.FC<AgentTabBarProps> = ({
                             color: isFocused
                                 ? 'var(--color-accent-blue-light)'
                                 : 'var(--color-text-tertiary)',
+                            fontSize: theme.fontSize.caption,
                         }}
-                        className="text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap"
+                        className="px-1.5 py-0.5 rounded whitespace-nowrap"
                         title={t.terminalComponents.focusClaude.replace('{shortcut}', shortcutLabel)}
                     >
                         {shortcutLabel}

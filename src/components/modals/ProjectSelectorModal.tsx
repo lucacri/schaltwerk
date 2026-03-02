@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { theme } from '../../common/theme'
 import { VscFolderOpened, VscTrash, VscClose } from 'react-icons/vsc'
 import { formatDateTime } from '../../utils/dateTime'
 import { useRecentProjects } from '../../hooks/useRecentProjects'
@@ -106,7 +107,7 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderBottomColor: 'var(--color-border-default)' }}>
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+          <h2 className="font-semibold" style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.heading }}>
             {t.projectSelector.title}
           </h2>
           <button
@@ -115,7 +116,7 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
             style={{ color: 'var(--color-text-tertiary)' }}
             aria-label={t.ariaLabels.close}
           >
-            <VscClose className="text-xl" />
+            <VscClose style={{ fontSize: theme.fontSize.headingLarge }} />
           </button>
         </div>
 
@@ -128,7 +129,7 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
                 border: '1px solid var(--color-accent-red-border)'
               }}
             >
-              <p className="text-sm" style={{ color: 'var(--color-accent-red)' }}>
+              <p style={{ color: 'var(--color-accent-red)', fontSize: theme.fontSize.body }}>
                 {error}
               </p>
             </div>
@@ -150,14 +151,14 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
                 e.currentTarget.style.backgroundColor = 'var(--color-accent-blue-bg)'
               }}
             >
-              <VscFolderOpened className="text-xl" />
+              <VscFolderOpened style={{ fontSize: theme.fontSize.headingLarge }} />
               <span className="font-medium">{t.projectSelector.openRepository}</span>
             </button>
           </div>
 
           {availableProjects.length > 0 && (
             <div>
-              <h3 className="text-sm font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--color-text-muted)' }}>
+              <h3 className="font-medium uppercase tracking-wider mb-3" style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.label }}>
                 {t.projectSelector.recentProjects}
               </h3>
 
@@ -182,10 +183,11 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
                     {index < 9 && (
                       <div className="absolute top-2 right-2 transition-opacity group-hover:opacity-0">
                         <span
-                          className="text-xs px-1.5 py-0.5 rounded"
+                          className="px-1.5 py-0.5 rounded"
                           style={{
                             backgroundColor: 'rgba(var(--color-bg-elevated-rgb), 0.5)',
-                            color: 'var(--color-text-muted)'
+                            color: 'var(--color-text-muted)',
+                            fontSize: theme.fontSize.caption,
                           }}
                         >
                           ⌘{index + 1}
@@ -198,17 +200,17 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
                     >
                       <div className="flex items-start gap-3">
                         <VscFolderOpened
-                          className="text-lg flex-shrink-0 mt-0.5"
-                          style={{ color: 'var(--color-text-muted)' }}
+                          className="flex-shrink-0 mt-0.5"
+                          style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.heading }}
                         />
                         <div className="flex-1 min-w-0 pr-8">
-                          <h3 className="font-medium truncate text-sm" style={{ color: 'var(--color-text-primary)' }}>
+                          <h3 className="font-medium truncate" style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.body }}>
                             {project.name}
                           </h3>
-                          <p className="text-xs truncate mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                          <p className="truncate mt-1" style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                             {project.path}
                           </p>
-                          <p className="text-xs mt-2" style={{ color: 'var(--color-text-tertiary)' }}>
+                          <p className="mt-2" style={{ color: 'var(--color-text-tertiary)', fontSize: theme.fontSize.caption }}>
                             {formatDateTime(project.lastOpened, RECENT_PROJECT_DATE_OPTIONS)}
                           </p>
                         </div>
@@ -226,7 +228,7 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
                       }}
                       title={`Remove ${project.name} from recent projects`}
                     >
-                      <VscTrash className="text-sm" />
+                      <VscTrash style={{ fontSize: theme.fontSize.body }} />
                     </button>
                   </div>
                 ))}

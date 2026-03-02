@@ -4,6 +4,7 @@ import { useFolderPermission } from '../hooks/usePermissions'
 import { TauriCommands } from '../common/tauriCommands'
 import { logger } from '../utils/logger'
 import { useTranslation } from '../common/i18n'
+import { theme } from '../common/theme'
 
 type InstallKind = 'app-bundle' | 'homebrew' | 'justfile' | 'standalone' | 'other'
 
@@ -202,21 +203,21 @@ export function PermissionPrompt({ onPermissionGranted, showOnlyIfNeeded = true,
           className="p-6 rounded-lg shadow-xl max-w-md mx-4"
           style={{ backgroundColor: 'var(--color-surface-modal)' }}
         >
-          <h2 className="text-xl font-semibold mb-4 text-white">{t.permissionPrompt.title}</h2>
+          <h2 className="font-semibold mb-4 text-white" style={{ fontSize: theme.fontSize.headingLarge }}>{t.permissionPrompt.title}</h2>
 
           <p className="text-gray-300 mb-4">
             {t.permissionPrompt.description}
           </p>
           
           {displayPath && (
-            <div className="mb-4 p-2 bg-gray-800 rounded font-mono text-sm text-gray-200">
+            <div className="mb-4 p-2 bg-gray-800 rounded font-mono text-gray-200" style={{ fontSize: theme.fontSize.code }}>
               {displayPath}
             </div>
           )}
           
           {attemptCount > 0 && (
             <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-600/50 rounded">
-              <p className="text-yellow-200 text-sm">
+              <p className="text-yellow-200" style={{ fontSize: theme.fontSize.body }}>
                 {attemptCount === 1
                   ? t.permissionPrompt.clickOk
                   : t.permissionPrompt.restartHint}
@@ -253,45 +254,43 @@ export function PermissionPrompt({ onPermissionGranted, showOnlyIfNeeded = true,
             }}
           >
             <h3
-              className="text-sm font-semibold"
-              style={{ color: 'var(--color-text-primary)' }}
+              className="font-semibold"
+              style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.body }}
             >
               {t.permissionPrompt.troubleTitle}
             </h3>
             <p
-              className="text-sm leading-relaxed"
-              style={{ color: 'var(--color-text-secondary)' }}
+              className="leading-relaxed"
+              style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}
             >
               {t.permissionPrompt.troubleDesc.replace('{app}', diagnostics?.appDisplayName ?? 'Schaltwerk')}
             </p>
             {installLabel && (
               <p
-                className="text-sm"
-                style={{ color: 'var(--color-text-secondary)' }}
+                style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}
               >
                 {t.permissionPrompt.detectedInstall.replace('{label}', installLabel)}
               </p>
             )}
             {installGuidance && (
               <p
-                className="text-xs leading-relaxed"
-                style={{ color: 'var(--color-text-muted)' }}
+                className="leading-relaxed"
+                style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}
               >
                 {installGuidance}
               </p>
             )}
             {diagnostics && (
               <p
-                className="text-xs break-all"
-                style={{ color: 'var(--color-text-muted)' }}
+                className="break-all"
+                style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}
               >
                 {t.permissionPrompt.currentExecutable.replace('{path}', diagnostics.executablePath)}
               </p>
             )}
             {diagnosticsError && (
               <p
-                className="text-xs"
-                style={{ color: 'var(--color-status-warning)' }}
+                style={{ color: 'var(--color-status-warning)', fontSize: theme.fontSize.caption }}
               >
                 {diagnosticsError}
               </p>
@@ -328,16 +327,16 @@ export function PermissionPrompt({ onPermissionGranted, showOnlyIfNeeded = true,
 
             {supportMessage && (
               <p
-                className="text-xs leading-relaxed"
-                style={{ color: 'var(--color-status-success)' }}
+                className="leading-relaxed"
+                style={{ color: 'var(--color-status-success)', fontSize: theme.fontSize.caption }}
               >
                 {supportMessage}
               </p>
             )}
             {supportError && (
               <p
-                className="text-xs leading-relaxed"
-                style={{ color: 'var(--color-status-error)' }}
+                className="leading-relaxed"
+                style={{ color: 'var(--color-status-error)', fontSize: theme.fontSize.caption }}
               >
                 {supportError}
               </p>
@@ -346,7 +345,7 @@ export function PermissionPrompt({ onPermissionGranted, showOnlyIfNeeded = true,
           
           {attemptCount > 1 && (
             <>
-              <p className="text-gray-400 text-xs mt-4">
+              <p className="text-gray-400 mt-4" style={{ fontSize: theme.fontSize.caption }}>
                 {t.permissionPrompt.persistHint}
               </p>
               {onRetryAgent && hasPermission && (

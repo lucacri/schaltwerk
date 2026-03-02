@@ -233,7 +233,7 @@ export function GitHubIssuePromptSection({
             <button
               type="button"
               onClick={() => { void handleOpenLink(details.url) }}
-              className="px-2 py-1 text-xs rounded border transition-colors"
+              className="px-2 py-1 rounded border transition-colors"
               style={{
                 backgroundColor: 'var(--color-accent-blue-bg)',
                 border: '1px solid var(--color-accent-blue-border)',
@@ -247,7 +247,7 @@ export function GitHubIssuePromptSection({
             <button
               type="button"
               onClick={onClearSelection}
-              className="px-2 py-1 text-xs rounded border transition-colors"
+              className="px-2 py-1 rounded border transition-colors"
               style={{
                 backgroundColor: 'var(--color-bg-primary)',
                 border: '1px solid var(--color-border-subtle)',
@@ -291,12 +291,13 @@ export function GitHubIssuePromptSection({
           onChange={event => setQuery(event.target.value)}
           placeholder={t.githubIssue.searchPlaceholder}
           disabled
-          className="px-3 py-2 rounded text-sm"
+          className="px-3 py-2 rounded"
           style={{
             backgroundColor: 'var(--color-bg-primary)',
             color: 'var(--color-text-secondary)',
             border: '1px solid var(--color-border-subtle)',
             opacity: 0.6,
+            fontSize: theme.fontSize.input,
           }}
         />
       </div>
@@ -309,7 +310,7 @@ export function GitHubIssuePromptSection({
       style={{ borderColor: 'var(--color-border-subtle)', backgroundColor: 'var(--color-bg-elevated)' }}
     >
       <div className="p-3 border-b space-y-2" style={{ borderColor: 'var(--color-border-subtle)' }}>
-        <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}>
           {t.githubIssue.searchHint}
         </p>
         <input
@@ -318,12 +319,13 @@ export function GitHubIssuePromptSection({
           onChange={event => setQuery(event.target.value)}
           placeholder={t.githubIssue.searchPlaceholder}
           aria-label={t.githubIssue.searchPlaceholder}
-          className="w-full px-3 py-2 text-sm rounded"
+          className="w-full px-3 py-2 rounded"
           style={{
             backgroundColor: 'var(--color-bg-primary)',
             color: 'var(--color-text-primary)',
             border: '1px solid var(--color-border-default)',
             boxShadow: '0 0 0 1px transparent',
+            fontSize: theme.fontSize.input,
           }}
           onFocus={event => {
             event.currentTarget.style.boxShadow = '0 0 0 1px var(--color-accent-blue)';
@@ -336,8 +338,8 @@ export function GitHubIssuePromptSection({
       <div className="flex-1 overflow-auto">
         {loading ? (
           <div
-            className="flex flex-col items-center justify-center gap-2 py-10 text-sm"
-            style={{ color: 'var(--color-text-secondary)' }}
+            className="flex flex-col items-center justify-center gap-2 py-10"
+            style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}
           >
             <span
               className="h-4 w-4 rounded-full border-2 border-t-transparent animate-spin"
@@ -347,12 +349,12 @@ export function GitHubIssuePromptSection({
           </div>
         ) : results.length === 0 ? (
           <div
-            className="flex flex-col items-center justify-center gap-2 py-10 text-sm text-center"
-            style={{ color: 'var(--color-text-secondary)' }}
+            className="flex flex-col items-center justify-center gap-2 py-10 text-center"
+            style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}
           >
             <span role="img" aria-hidden="true">🔍</span>
             <span>{t.githubIssue.noIssuesFound}</span>
-            <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+            <span style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}>
               {t.githubIssue.adjustSearch}
             </span>
           </div>
@@ -474,8 +476,7 @@ export function GitHubIssuePromptSection({
                       </div>
                       {isLoading && (
                         <span
-                          className="text-xs"
-                          style={{ color: 'var(--color-text-secondary)' }}
+                          style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}
                         >
                           {t.githubIssue.loading}
                         </span>

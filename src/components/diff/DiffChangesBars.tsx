@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { theme } from '../../common/theme'
 
 export interface DiffChangesProps {
   additions: number
@@ -117,7 +118,7 @@ export function DiffChangesBars({
   }
 
   return (
-    <div className={`flex gap-2 justify-end items-center font-mono text-xs ${className}`}>
+    <div className={`flex gap-2 justify-end items-center font-mono ${className}`} style={{ fontSize: theme.fontSize.code }}>
       <span style={{ color: 'var(--color-diff-added-text)' }}>+{additions}</span>
       <span style={{ color: 'var(--color-diff-removed-text)' }}>-{deletions}</span>
     </div>

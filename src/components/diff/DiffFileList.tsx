@@ -6,6 +6,7 @@ import { useSelection } from '../../hooks/useSelection'
 import { useOpenInEditor } from '../../hooks/useOpenInEditor'
 import { VscFile, VscDiffAdded, VscDiffModified, VscDiffRemoved, VscFileBinary, VscDiscard, VscGoToFile } from 'react-icons/vsc'
 import { isBinaryFileByExtension } from '../../utils/binaryDetection'
+import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
 import { UiEvent, emitUiEvent, listenUiEvent } from '../../common/uiEvents'
 import { AnimatedText } from '../common/AnimatedText'
@@ -911,14 +912,15 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
         {getFileIcon(node.file.change_type, node.file.path)}
         <div className="flex-1 min-w-0">
             <div className="flex items-start gap-2 justify-between">
-            <div className="text-sm truncate font-medium" style={{ color: 'var(--color-text-primary)' }}>
+            <div className="truncate font-medium" style={{ fontSize: theme.fontSize.body, color: 'var(--color-text-primary)' }}>
               {node.name}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {commentCount > 0 && (
                 <span
-                  className="text-xs px-1.5 py-0.5 rounded font-medium"
+                  className="px-1.5 py-0.5 rounded font-medium"
                   style={{
+                    fontSize: theme.fontSize.caption,
                     backgroundColor: 'var(--color-accent-blue-bg)',
                     color: 'var(--color-accent-blue-light)'
                   }}
@@ -956,7 +958,7 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
               e.currentTarget.style.color = 'var(--color-text-secondary)'
             }}
           >
-            <VscGoToFile className="text-base" />
+            <VscGoToFile style={{ fontSize: theme.fontSize.bodyLarge }} />
           </button>
           <button
             title={t.diffFileList.discardChanges}
@@ -969,7 +971,7 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
               setDiscardOpen(true)
             }}
           >
-            <VscDiscard className="text-base" />
+            <VscDiscard style={{ fontSize: theme.fontSize.bodyLarge }} />
           </button>
           {showCopyContextControls && (
             <input
@@ -993,12 +995,12 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
       <div className="px-3 py-2 relative" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
         <div className="flex items-center justify-between pr-12">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">
+            <span className="font-medium" style={{ fontSize: theme.fontSize.body }}>
               {getHeaderTitle({ isCommander: isCommander ?? false, sessionName, compareMode, branchInfo, t })}
             </span>
             {branchInfo && !isCommander && sessionName && (
               <>
-                <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+                <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-tertiary)' }}>
                   ({branchInfo.headCommit} → {branchInfo.baseCommit})
                 </span>
                 <BranchSelectorPopover
@@ -1010,7 +1012,7 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
               </>
             )}
             {branchInfo && isCommander && (
-              <span className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-tertiary)' }}>
                 (on {branchInfo.currentBranch})
               </span>
             )}
@@ -1023,13 +1025,14 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
               />
             )}
             {branchInfo && files.length > 0 && (
-              <div className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
+              <div style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-tertiary)' }}>
                 {t.diffFileList.filesChanged.replace('{count}', String(files.length))}
               </div>
             )}
             {showCopyContextControls && files.length > 0 && (
               <label
-                className="flex items-center gap-2 text-xs"
+                className="flex items-center gap-2"
+                style={{ fontSize: theme.fontSize.label }}
                 title="Select which changed files are included when copying Diff/Files context"
               >
                 <input
@@ -1058,7 +1061,7 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
                     disabled={files.length === 0}
                     className={`p-1 rounded ${files.length > 0 ? '' : 'opacity-50 cursor-not-allowed'}`}
                   >
-                    <VscDiscard className="text-lg" />
+                    <VscDiscard style={{ fontSize: theme.fontSize.heading }} />
                   </button>
                 )}
               </div>
@@ -1070,8 +1073,8 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
       {sessionName === null && !isCommander ? (
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="text-center" style={{ color: 'var(--color-text-tertiary)' }}>
-            <div className="text-sm">{t.diffFileList.noSessionSelected}</div>
-            <div className="text-xs mt-1">{t.diffFileList.selectSessionHint}</div>
+            <div style={{ fontSize: theme.fontSize.body }}>{t.diffFileList.noSessionSelected}</div>
+            <div className="mt-1" style={{ fontSize: theme.fontSize.caption }}>{t.diffFileList.selectSessionHint}</div>
           </div>
         </div>
       ) : files.length > 0 ? (
@@ -1083,7 +1086,7 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
               renderFolderContent={(folder) => {
                 if (!showCopyContextControls) {
                   return (
-                    <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+                    <span className="flex-shrink-0" style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>
                       ({folder.fileCount})
                     </span>
                   )
@@ -1100,7 +1103,7 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
 
                 return (
                   <div className="flex-1 flex items-center justify-between min-w-0">
-                    <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+                    <span className="flex-shrink-0" style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>
                       ({folder.fileCount})
                     </span>
                     <input
@@ -1125,11 +1128,11 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
       ) : (
         <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}>
           <div className="text-center">
-            <VscFile className="mx-auto mb-2 text-4xl opacity-50" />
+            <VscFile className="mx-auto mb-2 opacity-50" style={{ fontSize: theme.fontSize.display }} />
             <div className="mb-1">
               {getEmptyStateTitle({ isCommander: isCommander ?? false, sessionName, compareMode, branchInfo, t })}
             </div>
-            <div className="text-xs">
+            <div style={{ fontSize: theme.fontSize.caption }}>
               {getEmptyStateSubtitle({ isCommander: isCommander ?? false, sessionName, compareMode, branchInfo, t })}
             </div>
           </div>

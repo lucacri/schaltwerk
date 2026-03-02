@@ -174,11 +174,12 @@ export function GithubMenuButton({ className, hasActiveProject = false }: Github
     <div className={`relative ${className ?? ''}`} ref={menuRef}>
       <button
         type="button"
-        className="flex items-center gap-2 px-2 h-[22px] border rounded-md text-xs"
+        className="flex items-center gap-2 px-2 h-[22px] border rounded-md"
         style={{
           backgroundColor: 'var(--color-bg-elevated)',
           borderColor: 'var(--color-border-subtle)',
           color: 'var(--color-text-primary)',
+          fontSize: theme.fontSize.caption,
         }}
         disabled={busy}
         onClick={() => setOpen((value) => !value)}
@@ -186,7 +187,7 @@ export function GithubMenuButton({ className, hasActiveProject = false }: Github
         aria-expanded={open}
         title="GitHub integration"
       >
-        <FaGithub className="text-[12px]" />
+        <FaGithub style={{ fontSize: theme.fontSize.caption }} />
         <span className="truncate max-w-[120px]">{statusLabel}</span>
         <span
           aria-hidden="true"
@@ -206,9 +207,9 @@ export function GithubMenuButton({ className, hasActiveProject = false }: Github
           className="absolute right-0 mt-2 min-w-[240px] z-30 rounded-lg overflow-hidden"
           style={menuContainerStyle}
         >
-          <div className="px-3 py-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+          <div className="px-3 py-2" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}>
             <div className="flex items-center gap-2">
-              <FaGithub className="text-[14px]" />
+              <FaGithub style={{ fontSize: theme.fontSize.body }} />
               <span style={{ color: 'var(--color-text-primary)' }}>{t.githubMenu.title}</span>
             </div>
             <div className="mt-2 space-y-1">
@@ -217,7 +218,7 @@ export function GithubMenuButton({ className, hasActiveProject = false }: Github
               {repository ? (
                 <div>
                   {t.githubMenu.repository} <strong>{repository.nameWithOwner}</strong>
-                  <div className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                  <div style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                     {t.githubMenu.defaultBranch.replace('{branch}', repository.defaultBranch)}
                   </div>
                 </div>
@@ -230,14 +231,14 @@ export function GithubMenuButton({ className, hasActiveProject = false }: Github
             </div>
             {!installed && (
               <div className="mt-3 pt-2 border-t" style={{ borderColor: 'var(--color-border-subtle)' }}>
-                <div className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                <div style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                   {t.githubMenu.installCliHint}
                 </div>
               </div>
             )}
             {installed && !authenticated && (
               <div className="mt-3 pt-2 border-t" style={{ borderColor: 'var(--color-border-subtle)' }}>
-                <div className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                <div style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                   {t.githubMenu.authHint}
                 </div>
               </div>
@@ -252,8 +253,8 @@ export function GithubMenuButton({ className, hasActiveProject = false }: Github
               role="menuitem"
               onClick={() => { void handleConnectProject() }}
               disabled={connectDisabled}
-              className="text-left text-xs"
-              style={buildMenuButtonStyle('connect', { disabled: connectDisabled })}
+              className="text-left"
+              style={{ ...buildMenuButtonStyle('connect', { disabled: connectDisabled }), fontSize: theme.fontSize.caption }}
               onMouseEnter={() => !connectDisabled && setHoveredButton('connect')}
               onMouseLeave={() => setHoveredButton((prev) => (prev === 'connect' ? null : prev))}
               onFocus={() => !connectDisabled && setFocusedButton('connect')}
@@ -268,8 +269,8 @@ export function GithubMenuButton({ className, hasActiveProject = false }: Github
                 role="menuitem"
                 onClick={() => { void handleConnectProject() }}
                 disabled={github.isConnecting}
-                className="text-left text-xs"
-                style={buildMenuButtonStyle('reconnect', { disabled: github.isConnecting })}
+                className="text-left"
+                style={{ ...buildMenuButtonStyle('reconnect', { disabled: github.isConnecting }), fontSize: theme.fontSize.caption }}
                 onMouseEnter={() => !github.isConnecting && setHoveredButton('reconnect')}
                 onMouseLeave={() => setHoveredButton((prev) => (prev === 'reconnect' ? null : prev))}
                 onFocus={() => !github.isConnecting && setFocusedButton('reconnect')}
@@ -283,14 +284,14 @@ export function GithubMenuButton({ className, hasActiveProject = false }: Github
               type="button"
               role="menuitem"
               onClick={() => { void handleRefreshStatus() }}
-              className="text-left text-xs"
-              style={buildMenuButtonStyle('refresh', { withIcon: true })}
+              className="text-left"
+              style={{ ...buildMenuButtonStyle('refresh', { withIcon: true }), fontSize: theme.fontSize.caption }}
               onMouseEnter={() => setHoveredButton('refresh')}
               onMouseLeave={() => setHoveredButton((prev) => (prev === 'refresh' ? null : prev))}
               onFocus={() => setFocusedButton('refresh')}
               onBlur={() => setFocusedButton((prev) => (prev === 'refresh' ? null : prev))}
             >
-              <VscRefresh className="text-[13px]" />
+              <VscRefresh style={{ fontSize: theme.fontSize.label }} />
               <span>{t.githubMenu.refreshStatus}</span>
             </button>
           </div>

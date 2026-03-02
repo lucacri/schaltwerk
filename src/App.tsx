@@ -1934,7 +1934,7 @@ function AppContent() {
                       style={{ borderTopColor: 'var(--color-border-default)' }}
                     >
                       <div
-                        className="flex items-center justify-between px-1 pb-2 text-[11px]"
+                        className="flex items-center justify-between px-1 pb-2"
                         style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}
                         aria-hidden="true"
                       >
@@ -1953,11 +1953,12 @@ function AppContent() {
                             previousFocusRef.current = document.activeElement
                             setNewSessionOpen(true)
                           }}
-                          className="w-full text-sm px-3 py-2 rounded group transition-colors flex items-center justify-between border"
+                          className="w-full px-3 py-2 rounded group transition-colors flex items-center justify-between border"
                           style={{
                             backgroundColor: 'rgba(var(--color-bg-elevated-rgb), 0.6)',
                             color: 'var(--color-text-primary)',
-                            borderColor: 'var(--color-border-subtle)'
+                            borderColor: 'var(--color-border-subtle)',
+                            fontSize: theme.fontSize.button,
                           }}
                           data-onboarding="start-agent-button"
                           onMouseEnter={(e) => {
@@ -1970,10 +1971,11 @@ function AppContent() {
                         >
                           <span>Start Agent</span>
                           <span
-                            className="text-xs px-2 py-0.5 rounded transition-opacity group-hover:opacity-100"
+                            className="px-2 py-0.5 rounded transition-opacity group-hover:opacity-100"
                             style={{
                               backgroundColor: 'var(--color-bg-secondary)',
-                              color: 'var(--color-text-secondary)'
+                              color: 'var(--color-text-secondary)',
+                              fontSize: theme.fontSize.caption,
                             }}
                           >
                             {startShortcut}
@@ -1985,11 +1987,12 @@ function AppContent() {
                             setOpenAsSpec(true)
                             setNewSessionOpen(true)
                           }}
-                          className="w-full text-sm px-3 py-2 rounded group border transition-colors flex items-center justify-between"
+                          className="w-full px-3 py-2 rounded group border transition-colors flex items-center justify-between"
                           style={{
                             backgroundColor: 'var(--color-accent-amber-bg)',
                             borderColor: 'var(--color-accent-amber-border)',
-                            color: 'var(--color-text-primary)'
+                            color: 'var(--color-text-primary)',
+                            fontSize: theme.fontSize.button,
                           }}
                           data-onboarding="create-spec-button"
                           onMouseEnter={(e) => {
@@ -2002,10 +2005,11 @@ function AppContent() {
                         >
                           <span>Create Spec</span>
                           <span
-                            className="text-xs px-2 py-0.5 rounded transition-opacity group-hover:opacity-100"
+                            className="px-2 py-0.5 rounded transition-opacity group-hover:opacity-100"
                             style={{
                               backgroundColor: 'rgba(var(--color-accent-amber-rgb), 0.15)',
-                              color: 'var(--color-accent-amber-light)'
+                              color: 'var(--color-accent-amber-light)',
+                              fontSize: theme.fontSize.caption,
                             }}
                           >
                           {specShortcut}

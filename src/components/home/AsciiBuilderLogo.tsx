@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { theme } from '../../common/theme'
 
 interface AsciiBuilderLogoProps {
   asciiArt?: string
@@ -46,6 +47,8 @@ interface AsciiBuilderLogoProps {
   className?: string
   /** Override default responsive font sizes with a fixed size class */
   textSizeClass?: string
+  /** Override font size with an inline style value (e.g. '5px') */
+  textSizeOverride?: string
 }
 
 const DEFAULT_ASCII = `╔═══╗╔═══╗╔╗ ╔╗╔═══╗╔╗  ╔═══╗╔╗  ╔╗╔═══╗╔═══╗╔╗╔═╗
@@ -92,6 +95,7 @@ export function AsciiBuilderLogo({
   onAssembled,
   className = '',
   textSizeClass,
+  textSizeOverride,
 }: AsciiBuilderLogoProps) {
   const preRef = useRef<HTMLPreElement | null>(null)
   const frameRef = useRef<number | null>(null)
@@ -749,14 +753,14 @@ export function AsciiBuilderLogo({
       ? `0 0 6px rgba(${primaryGlow}, 0.25)`
       : 'none'
 
-  const defaultTextSizeClasses = 'text-[10px] sm:text-xs md:text-sm lg:text-base xl:text-lg 2xl:text-xl'
-  const textSizeClasses = textSizeClass ?? defaultTextSizeClasses
+  const textSizeClasses = textSizeClass ?? ''
+  const baseFontSize = textSizeOverride ?? (textSizeClass ? undefined : theme.fontSize.caption)
 
   return (
     <pre
       ref={preRef}
       className={`${gradientClasses} ascii-logo block leading-[1.05] ${textSizeClasses} font-mono select-none ${className}`}
-      style={{ textShadow, ...colorStyle }}
+      style={{ textShadow, ...colorStyle, ...(baseFontSize ? { fontSize: baseFontSize } : {}) }}
       aria-label="SCHALTWERK 3D assembled logo"
       role="img"
     />

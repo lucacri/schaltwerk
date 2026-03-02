@@ -1,4 +1,5 @@
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 import { ConfirmModal } from './ConfirmModal'
 
 interface Props {
@@ -38,8 +39,8 @@ export function SetupScriptApprovalModal({
           >
             <pre
               data-testid="setup-script-preview"
-              className="p-3 text-sm font-mono whitespace-pre-wrap"
-              style={{ color: 'var(--color-text-primary)' }}
+              className="p-3 font-mono whitespace-pre-wrap"
+              style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.code }}
             >
               {script || t.setupScriptModal.emptyScript}
             </pre>

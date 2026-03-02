@@ -1,4 +1,4 @@
-const DISALLOWED = [
+const EXACT_DISALLOWED = [
   'text-xs',
   'text-sm',
   'text-base',
@@ -12,8 +12,9 @@ const DISALLOWED = [
   'text-7xl',
   'text-8xl',
   'text-9xl',
-  'text-[',
 ]
+
+const ARBITRARY_SIZE_RE = /text-\[\d/
 
 export default {
   meta: {
@@ -28,7 +29,7 @@ export default {
   },
   create(context) {
     const reportMatch = (value, node) => {
-      for (const token of DISALLOWED) {
+      for (const token of EXACT_DISALLOWED) {
         if (value.includes(token)) {
           context.report({
             node,
@@ -37,6 +38,14 @@ export default {
           })
           return
         }
+      }
+      const m = ARBITRARY_SIZE_RE.exec(value)
+      if (m) {
+        context.report({
+          node,
+          messageId: 'unexpected',
+          data: { token: m[0] },
+        })
       }
     }
 

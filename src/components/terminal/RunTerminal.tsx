@@ -16,6 +16,7 @@ import { terminalOutputManager } from '../../terminal/stream/terminalOutputManag
 import { useStreamingDecoder } from '../../hooks/useStreamingDecoder'
 import type { AutoPreviewConfig } from '../../utils/runScriptPreviewConfig'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 
 interface RunScript {
   command: string
@@ -360,7 +361,7 @@ export const RunTerminal = forwardRef<RunTerminalHandle, RunTerminalProps>(({
       <div className={`${className} flex items-center justify-center`} style={{ backgroundColor: 'var(--color-bg-primary)' }}>
         <div className="text-center">
           <AnimatedText text="loading" />
-          <div className="text-xs text-slate-600 mt-2">{t.runTerminal.loadingRunScript}</div>
+          <div className="text-slate-600 mt-2" style={{ fontSize: theme.fontSize.caption }}>{t.runTerminal.loadingRunScript}</div>
         </div>
       </div>
     )
@@ -377,14 +378,14 @@ export const RunTerminal = forwardRef<RunTerminalHandle, RunTerminalProps>(({
           style={{ borderColor: 'var(--color-border-subtle)' }}
         >
           <div
-            className="text-lg font-medium mb-2"
-            style={{ color: 'var(--color-text-primary)' }}
+            className="font-medium mb-2"
+            style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.heading }}
           >
             {t.runTerminal.noRunConfiguration}
           </div>
           <div
-            className="text-sm mb-6"
-            style={{ color: 'var(--color-text-secondary)' }}
+            className="mb-6"
+            style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}
           >
             {t.runTerminal.noRunConfigurationDesc}
           </div>
@@ -414,7 +415,7 @@ export const RunTerminal = forwardRef<RunTerminalHandle, RunTerminalProps>(({
           borderColor: 'var(--color-border-default)',
         }}
       >
-        <div className="flex items-center gap-3 text-xs">
+        <div className="flex items-center gap-3" style={{ fontSize: theme.fontSize.caption }}>
           <span style={{ color: isRunning ? 'var(--color-accent-green)' : 'var(--color-text-muted)' }}>
             {isRunning ? '▶' : '■'}
           </span>
@@ -448,15 +449,15 @@ export const RunTerminal = forwardRef<RunTerminalHandle, RunTerminalProps>(({
         ) : (
           <div className="h-full flex items-center justify-center" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
             <div className="text-center">
-              <div className="text-slate-600 text-4xl mb-4">▶</div>
-              <div className="text-slate-500 text-sm">{t.runTerminal.pressToStart}</div>
+              <div className="text-slate-600 mb-4" style={{ fontSize: theme.fontSize.display }}>▶</div>
+              <div className="text-slate-500" style={{ fontSize: theme.fontSize.body }}>{t.runTerminal.pressToStart}</div>
             </div>
           </div>
         )}
       </div>
 
       {terminalCreated && !isRunning && (
-        <div className="border-t border-slate-800 px-4 py-1 text-[11px] text-slate-500 flex-shrink-0" style={{ backgroundColor: 'var(--color-bg-elevated)' }}>
+        <div className="border-t border-slate-800 px-4 py-1 text-slate-500 flex-shrink-0" style={{ backgroundColor: 'var(--color-bg-elevated)', fontSize: theme.fontSize.caption }}>
           [{t.runTerminal.processEnded}]
         </div>
       )}

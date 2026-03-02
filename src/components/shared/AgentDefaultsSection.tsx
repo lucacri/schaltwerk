@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import { AgentType } from '../../types/session'
 import { AgentEnvVar, displayNameForAgent } from './agentDefaults'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 
 interface Props {
     agentType: AgentType
@@ -36,9 +37,10 @@ export function AgentDefaultsSection({
         '--agent-advanced-btn-text': 'var(--color-text-secondary)',
         '--agent-advanced-btn-text-hover': 'var(--color-text-primary)',
         '--agent-advanced-btn-border': 'var(--color-border-subtle)',
+        fontSize: theme.fontSize.button,
     }) as CSSProperties, [])
 
-    const buttonClasses = 'inline-flex items-center justify-center h-8 px-3 rounded-md border text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-[color:var(--agent-advanced-btn-bg)] text-[color:var(--agent-advanced-btn-text)] border-[color:var(--agent-advanced-btn-border)] hover:bg-[color:var(--agent-advanced-btn-hover)] hover:text-[color:var(--agent-advanced-btn-text-hover)] focus:outline-none focus:ring-1 focus:ring-[color:var(--agent-advanced-btn-border)] focus:ring-offset-0'
+    const buttonClasses = 'inline-flex items-center justify-center h-8 px-3 rounded-md border font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-[color:var(--agent-advanced-btn-bg)] text-[color:var(--agent-advanced-btn-text)] border-[color:var(--agent-advanced-btn-border)] hover:bg-[color:var(--agent-advanced-btn-hover)] hover:text-[color:var(--agent-advanced-btn-text-hover)] focus:outline-none focus:ring-1 focus:ring-[color:var(--agent-advanced-btn-border)] focus:ring-offset-0'
 
     const summaryText = useMemo(() => {
         if (loading) {
@@ -103,8 +105,8 @@ export function AgentDefaultsSection({
         <div className="space-y-3" data-testid="agent-defaults-section">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <p className="text-sm text-slate-300">{t.agentDefaults.title}</p>
-                    <p className="text-xs text-slate-400 mt-1">
+                    <p className="text-slate-300" style={{ fontSize: theme.fontSize.body }}>{t.agentDefaults.title}</p>
+                    <p className="text-slate-400 mt-1" style={{ fontSize: theme.fontSize.caption }}>
                         {agentType === 'terminal'
                             ? t.agentDefaults.descriptionEnvOnly.replace('{agent}', agentDisplayName)
                             : t.agentDefaults.descriptionWithArgs.replace('{agent}', agentDisplayName)
@@ -127,18 +129,19 @@ export function AgentDefaultsSection({
                 <div className="space-y-3">
                     {agentType !== 'terminal' && (
                         <div>
-                            <label className="block text-sm text-slate-300 mb-1">{t.agentDefaults.defaultCustomArgs}</label>
+                            <label className="block text-slate-300 mb-1" style={{ fontSize: theme.fontSize.label }}>{t.agentDefaults.defaultCustomArgs}</label>
                             <textarea
                                 ref={cliArgsRef}
                                 data-testid="agent-cli-args-input"
                                 value={cliArgs}
                                 onChange={event => onCliArgsChange(event.target.value)}
-                                className="w-full bg-slate-800 text-slate-100 rounded px-3 py-2 border border-slate-700 font-mono text-sm"
+                                className="w-full bg-slate-800 text-slate-100 rounded px-3 py-2 border border-slate-700 font-mono"
+                                style={{ fontSize: theme.fontSize.input }}
                                 placeholder={t.agentDefaults.argsPlaceholder}
                                 rows={2}
                                 disabled={loading}
                             />
-                            <p className="text-xs text-slate-400 mt-1">
+                            <p className="text-slate-400 mt-1" style={{ fontSize: theme.fontSize.caption }}>
                                 {t.agentDefaults.argsHint.replace('{agent}', agentDisplayName)}
                             </p>
                         </div>
@@ -146,8 +149,8 @@ export function AgentDefaultsSection({
                     <div>
                         <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="min-w-0">
-                                <label className="block text-sm text-slate-300">{t.agentDefaults.envVars}</label>
-                                <p className="text-xs text-slate-400 mt-1" data-testid="env-summary">
+                                <label className="block text-slate-300" style={{ fontSize: theme.fontSize.label }}>{t.agentDefaults.envVars}</label>
+                                <p className="text-slate-400 mt-1" style={{ fontSize: theme.fontSize.caption }} data-testid="env-summary">
                                     {summaryText}
                                 </p>
                             </div>
@@ -188,9 +191,9 @@ export function AgentDefaultsSection({
                                     data-testid="env-vars-scroll"
                                 >
                                     {loading ? (
-                                        <div className="p-3 text-xs text-slate-400">{t.agentDefaults.loadingDefaults}</div>
+                                        <div className="p-3 text-slate-400" style={{ fontSize: theme.fontSize.caption }}>{t.agentDefaults.loadingDefaults}</div>
                                     ) : envVars.length === 0 ? (
-                                        <div className="p-3 text-xs text-slate-400">
+                                        <div className="p-3 text-slate-400" style={{ fontSize: theme.fontSize.caption }}>
                                             {t.agentDefaults.noEnvVarsConfigured}
                                         </div>
                                     ) : (
@@ -205,7 +208,8 @@ export function AgentDefaultsSection({
                                                     value={item.key}
                                                     onChange={event => onEnvVarChange(index, 'key', event.target.value)}
                                                     placeholder={t.agentDefaults.keyPlaceholder}
-                                                    className="col-span-4 bg-slate-800 text-slate-100 rounded px-2 py-1 border border-slate-700 text-xs"
+                                                    className="col-span-4 bg-slate-800 text-slate-100 rounded px-2 py-1 border border-slate-700"
+                                                    style={{ fontSize: theme.fontSize.input }}
                                                     disabled={loading}
                                                 />
                                                 <input
@@ -213,7 +217,8 @@ export function AgentDefaultsSection({
                                                     value={item.value}
                                                     onChange={event => onEnvVarChange(index, 'value', event.target.value)}
                                                     placeholder={t.agentDefaults.valuePlaceholder}
-                                                    className="col-span-7 bg-slate-800 text-slate-100 rounded px-2 py-1 border border-slate-700 text-xs"
+                                                    className="col-span-7 bg-slate-800 text-slate-100 rounded px-2 py-1 border border-slate-700"
+                                                    style={{ fontSize: theme.fontSize.input }}
                                                     disabled={loading}
                                                 />
                                                 <button
@@ -233,7 +238,7 @@ export function AgentDefaultsSection({
                                 </div>
                             </div>
                         )}
-                        <p className="text-xs text-slate-400 mt-1">
+                        <p className="text-slate-400 mt-1" style={{ fontSize: theme.fontSize.caption }}>
                             {agentType === 'terminal'
                                 ? t.agentDefaults.envVarsShellHint.replace('{agent}', agentDisplayName)
                                 : t.agentDefaults.envVarsProcessHint.replace('{agent}', agentDisplayName)

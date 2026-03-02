@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react'
+import { theme } from '../../common/theme'
 import { useTranslation } from '../../common/i18n'
 
 interface ConfirmModalProps {
@@ -73,7 +74,7 @@ export function ConfirmModal({
 
   if (!open) return null
 
-  const confirmBaseClasses = 'px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 group disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2'
+  const confirmBaseClasses = 'px-4 py-2 font-medium text-white rounded-md focus:outline-none focus:ring-2 group disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2'
   const confirmVariantClasses =
     variant === 'danger'
       ? 'bg-red-700 hover:bg-red-600 focus:ring-red-500'
@@ -90,26 +91,28 @@ export function ConfirmModal({
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold mb-4 text-slate-100">{title}</h2>
+        <h2 className="font-semibold mb-4 text-slate-100" style={{ fontSize: theme.fontSize.heading }}>{title}</h2>
         {body && <div className="mb-6">{body}</div>}
         <div className="flex gap-3 justify-end">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 group"
+            className="px-4 py-2 font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 group"
+            style={{ fontSize: theme.fontSize.button }}
             title={cancelTitle || t.confirmModal.cancelDefault}
           >
             {cancelText}
-            <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">{t.confirmModal.escKey}</span>
+            <span className="ml-1.5 opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>{t.confirmModal.escKey}</span>
           </button>
           <button
             ref={confirmButtonRef}
             onClick={handleConfirm}
             disabled={loading || confirmDisabled}
             className={`${confirmBaseClasses} ${confirmVariantClasses}`}
+            style={{ fontSize: theme.fontSize.button }}
             title={confirmTitle || t.confirmModal.confirmDefault}
           >
             <span>{confirmText}</span>
-            <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">{t.confirmModal.enterKey}</span>
+            <span className="ml-1.5 opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>{t.confirmModal.enterKey}</span>
           </button>
         </div>
       </div>

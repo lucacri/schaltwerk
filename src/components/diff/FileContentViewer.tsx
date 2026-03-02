@@ -43,7 +43,7 @@ const CodeContent = memo(function CodeContent({
 
   return (
     <div
-      className="h-full overflow-auto font-mono text-sm hljs"
+      className="h-full overflow-auto font-mono hljs"
       style={{
         backgroundColor: 'var(--color-bg-primary)',
         fontFamily: theme.fontFamily.mono,
@@ -185,7 +185,7 @@ export function FileContentViewer({
       return (
         <div className="h-full flex items-center justify-center">
           <div className="text-center" style={{ color: 'var(--color-text-muted)' }}>
-            <div className="text-sm">{t.fileContentViewer.loading}</div>
+            <div style={{ fontSize: theme.fontSize.body }}>{t.fileContentViewer.loading}</div>
           </div>
         </div>
       )
@@ -195,8 +195,8 @@ export function FileContentViewer({
       return (
         <div className="h-full flex items-center justify-center">
           <div className="text-center" style={{ color: 'var(--color-text-muted)' }}>
-            <VscWarning className="mx-auto mb-2 text-4xl" style={{ color: 'var(--color-accent-amber)' }} />
-            <div className="text-sm">{error}</div>
+            <VscWarning className="mx-auto mb-2" style={{ color: 'var(--color-accent-amber)', fontSize: theme.fontSize.display }} />
+            <div style={{ fontSize: theme.fontSize.body }}>{error}</div>
           </div>
         </div>
       )
@@ -206,9 +206,9 @@ export function FileContentViewer({
       return (
         <div className="h-full flex items-center justify-center">
           <div className="text-center" style={{ color: 'var(--color-text-muted)' }}>
-            <VscFileBinary className="mx-auto mb-2 text-4xl opacity-50" />
-            <div className="text-sm">{t.fileContentViewer.binaryFile}</div>
-            <div className="text-xs mt-1">{formatBytes(fileSize)}</div>
+            <VscFileBinary className="mx-auto mb-2 opacity-50" style={{ fontSize: theme.fontSize.display }} />
+            <div style={{ fontSize: theme.fontSize.body }}>{t.fileContentViewer.binaryFile}</div>
+            <div className="mt-1" style={{ fontSize: theme.fontSize.caption }}>{formatBytes(fileSize)}</div>
           </div>
         </div>
       )
@@ -233,8 +233,8 @@ export function FileContentViewer({
       >
         <button
           onClick={onBack}
-          className="group pl-2 pr-3 py-1 rounded text-xs font-medium flex items-center gap-2 transition-colors"
-          style={{ color: 'var(--color-text-muted)' }}
+          className="group pl-2 pr-3 py-1 rounded font-medium flex items-center gap-2 transition-colors"
+          style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}
           onMouseEnter={(e) => {
             e.currentTarget.style.color = 'var(--color-text-primary)'
             e.currentTarget.style.backgroundColor = 'var(--color-bg-elevated)'
@@ -249,7 +249,7 @@ export function FileContentViewer({
         </button>
 
         <div className="flex-1 mx-4 truncate text-center">
-          <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+          <span className="font-medium" style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.body }}>
             {fileName}
           </span>
         </div>

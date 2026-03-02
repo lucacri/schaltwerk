@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { theme } from '../../common/theme'
 import { ModelSelector } from '../inputs/ModelSelector'
 import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../../types/session'
 import { useTranslation } from '../../common/i18n'
@@ -96,7 +97,7 @@ export function CustomAgentModal({
 
                 <div className="p-4 space-y-4">
                     <div>
-                        <label className="block text-sm text-slate-300 mb-2">{t.customAgentModal.selectAgent}</label>
+                        <label className="block text-slate-300 mb-2" style={{ fontSize: theme.fontSize.label }}>{t.customAgentModal.selectAgent}</label>
                         <ModelSelector
                             value={agentType}
                             onChange={setAgentType}
@@ -106,7 +107,7 @@ export function CustomAgentModal({
                             onDropdownOpenChange={setIsModelSelectorOpen}
                             allowedAgents={ALLOWED_AGENTS}
                         />
-                        <p className="text-xs text-slate-400 mt-2">
+                        <p className="text-slate-400 mt-2" style={{ fontSize: theme.fontSize.caption }}>
                             {t.customAgentModal.helperText}
                         </p>
                     </div>
@@ -120,7 +121,7 @@ export function CustomAgentModal({
                         title={t.customAgentModal.cancelEsc}
                     >
                         {t.customAgentModal.cancel}
-                        <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">Esc</span>
+                        <span className="ml-1.5 opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>Esc</span>
                     </button>
                     <button
                         onClick={() => { void handleSelect() }}
@@ -145,7 +146,7 @@ export function CustomAgentModal({
                         )}
                         <span>{t.customAgentModal.addTab}</span>
                         {!isSelecting && (
-                            <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">↵</span>
+                            <span className="ml-1.5 opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>↵</span>
                         )}
                     </button>
                 </div>

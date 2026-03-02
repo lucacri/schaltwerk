@@ -1249,7 +1249,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 title={t.newSessionModal.cancelEsc}
             >
                 {t.newSessionModal.cancel}
-                <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">{t.newSessionModal.esc}</span>
+                <span className="ml-1.5 opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>{t.newSessionModal.esc}</span>
             </button>
             <button
                 onClick={() => { void handleCreate() }}
@@ -1269,7 +1269,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                     />
                 )}
                 <span>{createAsDraft ? t.newSessionModal.createSpec : t.newSessionModal.startAgent}</span>
-                {!creating && <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">{t.newSessionModal.cmdEnter}</span>}
+                {!creating && <span className="ml-1.5 opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>{t.newSessionModal.cmdEnter}</span>}
             </button>
         </>
     )
@@ -1290,7 +1290,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
 	            <div className="flex flex-col h-full p-4 gap-4">
 	                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 	                    <div>
-	                        <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>{t.newSessionModal.agentName}</label>
+	                        <label className="block mb-1" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>{t.newSessionModal.agentName}</label>
 	                        <input
 	                            ref={nameInputRef}
 	                            value={name}
@@ -1314,11 +1314,11 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                 <svg className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                <p className="text-xs text-red-400">{nameError}</p>
+                                <p className="text-red-400" style={{ fontSize: theme.fontSize.caption }}>{nameError}</p>
                             </div>
                         )}
                         {originalSpecName && (
-                            <div className="flex items-center justify-between mt-2 px-2 py-1 rounded text-xs" style={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)' }}>
+                            <div className="flex items-center justify-between mt-2 px-2 py-1 rounded" style={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)', fontSize: theme.fontSize.caption }}>
                                 <div className="flex items-center gap-2">
                                     <svg className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--color-accent-blue)' }} fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v1.5h16V5a2 2 0 00-2-2H4zm14 6H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM2 7h16v1H2V7z" clipRule="evenodd" />
@@ -1333,8 +1333,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                             setWasEdited(true)
                                             wasEditedRef.current = true
                                         }}
-                                        className="ml-2 px-2 py-0.5 rounded text-xs hover:opacity-80"
-                                        style={{ backgroundColor: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)' }}
+                                        className="ml-2 px-2 py-0.5 rounded hover:opacity-80"
+                                        style={{ backgroundColor: 'var(--color-accent-blue-bg)', color: 'var(--color-accent-blue)', fontSize: theme.fontSize.caption }}
                                         title={t.newSessionModal.resetToOriginal}
                                     >
                                         {t.newSessionModal.reset}
@@ -1345,7 +1345,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
 	                    </div>
 	
 	                    <div>
-	                        <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>{t.newSessionModal.epic}</label>
+	                        <label className="block mb-1" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>{t.newSessionModal.epic}</label>
 	                        <EpicSelect
 	                            value={selectedEpic}
 	                            onChange={setEpicId}
@@ -1368,23 +1368,24 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                             }}
                             style={{ color: 'var(--color-accent-cyan)' }}
                         />
-                        <label htmlFor="createAsDraft" className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.newSessionModal.createAsSpec}</label>
+                        <label htmlFor="createAsDraft" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>{t.newSessionModal.createAsSpec}</label>
                     </div>
 
                     <div className="flex flex-col flex-1 min-h-0">
                         <div className="flex items-center justify-between mb-2">
-                            <label className="block text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                            <label className="block" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>
                                 {createAsDraft ? t.newSessionModal.specContent : t.newSessionModal.initialPrompt}
                             </label>
                             <button
                                 type="button"
                                 data-testid="start-from-button"
                                 onClick={() => setUnifiedSearchOpen(true)}
-                                className="px-3 py-1 text-xs rounded transition-colors hover:opacity-90 flex items-center gap-1.5"
+                                className="px-3 py-1 rounded transition-colors hover:opacity-90 flex items-center gap-1.5"
                                 style={{
                                     backgroundColor: 'var(--color-bg-elevated)',
                                     color: 'var(--color-text-primary)',
                                     border: '1px solid var(--color-border-subtle)',
+                                    fontSize: theme.fontSize.caption,
                                 }}
                             >
                                 {t.newSessionModal.startFrom}
@@ -1413,10 +1414,10 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                 data-testid="github-selection-card"
                             >
                                 <div className="flex items-center gap-2 min-w-0">
-                                    <span className="text-xs font-semibold flex-shrink-0" style={{ color: 'var(--color-accent-blue)' }}>
+                                    <span className="font-semibold flex-shrink-0" style={{ color: 'var(--color-accent-blue)', fontSize: theme.fontSize.caption }}>
                                         {t.newSessionModal.unifiedSearch.selectedIssue}
                                     </span>
-                                    <span className="text-sm truncate" style={{ color: 'var(--color-text-primary)' }}>
+                                    <span className="truncate" style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.body }}>
                                         #{githubIssueSelection.details.number} {githubIssueSelection.details.title}
                                     </span>
                                 </div>
@@ -1424,8 +1425,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                     <button
                                         type="button"
                                         onClick={() => setUnifiedSearchOpen(true)}
-                                        className="px-2 py-0.5 text-xs rounded"
-                                        style={{ color: 'var(--color-accent-blue)', backgroundColor: 'transparent' }}
+                                        className="px-2 py-0.5 rounded"
+                                        style={{ color: 'var(--color-accent-blue)', backgroundColor: 'transparent', fontSize: theme.fontSize.caption }}
                                     >
                                         {t.newSessionModal.unifiedSearch.change}
                                     </button>
@@ -1439,8 +1440,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                             setTaskContent(manualPromptDraft)
                                             onPromptChange?.(manualPromptDraft)
                                         }}
-                                        className="px-2 py-0.5 text-xs rounded"
-                                        style={{ color: 'var(--color-text-secondary)', backgroundColor: 'transparent' }}
+                                        className="px-2 py-0.5 rounded"
+                                        style={{ color: 'var(--color-text-secondary)', backgroundColor: 'transparent', fontSize: theme.fontSize.caption }}
                                     >
                                         {t.newSessionModal.unifiedSearch.clear}
                                     </button>
@@ -1458,10 +1459,10 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                 data-testid="github-selection-card"
                             >
                                 <div className="flex items-center gap-2 min-w-0">
-                                    <span className="text-xs font-semibold flex-shrink-0" style={{ color: 'var(--color-accent-blue)' }}>
+                                    <span className="font-semibold flex-shrink-0" style={{ color: 'var(--color-accent-blue)', fontSize: theme.fontSize.caption }}>
                                         {t.newSessionModal.unifiedSearch.selectedPr}
                                     </span>
-                                    <span className="text-sm truncate" style={{ color: 'var(--color-text-primary)' }}>
+                                    <span className="truncate" style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.body }}>
                                         #{githubPrSelection.details.number} {githubPrSelection.details.title}
                                     </span>
                                 </div>
@@ -1469,8 +1470,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                     <button
                                         type="button"
                                         onClick={() => setUnifiedSearchOpen(true)}
-                                        className="px-2 py-0.5 text-xs rounded"
-                                        style={{ color: 'var(--color-accent-blue)', backgroundColor: 'transparent' }}
+                                        className="px-2 py-0.5 rounded"
+                                        style={{ color: 'var(--color-accent-blue)', backgroundColor: 'transparent', fontSize: theme.fontSize.caption }}
                                     >
                                         {t.newSessionModal.unifiedSearch.change}
                                     </button>
@@ -1484,8 +1485,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                             setTaskContent(manualPromptDraft)
                                             onPromptChange?.(manualPromptDraft)
                                         }}
-                                        className="px-2 py-0.5 text-xs rounded"
-                                        style={{ color: 'var(--color-text-secondary)', backgroundColor: 'transparent' }}
+                                        className="px-2 py-0.5 rounded"
+                                        style={{ color: 'var(--color-text-secondary)', backgroundColor: 'transparent', fontSize: theme.fontSize.caption }}
                                     >
                                         {t.newSessionModal.unifiedSearch.clear}
                                     </button>
@@ -1519,7 +1520,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                 />
                             </div>
                         </div>
-                        <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                        <p className="mt-1" style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                             {promptSource === 'github_issue'
                                 ? t.newSessionModal.issueSelectHint
                                 : promptSource === 'github_pull_request'
@@ -1601,9 +1602,9 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                             <svg className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <div className="text-sm text-amber-200">
+                            <div className="text-amber-200" style={{ fontSize: theme.fontSize.body }}>
                                 <p className="font-medium mb-1">{t.newSessionModal.newRepositoryDetected}</p>
-                                <p className="text-xs text-amber-300">
+                                <p className="text-amber-300" style={{ fontSize: theme.fontSize.caption }}>
                                     {t.newSessionModal.newRepositoryHint}
                                 </p>
                             </div>
@@ -1660,9 +1661,9 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                     <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    <div className="text-sm text-blue-200">
+                                    <div className="text-blue-200" style={{ fontSize: theme.fontSize.body }}>
                                         <p className="font-medium mb-1">{t.newSessionModal.terminalOnlyMode}</p>
-                                        <p className="text-xs text-blue-300">
+                                        <p className="text-blue-300" style={{ fontSize: theme.fontSize.caption }}>
                                             {t.newSessionModal.terminalOnlyHint}
                                         </p>
                                     </div>

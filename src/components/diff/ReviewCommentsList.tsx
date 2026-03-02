@@ -1,6 +1,7 @@
 import { VscTrash } from 'react-icons/vsc'
 import type { CommentDisplay } from '../../hooks/useReviewComments'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 
 interface ReviewCommentsListProps {
   comments: CommentDisplay[]
@@ -18,13 +19,13 @@ export function ReviewCommentsList({ comments, onDeleteComment }: ReviewComments
         >
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <div className="text-xs text-slate-300 font-mono truncate">
+              <div className="text-slate-300 font-mono truncate" style={{ fontSize: theme.fontSize.code }}>
                 {comment.fileName}
               </div>
-              <div className="text-[10px] text-slate-500">
+              <div className="text-slate-500" style={{ fontSize: theme.fontSize.caption }}>
                 {comment.sideText ? `${comment.lineText} • ${comment.sideText}` : comment.lineText}
               </div>
-              <div className="text-xs text-slate-400 mt-0.5">
+              <div className="text-slate-400 mt-0.5" style={{ fontSize: theme.fontSize.caption }}>
                 "{comment.commentPreview}"
               </div>
             </div>
@@ -34,7 +35,7 @@ export function ReviewCommentsList({ comments, onDeleteComment }: ReviewComments
               title={t.reviewComments.deleteComment}
               aria-label={t.reviewComments.deleteCommentOn.replace('{file}', comment.fileName)}
             >
-              <VscTrash className="text-xs" />
+              <VscTrash style={{ fontSize: theme.fontSize.caption }} />
             </button>
           </div>
         </div>

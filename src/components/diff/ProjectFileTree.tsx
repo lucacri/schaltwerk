@@ -3,6 +3,7 @@ import { TauriCommands } from '../../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
 import { VscFile, VscFolder, VscFolderOpened, VscFileCode, VscSymbolFile, VscFileBinary, VscGoToFile } from 'react-icons/vsc'
 import clsx from 'clsx'
+import { theme } from '../../common/theme'
 import { isBinaryFileByExtension } from '../../utils/binaryDetection'
 import { logger } from '../../utils/logger'
 import { useAtomValue } from 'jotai'
@@ -120,10 +121,10 @@ export function ProjectFileTree({ onFileSelect, sessionNameOverride, isCommander
               <VscFolder size={14} style={{ color: 'var(--color-text-muted)' }} />
             )}
             <div className="flex-1 flex items-center gap-2 min-w-0">
-              <span className="text-sm font-medium truncate" style={{ color: 'var(--color-text-secondary)' }}>
+              <span className="font-medium truncate" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
                 {node.name}
               </span>
-              <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+              <span className="flex-shrink-0" style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                 ({node.fileCount})
               </span>
             </div>
@@ -153,7 +154,7 @@ export function ProjectFileTree({ onFileSelect, sessionNameOverride, isCommander
         data-file-path={node.path}
       >
         {getFileIcon(node.path)}
-        <span className="flex-1 text-sm truncate" style={{ color: 'var(--color-text-primary)' }}>
+        <span className="flex-1 truncate" style={{ color: 'var(--color-text-primary)', fontSize: theme.fontSize.body }}>
           {node.name}
         </span>
         <button
@@ -189,7 +190,7 @@ export function ProjectFileTree({ onFileSelect, sessionNameOverride, isCommander
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center" style={{ color: 'var(--color-text-muted)' }}>
-          <div className="text-sm">Loading files...</div>
+          <div style={{ fontSize: theme.fontSize.body }}>Loading files...</div>
         </div>
       </div>
     )
@@ -199,9 +200,9 @@ export function ProjectFileTree({ onFileSelect, sessionNameOverride, isCommander
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center" style={{ color: 'var(--color-text-muted)' }}>
-          <VscFile className="mx-auto mb-2 text-4xl opacity-50" />
-          <div className="text-sm">No files found</div>
-          <div className="text-xs mt-1">This project appears to be empty</div>
+          <VscFile className="mx-auto mb-2 opacity-50" style={{ fontSize: theme.fontSize.display }} />
+          <div style={{ fontSize: theme.fontSize.body }}>No files found</div>
+          <div className="mt-1" style={{ fontSize: theme.fontSize.caption }}>This project appears to be empty</div>
         </div>
       </div>
     )
@@ -211,10 +212,10 @@ export function ProjectFileTree({ onFileSelect, sessionNameOverride, isCommander
     <div className="h-full flex flex-col overflow-hidden">
       <div className="px-3 py-2 border-b border-slate-800">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+          <span className="font-medium" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
             Project Files
           </span>
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          <span style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
             {files.length} files
           </span>
         </div>

@@ -1,6 +1,7 @@
 import { forwardRef } from 'react'
 import type { KeyboardEvent } from 'react'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 
 type Props = {
   searchTerm: string
@@ -40,7 +41,8 @@ export const TerminalSearchPanel = forwardRef<HTMLDivElement, Props>(
           onChange={(event) => onSearchTermChange(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t.terminalSearch.placeholder}
-          className="bg-transparent text-sm text-slate-200 outline-none w-40 placeholder:text-slate-500"
+          className="bg-transparent text-slate-200 outline-none w-40 placeholder:text-slate-500"
+          style={{ fontSize: theme.fontSize.input }}
           autoFocus
         />
         <button

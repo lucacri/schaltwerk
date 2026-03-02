@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, ReactElement } from 'react'
+import { theme } from '../../common/theme'
 import { TauriCommands } from '../../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
@@ -1108,7 +1109,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                         <div className="text-body text-text-tertiary mb-3">
                             {t.settings.projectGeneral.mergeDefaultsDesc}
                         </div>
-                        <label className="flex items-center gap-3 text-sm text-text-primary">
+                        <label className="flex items-center gap-3 text-text-primary" style={{ fontSize: theme.fontSize.label }}>
                             <input
                                 type="checkbox"
                                 checked={mergePreferences.autoCancelAfterMerge}
@@ -2094,7 +2095,7 @@ fi`}
                             <div className="text-body text-text-tertiary mb-3">
                                 {t.settings.appearance.devDiagnosticsDesc}
                             </div>
-                            <label className="flex items-center gap-3 text-sm text-text-primary">
+                            <label className="flex items-center gap-3 text-text-primary" style={{ fontSize: theme.fontSize.label }}>
                                 <input
                                     type="checkbox"
                                     checked={devErrorToastsEnabled}

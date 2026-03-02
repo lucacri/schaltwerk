@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import { VscDiff, VscGitCommit, VscInfo, VscNotebook, VscPreview } from 'react-icons/vsc'
 import type { TabKey } from './RightPanelTabs.types'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 import './RightPanelTabsHeader.css'
 
 interface RightPanelTabsHeaderProps {
@@ -17,12 +18,12 @@ interface RightPanelTabsHeaderProps {
   onSelectTab: (tab: TabKey) => void
 }
 
-const baseTabIconClass = 'w-4 h-4 shrink-0 text-base leading-none'
+const baseTabIconClass = 'w-4 h-4 shrink-0 leading-none'
 const specTabIconClass = baseTabIconClass
 
 const buildButtonClass = (active: boolean, localFocus: boolean) => (
   clsx(
-    'right-panel-tab h-full flex-1 px-3 text-xs font-medium flex items-center justify-center gap-1.5',
+    'right-panel-tab h-full flex-1 px-3 font-medium flex items-center justify-center gap-1.5',
     active && 'right-panel-tab--active',
     localFocus && 'right-panel-tab--focus'
   )
@@ -116,6 +117,7 @@ export const RightPanelTabsHeader = ({
           key={key}
           onClick={() => onSelectTab(key)}
           className={buildButtonClass(activeTab === key, localFocus)}
+          style={{ fontSize: theme.fontSize.caption }}
           data-active={activeTab === key || undefined}
           title={title}
           {...dataAttrs}

@@ -105,12 +105,7 @@ export default [
     },
   },
   {
-    files: [
-      'src/components/sidebar/SessionCard.tsx',
-      'src/components/specs/**/*.{ts,tsx}',
-      'src/components/terminal/UnifiedTab.tsx',
-      'src/components/terminal/TerminalTabs.tsx',
-    ],
+    files: ['src/**/*.{ts,tsx}'],
     rules: {
       'local/no-tailwind-font-sizes': 'error',
     },

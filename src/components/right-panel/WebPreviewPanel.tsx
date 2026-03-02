@@ -25,6 +25,7 @@ import { emitUiEvent, UiEvent } from '../../common/uiEvents'
 import { logger } from '../../utils/logger'
 import { useModal } from '../../contexts/ModalContext'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 
 interface WebPreviewPanelProps {
   previewKey: string
@@ -283,18 +284,18 @@ export const WebPreviewPanel = ({ previewKey, isResizing = false }: WebPreviewPa
       <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-3">
         <div className="flex items-center gap-1">
           <button type="button" aria-label={t.webPreview.back} className={buttonClass(!canGoBack)} onClick={() => handleNavigate(-1)} disabled={!canGoBack}>
-            <VscChevronLeft className="text-lg" />
+            <VscChevronLeft style={{ fontSize: theme.fontSize.heading }} />
           </button>
           <button type="button" aria-label={t.webPreview.forward} className={buttonClass(!canGoForward)} onClick={() => handleNavigate(1)} disabled={!canGoForward}>
-            <VscChevronRight className="text-lg" />
+            <VscChevronRight style={{ fontSize: theme.fontSize.heading }} />
           </button>
         </div>
         <div className="flex items-center gap-1">
           <button type="button" aria-label={t.webPreview.hardReload} className={buttonClass(!hasUrl)} onClick={() => handleRefresh(true)} disabled={!hasUrl} title={t.webPreview.hardReloadTitle}>
-            <VscRefresh className="text-lg" />
+            <VscRefresh style={{ fontSize: theme.fontSize.heading }} />
           </button>
           <button type="button" aria-label={t.webPreview.openInBrowser} className={buttonClass(!hasUrl)} onClick={() => { void handleOpenInBrowser() }} disabled={!hasUrl} title={t.webPreview.openInBrowserTitle}>
-            <VscLinkExternal className="text-lg" />
+            <VscLinkExternal style={{ fontSize: theme.fontSize.heading }} />
           </button>
           <button
             type="button"
@@ -307,7 +308,7 @@ export const WebPreviewPanel = ({ previewKey, isResizing = false }: WebPreviewPa
             disabled={!hasUrl}
             title={t.webPreview.selectElementTitle}
           >
-            <VscInspect className="text-lg" />
+            <VscInspect style={{ fontSize: theme.fontSize.heading }} />
           </button>
         </div>
         <form
@@ -322,21 +323,23 @@ export const WebPreviewPanel = ({ previewKey, isResizing = false }: WebPreviewPa
           </label>
           <input
             id="preview-url-input"
-            className="flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            style={{ fontSize: theme.fontSize.input }}
             value={inputValue}
             onChange={handleChange}
             placeholder={t.webPreview.urlPlaceholder}
             autoComplete="off"
           />
           <button type="submit" className="h-8 w-8 rounded bg-cyan-600 flex items-center justify-center text-slate-900 hover:bg-cyan-500 disabled:opacity-40" disabled={!inputValue.trim()} aria-label={t.webPreview.navigate}>
-            <VscArrowRight className="text-lg" />
+            <VscArrowRight style={{ fontSize: theme.fontSize.heading }} />
           </button>
         </form>
         <div className="flex items-center gap-0.5 border-l border-slate-700 pl-2">
           <button
             type="button"
             aria-label={t.webPreview.zoomOut}
-            className="h-6 w-6 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent flex items-center justify-center text-xs"
+            className="h-6 w-6 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent flex items-center justify-center"
+            style={{ fontSize: theme.fontSize.caption }}
             onClick={() => handleZoomDelta(-PREVIEW_ZOOM_STEP)}
             disabled={!canZoomOut}
           >
@@ -345,7 +348,8 @@ export const WebPreviewPanel = ({ previewKey, isResizing = false }: WebPreviewPa
           <button
             type="button"
             aria-label={t.webPreview.resetZoom}
-            className="px-1 text-xs text-slate-400 hover:text-cyan-300 rounded min-w-[2.5rem] text-center"
+            className="px-1 text-slate-400 hover:text-cyan-300 rounded min-w-[2.5rem] text-center"
+            style={{ fontSize: theme.fontSize.caption }}
             onClick={handleZoomReset}
           >
             {Math.round(zoom * 100)}%
@@ -353,7 +357,8 @@ export const WebPreviewPanel = ({ previewKey, isResizing = false }: WebPreviewPa
           <button
             type="button"
             aria-label={t.webPreview.zoomIn}
-            className="h-6 w-6 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent flex items-center justify-center text-xs"
+            className="h-6 w-6 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 disabled:opacity-40 disabled:hover:bg-transparent flex items-center justify-center"
+            style={{ fontSize: theme.fontSize.caption }}
             onClick={() => handleZoomDelta(PREVIEW_ZOOM_STEP)}
             disabled={!canZoomIn}
           >
@@ -362,25 +367,25 @@ export const WebPreviewPanel = ({ previewKey, isResizing = false }: WebPreviewPa
         </div>
       </div>
       {error && (
-        <div className="px-4 py-2 text-xs text-red-400 border-b border-slate-800" role="status" aria-live="polite">
+        <div className="px-4 py-2 text-red-400 border-b border-slate-800" style={{ fontSize: theme.fontSize.caption }} role="status" aria-live="polite">
           {error}
         </div>
       )}
       <div className="flex-1 bg-slate-950 text-slate-400 overflow-hidden">
         {modalOpen ? (
-          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-slate-400">{t.webPreview.pausedDialog}</div>
+          <div className="flex h-full items-center justify-center px-6 text-center text-slate-400" style={{ fontSize: theme.fontSize.body }}>{t.webPreview.pausedDialog}</div>
         ) : isResizing ? (
-          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-slate-400">{t.webPreview.pausedResizing}</div>
+          <div className="flex h-full items-center justify-center px-6 text-center text-slate-400" style={{ fontSize: theme.fontSize.body }}>{t.webPreview.pausedResizing}</div>
         ) : hasUrl ? (
           <div className="h-full w-full overflow-hidden" data-preview-zoom={zoom.toFixed(2)}>
             <div ref={setHostElement} className="h-full w-full overflow-hidden" />
           </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-            <VscGlobe className="text-4xl text-slate-600" />
+            <VscGlobe className="text-slate-600" style={{ fontSize: theme.fontSize.display }} />
             <div>
-              <p className="text-base font-semibold text-slate-200">{t.webPreview.browserTitle}</p>
-              <p className="text-sm text-slate-500">{t.webPreview.browserHint}</p>
+              <p className="font-semibold text-slate-200" style={{ fontSize: theme.fontSize.bodyLarge }}>{t.webPreview.browserTitle}</p>
+              <p className="text-slate-500" style={{ fontSize: theme.fontSize.body }}>{t.webPreview.browserHint}</p>
             </div>
           </div>
         )}

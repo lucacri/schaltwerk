@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
+import { theme } from '../../common/theme';
 
 interface IconButtonProps {
   icon: React.ReactNode;
@@ -128,15 +129,14 @@ export function IconButton({
         className={clsx(
           'inline-flex items-center justify-center',
           'px-1.5 py-1 rounded border',
-          'transition-colors duration-150', // Smooth color transitions only
-          'text-[12px]', // Medium text size for better visibility
-          'bg-[var(--icon-button-bg)] text-[var(--icon-button-text)] border-[var(--icon-button-border)]',
+          'transition-colors duration-150',
+          'bg-[var(--icon-button-bg)] border-[var(--icon-button-border)]',
           !disabled && 'hover:bg-[var(--icon-button-hover-bg)] hover:border-[var(--icon-button-hover-border)]',
           disabled && 'opacity-50 cursor-not-allowed',
           !disabled && 'cursor-pointer',
           className
         )}
-        style={buttonStyle}
+        style={{ ...buttonStyle, fontSize: theme.fontSize.caption, color: 'var(--icon-button-text)' }}
         title={tooltip ? undefined : ariaLabel}
       >
         <span className="w-4 h-4 flex items-center justify-center">
@@ -150,7 +150,7 @@ export function IconButton({
         createPortal(
           <div
             role="tooltip"
-            className="fixed z-50 px-2 py-1 text-xs rounded shadow-lg pointer-events-none animate-fadeIn"
+            className="fixed z-50 px-2 py-1 rounded shadow-lg pointer-events-none animate-fadeIn"
             style={{
               top: `${tooltipPosition.top}px`,
               left: `${tooltipPosition.left}px`,
@@ -159,6 +159,7 @@ export function IconButton({
               color: 'var(--color-text-primary)',
               border: '1px solid var(--color-border-subtle)',
               animation: 'fadeIn 150ms ease-out',
+              fontSize: theme.fontSize.caption,
             }}
           >
             {tooltip}

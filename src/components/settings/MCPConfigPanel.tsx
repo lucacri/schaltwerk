@@ -4,6 +4,7 @@ import { AnimatedText } from '../common/AnimatedText'
 import { TauriCommands } from '../../common/tauriCommands'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n/useTranslation'
+import { theme } from '../../common/theme'
 
 interface MCPStatus {
   mcp_server_path: string
@@ -43,11 +44,12 @@ function NodeRequiredNotice({ agent, t }: { agent: Props['agent']; t: ReturnType
   const agentLabel = getAgentDisplayName(agent)
   return (
     <div
-      className="p-3 border rounded text-xs space-y-2"
+      className="p-3 border rounded space-y-2"
       style={{
         backgroundColor: 'var(--color-accent-amber-bg)',
         borderColor: 'var(--color-accent-amber-border)',
         color: 'var(--color-text-primary)',
+        fontSize: theme.fontSize.caption,
       }}
     >
       <div className="font-medium" style={{ color: 'var(--color-accent-amber-light)' }}>
@@ -159,7 +161,7 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
     <div className="space-y-4">
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-text-primary">{t.settings.mcp.title}</h3>
+          <h3 className="font-medium text-text-primary" style={{ fontSize: theme.fontSize.body }}>{t.settings.mcp.title}</h3>
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -175,12 +177,12 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                 color: 'var(--color-accent-blue-dark)',
               }}
             />
-             <span className="text-xs text-text-tertiary">
+             <span className="text-text-tertiary" style={{ fontSize: theme.fontSize.label }}>
                {requiresGlobalConfig ? t.settings.mcp.enableMcpGlobal : t.settings.mcp.enableMcp}
              </span>
           </label>
         </div>
-         <p className="text-xs text-text-tertiary">
+         <p className="text-text-tertiary" style={{ fontSize: theme.fontSize.caption }}>
            {agent === 'claude'
              ? t.settings.mcp.claudeDesc.replace('{agent}', agentLabel)
              : agent === 'codex'
@@ -194,7 +196,7 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
       </div>
 
        {!mcpEnabled && (
-         <div className="p-3 bg-bg-tertiary/30 border border-border-subtle rounded text-text-tertiary text-xs">
+         <div className="p-3 bg-bg-tertiary/30 border border-border-subtle rounded text-text-tertiary" style={{ fontSize: theme.fontSize.caption }}>
            {t.settings.mcp.enableMcpHint.replace('{agent}', agentLabel)}
          </div>
        )}
@@ -208,11 +210,12 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
           )}
 
           {error && (
-            <div className="p-3 rounded text-xs"
+            <div className="p-3 rounded"
                  style={{
                    backgroundColor: 'var(--color-accent-red-bg)',
                    border: '1px solid var(--color-accent-red-border)',
                    color: 'var(--color-accent-red-light)',
+                   fontSize: theme.fontSize.caption,
                  }}>
               {error}
             </div>
@@ -220,20 +223,22 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
 
           {success && (
             <div className="space-y-3">
-              <div className="p-3 rounded text-xs"
+              <div className="p-3 rounded"
                    style={{
                      backgroundColor: 'var(--color-accent-green-bg)',
                      border: '1px solid var(--color-accent-green-border)',
                      color: 'var(--color-accent-green-light)',
+                     fontSize: theme.fontSize.caption,
                    }}>
                 {success}
               </div>
               
-              <div className="p-3 rounded text-xs"
+              <div className="p-3 rounded"
                    style={{
                      backgroundColor: 'var(--color-accent-blue-bg)',
                      borderColor: 'var(--color-accent-blue-border)',
                      color: 'var(--color-accent-blue)',
+                     fontSize: theme.fontSize.caption,
                    }}>
                 <div className="flex items-start gap-2">
                   <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -256,29 +261,29 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
 
           {status && (
             <>
-              <div className="space-y-2 p-3 rounded border" style={{ backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-border-subtle)' }}>
-                 <div className="flex items-center justify-between text-xs">
+              <div className="space-y-2 p-3 rounded border" style={{ backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-border-subtle)', fontSize: theme.fontSize.label }}>
+                 <div className="flex items-center justify-between">
                    <span className="text-text-tertiary">{t.settings.mcp.cliLabel.replace('{agent}', agentLabel)}</span>
                    <span style={{ color: status.cli_available ? 'var(--color-accent-green-light)' : 'var(--color-accent-amber-light)' }}>
                      {status.cli_available ? t.settings.mcp.available : t.settings.mcp.notFound}
                    </span>
                  </div>
 
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between">
                   <span className="text-text-tertiary">{t.settings.mcp.serverLabel}</span>
                   <span className="text-text-secondary">
                     {status.is_embedded ? t.settings.mcp.embedded : t.settings.mcp.development}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between">
                   <span className="text-text-tertiary">{t.settings.mcp.nodeRuntime}</span>
                   <span style={{ color: nodeAvailable ? 'var(--color-accent-green-light)' : 'var(--color-accent-amber-light)' }}>
                     {nodeAvailable ? t.settings.mcp.available : t.settings.mcp.notFound}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between">
                   <span className="text-text-tertiary">{t.settings.mcp.configuration}</span>
                   <span style={{ color: status.is_configured ? 'var(--color-accent-green-light)' : 'var(--color-accent-amber-light)' }}>
                     {status.is_configured ? t.settings.mcp.configured : t.settings.mcp.notConfigured}
@@ -287,8 +292,8 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
 
                 {status.is_configured && (
                   <div className="pt-2 border-t border-border-subtle">
-                    <div className="text-xs text-text-muted mb-1">{t.settings.mcp.serverLocation}</div>
-                    <div className="text-xs text-text-secondary font-mono break-all">
+                    <div className="text-text-muted mb-1">{t.settings.mcp.serverLocation}</div>
+                    <div className="text-text-secondary font-mono break-all">
                       {status.mcp_server_path}
                     </div>
                   </div>
@@ -301,7 +306,8 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                     <button
                       onClick={() => { void configureMCP() }}
                        disabled={loading}
-                       className="settings-btn-success px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm"
+                       className="settings-btn-success px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                     style={{ fontSize: theme.fontSize.button }}
                      >
                        {requiresGlobalConfig ? t.settings.mcp.reconfigureMcpGlobal : t.settings.mcp.reconfigureMcp}
                      </button>
@@ -309,7 +315,8 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                     <button
                       onClick={() => { void configureMCP() }}
                        disabled={loading}
-                         className="settings-btn-success px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm"
+                         className="settings-btn-success px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                     style={{ fontSize: theme.fontSize.button }}
                      >
                        {agent === 'codex' || agent === 'amp' || agent === 'droid' ? t.settings.mcp.enableMcpGlobalBtn : t.settings.mcp.configureMcpProject}
                      </button>
@@ -321,12 +328,14 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                            href="https://claude.ai/download"
                            target="_blank"
                            rel="noopener noreferrer"
-                           className="settings-btn-success px-3 py-1 rounded text-sm inline-block"
+                           className="settings-btn-success px-3 py-1 rounded inline-block"
+                           style={{ fontSize: theme.fontSize.button }}
                         >
                          {t.settings.mcp.installClaudeFirst}
                        </a>
                      ) : agent === 'codex' ? (
-                       <div className="px-3 py-1 bg-bg-tertiary border border-border-subtle rounded text-sm text-text-secondary inline-block">
+                       <div className="px-3 py-1 bg-bg-tertiary border border-border-subtle rounded text-text-secondary inline-block"
+                         style={{ fontSize: theme.fontSize.button }}>
                          {t.settings.mcp.installCodexFirst}
                        </div>
                      ) : agent === 'opencode' ? (
@@ -334,16 +343,19 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                           href="https://opencode.ai"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="settings-btn px-3 py-1 rounded text-sm inline-block"
+                          className="settings-btn px-3 py-1 rounded inline-block"
+                          style={{ fontSize: theme.fontSize.button }}
                        >
                          {t.settings.mcp.installOpencodeFirst}
                        </a>
                      ) : agent === 'amp' ? (
-                       <div className="px-3 py-1 bg-bg-tertiary border border-border-subtle rounded text-sm text-text-secondary inline-block">
+                       <div className="px-3 py-1 bg-bg-tertiary border border-border-subtle rounded text-text-secondary inline-block"
+                         style={{ fontSize: theme.fontSize.button }}>
                          {t.settings.mcp.installAmpFirst}
                        </div>
                      ) : (
-                       <div className="px-3 py-1 bg-bg-tertiary border border-border-subtle rounded text-sm text-text-secondary inline-block">
+                       <div className="px-3 py-1 bg-bg-tertiary border border-border-subtle rounded text-text-secondary inline-block"
+                         style={{ fontSize: theme.fontSize.button }}>
                          {t.settings.mcp.installDroidFirst}
                        </div>
                      )}
@@ -354,7 +366,8 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                   <button
                     onClick={() => { void removeMCP() }}
                     disabled={loading}
-                    className="settings-btn px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm"
+                    className="settings-btn px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+                     style={{ fontSize: theme.fontSize.button }}
                   >
                     {t.settings.common.remove}
                   </button>
@@ -362,7 +375,8 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                 
                 <button
                   onClick={() => setShowManualSetup(!showManualSetup)}
-                  className="settings-btn px-3 py-1 rounded text-sm"
+                  className="settings-btn px-3 py-1 rounded"
+                  style={{ fontSize: theme.fontSize.button }}
                 >
                   {showManualSetup ? t.settings.mcp.hide : t.settings.mcp.manualSetup}
                 </button>
@@ -370,14 +384,14 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
 
               {showManualSetup && (
                 <div className="p-3 bg-bg-tertiary border border-border-subtle rounded">
-                   <p className="text-xs text-text-tertiary mb-2">
+                   <p className="text-text-tertiary mb-2" style={{ fontSize: theme.fontSize.caption }}>
                      {agent === 'codex' ? 'Add to ~/.codex/config.toml:' : agent === 'opencode' ? 'Add to opencode.json:' : agent === 'amp' ? 'Add to ~/.config/amp/settings.json:' : agent === 'droid' ? 'Add to ~/.factory/mcp.json:' : t.settings.mcp.manualSetupPrefix}
                    </p>
 
                   <div className="flex gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="p-2 bg-bg-primary border border-border-default rounded overflow-x-auto">
-                         <code className="text-xs text-text-secondary whitespace-nowrap block font-mono">
+                         <code className="text-text-secondary whitespace-nowrap block font-mono" style={{ fontSize: theme.fontSize.code }}>
                            {agent === 'codex'
                              ? (<>
                                  [mcp_servers.schaltwerk]
@@ -405,14 +419,15 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                     
                     <button
                       onClick={() => { void copyCommand() }}
-                      className="settings-btn px-2 py-1 rounded text-xs flex-shrink-0 self-start"
+                      className="settings-btn px-2 py-1 rounded flex-shrink-0 self-start"
+                      style={{ fontSize: theme.fontSize.button }}
                       title={t.mcpMessages.copyCommand}
                     >
                       {t.settings.common.copy}
                     </button>
                   </div>
                   
-                   <p className="text-xs text-text-muted mt-2 italic">
+                   <p className="text-text-muted mt-2 italic" style={{ fontSize: theme.fontSize.caption }}>
                      {agent === 'codex'
                        ? t.settings.mcp.codexConfigNote
                        : agent === 'opencode'

@@ -4,6 +4,7 @@ import { useClaudeSession } from '../../hooks/useClaudeSession'
 import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../../types/session'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 
 interface Props {
   open: boolean
@@ -153,8 +154,8 @@ export function SwitchOrchestratorModal({
         <div className="p-4 space-y-4">
           <div className="p-3 bg-amber-900/20 border border-amber-700/50 rounded-lg">
             <div className="flex items-start gap-2">
-              <span className="text-amber-500 text-lg">⚠️</span>
-              <div className="text-sm text-amber-200">
+              <span className="text-amber-500" style={{ fontSize: theme.fontSize.heading }}>⚠️</span>
+              <div className="text-amber-200" style={{ fontSize: theme.fontSize.body }}>
                 <p className="font-medium mb-1">{t.switchAgentModal.warning}</p>
                 <p className="text-amber-300/90">{warningBody}</p>
               </div>
@@ -162,7 +163,7 @@ export function SwitchOrchestratorModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t.switchAgentModal.selectAgent}</label>
+            <label className="block text-slate-300 mb-2" style={{ fontSize: theme.fontSize.label }}>{t.switchAgentModal.selectAgent}</label>
             <ModelSelector
               value={agentType}
               onChange={setAgentType}
@@ -172,7 +173,7 @@ export function SwitchOrchestratorModal({
               onDropdownOpenChange={setIsModelSelectorOpen}
               allowedAgents={allowedAgents}
             />
-            <p className="text-xs text-slate-400 mt-2">{helperText}</p>
+            <p className="text-slate-400 mt-2" style={{ fontSize: theme.fontSize.caption }}>{helperText}</p>
           </div>
         </div>
 
@@ -184,7 +185,7 @@ export function SwitchOrchestratorModal({
             title={t.switchAgentModal.cancelEsc}
           >
             {t.switchAgentModal.cancel}
-            <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">Esc</span>
+            <span className="ml-1.5 opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>Esc</span>
           </button>
           <button
             onClick={() => { void handleSwitch() }}
@@ -209,7 +210,7 @@ export function SwitchOrchestratorModal({
             )}
             <span>{t.switchAgentModal.switchAgent}</span>
             {!switching && (
-              <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">↵</span>
+              <span className="ml-1.5 opacity-60 group-hover:opacity-100" style={{ fontSize: theme.fontSize.caption }}>↵</span>
             )}
           </button>
         </div>

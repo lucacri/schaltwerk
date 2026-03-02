@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { theme } from '../../common/theme'
 import { useTranslation } from '../../common/i18n'
 
 type BadgeLayout = 'row' | 'column'
@@ -19,11 +20,11 @@ const additionClass = 'text-green-400'
 const deletionClass = 'text-red-400'
 const binaryClass = 'text-purple-300 font-medium'
 
-const textSizeFor = (layout: BadgeLayout, size: BadgeSize) => {
+const fontSizeFor = (layout: BadgeLayout, size: BadgeSize): string => {
   if (layout === 'column') {
-    return size === 'compact' ? 'text-[10px]' : 'text-[11px]'
+    return size === 'compact' ? theme.fontSize.caption : theme.fontSize.caption
   }
-  return size === 'compact' ? 'text-[11px]' : 'text-[12px]'
+  return size === 'compact' ? theme.fontSize.caption : theme.fontSize.caption
 }
 
 const gapFor = (layout: BadgeLayout) =>
@@ -44,13 +45,14 @@ export function DiffChangeBadges({
   const containerClasses = clsx(
     'flex justify-end',
     gapFor(layout),
-    textSizeFor(layout, size),
     className
   )
 
+  const containerStyle = { fontSize: fontSizeFor(layout, size) }
+
   if (isBinary) {
     return (
-      <div className={containerClasses}>
+      <div className={containerClasses} style={containerStyle}>
         <span className={clsx(baseNumberClass, binaryClass)}>{t.diffChangeBadges.binary}</span>
       </div>
     )
@@ -61,7 +63,7 @@ export function DiffChangeBadges({
     : 'flex items-baseline gap-1'
 
   return (
-    <div className={containerClasses}>
+    <div className={containerClasses} style={containerStyle}>
       <span className={itemClass}>
         <span className={clsx(baseNumberClass, additionClass)}>+{additions}</span>
       </span>

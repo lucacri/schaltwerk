@@ -23,6 +23,7 @@ import { usePrComments } from '../../hooks/usePrComments'
 import type { Epic } from '../../types/session'
 import { EpicSelect } from '../shared/EpicSelect'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 
 const spinnerIcon = (
   <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -298,8 +299,9 @@ export function SessionActions({
           {onMerge && (
             mergeStatus === 'merged' ? (
               <span
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border"
+                className="inline-flex items-center gap-1 px-2 py-1 font-medium rounded border"
                 style={{
+                  fontSize: theme.fontSize.caption,
                   backgroundColor: 'var(--color-accent-green-bg)',
                   borderColor: 'var(--color-accent-green-border)',
                   color: 'var(--color-accent-green-light)',
@@ -314,8 +316,9 @@ export function SessionActions({
                 type="button"
                 onClick={() => { void onMerge(sessionId) }}
                 disabled={disableMerge}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border"
+                className="inline-flex items-center gap-1 px-2 py-1 font-medium rounded border"
                 style={{
+                  fontSize: theme.fontSize.caption,
                   backgroundColor: 'var(--color-accent-red-bg)',
                   borderColor: 'var(--color-accent-red-border)',
                   color: 'var(--color-accent-red-light)',

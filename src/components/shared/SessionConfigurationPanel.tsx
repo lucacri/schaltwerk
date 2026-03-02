@@ -308,19 +308,20 @@ export function SessionConfigurationPanel({
 
     if (isCompact) {
         return (
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-2" style={{ fontSize: theme.fontSize.body }}>
                 <div className="flex items-center gap-1.5">
                     {!hideLabels && (
                         <span style={{ color: 'var(--color-text-secondary)' }}>Branch:</span>
                     )}
                     {loadingBranches ? (
                         <div 
-                            className="px-2 py-1 rounded text-xs"
+                            className="px-2 py-1 rounded"
                             style={{
-                                backgroundColor: 'var(--color-bg-elevated)'
+                                backgroundColor: 'var(--color-bg-elevated)',
+                                fontSize: theme.fontSize.caption,
                             }}
                         >
-                            <span className="text-slate-500 text-xs">{t.sessionConfig.loading}</span>
+                            <span className="text-slate-500">{t.sessionConfig.loading}</span>
                         </div>
                     ) : (
                         <div className="min-w-[120px]">
@@ -331,7 +332,8 @@ export function SessionConfigurationPanel({
                                 disabled={disabled || branches.length === 0}
                                 placeholder={branches.length === 0 ? t.sessionConfig.noBranches : "Select branch"}
                                 onValidationChange={setIsValidBranch}
-                                className="text-xs py-1 px-2"
+                                className="py-1 px-2"
+                                style={{ fontSize: theme.fontSize.caption }}
                             />
                         </div>
                     )}
@@ -367,10 +369,10 @@ export function SessionConfigurationPanel({
             <div className="flex flex-col gap-3">
                 <div data-onboarding="base-branch-selector">
                     <div className="flex items-center justify-between mb-1">
-                        <label className="block text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                        <label className="block" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>
                             {useExistingBranch ? t.sessionConfig.existingBranch : t.sessionConfig.baseBranch}
                         </label>
-                        <label className={`flex items-center gap-1.5 text-xs cursor-pointer ${branchError ? 'text-red-400' : ''}`} style={branchError ? undefined : { color: 'var(--color-text-secondary)' }}>
+                        <label className={`flex items-center gap-1.5 cursor-pointer ${branchError ? 'text-red-400' : ''}`} style={branchError ? { fontSize: theme.fontSize.label } : { color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>
                             <input
                                 type="checkbox"
                                 checked={useExistingBranch}
@@ -389,7 +391,7 @@ export function SessionConfigurationPanel({
                                 borderColor: 'var(--color-border-default)'
                             }}
                         >
-                            <span className="text-slate-500 text-xs">{t.sessionConfig.loading}</span>
+                            <span className="text-slate-500" style={{ fontSize: theme.fontSize.caption }}>{t.sessionConfig.loading}</span>
                         </div>
                     ) : (
                         <BranchAutocomplete
@@ -407,10 +409,10 @@ export function SessionConfigurationPanel({
                             <svg className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <p className="text-xs text-red-400">{branchError}</p>
+                            <p className="text-red-400" style={{ fontSize: theme.fontSize.caption }}>{branchError}</p>
                         </div>
                     ) : (
-                        <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                        <p className="mt-1" style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                             {useExistingBranch
                                 ? t.sessionConfig.checkoutBranchHint
                                 : t.sessionConfig.existingBranchHint}
@@ -420,7 +422,7 @@ export function SessionConfigurationPanel({
 
                 {!useExistingBranch && (
                     <div>
-                        <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                        <label className="block mb-1" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>
                             {t.sessionConfig.branchNameOptional}
                         </label>
                         <input
@@ -435,7 +437,7 @@ export function SessionConfigurationPanel({
                             placeholder={branchPlaceholder}
                             disabled={disabled}
                         />
-                        <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                        <p className="mt-1" style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                             {t.sessionConfig.branchNameHint.replace('{placeholder}', branchPlaceholder)}
                         </p>
                     </div>
@@ -444,7 +446,7 @@ export function SessionConfigurationPanel({
 
             {!hideAgentType && (
                 <div>
-                    <label className="block text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                    <label className="block mb-2" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>
                         {t.sessionConfig.agent}
                     </label>
                     <div className="space-y-3">
@@ -471,7 +473,7 @@ export function SessionConfigurationPanel({
                             />
                         )}
                     </div>
-                    <p className="text-xs mt-2" style={{ color: 'var(--color-text-muted)' }}>
+                    <p className="mt-2" style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                         {t.sessionConfig.agentHint}
                     </p>
                 </div>
@@ -537,7 +539,7 @@ function CodexModelSelector({
                         <span className="flex flex-col text-left">
                             <span>{meta?.label ?? option}</span>
                             {meta?.description && (
-                                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                                <span style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                                     {meta.description}
                                 </span>
                             )}
@@ -561,7 +563,7 @@ function CodexModelSelector({
                 label: (
                     <span className="flex flex-col text-left">
                         <span>{option.label}</span>
-                        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
                             {option.description}
                         </span>
                     </span>
@@ -593,7 +595,7 @@ function CodexModelSelector({
     return (
         <div className="space-y-3">
             <div className="space-y-1">
-                <span className="block text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                <span className="block" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>
                     {t.sessionConfig.model}
                 </span>
                 <Dropdown
@@ -609,13 +611,14 @@ function CodexModelSelector({
                         type="button"
                         data-testid="codex-model-selector"
                         onClick={() => !buttonDisabled && toggle()}
-                        className={`w-full px-3 py-1.5 text-sm rounded border flex items-center justify-between ${
+                        className={`w-full px-3 py-1.5 rounded border flex items-center justify-between ${
                             buttonDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:opacity-80'
                         }`}
                         style={{
                             backgroundColor: 'var(--color-bg-elevated)',
                             borderColor: dropdownOpen ? 'var(--color-border-default)' : 'var(--color-border-subtle)',
-                            color: 'var(--color-text-primary)'
+                            color: 'var(--color-text-primary)',
+                            fontSize: theme.fontSize.body,
                         }}
                         disabled={buttonDisabled}
                     >
@@ -629,7 +632,7 @@ function CodexModelSelector({
             </div>
             {showReasoningSelector && (
                 <div className="space-y-1">
-                    <span className="block text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                    <span className="block" style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.label }}>
                         {t.sessionConfig.reasoningEffort}
                     </span>
                     <Dropdown
@@ -645,13 +648,14 @@ function CodexModelSelector({
                                 type="button"
                                 data-testid="codex-reasoning-selector"
                                 onClick={() => !reasoningButtonDisabled && toggle()}
-                                className={`w-full px-3 py-1.5 text-sm rounded border flex items-center justify-between ${
+                                className={`w-full px-3 py-1.5 rounded border flex items-center justify-between ${
                                     reasoningButtonDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:opacity-80'
                                 }`}
                                 style={{
                                     backgroundColor: 'var(--color-bg-elevated)',
                                     borderColor: dropdownOpen ? 'var(--color-border-default)' : 'var(--color-border-subtle)',
-                                    color: 'var(--color-text-primary)'
+                                    color: 'var(--color-text-primary)',
+                                    fontSize: theme.fontSize.body,
                                 }}
                                 disabled={reasoningButtonDisabled}
                             >

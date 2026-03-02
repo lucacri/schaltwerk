@@ -30,6 +30,7 @@ import { isTuiAgent } from '../../types/session';
 import '@xterm/xterm/css/xterm.css';
 import './xtermOverrides.css';
 import { logger } from '../../utils/logger'
+import { theme } from '../../common/theme'
 import { useModal } from '../../contexts/ModalContext'
 import { safeTerminalFocus, safeTerminalFocusImmediate } from '../../utils/safeFocus'
 import { TerminalLoadingOverlay } from './TerminalLoadingOverlay'
@@ -2233,12 +2234,13 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
              {isAgentTopTerminal && agentStopped && hydrated && terminalEverStartedRef.current && (
                  <div className="absolute inset-0 flex items-center justify-center z-30">
                      <div className="flex items-center gap-2 bg-slate-800/90 border border-slate-700 rounded px-3 py-2 shadow-lg">
-                         <span className="text-sm text-slate-300">Agent stopped</span>
+                         <span className="text-slate-300" style={{ fontSize: theme.fontSize.body }}>Agent stopped</span>
                           <button
                               onClick={(e) => { e.stopPropagation(); void restartAgent(); }}
-                              className="text-sm px-3 py-1 rounded text-white font-medium"
+                              className="px-3 py-1 rounded text-white font-medium"
                               style={{
                                   backgroundColor: 'var(--color-accent-blue-dark)',
+                                  fontSize: theme.fontSize.button,
                               }}
                               onMouseEnter={(e) => {
                                   e.currentTarget.style.backgroundColor = 'var(--color-accent-blue)';

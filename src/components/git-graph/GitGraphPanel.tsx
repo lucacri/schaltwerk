@@ -10,6 +10,7 @@ import type {
   HistoryItemViewModel,
   HistoryProviderSnapshot,
 } from './types'
+import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
 import { useToast } from '../../common/toast/ToastProvider'
 import { useTranslation } from '../../common/i18n'
@@ -700,7 +701,7 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
 
   if (!repoPath) {
     return (
-      <div className="flex items-center justify-center h-full text-slate-400 text-xs">
+      <div className="flex items-center justify-center h-full text-slate-400" style={{ fontSize: theme.fontSize.caption }}>
         No repository selected
       </div>
     )
@@ -709,7 +710,7 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
   if (!hasSnapshot) {
     if (isLoading) {
       return (
-        <div className="flex items-center justify-center h-full text-slate-400 text-xs">
+        <div className="flex items-center justify-center h-full text-slate-400" style={{ fontSize: theme.fontSize.caption }}>
           Loading git history...
         </div>
       )
@@ -717,15 +718,15 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
 
     if (error) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-red-400 text-xs p-4">
+        <div className="flex flex-col items-center justify-center h-full text-red-400 p-4" style={{ fontSize: theme.fontSize.caption }}>
           <div className="mb-2">Failed to load git history</div>
-          <div className="text-slate-500 text-[10px] max-w-md text-center break-words">{error}</div>
+          <div className="text-slate-500 max-w-md text-center break-words" style={{ fontSize: theme.fontSize.caption }}>{error}</div>
         </div>
       )
     }
 
     return (
-      <div className="flex items-center justify-center h-full text-slate-400 text-xs">
+      <div className="flex items-center justify-center h-full text-slate-400" style={{ fontSize: theme.fontSize.caption }}>
         No git history available
       </div>
     )
@@ -733,7 +734,7 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
 
   if (historyItems.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-slate-400 text-xs">
+      <div className="flex items-center justify-center h-full text-slate-400" style={{ fontSize: theme.fontSize.caption }}>
         No git history available
       </div>
     )
@@ -767,7 +768,7 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
         onOpenCommitDiff={(viewModel, filePath) => { void handleOpenCommitDiffInternal(viewModel.historyItem, filePath) }}
       />
       {hasMore && (
-        <div className="border-t border-slate-800 px-3 py-2 text-xs text-slate-400 flex items-center justify-between">
+        <div className="border-t border-slate-800 px-3 py-2 text-slate-400 flex items-center justify-between" style={{ fontSize: theme.fontSize.caption }}>
           {loadMoreError ? (
             <span className="text-red-400" title={loadMoreError}>
               Failed to load more commits
@@ -821,8 +822,8 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
             {contextMenu && onOpenCommitDiff && (
               <button
                 type="button"
-                className="w-full px-3 py-1 text-left text-xs hover:bg-[color:var(--hover-bg)] transition-colors"
-                style={{ '--hover-bg': 'var(--color-bg-secondary)' } as React.CSSProperties}
+                className="w-full px-3 py-1 text-left hover:bg-[color:var(--hover-bg)] transition-colors"
+                style={{ '--hover-bg': 'var(--color-bg-secondary)', fontSize: theme.fontSize.caption } as React.CSSProperties}
                 onClick={() => {
                   void handleOpenCommitDiffInternal(contextMenu.commit)
                   setContextMenu(null)
@@ -833,16 +834,16 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
             )}
             <button
               type="button"
-              className="w-full px-3 py-1 text-left text-xs hover:bg-[color:var(--hover-bg)] transition-colors"
-              style={{ '--hover-bg': 'var(--color-bg-secondary)' } as React.CSSProperties}
+              className="w-full px-3 py-1 text-left hover:bg-[color:var(--hover-bg)] transition-colors"
+              style={{ '--hover-bg': 'var(--color-bg-secondary)', fontSize: theme.fontSize.caption } as React.CSSProperties}
               onClick={() => { void handleCopyCommitId() }}
             >
               Copy commit ID
             </button>
             <button
               type="button"
-              className="w-full px-3 py-1 text-left text-xs hover:bg-[color:var(--hover-bg)] transition-colors"
-              style={{ '--hover-bg': 'var(--color-bg-secondary)' } as React.CSSProperties}
+              className="w-full px-3 py-1 text-left hover:bg-[color:var(--hover-bg)] transition-colors"
+              style={{ '--hover-bg': 'var(--color-bg-secondary)', fontSize: theme.fontSize.caption } as React.CSSProperties}
               onClick={() => { void handleCopyCommitMessage() }}
             >
               Copy commit message

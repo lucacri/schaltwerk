@@ -5,6 +5,7 @@ import { SessionVersionGroup } from '../../utils/sessionVersions'
 import { invoke } from '@tauri-apps/api/core'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
+import { theme } from '../../common/theme'
 
 interface SessionPreferences {
   skip_confirmation_modals: boolean
@@ -103,15 +104,15 @@ export function PromoteVersionConfirmation({
       body={
         <div className="space-y-4">
           <div>
-            <p className="text-sm text-slate-300 mb-3">
+            <p className="text-slate-300 mb-3" style={{ fontSize: theme.fontSize.body }}>
               {t.promoteVersionConfirmation.deleteDescription}
             </p>
-            <ul className="space-y-1 text-sm text-slate-400 bg-slate-800/50 rounded p-3 border border-slate-700">
+            <ul className="space-y-1 text-slate-400 bg-slate-800/50 rounded p-3 border border-slate-700" style={{ fontSize: theme.fontSize.body }}>
               {sessionsToDelete.map((version) => (
                 <li key={version.session.info.session_id} className="flex items-center gap-2">
                   <span className="text-red-400">•</span>
                   <span className="font-mono">{version.session.info.session_id}</span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-slate-500" style={{ fontSize: theme.fontSize.caption }}>
                     (v{version.versionNumber})
                   </span>
                 </li>
@@ -120,7 +121,7 @@ export function PromoteVersionConfirmation({
           </div>
 
           <div>
-            <p className="text-sm text-slate-300 mb-2">
+            <p className="text-slate-300 mb-2" style={{ fontSize: theme.fontSize.body }}>
               {t.promoteVersionConfirmation.remainRunning}
             </p>
           </div>
@@ -133,7 +134,7 @@ export function PromoteVersionConfirmation({
               onChange={(e) => setDontAskAgain(e.target.checked)}
               className="rounded border-slate-600 bg-slate-700 text-cyan-400 focus:ring-cyan-400 focus:ring-offset-0"
             />
-            <label htmlFor="dont-ask-again" className="text-xs text-slate-400">
+            <label htmlFor="dont-ask-again" className="text-slate-400" style={{ fontSize: theme.fontSize.label }}>
               {t.promoteVersionConfirmation.dontAskAgain}
             </label>
           </div>
