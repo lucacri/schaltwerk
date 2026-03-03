@@ -4,7 +4,7 @@ use std::path::Path;
 
 #[inline]
 fn is_internal_tooling_path(path: &str) -> bool {
-    path == ".schaltwerk" || path.starts_with(".schaltwerk/")
+    path == ".lucode" || path.starts_with(".lucode/")
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -394,13 +394,13 @@ mod tests {
             .unwrap();
 
         // Create internal file only
-        std::fs::create_dir_all(temp_dir.path().join(".schaltwerk")).unwrap();
-        let mut f = std::fs::File::create(temp_dir.path().join(".schaltwerk/temp.txt")).unwrap();
+        std::fs::create_dir_all(temp_dir.path().join(".lucode")).unwrap();
+        let mut f = std::fs::File::create(temp_dir.path().join(".lucode/temp.txt")).unwrap();
         writeln!(f, "internal").unwrap();
 
         // Should be considered clean (internal-only changes ignored)
         let result = has_uncommitted_changes(temp_dir.path()).unwrap();
-        assert!(!result, "Internal .schaltwerk changes must be ignored");
+        assert!(!result, "Internal .lucode changes must be ignored");
     }
 
     #[test]

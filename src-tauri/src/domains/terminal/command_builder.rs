@@ -4,7 +4,7 @@ use crate::shared::terminal_id::is_session_top_terminal_id;
 use portable_pty::CommandBuilder;
 use std::path::PathBuf;
 
-const TERM_PROGRAM_NAME: &str = "schaltwerk";
+const TERM_PROGRAM_NAME: &str = "lucode";
 const COLORTERM_VALUE: &str = "truecolor";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -683,7 +683,7 @@ mod tests {
         let env = build_environment(80, 24, "/tmp");
         assert!(
             env.iter()
-                .any(|(key, value)| key == "TERM_PROGRAM" && value == "schaltwerk")
+                .any(|(key, value)| key == "TERM_PROGRAM" && value == "lucode")
         );
         // TERM_PROGRAM_VERSION removed for compatibility
         assert!(

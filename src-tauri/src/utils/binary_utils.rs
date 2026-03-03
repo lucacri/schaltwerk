@@ -130,7 +130,7 @@ mod tests {
     fn make_temp_script(contents: &str) -> PathBuf {
         let id = std::process::id();
         let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let filename = format!("schaltwerk-test-binary-{id}-{counter}");
+        let filename = format!("lucode-test-binary-{id}-{counter}");
         let path = std::env::temp_dir().join(filename);
         fs::write(&path, contents).expect("failed to write temp script");
 

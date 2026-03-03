@@ -1,9 +1,9 @@
 ---
 title: Core Concepts Overview
-description: 'Map of key Schaltwerk concepts and links to deeper dives'
+description: 'Map of key Lucode concepts and links to deeper dives'
 ---
 
-Schaltwerk’s workflow revolves around sessions (isolated git worktrees), reusable specs, and the orchestrator that coordinates everything. Use this overview to jump into the detailed guides.
+Lucode’s workflow revolves around sessions (isolated git worktrees), reusable specs, and the orchestrator that coordinates everything. Use this overview to jump into the detailed guides.
 
 ## Start Here
 
@@ -24,10 +24,10 @@ Schaltwerk’s workflow revolves around sessions (isolated git worktrees), reusa
 
 <CardGroup cols={2}>
   <Card title="Claude Code" icon="robot">
-    CLI interface from Anthropic that runs in Schaltwerk’s orchestrator terminal. When you start a Claude Code session, the top terminal launches the `claude` CLI.
+    CLI interface from Anthropic that runs in Lucode’s orchestrator terminal. When you start a Claude Code session, the top terminal launches the `claude` CLI.
   </Card>
   <Card title="GitHub Copilot" icon="robot">
-    GitHub’s Copilot CLI runs directly in the session terminal. Install it with `npm install -g @github/copilot`, trust the worktree once via `/cwd /trust`, and Schaltwerk auto-sends your first prompt when the CLI finishes booting.
+    GitHub’s Copilot CLI runs directly in the session terminal. Install it with `npm install -g @github/copilot`, trust the worktree once via `/cwd /trust`, and Lucode auto-sends your first prompt when the CLI finishes booting.
   </Card>
   <Card title="Codex" icon="robot">
     Git-based AI agent from Stately used for repository automation. Configurable via Settings → Agent Configuration.

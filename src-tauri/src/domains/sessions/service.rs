@@ -252,7 +252,7 @@ mod service_unified_tests {
             epic_id: None,
             repository_path: repo_path,
             repository_name: "test-repo".to_string(),
-            branch: "schaltwerk/test-session".to_string(),
+            branch: "lucode/test-session".to_string(),
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path,
@@ -281,7 +281,7 @@ mod service_unified_tests {
         let (manager, temp_dir) = create_test_session_manager();
         let home_dir = tempfile::tempdir().unwrap();
         let prev_home = std::env::var("HOME").ok();
-        let override_key = "SCHALTWERK_CLAUDE_HOME_OVERRIDE";
+        let override_key = "LUCODE_CLAUDE_HOME_OVERRIDE";
         let prev_override = std::env::var(override_key).ok();
         EnvAdapter::set_var("HOME", &home_dir.path().to_string_lossy());
         EnvAdapter::set_var(override_key, &home_dir.path().to_string_lossy());
@@ -396,7 +396,7 @@ mod service_unified_tests {
         let (manager, temp_dir) = create_test_session_manager();
         let home_dir = tempfile::TempDir::new().unwrap();
         let prev_home = std::env::var("HOME").ok();
-        let override_key = "SCHALTWERK_CLAUDE_HOME_OVERRIDE";
+        let override_key = "LUCODE_CLAUDE_HOME_OVERRIDE";
         let prev_override = std::env::var(override_key).ok();
         EnvAdapter::set_var("HOME", &home_dir.path().to_string_lossy());
         EnvAdapter::set_var(override_key, &home_dir.path().to_string_lossy());
@@ -2718,7 +2718,7 @@ impl SessionManager {
         for spec in specs {
             let worktree_path = self
                 .repo_path
-                .join(".schaltwerk")
+                .join(".lucode")
                 .join("specs")
                 .join(&spec.name);
             let base_branch = self
@@ -3745,7 +3745,7 @@ impl SessionManager {
         // Validate that the session is in a valid state for marking as reviewed
         if session.session_state == SessionState::Spec {
             return Err(anyhow!(
-                "Cannot mark spec session '{session_name}' as reviewed. Start the spec first with schaltwerk_draft_start."
+                "Cannot mark spec session '{session_name}' as reviewed. Start the spec first with lucode_draft_start."
             ));
         }
 
@@ -3968,7 +3968,7 @@ impl SessionManager {
         let spec_name = spec.name.clone();
         let worktree_path = self
             .repo_path
-            .join(".schaltwerk")
+            .join(".lucode")
             .join("specs")
             .join(&spec_name);
         let branch = format!("specs/{spec_name}");
@@ -4446,8 +4446,8 @@ impl SessionManager {
         }
 
         // Prevent touching our internal control area
-        if rel_file_path.starts_with(".schaltwerk/") {
-            return Err(anyhow!("Refusing to discard changes under .schaltwerk"));
+        if rel_file_path.starts_with(".lucode/") {
+            return Err(anyhow!("Refusing to discard changes under .lucode"));
         }
 
         let path = std::path::Path::new(rel_file_path);

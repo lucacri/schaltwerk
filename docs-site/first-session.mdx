@@ -1,35 +1,35 @@
 ---
 title: Your First Session
-description: 'Create and run your first AI agent in Schaltwerk'
+description: 'Create and run your first AI agent in Lucode'
 ---
 
-Once you've installed Schaltwerk, it's time to create your first session.
+Once you've installed Lucode, it's time to create your first session.
 
 ## Open Your Repository
 
 <Steps>
-  <Step title="Launch Schaltwerk">
+  <Step title="Launch Lucode">
     Open the app from your applications menu, or via terminal:
 
     **macOS:**
     ```bash
-    open -a Schaltwerk
+    open -a Lucode
     ```
 
     **Windows:** Launch from Start menu or double-click the desktop shortcut
 
     **Linux:**
     ```bash
-    schaltwerk
+    lucode
     ```
 
-    > Prefer the CLI? Running `schaltwerk` always lands on the Home screen first. Pick a repository manually every time—no project is auto-selected on startup.
+    > Prefer the CLI? Running `lucode` always lands on the Home screen first. Pick a repository manually every time—no project is auto-selected on startup.
   </Step>
 
   <Step title="Open a project">
     On the Home screen, click **Open Repository** and select your Git repository.
 
-    <Info>Schaltwerk verifies that the folder is a valid Git repository before opening it.</Info>
+    <Info>Lucode verifies that the folder is a valid Git repository before opening it.</Info>
   </Step>
 
   <Step title="Recent Projects">
@@ -86,13 +86,13 @@ Sessions are where AI agents work. Each session runs in its own isolated [git wo
   </Step>
 
   <Step title="Press ⌘Enter to start">
-    Schaltwerk will:
-    1. Create a new git branch named `schaltwerk/<session-name>`
-    2. Create an isolated [git worktree](https://git-scm.com/docs/git-worktree) at `.schaltwerk/worktrees/<session-name>/`
+    Lucode will:
+    1. Create a new git branch named `lucode/<session-name>`
+    2. Create an isolated [git worktree](https://git-scm.com/docs/git-worktree) at `.lucode/worktrees/<session-name>/`
     3. Spawn two terminals (agent terminal on top, your shell below)
     4. Start the agent with your task description
 
-    ![Full Schaltwerk interface showing sidebar with sessions, agent terminal on top displaying code analysis, and shell terminal below](/images/schaltwerk-agent-view.png)
+    ![Full Lucode interface showing sidebar with sessions, agent terminal on top displaying code analysis, and shell terminal below](/images/lucode-agent-view.png)
   </Step>
 </Steps>
 
@@ -193,7 +193,7 @@ When you're satisfied with the changes:
   <Tab title="Merge to Main">
     Press **`⌘⇧M`** to merge directly to your base branch.
 
-    Schaltwerk will:
+    Lucode will:
     1. Switch to the base branch
     2. Merge the session branch
     3. Push changes (if configured)
@@ -210,7 +210,7 @@ When you're satisfied with the changes:
 
     ![GitHub CLI status showing installed, authenticated, repository name, default branch, account, with options to reconnect or refresh status](/images/connect-github.png)
 
-    Schaltwerk opens a PR dialog where you can choose a strategy (**Squash changes** vs **Use existing commits**), adjust the title/body, pick a base branch, and optionally push to a custom PR branch name.
+    Lucode opens a PR dialog where you can choose a strategy (**Squash changes** vs **Use existing commits**), adjust the title/body, pick a base branch, and optionally push to a custom PR branch name.
 
     See the full PR guide (including linking PRs and fetching review comments): [Pull Requests](/guides/pull-requests)
   </Tab>
@@ -228,7 +228,7 @@ After merging, clean up the session:
   </Step>
 
   <Step title="Confirm deletion">
-    Schaltwerk will ask for confirmation before removing the worktree
+    Lucode will ask for confirmation before removing the worktree
   </Step>
 </Steps>
 

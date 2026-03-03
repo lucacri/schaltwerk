@@ -335,7 +335,7 @@ fn extract_repo_root(path: &Path) -> Option<PathBuf> {
             && let Some(grand) = parent.parent()
             && grand
                 .file_name()
-                .map(|name| name == ".schaltwerk")
+                .map(|name| name == ".lucode")
                 .unwrap_or(false)
         {
             return grand.parent().map(|p| p.to_path_buf());
@@ -373,13 +373,13 @@ fn escape_for_shell(s: &str) -> String {
 fn sanitize_path_for_opencode(path: &Path) -> String {
     // Based on analysis of actual OpenCode directory names:
     // Looking at actual directories like:
-    // Users-marius-wichtner-Documents-git-tubetalk--schaltwerk-worktrees-keen_brahmagupta
+    // Users-marius-wichtner-Documents-git-tubetalk--lucode-worktrees-keen_brahmagupta
     //
     // The pattern is:
     // 1. Remove leading slash
     // 2. Replace / with - (single dash) normally
     // 3. When a component starts with . (hidden dir), use -- before it (without the dot)
-    //    e.g., tubetalk/.schaltwerk becomes tubetalk--schaltwerk
+    //    e.g., tubetalk/.lucode becomes tubetalk--lucode
     // 4. Regular dots in filenames become single dash
     //    e.g., marius.wichtner becomes marius-wichtner
 
@@ -574,12 +574,12 @@ mod tests {
         // Test the actual tubetalk worktree path pattern
         // The key is that it should produce a path that can be found in the filesystem
         let path = Path::new(
-            "/Users/marius.wichtner/Documents/git/tubetalk/.schaltwerk/worktrees/bold_dijkstra",
+            "/Users/marius.wichtner/Documents/git/tubetalk/.lucode/worktrees/bold_dijkstra",
         );
         let sanitized = sanitize_path_for_opencode(path);
         assert_eq!(
             sanitized,
-            "Users-marius-wichtner-Documents-git-tubetalk--schaltwerk-worktrees-bold_dijkstra"
+            "Users-marius-wichtner-Documents-git-tubetalk--lucode-worktrees-bold_dijkstra"
         );
     }
 
@@ -624,7 +624,7 @@ mod tests {
 
         let repo_root = temp_home.path().join("repo");
         let worktree_path = repo_root
-            .join(".schaltwerk")
+            .join(".lucode")
             .join("worktrees")
             .join("session_alpha");
         fs::create_dir_all(&worktree_path).unwrap();
@@ -693,7 +693,7 @@ mod tests {
 
         let repo_root = temp_home.path().join("repo_two");
         let worktree_path = repo_root
-            .join(".schaltwerk")
+            .join(".lucode")
             .join("worktrees")
             .join("session_beta");
         fs::create_dir_all(&worktree_path).unwrap();
@@ -759,7 +759,7 @@ mod tests {
         // Only run if HOME is set and the test path exists
         if let Ok(home) = std::env::var("HOME") {
             let test_path = Path::new(
-                "/Users/marius.wichtner/Documents/git/tubetalk/.schaltwerk/worktrees/bold_dijkstra",
+                "/Users/marius.wichtner/Documents/git/tubetalk/.lucode/worktrees/bold_dijkstra",
             );
 
             // Test the actual sanitized path that OpenCode uses

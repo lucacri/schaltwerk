@@ -41,7 +41,7 @@ where
 pub fn get_log_dir() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("schaltwerk")
+        .join("lucode")
         .join("logs")
 }
 
@@ -61,7 +61,7 @@ pub fn get_log_path() -> PathBuf {
     }
 
     let log_file = log_dir.join(format!(
-        "schaltwerk-{}.log",
+        "lucode-{}.log",
         Local::now().format("%Y%m%d-%H%M%S")
     ));
 
@@ -96,7 +96,7 @@ pub fn init_logging() {
             config.deferred_warnings.extend(cleanup_warnings);
 
             let candidate = config.log_dir.join(format!(
-                "schaltwerk-{}.log",
+                "lucode-{}.log",
                 Local::now().format("%Y%m%d-%H%M%S")
             ));
 
@@ -135,8 +135,7 @@ pub fn init_logging() {
     if let Ok(rust_log) = env::var("RUST_LOG") {
         builder.parse_filters(&rust_log);
     } else if config.file_logging_enabled {
-        // Our crate (schaltwerk) - set to Debug to see all our logs
-        builder.filter_module("schaltwerk", LevelFilter::Debug);
+        builder.filter_module("lucode", LevelFilter::Debug);
 
         // Third-party crates we care about
         builder.filter_module("portable_pty", LevelFilter::Info);
@@ -219,7 +218,7 @@ pub fn init_logging() {
     }
 
     log::info!("========================================");
-    log::info!("Schaltwerk v{} starting", env!("CARGO_PKG_VERSION"));
+    log::info!("Lucode v{} starting", env!("CARGO_PKG_VERSION"));
     if let Some(path) = log_path.as_ref() {
         log::info!("Log file: {}", path.display());
     } else {
@@ -248,12 +247,12 @@ fn resolve_logging_config() -> LoggingConfig {
 
     let log_dir = get_log_dir();
 
-    let retention = match env::var("SCHALTWERK_LOG_RETENTION_HOURS") {
+    let retention = match env::var("LUCODE_LOG_RETENTION_HOURS") {
         Ok(value) => match value.parse::<u64>() {
             Ok(hours) => Duration::from_secs(hours.saturating_mul(SECONDS_PER_HOUR)),
             Err(_) => {
                 deferred_warnings.push(format!(
-                    "Invalid SCHALTWERK_LOG_RETENTION_HOURS value '{value}'. Using default {DEFAULT_RETENTION_HOURS} hours."
+                    "Invalid LUCODE_LOG_RETENTION_HOURS value '{value}'. Using default {DEFAULT_RETENTION_HOURS} hours."
                 ));
                 Duration::from_secs(DEFAULT_RETENTION_HOURS * SECONDS_PER_HOUR)
             }
@@ -262,11 +261,11 @@ fn resolve_logging_config() -> LoggingConfig {
     };
 
     let mut file_logging_enabled = cfg!(debug_assertions);
-    if let Ok(value) = env::var("SCHALTWERK_ENABLE_LOGS") {
+    if let Ok(value) = env::var("LUCODE_ENABLE_LOGS") {
         match parse_bool(&value) {
             Some(flag) => file_logging_enabled = flag,
             None => deferred_warnings.push(format!(
-                "Invalid SCHALTWERK_ENABLE_LOGS value '{value}'. Expected a boolean. Falling back to default ({file_logging_enabled})."
+                "Invalid LUCODE_ENABLE_LOGS value '{value}'. Expected a boolean. Falling back to default ({file_logging_enabled})."
             )),
         }
     }
@@ -351,7 +350,7 @@ mod tests {
         EnvAdapter::set_var("HOME", &tmp.path().to_string_lossy());
 
         let dir = get_log_dir();
-        assert!(dir.exists() || dir.to_string_lossy().contains("schaltwerk/logs"));
+        assert!(dir.exists() || dir.to_string_lossy().contains("lucode/logs"));
 
         if let Some(p) = prev {
             EnvAdapter::set_var("HOME", &p);
@@ -371,7 +370,7 @@ mod tests {
         let parent = path.parent().unwrap();
         std::fs::create_dir_all(parent).unwrap();
         assert!(parent.exists());
-        assert!(path.to_string_lossy().contains("schaltwerk"));
+        assert!(path.to_string_lossy().contains("lucode"));
 
         if let Some(p) = prev {
             EnvAdapter::set_var("HOME", &p);
@@ -387,8 +386,8 @@ mod tests {
         let log_dir = tmp.path().join("logs");
         std::fs::create_dir_all(&log_dir).unwrap();
 
-        let old_log = log_dir.join("schaltwerk-old.log");
-        let recent_log = log_dir.join("schaltwerk-recent.log");
+        let old_log = log_dir.join("lucode-old.log");
+        let recent_log = log_dir.join("lucode-recent.log");
         std::fs::write(&old_log, "old").unwrap();
         std::fs::write(&recent_log, "recent").unwrap();
 
@@ -408,21 +407,21 @@ mod tests {
     fn test_resolve_logging_config_respects_env_toggle() {
         let tmp = TempDir::new().unwrap();
         let prev_home = env::var("HOME").ok();
-        let prev_enable = env::var("SCHALTWERK_ENABLE_LOGS").ok();
+        let prev_enable = env::var("LUCODE_ENABLE_LOGS").ok();
         EnvAdapter::set_var("HOME", &tmp.path().to_string_lossy());
-        EnvAdapter::set_var("SCHALTWERK_ENABLE_LOGS", "0");
+        EnvAdapter::set_var("LUCODE_ENABLE_LOGS", "0");
 
         let config = resolve_logging_config();
         assert!(!config.file_logging_enabled);
 
-        EnvAdapter::set_var("SCHALTWERK_ENABLE_LOGS", "1");
+        EnvAdapter::set_var("LUCODE_ENABLE_LOGS", "1");
         let enabled_config = resolve_logging_config();
         assert!(enabled_config.file_logging_enabled);
 
         if let Some(prev) = prev_enable {
-            EnvAdapter::set_var("SCHALTWERK_ENABLE_LOGS", &prev);
+            EnvAdapter::set_var("LUCODE_ENABLE_LOGS", &prev);
         } else {
-            EnvAdapter::remove_var("SCHALTWERK_ENABLE_LOGS");
+            EnvAdapter::remove_var("LUCODE_ENABLE_LOGS");
         }
         if let Some(prev) = prev_home {
             EnvAdapter::set_var("HOME", &prev);

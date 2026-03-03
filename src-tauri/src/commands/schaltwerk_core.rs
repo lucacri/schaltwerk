@@ -3,27 +3,27 @@ use crate::{
     errors::SchaltError, get_core_read, get_core_write, get_file_watcher_manager,
     get_terminal_manager,
 };
-use schaltwerk::infrastructure::attention_bridge::clear_session_attention_state;
-use schaltwerk::infrastructure::events::{SchaltEvent, emit_event};
-use schaltwerk::schaltwerk_core::{AgentLaunchParams, SessionManager};
-use schaltwerk::schaltwerk_core::db_app_config::AppConfigMethods;
-use schaltwerk::schaltwerk_core::db_project_config::{DEFAULT_BRANCH_PREFIX, ProjectConfigMethods};
-use schaltwerk::services::format_branch_name;
-use schaltwerk::services::MergeStateSnapshot;
-use schaltwerk::services::ServiceHandles;
-use schaltwerk::services::SessionMethods;
-use schaltwerk::services::get_project_files_with_status;
-use schaltwerk::services::repository;
-use schaltwerk::services::{AgentManifest, parse_agent_command};
-use schaltwerk::services::{
+use lucode::infrastructure::attention_bridge::clear_session_attention_state;
+use lucode::infrastructure::events::{SchaltEvent, emit_event};
+use lucode::schaltwerk_core::{AgentLaunchParams, SessionManager};
+use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
+use lucode::schaltwerk_core::db_project_config::{DEFAULT_BRANCH_PREFIX, ProjectConfigMethods};
+use lucode::services::format_branch_name;
+use lucode::services::MergeStateSnapshot;
+use lucode::services::ServiceHandles;
+use lucode::services::SessionMethods;
+use lucode::services::get_project_files_with_status;
+use lucode::services::repository;
+use lucode::services::{AgentManifest, parse_agent_command};
+use lucode::services::{
     EnrichedSessionEntity as EnrichedSession, FilterMode, Session, SessionState, SortMode,
 };
-use schaltwerk::services::{MergeMode, MergeOutcome, MergePreview, MergeService};
-use schaltwerk::services::{
+use lucode::services::{MergeMode, MergeOutcome, MergePreview, MergeService};
+use lucode::services::{
     build_login_shell_invocation_with_shell, get_effective_shell, sh_quote_string,
     shell_invocation_to_posix,
 };
-use schaltwerk::utils::env_adapter::EnvAdapter;
+use lucode::utils::env_adapter::EnvAdapter;
 use std::path::Path;
 use std::time::{Duration, Instant};
 use tauri::State;
@@ -116,7 +116,7 @@ async fn get_agent_env_and_cli_args_async(
     Vec<(String, String)>,
     String,
     Option<String>,
-    schaltwerk::domains::settings::AgentPreference,
+    lucode::domains::settings::AgentPreference,
 ) {
     if let Some(settings_manager) = SETTINGS_MANAGER.get() {
         let manager = settings_manager.lock().await;
@@ -133,7 +133,7 @@ async fn get_agent_env_and_cli_args_async(
             vec![],
             String::new(),
             None,
-            schaltwerk::domains::settings::AgentPreference::default(),
+            lucode::domains::settings::AgentPreference::default(),
         )
     }
 }
@@ -221,7 +221,7 @@ fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: Str
             Some(cli_args)
         };
 
-        let ctx = schaltwerk::domains::agents::naming::SessionRenameContext {
+        let ctx = lucode::domains::agents::naming::SessionRenameContext {
             db: &db_clone,
             session_id: &session_id,
             worktree_path: &worktree_path,
@@ -234,7 +234,7 @@ fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: Str
             binary_path,
         };
 
-        match schaltwerk::domains::agents::naming::generate_display_name_and_rename_branch(ctx)
+        match lucode::domains::agents::naming::generate_display_name_and_rename_branch(ctx)
             .await
         {
             Ok(Some(display_name)) => {
@@ -297,7 +297,7 @@ fn spawn_spec_name_generation(
             Some(cli_args)
         };
 
-        let args = schaltwerk::domains::agents::naming::NameGenerationArgs {
+        let args = lucode::domains::agents::naming::NameGenerationArgs {
             db: &db_clone,
             target_id: &spec_id,
             worktree_path: Path::new(""),
@@ -308,7 +308,7 @@ fn spawn_spec_name_generation(
             binary_path: binary_path.as_deref(),
         };
 
-        match schaltwerk::domains::agents::naming::generate_spec_display_name(args).await {
+        match lucode::domains::agents::naming::generate_spec_display_name(args).await {
             Ok(Some(display_name)) => {
                 log::info!(
                     "Generated display name '{display_name}' for spec '{spec_name}', requesting refresh"
@@ -477,20 +477,20 @@ pub async fn merge_session_with_events(
                 let manager = service.session_manager();
                 if let Ok(session) = manager.get_session(name)
                     && session.worktree_path.exists()
-                    && let Ok(stats) = schaltwerk::domains::git::service::calculate_git_stats_fast(
+                    && let Ok(stats) = lucode::domains::git::service::calculate_git_stats_fast(
                         &session.worktree_path,
                         &session.parent_branch,
                     )
                 {
                     let has_conflicts =
-                        schaltwerk::domains::git::operations::has_conflicts(&session.worktree_path)
+                        lucode::domains::git::operations::has_conflicts(&session.worktree_path)
                             .unwrap_or(false);
 
                     let preview = service.preview_with_worktree(name).ok();
                     let mut merge_snapshot = MergeStateSnapshot::from_preview(preview.as_ref());
                     merge_snapshot.merge_has_conflicts = Some(true);
 
-                    let payload = schaltwerk::domains::sessions::activity::SessionGitStatsUpdated {
+                    let payload = lucode::domains::sessions::activity::SessionGitStatsUpdated {
                         session_id: session.id.clone(),
                         session_name: session.name.clone(),
                         files_changed: stats.files_changed,
@@ -544,7 +544,7 @@ pub async fn schaltwerk_core_merge_session_to_main(
 #[tauri::command]
 pub async fn schaltwerk_core_update_session_from_parent(
     name: String,
-) -> Result<schaltwerk::services::UpdateSessionFromParentResult, String> {
+) -> Result<lucode::services::UpdateSessionFromParentResult, String> {
     let core = get_core_read().await?;
     let manager = core.session_manager();
 
@@ -553,15 +553,15 @@ pub async fn schaltwerk_core_update_session_from_parent(
         .map_err(|e| format!("Session not found: {e}"))?;
 
     if session.session_state == SessionState::Spec {
-        return Ok(schaltwerk::services::UpdateSessionFromParentResult {
-            status: schaltwerk::services::UpdateFromParentStatus::NoSession,
+        return Ok(lucode::services::UpdateSessionFromParentResult {
+            status: lucode::services::UpdateFromParentStatus::NoSession,
             parent_branch: session.parent_branch.clone(),
             message: "Cannot update a spec session".to_string(),
             conflicting_paths: Vec::new(),
         });
     }
 
-    let result = schaltwerk::services::update_session_from_parent(
+    let result = lucode::services::update_session_from_parent(
         &session.name,
         &session.worktree_path,
         &session.repository_path,
@@ -597,7 +597,7 @@ pub async fn schaltwerk_core_archive_spec_session(
 
 #[tauri::command]
 pub async fn schaltwerk_core_list_archived_specs()
--> Result<Vec<schaltwerk::domains::sessions::entity::ArchivedSpec>, String> {
+-> Result<Vec<lucode::domains::sessions::entity::ArchivedSpec>, String> {
     let manager = session_manager_read().await?;
     manager
         .list_archived_specs()
@@ -789,7 +789,7 @@ pub async fn schaltwerk_core_create_session(
     let was_user_edited = params.user_edited_name.unwrap_or(false);
     let was_auto_generated = !was_user_edited;
 
-    let creation_params = schaltwerk::domains::sessions::service::SessionCreationParams {
+    let creation_params = lucode::domains::sessions::service::SessionCreationParams {
         name: &params.name,
         prompt: params.prompt.as_deref(),
         base_branch: params.base_branch.as_deref(),
@@ -842,7 +842,7 @@ pub async fn schaltwerk_core_create_session(
         created_at: String,
         last_modified: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        epic: Option<schaltwerk::domains::sessions::entity::Epic>,
+        epic: Option<lucode::domains::sessions::entity::Epic>,
         #[serde(skip_serializing_if = "Option::is_none")]
         skip_permissions: Option<bool>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -965,7 +965,7 @@ pub async fn schaltwerk_core_rename_version_group(
     }
 
     // Generate a display name once for the entire group
-    let name_args = schaltwerk::domains::agents::naming::NameGenerationArgs {
+    let name_args = lucode::domains::agents::naming::NameGenerationArgs {
         db: &db,
         target_id: &first_session.id,
         worktree_path: &worktree_path,
@@ -981,7 +981,7 @@ pub async fn schaltwerk_core_rename_version_group(
     };
 
     let generated_name =
-        match schaltwerk::domains::agents::naming::generate_display_name(name_args).await {
+        match lucode::domains::agents::naming::generate_display_name(name_args).await {
             Ok(Some(name)) => name,
             Ok(None) => {
                 log::warn!("Name generation returned None for version group '{base_name}'");
@@ -1023,7 +1023,7 @@ pub async fn schaltwerk_core_rename_version_group(
 
         // Rename the git branch
         if session.branch != new_branch_name {
-            match schaltwerk::domains::git::branches::rename_branch(
+            match lucode::domains::git::branches::rename_branch(
                 &repo_path,
                 &session.branch,
                 &new_branch_name,
@@ -1035,7 +1035,7 @@ pub async fn schaltwerk_core_rename_version_group(
                     );
 
                     // Update worktree to use new branch
-                    if let Err(e) = schaltwerk::services::worktrees::update_worktree_branch(
+                    if let Err(e) = lucode::services::worktrees::update_worktree_branch(
                         &session.worktree_path,
                         &new_branch_name,
                     ) {
@@ -1076,7 +1076,7 @@ pub async fn schaltwerk_core_list_sessions() -> Result<Vec<Session>, String> {
 
 #[tauri::command]
 pub async fn schaltwerk_core_list_epics(
-) -> Result<Vec<schaltwerk::domains::sessions::entity::Epic>, String> {
+) -> Result<Vec<lucode::domains::sessions::entity::Epic>, String> {
     session_manager_read()
         .await?
         .list_epics()
@@ -1088,7 +1088,7 @@ pub async fn schaltwerk_core_create_epic(
     app: tauri::AppHandle,
     name: String,
     color: Option<String>,
-) -> Result<schaltwerk::domains::sessions::entity::Epic, String> {
+) -> Result<lucode::domains::sessions::entity::Epic, String> {
     let core = get_core_write().await?;
     let manager = core.session_manager();
 
@@ -1106,7 +1106,7 @@ pub async fn schaltwerk_core_update_epic(
     id: String,
     name: String,
     color: Option<String>,
-) -> Result<schaltwerk::domains::sessions::entity::Epic, String> {
+) -> Result<lucode::domains::sessions::entity::Epic, String> {
     let core = get_core_write().await?;
     let manager = core.session_manager();
 
@@ -1166,7 +1166,7 @@ pub async fn schaltwerk_core_get_session(name: String) -> Result<Session, Schalt
 #[tauri::command]
 pub async fn schaltwerk_core_get_spec(
     name: String,
-) -> Result<schaltwerk::domains::sessions::entity::Spec, SchaltError> {
+) -> Result<lucode::domains::sessions::entity::Spec, SchaltError> {
     let manager = session_manager_read()
         .await
         .map_err(|e| SchaltError::DatabaseError {
@@ -1215,7 +1215,7 @@ pub async fn schaltwerk_core_cancel_session(
             }
         })?;
 
-        if session.session_state == schaltwerk::domains::sessions::entity::SessionState::Spec {
+        if session.session_state == lucode::domains::sessions::entity::SessionState::Spec {
             manager
                 .archive_spec_session(&name)
                 .map_err(|e| SchaltError::DatabaseError {
@@ -1270,7 +1270,7 @@ pub async fn schaltwerk_core_cancel_session(
         let cancel_result = match session_info {
             Ok(info) => {
                 // Perform slow filesystem operations WITHOUT holding the core write lock
-                use schaltwerk::schaltwerk_core::{
+                use lucode::schaltwerk_core::{
                     CancellationConfig, StandaloneCancellationCoordinator,
                 };
                 let coordinator =
@@ -1674,9 +1674,9 @@ async fn schaltwerk_core_start_agent_in_terminal(
         env_vars.len()
     );
 
-    EnvAdapter::set_var("SCHALTWERK_SESSION", &session_name);
-    if !env_vars.iter().any(|(key, _)| key == "SCHALTWERK_SESSION") {
-        env_vars.push(("SCHALTWERK_SESSION".to_string(), session_name.clone()));
+    EnvAdapter::set_var("LUCODE_SESSION", &session_name);
+    if !env_vars.iter().any(|(key, _)| key == "LUCODE_SESSION") {
+        env_vars.push(("LUCODE_SESSION".to_string(), session_name.clone()));
     }
 
     // Inject session-specific environment variables for the setup script and agent
@@ -1693,10 +1693,10 @@ async fn schaltwerk_core_start_agent_in_terminal(
 
     // If a project setup script exists, run it ONCE inside this terminal before exec'ing the agent.
     // This streams all setup output to the agent terminal and avoids blocking session creation.
-    // We gate with a marker file in the worktree: .schaltwerk/setup.done
+    // We gate with a marker file in the worktree: .lucode/setup.done
     let mut use_shell_chain = false;
     let mut shell_cmd: Option<String> = None;
-    let marker_rel = ".schaltwerk/setup.done";
+    let marker_rel = ".lucode/setup.done";
 
     // For Amp commands with pipes (containing " | amp"), use shell chain to preserve the pipe
     let has_pipe =
@@ -1761,7 +1761,7 @@ async fn schaltwerk_core_start_agent_in_terminal(
             // For regular agents, use exec to replace the shell
             let exec_prefix = if is_piped_cmd { "" } else { "exec " };
             let chained = format!(
-                "set -e; if [ ! -f {marker_q} ]; then {run_setup_command}; rm -f {script_q}; mkdir -p .schaltwerk; : > {marker_q}; fi; {exec_prefix}{exec_cmd}"
+                "set -e; if [ ! -f {marker_q} ]; then {run_setup_command}; rm -f {script_q}; mkdir -p .lucode; : > {marker_q}; fi; {exec_prefix}{exec_cmd}"
             );
             shell_cmd = Some(chained);
             use_shell_chain = true;
@@ -1805,7 +1805,7 @@ async fn schaltwerk_core_start_agent_in_terminal(
         };
         let mut sh_args: Vec<String> = vec!["-lc".to_string(), chained_command];
         if let (Some(c), Some(r)) = (cols, rows) {
-            use schaltwerk::services::CreateTerminalWithAppAndSizeParams;
+            use lucode::services::CreateTerminalWithAppAndSizeParams;
             terminal_manager
                 .create_terminal_with_app_and_size(CreateTerminalWithAppAndSizeParams {
                     id: terminal_id.clone(),
@@ -1825,7 +1825,7 @@ async fn schaltwerk_core_start_agent_in_terminal(
     } else {
         match (cols, rows) {
             (Some(c), Some(r)) => {
-                use schaltwerk::services::CreateTerminalWithAppAndSizeParams;
+                use lucode::services::CreateTerminalWithAppAndSizeParams;
                 terminal_manager
                     .create_terminal_with_app_and_size(CreateTerminalWithAppAndSizeParams {
                         id: terminal_id.clone(),
@@ -2264,13 +2264,13 @@ pub async fn schaltwerk_core_mark_session_ready(
 
     if let Ok(session) = manager.get_session(&name)
         && session.worktree_path.exists()
-        && let Ok(stats) = schaltwerk::domains::git::service::calculate_git_stats_fast(
+        && let Ok(stats) = lucode::domains::git::service::calculate_git_stats_fast(
             &session.worktree_path,
             &session.parent_branch,
         )
     {
         let has_conflicts =
-            schaltwerk::domains::git::operations::has_conflicts(&session.worktree_path)
+            lucode::domains::git::operations::has_conflicts(&session.worktree_path)
                 .unwrap_or(false);
 
         let merge_service = MergeService::new(core.db.clone(), core.repo_path.clone());
@@ -2278,7 +2278,7 @@ pub async fn schaltwerk_core_mark_session_ready(
 
         let merge_snapshot = MergeStateSnapshot::from_preview(merge_preview.as_ref());
 
-        let payload = schaltwerk::domains::sessions::activity::SessionGitStatsUpdated {
+        let payload = lucode::domains::sessions::activity::SessionGitStatsUpdated {
             session_id: session.id.clone(),
             session_name: session.name.clone(),
             files_changed: stats.files_changed,
@@ -2317,7 +2317,7 @@ pub async fn schaltwerk_core_has_uncommitted_changes(name: String) -> Result<boo
         .get_session(&name)
         .map_err(|e| format!("Failed to get session: {e}"))?;
 
-    schaltwerk::domains::git::has_uncommitted_changes(&session.worktree_path)
+    lucode::domains::git::has_uncommitted_changes(&session.worktree_path)
         .map_err(|e| format!("Failed to check uncommitted changes: {e}"))
 }
 
@@ -2463,7 +2463,7 @@ pub async fn schaltwerk_core_rename_session_display_name(
 ) -> Result<(), String> {
     log::info!("Renaming session display name: session_id={session_id}, new_name={new_display_name}");
 
-    let sanitized = schaltwerk::domains::agents::naming::sanitize_name(&new_display_name);
+    let sanitized = lucode::domains::agents::naming::sanitize_name(&new_display_name);
     if sanitized.is_empty() {
         return Err("Display name cannot be empty".to_string());
     }
@@ -2506,7 +2506,7 @@ pub async fn schaltwerk_core_rename_session_display_name(
         db.update_session_display_name(&session.id, &sanitized)
             .map_err(|e| format!("Failed to update session display name: {e}"))?;
     } else if let Ok(spec) = manager.get_spec(&session_id) {
-        use schaltwerk::infrastructure::database::db_specs::SpecMethods;
+        use lucode::infrastructure::database::db_specs::SpecMethods;
         db.update_spec_display_name(&spec.id, &sanitized)
             .map_err(|e| format!("Failed to update spec display name: {e}"))?;
     }
@@ -2719,8 +2719,8 @@ pub async fn schaltwerk_core_start_fresh_orchestrator(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use schaltwerk::schaltwerk_core::Database;
-    use schaltwerk::services::AgentLaunchSpec;
+    use lucode::schaltwerk_core::Database;
+    use lucode::services::AgentLaunchSpec;
 
     #[test]
     fn test_codex_flag_normalization_integration() {
@@ -2889,15 +2889,15 @@ pub async fn schaltwerk_core_discard_file_in_orchestrator(
     // Operate directly on the main repo workdir
     let repo_path = std::path::Path::new(&core.repo_path).to_path_buf();
 
-    // Safety: disallow .schaltwerk paths
-    if file_path.starts_with(".schaltwerk/") {
+    // Safety: disallow .lucode paths
+    if file_path.starts_with(".lucode/") {
         return Err(SchaltError::invalid_input(
             "file_path",
-            "Refusing to discard changes under .schaltwerk",
+            "Refusing to discard changes under .lucode",
         ));
     }
 
-    schaltwerk::domains::git::worktrees::discard_path_in_worktree(
+    lucode::domains::git::worktrees::discard_path_in_worktree(
         &repo_path,
         std::path::Path::new(&file_path),
         None,
@@ -2917,7 +2917,7 @@ mod reset_tests {
         let msg = result.err().unwrap().to_string();
         assert!(
             msg.contains("No active project")
-                || msg.contains("Failed to get schaltwerk core")
+                || msg.contains("Failed to get lucode core")
                 || msg.contains("No project is currently open")
         );
     }

@@ -19,13 +19,13 @@ describe('MCPConfigPanel', () => {
     invokeMock.mockImplementation((command, _args) => {
       if (command === TauriCommands.GetMcpStatus) {
         return Promise.resolve({
-          mcp_server_path: '/Applications/Schaltwerk.app/Contents/Resources/mcp-server/build/schaltwerk-mcp-server.js',
+          mcp_server_path: '/Applications/Lucode.app/Contents/Resources/mcp-server/build/lucode-mcp-server.js',
           is_embedded: true,
           cli_available: true,
           node_command: '/Users/example/.local/state/fnm_multishells/node',
           client: 'codex',
           is_configured: true,
-          setup_command: 'node /Applications/Schaltwerk.app/Contents/Resources/mcp-server/build/schaltwerk-mcp-server.js',
+          setup_command: 'node /Applications/Lucode.app/Contents/Resources/mcp-server/build/lucode-mcp-server.js',
           project_path: '/Users/example/project',
           node_available: false
         }) as ReturnType<typeof invoke>
@@ -40,7 +40,7 @@ describe('MCPConfigPanel', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('Node.js is required to run the Schaltwerk MCP server.')
+        screen.getByText('Node.js is required to run the Lucode MCP server.')
       ).toBeInTheDocument()
     )
 

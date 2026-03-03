@@ -2,10 +2,10 @@
 #![cfg(unix)]
 
 use chrono::Utc;
-use schaltwerk::domains::agents::naming::{NameGenerationArgs, generate_spec_display_name};
-use schaltwerk::domains::sessions::entity::Spec;
-use schaltwerk::infrastructure::database::Database;
-use schaltwerk::infrastructure::database::SpecMethods;
+use lucode::domains::agents::naming::{NameGenerationArgs, generate_spec_display_name};
+use lucode::domains::sessions::entity::Spec;
+use lucode::infrastructure::database::Database;
+use lucode::infrastructure::database::SpecMethods;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;

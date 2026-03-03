@@ -9,7 +9,7 @@ pub fn disable_smart_substitutions() {
     use core_foundation::string::CFString;
     use core_foundation_sys::preferences::{CFPreferencesAppSynchronize, CFPreferencesSetAppValue};
 
-    // Get the bundle identifier at runtime (e.g., "com.schaltwerk.app")
+    // Get the bundle identifier at runtime (e.g., "com.lucacri.lucode")
     let bundle_id_cf = unsafe {
         let bundle = CFBundleGetMainBundle();
         let ident = CFBundleGetIdentifier(bundle);

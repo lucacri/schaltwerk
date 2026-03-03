@@ -365,10 +365,10 @@ mod tests {
         let utils = SessionUtils::new(repo_path.clone(), cache_manager, db_manager);
         let bootstrapper = WorktreeBootstrapper::new(&repo_path, &utils);
 
-        let worktree_path = repo_path.join(".schaltwerk/worktrees/test-session");
+        let worktree_path = repo_path.join(".lucode/worktrees/test-session");
         let config = BootstrapConfig {
             session_name: "test-session",
-            branch_name: "schaltwerk/test-session",
+            branch_name: "lucode/test-session",
             worktree_path: &worktree_path,
             parent_branch: "master",
             custom_branch: None,
@@ -379,7 +379,7 @@ mod tests {
         };
 
         let result = bootstrapper.bootstrap_worktree(config).unwrap();
-        assert_eq!(result.branch, "schaltwerk/test-session");
+        assert_eq!(result.branch, "lucode/test-session");
         assert!(worktree_path.exists());
         assert!(worktree_path.join(".git").exists());
     }
@@ -401,7 +401,7 @@ mod tests {
         let utils = SessionUtils::new(repo_path.clone(), cache_manager, db_manager);
         let bootstrapper = WorktreeBootstrapper::new(&repo_path, &utils);
 
-        let worktree_path = repo_path.join(".schaltwerk/worktrees/test-session");
+        let worktree_path = repo_path.join(".lucode/worktrees/test-session");
         let config = BootstrapConfig {
             session_name: "test-session",
             branch_name: "custom-branch",
@@ -471,10 +471,10 @@ mod tests {
         let utils = SessionUtils::new(repo_path.clone(), cache_manager, db_manager);
         let bootstrapper = WorktreeBootstrapper::new(&repo_path, &utils);
 
-        let worktree_path = repo_path.join(".schaltwerk/worktrees/test-session");
+        let worktree_path = repo_path.join(".lucode/worktrees/test-session");
         let config = BootstrapConfig {
             session_name: "test-session",
-            branch_name: "schaltwerk/test-session",
+            branch_name: "lucode/test-session",
             worktree_path: &worktree_path,
             parent_branch: "master",
             custom_branch: None,
@@ -529,10 +529,10 @@ mod tests {
         let utils = SessionUtils::new(repo_path.clone(), cache_manager, db_manager);
         let bootstrapper = WorktreeBootstrapper::new(&repo_path, &utils);
 
-        let worktree_path = repo_path.join(".schaltwerk/worktrees/existing-session");
+        let worktree_path = repo_path.join(".lucode/worktrees/existing-session");
         let config = BootstrapConfig {
             session_name: "existing-session",
-            branch_name: "schaltwerk/existing-session",
+            branch_name: "lucode/existing-session",
             worktree_path: &worktree_path,
             parent_branch: "master",
             custom_branch: Some("feature/existing-branch"),
@@ -559,10 +559,10 @@ mod tests {
         let utils = SessionUtils::new(repo_path.clone(), cache_manager, db_manager);
         let bootstrapper = WorktreeBootstrapper::new(&repo_path, &utils);
 
-        let worktree_path = repo_path.join(".schaltwerk/worktrees/missing-session");
+        let worktree_path = repo_path.join(".lucode/worktrees/missing-session");
         let config = BootstrapConfig {
             session_name: "missing-session",
-            branch_name: "schaltwerk/missing-session",
+            branch_name: "lucode/missing-session",
             worktree_path: &worktree_path,
             parent_branch: "master",
             custom_branch: Some("feature/nonexistent"),
@@ -589,10 +589,10 @@ mod tests {
         let utils = SessionUtils::new(repo_path.clone(), cache_manager, db_manager);
         let bootstrapper = WorktreeBootstrapper::new(&repo_path, &utils);
 
-        let worktree_path = repo_path.join(".schaltwerk/worktrees/no-custom-session");
+        let worktree_path = repo_path.join(".lucode/worktrees/no-custom-session");
         let config = BootstrapConfig {
             session_name: "no-custom-session",
-            branch_name: "schaltwerk/no-custom-session",
+            branch_name: "lucode/no-custom-session",
             worktree_path: &worktree_path,
             parent_branch: "master",
             custom_branch: None,

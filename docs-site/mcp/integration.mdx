@@ -3,7 +3,7 @@ title: MCP Integration
 description: 'Automate session management with the Model Context Protocol REST API'
 ---
 
-Schaltwerk ships with a Model Context Protocol (MCP) server so AI assistants (Claude, Codex, OpenCode, Factory Droid, etc.) can automate session management.
+Lucode ships with a Model Context Protocol (MCP) server so AI assistants (Claude, Codex, OpenCode, Factory Droid, etc.) can automate session management.
 
 <Info>
   The MCP server binary is bundled with the app—most users simply enable it in Settings. Node.js is only required if you intend to rebuild the server source.
@@ -11,15 +11,15 @@ Schaltwerk ships with a Model Context Protocol (MCP) server so AI assistants (Cl
 
 ## Setup
 
-### Option 1: Via Schaltwerk Settings (Recommended)
+### Option 1: Via Lucode Settings (Recommended)
 
 <Steps>
   <Step title="Open Settings">
-    Click the gear icon in the top bar to open Schaltwerk Settings
+    Click the gear icon in the top bar to open Lucode Settings
   </Step>
 
   <Step title="Configure MCP">
-    Go to **Agent Configuration**, select your agent (Claude Code, Codex, OpenCode, or Gemini), and toggle **Enable MCP**. Schaltwerk writes the necessary config pointing to the embedded server.
+    Go to **Agent Configuration**, select your agent (Claude Code, Codex, OpenCode, or Gemini), and toggle **Enable MCP**. Lucode writes the necessary config pointing to the embedded server.
   </Step>
 
   <Step title="Restart Agent">
@@ -35,7 +35,7 @@ If you prefer manual setup or your agent doesn't appear in settings:
   <Tab title="Codex">
     ```bash
     # Register Codex with the bundled MCP server (rebuild optional)
-    codex mcp add schaltwerk node /absolute/path/to/schaltwerk/mcp-server/build/schaltwerk-mcp-server.js
+    codex mcp add lucode node /absolute/path/to/lucode/mcp-server/build/lucode-mcp-server.js
     ```
 
     Restart Codex to load the MCP server. If you changed the MCP source, rebuild it first (see the development appendix).
@@ -43,8 +43,8 @@ If you prefer manual setup or your agent doesn't appear in settings:
 
   <Tab title="Claude Code">
     ```bash
-    claude mcp add --transport stdio --scope project schaltwerk \
-      node /absolute/path/to/schaltwerk/mcp-server/build/schaltwerk-mcp-server.js
+    claude mcp add --transport stdio --scope project lucode \
+      node /absolute/path/to/lucode/mcp-server/build/lucode-mcp-server.js
     ```
 
     Restart Claude Code to load the MCP server. Rebuild only if you modified the source.
@@ -52,8 +52,8 @@ If you prefer manual setup or your agent doesn't appear in settings:
 
   <Tab title="Factory Droid">
     ```bash
-    droid mcp add --transport stdio --scope project schaltwerk \
-      node /absolute/path/to/schaltwerk/mcp-server/build/schaltwerk-mcp-server.js
+    droid mcp add --transport stdio --scope project lucode \
+      node /absolute/path/to/lucode/mcp-server/build/lucode-mcp-server.js
     ```
 
     Restart Factory Droid to load the MCP server. Rebuild is optional unless you changed the code.
@@ -66,9 +66,9 @@ If you prefer manual setup or your agent doesn't appear in settings:
     ```json
     {
       "mcpServers": {
-        "schaltwerk": {
+        "lucode": {
           "command": "node",
-          "args": ["/absolute/path/to/schaltwerk/mcp-server/build/schaltwerk-mcp-server.js"]
+          "args": ["/absolute/path/to/lucode/mcp-server/build/lucode-mcp-server.js"]
         }
       }
     }
@@ -78,10 +78,10 @@ If you prefer manual setup or your agent doesn't appear in settings:
     ```json
     {
       "mcpServers": {
-        "schaltwerk": {
+        "lucode": {
           "type": "stdio",
           "command": "node",
-          "args": ["/absolute/path/to/schaltwerk/mcp-server/build/schaltwerk-mcp-server.js"]
+          "args": ["/absolute/path/to/lucode/mcp-server/build/lucode-mcp-server.js"]
         }
       }
     }
@@ -95,7 +95,7 @@ Once set up, your AI agent can use these MCP tools to automate session managemen
 
 <CardGroup cols={2}>
   <Card title="Create Sessions" icon="plus">
-    Agent can create new specs or sessions directly in Schaltwerk
+    Agent can create new specs or sessions directly in Lucode
   </Card>
 
   <Card title="Update Specs" icon="pen">
@@ -120,10 +120,10 @@ Once set up, your AI agent can use these MCP tools to automate session managemen
 
 ## Pull Requests via MCP
 
-Agents can request that Schaltwerk open the **Create Pull Request** dialog for a running/reviewed session:
+Agents can request that Lucode open the **Create Pull Request** dialog for a running/reviewed session:
 
-- Tool: `schaltwerk_create_pr`
-- Result: Schaltwerk opens the PR modal with suggested values
+- Tool: `lucode_create_pr`
+- Result: Lucode opens the PR modal with suggested values
 - You still confirm the PR in the UI (the tool does not create the PR directly)
 
 ```json
@@ -139,17 +139,17 @@ Agents can request that Schaltwerk open the **Create Pull Request** dialog for a
 
 ## Worktree Setup Scripts via MCP
 
-- **Read first:** Call `schaltwerk_get_setup_script` to load the existing script.
+- **Read first:** Call `lucode_get_setup_script` to load the existing script.
 - **Inspect & confirm:** Check the repo for untracked config (e.g., `.env`, `.env.local`, `.npmrc`) and confirm with the user which files should be copied into new worktrees.
-- **Write full script:** Send the complete updated script (with shebang) via `schaltwerk_set_setup_script`. The script runs once per new worktree with `WORKTREE_PATH`, `REPO_PATH`, `SESSION_NAME`, and `BRANCH_NAME` env vars.
-- **UI safeguard:** When edited in the app, Schaltwerk prompts before saving. MCP changes rely on the agent following the read/confirm/write flow above.
+- **Write full script:** Send the complete updated script (with shebang) via `lucode_set_setup_script`. The script runs once per new worktree with `WORKTREE_PATH`, `REPO_PATH`, `SESSION_NAME`, and `BRANCH_NAME` env vars.
+- **UI safeguard:** When edited in the app, Lucode prompts before saving. MCP changes rely on the agent following the read/confirm/write flow above.
 
 ## Spec Discovery API
 
 Agents can inspect specs without crawling the full session list. Use the following MCP tools when you need to review planning docs before starting work:
 
-- `schaltwerk_spec_list` — returns an array of spec summaries `{ session_id, display_name?, content_length, updated_at }`
-- `schaltwerk_spec_read` — fetches the full markdown plus metadata for a given spec
+- `lucode_spec_list` — returns an array of spec summaries `{ session_id, display_name?, content_length, updated_at }`
+- `lucode_spec_read` — fetches the full markdown plus metadata for a given spec
 
 Developing against the REST API directly? The MCP bridge proxies two lightweight endpoints:
 
@@ -194,10 +194,10 @@ Both endpoints diff against the same backing data the desktop app uses, so you a
   </Step>
 
   <Step title="Agent creates session">
-    Agent uses MCP to create a Schaltwerk session with the task description
+    Agent uses MCP to create a Lucode session with the task description
   </Step>
 
-  <Step title="Schaltwerk updates">
+  <Step title="Lucode updates">
     New session appears in your sidebar automatically
   </Step>
 
@@ -222,7 +222,7 @@ Both endpoints diff against the same backing data the desktop app uses, so you a
     Let your agent help with code reviews:
 
     - Agent analyzes pull requests
-    - Creates Schaltwerk session with review notes
+    - Creates Lucode session with review notes
     - You see the session appear in sidebar
     - Review agent's feedback and suggestions
   </Accordion>
@@ -241,7 +241,7 @@ Both endpoints diff against the same backing data the desktop app uses, so you a
 
 <AccordionGroup>
   <Accordion title="Sessions not appearing">
-    Make sure Schaltwerk is running and your project is open. The MCP server only works when Schaltwerk is active.
+    Make sure Lucode is running and your project is open. The MCP server only works when Lucode is active.
   </Accordion>
 
   <Accordion title="Agent can't connect">

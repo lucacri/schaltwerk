@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/schema.json",
-  "name": "Schaltwerk",
+  "name": "Lucode",
   "logo": {
     "dark": "/logo/dark.png",
     "light": "/logo/light.png"
@@ -15,18 +15,18 @@
     }
   },
   "announcement": {
-    "text": "Documentation for Schaltwerk v0.2.x",
-    "link": "https://github.com/2mawi2/schaltwerk/releases"
+    "text": "Documentation for Lucode v0.2.x",
+    "link": "https://github.com/lucacri/lucode/releases"
   },
   "topbarLinks": [
     {
       "name": "Support",
-      "url": "https://github.com/2mawi2/schaltwerk/issues"
+      "url": "https://github.com/lucacri/lucode/issues"
     }
   ],
   "topbarCtaButton": {
     "name": "Download",
-    "url": "https://github.com/2mawi2/schaltwerk/releases"
+    "url": "https://github.com/lucacri/lucode/releases"
   },
   "navigation": [
     {
@@ -49,7 +49,7 @@
     {
       "group": "Guides",
       "pages": [
-        "guides/using-schaltwerk",
+        "guides/using-lucode",
         "guides/pull-requests",
         "guides/advanced-workflows",
         "guides/multi-project",
@@ -75,7 +75,7 @@
     }
   ],
   "footerSocials": {
-    "github": "https://github.com/2mawi2/schaltwerk"
+    "github": "https://github.com/lucacri/lucode"
   },
   "theme": "quill",
   "modeToggle": {

@@ -308,7 +308,7 @@ fn default_shell() -> String {
 fn default_transcript_root() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".schaltwerk")
+        .join(".lucode")
         .join("pty")
 }
 

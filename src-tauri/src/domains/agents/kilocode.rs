@@ -186,7 +186,7 @@ impl KilocodeIndex {
     fn get_or_rebuild(&self, tasks_dir: &Path, workspaces_dir: &Path) -> HashMap<String, KilocodeIndexEntry> {
         if *DISABLE_INDEXING {
             debug!(
-                "KiloCode session indexing disabled via SCHALTWERK_DISABLE_KILOCODE_INDEX, skipping lookup"
+                "KiloCode session indexing disabled via LUCODE_DISABLE_KILOCODE_INDEX, skipping lookup"
             );
             self.clear();
             return HashMap::new();
@@ -431,7 +431,7 @@ fn extract_repo_root(path: &Path) -> Option<PathBuf> {
             && let Some(grand) = parent.parent()
             && grand
                 .file_name()
-                .map(|name| name == ".schaltwerk")
+                .map(|name| name == ".lucode")
                 .unwrap_or(false)
         {
             return grand.parent().map(|p| p.to_path_buf());
@@ -672,7 +672,7 @@ struct DiskCacheFile {
 }
 
 fn cache_file_path(tasks_dir: &Path) -> PathBuf {
-    tasks_dir.join("_schaltwerk_kilocode_index_cache.json")
+    tasks_dir.join("_lucode_kilocode_index_cache.json")
 }
 
 fn load_disk_cache(tasks_dir: &Path) -> HashMap<PathBuf, CachedTaskEntry> {
@@ -911,7 +911,7 @@ fn read_workspace_session_info(session_file: &Path) -> Option<(String, Vec<Strin
 }
 
 static DISABLE_INDEXING: LazyLock<bool> =
-    LazyLock::new(|| match std::env::var("SCHALTWERK_DISABLE_KILOCODE_INDEX") {
+    LazyLock::new(|| match std::env::var("LUCODE_DISABLE_KILOCODE_INDEX") {
         Ok(value) => {
             let normalized = value.trim().to_ascii_lowercase();
             if normalized.is_empty() {
@@ -1436,7 +1436,7 @@ mod tests {
         let temp_home = TempDir::new().unwrap();
         let repo_root = temp_home.path().join("repo");
         let worktree = repo_root
-            .join(".schaltwerk")
+            .join(".lucode")
             .join("worktrees")
             .join("test_session");
         fs::create_dir_all(&worktree).unwrap();
@@ -1460,7 +1460,7 @@ mod tests {
         let temp_home = TempDir::new().unwrap();
         let repo_root = temp_home.path().join("repo");
         let worktree = repo_root
-            .join(".schaltwerk")
+            .join(".lucode")
             .join("worktrees")
             .join("empty_session");
         fs::create_dir_all(&worktree).unwrap();
@@ -1499,7 +1499,7 @@ mod tests {
         let temp_home = TempDir::new().unwrap();
         let repo_root = temp_home.path().join("repo");
         let worktree = repo_root
-            .join(".schaltwerk")
+            .join(".lucode")
             .join("worktrees")
             .join("my_session");
         fs::create_dir_all(&worktree).unwrap();
@@ -1518,7 +1518,7 @@ mod tests {
 
     #[test]
     fn test_extract_repo_root() {
-        let path = Path::new("/Users/me/project/.schaltwerk/worktrees/my_session");
+        let path = Path::new("/Users/me/project/.lucode/worktrees/my_session");
         let root = extract_repo_root(path);
         assert_eq!(root, Some(PathBuf::from("/Users/me/project")));
 

@@ -11,12 +11,12 @@ import {
   McpError,
   CallToolRequest,
 } from "@modelcontextprotocol/sdk/types.js"
-import { SchaltwerkBridge, Session, MergeModeOption } from "./schaltwerk-bridge.js"
+import { LucodeBridge, Session, MergeModeOption } from "./lucode-bridge.js"
 import { toolOutputSchemas } from "./schemas.js"
 
 const DEFAULT_AGENT = 'claude'
 
-interface SchaltwerkStartArgs {
+interface LucodeStartArgs {
   name?: string
   prompt?: string
   agent_type?: 'claude' | 'opencode' | 'gemini' | 'codex' | 'qwen' | 'droid' | 'amp' | 'kilocode'
@@ -28,75 +28,75 @@ interface SchaltwerkStartArgs {
   epic_id?: string
 }
 
-interface SchaltwerkCancelArgs {
+interface LucodeCancelArgs {
   session_name: string
   force?: boolean
 }
 
-interface SchaltwerkListArgs {
+interface LucodeListArgs {
   json?: boolean
   filter?: 'all' | 'active' | 'spec' | 'reviewed'
 }
 
-interface SchaltwerkSendMessageArgs {
+interface LucodeSendMessageArgs {
   session_name: string
   message: string
 }
 
-interface SchaltwerkSpecCreateArgs {
+interface LucodeSpecCreateArgs {
   name?: string
   content?: string
   base_branch?: string
   epic_id?: string
 }
 
-interface SchaltwerkCreateEpicArgs {
+interface LucodeCreateEpicArgs {
   name: string
   color?: string
 }
 
-interface SchaltwerkDraftUpdateArgs {
+interface LucodeDraftUpdateArgs {
   session_name: string
   content: string
   append?: boolean
 }
 
-interface SchaltwerkCurrentSpecUpdateArgs {
+interface LucodeCurrentSpecUpdateArgs {
   content: string
   append?: boolean
 }
 
-interface SchaltwerkDraftStartArgs {
+interface LucodeDraftStartArgs {
   session_name: string
   agent_type?: 'claude' | 'opencode' | 'gemini' | 'codex' | 'qwen' | 'droid' | 'amp' | 'kilocode'
   skip_permissions?: boolean
   base_branch?: string
 }
 
-interface SchaltwerkDraftListArgs {
+interface LucodeDraftListArgs {
   json?: boolean
 }
 
-interface SchaltwerkDraftDeleteArgs {
+interface LucodeDraftDeleteArgs {
   session_name: string
 }
 
-interface SchaltwerkMarkReviewedArgs {
+interface LucodeMarkReviewedArgs {
   session_name: string
 }
 
-interface SchaltwerkConvertToSpecArgs {
+interface LucodeConvertToSpecArgs {
   session_name: string
 }
 
-interface SchaltwerkMergeArgs {
+interface LucodeMergeArgs {
   session_name: string
   commit_message?: string | null
   mode?: 'squash' | 'reapply'
   cancel_after_merge?: boolean
 }
 
-interface SchaltwerkCreatePrArgs {
+interface LucodeCreatePrArgs {
   session_name: string
   pr_title: string
   pr_body?: string | null
@@ -108,24 +108,24 @@ interface SchaltwerkCreatePrArgs {
   cancel_after_pr?: boolean
 }
 
-interface SchaltwerkPrepareMergeArgs {
+interface LucodePrepareMergeArgs {
   session_name: string
   commit_message?: string | null
   mode?: 'squash' | 'reapply'
 }
 
-interface SchaltwerkSetSetupScriptArgs {
+interface LucodeSetSetupScriptArgs {
   setup_script: string
 }
 
-interface SchaltwerkSetWorktreeBaseDirectoryArgs {
+interface LucodeSetWorktreeBaseDirectoryArgs {
   worktree_base_directory: string
 }
 
-const bridge = new SchaltwerkBridge()
+const bridge = new LucodeBridge()
 
  const server = new Server({
-   name: "schaltwerk-mcp-server",
+   name: "lucode-mcp-server",
    version: "1.0.0",
  }, {
    capabilities: {
@@ -149,12 +149,12 @@ type TextContent = { type: "text"; text: string; mimeType?: string }
 const JSON_MIME = "application/json"
 
 const structuredContentEnabled = () => {
-  const flag = process.env.SCHALTWERK_STRUCTURED_CONTENT
+  const flag = process.env.LUCODE_STRUCTURED_CONTENT
   return flag === undefined || flag.toLowerCase() === 'true' || flag === '1'
 }
 
 const jsonArrayCompatEnabled = () => {
-  const flag = process.env.SCHALTWERK_JSON_ARRAY_COMPAT
+  const flag = process.env.LUCODE_JSON_ARRAY_COMPAT
   return flag !== undefined && (flag.toLowerCase() === 'true' || flag === '1')
 }
 
@@ -295,14 +295,14 @@ const sanitizeDiffChunk = (payload: DiffChunkPayload) => ({
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   const tools = [
       {
-        name: "schaltwerk_create",
-        description: `Create a new Schaltwerk session and matching git worktree for an AI agent. Provide a unique session name plus a specific, implementation-focused prompt; that prompt seeds the agent. Optional fields let you select agent_type (claude, opencode, gemini, codex, qwen, droid, kilocode), choose a base_branch, or bypass manual permission prompts when you understand the risk. Use this whenever you need a fresh, isolated development branch.`,
+        name: "lucode_create",
+        description: `Create a new Lucode session and matching git worktree for an AI agent. Provide a unique session name plus a specific, implementation-focused prompt; that prompt seeds the agent. Optional fields let you select agent_type (claude, opencode, gemini, codex, qwen, droid, kilocode), choose a base_branch, or bypass manual permission prompts when you understand the risk. Use this whenever you need a fresh, isolated development branch.`,
         inputSchema: {
           type: "object",
           properties: {
             name: {
               type: "string",
-              description: "Session name (alphanumeric, hyphens, underscores). Will be used in branch name: schaltwerk/{name}"
+              description: "Session name (alphanumeric, hyphens, underscores). Will be used in branch name: lucode/{name}"
             },
             prompt: {
               type: "string",
@@ -332,21 +332,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["name", "prompt"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_create
+        outputSchema: toolOutputSchemas.lucode_create
       },
       {
-        name: "schaltwerk_get_setup_script",
+        name: "lucode_get_setup_script",
         description: `Fetch the project worktree setup script that runs once per new worktree before any agent starts. Always call this before modifying the script so you merge with the current contents (env copies, installs, etc.).`,
         inputSchema: {
           type: "object",
           properties: {},
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_get_setup_script
+        outputSchema: toolOutputSchemas.lucode_get_setup_script
       },
       {
-        name: "schaltwerk_set_setup_script",
-        description: `Replace the project worktree setup script. Workflow: (1) call schaltwerk_get_setup_script; (2) inspect the repo for untracked config (e.g., .env*, .npmrc) that should be copied into worktrees; (3) confirm the exact files to copy with the user; (4) send back the full updated script (include shebang). The script runs once in the worktree root with env vars WORKTREE_PATH, REPO_PATH, SESSION_NAME, BRANCH_NAME—ideal for copying env files or installing local deps.`,
+        name: "lucode_set_setup_script",
+        description: `Replace the project worktree setup script. Workflow: (1) call lucode_get_setup_script; (2) inspect the repo for untracked config (e.g., .env*, .npmrc) that should be copied into worktrees; (3) confirm the exact files to copy with the user; (4) send back the full updated script (include shebang). The script runs once in the worktree root with env vars WORKTREE_PATH, REPO_PATH, SESSION_NAME, BRANCH_NAME—ideal for copying env files or installing local deps.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -358,21 +358,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["setup_script"],
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_set_setup_script
+        outputSchema: toolOutputSchemas.lucode_set_setup_script
       },
       {
-        name: "schaltwerk_get_worktree_base_directory",
-        description: `Get the custom worktree base directory for the project. Returns the configured directory path (if any) where new session worktrees are created instead of the default .schaltwerk/worktrees/ location.`,
+        name: "lucode_get_worktree_base_directory",
+        description: `Get the custom worktree base directory for the project. Returns the configured directory path (if any) where new session worktrees are created instead of the default .lucode/worktrees/ location.`,
         inputSchema: {
           type: "object",
           properties: {},
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_get_worktree_base_directory
+        outputSchema: toolOutputSchemas.lucode_get_worktree_base_directory
       },
       {
-        name: "schaltwerk_set_worktree_base_directory",
-        description: `Set or clear the custom worktree base directory for the project. Accepts absolute paths (e.g., /Volumes/fast-ssd/worktrees) or paths relative to the repository root (e.g., ../../worktrees). An empty string clears the setting, reverting to the default .schaltwerk/worktrees/ location. Only affects new sessions; existing worktrees are not moved.`,
+        name: "lucode_set_worktree_base_directory",
+        description: `Set or clear the custom worktree base directory for the project. Accepts absolute paths (e.g., /Volumes/fast-ssd/worktrees) or paths relative to the repository root (e.g., ../../worktrees). An empty string clears the setting, reverting to the default .lucode/worktrees/ location. Only affects new sessions; existing worktrees are not moved.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -384,11 +384,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["worktree_base_directory"],
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_set_worktree_base_directory
+        outputSchema: toolOutputSchemas.lucode_set_worktree_base_directory
       },
       {
-        name: "schaltwerk_list",
-        description: `List Schaltwerk sessions for quick status checks. Default output is a readable summary; set json: true for structured fields (name, status, timestamps, agent_type, branch, prompts). Use filter to focus on all, active, spec, or reviewed sessions. Treat reviewed sessions as protected; only cancel them after a successful merge and passing tests.`,
+        name: "lucode_list",
+        description: `List Lucode sessions for quick status checks. Default output is a readable summary; set json: true for structured fields (name, status, timestamps, agent_type, branch, prompts). Use filter to focus on all, active, spec, or reviewed sessions. Treat reviewed sessions as protected; only cancel them after a successful merge and passing tests.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -406,10 +406,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_list
+        outputSchema: toolOutputSchemas.lucode_list
       },
       {
-        name: "schaltwerk_send_message",
+        name: "lucode_send_message",
         description: `Push a follow-up message into an existing session's agent terminal. The session must exist and be running; the server validates this before sending. Messages queue until the terminal is ready, so you can safely issue reminders or extra instructions.`,
         inputSchema: {
           type: "object",
@@ -425,11 +425,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["session_name", "message"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_send_message
+        outputSchema: toolOutputSchemas.lucode_send_message
       },
       {
-        name: "schaltwerk_cancel",
-        description: `Cancel a session by deleting its worktree and branch. The server blocks the operation if uncommitted changes are present; pass force: true to override (irreversible and drops unstaged work). Only use after the session has been merged and validated. Reviewed sessions should almost always stay; if uncertain, use schaltwerk_convert_to_spec to preserve the work.`,
+        name: "lucode_cancel",
+        description: `Cancel a session by deleting its worktree and branch. The server blocks the operation if uncommitted changes are present; pass force: true to override (irreversible and drops unstaged work). Only use after the session has been merged and validated. Reviewed sessions should almost always stay; if uncertain, use lucode_convert_to_spec to preserve the work.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -445,11 +445,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["session_name"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_cancel
+        outputSchema: toolOutputSchemas.lucode_cancel
       },
       {
-        name: "schaltwerk_spec_create",
-        description: `Create a spec session for planning (no worktree yet). Provide optional name, Markdown content, and base_branch. Refine the draft with schaltwerk_draft_update and start it with schaltwerk_draft_start when the plan is ready.`,
+        name: "lucode_spec_create",
+        description: `Create a spec session for planning (no worktree yet). Provide optional name, Markdown content, and base_branch. Refine the draft with lucode_draft_update and start it with lucode_draft_start when the plan is ready.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -472,10 +472,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_spec_create
+        outputSchema: toolOutputSchemas.lucode_spec_create
       },
       {
-        name: "schaltwerk_draft_update",
+        name: "lucode_draft_update",
         description: `Replace or append Markdown content on an existing spec session. Leave append false to overwrite the draft or set it true to add on. Use this for iterative refinement before starting the agent.`,
         inputSchema: {
           type: "object",
@@ -496,10 +496,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["session_name", "content"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_draft_update
+        outputSchema: toolOutputSchemas.lucode_draft_update
       },
       {
-        name: "schaltwerk_current_spec_update",
+        name: "lucode_current_spec_update",
         description: `Update the spec currently open in Spec Mode without naming it explicitly. Works only when Spec Mode has a selected draft. Set append true to add text instead of replacing it.`,
         inputSchema: {
           type: "object",
@@ -516,19 +516,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["content"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_current_spec_update
+        outputSchema: toolOutputSchemas.lucode_current_spec_update
       },
       {
-        name: "schaltwerk_spec_list",
+        name: "lucode_spec_list",
         description: `List available specs with content length and last update time. Useful for spotting stale or empty drafts before starting them.`,
         inputSchema: {
           type: "object",
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_spec_list
+        outputSchema: toolOutputSchemas.lucode_spec_list
       },
       {
-        name: "schaltwerk_spec_read",
+        name: "lucode_spec_read",
         description: `Fetch the full markdown content for a spec session by id or name.`,
         inputSchema: {
           type: "object",
@@ -541,10 +541,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["session"],
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_spec_read
+        outputSchema: toolOutputSchemas.lucode_spec_read
       },
       {
-        name: "schaltwerk_diff_summary",
+        name: "lucode_diff_summary",
         description: `List changed files for a session (or orchestrator when session is omitted) using merge-base(HEAD, parent_branch) semantics. Supports pagination through cursor and page_size and mirrors the desktop diff summary.` ,
         inputSchema: {
           type: "object",
@@ -565,10 +565,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_diff_summary
+        outputSchema: toolOutputSchemas.lucode_diff_summary
       },
       {
-        name: "schaltwerk_diff_chunk",
+        name: "lucode_diff_chunk",
         description: `Fetch unified diff lines for a file. Large diffs paginate via cursor, follow the same merge-base rules as the desktop app, and binaries return an empty list automatically.`,
         inputSchema: {
           type: "object",
@@ -594,10 +594,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["path"],
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_diff_chunk
+        outputSchema: toolOutputSchemas.lucode_diff_chunk
       },
       {
-        name: "schaltwerk_session_spec",
+        name: "lucode_session_spec",
         description: `Fetch spec markdown (and the last updated timestamp) for a running session by id or name.`,
         inputSchema: {
           type: "object",
@@ -610,11 +610,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["session"],
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_session_spec
+        outputSchema: toolOutputSchemas.lucode_session_spec
       },
       {
-        name: "schaltwerk_draft_start",
-        description: `Start an AI agent from an existing spec. This creates the session's worktree from the chosen base_branch, launches the selected agent with the spec content as its prompt, and moves the session to running state. Once started, you must use schaltwerk_convert_to_spec if you later need to re-draft.`,
+        name: "lucode_draft_start",
+        description: `Start an AI agent from an existing spec. This creates the session's worktree from the chosen base_branch, launches the selected agent with the spec content as its prompt, and moves the session to running state. Once started, you must use lucode_convert_to_spec if you later need to re-draft.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -639,10 +639,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["session_name"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_draft_start
+        outputSchema: toolOutputSchemas.lucode_draft_start
       },
       {
-        name: "schaltwerk_draft_list",
+        name: "lucode_draft_list",
         description: `List all spec sessions in chronological order. Default output is human readable; set json: true for machine parsing with content length and timestamps so you can pick the right draft to start next.`,
         inputSchema: {
           type: "object",
@@ -655,10 +655,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_draft_list
+        outputSchema: toolOutputSchemas.lucode_draft_list
       },
       {
-        name: "schaltwerk_draft_delete",
+        name: "lucode_draft_delete",
         description: `Delete a spec record permanently (specs have no worktree, but the draft content is lost). Use only for obsolete plans and confirm with the user when unsure.`,
         inputSchema: {
           type: "object",
@@ -670,10 +670,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["session_name"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_draft_delete
+        outputSchema: toolOutputSchemas.lucode_draft_delete
       },
       {
-        name: "schaltwerk_mark_session_reviewed",
+        name: "lucode_mark_session_reviewed",
         description: `Mark a running session as reviewed and ready_to_merge. The worktree stays intact for verification, but the session is now protected; only cancel it after a successful merge and green tests.`,
         inputSchema: {
           type: "object",
@@ -685,11 +685,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["session_name"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_mark_session_reviewed
+        outputSchema: toolOutputSchemas.lucode_mark_session_reviewed
       },
       {
-        name: "schaltwerk_convert_to_spec",
-        description: `Convert a running or reviewed session back into a spec for rework. The worktree is removed but the branch and commits remain, so you can refine the plan and restart it with schaltwerk_draft_start.`,
+        name: "lucode_convert_to_spec",
+        description: `Convert a running or reviewed session back into a spec for rework. The worktree is removed but the branch and commits remain, so you can refine the plan and restart it with lucode_draft_start.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -700,10 +700,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["session_name"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_convert_to_spec
+        outputSchema: toolOutputSchemas.lucode_convert_to_spec
       },
       {
-        name: "schaltwerk_merge_session",
+        name: "lucode_merge_session",
         description: `Merge a reviewed session back onto its parent branch using the same pipeline as the desktop app. Run this only after the session is reviewed, clean, and tests are green. Optional parameters select the merge mode (squash or reapply), supply the squash commit_message, and request cancel_after_merge to queue worktree cleanup. The tool rejects spec sessions, unresolved conflicts, and empty merges, and it never runs tests for you.`,
         inputSchema: {
           type: "object",
@@ -728,11 +728,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["session_name"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_merge_session
+        outputSchema: toolOutputSchemas.lucode_merge_session
       },
       {
-        name: "schaltwerk_create_pr",
-        description: `Open a pull request modal in the Schaltwerk UI for user review and confirmation. The modal is pre-filled with the provided title, body, and branch options. The user can review, edit, and confirm to create the PR. This tool does NOT create the PR directly - it requires user confirmation via the UI. Works for running and reviewed sessions. Spec sessions are not eligible for PR creation.`,
+        name: "lucode_create_pr",
+        description: `Open a pull request modal in the Lucode UI for user review and confirmation. The modal is pre-filled with the provided title, body, and branch options. The user can review, edit, and confirm to create the PR. This tool does NOT create the PR directly - it requires user confirmation via the UI. Works for running and reviewed sessions. Spec sessions are not eligible for PR creation.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -776,10 +776,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["session_name", "pr_title"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_create_pr
+        outputSchema: toolOutputSchemas.lucode_create_pr
       },
       {
-        name: "schaltwerk_create_epic",
+        name: "lucode_create_epic",
         description: `Create a named epic to group related sessions and specs. Provide a unique name and optional color. Epics help organize work into logical units.`,
         inputSchema: {
           type: "object",
@@ -796,21 +796,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["name"],
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_create_epic
+        outputSchema: toolOutputSchemas.lucode_create_epic
       },
       {
-        name: "schaltwerk_list_epics",
+        name: "lucode_list_epics",
         description: `List all epics in the current project. Returns each epic's id, name, and optional color.`,
         inputSchema: {
           type: "object",
           properties: {},
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_list_epics
+        outputSchema: toolOutputSchemas.lucode_list_epics
       },
       {
-        name: "schaltwerk_prepare_merge",
-        description: `Open a merge modal in the Schaltwerk UI for user review and confirmation. The modal is pre-filled with the provided commit message and merge mode. The user can review, edit, and confirm to merge. This tool does NOT merge directly - it requires user confirmation via the UI. Works for running and reviewed sessions. Spec sessions are not eligible for merging.`,
+        name: "lucode_prepare_merge",
+        description: `Open a merge modal in the Lucode UI for user review and confirmation. The modal is pre-filled with the provided commit message and merge mode. The user can review, edit, and confirm to merge. This tool does NOT merge directly - it requires user confirmation via the UI. Works for running and reviewed sessions. Spec sessions are not eligible for merging.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -830,11 +830,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           required: ["session_name"]
         },
-        outputSchema: toolOutputSchemas.schaltwerk_prepare_merge
+        outputSchema: toolOutputSchemas.lucode_prepare_merge
       },
       {
-        name: "schaltwerk_get_current_tasks",
-        description: `Return the active Schaltwerk agents with controllable verbosity. Use fields to request only the properties you need (defaults to a minimal set), status_filter to limit by session state, and content_preview_length to trim large text when including draft_content or initial_prompt. Helpful for keeping responses lightweight while still exposing full session metadata on demand.`,
+        name: "lucode_get_current_tasks",
+        description: `Return the active Lucode agents with controllable verbosity. Use fields to request only the properties you need (defaults to a minimal set), status_filter to limit by session state, and content_preview_length to trim large text when including draft_content or initial_prompt. Helpful for keeping responses lightweight while still exposing full session metadata on demand.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -861,17 +861,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_get_current_tasks
+        outputSchema: toolOutputSchemas.lucode_get_current_tasks
       },
       {
-        name: "schaltwerk_run_script",
+        name: "lucode_run_script",
         description: `Execute the project's configured run script (the command triggered by Cmd+E in the UI). Returns the command output. Fails if no run script is configured for the project.`,
         inputSchema: {
           type: "object",
           properties: {},
           additionalProperties: false
         },
-        outputSchema: toolOutputSchemas.schaltwerk_run_script
+        outputSchema: toolOutputSchemas.lucode_run_script
       }
   ]
 
@@ -899,7 +899,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
     let response: StructuredResponse
 
     switch (name) {
-      case "schaltwerk_spec_list": {
+      case "lucode_spec_list": {
         const payload = await bridge.listSpecSummaries()
         const structured = { specs: payload.map(sanitizeSpecSummary) }
         response = buildStructuredResponse(structured, {
@@ -909,10 +909,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         break
       }
 
-      case "schaltwerk_spec_read": {
+      case "lucode_spec_read": {
         const specArgs = args as { session?: string }
         if (!specArgs.session || specArgs.session.trim().length === 0) {
-          throw new McpError(ErrorCode.InvalidParams, "'session' is required when invoking schaltwerk_spec_read.")
+          throw new McpError(ErrorCode.InvalidParams, "'session' is required when invoking lucode_spec_read.")
         }
         const specDoc = await bridge.getSpecDocument(specArgs.session)
         if (!specDoc) {
@@ -926,7 +926,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         break
       }
 
-      case "schaltwerk_diff_summary": {
+      case "lucode_diff_summary": {
         const diffArgs = args as { session?: string; cursor?: string; page_size?: number }
         const diffSummary = await bridge.getDiffSummary({
           session: diffArgs.session,
@@ -944,10 +944,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         break
       }
 
-      case "schaltwerk_diff_chunk": {
+      case "lucode_diff_chunk": {
         const diffArgs = args as { session?: string; path?: string; cursor?: string; line_limit?: number }
         if (!diffArgs.path || diffArgs.path.trim().length === 0) {
-          throw new McpError(ErrorCode.InvalidParams, "'path' is required when invoking schaltwerk_diff_chunk.")
+          throw new McpError(ErrorCode.InvalidParams, "'path' is required when invoking lucode_diff_chunk.")
         }
 
         const cappedLineLimit = diffArgs.line_limit !== undefined
@@ -971,10 +971,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         break
       }
 
-      case "schaltwerk_session_spec": {
+      case "lucode_session_spec": {
         const specArgs = args as { session: string }
         if (!specArgs.session || specArgs.session.trim().length === 0) {
-          throw new McpError(ErrorCode.InvalidParams, "'session' is required when invoking schaltwerk_session_spec.")
+          throw new McpError(ErrorCode.InvalidParams, "'session' is required when invoking lucode_session_spec.")
         }
         const specPayload = await bridge.getSessionSpec(specArgs.session)
         if (!specPayload) {
@@ -988,8 +988,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         break
       }
 
-      case "schaltwerk_create": {
-        const createArgs = args as SchaltwerkStartArgs
+      case "lucode_create": {
+        const createArgs = args as LucodeStartArgs
 
         if (createArgs.is_draft) {
           const session = await bridge.createSpecSession(
@@ -1057,7 +1057,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_get_setup_script": {
+      case "lucode_get_setup_script": {
         const payload = await bridge.getProjectSetupScript()
         const summary = payload.has_setup_script
           ? `Setup script present (${payload.setup_script.length} chars)`
@@ -1070,13 +1070,13 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_set_setup_script": {
-        const setupArgs = args as SchaltwerkSetSetupScriptArgs | undefined
+      case "lucode_set_setup_script": {
+        const setupArgs = args as LucodeSetSetupScriptArgs | undefined
         const script = setupArgs?.setup_script
         if (script === undefined || script === null) {
           throw new McpError(
             ErrorCode.InvalidParams,
-            "'setup_script' is required when invoking schaltwerk_set_setup_script (empty string clears it)."
+            "'setup_script' is required when invoking lucode_set_setup_script (empty string clears it)."
           )
         }
 
@@ -1089,11 +1089,11 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_get_worktree_base_directory": {
+      case "lucode_get_worktree_base_directory": {
         const payload = await bridge.getWorktreeBaseDirectory()
         const summary = payload.has_custom_directory
           ? `Custom worktree directory: ${payload.worktree_base_directory}`
-          : 'Using default worktree directory (.schaltwerk/worktrees/)'
+          : 'Using default worktree directory (.lucode/worktrees/)'
 
         response = buildStructuredResponse(payload, {
           summaryText: summary,
@@ -1102,13 +1102,13 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_set_worktree_base_directory": {
-        const wbdArgs = args as SchaltwerkSetWorktreeBaseDirectoryArgs | undefined
+      case "lucode_set_worktree_base_directory": {
+        const wbdArgs = args as LucodeSetWorktreeBaseDirectoryArgs | undefined
         const dir = wbdArgs?.worktree_base_directory
         if (dir === undefined || dir === null) {
           throw new McpError(
             ErrorCode.InvalidParams,
-            "'worktree_base_directory' is required when invoking schaltwerk_set_worktree_base_directory (empty string clears it)."
+            "'worktree_base_directory' is required when invoking lucode_set_worktree_base_directory (empty string clears it)."
           )
         }
 
@@ -1123,8 +1123,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_list": {
-        const listArgs = args as SchaltwerkListArgs
+      case "lucode_list": {
+        const listArgs = args as LucodeListArgs
 
         const sessions = await bridge.listSessionsByState(listArgs.filter)
 
@@ -1177,8 +1177,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_send_message": {
-        const sendMessageArgs = args as unknown as SchaltwerkSendMessageArgs
+      case "lucode_send_message": {
+        const sendMessageArgs = args as unknown as LucodeSendMessageArgs
 
         await bridge.sendFollowUpMessage(
           sendMessageArgs.session_name,
@@ -1196,8 +1196,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_cancel": {
-        const cancelArgs = args as unknown as SchaltwerkCancelArgs
+      case "lucode_cancel": {
+        const cancelArgs = args as unknown as LucodeCancelArgs
 
         await bridge.cancelSession(cancelArgs.session_name, cancelArgs.force)
 
@@ -1212,8 +1212,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_spec_create": {
-        const specCreateArgs = args as SchaltwerkSpecCreateArgs
+      case "lucode_spec_create": {
+        const specCreateArgs = args as LucodeSpecCreateArgs
 
         const session = await bridge.createSpecSession(
           specCreateArgs.name || `spec_${Date.now()}`,
@@ -1244,8 +1244,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_draft_update": {
-        const draftUpdateArgs = args as unknown as SchaltwerkDraftUpdateArgs
+      case "lucode_draft_update": {
+        const draftUpdateArgs = args as unknown as LucodeDraftUpdateArgs
 
         await bridge.updateDraftContent(
           draftUpdateArgs.session_name,
@@ -1272,13 +1272,13 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_current_spec_update": {
-        const currentSpecUpdateArgs = args as unknown as SchaltwerkCurrentSpecUpdateArgs
+      case "lucode_current_spec_update": {
+        const currentSpecUpdateArgs = args as unknown as LucodeCurrentSpecUpdateArgs
 
         const currentSpec = await bridge.getCurrentSpecModeSession()
         if (!currentSpec) {
           const structured = { status: "no_current_spec" }
-          const summary = 'Spec mode session tracking not yet implemented. Please use schaltwerk_draft_update with explicit session name instead.\n\nAlternatively, check available specs with schaltwerk_draft_list first.'
+          const summary = 'Spec mode session tracking not yet implemented. Please use lucode_draft_update with explicit session name instead.\n\nAlternatively, check available specs with lucode_draft_list first.'
           response = buildStructuredResponse(structured, { summaryText: summary })
           break
         }
@@ -1309,8 +1309,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_draft_start": {
-        const draftStartArgs = args as unknown as SchaltwerkDraftStartArgs
+      case "lucode_draft_start": {
+        const draftStartArgs = args as unknown as LucodeDraftStartArgs
 
         await bridge.startDraftSession(
           draftStartArgs.session_name,
@@ -1335,8 +1335,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_draft_list": {
-        const draftListArgs = args as SchaltwerkDraftListArgs
+      case "lucode_draft_list": {
+        const draftListArgs = args as LucodeDraftListArgs
 
         const specs = await bridge.listDraftSessions()
 
@@ -1379,8 +1379,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_draft_delete": {
-        const draftDeleteArgs = args as unknown as SchaltwerkDraftDeleteArgs
+      case "lucode_draft_delete": {
+        const draftDeleteArgs = args as unknown as LucodeDraftDeleteArgs
 
         await bridge.deleteDraftSession(draftDeleteArgs.session_name)
 
@@ -1390,7 +1390,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_get_current_tasks": {
+      case "lucode_get_current_tasks": {
         const taskArgs = args as {
           fields?: string[],
           status_filter?: 'spec' | 'active' | 'reviewed' | 'all',
@@ -1481,8 +1481,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
        }
 
-      case "schaltwerk_mark_session_reviewed": {
-        const markReviewedArgs = args as unknown as SchaltwerkMarkReviewedArgs
+      case "lucode_mark_session_reviewed": {
+        const markReviewedArgs = args as unknown as LucodeMarkReviewedArgs
 
         await bridge.markSessionReviewed(markReviewedArgs.session_name)
 
@@ -1492,8 +1492,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_convert_to_spec": {
-        const convertToSpecArgs = args as unknown as SchaltwerkConvertToSpecArgs
+      case "lucode_convert_to_spec": {
+        const convertToSpecArgs = args as unknown as LucodeConvertToSpecArgs
 
         await bridge.convertToSpec(convertToSpecArgs.session_name)
 
@@ -1503,18 +1503,18 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         break
       }
 
-      case "schaltwerk_merge_session": {
-        const mergeArgs = args as unknown as SchaltwerkMergeArgs
+      case "lucode_merge_session": {
+        const mergeArgs = args as unknown as LucodeMergeArgs
 
         if (!mergeArgs.session_name || typeof mergeArgs.session_name !== 'string') {
-          throw new Error('session_name is required when invoking schaltwerk_merge_session.')
+          throw new Error('session_name is required when invoking lucode_merge_session.')
         }
 
         const requestedMode: MergeModeOption = mergeArgs.mode === 'reapply' ? 'reapply' : 'squash'
         const trimmedCommit = mergeArgs.commit_message?.trim() ?? ''
 
         if (requestedMode === 'squash' && trimmedCommit.length === 0) {
-          throw new Error('commit_message is required and cannot be empty when performing a squash merge via schaltwerk_merge_session.')
+          throw new Error('commit_message is required and cannot be empty when performing a squash merge via lucode_merge_session.')
         }
 
         const mergeResult = await bridge.mergeSession(mergeArgs.session_name, {
@@ -1552,14 +1552,14 @@ ${cancelLine}`
         break
       }
 
-      case "schaltwerk_create_pr": {
-        const prArgs = args as unknown as SchaltwerkCreatePrArgs
+      case "lucode_create_pr": {
+        const prArgs = args as unknown as LucodeCreatePrArgs
 
         if (!prArgs.session_name || typeof prArgs.session_name !== 'string') {
-          throw new Error('session_name is required when invoking schaltwerk_create_pr.')
+          throw new Error('session_name is required when invoking lucode_create_pr.')
         }
         if (!prArgs.pr_title || typeof prArgs.pr_title !== 'string') {
-          throw new Error('pr_title is required when invoking schaltwerk_create_pr.')
+          throw new Error('pr_title is required when invoking lucode_create_pr.')
         }
 
         const prResult = await bridge.createPullRequest(prArgs.session_name, {
@@ -1584,17 +1584,17 @@ ${cancelLine}`
         }
 
         const summary = prResult.modalTriggered
-          ? `Pull request modal opened for '${prArgs.session_name}'. The user will review and confirm the PR details in the Schaltwerk UI.`
+          ? `Pull request modal opened for '${prArgs.session_name}'. The user will review and confirm the PR details in the Lucode UI.`
           : `Failed to open pull request modal for '${prArgs.session_name}'.`
 
         response = buildStructuredResponse(structured, { summaryText: summary })
         break
       }
 
-      case "schaltwerk_create_epic": {
-        const epicArgs = args as unknown as SchaltwerkCreateEpicArgs
+      case "lucode_create_epic": {
+        const epicArgs = args as unknown as LucodeCreateEpicArgs
         if (!epicArgs.name || epicArgs.name.trim().length === 0) {
-          throw new McpError(ErrorCode.InvalidParams, "'name' is required when invoking schaltwerk_create_epic.")
+          throw new McpError(ErrorCode.InvalidParams, "'name' is required when invoking lucode_create_epic.")
         }
 
         const epic = await bridge.createEpic(epicArgs.name, epicArgs.color)
@@ -1604,7 +1604,7 @@ ${cancelLine}`
         break
       }
 
-      case "schaltwerk_list_epics": {
+      case "lucode_list_epics": {
         const epics = await bridge.listEpics()
         const structured = { epics: epics.map(e => ({ id: e.id, name: e.name, color: e.color ?? null })) }
         const summary = epics.length === 0
@@ -1614,7 +1614,7 @@ ${cancelLine}`
         break
       }
 
-      case "schaltwerk_run_script": {
+      case "lucode_run_script": {
         const result = await bridge.executeProjectRunScript()
         const summary = result.success
           ? `Run script completed successfully (exit code ${result.exit_code}):\n${result.stdout}`
@@ -1626,11 +1626,11 @@ ${cancelLine}`
         break
       }
 
-      case "schaltwerk_prepare_merge": {
-        const mergeArgs = args as unknown as SchaltwerkPrepareMergeArgs
+      case "lucode_prepare_merge": {
+        const mergeArgs = args as unknown as LucodePrepareMergeArgs
 
         if (!mergeArgs.session_name || typeof mergeArgs.session_name !== 'string') {
-          throw new Error('session_name is required when invoking schaltwerk_prepare_merge.')
+          throw new Error('session_name is required when invoking lucode_prepare_merge.')
         }
 
         const mergeResult = await bridge.prepareMerge(mergeArgs.session_name, {
@@ -1644,7 +1644,7 @@ ${cancelLine}`
         }
 
         const summary = mergeResult.modalTriggered
-          ? `Merge modal opened for '${mergeArgs.session_name}'. The user will review and confirm the merge in the Schaltwerk UI.`
+          ? `Merge modal opened for '${mergeArgs.session_name}'. The user will review and confirm the merge in the Lucode UI.`
           : `Failed to open merge modal for '${mergeArgs.session_name}'.`
 
         response = buildStructuredResponse(structured, { summaryText: summary })
@@ -1666,43 +1666,43 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
   return {
     resources: [
       {
-        uri: "schaltwerk://sessions",
-        name: "Schaltwerk Sessions",
-        description: "List of all active Schaltwerk sessions with full metadata",
+        uri: "lucode://sessions",
+        name: "Lucode Sessions",
+        description: "List of all active Lucode sessions with full metadata",
         mimeType: "application/json"
       },
       {
-        uri: "schaltwerk://sessions/reviewed",
+        uri: "lucode://sessions/reviewed",
         name: "Reviewed Sessions",
         description: "Sessions marked as ready to merge",
         mimeType: "application/json"
       },
       {
-        uri: "schaltwerk://sessions/new",
+        uri: "lucode://sessions/new",
         name: "New Sessions",
         description: "Sessions not yet reviewed",
         mimeType: "application/json"
       },
       {
-        uri: "schaltwerk://specs",
+        uri: "lucode://specs",
         name: "Spec Sessions",
         description: "All spec sessions awaiting refinement and start",
         mimeType: "application/json"
       },
       {
-        uri: "schaltwerk://specs/{name}",
+        uri: "lucode://specs/{name}",
         name: "Spec Content",
         description: "Content of a specific spec session",
         mimeType: "text/markdown"
       },
       {
-        uri: "schaltwerk://diff/summary",
+        uri: "lucode://diff/summary",
         name: "Diff Summary",
         description: "Diff summary; add query ?session=<name>&cursor=<c>&page_size=<n>",
         mimeType: "application/json"
       },
       {
-        uri: "schaltwerk://diff/file",
+        uri: "lucode://diff/file",
         name: "Diff Chunk",
         description: "Diff chunk; add query ?path=<file>&session=<name>&cursor=<c>&line_limit=<n>",
         mimeType: "application/json"
@@ -1717,7 +1717,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request: { params: { 
   try {
     let content: string
     const parseQuery = (raw: string) => {
-      const url = new URL(raw.replace(/^schaltwerk:\/\//, 'https://dummy/'))
+      const url = new URL(raw.replace(/^lucode:\/\//, 'https://dummy/'))
       const get = (key: string) => {
         const val = url.searchParams.get(key)
         return val === null ? undefined : val
@@ -1726,34 +1726,34 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request: { params: { 
     }
 
     switch (uri) {
-      case "schaltwerk://sessions": {
+      case "lucode://sessions": {
         const sessions = await bridge.listSessions()
         content = JSON.stringify(sessions, null, 2)
         break
       }
 
-      case "schaltwerk://sessions/reviewed": {
+      case "lucode://sessions/reviewed": {
         const sessions = await bridge.listSessions()
         const reviewed = sessions.filter(s => s.ready_to_merge)
         content = JSON.stringify(reviewed, null, 2)
         break
       }
 
-      case "schaltwerk://sessions/new": {
+      case "lucode://sessions/new": {
         const sessions = await bridge.listSessions()
         const newSessions = sessions.filter(s => !s.ready_to_merge)
         content = JSON.stringify(newSessions, null, 2)
         break
       }
 
-      case "schaltwerk://specs": {
+      case "lucode://specs": {
         const specs = await bridge.listDraftSessions()
         content = JSON.stringify(specs, null, 2)
         break
       }
 
-      case "schaltwerk://diff/summary":
-      case uri.match(/^schaltwerk:\/\/diff\/summary\?.*/)?.input: {
+      case "lucode://diff/summary":
+      case uri.match(/^lucode:\/\/diff\/summary\?.*/)?.input: {
         const { get } = parseQuery(uri)
         const session = get('session')
         const cursor = get('cursor')
@@ -1767,8 +1767,8 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request: { params: { 
         break
       }
 
-      case "schaltwerk://diff/file":
-      case uri.match(/^schaltwerk:\/\/diff\/file\?.*/)?.input: {
+      case "lucode://diff/file":
+      case uri.match(/^lucode:\/\/diff\/file\?.*/)?.input: {
         const { get } = parseQuery(uri)
         const path = get('path')
         if (!path) {
@@ -1788,7 +1788,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request: { params: { 
 
       default: {
         // Check if it's a specific spec content request
-        const draftMatch = uri.match(/^schaltwerk:\/\/specs\/(.+)$/)
+        const draftMatch = uri.match(/^lucode:\/\/specs\/(.+)$/)
         if (draftMatch) {
           const draftName = draftMatch[1]
           const specs = await bridge.listDraftSessions()
@@ -1835,8 +1835,8 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport()
   await server.connect(transport)
   
-  console.error("Schaltwerk MCP server running")
-  console.error(`Project path: ${process.env.SCHALTWERK_PROJECT_PATH || 'auto-detected from git root'}`)
+  console.error("Lucode MCP server running")
+  console.error(`Project path: ${process.env.LUCODE_PROJECT_PATH || 'auto-detected from git root'}`)
   console.error("Connected to database, ready to manage sessions")
   
   // Graceful shutdown

@@ -1,4 +1,4 @@
-use schaltwerk::services::{ServiceHandles, mcp::get_mcp_server_process as service_mcp_process};
+use lucode::services::{ServiceHandles, mcp::get_mcp_server_process as service_mcp_process};
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::{Mutex, OnceCell};

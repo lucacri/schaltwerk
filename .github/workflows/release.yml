@@ -44,7 +44,7 @@ jobs:
     # Only run for tag pushes, not manual workflow dispatch
     if: startsWith(github.ref, 'refs/tags/')
     env:
-      SCHALTWERK_PM: bun
+      LUCODE_PM: bun
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
       CARGO_INCREMENTAL: "0"
@@ -133,7 +133,7 @@ jobs:
     runs-on: windows-latest
     if: false  # Temporarily disabled - Windows CI needs fixes
     env:
-      SCHALTWERK_PM: bun
+      LUCODE_PM: bun
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
       CARGO_INCREMENTAL: "0"
@@ -262,7 +262,7 @@ jobs:
     needs: [tag-check]
     if: always() && (needs.tag-check.result == 'success' || needs.tag-check.result == 'skipped')
     env:
-      SCHALTWERK_PM: bun
+      LUCODE_PM: bun
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
       CARGO_INCREMENTAL: "0"
@@ -370,18 +370,18 @@ jobs:
           X64_APP=""
           
           # Check standard target directory first
-          if [ -d "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/schaltwerk.app" ]; then
-            ARM64_APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/schaltwerk.app"
-            X64_APP="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/schaltwerk.app"
+          if [ -d "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/lucode.app" ]; then
+            ARM64_APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/lucode.app"
+            X64_APP="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/lucode.app"
             echo "✅ Found apps in standard target directory"
-          elif [ -d "/tmp/schaltwerk-shared-target/aarch64-apple-darwin/release/bundle/macos/schaltwerk.app" ]; then
-            ARM64_APP="/tmp/schaltwerk-shared-target/aarch64-apple-darwin/release/bundle/macos/schaltwerk.app"
-            X64_APP="/tmp/schaltwerk-shared-target/x86_64-apple-darwin/release/bundle/macos/schaltwerk.app"
+          elif [ -d "/tmp/lucode-shared-target/aarch64-apple-darwin/release/bundle/macos/lucode.app" ]; then
+            ARM64_APP="/tmp/lucode-shared-target/aarch64-apple-darwin/release/bundle/macos/lucode.app"
+            X64_APP="/tmp/lucode-shared-target/x86_64-apple-darwin/release/bundle/macos/lucode.app"
             echo "✅ Found apps in shared target directory"
           else
             echo "❌ App bundles not found. Searching for them..."
-            find . -name "schaltwerk.app" -type d 2>/dev/null || true
-            find /tmp -name "schaltwerk.app" -type d 2>/dev/null || true
+            find . -name "lucode.app" -type d 2>/dev/null || true
+            find /tmp -name "lucode.app" -type d 2>/dev/null || true
             exit 1
           fi
           
@@ -389,38 +389,38 @@ jobs:
           echo "📱 x64 app: $X64_APP"
           
           # Copy the app bundles
-          cp -R "$ARM64_APP" ./Schaltwerk-arm64.app
-          cp -R "$X64_APP" ./Schaltwerk-x64.app
+          cp -R "$ARM64_APP" ./Lucode-arm64.app
+          cp -R "$X64_APP" ./Lucode-x64.app
           
           # Create universal binary
           lipo -create \
-            ./Schaltwerk-arm64.app/Contents/MacOS/schaltwerk \
-            ./Schaltwerk-x64.app/Contents/MacOS/schaltwerk \
-            -output ./schaltwerk-universal
+            ./Lucode-arm64.app/Contents/MacOS/lucode \
+            ./Lucode-x64.app/Contents/MacOS/lucode \
+            -output ./lucode-universal
           
           # Use the arm64 app as base and replace binary
-          cp -R ./Schaltwerk-arm64.app ./Schaltwerk.app
-          mv ./schaltwerk-universal ./Schaltwerk.app/Contents/MacOS/schaltwerk
+          cp -R ./Lucode-arm64.app ./Lucode.app
+          mv ./lucode-universal ./Lucode.app/Contents/MacOS/lucode
           
           # Embed MCP server with dependencies in app bundle
           echo "📦 Embedding MCP server in app bundle..."
-          mkdir -p ./Schaltwerk.app/Contents/Resources/mcp-server
-          cp -R mcp-server/build ./Schaltwerk.app/Contents/Resources/mcp-server/
-          cp mcp-server/package.json ./Schaltwerk.app/Contents/Resources/mcp-server/
-          cp -R mcp-server/node_modules ./Schaltwerk.app/Contents/Resources/mcp-server/
+          mkdir -p ./Lucode.app/Contents/Resources/mcp-server
+          cp -R mcp-server/build ./Lucode.app/Contents/Resources/mcp-server/
+          cp mcp-server/package.json ./Lucode.app/Contents/Resources/mcp-server/
+          cp -R mcp-server/node_modules ./Lucode.app/Contents/Resources/mcp-server/
           echo "✅ MCP server embedded in app bundle with dependencies"
           
           # Ad-hoc sign the universal app
-          codesign --force --deep -s - ./Schaltwerk.app
+          codesign --force --deep -s - ./Lucode.app
           
           # Clear extended attributes
-          xattr -cr ./Schaltwerk.app
+          xattr -cr ./Lucode.app
 
       - name: Create Updater Artifacts
         env:
           VERSION: ${{ github.event.inputs.version || github.ref_name }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.SCHALTWERK_UPDATER_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.SCHALTWERK_UPDATER_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.LUCODE_UPDATER_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.LUCODE_UPDATER_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
 
@@ -430,12 +430,12 @@ jobs:
           fi
 
           VERSION="${VERSION#v}"
-          ARCHIVE_NAME="Schaltwerk-${VERSION}-macos-universal.app.tar.gz"
+          ARCHIVE_NAME="Lucode-${VERSION}-macos-universal.app.tar.gz"
           RELEASE_TAG="v${VERSION}"
-          RELEASE_URL="https://github.com/2mawi2/schaltwerk/releases/download/${RELEASE_TAG}/${ARCHIVE_NAME}"
+          RELEASE_URL="https://github.com/lucacri/lucode/releases/download/${RELEASE_TAG}/${ARCHIVE_NAME}"
 
           echo "Creating updater archive ${ARCHIVE_NAME}"
-          tar -czf "$ARCHIVE_NAME" -C . Schaltwerk.app
+          tar -czf "$ARCHIVE_NAME" -C . Lucode.app
 
           echo "Signing updater archive"
           printf '%s' "$TAURI_SIGNING_PRIVATE_KEY" > updater-private.key
@@ -493,22 +493,22 @@ jobs:
           
           # Create DMG with the universal app
           create-dmg \
-            --volname "Schaltwerk ${VERSION}" \
+            --volname "Lucode ${VERSION}" \
             --window-pos 200 120 \
             --window-size 600 400 \
             --icon-size 100 \
             --skip-jenkins \
-            --icon "Schaltwerk.app" 150 150 \
+            --icon "Lucode.app" 150 150 \
             --app-drop-link 450 150 \
-            --hide-extension "Schaltwerk.app" \
-            "Schaltwerk-${VERSION}-universal.dmg" \
-            "Schaltwerk.app"
+            --hide-extension "Lucode.app" \
+            "Lucode-${VERSION}-universal.dmg" \
+            "Lucode.app"
 
       - name: Calculate checksums
         run: |
           VERSION="${{ github.event.inputs.version || github.ref_name }}"
           VERSION="${VERSION#v}"
-          shasum -a 256 "Schaltwerk-${VERSION}-universal.dmg" > checksums.txt
+          shasum -a 256 "Lucode-${VERSION}-universal.dmg" > checksums.txt
           cat checksums.txt
 
       - name: Upload artifacts
@@ -516,8 +516,8 @@ jobs:
         with:
           name: macos-universal
           path: |
-            Schaltwerk-*.dmg
-            Schaltwerk-*.app.tar.gz
+            Lucode-*.dmg
+            Lucode-*.app.tar.gz
             checksums.txt
             latest.json
 
@@ -527,7 +527,7 @@ jobs:
     needs: [tag-check]
     if: false  # Temporarily disabled - Windows builds not ready for release
     env:
-      SCHALTWERK_PM: bun
+      LUCODE_PM: bun
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
       CARGO_INCREMENTAL: "0"
@@ -591,8 +591,8 @@ jobs:
         shell: pwsh
         env:
           VERSION: ${{ github.event.inputs.version || github.ref_name }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.SCHALTWERK_UPDATER_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.SCHALTWERK_UPDATER_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.LUCODE_UPDATER_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.LUCODE_UPDATER_PRIVATE_KEY_PASSWORD }}
         run: |
           $VERSION = $env:VERSION -replace '^v',''
           $NSIS_DIR = "src-tauri/target/release/bundle/nsis"
@@ -603,11 +603,11 @@ jobs:
             exit 1
           }
 
-          $EXE_NAME = "Schaltwerk-$VERSION-windows-x64.exe"
+          $EXE_NAME = "Lucode-$VERSION-windows-x64.exe"
           Copy-Item $INSTALLER.FullName -Destination $EXE_NAME
           Write-Host "Created $EXE_NAME"
 
-          $ZIP_NAME = "Schaltwerk-$VERSION-windows-x64.nsis.zip"
+          $ZIP_NAME = "Lucode-$VERSION-windows-x64.nsis.zip"
           Compress-Archive -Path $EXE_NAME -DestinationPath $ZIP_NAME
           Write-Host "Created $ZIP_NAME"
 
@@ -647,8 +647,8 @@ jobs:
         with:
           name: windows-installer
           path: |
-            Schaltwerk-*-windows-x64.exe
-            Schaltwerk-*-windows-x64.nsis.zip
+            Lucode-*-windows-x64.exe
+            Lucode-*-windows-x64.nsis.zip
             windows-signature.txt
             windows-checksums.txt
 
@@ -723,7 +723,7 @@ jobs:
             exit 0
           fi
 
-          PROMPT="You are a release notes writer for Schaltwerk, a Tauri desktop app for managing AI coding sessions with git worktrees. Analyze the following git commit log and generate release notes.
+          PROMPT="You are a release notes writer for Lucode, a Tauri desktop app for managing AI coding sessions with git worktrees. Analyze the following git commit log and generate release notes.
 
           Format (follow this exactly):
           ## What's New in ${CURRENT_TAG}
@@ -803,7 +803,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', github.event.inputs.version) }}
-          name: Schaltwerk ${{ github.event.inputs.version || github.ref_name }}
+          name: Lucode ${{ github.event.inputs.version || github.ref_name }}
           draft: false
           prerelease: false
           body: ${{ steps.release_notes.outputs.notes }}

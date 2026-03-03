@@ -5,7 +5,7 @@ fn should_skip(path: &Path) -> bool {
     if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
         matches!(
             name,
-            "target" | ".git" | "node_modules" | ".schaltwerk" | "dist"
+            "target" | ".git" | "node_modules" | ".lucode" | "dist"
         )
     } else {
         false

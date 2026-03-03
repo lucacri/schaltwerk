@@ -3,7 +3,7 @@ title: Sessions & Specs
 description: 'Learn how sessions, specs, and lifecycle states work together'
 ---
 
-Schaltwerk revolves around isolated git worktrees and the lifecycle of each AI-driven session. This page covers how sessions and specs move between states, how the orchestrator supports planning, and how to reuse specs as a backlog.
+Lucode revolves around isolated git worktrees and the lifecycle of each AI-driven session. This page covers how sessions and specs move between states, how the orchestrator supports planning, and how to reuse specs as a backlog.
 
 ## Sessions
 
@@ -27,7 +27,7 @@ Schaltwerk revolves around isolated git worktrees and the lifecycle of each AI-d
 </CardGroup>
 
 <Tip>
-  Every worktree is its own copy of the repository on disk. Keep sessions short-lived and clean up finished work so the `.schaltwerk/worktrees/` folder doesn't grow without bound.
+  Every worktree is its own copy of the repository on disk. Keep sessions short-lived and clean up finished work so the `.lucode/worktrees/` folder doesn't grow without bound.
 </Tip>
 
 ### Renaming Sessions
@@ -142,7 +142,7 @@ Click "Repository (Orchestrator)" at the top of the sidebar
   <Step title="Running" icon="play">
     **Active session.** The session owns a worktree and active terminals.
 
-    - Git worktree created under `.schaltwerk/worktrees/`
+    - Git worktree created under `.lucode/worktrees/`
     - Two PTY terminals spawned
     - Agent process can run in top terminal
     - Magenta badge in sidebar

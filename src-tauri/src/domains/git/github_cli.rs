@@ -1372,7 +1372,7 @@ impl<R: CommandRunner> GitHubCli<R> {
                      1. Open your terminal\n\
                      2. Run: gh auth login\n\
                      3. Follow the prompts to authenticate\n\
-                     4. Return to Schaltwerk and the status will update automatically"
+                     4. Return to Lucode and the status will update automatically"
                 .to_string(),
         })
     }
@@ -2675,8 +2675,8 @@ mod tests {
     #[test]
     fn sanitize_branch_name_handles_slashes() {
         assert_eq!(
-            sanitize_branch_name("schaltwerk/my-session"),
-            "schaltwerk/my-session"
+            sanitize_branch_name("lucode/my-session"),
+            "lucode/my-session"
         );
         assert_eq!(
             sanitize_branch_name("feature/add-login"),

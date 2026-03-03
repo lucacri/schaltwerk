@@ -262,7 +262,7 @@ export function PermissionPrompt({ onPermissionGranted, showOnlyIfNeeded = true,
               className="text-sm leading-relaxed"
               style={{ color: 'var(--color-text-secondary)' }}
             >
-              {t.permissionPrompt.troubleDesc.replace('{app}', diagnostics?.appDisplayName ?? 'Schaltwerk')}
+              {t.permissionPrompt.troubleDesc.replace('{app}', diagnostics?.appDisplayName ?? 'Lucode')}
             </p>
             {installLabel && (
               <p

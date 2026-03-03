@@ -176,7 +176,7 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
         "CREATE TABLE IF NOT EXISTS project_config (
             repository_path TEXT PRIMARY KEY,
             setup_script TEXT,
-            branch_prefix TEXT DEFAULT 'schaltwerk',
+            branch_prefix TEXT DEFAULT 'lucode',
             github_repository TEXT,
             github_default_branch TEXT,
             created_at INTEGER NOT NULL,
@@ -387,7 +387,7 @@ fn apply_project_config_migrations(conn: &rusqlite::Connection) -> anyhow::Resul
         [],
     );
     let _ = conn.execute(
-        "UPDATE project_config SET branch_prefix = 'schaltwerk' WHERE branch_prefix IS NULL",
+        "UPDATE project_config SET branch_prefix = 'lucode' WHERE branch_prefix IS NULL",
         [],
     );
     let _ = conn.execute(

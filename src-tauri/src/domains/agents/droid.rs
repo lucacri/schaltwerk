@@ -8,7 +8,7 @@ use std::time::SystemTime;
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::PermissionsExt;
 
-const SHIM_RELATIVE_PATH: &str = ".schaltwerk/droid/shims";
+const SHIM_RELATIVE_PATH: &str = ".lucode/droid/shims";
 const SHIM_BINARY_NAME: &str = "code";
 const SHIM_CONTENT: &str = r#"#!/bin/bash
 set -euo pipefail

@@ -68,8 +68,8 @@ impl ProjectSessionsBackend {
             .current_schaltwerk_core()
             .await
             .map_err(|e| {
-                log::error!("Failed to get Schaltwerk core: {e}");
-                format!("Failed to get Schaltwerk core: {e}")
+                log::error!("Failed to get Lucode core: {e}");
+                format!("Failed to get Lucode core: {e}")
             })
     }
 }

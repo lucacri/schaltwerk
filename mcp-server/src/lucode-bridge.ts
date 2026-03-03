@@ -193,8 +193,8 @@ interface ProjectContext {
 function detectProjectPath(): string {
   try {
     // First try the environment variable (if set by Tauri app)
-    if (process.env.SCHALTWERK_PROJECT_PATH) {
-      return process.env.SCHALTWERK_PROJECT_PATH
+    if (process.env.LUCODE_PROJECT_PATH) {
+      return process.env.LUCODE_PROJECT_PATH
     }
     
     // Otherwise, find the git root from current working directory
@@ -250,7 +250,7 @@ function createProjectContext(projectPath: string): ProjectContext {
   }
 }
 
-export class SchaltwerkBridge {
+export class LucodeBridge {
   private readonly projectContext: ProjectContext
   private readonly portCandidates: number[]
   private activePort: number | null = null
@@ -300,7 +300,7 @@ export class SchaltwerkBridge {
       }
     }
 
-    const envPort = process.env.SCHALTWERK_MCP_PORT ? Number.parseInt(process.env.SCHALTWERK_MCP_PORT, 10) : undefined
+    const envPort = process.env.LUCODE_MCP_PORT ? Number.parseInt(process.env.LUCODE_MCP_PORT, 10) : undefined
     addPort(envPort)
 
     const basePort = this.calculateBasePort()
@@ -352,7 +352,7 @@ export class SchaltwerkBridge {
         const response = await fetch(`http://${this.host}:${port}${path}`, this.cloneInit(init))
         this.activePort = port
         if (!this.hasLoggedPort) {
-          console.error(`Schaltwerk MCP bridge connected to port ${port}`)
+          console.error(`Lucode MCP bridge connected to port ${port}`)
           this.hasLoggedPort = true
         }
         return response
@@ -368,7 +368,7 @@ export class SchaltwerkBridge {
     const errorMessage =
       lastError instanceof Error ? lastError.message : lastError ? String(lastError) : 'unknown error'
     throw new Error(
-      `Failed to reach Schaltwerk MCP service on ports ${attempts.join(', ')}: ${errorMessage}`
+      `Failed to reach Lucode MCP service on ports ${attempts.join(', ')}: ${errorMessage}`
     )
   }
 
@@ -560,7 +560,7 @@ export class SchaltwerkBridge {
 
       const session = await response.json() as Session
 
-      // Notify Schaltwerk UI about the new session
+      // Notify Lucode UI about the new session
       await this.notifySessionAdded(session)
 
       return session
@@ -798,12 +798,12 @@ export class SchaltwerkBridge {
    - git commit -m "Save progress before cancellation"
    - Then retry cancellation
 
-2. SAFER ALTERNATIVE: Use schaltwerk_convert_to_spec instead
+2. SAFER ALTERNATIVE: Use lucode_convert_to_spec instead
    - Converts session to spec state, removing worktree but preserving branch
-   - Can be restarted later with schaltwerk_draft_start
+   - Can be restarted later with lucode_draft_start
 
 3. FORCE DELETION (DANGEROUS): Add force: true parameter
-   - schaltwerk_cancel(session_name: "${name}", force: true)
+   - lucode_cancel(session_name: "${name}", force: true)
    - ⚠️ THIS WILL PERMANENTLY DELETE ALL UNCOMMITTED WORK
 
 💡 Your work is valuable - consider saving it before cancellation!`)
@@ -911,12 +911,12 @@ export class SchaltwerkBridge {
       execSync('git rev-parse --show-toplevel', { cwd, stdio: 'pipe' })
       return cwd
     } catch {
-      // If not, try to find the schaltwerk repository
+      // If not, try to find the lucode repository
       const possiblePaths = [
-        path.join(os.homedir(), 'Documents', 'git', 'schaltwerk'),
-        path.join(os.homedir(), 'Projects', 'schaltwerk'),
-        path.join(os.homedir(), 'Code', 'schaltwerk'),
-        path.join(os.homedir(), 'schaltwerk'),
+        path.join(os.homedir(), 'Documents', 'git', 'lucode'),
+        path.join(os.homedir(), 'Projects', 'lucode'),
+        path.join(os.homedir(), 'Code', 'lucode'),
+        path.join(os.homedir(), 'lucode'),
       ]
       
       for (const p of possiblePaths) {
@@ -925,7 +925,7 @@ export class SchaltwerkBridge {
         }
       }
       
-      throw new Error('Could not find schaltwerk repository')
+      throw new Error('Could not find lucode repository')
     }
   }
 
@@ -949,7 +949,7 @@ export class SchaltwerkBridge {
   }
 
   private async createWorktree(repoPath: string, sessionName: string, branchName: string, parentBranch: string): Promise<string> {
-    const worktreePath = path.join(repoPath, '.schaltwerk', 'worktrees', sessionName)
+    const worktreePath = path.join(repoPath, '.lucode', 'worktrees', sessionName)
     
     // Create worktree with new branch
     execSync(`git worktree add -b "${branchName}" "${worktreePath}" "${parentBranch}"`, {

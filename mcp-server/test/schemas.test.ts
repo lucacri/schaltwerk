@@ -13,19 +13,19 @@ const ajv = new Ajv({ strict: true, allErrors: true, validateSchema: false })
 addFormats(ajv)
 
 const sampleStructuredOutputs: Record<string, any> = {
-  schaltwerk_create: {
+  lucode_create: {
     type: 'session',
     status: 'created',
     session: {
       name: 'alpha',
-      branch: 'schaltwerk/alpha',
-      worktree_path: '/tmp/project/.schaltwerk/worktrees/alpha',
+      branch: 'lucode/alpha',
+      worktree_path: '/tmp/project/.lucode/worktrees/alpha',
       parent_branch: 'main',
       agent_type: 'claude',
       ready_to_merge: false,
     },
   },
-  schaltwerk_list: {
+  lucode_list: {
     sessions: [
       {
         name: 'alpha',
@@ -36,57 +36,57 @@ const sampleStructuredOutputs: Record<string, any> = {
         created_at: '2024-05-01T00:00:00Z',
         last_activity: null,
         agent_type: 'claude',
-        branch: 'schaltwerk/alpha',
+        branch: 'lucode/alpha',
         worktree_path: null,
         initial_prompt: 'Initial work',
         draft_content: '# Plan',
       },
     ],
   },
-  schaltwerk_send_message: {
+  lucode_send_message: {
     session: 'alpha',
     status: 'sent',
     message: 'ping',
   },
-  schaltwerk_cancel: {
+  lucode_cancel: {
     session: 'alpha',
     cancelled: true,
     force: false,
   },
-  schaltwerk_get_setup_script: {
+  lucode_get_setup_script: {
     setup_script: '#!/bin/bash\necho boot',
     has_setup_script: true,
   },
-  schaltwerk_set_setup_script: {
+  lucode_set_setup_script: {
     setup_script: '#!/bin/bash\necho updated',
     has_setup_script: true,
   },
-  schaltwerk_get_worktree_base_directory: {
+  lucode_get_worktree_base_directory: {
     worktree_base_directory: '/tmp/worktrees',
     has_custom_directory: true,
   },
-  schaltwerk_set_worktree_base_directory: {
+  lucode_set_worktree_base_directory: {
     worktree_base_directory: '/tmp/worktrees',
     has_custom_directory: true,
   },
-  schaltwerk_spec_create: {
+  lucode_spec_create: {
     type: 'spec',
     status: 'created',
     session: {
       name: 'alpha_spec',
-      branch: 'schaltwerk/alpha_spec',
+      branch: 'lucode/alpha_spec',
       parent_branch: 'main',
       content_length: 128,
     },
   },
-  schaltwerk_draft_update: {
+  lucode_draft_update: {
     session: 'alpha_spec',
     updated: true,
     append: false,
     content_length: 256,
     content_preview: '# Updated plan',
   },
-  schaltwerk_current_spec_update: {
+  lucode_current_spec_update: {
     status: 'updated',
     session: 'alpha_spec',
     updated: true,
@@ -94,7 +94,7 @@ const sampleStructuredOutputs: Record<string, any> = {
     content_length: 42,
     content_preview: '# delta',
   },
-  schaltwerk_spec_list: {
+  lucode_spec_list: {
     specs: [
       {
         session_id: 'alpha_spec',
@@ -104,18 +104,18 @@ const sampleStructuredOutputs: Record<string, any> = {
       },
     ],
   },
-  schaltwerk_spec_read: {
+  lucode_spec_read: {
     session_id: 'alpha_spec',
     display_name: 'Alpha Spec',
     content: '# Alpha',
     content_length: 7,
     updated_at: '2024-05-01T12:00:00Z',
   },
-  schaltwerk_diff_summary: {
+  lucode_diff_summary: {
     scope: 'session',
     session_id: 'fiery_maxwell',
     branch_info: {
-      current_branch: 'schaltwerk/fiery_maxwell',
+      current_branch: 'lucode/fiery_maxwell',
       parent_branch: 'main',
       merge_base_short: 'abc1234',
       head_short: 'def5678',
@@ -124,10 +124,10 @@ const sampleStructuredOutputs: Record<string, any> = {
     files: [{ path: 'src/app.ts', change_type: 'modified' }],
     paging: { next_cursor: null, total_files: 1, returned: 1 },
   },
-  schaltwerk_diff_chunk: {
+  lucode_diff_chunk: {
     file: { path: 'src/app.ts', change_type: 'modified' },
     branch_info: {
-      current_branch: 'schaltwerk/fiery_maxwell',
+      current_branch: 'lucode/fiery_maxwell',
       parent_branch: 'main',
       merge_base_short: 'abc1234',
       head_short: 'def5678',
@@ -137,19 +137,19 @@ const sampleStructuredOutputs: Record<string, any> = {
     lines: [{ content: 'const a = 1;', line_type: 'added', new_line_number: 3 }],
     paging: { cursor: null, next_cursor: null, returned: 1 },
   },
-  schaltwerk_session_spec: {
+  lucode_session_spec: {
     session_id: 'fiery_maxwell',
     content: '# Spec',
     updated_at: '2024-05-01T12:34:56Z',
   },
-  schaltwerk_draft_start: {
+  lucode_draft_start: {
     session: 'alpha_spec',
     started: true,
     agent_type: 'claude',
     skip_permissions: false,
     base_branch: 'main',
   },
-  schaltwerk_draft_list: {
+  lucode_draft_list: {
     specs: [
       {
         name: 'alpha_spec',
@@ -162,18 +162,18 @@ const sampleStructuredOutputs: Record<string, any> = {
       },
     ],
   },
-  schaltwerk_draft_delete: {
+  lucode_draft_delete: {
     session: 'alpha_spec',
     deleted: true,
   },
-  schaltwerk_get_current_tasks: {
+  lucode_get_current_tasks: {
     tasks: [
       {
         name: 'alpha',
         display_name: 'Alpha',
         status: 'spec',
         session_state: 'Spec',
-        branch: 'schaltwerk/alpha',
+        branch: 'lucode/alpha',
         ready_to_merge: false,
         agent_type: 'claude',
         initial_prompt: 'prompt',
@@ -181,41 +181,41 @@ const sampleStructuredOutputs: Record<string, any> = {
       },
     ],
   },
-  schaltwerk_mark_session_reviewed: {
+  lucode_mark_session_reviewed: {
     session: 'alpha',
     reviewed: true,
   },
-  schaltwerk_convert_to_spec: {
+  lucode_convert_to_spec: {
     session: 'alpha',
     converted: true,
   },
-  schaltwerk_merge_session: {
+  lucode_merge_session: {
     session: 'alpha',
     merged: true,
     mode: 'squash',
     parent_branch: 'main',
-    session_branch: 'schaltwerk/alpha',
+    session_branch: 'lucode/alpha',
     commit: 'abc123',
     cancel_requested: false,
     cancel_queued: false,
     cancel_error: null,
   },
-  schaltwerk_create_pr: {
+  lucode_create_pr: {
     session: 'alpha',
-    branch: 'schaltwerk/alpha',
+    branch: 'lucode/alpha',
     pr_url: 'https://example.com/pr/1',
     cancel_requested: false,
     cancel_queued: false,
     cancel_error: null,
   },
-  schaltwerk_create_epic: {
+  lucode_create_epic: {
     epic: {
       id: 'abc-123',
       name: 'auth-rewrite',
       color: '#FF5733',
     },
   },
-  schaltwerk_list_epics: {
+  lucode_list_epics: {
     epics: [
       {
         id: 'abc-123',
@@ -229,14 +229,14 @@ const sampleStructuredOutputs: Record<string, any> = {
       },
     ],
   },
-  schaltwerk_run_script: {
+  lucode_run_script: {
     success: true,
     command: 'bun run dev',
     exit_code: 0,
     stdout: 'Server started on port 3000',
     stderr: '',
   },
-  schaltwerk_prepare_merge: {
+  lucode_prepare_merge: {
     session: 'alpha',
     modal_triggered: true,
   },
@@ -260,7 +260,7 @@ describe('MCP output schemas', () => {
   }
 
   it('rejects an invalid diff chunk payload', () => {
-    const schema = toolOutputSchemas.schaltwerk_diff_chunk as any
+    const schema = toolOutputSchemas.lucode_diff_chunk as any
     const validate = ajv.compile(schema)
     const invalid = {
       stats: { additions: 1, deletions: 0 },

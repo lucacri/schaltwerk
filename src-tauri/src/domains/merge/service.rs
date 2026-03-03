@@ -981,7 +981,7 @@ fn collect_conflicting_paths(index: &git2::Index) -> Result<Vec<String>> {
             .or_else(|| conflict.ancestor.as_ref().and_then(index_entry_path));
 
         if let Some(path) = path {
-            if path == ".schaltwerk" || path.starts_with(".schaltwerk/") {
+            if path == ".lucode" || path.starts_with(".lucode/") {
                 continue;
             }
 
@@ -1047,11 +1047,11 @@ fn fast_forward_branch(repo: &Repository, branch: &str, new_oid: Oid) -> Result<
             })?;
 
         // If checkout succeeded, it's safe to update the reference
-        reference.set_target(new_oid, "schaltwerk fast-forward merge")?;
+        reference.set_target(new_oid, "lucode fast-forward merge")?;
     } else {
         // If not on the branch, just update the reference (standard fast-forward for non-checked-out branch)
         debug!("{OPERATION_LABEL}: fast-forwarding non-HEAD branch '{branch}' (ref update only)");
-        reference.set_target(new_oid, "schaltwerk fast-forward merge")?;
+        reference.set_target(new_oid, "lucode fast-forward merge")?;
     }
 
     Ok(())
@@ -1377,7 +1377,7 @@ pub fn update_session_from_parent(
     let original_head = session_oid.to_string();
 
     let stash_hash = if dirty.has_tracked_changes || dirty.has_untracked_changes {
-        let message = format!("schaltwerk: update session '{session_name}' from '{parent_branch}'");
+        let message = format!("lucode: update session '{session_name}' from '{parent_branch}'");
         match git_output(worktree_path, &["stash", "push", "-u", "-m", &message]) {
             Ok(output) if output.status.success() => {
                 let combined = git_combined_output(&output);
@@ -3711,11 +3711,11 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
 
-        std::fs::create_dir_all(repo_path.join(".schaltwerk")).unwrap();
-        std::fs::write(repo_path.join(".schaltwerk/config.json"), "{}").unwrap();
+        std::fs::create_dir_all(repo_path.join(".lucode")).unwrap();
+        std::fs::write(repo_path.join(".lucode/config.json"), "{}").unwrap();
         run_git(
             &repo_path,
-            vec![OsString::from("add"), OsString::from(".schaltwerk")],
+            vec![OsString::from("add"), OsString::from(".lucode")],
         )
         .unwrap();
         run_git(
@@ -3747,13 +3747,13 @@ mod tests {
         let session = manager.create_session_with_agent(params).unwrap();
 
         std::fs::write(
-            session.worktree_path.join(".schaltwerk/config.json"),
+            session.worktree_path.join(".lucode/config.json"),
             r#"{"session": "change"}"#,
         )
         .unwrap();
         run_git(
             &session.worktree_path,
-            vec![OsString::from("add"), OsString::from(".schaltwerk")],
+            vec![OsString::from("add"), OsString::from(".lucode")],
         )
         .unwrap();
         run_git(
@@ -3767,13 +3767,13 @@ mod tests {
         .unwrap();
 
         std::fs::write(
-            repo_path.join(".schaltwerk/config.json"),
+            repo_path.join(".lucode/config.json"),
             r#"{"parent": "change"}"#,
         )
         .unwrap();
         run_git(
             &repo_path,
-            vec![OsString::from("add"), OsString::from(".schaltwerk")],
+            vec![OsString::from("add"), OsString::from(".lucode")],
         )
         .unwrap();
         run_git(
@@ -3793,11 +3793,11 @@ mod tests {
 
         assert!(
             !preview.has_conflicts,
-            ".schaltwerk conflicts should be ignored"
+            ".lucode conflicts should be ignored"
         );
         assert!(
             preview.conflicting_paths.is_empty(),
-            "conflicting_paths should not include .schaltwerk files"
+            "conflicting_paths should not include .lucode files"
         );
     }
 
@@ -3807,10 +3807,10 @@ mod tests {
         let (manager, db, repo_path) = create_session_manager(&temp);
 
         let internal_files: Vec<String> = (0..7)
-            .map(|idx| format!(".schaltwerk/internal-{idx}.json"))
+            .map(|idx| format!(".lucode/internal-{idx}.json"))
             .collect();
 
-        std::fs::create_dir_all(repo_path.join(".schaltwerk")).unwrap();
+        std::fs::create_dir_all(repo_path.join(".lucode")).unwrap();
         for file in &internal_files {
             std::fs::write(repo_path.join(file), "base").unwrap();
         }

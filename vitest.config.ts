@@ -26,7 +26,7 @@ export default defineConfig({
     exclude: [
       'node_modules/**',
       'vscode/**',
-      '.schaltwerk/**',
+      '.lucode/**',
       'dist/**',
       '**/*.performance.test.*',
       '**/*.bench.test.*'

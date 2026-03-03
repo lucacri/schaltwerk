@@ -1,21 +1,21 @@
 [package]
-name = "schaltwerk"
+name = "lucode"
 version = "0.13.4"
 description = "AI-powered git worktree session manager for isolated development environments"
-authors = ["Schaltwerk Contributors"]
+authors = ["Lucode Contributors"]
 license = "MIT"
-repository = "https://github.com/schaltwerk/schaltwerk"
-homepage = "https://github.com/schaltwerk/schaltwerk"
+repository = "https://github.com/lucacri/lucode"
+homepage = "https://github.com/lucacri/lucode"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [[bin]]
-name = "schaltwerk"
+name = "lucode"
 path = "src/main.rs"
 
 [lib]
-name = "schaltwerk"
+name = "lucode"
 path = "src/lib.rs"
 doctest = false
 

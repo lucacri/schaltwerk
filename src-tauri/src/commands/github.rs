@@ -1,11 +1,11 @@
 use crate::get_project_manager;
 use log::{error, info, warn};
-use schaltwerk::domains::git::service::rename_branch;
-use schaltwerk::infrastructure::events::{SchaltEvent, emit_event};
-use schaltwerk::project_manager::ProjectManager;
-use schaltwerk::schaltwerk_core::db_project_config::{ProjectConfigMethods, ProjectGithubConfig};
-use schaltwerk::shared::session_metadata_gateway::SessionMetadataGateway;
-use schaltwerk::services::{
+use lucode::domains::git::service::rename_branch;
+use lucode::infrastructure::events::{SchaltEvent, emit_event};
+use lucode::project_manager::ProjectManager;
+use lucode::schaltwerk_core::db_project_config::{ProjectConfigMethods, ProjectGithubConfig};
+use lucode::shared::session_metadata_gateway::SessionMetadataGateway;
+use lucode::services::{
     CommandRunner, CreatePrOptions, CreateSessionPrOptions, GitHubCli, GitHubCliError,
     GitHubIssueComment, GitHubIssueDetails, GitHubIssueLabel, GitHubIssueSummary,
     GitHubPrDetails, GitHubPrReview, GitHubPrReviewComment, GitHubPrSummary, GitHubStatusCheck,
@@ -389,7 +389,7 @@ pub async fn github_create_session_pr_impl(
         )
     };
 
-    if session_state == schaltwerk::domains::sessions::SessionState::Spec {
+    if session_state == lucode::domains::sessions::SessionState::Spec {
         return Err("Cannot create PR for a spec session. Start the session first.".to_string());
     }
 
@@ -571,7 +571,7 @@ pub async fn github_preview_pr(
         .get_session(&session_name)
         .map_err(|e| format!("Session not found: {e}"))?;
 
-    if session.session_state == schaltwerk::domains::sessions::SessionState::Spec {
+    if session.session_state == lucode::domains::sessions::SessionState::Spec {
         return Err("Cannot create PR for a spec session. Start the session first.".to_string());
     }
 
@@ -593,7 +593,7 @@ pub async fn github_preview_pr(
         get_commit_info(&worktree_path, &parent_branch).unwrap_or((0, vec![]));
 
     let has_uncommitted =
-        schaltwerk::domains::git::has_uncommitted_changes(&worktree_path).unwrap_or(false);
+        lucode::domains::git::has_uncommitted_changes(&worktree_path).unwrap_or(false);
 
     let default_title = if commit_count == 1 && !commit_summaries.is_empty() {
         commit_summaries[0].clone()
@@ -611,7 +611,7 @@ pub async fn github_preview_pr(
             .join("\n")
     };
 
-    let remote_status = schaltwerk::domains::git::branches::check_remote_branch_status(
+    let remote_status = lucode::domains::git::branches::check_remote_branch_status(
         &project.path,
         &session_branch,
     );
@@ -1081,8 +1081,8 @@ fn format_cli_error(err: GitHubCliError) -> String {
 mod tests {
     use super::*;
     use git2::Repository;
-    use schaltwerk::project_manager::ProjectManager;
-    use schaltwerk::services::CommandOutput;
+    use lucode::project_manager::ProjectManager;
+    use lucode::services::CommandOutput;
     use std::collections::VecDeque;
     use std::io;
     use std::path::{Path, PathBuf};
@@ -1140,7 +1140,7 @@ mod tests {
 
     impl TempHomeGuard {
         fn new() -> Self {
-            use schaltwerk::utils::env_adapter::EnvAdapter;
+            use lucode::utils::env_adapter::EnvAdapter;
             let temp_dir = TempDir::new().expect("temp home directory");
             let previous = std::env::var("HOME").ok();
             EnvAdapter::set_var("HOME", &temp_dir.path().to_string_lossy());
@@ -1153,7 +1153,7 @@ mod tests {
 
     impl Drop for TempHomeGuard {
         fn drop(&mut self) {
-            use schaltwerk::utils::env_adapter::EnvAdapter;
+            use lucode::utils::env_adapter::EnvAdapter;
             if let Some(prev) = &self.previous {
                 EnvAdapter::set_var("HOME", prev);
             } else {
