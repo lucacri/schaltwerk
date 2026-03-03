@@ -695,7 +695,7 @@ mod tests {
 
             let spec = adapter.build_launch_spec(ctx);
 
-            let shim_dir = worktree_path.join(".schaltwerk/droid/shims");
+            let shim_dir = worktree_path.join(".lucode/droid/shims");
             let shim_binary = shim_dir.join("code");
             assert!(shim_binary.exists(), "expected VSCode shim to be created");
 

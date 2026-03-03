@@ -10,10 +10,10 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use schaltwerk::binary_detection::{get_unsupported_reason, is_binary_file_by_extension};
-use schaltwerk::domains::git;
-use schaltwerk::domains::sessions::entity::{ChangedFile, Session, SessionStatus};
-use schaltwerk::domains::workspace::diff_engine::{
+use lucode::binary_detection::{get_unsupported_reason, is_binary_file_by_extension};
+use lucode::domains::git;
+use lucode::domains::sessions::entity::{ChangedFile, Session, SessionStatus};
+use lucode::domains::workspace::diff_engine::{
     DiffLine, LineType, add_collapsible_sections, calculate_diff_stats, compute_unified_diff,
 };
 
@@ -675,8 +675,8 @@ pub fn fetch_session_spec(session: &Session) -> Result<SessionSpecResponse, Diff
 mod tests {
     use super::*;
     use git2::{Oid, Repository};
-    use schaltwerk::domains::sessions::entity::{SessionState, SessionStatus};
-    use schaltwerk::domains::workspace::diff_engine::{
+    use lucode::domains::sessions::entity::{SessionState, SessionStatus};
+    use lucode::domains::workspace::diff_engine::{
         add_collapsible_sections, compute_unified_diff,
     };
     use std::process::{Command, Stdio};
@@ -794,13 +794,13 @@ mod tests {
     fn diff_summary_paginates_session_changes() {
         let tmp = init_repo();
         let repo_path = tmp.path();
-        checkout_branch(repo_path, "schaltwerk/diff-summary", "main");
+        checkout_branch(repo_path, "lucode/diff-summary", "main");
 
         write_file(repo_path.join("alpha.txt").as_path(), "alpha");
         write_file(repo_path.join("beta.txt").as_path(), "beta");
         write_file(repo_path.join("gamma.txt").as_path(), "gamma");
 
-        let session = make_session(repo_path, "schaltwerk/diff-summary", "main");
+        let session = make_session(repo_path, "lucode/diff-summary", "main");
         let scope = DiffScope::for_session(&session).expect("scope");
 
         let first = compute_diff_summary(
@@ -907,8 +907,8 @@ mod tests {
             "Add base file",
         );
 
-        checkout_branch(repo_path, "schaltwerk/diff-chunk", "main");
-        let session = make_session(repo_path, "schaltwerk/diff-chunk", "main");
+        checkout_branch(repo_path, "lucode/diff-chunk", "main");
+        let session = make_session(repo_path, "lucode/diff-chunk", "main");
         let scope = DiffScope::for_session(&session).expect("scope");
 
         let new_content: String = (0..120)
@@ -972,11 +972,11 @@ mod tests {
     fn diff_chunk_marks_binary_files() {
         let tmp = init_repo();
         let repo_path = tmp.path();
-        checkout_branch(repo_path, "schaltwerk/binary-diff", "main");
+        checkout_branch(repo_path, "lucode/binary-diff", "main");
 
         write_file(repo_path.join("binary.bin").as_path(), "\0\0\0");
 
-        let session = make_session(repo_path, "schaltwerk/binary-diff", "main");
+        let session = make_session(repo_path, "lucode/binary-diff", "main");
         let scope = DiffScope::for_session(&session).expect("scope");
 
         let response = compute_diff_chunk(
@@ -999,7 +999,7 @@ mod tests {
     fn session_spec_response_present() {
         let tmp = init_repo();
         let repo_path = tmp.path();
-        let mut session = make_session(repo_path, "schaltwerk/spec-session", "main");
+        let mut session = make_session(repo_path, "lucode/spec-session", "main");
         session.spec_content = Some("# Spec content\nDetails".to_string());
 
         let response = fetch_session_spec(&session).expect("spec response");
@@ -1011,7 +1011,7 @@ mod tests {
     fn session_spec_response_missing() {
         let tmp = init_repo();
         let repo_path = tmp.path();
-        let session = make_session(repo_path, "schaltwerk/no-spec", "main");
+        let session = make_session(repo_path, "lucode/no-spec", "main");
 
         let err = fetch_session_spec(&session).expect_err("missing spec should error");
         assert_eq!(err.status, StatusCode::NOT_FOUND);

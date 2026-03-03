@@ -39,7 +39,7 @@ fn discover_repository_from_env() -> Option<PathBuf> {
 fn discover_repository_from_cwd() -> Result<PathBuf> {
     let current_dir = std::env::current_dir()?;
     let repo = Repository::discover(&current_dir).map_err(|_| {
-        anyhow!("Not in a git repository. Please run Schaltwerk from within a git repository.")
+        anyhow!("Not in a git repository. Please run Lucode from within a git repository.")
     })?;
 
     repo.workdir()

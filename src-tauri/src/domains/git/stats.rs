@@ -93,7 +93,7 @@ pub fn build_changed_files_from_diff(diff: &Diff) -> Result<Vec<ChangedFile>> {
             .and_then(|p| p.to_str());
 
         let Some(path_str) = path else { continue };
-        if path_str.starts_with(".schaltwerk/") || path_str == ".schaltwerk" {
+        if path_str.starts_with(".lucode/") || path_str == ".lucode" {
             continue;
         }
 
@@ -139,7 +139,7 @@ pub fn build_changed_files_from_diff(diff: &Diff) -> Result<Vec<ChangedFile>> {
             .and_then(|p| p.to_str());
 
         if let Some(path_str) = path {
-            if path_str.starts_with(".schaltwerk/") || path_str == ".schaltwerk" {
+            if path_str.starts_with(".lucode/") || path_str == ".lucode" {
                 return true;
             }
 
@@ -219,7 +219,7 @@ struct StatsCacheKey {
 type StatsCacheMap = HashMap<(std::path::PathBuf, String), (StatsCacheKey, GitStats)>;
 /// Process-wide memoization of the most recent stats per (worktree, parent branch).
 ///
-/// The mutex protects concurrent refreshes within a single Schaltwerk process. The key
+/// The mutex protects concurrent refreshes within a single Lucode process. The key
 /// includes the absolute worktree path, so concurrent projects do not collide.
 /// This keeps the cache safe even when multiple projects are active.
 static STATS_CACHE: OnceLock<Mutex<StatsCacheMap>> = OnceLock::new();
@@ -233,7 +233,7 @@ pub fn clear_stats_cache() {
 
 #[inline]
 fn is_internal_tooling_path(path: &str) -> bool {
-    path == ".schaltwerk" || path.starts_with(".schaltwerk/")
+    path == ".lucode" || path.starts_with(".lucode/")
 }
 
 pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Result<GitStats> {
@@ -271,7 +271,7 @@ pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Re
         .include_untracked(true)
         .recurse_untracked_dirs(true);
     let statuses = repo.statuses(Some(&mut status_opts))?;
-    // Compute filtered has_uncommitted: ignore .schaltwerk internal files
+    // Compute filtered has_uncommitted: ignore .lucode internal files
     let has_uncommitted_filtered = statuses.iter().any(|entry| {
         if let Some(path) = entry.path()
             && is_internal_tooling_path(path)
@@ -918,7 +918,7 @@ mod tests {
 
         // Create feature branch
         StdCommand::new("git")
-            .args(["checkout", "-b", "schaltwerk/test-feature"])
+            .args(["checkout", "-b", "lucode/test-feature"])
             .current_dir(p)
             .output()
             .unwrap();
@@ -936,7 +936,7 @@ mod tests {
             .output()
             .unwrap();
 
-        // Simulate pushing by creating origin/schaltwerk/test-feature ref pointing to current HEAD
+        // Simulate pushing by creating origin/lucode/test-feature ref pointing to current HEAD
         let head_output = StdCommand::new("git")
             .args(["rev-parse", "HEAD"])
             .current_dir(p)
@@ -945,7 +945,7 @@ mod tests {
         let head_sha = String::from_utf8_lossy(&head_output.stdout).trim().to_string();
 
         // Create the remote tracking ref manually
-        let refs_dir = p.join(".git/refs/remotes/origin/schaltwerk");
+        let refs_dir = p.join(".git/refs/remotes/origin/lucode");
         fs::create_dir_all(&refs_dir).unwrap();
         fs::write(refs_dir.join("test-feature"), format!("{}\n", head_sha)).unwrap();
 
@@ -970,7 +970,7 @@ mod tests {
             p,
             "main",
             DiffCompareMode::MergeBase,
-            Some("schaltwerk/test-feature"),
+            Some("lucode/test-feature"),
         )
         .unwrap();
         let merge_base_paths: std::collections::HashSet<_> =
@@ -994,7 +994,7 @@ mod tests {
             p,
             "main",
             DiffCompareMode::UnpushedOnly,
-            Some("schaltwerk/test-feature"),
+            Some("lucode/test-feature"),
         )
         .unwrap();
         let unpushed_paths: std::collections::HashSet<_> =
@@ -1021,14 +1021,14 @@ mod tests {
 
         // Create feature branch
         StdCommand::new("git")
-            .args(["checkout", "-b", "schaltwerk/has-remote"])
+            .args(["checkout", "-b", "lucode/has-remote"])
             .current_dir(p)
             .output()
             .unwrap();
 
         // Initially no remote tracking branch
         assert!(
-            !has_remote_tracking_branch(p, "schaltwerk/has-remote"),
+            !has_remote_tracking_branch(p, "lucode/has-remote"),
             "Should not have remote tracking branch initially"
         );
 
@@ -1040,19 +1040,19 @@ mod tests {
             .unwrap();
         let head_sha = String::from_utf8_lossy(&head_output.stdout).trim().to_string();
 
-        let refs_dir = p.join(".git/refs/remotes/origin/schaltwerk");
+        let refs_dir = p.join(".git/refs/remotes/origin/lucode");
         fs::create_dir_all(&refs_dir).unwrap();
         fs::write(refs_dir.join("has-remote"), format!("{}\n", head_sha)).unwrap();
 
         // Now should have remote tracking branch
         assert!(
-            has_remote_tracking_branch(p, "schaltwerk/has-remote"),
+            has_remote_tracking_branch(p, "lucode/has-remote"),
             "Should have remote tracking branch after creating ref"
         );
 
         // Non-existent branch should return false
         assert!(
-            !has_remote_tracking_branch(p, "schaltwerk/does-not-exist"),
+            !has_remote_tracking_branch(p, "lucode/does-not-exist"),
             "Should not have remote tracking branch for non-existent branch"
         );
     }

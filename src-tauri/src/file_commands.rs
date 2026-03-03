@@ -1,7 +1,7 @@
 use crate::diff_commands::resolve_repo_path_structured;
 use crate::errors::SchaltError;
-use schaltwerk::binary_detection::{is_binary_file_by_extension, is_likely_binary_content};
-use schaltwerk::domains::workspace::diff_engine::get_file_language;
+use lucode::binary_detection::{is_binary_file_by_extension, is_likely_binary_content};
+use lucode::domains::workspace::diff_engine::get_file_language;
 
 #[derive(serde::Serialize, Clone, Debug)]
 pub struct FileContentResponse {

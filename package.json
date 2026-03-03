@@ -1,19 +1,19 @@
 {
-  "name": "schaltwerk",
+  "name": "lucode",
   "version": "0.13.4",
   "type": "module",
   "license": "MIT",
-  "author": "Schaltwerk Contributors",
+  "author": "Lucode Contributors",
   "description": "AI-powered git worktree session manager for isolated development environments",
   "packageManager": "bun@1.2.16",
   "repository": {
     "type": "git",
-    "url": "https://github.com/schaltwerk/schaltwerk.git"
+    "url": "https://github.com/lucacri/lucode.git"
   },
   "bugs": {
-    "url": "https://github.com/schaltwerk/schaltwerk/issues"
+    "url": "https://github.com/lucacri/lucode/issues"
   },
-  "homepage": "https://github.com/schaltwerk/schaltwerk#readme",
+  "homepage": "https://github.com/lucacri/lucode#readme",
   "scripts": {
     "dev": "vite",
     "build": "mkdir -p node_modules/.cache && tsc --noEmit --skipLibCheck && vite build",

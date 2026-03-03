@@ -17,20 +17,20 @@ mock.module('node-fetch', () => ({
   default: fetchMock,
 }))
 
-const { SchaltwerkBridge } = await import('../src/schaltwerk-bridge')
+const { LucodeBridge } = await import('../src/lucode-bridge')
 
-describe('SchaltwerkBridge diff helpers', () => {
+describe('LucodeBridge diff helpers', () => {
   let consoleErrorSpy: ReturnType<typeof spyOn>
 
   beforeEach(() => {
     fetchMock.mockReset()
-    process.env.SCHALTWERK_PROJECT_PATH = path.resolve(__dirname, '..', '..')
+    process.env.LUCODE_PROJECT_PATH = path.resolve(__dirname, '..', '..')
     consoleErrorSpy = spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
     consoleErrorSpy.mockRestore()
-    delete process.env.SCHALTWERK_PROJECT_PATH
+    delete process.env.LUCODE_PROJECT_PATH
   })
 
   it('fetches diff summary with session pagination params', async () => {
@@ -43,7 +43,7 @@ describe('SchaltwerkBridge diff helpers', () => {
           scope: 'session',
           session_id: 'fiery_maxwell',
           branch_info: {
-            current_branch: 'schaltwerk/fiery_maxwell',
+            current_branch: 'lucode/fiery_maxwell',
             parent_branch: 'main',
             merge_base_short: 'abc1234',
             head_short: 'def5678',
@@ -54,7 +54,7 @@ describe('SchaltwerkBridge diff helpers', () => {
         }),
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const result = await bridge.getDiffSummary({ session: 'fiery_maxwell', cursor: 'cursor-1', pageSize: 5 })
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -88,7 +88,7 @@ describe('SchaltwerkBridge diff helpers', () => {
         }),
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const result = await bridge.getDiffSummary({ pageSize: 50 })
 
     const [url] = fetchMock.mock.calls[0]
@@ -108,7 +108,7 @@ describe('SchaltwerkBridge diff helpers', () => {
         JSON.stringify({
           file: { path: 'src/app.ts', change_type: 'modified' },
           branch_info: {
-            current_branch: 'schaltwerk/fiery_maxwell',
+            current_branch: 'lucode/fiery_maxwell',
             parent_branch: 'main',
             merge_base_short: 'abc1234',
             head_short: 'def5678',
@@ -120,7 +120,7 @@ describe('SchaltwerkBridge diff helpers', () => {
         }),
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const result = await bridge.getDiffChunk({
       session: 'fiery_maxwell',
       path: 'src/app.ts',
@@ -146,7 +146,7 @@ describe('SchaltwerkBridge diff helpers', () => {
       text: async () => JSON.stringify({ error: 'line_limit must be <= 1000' }),
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     await expect(
       bridge.getDiffChunk({ path: 'src/app.ts', lineLimit: 5000 })
     ).rejects.toThrow('Failed to fetch diff chunk: 422 Unprocessable Entity - line_limit must be <= 1000')
@@ -165,7 +165,7 @@ describe('SchaltwerkBridge diff helpers', () => {
         }),
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const result = await bridge.getSessionSpec('fiery_maxwell')
     const [url] = fetchMock.mock.calls[0]
     const parsed = new URL(String(url))
@@ -174,18 +174,18 @@ describe('SchaltwerkBridge diff helpers', () => {
   })
 })
 
-describe('SchaltwerkBridge spec helpers', () => {
+describe('LucodeBridge spec helpers', () => {
   let consoleErrorSpy: ReturnType<typeof spyOn>
 
   beforeEach(() => {
     fetchMock.mockReset()
-    process.env.SCHALTWERK_PROJECT_PATH = path.resolve(__dirname, '..', '..')
+    process.env.LUCODE_PROJECT_PATH = path.resolve(__dirname, '..', '..')
     consoleErrorSpy = spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
     consoleErrorSpy.mockRestore()
-    delete process.env.SCHALTWERK_PROJECT_PATH
+    delete process.env.LUCODE_PROJECT_PATH
   })
 
   it('lists spec summaries with content length metadata', async () => {
@@ -206,7 +206,7 @@ describe('SchaltwerkBridge spec helpers', () => {
         }),
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const items = await bridge.listSpecSummaries()
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -233,7 +233,7 @@ describe('SchaltwerkBridge spec helpers', () => {
         }),
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const doc = await bridge.getSpecDocument('beta_spec')
 
     const [url] = fetchMock.mock.calls[0]
@@ -244,7 +244,7 @@ describe('SchaltwerkBridge spec helpers', () => {
   })
 
   it('validates required session name when fetching spec documents', async () => {
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     await expect(bridge.getSpecDocument('')).rejects.toThrow('sessionName is required to fetch a spec')
     expect(fetchMock).not.toHaveBeenCalled()
   })

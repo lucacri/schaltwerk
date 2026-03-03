@@ -1,5 +1,5 @@
-use schaltwerk::services::ServiceHandles;
-use schaltwerk::services::terminals::{
+use lucode::services::ServiceHandles;
+use lucode::services::terminals::{
     CreateRunTerminalRequest, CreateTerminalRequest, CreateTerminalWithSizeRequest,
 };
 use serde::Serialize;
@@ -206,8 +206,8 @@ pub async fn resume_session_terminals(
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use schaltwerk::services::TerminalSnapshot;
-    use schaltwerk::services::terminals::{TerminalsBackend, TerminalsServiceImpl};
+    use lucode::services::TerminalSnapshot;
+    use lucode::services::terminals::{TerminalsBackend, TerminalsServiceImpl};
     use std::sync::{Arc, Mutex};
 
     struct MockTerminalsBackend {

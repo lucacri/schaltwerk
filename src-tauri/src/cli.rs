@@ -1,6 +1,6 @@
 use clap::CommandFactory;
 
-pub use schaltwerk::shared::cli::{Cli, SpecialCliAction, VERSION, detect_special_cli_action};
+pub use lucode::shared::cli::{Cli, SpecialCliAction, VERSION, detect_special_cli_action};
 
 pub fn perform_special_cli_action(action: SpecialCliAction) {
     match action {
@@ -13,7 +13,7 @@ pub fn perform_special_cli_action(action: SpecialCliAction) {
             }
         }
         SpecialCliAction::ShowVersion => {
-            println!("schaltwerk {VERSION}");
+            println!("lucode {VERSION}");
         }
     }
 }

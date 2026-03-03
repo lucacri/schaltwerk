@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{PROJECT_MANAGER, get_core_read, get_core_write, get_settings_manager};
-use schaltwerk::schaltwerk_core::db_app_config::AppConfigMethods;
-use schaltwerk::schaltwerk_core::db_project_config::{
+use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
+use lucode::schaltwerk_core::db_project_config::{
     HeaderActionConfig, ProjectConfigMethods, ProjectMergePreferences, ProjectSessionsSettings,
     RunScript, default_action_buttons,
 };
-use schaltwerk::services::{
+use lucode::services::{
     AgentPreference, DiffViewPreferences, McpServerConfig, SessionPreferences, TerminalSettings,
     TerminalUIPreferences,
 };
@@ -441,7 +441,7 @@ pub async fn set_terminal_settings(app: AppHandle, terminal: TerminalSettings) -
         let shell = terminal
             .shell
             .unwrap_or_else(|| std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string()));
-        schaltwerk::domains::terminal::put_terminal_shell_override(shell, terminal.shell_args);
+        lucode::domains::terminal::put_terminal_shell_override(shell, terminal.shell_args);
     })
 }
 
@@ -935,7 +935,7 @@ mod tests {
         assert!(
             result
                 .unwrap_err()
-                .contains("Failed to get Schaltwerk core")
+                .contains("Failed to get Lucode core")
         );
     }
 
@@ -946,7 +946,7 @@ mod tests {
         assert!(
             result
                 .unwrap_err()
-                .contains("Failed to get Schaltwerk core")
+                .contains("Failed to get Lucode core")
         );
     }
 
@@ -1035,7 +1035,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_set_project_sessions_settings_uninitialized_manager() {
-        let settings = schaltwerk::schaltwerk_core::db_project_config::ProjectSessionsSettings {
+        let settings = lucode::schaltwerk_core::db_project_config::ProjectSessionsSettings {
             filter_mode: "running".to_string(),
         };
         let result = set_project_sessions_settings(settings).await;
@@ -1251,7 +1251,7 @@ mod tests {
     fn test_empty_project_settings() {
         let settings = ProjectSettings {
             setup_script: String::new(),
-            branch_prefix: "schaltwerk".to_string(),
+            branch_prefix: "lucode".to_string(),
             worktree_base_directory: None,
         };
 

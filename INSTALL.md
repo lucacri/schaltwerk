@@ -1,4 +1,4 @@
-# Schaltwerk Installation Guide
+# Lucode Installation Guide
 
 ## Quick Install (Homebrew)
 
@@ -6,24 +6,24 @@ For users with access to the private repository:
 
 ```bash
 # 1. Add the private Homebrew tap (one-time setup)
-brew tap 2mawi2/tap https://github.com/2mawi2/homebrew-tap
+brew tap lucacri/tap https://github.com/2mawi2/homebrew-tap
 
-# 2. Install Schaltwerk
-brew install --cask schaltwerk
+# 2. Install Lucode
+brew install --cask lucode
 
 # 3. Launch the application
-open -a Schaltwerk
+open -a Lucode
 ```
 
 ## First Launch Setup
 
-Since Schaltwerk is distributed without an Apple Developer certificate, macOS will block it on first launch. Follow these steps to approve the app:
+Since Lucode is distributed without an Apple Developer certificate, macOS will block it on first launch. Follow these steps to approve the app:
 
 ### Step 1: Attempt First Launch
 ```bash
-schaltwerk
+lucode
 ```
-You'll see a message that "Schaltwerk" cannot be opened because it is from an unidentified developer.
+You'll see a message that "Lucode" cannot be opened because it is from an unidentified developer.
 
 ### Step 2: Open System Settings
 1. Click the Apple menu  > System Settings
@@ -31,12 +31,12 @@ You'll see a message that "Schaltwerk" cannot be opened because it is from an un
 3. Scroll down to the Security section
 
 ### Step 3: Approve the Application
-1. Look for the message: "Schaltwerk was blocked from use because it is not from an identified developer"
+1. Look for the message: "Lucode was blocked from use because it is not from an identified developer"
 2. Click the "Open Anyway" button next to this message
 3. You may need to enter your password
 
 ### Step 4: Confirm Launch
-1. Try launching Schaltwerk again
+1. Try launching Lucode again
 2. A dialog will appear asking if you're sure you want to open it
 3. Click "Open"
 
@@ -47,65 +47,65 @@ The application will now launch and work normally. This approval is only needed 
 If you prefer to install manually or can't use Homebrew:
 
 ### Download the Application
-1. Go to the [Releases page](https://github.com/2mawi2/schaltwerk/releases)
-2. Download `Schaltwerk-<version>-macos-universal.app.tar.gz`
+1. Go to the [Releases page](https://github.com/lucacri/lucode/releases)
+2. Download `Lucode-<version>-macos-universal.app.tar.gz`
 
 ### Install the Application
 ```bash
 # 1. Extract the archive
-tar -xzf Schaltwerk-*-macos-universal.app.tar.gz
+tar -xzf Lucode-*-macos-universal.app.tar.gz
 
 # 2. Move to Applications folder
-mv Schaltwerk.app /Applications/
+mv Lucode.app /Applications/
 
 # 3. Remove quarantine attribute (optional, helps with Gatekeeper)
-xattr -cr /Applications/Schaltwerk.app
+xattr -cr /Applications/Lucode.app
 
 # 4. Ad-hoc sign the application (optional, improves security)
-codesign --force --deep -s - /Applications/Schaltwerk.app
+codesign --force --deep -s - /Applications/Lucode.app
 ```
 
 ### Launch from Applications
 1. Open Finder
 2. Navigate to Applications
-3. Double-click Schaltwerk
+3. Double-click Lucode
 4. Follow the First Launch Setup steps above if blocked
 
 ## Troubleshooting
 
 ## Automatic Updates
 
-- Schaltwerk checks GitHub releases on startup and installs new versions silently when "Automatic updates" is enabled (default).
+- Lucode checks GitHub releases on startup and installs new versions silently when "Automatic updates" is enabled (default).
 - You can toggle this behavior in **Settings → Version** and run a manual check with the "Check for updates" button. Manual checks work even when automatic updates are disabled.
-- Updates require internet connectivity and the ability to overwrite the existing `/Applications/Schaltwerk.app`. If macOS prevents the update, reopen the app directly from `/Applications` or reinstall from the latest DMG/tarball.
-- After an update is applied you will be prompted with a toast; restart Schaltwerk to launch the new build.
+- Updates require internet connectivity and the ability to overwrite the existing `/Applications/Lucode.app`. If macOS prevents the update, reopen the app directly from `/Applications` or reinstall from the latest DMG/tarball.
+- After an update is applied you will be prompted with a toast; restart Lucode to launch the new build.
 
-### "Schaltwerk is damaged and can't be opened"
+### "Lucode is damaged and can't be opened"
 This usually means the quarantine attribute needs to be removed:
 ```bash
-xattr -cr /Applications/Schaltwerk.app
+xattr -cr /Applications/Lucode.app
 ```
 
-### "The application 'Schaltwerk' can't be opened"
+### "The application 'Lucode' can't be opened"
 Re-sign the application:
 ```bash
-codesign --force --deep -s - /Applications/Schaltwerk.app
+codesign --force --deep -s - /Applications/Lucode.app
 ```
 
 ### App doesn't appear in Applications folder after Homebrew install
 Check if it was installed to the Homebrew prefix:
 ```bash
-ls -la $(brew --prefix)/bin/schaltwerk
+ls -la $(brew --prefix)/bin/lucode
 ```
 
 ### Terminal permissions issues
-If Schaltwerk can't create terminals:
+If Lucode can't create terminals:
 1. Go to System Settings > Privacy & Security > Developer Tools
 2. Add Terminal.app or your preferred terminal
-3. Restart Schaltwerk
+3. Restart Lucode
 
 ### Port 8547 already in use
-Schaltwerk runs an API server on port 8547. If this port is in use:
+Lucode runs an API server on port 8547. If this port is in use:
 ```bash
 # Find what's using the port
 lsof -i :8547
@@ -118,24 +118,24 @@ kill -9 <PID>
 
 ### Via Homebrew
 ```bash
-brew uninstall schaltwerk
+brew uninstall lucode
 ```
 
 ### Manual Uninstallation
 ```bash
 # Remove the application
-rm -rf /Applications/Schaltwerk.app
+rm -rf /Applications/Lucode.app
 
 # Remove application support files
-rm -rf ~/Library/Application\ Support/schaltwerk
+rm -rf ~/Library/Application\ Support/lucode
 
 # Remove logs
-rm -rf ~/Library/Logs/schaltwerk
+rm -rf ~/Library/Logs/lucode
 ```
 
 ## Building from Source
 
-If you need to build Schaltwerk from source:
+If you need to build Lucode from source:
 
 ### Prerequisites
 - Bun 1.2 or later (JS tooling)
@@ -146,8 +146,8 @@ If you need to build Schaltwerk from source:
 ### Build Steps
 ```bash
 # 1. Clone the repository
-git clone https://github.com/2mawi2/schaltwerk.git
-cd schaltwerk
+git clone https://github.com/lucacri/lucode.git
+cd lucode
 
 # 2. Install dependencies
 bun install        # or: npm install
@@ -156,18 +156,18 @@ bun install        # or: npm install
 bun run tauri build    # or: npm run tauri build
 
 # 4. The built app will be in:
-# src-tauri/target/release/bundle/macos/Schaltwerk.app
+# src-tauri/target/release/bundle/macos/Lucode.app
 ```
 
 ## Security Considerations
 
 ### Why the Security Warning?
-Schaltwerk is distributed without an Apple Developer certificate ($99/year) to keep it free and open. The ad-hoc signing we use provides:
+Lucode is distributed without an Apple Developer certificate ($99/year) to keep it free and open. The ad-hoc signing we use provides:
 - Basic code integrity verification
 - Protection against tampering after download
 - Consistent behavior across launches
 
-### What Permissions Does Schaltwerk Need?
+### What Permissions Does Lucode Need?
 - **File System Access**: To read and write Para session files
 - **Process Spawning**: To create terminal sessions (PTY)
 - **Network Access**: Local API server on port 8547
@@ -182,6 +182,6 @@ Schaltwerk is distributed without an Apple Developer certificate ($99/year) to k
 ## Support
 
 For issues or questions:
-1. Check the [GitHub Issues](https://github.com/2mawi2/schaltwerk/issues)
+1. Check the [GitHub Issues](https://github.com/lucacri/lucode/issues)
 2. Review the [CLAUDE.md](./CLAUDE.md) for development guidelines
 3. Contact the maintainer through the private repository

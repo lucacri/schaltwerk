@@ -109,9 +109,9 @@ impl Project {
             hash_short
         );
 
-        // Build the full path: ~/.local/share/schaltwerk/projects/{projectname_hash}/sessions.db
+        // Build the full path: ~/.local/share/lucode/projects/{projectname_hash}/sessions.db
         let project_data_dir = data_dir
-            .join("schaltwerk")
+            .join("lucode")
             .join("projects")
             .join(folder_name);
 
@@ -223,9 +223,9 @@ impl ProjectManager {
             }
         };
 
-        // Ensure .schaltwerk is excluded from git (outside the projects lock).
+        // Ensure .lucode is excluded from git (outside the projects lock).
         if let Err(e) = Self::ensure_schaltwerk_excluded(&path) {
-            log::warn!("Failed to ensure .schaltwerk exclusion: {e}");
+            log::warn!("Failed to ensure .lucode exclusion: {e}");
         }
 
         // Update current project (outside the projects lock).
@@ -235,7 +235,7 @@ impl ProjectManager {
         Ok(project)
     }
 
-    /// Ensures .schaltwerk folder is excluded from git using .git/info/exclude
+    /// Ensures .lucode folder is excluded from git using .git/info/exclude
     fn ensure_schaltwerk_excluded(project_path: &Path) -> Result<()> {
         let git_dir = project_path.join(".git");
         if !git_dir.exists() {
@@ -249,28 +249,28 @@ impl ProjectManager {
             std::fs::create_dir_all(parent)?;
         }
 
-        // Check if .schaltwerk is already excluded
+        // Check if .lucode is already excluded
         let exclude_content = if exclude_file.exists() {
             std::fs::read_to_string(&exclude_file)?
         } else {
             String::new()
         };
 
-        // Add .schaltwerk exclusion if not already present
+        // Add .lucode exclusion if not already present
         if !exclude_content.lines().any(|line| {
             let trimmed = line.trim();
-            trimmed == ".schaltwerk"
-                || trimmed == ".schaltwerk/"
-                || trimmed == "/.schaltwerk"
-                || trimmed == "/.schaltwerk/"
+            trimmed == ".lucode"
+                || trimmed == ".lucode/"
+                || trimmed == "/.lucode"
+                || trimmed == "/.lucode/"
         }) {
             let mut new_content = exclude_content;
             if !new_content.is_empty() && !new_content.ends_with('\n') {
                 new_content.push('\n');
             }
-            new_content.push_str(".schaltwerk/\n");
+            new_content.push_str(".lucode/\n");
             std::fs::write(&exclude_file, new_content)?;
-            log::info!("✅ Added .schaltwerk/ to {}", exclude_file.display());
+            log::info!("✅ Added .lucode/ to {}", exclude_file.display());
         }
 
         Ok(())

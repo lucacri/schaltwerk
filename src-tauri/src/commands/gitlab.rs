@@ -1,16 +1,16 @@
 use crate::get_project_manager;
 use log::{error, info, warn};
-use schaltwerk::domains::git::service::{
+use lucode::domains::git::service::{
     format_cli_error, rename_branch, CreateMrParams, CreateSessionMrOptions, GitlabCli,
     GitlabCliError, GitlabIssueDetails, GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary,
     GitlabNote, GitlabPipelineDetails, MrCommitMode,
 };
-use schaltwerk::services::MergeMode;
-use schaltwerk::infrastructure::events::{SchaltEvent, emit_event};
-use schaltwerk::schaltwerk_core::db_project_config::{
+use lucode::services::MergeMode;
+use lucode::infrastructure::events::{SchaltEvent, emit_event};
+use lucode::schaltwerk_core::db_project_config::{
     GitlabSource, ProjectConfigMethods, ProjectGitlabConfig,
 };
-use schaltwerk::shared::session_metadata_gateway::SessionMetadataGateway;
+use lucode::shared::session_metadata_gateway::SessionMetadataGateway;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
@@ -573,7 +573,7 @@ pub async fn gitlab_create_session_mr(
         )
     };
 
-    if session_state == schaltwerk::domains::sessions::SessionState::Spec {
+    if session_state == lucode::domains::sessions::SessionState::Spec {
         return Err("Cannot create MR for a spec session. Start the session first.".to_string());
     }
 

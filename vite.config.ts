@@ -26,7 +26,7 @@ export default defineConfig(({ command }) => ({
       : undefined,
     watch: {
       // 3. tell Vite to ignore watching `src-tauri` and worktrees
-      ignored: ["**/src-tauri/**", "**/.schaltwerk/worktrees/**"],
+      ignored: ["**/src-tauri/**", "**/.lucode/worktrees/**"],
     },
   },
   build: {

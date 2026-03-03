@@ -3,7 +3,7 @@ use crate::{
     get_project_manager, projects,
 };
 use log::warn;
-use schaltwerk::services::ServiceHandles;
+use lucode::services::ServiceHandles;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -105,12 +105,12 @@ pub async fn get_project_default_branch() -> Result<String, String> {
     let start = std::time::Instant::now();
     let manager = get_project_manager().await;
     let result = if let Ok(project) = manager.current_project().await {
-        schaltwerk::domains::git::get_default_branch(&project.path)
+        lucode::domains::git::get_default_branch(&project.path)
             .map_err(|e| format!("Failed to get default branch: {e}"))
     } else {
         let current_dir =
             std::env::current_dir().map_err(|e| format!("Failed to get current directory: {e}"))?;
-        schaltwerk::domains::git::get_default_branch(&current_dir)
+        lucode::domains::git::get_default_branch(&current_dir)
             .map_err(|e| format!("Failed to get default branch: {e}"))
     };
     let elapsed = start.elapsed().as_millis();
@@ -130,12 +130,12 @@ pub async fn list_project_branches() -> Result<Vec<String>, String> {
     let start = std::time::Instant::now();
     let manager = get_project_manager().await;
     let result = if let Ok(project) = manager.current_project().await {
-        schaltwerk::domains::git::list_branches(&project.path)
+        lucode::domains::git::list_branches(&project.path)
             .map_err(|e| format!("Failed to list branches: {e}"))
     } else {
         let current_dir =
             std::env::current_dir().map_err(|e| format!("Failed to get current directory: {e}"))?;
-        schaltwerk::domains::git::list_branches(&current_dir)
+        lucode::domains::git::list_branches(&current_dir)
             .map_err(|e| format!("Failed to list branches: {e}"))
     };
     let elapsed = start.elapsed().as_millis();
@@ -158,5 +158,5 @@ pub async fn repository_is_empty() -> Result<bool, String> {
         std::env::current_dir().map_err(|e| format!("Failed to get current directory: {e}"))?
     };
 
-    Ok(!schaltwerk::domains::git::repository_has_commits(&repo_path).unwrap_or(true))
+    Ok(!lucode::domains::git::repository_has_commits(&repo_path).unwrap_or(true))
 }

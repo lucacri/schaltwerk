@@ -1,13 +1,13 @@
 ---
 title: Remote Access
-description: 'Access your Schaltwerk sessions from anywhere using VibeTunnel'
+description: 'Access your Lucode sessions from anywhere using VibeTunnel'
 ---
 
-For remote access to your Schaltwerk sessions, we recommend [VibeTunnel](https://github.com/amantus-ai/vibetunnel). It integrates seamlessly with Schaltwerk's [command prefix](/guides/terminal-configuration#agent-command-prefix) feature—just set `vt` as your prefix and all agent sessions become accessible from any browser, including your phone.
+For remote access to your Lucode sessions, we recommend [VibeTunnel](https://github.com/amantus-ai/vibetunnel). It integrates seamlessly with Lucode's [command prefix](/guides/terminal-configuration#agent-command-prefix) feature—just set `vt` as your prefix and all agent sessions become accessible from any browser, including your phone.
 
 ## How It Works
 
-VibeTunnel provides a `vt` command wrapper that forwards terminal sessions to a web dashboard. When combined with Schaltwerk's [command prefix](/guides/terminal-configuration#agent-command-prefix) feature:
+VibeTunnel provides a `vt` command wrapper that forwards terminal sessions to a web dashboard. When combined with Lucode's [command prefix](/guides/terminal-configuration#agent-command-prefix) feature:
 
 1. Each agent session is wrapped with `vt`
 2. VibeTunnel captures the terminal output
@@ -35,14 +35,14 @@ VibeTunnel provides a `vt` command wrapper that forwards terminal sessions to a 
     **npm:** Run `vibetunnel` to start the server.
   </Step>
 
-  <Step title="Configure Schaltwerk">
+  <Step title="Configure Lucode">
     Set the command prefix to `vt` in **Settings → Terminal → Agent Command Prefix**
 
     See [Terminal Configuration](/guides/terminal-configuration#agent-command-prefix) for details.
   </Step>
 
   <Step title="Start a session">
-    Create or start any session in Schaltwerk. The agent will automatically be wrapped with VibeTunnel.
+    Create or start any session in Lucode. The agent will automatically be wrapped with VibeTunnel.
   </Step>
 
   <Step title="Access the dashboard">
@@ -64,13 +64,13 @@ To access your sessions from other devices, you'll need to expose the VibeTunnel
 <AccordionGroup>
   <Accordion title="VibeTunnel dashboard is empty">
     - Ensure VibeTunnel is running (check menu bar on macOS)
-    - Verify the prefix is set to `vt` exactly in Schaltwerk settings
+    - Verify the prefix is set to `vt` exactly in Lucode settings
     - Restart the agent session after setting the prefix
   </Accordion>
 
   <Accordion title="Agent not starting">
     - Verify `vt` command is available: run `which vt` in terminal
-    - Check Schaltwerk logs for error messages
+    - Check Lucode logs for error messages
   </Accordion>
 </AccordionGroup>
 

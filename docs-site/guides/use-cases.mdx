@@ -1,9 +1,9 @@
 ---
 title: Use Cases
-description: 'Real-world examples of how to use Schaltwerk effectively'
+description: 'Real-world examples of how to use Lucode effectively'
 ---
 
-Discover how Schaltwerk solves real development challenges with isolated AI agents and parallel workflows.
+Discover how Lucode solves real development challenges with isolated AI agents and parallel workflows.
 
 > **Note:** Command examples use `bun`. Replace `bun run …` with `npm run …` (and `bun install` with `npm install`) if you prefer npm.
 
@@ -12,9 +12,9 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 <Accordion title="Build multiple features simultaneously">
   **Scenario:** You need to build a user authentication system with registration, login, and password reset.
 
-  **Without Schaltwerk:** Work on one feature at a time, or risk merge conflicts if working in parallel.
+  **Without Lucode:** Work on one feature at a time, or risk merge conflicts if working in parallel.
 
-  **With Schaltwerk:**
+  **With Lucode:**
 
   <Steps>
     <Step title="Create specs">
@@ -66,9 +66,9 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 <Accordion title="Fix multiple bugs simultaneously">
   **Scenario:** Your test suite has 15 failing tests across different modules.
 
-  **Without Schaltwerk:** Fix bugs one at a time, or juggle multiple branches manually.
+  **Without Lucode:** Fix bugs one at a time, or juggle multiple branches manually.
 
-  **With Schaltwerk:**
+  **With Lucode:**
 
   <Steps>
     <Step title="Identify bugs">
@@ -117,9 +117,9 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 <Accordion title="Refactor code with confidence">
   **Scenario:** Legacy payment module needs refactoring to use Strategy pattern for different payment providers.
 
-  **Without Schaltwerk:** Refactor on main branch and hope tests catch issues, or create complex branch structure manually.
+  **Without Lucode:** Refactor on main branch and hope tests catch issues, or create complex branch structure manually.
 
-  **With Schaltwerk:**
+  **With Lucode:**
 
   <Steps>
     <Step title="Create refactoring spec">
@@ -195,9 +195,9 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 <Accordion title="Let multiple agents solve the same problem">
   **Scenario:** Need to implement a caching layer, but not sure about the best approach.
 
-  **Without Schaltwerk:** Implement one solution, hope it's optimal, or spend time prototyping manually.
+  **Without Lucode:** Implement one solution, hope it's optimal, or spend time prototyping manually.
 
-  **With Schaltwerk:**
+  **With Lucode:**
 
   <Steps>
     <Step title="Create identical specs">
@@ -289,9 +289,9 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 <Accordion title="Prototype ideas quickly">
   **Scenario:** Exploring different UI frameworks for a new feature.
 
-  **Without Schaltwerk:** Create branches manually, switch between them, cleanup after.
+  **Without Lucode:** Create branches manually, switch between them, cleanup after.
 
-  **With Schaltwerk:**
+  **With Lucode:**
 
   <Steps>
     <Step title="Create exploration specs">
@@ -330,9 +330,9 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 <Accordion title="Get AI help reviewing pull requests">
   **Scenario:** Large PR needs review, but you're short on time.
 
-  **Without Schaltwerk:** Review manually or use basic GitHub tools.
+  **Without Lucode:** Review manually or use basic GitHub tools.
 
-  **With Schaltwerk:**
+  **With Lucode:**
 
   <Steps>
     <Step title="Create review session via MCP">
@@ -386,9 +386,9 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 <Accordion title="Convert GitHub issues to sessions automatically">
   **Scenario:** New issues are filed daily, need to be triaged and assigned.
 
-  **Without Schaltwerk:** Manually create branches, assign developers, track progress.
+  **Without Lucode:** Manually create branches, assign developers, track progress.
 
-  **With Schaltwerk:**
+  **With Lucode:**
 
   <Steps>
     <Step title="Setup webhook">
@@ -399,7 +399,7 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 
         if (issue.labels.includes('bug')) {
           // Create session for bug fix
-          await createSchaltwerkSession({
+          await createLucodeSession({
             name: `fix-issue-${issue.number}`,
             prompt: `Fix: ${issue.title}\n\n${issue.body}\n\nReported by: ${issue.user.login}`,
             agent_type: 'claude'
@@ -413,7 +413,7 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 
     <Step title="Auto-create sessions">
       - Webhook receives new issue
-      - Creates Schaltwerk session automatically
+      - Creates Lucode session automatically
       - Agent starts investigating
     </Step>
 
@@ -425,7 +425,7 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
     </Step>
 
     <Step title="Human review">
-      - Review proposed fix in Schaltwerk
+      - Review proposed fix in Lucode
       - Test locally
       - Merge if good, or provide feedback
     </Step>
@@ -439,9 +439,9 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 <Accordion title="Keep docs in sync with code">
   **Scenario:** Code changes but documentation lags behind.
 
-  **Without Schaltwerk:** Manually update docs, often forgotten.
+  **Without Lucode:** Manually update docs, often forgotten.
 
-  **With Schaltwerk:**
+  **With Lucode:**
 
   <Steps>
     <Step title="Create doc update spec">
@@ -487,9 +487,9 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 <Accordion title="Optimize different parts in parallel">
   **Scenario:** Application is slow, multiple bottlenecks identified.
 
-  **Without Schaltwerk:** Optimize one at a time, long iteration cycle.
+  **Without Lucode:** Optimize one at a time, long iteration cycle.
 
-  **With Schaltwerk:**
+  **With Lucode:**
 
   <Steps>
     <Step title="Identify bottlenecks">
@@ -542,9 +542,9 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 <Accordion title="Increase test coverage systematically">
   **Scenario:** Code coverage is 45%, need to reach 80%+.
 
-  **Without Schaltwerk:** Write tests manually, slow progress.
+  **Without Lucode:** Write tests manually, slow progress.
 
-  **With Schaltwerk:**
+  **With Lucode:**
 
   <Steps>
     <Step title="Identify untested code">
@@ -598,9 +598,9 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 <Accordion title="Migrate codebase incrementally">
   **Scenario:** Migrate from JavaScript to TypeScript gradually.
 
-  **Without Schaltwerk:** Migrate files one by one on main branch, risky.
+  **Without Lucode:** Migrate files one by one on main branch, risky.
 
-  **With Schaltwerk:**
+  **With Lucode:**
 
   <Steps>
     <Step title="Plan migration">
@@ -690,7 +690,7 @@ Discover how Schaltwerk solves real development challenges with isolated AI agen
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="Try a Use Case" icon="play" href="/guides/using-schaltwerk">
+  <Card title="Try a Use Case" icon="play" href="/guides/using-lucode">
     Follow the daily workflow guide
   </Card>
   <Card title="Setup MCP Automation" icon="bolt" href="/mcp/setup">

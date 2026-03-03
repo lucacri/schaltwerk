@@ -51,7 +51,7 @@ mod performance_tests {
     fn setup_test_repo_with_many_files(num_files: usize) -> (TempDir, PathBuf, PathBuf) {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = temp_dir.path().to_path_buf();
-        let worktree_path = temp_dir.path().join(".schaltwerk/worktrees/test");
+        let worktree_path = temp_dir.path().join(".lucode/worktrees/test");
 
         // Initialize git repo
         StdCommand::new("git")
@@ -241,7 +241,7 @@ mod performance_tests {
             .unwrap();
 
         // Create worktree with no changes
-        let worktree_path = temp_dir.path().join(".schaltwerk/worktrees/test");
+        let worktree_path = temp_dir.path().join(".lucode/worktrees/test");
         let current_branch = get_current_branch(&repo_path).unwrap();
         create_worktree_from_base(&repo_path, "test-branch", &worktree_path, &current_branch)
             .unwrap();

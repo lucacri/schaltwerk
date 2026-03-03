@@ -1,6 +1,6 @@
 use anyhow::Result;
 use chrono::Utc;
-use schaltwerk::domains::git::clone::{self, CloneOptions, RemoteMetadata};
+use lucode::domains::git::clone::{self, CloneOptions, RemoteMetadata};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -48,7 +48,7 @@ impl ProjectHistory {
         let config_dir =
             dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Failed to get config directory"))?;
 
-        Ok(config_dir.join("schaltwerk").join("project_history.json"))
+        Ok(config_dir.join("lucode").join("project_history.json"))
     }
 
     pub fn add_project(&mut self, path: &str) -> Result<()> {
@@ -124,7 +124,7 @@ pub fn create_new_project(name: &str, parent_path: &str) -> Result<PathBuf> {
     fs::create_dir(&project_path)
         .map_err(|e| anyhow::anyhow!("Failed to create project directory: {e}"))?;
 
-    if let Err(e) = schaltwerk::domains::git::init_repository(&project_path) {
+    if let Err(e) = lucode::domains::git::init_repository(&project_path) {
         fs::remove_dir(&project_path).ok();
         return Err(e);
     }
@@ -184,7 +184,7 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_project_history_add_update_remove_and_persist() {
-        use schaltwerk::utils::env_adapter::EnvAdapter;
+        use lucode::utils::env_adapter::EnvAdapter;
         let tmp = TempDir::new().unwrap();
         let prev_home = env::var("HOME").ok();
         let prev_xdg = env::var("XDG_CONFIG_HOME").ok();

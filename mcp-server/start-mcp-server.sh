@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Start the Schaltwerk MCP Server
+# Start the Lucode MCP Server
 # This script is called when the Tauri app starts
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -29,5 +29,5 @@ if [ ! -d "$MCP_DIR/build" ]; then
 fi
 
 # Start the MCP server
-echo "Starting Schaltwerk MCP server..."
-cd "$MCP_DIR" && node build/schaltwerk-mcp-server.js
+echo "Starting Lucode MCP server..."
+cd "$MCP_DIR" && node build/lucode-mcp-server.js

@@ -20,7 +20,7 @@ pub trait PlatformAdapter: Send + Sync {
     /// Build the inhibitor command specific to the platform.
     fn build_command(&self) -> Result<Command, SchaltError>;
 
-    /// Attempt to find an existing inhibitor process started by Schaltwerk.
+    /// Attempt to find an existing inhibitor process started by Lucode.
     fn find_existing_inhibitor(&self) -> Result<Option<u32>, SchaltError>;
 }
 

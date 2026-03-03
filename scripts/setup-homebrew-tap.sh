@@ -2,13 +2,13 @@
 
 set -e
 
-echo "🍺 Setting up Homebrew tap for Schaltwerk"
+echo "🍺 Setting up Homebrew tap for Lucode"
 echo ""
 echo "This script will help you create the private Homebrew tap repository."
 echo ""
 
-REPO_NAME="homebrew-schaltwerk"
-GITHUB_USER="mariuswichtner"
+REPO_NAME="homebrew-lucode"
+GITHUB_USER="lucacri"
 
 echo "📋 Prerequisites:"
 echo "  1. GitHub account with access to create private repositories"
@@ -40,14 +40,14 @@ echo "📝 Creating Formula directory..."
 mkdir -p Formula
 
 echo "📄 Copying formula file..."
-cp "$OLDPWD/homebrew/Formula/schaltwerk.rb" Formula/
+cp "$OLDPWD/homebrew/Formula/lucode.rb" Formula/
 
 echo "📄 Copying README..."
 cp "$OLDPWD/homebrew/README.md" .
 
 echo "📤 Committing and pushing..."
 git add .
-git commit -m "Initial Homebrew tap setup for Schaltwerk"
+git commit -m "Initial Homebrew tap setup for Lucode"
 git push origin main
 
 echo ""
@@ -59,12 +59,12 @@ echo "1. Create a GitHub Personal Access Token with 'repo' scope:"
 echo "   https://github.com/settings/tokens/new"
 echo ""
 echo "2. Add the token as a secret in the main repository:"
-echo "   - Go to: https://github.com/${GITHUB_USER}/schaltwerk/settings/secrets/actions"
+echo "   - Go to: https://github.com/${GITHUB_USER}/lucode/settings/secrets/actions"
 echo "   - Create new secret named: HOMEBREW_TAP_TOKEN"
 echo "   - Paste your personal access token"
 echo ""
 echo "3. Test the tap locally:"
-echo "   brew tap ${GITHUB_USER}/schaltwerk https://github.com/${GITHUB_USER}/${REPO_NAME}.git"
+echo "   brew tap ${GITHUB_USER}/lucode https://github.com/${GITHUB_USER}/${REPO_NAME}.git"
 echo ""
 echo "4. Create a release:"
 echo "   git tag v0.1.0"

@@ -30,20 +30,20 @@ use crate::commands::sessions_refresh::{SessionsRefreshReason, request_sessions_
 use crate::errors::SchaltError;
 use clap::Parser;
 use once_cell::sync::Lazy;
-use schaltwerk::domains::power::global_service::{
+use lucode::domains::power::global_service::{
     GlobalInhibitorService, set_global_keep_awake_service,
 };
-use schaltwerk::domains::{attention::AttentionStateRegistry, git::repository};
-use schaltwerk::infrastructure::config::SettingsManager;
-use schaltwerk::project_manager::ProjectManager;
-use schaltwerk::schaltwerk_core::db_app_config::AppConfigMethods;
-use schaltwerk::services::ServiceHandles;
-use schaltwerk::shared::terminal_id::{
+use lucode::domains::{attention::AttentionStateRegistry, git::repository};
+use lucode::infrastructure::config::SettingsManager;
+use lucode::project_manager::ProjectManager;
+use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
+use lucode::services::ServiceHandles;
+use lucode::shared::terminal_id::{
     legacy_terminal_id_for_session_top, previous_hashed_terminal_id_for_session_top,
     previous_tilde_hashed_terminal_id_for_session_top, terminal_id_for_session_top,
 };
-use schaltwerk::domains::terminal::submission::submission_options_for_agent;
-use schaltwerk::utils::env_adapter::EnvAdapter;
+use lucode::domains::terminal::submission::submission_options_for_agent;
+use lucode::utils::env_adapter::EnvAdapter;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::sync::{Mutex, OnceCell, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
@@ -245,13 +245,13 @@ fn get_development_info() -> Result<serde_json::Value, String> {
     }
 }
 
-fn open_global_app_config_db() -> Result<schaltwerk::schaltwerk_core::Database, String> {
-    if let Ok(path) = std::env::var("SCHALTWERK_APP_CONFIG_DB_PATH") {
+fn open_global_app_config_db() -> Result<lucode::schaltwerk_core::Database, String> {
+    if let Ok(path) = std::env::var("LUCODE_APP_CONFIG_DB_PATH") {
         let db_path = PathBuf::from(path);
-        schaltwerk::schaltwerk_core::Database::new(Some(db_path))
+        lucode::schaltwerk_core::Database::new(Some(db_path))
             .map_err(|e| format!("Failed to open override app config database: {e}"))
     } else {
-        schaltwerk::schaltwerk_core::Database::new(None)
+        lucode::schaltwerk_core::Database::new(None)
             .map_err(|e| format!("Failed to open app config database: {e}"))
     }
 }
@@ -268,7 +268,7 @@ async fn get_default_open_app() -> Result<String, String> {
     let default_app = "explorer";
 
     match open_global_app_config_db() {
-        Ok(db) => schaltwerk::open_apps::get_default_open_app_from_db(&db)
+        Ok(db) => lucode::open_apps::get_default_open_app_from_db(&db)
             .map_err(|e| format!("Failed to load default open app: {e}"))
             .or_else(|e| {
                 log::warn!(
@@ -286,14 +286,14 @@ async fn get_default_open_app() -> Result<String, String> {
 #[tauri::command]
 async fn set_default_open_app(app_id: String) -> Result<(), String> {
     let db = open_global_app_config_db()?;
-    schaltwerk::open_apps::set_default_open_app_in_db(&db, &app_id)
+    lucode::open_apps::set_default_open_app_in_db(&db, &app_id)
         .map_err(|e| format!("Failed to store default open app: {e}"))
 }
 
 pub static PROJECT_MANAGER: OnceCell<Arc<ProjectManager>> = OnceCell::const_new();
 pub static SETTINGS_MANAGER: OnceCell<Arc<Mutex<SettingsManager>>> = OnceCell::const_new();
 pub static ATTENTION_REGISTRY: OnceCell<Arc<Mutex<AttentionStateRegistry>>> = OnceCell::const_new();
-pub static FILE_WATCHER_MANAGER: OnceCell<Arc<schaltwerk::domains::workspace::FileWatcherManager>> =
+pub static FILE_WATCHER_MANAGER: OnceCell<Arc<lucode::domains::workspace::FileWatcherManager>> =
     OnceCell::const_new();
 static LAST_CORE_WRITE: Lazy<StdMutex<Option<(Uuid, std::time::Instant)>>> =
     Lazy::new(|| StdMutex::new(None));
@@ -325,7 +325,7 @@ pub async fn get_settings_manager(
 }
 
 pub async fn get_terminal_manager()
--> Result<Arc<schaltwerk::domains::terminal::TerminalManager>, String> {
+-> Result<Arc<lucode::domains::terminal::TerminalManager>, String> {
     let manager = get_project_manager().await;
     manager
         .current_terminal_manager()
@@ -334,7 +334,7 @@ pub async fn get_terminal_manager()
 }
 
 pub async fn get_schaltwerk_core()
--> Result<Arc<RwLock<schaltwerk::schaltwerk_core::SchaltwerkCore>>, String> {
+-> Result<Arc<RwLock<lucode::schaltwerk_core::SchaltwerkCore>>, String> {
     // Respect MCP request context if one is set for this task
     if let Ok(Some(project_path)) = REQUEST_PROJECT_OVERRIDE.try_with(|cell| cell.borrow().clone())
     {
@@ -343,7 +343,7 @@ pub async fn get_schaltwerk_core()
             Ok(core) => return Ok(core),
             Err(e) => {
                 log::error!(
-                    "Failed to get Schaltwerk core for override path {}: {e}",
+                    "Failed to get Lucode core for override path {}: {e}",
                     project_path.display()
                 );
                 // Fall through to current project fallback
@@ -354,7 +354,7 @@ pub async fn get_schaltwerk_core()
     let manager = get_project_manager().await;
     manager.current_schaltwerk_core().await.map_err(|e| {
         let detail = e.to_string();
-        let message = format!("Failed to get Schaltwerk core: {detail}");
+        let message = format!("Failed to get Lucode core: {detail}");
         if detail.contains("No active project") {
             log::warn!("{message}");
         } else {
@@ -365,7 +365,7 @@ pub async fn get_schaltwerk_core()
 }
 
 pub async fn get_core_read()
--> Result<OwnedRwLockReadGuard<schaltwerk::schaltwerk_core::SchaltwerkCore>, String> {
+-> Result<OwnedRwLockReadGuard<lucode::schaltwerk_core::SchaltwerkCore>, String> {
     let call_id = uuid::Uuid::new_v4();
     let start = std::time::Instant::now();
     log::debug!("get_core_read start call_id={call_id}");
@@ -415,7 +415,7 @@ pub async fn get_core_read()
 }
 
 pub async fn get_core_write()
--> Result<OwnedRwLockWriteGuard<schaltwerk::schaltwerk_core::SchaltwerkCore>, String> {
+-> Result<OwnedRwLockWriteGuard<lucode::schaltwerk_core::SchaltwerkCore>, String> {
     let call_id = uuid::Uuid::new_v4();
     let start = std::time::Instant::now();
     log::debug!("get_core_write start call_id={call_id}");
@@ -453,7 +453,7 @@ pub async fn get_core_write()
 }
 
 pub async fn get_file_watcher_manager()
--> Result<Arc<schaltwerk::domains::workspace::FileWatcherManager>, String> {
+-> Result<Arc<lucode::domains::workspace::FileWatcherManager>, String> {
     FILE_WATCHER_MANAGER
         .get()
         .ok_or_else(|| "File watcher manager not initialized".to_string())
@@ -997,15 +997,15 @@ async fn start_webhook_server(app: tauri::AppHandle) -> bool {
     }
 }
 
-use schaltwerk::infrastructure::events::{SchaltEvent, emit_event};
+use lucode::infrastructure::events::{SchaltEvent, emit_event};
 #[cfg(debug_assertions)]
-use schaltwerk::infrastructure::logging::register_dev_error_hook;
+use lucode::infrastructure::logging::register_dev_error_hook;
 #[cfg(debug_assertions)]
 use serde::Serialize;
 use tauri::Manager;
 
 #[cfg(target_os = "macos")]
-const MACOS_SELECT_ALL_MENU_ID: &str = "schaltwerk-select-all";
+const MACOS_SELECT_ALL_MENU_ID: &str = "lucode-select-all";
 
 #[cfg(target_os = "macos")]
 fn build_app_menu<R: tauri::Runtime>(
@@ -1102,8 +1102,8 @@ fn main() {
     };
 
     // Initialize logging
-    schaltwerk::infrastructure::logging::init_logging();
-    log::info!("Schaltwerk starting...");
+    lucode::infrastructure::logging::init_logging();
+    log::info!("Lucode starting...");
     log::debug!(
         "[startup] Effective PATH: {}",
         std::env::var("PATH").unwrap_or_default()
@@ -1300,8 +1300,8 @@ fn main() {
             // Open apps commands
             get_default_open_app,
             set_default_open_app,
-            schaltwerk::open_apps::list_available_open_apps,
-            schaltwerk::open_apps::open_in_app,
+            lucode::open_apps::list_available_open_apps,
+            lucode::open_apps::open_in_app,
             // Diff commands (from module)
             diff_commands::get_changed_files_from_main,
             diff_commands::has_remote_tracking_branch,
@@ -1413,8 +1413,8 @@ fn main() {
             }
 
             // Initialize session attention state global in library crate
-            schaltwerk::domains::attention::set_session_attention_state(
-                Arc::new(Mutex::new(schaltwerk::domains::attention::SessionAttentionState::default()))
+            lucode::domains::attention::set_session_attention_state(
+                Arc::new(Mutex::new(lucode::domains::attention::SessionAttentionState::default()))
             );
 
             #[cfg(debug_assertions)]
@@ -1467,8 +1467,8 @@ fn main() {
 
                 if let Some(window) = app_handle.get_webview_window("main") {
                     let title = if let Some(branch) = branch_name {
-                        if !branch.is_empty() { format!("Schaltwerk - {branch}") } else { "Schaltwerk".to_string() }
-                    } else { "Schaltwerk".to_string() };
+                        if !branch.is_empty() { format!("Lucode - {branch}") } else { "Lucode".to_string() }
+                    } else { "Lucode".to_string() };
 
                     if let Err(e) = window.set_title(&title) {
                         log::warn!("Failed to set window title: {e}");
@@ -1554,7 +1554,7 @@ fn main() {
                             });
                             (mgr.get_auto_update_enabled(), shell, term.shell_args)
                         };
-                        schaltwerk::domains::terminal::put_terminal_shell_override(shell, args);
+                        lucode::domains::terminal::put_terminal_shell_override(shell, args);
 
                         let updater_handle = settings_handle.clone();
                         tauri::async_runtime::spawn(async move {
@@ -1570,9 +1570,9 @@ fn main() {
             // Initialize file watcher manager
             let file_watcher_handle = app.handle().clone();
             let file_watcher_manager = Arc::new(
-                schaltwerk::domains::workspace::FileWatcherManager::new(file_watcher_handle),
+                lucode::domains::workspace::FileWatcherManager::new(file_watcher_handle),
             );
-            schaltwerk::domains::workspace::FileWatcherManager::register_global(
+            lucode::domains::workspace::FileWatcherManager::register_global(
                 &file_watcher_manager,
             );
             let _ = FILE_WATCHER_MANAGER.set(Arc::clone(&file_watcher_manager));
@@ -1596,7 +1596,7 @@ fn main() {
                         match get_core_read().await {
                             Ok(core) => {
                                 let db = Arc::new(core.db.clone());
-                                schaltwerk::domains::sessions::activity::start_activity_tracking_with_app(db, activity_handle.clone());
+                                lucode::domains::sessions::activity::start_activity_tracking_with_app(db, activity_handle.clone());
                                 break;
                             }
                             Err(e) => {
@@ -1617,7 +1617,7 @@ fn main() {
             });
 
             // MCP server is now managed by Claude Code via .mcp.json configuration
-            // No need to start it from Schaltwerk
+            // No need to start it from Lucode
 
             Ok(())
         })
@@ -1649,7 +1649,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use schaltwerk::utils::env_adapter::EnvAdapter;
+    use lucode::utils::env_adapter::EnvAdapter;
     use serial_test::serial;
 
     #[tokio::test]
@@ -1658,7 +1658,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
         let override_path = temp_dir.path().join("sessions.db");
         EnvAdapter::set_var(
-            "SCHALTWERK_APP_CONFIG_DB_PATH",
+            "LUCODE_APP_CONFIG_DB_PATH",
             &override_path.to_string_lossy(),
         );
 
@@ -1682,6 +1682,6 @@ mod tests {
             .expect("expected updated default app");
         assert_eq!(updated, "vscode");
 
-        EnvAdapter::remove_var("SCHALTWERK_APP_CONFIG_DB_PATH");
+        EnvAdapter::remove_var("LUCODE_APP_CONFIG_DB_PATH");
     }
 }

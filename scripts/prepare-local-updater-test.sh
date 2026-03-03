@@ -10,7 +10,7 @@ cd "$REPO_ROOT"
 
 KEY_PATH="${TAURI_UPDATER_PRIVATE_KEY_PATH:-}"
 if [[ -z "$KEY_PATH" ]]; then
-  DEFAULT_HOME="$HOME/.schaltwerk/schaltwerk-updater.key"
+  DEFAULT_HOME="$HOME/.lucode/lucode-updater.key"
   DEFAULT_REPO="$REPO_ROOT/updater-private.key"
 
   if [[ -f "$DEFAULT_HOME" ]]; then
@@ -27,9 +27,9 @@ if [[ ! -f "$KEY_PATH" ]]; then
   exit 1
 fi
 
-KEY_PASSWORD="${TAURI_UPDATER_PRIVATE_KEY_PASSWORD:-${SCHALTWERK_UPDATER_PRIVATE_KEY_PASSWORD:-${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}}}"
+KEY_PASSWORD="${TAURI_UPDATER_PRIVATE_KEY_PASSWORD:-${LUCODE_UPDATER_PRIVATE_KEY_PASSWORD:-${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}}}"
 if [[ -z "$KEY_PASSWORD" ]]; then
-  PASSWORD_FILE="$HOME/.schaltwerk/schaltwerk-updater-password.txt"
+  PASSWORD_FILE="$HOME/.lucode/lucode-updater-password.txt"
   if [[ -f "$PASSWORD_FILE" ]]; then
     KEY_PASSWORD="$(tr -d '\r\n' <"$PASSWORD_FILE")"
   fi
@@ -120,13 +120,13 @@ content = re.sub(r'(?m)^version = "[^"]+"$', f'version = "{version}"', content, 
 file.write_text(content)
 PY
 
-( cd src-tauri && cargo update -p schaltwerk --precise "$TARGET_VERSION" >/dev/null )
+( cd src-tauri && cargo update -p lucode --precise "$TARGET_VERSION" >/dev/null )
 
 echo "Building macOS bundle for version $TARGET_VERSION (this may take a few minutes)..."
 
 node scripts/package-manager.mjs run tauri -- build --target aarch64-apple-darwin >/dev/null
 
-ARM_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Schaltwerk.app"
+ARM_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Lucode.app"
 if [[ ! -d "$ARM_PATH" ]]; then
   echo "Expected app bundle not found: $ARM_PATH" >&2
   exit 1
@@ -135,11 +135,11 @@ fi
 TMP_BUILD="$WORK_DIR_ABS/aarch64"
 rm -rf "$TMP_BUILD"
 mkdir -p "$TMP_BUILD"
-cp -R "$ARM_PATH" "$TMP_BUILD/Schaltwerk.app"
+cp -R "$ARM_PATH" "$TMP_BUILD/Lucode.app"
 
-ARCHIVE_NAME="Schaltwerk-${TARGET_VERSION}-macos-aarch64.app.tar.gz"
+ARCHIVE_NAME="Lucode-${TARGET_VERSION}-macos-aarch64.app.tar.gz"
 ARCHIVE_PATH="$WORK_DIR_ABS/$ARCHIVE_NAME"
-( cd "$TMP_BUILD" && tar -czf "$ARCHIVE_PATH" Schaltwerk.app )
+( cd "$TMP_BUILD" && tar -czf "$ARCHIVE_PATH" Lucode.app )
 
 SIGN_ARGS=(signer sign "$ARCHIVE_PATH" --private-key-path "$KEY_PATH")
 if [[ -n "$KEY_PASSWORD" ]]; then
@@ -194,7 +194,7 @@ cd $WORK_DIR_ABS
 python3 -m http.server $PORT
 ```
 
-## 2. Run Schaltwerk against the test manifest
+## 2. Run Lucode against the test manifest
 ```
 TAURI_CONFIG_PATH="$WORK_DIR_ABS/tauri.local-updater.json" node scripts/package-manager.mjs run tauri -- dev
 ```

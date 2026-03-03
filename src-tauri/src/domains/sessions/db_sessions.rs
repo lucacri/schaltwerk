@@ -818,7 +818,7 @@ impl SessionMethods for Database {
 
         // Calculate new worktree path based on new session name
         let new_worktree_path = repo_path
-            .join(".schaltwerk")
+            .join(".lucode")
             .join("worktrees")
             .join(new_name);
 
@@ -883,10 +883,10 @@ mod tests {
             epic_id: None,
             repository_path: repo_path.clone(),
             repository_name: "repo".to_string(),
-            branch: "schaltwerk/millis-session".to_string(),
+            branch: "lucode/millis-session".to_string(),
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
-            worktree_path: repo_path.join(".schaltwerk/worktrees/millis-session"),
+            worktree_path: repo_path.join(".lucode/worktrees/millis-session"),
             status: SessionStatus::Active,
             created_at,
             updated_at,
@@ -933,10 +933,10 @@ mod tests {
             epic_id: None,
             repository_path: PathBuf::from("/tmp/repo"),
             repository_name: "repo".to_string(),
-            branch: "schaltwerk/test-session".to_string(),
+            branch: "lucode/test-session".to_string(),
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
-            worktree_path: PathBuf::from("/tmp/repo/.schaltwerk/worktrees/test-session"),
+            worktree_path: PathBuf::from("/tmp/repo/.lucode/worktrees/test-session"),
             status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -981,10 +981,10 @@ mod tests {
             epic_id: None,
             repository_path: PathBuf::from("/tmp/repo"),
             repository_name: "repo".to_string(),
-            branch: "schaltwerk/test-session-2".to_string(),
+            branch: "lucode/test-session-2".to_string(),
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
-            worktree_path: PathBuf::from("/tmp/repo/.schaltwerk/worktrees/test-session-2"),
+            worktree_path: PathBuf::from("/tmp/repo/.lucode/worktrees/test-session-2"),
             status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -1105,10 +1105,10 @@ mod tests {
             epic_id: None,
             repository_path: repo_path.clone(),
             repository_name: "repo".to_string(),
-            branch: "schaltwerk/running-with-spec".to_string(),
+            branch: "lucode/running-with-spec".to_string(),
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
-            worktree_path: PathBuf::from("/tmp/repo/.schaltwerk/worktrees/running-with-spec"),
+            worktree_path: PathBuf::from("/tmp/repo/.lucode/worktrees/running-with-spec"),
             status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),

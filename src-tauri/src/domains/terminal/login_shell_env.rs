@@ -40,7 +40,7 @@ pub async fn capture_login_shell_env() -> Result<HashMap<String, String>, String
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .env("SCHALTWERK_RESOLVING_ENVIRONMENT", "1");
+        .env("LUCODE_RESOLVING_ENVIRONMENT", "1");
 
     let result = timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS), cmd.output()).await;
 
@@ -106,7 +106,7 @@ fn generate_marker() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    format!("SCHALTWERK{timestamp:x}")
+    format!("LUCODE{timestamp:x}")
 }
 
 fn build_shell_command(shell_name: &str, mark: &str) -> (Vec<String>, String) {
@@ -273,7 +273,7 @@ fn is_valid_env_key(key: &str) -> bool {
 }
 
 fn clean_captured_env(mut env: HashMap<String, String>) -> HashMap<String, String> {
-    env.remove("SCHALTWERK_RESOLVING_ENVIRONMENT");
+    env.remove("LUCODE_RESOLVING_ENVIRONMENT");
     env.remove("SHLVL");
     env.remove("_");
     env.remove("PWD");
@@ -403,7 +403,7 @@ mod tests {
         let mut env = HashMap::new();
         env.insert("PATH".to_string(), "/usr/bin".to_string());
         env.insert(
-            "SCHALTWERK_RESOLVING_ENVIRONMENT".to_string(),
+            "LUCODE_RESOLVING_ENVIRONMENT".to_string(),
             "1".to_string(),
         );
         env.insert("SHLVL".to_string(), "2".to_string());
@@ -414,7 +414,7 @@ mod tests {
 
         assert!(cleaned.contains_key("PATH"));
         assert!(cleaned.contains_key("HOME"));
-        assert!(!cleaned.contains_key("SCHALTWERK_RESOLVING_ENVIRONMENT"));
+        assert!(!cleaned.contains_key("LUCODE_RESOLVING_ENVIRONMENT"));
         assert!(!cleaned.contains_key("SHLVL"));
         assert!(!cleaned.contains_key("_"));
     }

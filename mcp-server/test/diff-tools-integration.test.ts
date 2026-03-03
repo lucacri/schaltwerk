@@ -11,9 +11,9 @@ const buildSpecSession = (overrides: Record<string, any> = {}) => {
     name: sessionName,
     repository_path: overrides.repository_path ?? mockProjectPath,
     repository_name: overrides.repository_name ?? 'mock-project',
-    branch: overrides.branch ?? `schaltwerk/${sessionName}`,
+    branch: overrides.branch ?? `lucode/${sessionName}`,
     parent_branch: overrides.parent_branch ?? 'main',
-    worktree_path: overrides.worktree_path ?? `${mockProjectPath}/.schaltwerk/worktrees/${sessionName}`,
+    worktree_path: overrides.worktree_path ?? `${mockProjectPath}/.lucode/worktrees/${sessionName}`,
     status: overrides.status ?? 'spec',
     created_at: overrides.created_at ?? Date.now(),
     updated_at: overrides.updated_at ?? Date.now(),
@@ -30,7 +30,7 @@ const diffSummaryMock = mock(() =>
     scope: 'session',
     session_id: 'fiery_maxwell',
     branch_info: {
-      current_branch: 'schaltwerk/fiery_maxwell',
+      current_branch: 'lucode/fiery_maxwell',
       parent_branch: 'main',
       merge_base_short: 'abc1234',
       head_short: 'def5678',
@@ -45,7 +45,7 @@ const diffChunkMock = mock(() =>
   Promise.resolve({
     file: { path: 'src/app.ts', change_type: 'modified' },
     branch_info: {
-      current_branch: 'schaltwerk/fiery_maxwell',
+      current_branch: 'lucode/fiery_maxwell',
       parent_branch: 'main',
       merge_base_short: 'abc1234',
       head_short: 'def5678',
@@ -158,7 +158,7 @@ const getServer = () => {
   return server
 }
 
-let bridgeModule: typeof import('../src/schaltwerk-bridge')
+let bridgeModule: typeof import('../src/lucode-bridge')
 let originalGetDiffSummary: ((options: any) => Promise<any>) | undefined
 let originalGetDiffChunk: ((options: any) => Promise<any>) | undefined
 let originalGetSessionSpec: ((session: string) => Promise<any>) | undefined
@@ -174,35 +174,35 @@ describe('MCP diff tools integration', () => {
       createdProjectDir = true
     }
 
-    process.env.SCHALTWERK_PROJECT_PATH = mockProjectPath
-    bridgeModule = await import('../src/schaltwerk-bridge')
-    originalGetDiffSummary = bridgeModule.SchaltwerkBridge.prototype.getDiffSummary
-    originalGetDiffChunk = bridgeModule.SchaltwerkBridge.prototype.getDiffChunk
-    originalGetSessionSpec = bridgeModule.SchaltwerkBridge.prototype.getSessionSpec
-    originalListSpecSummaries = bridgeModule.SchaltwerkBridge.prototype.listSpecSummaries
-    originalGetSpecDocument = bridgeModule.SchaltwerkBridge.prototype.getSpecDocument
-    originalCreateSpecSession = bridgeModule.SchaltwerkBridge.prototype.createSpecSession
+    process.env.LUCODE_PROJECT_PATH = mockProjectPath
+    bridgeModule = await import('../src/lucode-bridge')
+    originalGetDiffSummary = bridgeModule.LucodeBridge.prototype.getDiffSummary
+    originalGetDiffChunk = bridgeModule.LucodeBridge.prototype.getDiffChunk
+    originalGetSessionSpec = bridgeModule.LucodeBridge.prototype.getSessionSpec
+    originalListSpecSummaries = bridgeModule.LucodeBridge.prototype.listSpecSummaries
+    originalGetSpecDocument = bridgeModule.LucodeBridge.prototype.getSpecDocument
+    originalCreateSpecSession = bridgeModule.LucodeBridge.prototype.createSpecSession
 
-    bridgeModule.SchaltwerkBridge.prototype.getDiffSummary = function (options) {
+    bridgeModule.LucodeBridge.prototype.getDiffSummary = function (options) {
       return diffSummaryMock(options)
     }
-    bridgeModule.SchaltwerkBridge.prototype.getDiffChunk = function (options) {
+    bridgeModule.LucodeBridge.prototype.getDiffChunk = function (options) {
       return diffChunkMock(options)
     }
-    bridgeModule.SchaltwerkBridge.prototype.getSessionSpec = function (session) {
+    bridgeModule.LucodeBridge.prototype.getSessionSpec = function (session) {
       return getSessionSpecMock(session)
     }
-    bridgeModule.SchaltwerkBridge.prototype.listSpecSummaries = function () {
+    bridgeModule.LucodeBridge.prototype.listSpecSummaries = function () {
       return specListMock()
     }
-    bridgeModule.SchaltwerkBridge.prototype.getSpecDocument = function (session) {
+    bridgeModule.LucodeBridge.prototype.getSpecDocument = function (session) {
       return specReadMock(session)
     }
-    bridgeModule.SchaltwerkBridge.prototype.createSpecSession = function (name: string, content?: string, baseBranch?: string) {
+    bridgeModule.LucodeBridge.prototype.createSpecSession = function (name: string, content?: string, baseBranch?: string) {
       return createSpecSessionMock(name, content, baseBranch)
     }
 
-    await import(`../src/schaltwerk-mcp-server?diff=${Date.now()}`)
+    await import(`../src/lucode-mcp-server?diff=${Date.now()}`)
   })
 
   beforeEach(() => {
@@ -215,26 +215,26 @@ describe('MCP diff tools integration', () => {
   })
 
   afterAll(() => {
-    delete process.env.SCHALTWERK_PROJECT_PATH
+    delete process.env.LUCODE_PROJECT_PATH
 
     if (bridgeModule) {
       if (originalGetDiffSummary) {
-        bridgeModule.SchaltwerkBridge.prototype.getDiffSummary = originalGetDiffSummary
+        bridgeModule.LucodeBridge.prototype.getDiffSummary = originalGetDiffSummary
       }
       if (originalGetDiffChunk) {
-        bridgeModule.SchaltwerkBridge.prototype.getDiffChunk = originalGetDiffChunk
+        bridgeModule.LucodeBridge.prototype.getDiffChunk = originalGetDiffChunk
       }
       if (originalGetSessionSpec) {
-        bridgeModule.SchaltwerkBridge.prototype.getSessionSpec = originalGetSessionSpec
+        bridgeModule.LucodeBridge.prototype.getSessionSpec = originalGetSessionSpec
       }
       if (originalListSpecSummaries) {
-        bridgeModule.SchaltwerkBridge.prototype.listSpecSummaries = originalListSpecSummaries
+        bridgeModule.LucodeBridge.prototype.listSpecSummaries = originalListSpecSummaries
       }
       if (originalGetSpecDocument) {
-        bridgeModule.SchaltwerkBridge.prototype.getSpecDocument = originalGetSpecDocument
+        bridgeModule.LucodeBridge.prototype.getSpecDocument = originalGetSpecDocument
       }
       if (originalCreateSpecSession) {
-        bridgeModule.SchaltwerkBridge.prototype.createSpecSession = originalCreateSpecSession
+        bridgeModule.LucodeBridge.prototype.createSpecSession = originalCreateSpecSession
       }
     }
 
@@ -251,20 +251,20 @@ describe('MCP diff tools integration', () => {
     expect(typeof listHandler).toBe('function')
     const response = await listHandler()
     const toolNames = response.tools.map((tool: { name: string }) => tool.name)
-    expect(toolNames).toContain('schaltwerk_diff_summary')
-    expect(toolNames).toContain('schaltwerk_diff_chunk')
-    expect(toolNames).toContain('schaltwerk_session_spec')
+    expect(toolNames).toContain('lucode_diff_summary')
+    expect(toolNames).toContain('lucode_diff_chunk')
+    expect(toolNames).toContain('lucode_session_spec')
 
-    const diffSummaryTool = response.tools.find((tool: { name: string }) => tool.name === 'schaltwerk_diff_summary')
-    const diffChunkTool = response.tools.find((tool: { name: string }) => tool.name === 'schaltwerk_diff_chunk')
-    const sessionSpecTool = response.tools.find((tool: { name: string }) => tool.name === 'schaltwerk_session_spec')
+    const diffSummaryTool = response.tools.find((tool: { name: string }) => tool.name === 'lucode_diff_summary')
+    const diffChunkTool = response.tools.find((tool: { name: string }) => tool.name === 'lucode_diff_chunk')
+    const sessionSpecTool = response.tools.find((tool: { name: string }) => tool.name === 'lucode_session_spec')
 
     expect(diffSummaryTool?.outputSchema).toBeDefined()
     expect(diffChunkTool?.outputSchema).toBeDefined()
     expect(sessionSpecTool?.outputSchema).toBeDefined()
   })
 
-  it('invokes bridge for schaltwerk_diff_summary and returns JSON payload', async () => {
+  it('invokes bridge for lucode_diff_summary and returns JSON payload', async () => {
     const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
     const server = getServer()
 
@@ -272,7 +272,7 @@ describe('MCP diff tools integration', () => {
     expect(typeof callHandler).toBe('function')
 
     const response = await callHandler({
-      params: { name: 'schaltwerk_diff_summary', arguments: { session: 'fiery_maxwell', page_size: 20 } },
+      params: { name: 'lucode_diff_summary', arguments: { session: 'fiery_maxwell', page_size: 20 } },
     })
 
     expect(diffSummaryMock).toHaveBeenCalledTimes(1)
@@ -284,17 +284,17 @@ describe('MCP diff tools integration', () => {
     expect(parsed.scope).toBe('session')
 
     expect(response.structuredContent?.scope).toBe('session')
-    expect(response.structuredContent?.branch_info?.current_branch).toBe('schaltwerk/fiery_maxwell')
+    expect(response.structuredContent?.branch_info?.current_branch).toBe('lucode/fiery_maxwell')
   })
 
-  it('caps line_limit on schaltwerk_diff_chunk and forwards cursor', async () => {
+  it('caps line_limit on lucode_diff_chunk and forwards cursor', async () => {
     const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
     const server = getServer()
 
     const callHandler = server.handlers.get(CallToolRequestSchema)
     const response = await callHandler({
       params: {
-        name: 'schaltwerk_diff_chunk',
+        name: 'lucode_diff_chunk',
         arguments: { session: 'fiery_maxwell', path: 'src/app.ts', cursor: 'cursor-1', line_limit: 5000 },
       },
     })
@@ -312,13 +312,13 @@ describe('MCP diff tools integration', () => {
     expect(response.structuredContent?.file?.path).toBe('src/app.ts')
   })
 
-  it('calls bridge for schaltwerk_session_spec', async () => {
+  it('calls bridge for lucode_session_spec', async () => {
     const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
     const server = getServer()
 
     const callHandler = server.handlers.get(CallToolRequestSchema)
     const response = await callHandler({
-      params: { name: 'schaltwerk_session_spec', arguments: { session: 'fiery_maxwell' } },
+      params: { name: 'lucode_session_spec', arguments: { session: 'fiery_maxwell' } },
     })
 
     expect(getSessionSpecMock).toHaveBeenCalledWith('fiery_maxwell')
@@ -329,13 +329,13 @@ describe('MCP diff tools integration', () => {
     expect(response.structuredContent?.content).toBe('# Spec')
   })
 
-  it('returns spec summaries via schaltwerk_spec_list', async () => {
+  it('returns spec summaries via lucode_spec_list', async () => {
     const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
     const server = getServer()
 
     const callHandler = server.handlers.get(CallToolRequestSchema)
     const response = await callHandler({
-      params: { name: 'schaltwerk_spec_list', arguments: {} },
+      params: { name: 'lucode_spec_list', arguments: {} },
     })
 
     expect(specListMock).toHaveBeenCalledTimes(1)
@@ -346,13 +346,13 @@ describe('MCP diff tools integration', () => {
     expect(response.structuredContent?.specs?.[0]?.session_id).toBe('alpha_spec')
   })
 
-  it('reads spec content via schaltwerk_spec_read', async () => {
+  it('reads spec content via lucode_spec_read', async () => {
     const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
     const server = getServer()
 
     const callHandler = server.handlers.get(CallToolRequestSchema)
     const response = await callHandler({
-      params: { name: 'schaltwerk_spec_read', arguments: { session: 'alpha_spec' } },
+      params: { name: 'lucode_spec_read', arguments: { session: 'alpha_spec' } },
     })
 
     expect(specReadMock).toHaveBeenCalledWith('alpha_spec')
@@ -372,7 +372,7 @@ describe('MCP diff tools integration', () => {
     const callHandler = server.handlers.get(CallToolRequestSchema)
     const response = await callHandler({
       params: {
-        name: 'schaltwerk_spec_create',
+        name: 'lucode_spec_create',
         arguments: { name: 'spec-alpha', content: '# Provided Content', base_branch: 'develop' },
       },
     })

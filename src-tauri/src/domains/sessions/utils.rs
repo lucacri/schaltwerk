@@ -23,7 +23,7 @@ pub fn resolve_worktree_base(repo_path: &Path, worktree_base_directory: Option<&
                 repo_path.join(path)
             }
         }
-        _ => repo_path.join(".schaltwerk").join("worktrees"),
+        _ => repo_path.join(".lucode").join("worktrees"),
     }
 }
 
@@ -282,7 +282,7 @@ impl SessionUtils {
             .map(|d| d.as_millis())
             .unwrap_or(0);
         let staged_name = format!(
-            ".schaltwerk-trash-orphan-{}-{ts}",
+            ".lucode-trash-orphan-{}-{ts}",
             path.file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("worktree")
@@ -340,7 +340,7 @@ impl SessionUtils {
     }
 
     fn cleanup_trash_in_directory(&self, worktrees_dir: &Path) -> Result<()> {
-        let trash_dir = worktrees_dir.join(".schaltwerk-trash");
+        let trash_dir = worktrees_dir.join(".lucode-trash");
 
         if !trash_dir.exists() {
             return Ok(());
@@ -352,7 +352,7 @@ impl SessionUtils {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis())
             .unwrap_or(0);
-        let staged_dir = worktrees_dir.join(format!(".schaltwerk-trash-cleanup-{ts}"));
+        let staged_dir = worktrees_dir.join(format!(".lucode-trash-cleanup-{ts}"));
 
         match fs::rename(&trash_dir, &staged_dir) {
             Ok(()) => {
@@ -600,21 +600,21 @@ mod tests {
     fn resolve_worktree_base_default_when_none() {
         let repo = PathBuf::from("/repo");
         let result = resolve_worktree_base(&repo, None);
-        assert_eq!(result, PathBuf::from("/repo/.schaltwerk/worktrees"));
+        assert_eq!(result, PathBuf::from("/repo/.lucode/worktrees"));
     }
 
     #[test]
     fn resolve_worktree_base_default_when_empty() {
         let repo = PathBuf::from("/repo");
         let result = resolve_worktree_base(&repo, Some(""));
-        assert_eq!(result, PathBuf::from("/repo/.schaltwerk/worktrees"));
+        assert_eq!(result, PathBuf::from("/repo/.lucode/worktrees"));
     }
 
     #[test]
     fn resolve_worktree_base_default_when_whitespace() {
         let repo = PathBuf::from("/repo");
         let result = resolve_worktree_base(&repo, Some("   "));
-        assert_eq!(result, PathBuf::from("/repo/.schaltwerk/worktrees"));
+        assert_eq!(result, PathBuf::from("/repo/.lucode/worktrees"));
     }
 
     #[test]
@@ -640,15 +640,15 @@ mod tests {
 
     #[test]
     fn is_under_managed_base_matches_default() {
-        let bases = vec![PathBuf::from("/repo/.schaltwerk/worktrees")];
-        let worktree = PathBuf::from("/repo/.schaltwerk/worktrees/my-session");
+        let bases = vec![PathBuf::from("/repo/.lucode/worktrees")];
+        let worktree = PathBuf::from("/repo/.lucode/worktrees/my-session");
         assert!(SessionUtils::is_under_managed_base(&worktree, &bases));
     }
 
     #[test]
     fn is_under_managed_base_matches_custom() {
         let bases = vec![
-            PathBuf::from("/repo/.schaltwerk/worktrees"),
+            PathBuf::from("/repo/.lucode/worktrees"),
             PathBuf::from("/tmp/custom-worktrees"),
         ];
         let worktree = PathBuf::from("/tmp/custom-worktrees/my-session");
@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn is_under_managed_base_rejects_unrelated_path() {
-        let bases = vec![PathBuf::from("/repo/.schaltwerk/worktrees")];
+        let bases = vec![PathBuf::from("/repo/.lucode/worktrees")];
         let worktree = PathBuf::from("/other/project/worktrees/session");
         assert!(!SessionUtils::is_under_managed_base(&worktree, &bases));
     }
@@ -671,15 +671,15 @@ mod tests {
 
     #[test]
     fn is_under_managed_base_rejects_substring_match() {
-        let bases = vec![PathBuf::from("/bar/.schaltwerk/worktrees")];
-        let worktree = PathBuf::from("/foo/bar/.schaltwerk/worktrees/session");
+        let bases = vec![PathBuf::from("/bar/.lucode/worktrees")];
+        let worktree = PathBuf::from("/foo/bar/.lucode/worktrees/session");
         assert!(!SessionUtils::is_under_managed_base(&worktree, &bases));
     }
 
     #[test]
     fn is_under_managed_base_empty_bases() {
         let bases: Vec<PathBuf> = vec![];
-        let worktree = PathBuf::from("/repo/.schaltwerk/worktrees/session");
+        let worktree = PathBuf::from("/repo/.lucode/worktrees/session");
         assert!(!SessionUtils::is_under_managed_base(&worktree, &bases));
     }
 }

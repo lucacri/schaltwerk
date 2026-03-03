@@ -100,7 +100,7 @@ impl Database {
         let path = db_path.unwrap_or_else(|| {
             dirs::data_local_dir()
                 .unwrap()
-                .join("schaltwerk")
+                .join("lucode")
                 .join("sessions.db")
         });
 
@@ -108,7 +108,7 @@ impl Database {
             std::fs::create_dir_all(parent)?;
         }
 
-        let pool_size = std::env::var("SCHALTWERK_DB_POOL_SIZE")
+        let pool_size = std::env::var("LUCODE_DB_POOL_SIZE")
             .ok()
             .and_then(|value| value.parse::<u32>().ok())
             .filter(|size| *size > 0)

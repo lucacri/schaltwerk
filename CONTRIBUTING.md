@@ -1,6 +1,6 @@
-# Contributing to Schaltwerk
+# Contributing to Lucode
 
-Thanks for your interest in helping build Schaltwerk! We appreciate contributions of all sizes—from filing issues and improving docs to landing features. The notes below explain how to get involved quickly while following the project’s quality bar.
+Thanks for your interest in helping build Lucode! We appreciate contributions of all sizes—from filing issues and improving docs to landing features. The notes below explain how to get involved quickly while following the project’s quality bar.
 
 ## Ways to Contribute
 - **Report bugs & share ideas**: Open an issue with clear reproduction steps or context. Feel free to propose enhancements or ask questions.
@@ -11,7 +11,7 @@ Thanks for your interest in helping build Schaltwerk! We appreciate contribution
 1. Fork and clone the repository (macOS only).
 2. Install dependencies with `bun install` (or `npm install` if you prefer).
 3. Launch the desktop app locally with `bun run tauri:dev` (or `npm run tauri:dev`).
-4. Use the [docs](https://schaltwerk.mintlify.app) for architecture, session flow, and agent management details.
+4. Use the [docs](https://lucode.mintlify.app) for architecture, session flow, and agent management details.
 
 ## Project Practices
 Use the pointers below as a checklist—apply what fits your contribution so everything stays consistent.
@@ -30,4 +30,4 @@ Use the pointers below as a checklist—apply what fits your contribution so eve
 ## Need Help?
 If you are unsure where to start, open a discussion or issue and tag the maintainers. We are happy to answer questions and help you move forward.
 
-Welcome aboard, and thanks for helping Schaltwerk grow!
+Welcome aboard, and thanks for helping Lucode grow!

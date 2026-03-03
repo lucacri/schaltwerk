@@ -12,9 +12,9 @@ mock.module('node-fetch', () => ({
   default: fetchMock
 }))
 
-const { SchaltwerkBridge } = await import('../src/schaltwerk-bridge')
+const { LucodeBridge } = await import('../src/lucode-bridge')
 
-describe('SchaltwerkBridge merge/pr helpers', () => {
+describe('LucodeBridge merge/pr helpers', () => {
   let consoleErrorSpy: ReturnType<typeof spyOn>
 
   beforeAll(() => {
@@ -27,11 +27,11 @@ describe('SchaltwerkBridge merge/pr helpers', () => {
 
   beforeEach(() => {
     fetchMock.mockReset()
-    process.env.SCHALTWERK_PROJECT_PATH = path.resolve(__dirname, '..', '..')
+    process.env.LUCODE_PROJECT_PATH = path.resolve(__dirname, '..', '..')
   })
 
   afterEach(() => {
-    delete process.env.SCHALTWERK_PROJECT_PATH
+    delete process.env.LUCODE_PROJECT_PATH
   })
 
   it('sends merge request payload and maps response', async () => {
@@ -43,7 +43,7 @@ describe('SchaltwerkBridge merge/pr helpers', () => {
         JSON.stringify({
           session_name: 'feature-login',
           parent_branch: 'main',
-          session_branch: 'schaltwerk/feature-login',
+          session_branch: 'lucode/feature-login',
           mode: 'reapply',
           commit: 'abcdef1',
           cancel_requested: true,
@@ -52,7 +52,7 @@ describe('SchaltwerkBridge merge/pr helpers', () => {
         })
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const result = await bridge.mergeSession('feature-login', {
       commitMessage: 'review: feature-login – add login screen',
       mode: 'reapply',
@@ -71,7 +71,7 @@ describe('SchaltwerkBridge merge/pr helpers', () => {
     expect(result).toEqual({
       sessionName: 'feature-login',
       parentBranch: 'main',
-      sessionBranch: 'schaltwerk/feature-login',
+      sessionBranch: 'lucode/feature-login',
       mode: 'reapply',
       commit: 'abcdef1',
       cancelRequested: true,
@@ -81,7 +81,7 @@ describe('SchaltwerkBridge merge/pr helpers', () => {
   })
 
   it('rejects squash merge without a commit message', async () => {
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     await expect(
       bridge.mergeSession('feature-login', { commitMessage: '   ' })
     ).rejects.toThrow('commitMessage is required and must be a non-empty string when performing a squash merge.')
@@ -97,7 +97,7 @@ describe('SchaltwerkBridge merge/pr helpers', () => {
         JSON.stringify({
           session_name: 'feature-login',
           parent_branch: 'main',
-          session_branch: 'schaltwerk/feature-login',
+          session_branch: 'lucode/feature-login',
           mode: 'reapply',
           commit: 'cafebabe',
           cancel_requested: false,
@@ -106,7 +106,7 @@ describe('SchaltwerkBridge merge/pr helpers', () => {
         })
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const result = await bridge.mergeSession('feature-login', { mode: 'reapply' })
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -130,7 +130,7 @@ describe('SchaltwerkBridge merge/pr helpers', () => {
         })
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const result = await bridge.createPullRequest('feature-login', {
       prTitle: 'review: login',
       prBody: 'Implements login flow.',

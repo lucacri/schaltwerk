@@ -3,11 +3,11 @@ use std::path::PathBuf;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Schaltwerk - An orchestrator for your agents
+/// Lucode - An orchestrator for your agents
 #[derive(Debug, Parser)]
 #[command(
-    name = "schaltwerk",
-    about = "Schaltwerk - An orchestrator for your agents",
+    name = "lucode",
+    about = "Lucode - An orchestrator for your agents",
     version = VERSION,
     help_template = "\
 {before-help}{name} {version}
@@ -17,10 +17,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 {all-args}{after-help}
 
 EXAMPLES:
-    schaltwerk                    # Open homescreen to select a project
-    schaltwerk /path/to/project   # Open specific Git repository
-    schaltwerk --version, -V      # Show version information
-    schaltwerk --help, -h         # Show this help message
+    lucode                    # Open homescreen to select a project
+    lucode /path/to/project   # Open specific Git repository
+    lucode --version, -V      # Show version information
+    lucode --help, -h         # Show this help message
 "
 )]
 pub struct Cli {
@@ -69,7 +69,7 @@ mod tests {
         I: IntoIterator<Item = T>,
         T: Into<std::ffi::OsString>,
     {
-        let iter = std::iter::once(std::ffi::OsString::from("schaltwerk"))
+        let iter = std::iter::once(std::ffi::OsString::from("lucode"))
             .chain(itr.into_iter().map(Into::into));
         Cli::parse_from(iter)
     }
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn detects_help_flag_without_other_args() {
-        let args = vec!["schaltwerk".to_string(), "--help".to_string()];
+        let args = vec!["lucode".to_string(), "--help".to_string()];
         assert_eq!(
             detect_special_cli_action(&args),
             Some(SpecialCliAction::ShowHelp)
@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn detects_version_flag_even_with_process_serial_arg() {
         let args = vec![
-            "schaltwerk".to_string(),
+            "lucode".to_string(),
             "-psn_0_12345".to_string(),
             "--version".to_string(),
         ];
@@ -111,7 +111,7 @@ mod tests {
     #[test]
     fn ignores_flags_when_path_arg_present() {
         let args = vec![
-            "schaltwerk".to_string(),
+            "lucode".to_string(),
             "--version".to_string(),
             "/tmp/repo".to_string(),
         ];
@@ -144,14 +144,14 @@ mod tests {
         let help_text = cmd.render_help();
         let help_string = help_text.to_string();
         assert!(help_string.contains("EXAMPLES:"));
-        assert!(help_string.contains("schaltwerk --version, -V"));
-        assert!(help_string.contains("schaltwerk --help, -h"));
+        assert!(help_string.contains("lucode --version, -V"));
+        assert!(help_string.contains("lucode --help, -h"));
     }
 
     #[test]
     fn version_flag_triggers_display_version() {
         use clap::Parser;
-        let err = Cli::try_parse_from(["schaltwerk", "--version"]).unwrap_err();
+        let err = Cli::try_parse_from(["lucode", "--version"]).unwrap_err();
         assert_eq!(err.kind(), clap::error::ErrorKind::DisplayVersion);
     }
 }

@@ -3,8 +3,8 @@ use crate::commands::schaltwerk_core::schaltwerk_core_cli::extract_codex_prompt_
 use crate::commands::schaltwerk_core::schaltwerk_core_cli::{
     fix_codex_single_dash_long_flags, normalize_cli_text, reorder_codex_model_after_profile,
 };
-use schaltwerk::schaltwerk_core::db_project_config::ProjectConfigMethods;
-use schaltwerk::services::AgentPreference;
+use lucode::schaltwerk_core::db_project_config::ProjectConfigMethods;
+use lucode::services::AgentPreference;
 use std::path::Path;
 
 pub enum AgentKind {
@@ -64,7 +64,7 @@ impl AgentKind {
 pub async fn collect_agent_env_and_cli(
     agent_kind: &AgentKind,
     repo_path: &Path,
-    db: &schaltwerk::schaltwerk_core::Database,
+    db: &lucode::schaltwerk_core::Database,
 ) -> (Vec<(String, String)>, String, AgentPreference) {
     let agent_str = match agent_kind {
         AgentKind::Claude => "claude",
@@ -101,7 +101,7 @@ pub async fn collect_agent_env_and_cli(
 }
 
 fn harness_manages_codex_sandbox() -> bool {
-    std::env::var_os("SCHALTWERK_SESSION").is_some()
+    std::env::var_os("LUCODE_SESSION").is_some()
 }
 
 fn strip_codex_sandbox_overrides(args: &mut Vec<String>) -> Option<Vec<String>> {
@@ -170,7 +170,7 @@ pub fn build_final_args(
             {
                 let removed_joined = removed.join(", ");
                 log::warn!(
-                    "Ignoring Codex CLI sandbox override because Schaltwerk manages sandbox mode: {removed_joined}"
+                    "Ignoring Codex CLI sandbox override because Lucode manages sandbox mode: {removed_joined}"
                 );
             }
             parsed_agent_args.extend(additional);
@@ -287,7 +287,7 @@ mod tests {
 
     impl EnvVarGuard {
         fn set(key: &'static str, value: &str) -> Self {
-            use schaltwerk::utils::env_adapter::EnvAdapter;
+            use lucode::utils::env_adapter::EnvAdapter;
             let original = std::env::var(key).ok();
             EnvAdapter::set_var(key, value);
             Self { key, original }
@@ -296,7 +296,7 @@ mod tests {
 
     impl Drop for EnvVarGuard {
         fn drop(&mut self) {
-            use schaltwerk::utils::env_adapter::EnvAdapter;
+            use lucode::utils::env_adapter::EnvAdapter;
             if let Some(ref original) = self.original {
                 EnvAdapter::set_var(self.key, original);
             } else {
@@ -388,7 +388,7 @@ mod tests {
     #[test]
     #[serial]
     fn codex_harness_strips_duplicate_sandbox_flag() {
-        let _guard = EnvVarGuard::set("SCHALTWERK_SESSION", "session-123");
+        let _guard = EnvVarGuard::set("LUCODE_SESSION", "session-123");
         let args = build_final_args(
             &AgentKind::Codex,
             vec!["--sandbox".into(), "workspace-write".into()],
@@ -405,7 +405,7 @@ mod tests {
     #[test]
     #[serial]
     fn codex_harness_strips_duplicate_sandbox_flag_equals_form() {
-        let _guard = EnvVarGuard::set("SCHALTWERK_SESSION", "session-abc");
+        let _guard = EnvVarGuard::set("LUCODE_SESSION", "session-abc");
         let args = build_final_args(
             &AgentKind::Codex,
             vec!["--sandbox".into(), "workspace-write".into()],
@@ -519,8 +519,8 @@ mod tests {
     #[test]
     #[serial]
     fn codex_standalone_keeps_duplicate_sandbox_flag() {
-        use schaltwerk::utils::env_adapter::EnvAdapter;
-        EnvAdapter::remove_var("SCHALTWERK_SESSION");
+        use lucode::utils::env_adapter::EnvAdapter;
+        EnvAdapter::remove_var("LUCODE_SESSION");
         let args = build_final_args(
             &AgentKind::Codex,
             vec!["--sandbox".into(), "workspace-write".into()],

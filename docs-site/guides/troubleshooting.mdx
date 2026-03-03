@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-description: 'Common issues and solutions for Schaltwerk'
+description: 'Common issues and solutions for Lucode'
 ---
 
 This guide covers common issues you might encounter and how to resolve them.
@@ -10,14 +10,14 @@ This guide covers common issues you might encounter and how to resolve them.
 ## Installation Issues
 
 <AccordionGroup>
-  <Accordion title="Schaltwerk won't open on first launch">
+  <Accordion title="Lucode won't open on first launch">
     **Symptom:** macOS blocks the app with "can't be opened because it is from an unidentified developer"
 
     **Solution:**
     1. Go to **System Settings → Privacy & Security**
-    2. Scroll down to find: "Schaltwerk was blocked"
+    2. Scroll down to find: "Lucode was blocked"
     3. Click **Open Anyway**
-    4. Launch Schaltwerk again and click **Open**
+    4. Launch Lucode again and click **Open**
 
     Only needed once - macOS will remember your choice.
   </Accordion>
@@ -28,14 +28,14 @@ This guide covers common issues you might encounter and how to resolve them.
     **Solution:**
     Remove the quarantine attribute:
     ```bash
-    xattr -cr /Applications/Schaltwerk.app
+    xattr -cr /Applications/Lucode.app
     ```
 
     Then try launching again.
   </Accordion>
 
   <Accordion title="Homebrew installation fails">
-    **Symptom:** `brew install --cask 2mawi2/tap/schaltwerk` fails
+    **Symptom:** `brew install --cask lucacri/tap/lucode` fails
 
     **Solution:**
     1. Update Homebrew:
@@ -44,12 +44,12 @@ This guide covers common issues you might encounter and how to resolve them.
        ```
     2. Try installation again:
        ```bash
-       brew install --cask 2mawi2/tap/schaltwerk
+       brew install --cask lucacri/tap/lucode
        ```
     3. If still failing, manually add tap first:
        ```bash
        brew tap 2mawi2/tap
-       brew install --cask schaltwerk
+       brew install --cask lucode
        ```
   </Accordion>
 </AccordionGroup>
@@ -78,16 +78,16 @@ This guide covers common issues you might encounter and how to resolve them.
 
     **3. Worktree directory exists:**
     ```bash
-    ls .schaltwerk/worktrees/
+    ls .lucode/worktrees/
     # If session directory exists, cancel old session first
     ```
 
     **4. Permission issues:**
     ```bash
     # Check permissions
-    ls -la .schaltwerk/
+    ls -la .lucode/
     # Fix if needed
-    chmod -R u+w .schaltwerk/
+    chmod -R u+w .lucode/
     ```
   </Accordion>
 
@@ -95,9 +95,9 @@ This guide covers common issues you might encounter and how to resolve them.
     **Symptom:** Session shows "Creating..." but never completes
 
     **Solution:**
-    1. Check Schaltwerk logs:
+    1. Check Lucode logs:
        ```bash
-       tail -f ~/Library/Application\ Support/schaltwerk/logs/schaltwerk-*.log
+       tail -f ~/Library/Application\ Support/lucode/logs/lucode-*.log
        ```
     2. Look for errors in the log
     3. Common causes:
@@ -114,11 +114,11 @@ This guide covers common issues you might encounter and how to resolve them.
     1. Check terminal permissions:
        - **System Settings → Privacy & Security → Developer Tools**
        - Add Terminal.app
-    2. Restart Schaltwerk
+    2. Restart Lucode
     3. Try selecting the session again
     4. Check logs for PTY errors:
        ```bash
-       tail -f ~/Library/Application\ Support/schaltwerk/logs/schaltwerk-*.log | grep PTY
+       tail -f ~/Library/Application\ Support/lucode/logs/lucode-*.log | grep PTY
        ```
   </Accordion>
 
@@ -130,7 +130,7 @@ This guide covers common issues you might encounter and how to resolve them.
        - **System Settings → Keyboard → Keyboard Shortcuts**
        - Look for conflicts with `⌘1-9`
     2. Try clicking session in sidebar instead
-    3. Restart Schaltwerk
+    3. Restart Lucode
   </Accordion>
 </AccordionGroup>
 
@@ -174,7 +174,7 @@ This guide covers common issues you might encounter and how to resolve them.
        - Incompatible CLI arguments
     3. Try running agent manually:
        ```bash
-       cd .schaltwerk/worktrees/session-name/
+       cd .lucode/worktrees/session-name/
        claude  # or your agent command
        ```
     4. Check agent-specific logs
@@ -184,14 +184,14 @@ This guide covers common issues you might encounter and how to resolve them.
     **Symptom:** Error like "ReferenceError: ReadableStream is not defined" when starting agent
 
     **Solution:**
-    This occurs when using Node version managers (fnm, nvm, n) that set paths via shell config files. Schaltwerk spawns agents without loading `.zshrc`/`.bashrc`, so falls back to system Node, which may be outdated.
+    This occurs when using Node version managers (fnm, nvm, n) that set paths via shell config files. Lucode spawns agents without loading `.zshrc`/`.bashrc`, so falls back to system Node, which may be outdated.
 
     Install Node via Homebrew to set a global default:
     ```bash
     brew install node
     ```
 
-    Verify system Node version (what Schaltwerk uses):
+    Verify system Node version (what Lucode uses):
     ```bash
     fnm use system && node --version  # For fnm users
     nvm use system && node --version  # For nvm users
@@ -219,7 +219,7 @@ This guide covers common issues you might encounter and how to resolve them.
     **Solution:**
     1. **Option 1: Merge main into session first**
        ```bash
-       cd .schaltwerk/worktrees/session-name/
+       cd .lucode/worktrees/session-name/
        git fetch origin main
        git merge origin/main
        # Resolve conflicts
@@ -249,11 +249,11 @@ This guide covers common issues you might encounter and how to resolve them.
        ```
     2. If session was cancelled but worktree remains:
        ```bash
-       git worktree remove .schaltwerk/worktrees/session-name
+       git worktree remove .lucode/worktrees/session-name
        ```
     3. If worktree is locked:
        ```bash
-       git worktree remove --force .schaltwerk/worktrees/session-name
+       git worktree remove --force .lucode/worktrees/session-name
        ```
     4. Retry session creation
   </Accordion>
@@ -265,12 +265,12 @@ This guide covers common issues you might encounter and how to resolve them.
     Cancelled sessions delete their local worktree and branch automatically. If a branch remains, it likely wasn't canceled cleanly. Remove it manually:
 
     ```bash
-    git branch -D schaltwerk/session-name
+    git branch -D lucode/session-name
     ```
 
     To delete from remote (if pushed):
     ```bash
-    git push origin --delete schaltwerk/session-name
+    git push origin --delete lucode/session-name
     ```
   </Accordion>
 </AccordionGroup>
@@ -278,7 +278,7 @@ This guide covers common issues you might encounter and how to resolve them.
 ## Performance Issues
 
 <AccordionGroup>
-  <Accordion title="Schaltwerk is slow or laggy">
+  <Accordion title="Lucode is slow or laggy">
     **Symptom:** UI is unresponsive, switching sessions is slow
 
     **Possible Causes & Solutions:**
@@ -297,13 +297,13 @@ This guide covers common issues you might encounter and how to resolve them.
     ```bash
     # Check CPU/memory usage
     top -o cpu
-    # Look for Schaltwerk processes
+    # Look for Lucode processes
     ```
 
     **4. Database size:**
     ```bash
     # Check database size
-    du -sh ~/Library/Application\ Support/schaltwerk/
+    du -sh ~/Library/Application\ Support/lucode/
     # If very large, consider cleaning old projects
     ```
   </Accordion>
@@ -328,7 +328,7 @@ This guide covers common issues you might encounter and how to resolve them.
     **Solution:**
     1. Verify MCP server is built:
        ```bash
-       ls mcp-server/build/schaltwerk-mcp-server.js
+       ls mcp-server/build/lucode-mcp-server.js
        ```
     2. Check configuration:
        ```bash
@@ -337,18 +337,18 @@ This guide covers common issues you might encounter and how to resolve them.
        claude mcp list
        ```
     3. Ensure path is absolute, not relative
-    4. Restart orchestrator in Schaltwerk Settings
+    4. Restart orchestrator in Lucode Settings
   </Accordion>
 
   <Accordion title="MCP operations fail">
-    **Symptom:** `schaltwerk_create` or other MCP tools error
+    **Symptom:** `lucode_create` or other MCP tools error
 
     **Solution:**
-    1. Check Schaltwerk is running
-    2. Verify project is loaded in Schaltwerk
+    1. Check Lucode is running
+    2. Verify project is loaded in Lucode
     3. Check database exists:
        ```bash
-       ls ~/Library/Application\ Support/schaltwerk/*/database.db
+       ls ~/Library/Application\ Support/lucode/*/database.db
        ```
     4. Look for errors in MCP server logs
     5. Try rebuilding MCP server:
@@ -365,29 +365,29 @@ This guide covers common issues you might encounter and how to resolve them.
     **Symptom:** Errors about database being locked or unable to open
 
     **Solution:**
-    1. **Close Schaltwerk completely**
+    1. **Close Lucode completely**
     2. **Check for zombie processes:**
        ```bash
-       ps aux | grep Schaltwerk
+       ps aux | grep Lucode
        # Kill any remaining processes
        kill -9 <PID>
        ```
     3. **Backup database:**
        ```bash
-       cp ~/Library/Application\ Support/schaltwerk/project-name/database.db \
-          ~/Desktop/schaltwerk-backup.db
+       cp ~/Library/Application\ Support/lucode/project-name/database.db \
+          ~/Desktop/lucode-backup.db
        ```
     4. **Try SQLite repair:**
        ```bash
-       sqlite3 ~/Library/Application\ Support/schaltwerk/project-name/database.db
+       sqlite3 ~/Library/Application\ Support/lucode/project-name/database.db
        # In SQLite prompt:
        PRAGMA integrity_check;
        .exit
        ```
     5. **Last resort - delete and recreate:**
        ```bash
-       rm ~/Library/Application\ Support/schaltwerk/project-name/database.db
-       # Restart Schaltwerk - will create fresh database
+       rm ~/Library/Application\ Support/lucode/project-name/database.db
+       # Restart Lucode - will create fresh database
        ```
   </Accordion>
 </AccordionGroup>
@@ -399,7 +399,7 @@ This guide covers common issues you might encounter and how to resolve them.
     **Symptom:** Can't connect to `localhost:8547`
 
     **Solution:**
-    1. Check if Schaltwerk is running
+    1. Check if Lucode is running
     2. Verify project is loaded
     3. Check if port is available:
        ```bash
@@ -407,7 +407,7 @@ This guide covers common issues you might encounter and how to resolve them.
        # or for project-specific port
        lsof -i :854X  # X depends on project hash
        ```
-    4. Try restarting Schaltwerk
+    4. Try restarting Lucode
     5. Check firewall settings
   </Accordion>
 
@@ -429,30 +429,30 @@ This guide covers common issues you might encounter and how to resolve them.
 
 <CodeGroup>
 ```bash Application Logs
-~/Library/Application Support/schaltwerk/logs/schaltwerk-*.log
+~/Library/Application Support/lucode/logs/lucode-*.log
 ```
 
 ```bash Tail Logs in Real-Time
-tail -f ~/Library/Application\ Support/schaltwerk/logs/schaltwerk-*.log
+tail -f ~/Library/Application\ Support/lucode/logs/lucode-*.log
 ```
 
 ```bash Filter for Errors
-grep -i error ~/Library/Application\ Support/schaltwerk/logs/schaltwerk-*.log
+grep -i error ~/Library/Application\ Support/lucode/logs/lucode-*.log
 ```
 
 ```bash Session-Specific Logs
 # Check terminal output in the session itself
 # Or look for session ID in main logs
-grep "session-name" ~/Library/Application\ Support/schaltwerk/logs/*.log
+grep "session-name" ~/Library/Application\ Support/lucode/logs/*.log
 ```
 </CodeGroup>
 
 ### Debug Mode
 
-Run Schaltwerk with debug logging:
+Run Lucode with debug logging:
 
 ```bash
-RUST_LOG=schaltwerk=debug bun run tauri:dev
+RUST_LOG=lucode=debug bun run tauri:dev
 ```
 
 Or for maximum verbosity:
@@ -467,11 +467,11 @@ If you can't resolve an issue:
 
 <Steps>
   <Step title="Check logs">
-    Look at Schaltwerk logs for error messages
+    Look at Lucode logs for error messages
   </Step>
 
   <Step title="Search existing issues">
-    Check [GitHub Issues](https://github.com/2mawi2/schaltwerk/issues)
+    Check [GitHub Issues](https://github.com/lucacri/lucode/issues)
   </Step>
 
   <Step title="Create an issue">
@@ -481,14 +481,14 @@ If you can't resolve an issue:
     - Actual behavior
     - Relevant log excerpts
     - macOS version
-    - Schaltwerk version
+    - Lucode version
   </Step>
 
   <Step title="Workaround">
     While waiting for fix:
     - Try manual git operations
     - Use terminal directly
-    - Restart Schaltwerk
+    - Restart Lucode
     - Close and reopen project
   </Step>
 </Steps>
@@ -504,7 +504,7 @@ If you can't resolve an issue:
 
   <Card title="Keep Updated" icon="arrow-up">
     ```bash
-    brew upgrade --cask schaltwerk
+    brew upgrade --cask lucode
     ```
     Updates include bug fixes
   </Card>

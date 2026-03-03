@@ -1,4 +1,4 @@
-# Schaltwerk Documentation
+# Lucode Documentation
 
 Documentation website built with [Mintlify](https://mintlify.com).
 
@@ -19,12 +19,12 @@ Docs are hosted on **Mintlify Cloud** (free for open source).
 **Setup:**
 1. Connect GitHub repo at [mintlify.com](https://mintlify.com)
 2. Configure repository settings:
-   - Repository: `2mawi2/schaltwerk`
+   - Repository: `lucacri/lucode`
    - Branch: `main`
    - Path: `docs-site`
 3. Docs auto-deploy on push to `main`
 
-**Live URL:** `schaltwerk.mintlify.app` (or custom domain)
+**Live URL:** `lucode.mintlify.app` (or custom domain)
 
 ## File Structure
 
@@ -39,7 +39,7 @@ docs-site/
 │   ├── sessions-and-specs.mdx
 │   └── worktrees-and-terminals.mdx
 ├── guides/                # User guides
-│   ├── using-schaltwerk.mdx
+│   ├── using-lucode.mdx
 │   ├── pull-requests.mdx
 │   ├── agent-setup.mdx
 │   └── keyboard-shortcuts.mdx
@@ -50,4 +50,4 @@ docs-site/
 
 ## Theme Configuration
 
-The docs use the **Quill** theme with Schaltwerk's cyan color scheme (#22d3ee) to match the app design. Colors are configured in `mint.json`.
+The docs use the **Quill** theme with Lucode's cyan color scheme (#22d3ee) to match the app design. Colors are configured in `mint.json`.

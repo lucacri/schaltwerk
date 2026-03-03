@@ -148,7 +148,7 @@ fn remove_path_with_optional_backup(
 
     if should_backup && abs_candidate.is_file() {
         let ts = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
-        let backup_root = abs_worktree.join(".schaltwerk").join("discarded").join(ts);
+        let backup_root = abs_worktree.join(".lucode").join("discarded").join(ts);
         let backup_path = backup_root.join(rel);
         if let Some(parent) = backup_path.parent() {
             std::fs::create_dir_all(parent).ok();
@@ -365,7 +365,7 @@ fn fast_remove_dir(path: &Path) -> Result<()> {
     let trash_dir = path
         .parent()
         .unwrap_or(path)
-        .join(".schaltwerk-trash");
+        .join(".lucode-trash");
 
     if !trash_dir.exists() {
         fs::create_dir_all(&trash_dir)?;
@@ -789,8 +789,8 @@ mod discard_path_tests {
         assert!(p.exists());
         discard_path_in_worktree(tmp.path(), Path::new("new.txt"), None).unwrap();
         assert!(!p.exists());
-        // Verify it was moved under .schaltwerk/discarded/
-        let disc_dir = tmp.path().join(".schaltwerk/discarded");
+        // Verify it was moved under .lucode/discarded/
+        let disc_dir = tmp.path().join(".lucode/discarded");
         let mut found = false;
         if disc_dir.exists() {
             for entry in std::fs::read_dir(disc_dir).unwrap() {
@@ -802,7 +802,7 @@ mod discard_path_tests {
                 }
             }
         }
-        assert!(found, "backup copy not found under .schaltwerk/discarded");
+        assert!(found, "backup copy not found under .lucode/discarded");
     }
 
     #[test]

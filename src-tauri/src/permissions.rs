@@ -5,9 +5,9 @@ use std::path::Path;
 use std::path::PathBuf;
 
 #[cfg(target_os = "macos")]
-const APP_IDENTIFIER: &str = "com.mariuswichtner.schaltwerk";
+const APP_IDENTIFIER: &str = "com.lucacri.lucode";
 #[cfg(target_os = "macos")]
-const APP_DISPLAY_NAME: &str = "Schaltwerk";
+const APP_DISPLAY_NAME: &str = "Lucode";
 
 #[derive(Serialize)]
 pub struct PermissionDiagnostics {
@@ -90,7 +90,7 @@ fn detect_install_kind(executable: &Path) -> &'static str {
     } else if executable
         .file_name()
         .and_then(|name| name.to_str())
-        .map(|name| name.eq_ignore_ascii_case("schaltwerk"))
+        .map(|name| name.eq_ignore_ascii_case("lucode"))
         .unwrap_or(false)
     {
         "standalone"
@@ -222,27 +222,27 @@ mod tests {
 
     #[test]
     fn detects_app_bundle_install_kind() {
-        let path = PathBuf::from("/Applications/Schaltwerk.app/Contents/MacOS/schaltwerk");
+        let path = PathBuf::from("/Applications/Lucode.app/Contents/MacOS/lucode");
         assert_eq!(detect_install_kind(&path), "app-bundle");
     }
 
     #[test]
     fn detects_homebrew_install_kind() {
-        let path = PathBuf::from("/opt/homebrew/Cellar/schaltwerk/1.0.0/bin/schaltwerk");
+        let path = PathBuf::from("/opt/homebrew/Cellar/lucode/1.0.0/bin/lucode");
         assert_eq!(detect_install_kind(&path), "homebrew");
     }
 
     #[test]
     fn detects_dev_install_kind() {
         let path = PathBuf::from(
-            "/Users/example/Documents/git/schaltwerk/src-tauri/target/debug/schaltwerk",
+            "/Users/example/Documents/git/lucode/src-tauri/target/debug/lucode",
         );
         assert_eq!(detect_install_kind(&path), "justfile");
     }
 
     #[test]
     fn detects_standalone_install_kind() {
-        let path = PathBuf::from("/tmp/custom/schaltwerk");
+        let path = PathBuf::from("/tmp/custom/lucode");
         assert_eq!(detect_install_kind(&path), "standalone");
     }
 }

@@ -8,14 +8,14 @@ Configure each agent from **Settings → Agent Configuration** before you launch
 > Commands in this guide use `bun`. Swap to npm equivalents (`npm run …`, `npm install`, etc.) if that's your default toolchain.
 
 <Info>
-  Settings are saved locally in `~/Library/Application Support/schaltwerk/settings.json` (plain JSON). Keep this file protected if you store API keys.
+  Settings are saved locally in `~/Library/Application Support/lucode/settings.json` (plain JSON). Keep this file protected if you store API keys.
 </Info>
 
 ## Storage Locations
 
 <AccordionGroup>
   <Accordion title="Global Settings">
-    **Location:** `~/Library/Application Support/schaltwerk/settings.json`
+    **Location:** `~/Library/Application Support/lucode/settings.json`
 
     **Contains:**
     - Agent binaries
@@ -25,7 +25,7 @@ Configure each agent from **Settings → Agent Configuration** before you launch
   </Accordion>
 
   <Accordion title="Project Settings">
-    **Location:** `~/Library/Application Support/schaltwerk/<project>/database.db`
+    **Location:** `~/Library/Application Support/lucode/<project>/database.db`
 
     **Contains:**
     - Worktree setup scripts
@@ -53,7 +53,7 @@ Configure each agent from **Settings → Agent Configuration** before you launch
   </Step>
 
   <Step title="Verify details">
-    Schaltwerk shows:
+    Lucode shows:
     - Installation method
     - Version number
     - Full path to executable
@@ -86,7 +86,7 @@ Configure each agent from **Settings → Agent Configuration** before you launch
 - **Setup Scripts:** Supported - runs before terminal opens
 
 <Tip>
-  Terminal mode is perfect for running agents not yet integrated into Schaltwerk, or for custom development workflows that don't require AI assistance.
+  Terminal mode is perfect for running agents not yet integrated into Lucode, or for custom development workflows that don't require AI assistance.
 </Tip>
 
 ### GitHub Copilot CLI
@@ -105,7 +105,7 @@ After installation run `/login` in any Copilot session to authenticate.
 
 **Trust the worktree:** Inside Copilot run `/cwd /trust` (or `/add-dir`) the first time you open a new project. Copilot stores this trust in `~/.config/github-copilot/cli` so future sessions start immediately.
 
-**Automatic prompts:** Schaltwerk queues your initial task prompt and submits it once Copilot finishes booting. If you disable auto-start or see Copilot waiting for input, just hit `Enter` to re-send the command.
+**Automatic prompts:** Lucode queues your initial task prompt and submits it once Copilot finishes booting. If you disable auto-start or see Copilot waiting for input, just hit `Enter` to re-send the command.
 
 ### Common Binary Locations
 
@@ -136,7 +136,7 @@ After installation run `/login` in any Copilot session to authenticate.
 </CodeGroup>
 
 <Tip>
-  Schaltwerk auto-detects common installation paths. If your binary isn't listed, paste the absolute path.
+  Lucode auto-detects common installation paths. If your binary isn't listed, paste the absolute path.
 </Tip>
 
 ## Add Custom CLI Arguments
@@ -214,17 +214,17 @@ Open **Settings → Run & Environment** to configure shared defaults for every s
 ### Worktree Setup Script
 
 <Card title="One-Time Initialization" icon="play" color="#22d3ee">
-  Runs once when Schaltwerk creates a new worktree. Perfect for dependency installation, environment setup, and project bootstrapping.
+  Runs once when Lucode creates a new worktree. Perfect for dependency installation, environment setup, and project bootstrapping.
 </Card>
 
 #### Available Environment Variables
 
 <CodeGroup>
 ```bash Session Variables
-$WORKTREE_PATH   # /path/to/repo/.schaltwerk/worktrees/session-name
+$WORKTREE_PATH   # /path/to/repo/.lucode/worktrees/session-name
 $REPO_PATH       # /path/to/repo
 $SESSION_NAME    # session-name
-$BRANCH_NAME     # schaltwerk/session-name
+$BRANCH_NAME     # lucode/session-name
 ```
 </CodeGroup>
 
@@ -266,7 +266,7 @@ $BRANCH_NAME     # schaltwerk/session-name
 
 **Execution:**
 - Runs in top terminal before agent launches
-- Creates `.schaltwerk/setup.done` marker (delete to force re-run)
+- Creates `.lucode/setup.done` marker (delete to force re-run)
 - Optional - leave empty if not needed
 
 <Warning>
@@ -311,7 +311,7 @@ Define a command to execute with `⌘E` in the bottom terminal.
 ## Recommended Setup Flow
 
 <Tip>
-  Using an MCP-capable agent? Have it call `schaltwerk_get_setup_script` first, inspect which untracked config (e.g., `.env`, `.npmrc`) should be copied into worktrees, confirm with you, then send the full script via `schaltwerk_set_setup_script`. In the UI, Schaltwerk will still prompt before saving.
+  Using an MCP-capable agent? Have it call `lucode_get_setup_script` first, inspect which untracked config (e.g., `.env`, `.npmrc`) should be copied into worktrees, confirm with you, then send the full script via `lucode_set_setup_script`. In the UI, Lucode will still prompt before saving.
 </Tip>
 
 <Steps>
@@ -397,10 +397,10 @@ Define a command to execute with `⌘E` in the bottom terminal.
     - Try running command manually in terminal
   </Accordion>
 
-  <Accordion title="Schaltwerk uses old agent version after upgrade">
-    **Problem:** After upgrading your agent, Schaltwerk still uses the old version
+  <Accordion title="Lucode uses old agent version after upgrade">
+    **Problem:** After upgrading your agent, Lucode still uses the old version
 
-    **Cause:** Multiple installations exist, Schaltwerk points to the old binary
+    **Cause:** Multiple installations exist, Lucode points to the old binary
 
     **Solution:**
     1. Find current installation path: `which <agent-name>`
@@ -441,7 +441,7 @@ Define a command to execute with `⌘E` in the bottom terminal.
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="Start Using Schaltwerk" icon="play" href="/guides/using-schaltwerk">
+  <Card title="Start Using Lucode" icon="play" href="/guides/using-lucode">
     Learn the day-to-day workflow
   </Card>
   <Card title="Keyboard Shortcuts" icon="keyboard" href="/guides/keyboard-shortcuts">

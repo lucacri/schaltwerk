@@ -7,7 +7,7 @@ pub fn extract_worktree_session(path: &Path) -> Option<String> {
         .collect();
 
     for index in 0..components.len() {
-        if components[index] == "worktrees" && index > 0 && components[index - 1] == ".schaltwerk" {
+        if components[index] == "worktrees" && index > 0 && components[index - 1] == ".lucode" {
             if let Some(session) = components.get(index + 1) {
                 if !session.is_empty() {
                     return Some(session.clone());
@@ -26,14 +26,14 @@ mod tests {
 
     #[test]
     fn detects_session_from_worktree_path() {
-        let path = PathBuf::from("/Users/example/project/.schaltwerk/worktrees/focused_carson");
+        let path = PathBuf::from("/Users/example/project/.lucode/worktrees/focused_carson");
         let session = extract_worktree_session(&path);
         assert_eq!(session.as_deref(), Some("focused_carson"));
     }
 
     #[test]
     fn detects_session_from_nested_worktree_path() {
-        let path = PathBuf::from("/Users/example/project/.schaltwerk/worktrees/focused_carson/src-tauri/src");
+        let path = PathBuf::from("/Users/example/project/.lucode/worktrees/focused_carson/src-tauri/src");
         let session = extract_worktree_session(&path);
         assert_eq!(session.as_deref(), Some("focused_carson"));
     }

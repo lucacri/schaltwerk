@@ -1,5 +1,5 @@
-use schaltwerk::services::GlobalState;
-use schaltwerk::services::power::{
+use lucode::services::GlobalState;
+use lucode::services::power::{
     disable_global_keep_awake as disable_global_keep_awake_service,
     enable_global_keep_awake as enable_global_keep_awake_service,
     get_global_keep_awake_state as get_global_keep_awake_state_service,

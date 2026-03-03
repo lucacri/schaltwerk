@@ -1,7 +1,7 @@
 use super::{agent_ctx, terminals};
 use crate::{SETTINGS_MANAGER, get_terminal_manager};
-use schaltwerk::services::CreateTerminalWithAppAndSizeParams;
-use schaltwerk::services::{AgentLaunchSpec, parse_agent_command};
+use lucode::services::CreateTerminalWithAppAndSizeParams;
+use lucode::services::{AgentLaunchSpec, parse_agent_command};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
@@ -35,7 +35,7 @@ pub fn apply_command_prefix(
 pub async fn launch_in_terminal(
     terminal_id: String,
     launch_spec: AgentLaunchSpec,
-    db: &schaltwerk::schaltwerk_core::Database,
+    db: &lucode::schaltwerk_core::Database,
     repo_path: &std::path::Path,
     cols: Option<u16>,
     rows: Option<u16>,

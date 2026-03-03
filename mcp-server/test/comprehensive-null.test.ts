@@ -152,7 +152,7 @@ const validateEdgeCase = (edgeCase: { value: any; expected: any }) => {
 
 describe('Comprehensive MCP Null Handling', () => {
   describe('All date fields across all commands', () => {
-    it('should handle null/undefined dates in schaltwerk_list', () => {
+    it('should handle null/undefined dates in lucode_list', () => {
       const testSessions = [
         { name: 'test1', status: 'active', created_at: null, last_activity: null },
         { name: 'test2', status: 'active', created_at: undefined, last_activity: undefined },
@@ -164,7 +164,7 @@ describe('Comprehensive MCP Null Handling', () => {
       testSessions.forEach(validateSessionFormatting)
     })
 
-    it('should handle null/undefined dates in schaltwerk_draft_list', () => {
+    it('should handle null/undefined dates in lucode_draft_list', () => {
       const testDrafts = [
         { name: 'draft1', created_at: null, updated_at: null },
         { name: 'draft2', created_at: undefined, updated_at: undefined },
@@ -176,7 +176,7 @@ describe('Comprehensive MCP Null Handling', () => {
       testDrafts.forEach(validateDraftFormatting)
     })
 
-    it('should handle null/undefined dates in schaltwerk_get_current_tasks', () => {
+    it('should handle null/undefined dates in lucode_get_current_tasks', () => {
       const testTasks = [
         { name: 'task1', status: 'active', created_at: null, last_activity: null },
         { name: 'task2', status: 'spec', created_at: undefined, last_activity: undefined },

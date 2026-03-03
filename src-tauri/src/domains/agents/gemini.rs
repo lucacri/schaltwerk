@@ -164,7 +164,7 @@ fn extract_session_id_from_file(path: &Path, limit: usize) -> Option<String> {
 }
 
 fn gemini_home_directory() -> Option<PathBuf> {
-    if let Ok(override_path) = std::env::var("SCHALTWERK_GEMINI_HOME_OVERRIDE") {
+    if let Ok(override_path) = std::env::var("LUCODE_GEMINI_HOME_OVERRIDE") {
         let trimmed = override_path.trim();
         if !trimmed.is_empty() {
             return Some(PathBuf::from(trimmed));

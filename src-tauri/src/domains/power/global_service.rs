@@ -227,7 +227,7 @@ impl GlobalInhibitorService {
                 path: "cache".into(),
                 message: e.to_string(),
             })?
-            .join("schaltwerk");
+            .join("lucode");
         fs::create_dir_all(&cache_dir).map_err(|e| SchaltError::IoError {
             operation: "create_cache_dir".into(),
             path: cache_dir.display().to_string(),
@@ -863,7 +863,7 @@ mod tests {
     #[serial]
     async fn idle_transitions_to_auto_pause_and_stops_inhibitor() {
         let tmp = TempDir::new().unwrap();
-        let inspector = Arc::new(FakeInspector::new("caffeinate -d # schaltwerk-keep-awake"));
+        let inspector = Arc::new(FakeInspector::new("caffeinate -d # lucode-keep-awake"));
         let platform = Arc::new(FakePlatform::new(inspector.clone()));
         let service = build_service(&tmp, inspector.clone(), platform.clone());
 
@@ -892,7 +892,7 @@ mod tests {
     #[serial]
     async fn duplicate_inhibitor_is_killed_before_spawn() {
         let tmp = TempDir::new().unwrap();
-        let inspector = Arc::new(FakeInspector::new("caffeinate -d # schaltwerk-keep-awake"));
+        let inspector = Arc::new(FakeInspector::new("caffeinate -d # lucode-keep-awake"));
         let platform = Arc::new(FakePlatform::new(inspector.clone()));
         platform.set_existing(Some(999));
         inspector.set_running(true);
@@ -912,7 +912,7 @@ mod tests {
     #[serial]
     async fn watchdog_respawns_after_process_dies() {
         let tmp = TempDir::new().unwrap();
-        let inspector = Arc::new(FakeInspector::new("caffeinate -d # schaltwerk-keep-awake"));
+        let inspector = Arc::new(FakeInspector::new("caffeinate -d # lucode-keep-awake"));
         let platform = Arc::new(FakePlatform::new(inspector.clone()));
         let service = build_service(&tmp, inspector.clone(), platform.clone());
 
@@ -938,7 +938,7 @@ mod tests {
     #[serial]
     async fn enabling_with_no_active_sessions_does_not_spawn() {
         let tmp = TempDir::new().unwrap();
-        let inspector = Arc::new(FakeInspector::new("caffeinate -d # schaltwerk-keep-awake"));
+        let inspector = Arc::new(FakeInspector::new("caffeinate -d # lucode-keep-awake"));
         let platform = Arc::new(FakePlatform::new(inspector.clone()));
         let service = build_service(&tmp, inspector.clone(), platform.clone());
 
@@ -960,7 +960,7 @@ mod tests {
     async fn sync_running_sessions_prunes_and_stops_when_none_running() {
         let tmp = TempDir::new().unwrap();
         let inspector = Arc::new(FakeInspector::new(
-            "systemd-inhibit --what=sleep:idle --who=Schaltwerk-KeepAwake --why=\"AI agent sessions active (schaltwerk-keep-awake)\" sleep infinity",
+            "systemd-inhibit --what=sleep:idle --who=Lucode-KeepAwake --why=\"AI agent sessions active (lucode-keep-awake)\" sleep infinity",
         ));
         let platform = Arc::new(FakePlatform::new(inspector.clone()));
         let service = build_service(&tmp, inspector.clone(), platform.clone());
@@ -987,7 +987,7 @@ mod tests {
     #[serial]
     async fn sync_treats_newly_started_sessions_as_active() {
         let tmp = TempDir::new().unwrap();
-        let inspector = Arc::new(FakeInspector::new("caffeinate -d # schaltwerk-keep-awake"));
+        let inspector = Arc::new(FakeInspector::new("caffeinate -d # lucode-keep-awake"));
         let platform = Arc::new(FakePlatform::new(inspector.clone()));
         let service = build_service(&tmp, inspector.clone(), platform.clone());
 
@@ -1013,7 +1013,7 @@ mod tests {
     #[serial]
     async fn sync_does_not_reactivate_idle_sessions() {
         let tmp = TempDir::new().unwrap();
-        let inspector = Arc::new(FakeInspector::new("caffeinate -d # schaltwerk-keep-awake"));
+        let inspector = Arc::new(FakeInspector::new("caffeinate -d # lucode-keep-awake"));
         let platform = Arc::new(FakePlatform::new(inspector.clone()));
         let service = build_service(&tmp, inspector.clone(), platform.clone());
 

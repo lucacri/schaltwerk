@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use schaltwerk::shared::terminal_id::session_terminal_base_variants;
-pub use schaltwerk::shared::terminal_id::{
+use lucode::shared::terminal_id::session_terminal_base_variants;
+pub use lucode::shared::terminal_id::{
     legacy_terminal_id_for_session_bottom, legacy_terminal_id_for_session_top,
     previous_hashed_terminal_id_for_session_bottom, previous_hashed_terminal_id_for_session_top,
     previous_tilde_hashed_terminal_id_for_session_bottom,
@@ -116,7 +116,7 @@ fn terminal_matches_prefix(terminal_id: &str, prefix: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use schaltwerk::shared::terminal_id::session_terminal_base;
+    use lucode::shared::terminal_id::session_terminal_base;
     use std::path::PathBuf;
 
     #[test]

@@ -680,7 +680,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time went backwards")
             .as_nanos();
-        let missing_path = std::env::temp_dir().join(format!("schaltwerk-missing-{unique_suffix}"));
+        let missing_path = std::env::temp_dir().join(format!("lucode-missing-{unique_suffix}"));
         assert!(
             !missing_path.exists(),
             "test path unexpectedly exists: {}",

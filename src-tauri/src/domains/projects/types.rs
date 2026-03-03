@@ -47,7 +47,7 @@ impl ProjectHistory {
         let config_dir =
             dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Failed to get config directory"))?;
 
-        Ok(config_dir.join("schaltwerk").join("project_history.json"))
+        Ok(config_dir.join("lucode").join("project_history.json"))
     }
 
     pub fn add_project(&mut self, path: &str) -> Result<()> {

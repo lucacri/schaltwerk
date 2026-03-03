@@ -192,7 +192,7 @@ fn sanitize_path_for_claude(path: &Path) -> String {
 }
 
 fn claude_home_directory() -> Option<PathBuf> {
-    if let Ok(override_path) = std::env::var("SCHALTWERK_CLAUDE_HOME_OVERRIDE") {
+    if let Ok(override_path) = std::env::var("LUCODE_CLAUDE_HOME_OVERRIDE") {
         let trimmed = override_path.trim();
         if !trimmed.is_empty() {
             return Some(PathBuf::from(trimmed));
@@ -418,16 +418,16 @@ mod tests {
     fn test_sanitize_path_for_claude_schaltwerk_worktree_schaltwerk() {
         // Realistic path from our setup
         let path = Path::new(
-            "/Users/marius.wichtner/Documents/git/schaltwerk/.schaltwerk/worktrees/eager_tesla",
+            "/Users/marius.wichtner/Documents/git/schaltwerk/.lucode/worktrees/eager_tesla",
         );
         let sanitized = sanitize_path_for_claude(path);
         // Expectations based on observed ~/.claude/projects entries:
         // - leading dash for absolute path
         // - components separated by single '-'
-        // - hidden ".schaltwerk" becomes "--schaltwerk" due to '/' -> '-' and '.' -> '-'
+        // - hidden ".lucode" becomes "--lucode" due to '/' -> '-' and '.' -> '-'
         assert_eq!(
             sanitized,
-            "-Users-marius-wichtner-Documents-git-schaltwerk--schaltwerk-worktrees-eager-tesla"
+            "-Users-marius-wichtner-Documents-git-schaltwerk--lucode-worktrees-eager-tesla"
         );
     }
 
@@ -463,7 +463,7 @@ mod tests {
         EnvAdapter::set_var("HOME", &home_path.to_string_lossy());
 
         let worktree = Path::new(
-            "/Users/marius.wichtner/Documents/git/schaltwerk/.schaltwerk/worktrees/eager_tesla",
+            "/Users/marius.wichtner/Documents/git/schaltwerk/.lucode/worktrees/eager_tesla",
         );
         let sanitized = sanitize_path_for_claude(worktree);
 
@@ -479,13 +479,13 @@ mod tests {
         let mut f_old = File::create(&older).unwrap();
         f_old
             .write_all(
-                b"{\"sessionId\":\"ses_old\",\"cwd\":\"/Users/marius.wichtner/Documents/git/schaltwerk/.schaltwerk/worktrees/eager_tesla\"}",
+                b"{\"sessionId\":\"ses_old\",\"cwd\":\"/Users/marius.wichtner/Documents/git/schaltwerk/.lucode/worktrees/eager_tesla\"}",
             )
             .unwrap();
         let mut f_new = File::create(&newer).unwrap();
         f_new
             .write_all(
-                b"{\"sessionId\":\"ses_new\",\"cwd\":\"/Users/marius.wichtner/Documents/git/schaltwerk/.schaltwerk/worktrees/eager_tesla\"}",
+                b"{\"sessionId\":\"ses_new\",\"cwd\":\"/Users/marius.wichtner/Documents/git/schaltwerk/.lucode/worktrees/eager_tesla\"}",
             )
             .unwrap();
 
@@ -533,7 +533,7 @@ mod tests {
         EnvAdapter::set_var("HOME", &home_path.to_string_lossy());
 
         let worktree = Path::new(
-            "/Users/marius.wichtner/Documents/git/schaltwerk/.schaltwerk/worktrees/focused_mccarthy",
+            "/Users/marius.wichtner/Documents/git/schaltwerk/.lucode/worktrees/focused_mccarthy",
         );
         let sanitized = sanitize_path_for_claude(worktree);
 
@@ -551,7 +551,7 @@ mod tests {
         let mut valid = File::create(&valid_file).unwrap();
         valid
             .write_all(
-                b"{\"sessionId\":\"valid-session\",\"cwd\":\"/Users/marius.wichtner/Documents/git/schaltwerk/.schaltwerk/worktrees/focused_mccarthy\"}",
+                b"{\"sessionId\":\"valid-session\",\"cwd\":\"/Users/marius.wichtner/Documents/git/schaltwerk/.lucode/worktrees/focused_mccarthy\"}",
             )
             .unwrap();
 
@@ -581,7 +581,7 @@ mod tests {
         EnvAdapter::set_var("HOME", &home_path.to_string_lossy());
 
         let worktree = Path::new(
-            "/Users/marius.wichtner/Documents/git/schaltwerk/.schaltwerk/worktrees/fleet_torvalds",
+            "/Users/marius.wichtner/Documents/git/schaltwerk/.lucode/worktrees/fleet_torvalds",
         );
         let sanitized = sanitize_path_for_claude(worktree);
 
@@ -669,14 +669,14 @@ mod tests {
     #[test]
     fn test_sanitize_schaltwerk_worktree_path() {
         // Matches observed ~/.claude/projects folder for this worktree:
-        // -Users-marius-wichtner-Documents-git-schaltwerk--schaltwerk-worktrees-auto-submit-functionality
+        // -Users-marius-wichtner-Documents-git-schaltwerk--lucode-worktrees-auto-submit-functionality
         let path = Path::new(
-            "/Users/marius.wichtner/Documents/git/schaltwerk/.schaltwerk/worktrees/auto-submit-functionality",
+            "/Users/marius.wichtner/Documents/git/schaltwerk/.lucode/worktrees/auto-submit-functionality",
         );
         let sanitized = sanitize_path_for_claude(path);
         assert_eq!(
             sanitized,
-            "-Users-marius-wichtner-Documents-git-schaltwerk--schaltwerk-worktrees-auto-submit-functionality"
+            "-Users-marius-wichtner-Documents-git-schaltwerk--lucode-worktrees-auto-submit-functionality"
         );
     }
 
