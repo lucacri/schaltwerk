@@ -553,7 +553,9 @@ class TerminalInstanceRegistry {
 
       const chunk = slicePreservingSurrogates(payload, offset, offset + FLUSH_CHUNK_SIZE);
       offset += chunk.length;
-      record.xterm.raw.write(chunk, writeNextChunk);
+      record.xterm.raw.write(chunk, () => {
+        setTimeout(writeNextChunk, 0);
+      });
     };
 
     writeNextChunk();

@@ -5,6 +5,7 @@ import { listenTerminalOutput } from '../../common/eventSystem'
 import { TauriCommands } from '../../common/tauriCommands'
 import { ackTerminalBackend, isPluginTerminal, subscribeTerminalBackend } from '../transport/backend'
 import { logger } from '../../utils/logger'
+import { slicePreservingSurrogates } from '../paste/bracketedPaste'
 
 type TerminalStreamListener = (chunk: string) => void
 
@@ -29,6 +30,8 @@ interface TerminalStream {
   decoder?: TextDecoder
   encoder?: TextEncoder
 }
+
+const HYDRATION_DISPATCH_CHUNK_SIZE = 64 * 1024
 
 const TEXT_PRESENTATION_RULES = [
   {
@@ -154,7 +157,7 @@ class TerminalOutputManager {
         return stream.seqCursor ?? fallbackSeq
       }
       if (snapshot.data && snapshot.data.length > 0) {
-        this.dispatch(id, snapshot.data)
+        await this.dispatchHydrationData(id, snapshot.data)
       }
       stream.seqCursor = snapshot.seq
       this.lastSeqById.set(id, snapshot.seq)
@@ -212,6 +215,28 @@ class TerminalOutputManager {
         listener(normalized)
       } catch (error) {
         logger.debug(`[TerminalOutput] listener error for ${id}`, error)
+      }
+    }
+  }
+
+  private async dispatchHydrationData(id: string, data: string): Promise<void> {
+    if (data.length <= HYDRATION_DISPATCH_CHUNK_SIZE) {
+      this.dispatch(id, data)
+      return
+    }
+
+    let offset = 0
+    while (offset < data.length) {
+      const chunk = slicePreservingSurrogates(data, offset, offset + HYDRATION_DISPATCH_CHUNK_SIZE)
+      if (chunk.length === 0) {
+        break
+      }
+      this.dispatch(id, chunk)
+      offset += chunk.length
+      if (offset < data.length) {
+        await new Promise<void>(resolve => {
+          setTimeout(resolve, 0)
+        })
       }
     }
   }

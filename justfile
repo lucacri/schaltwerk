@@ -154,9 +154,9 @@ install:
         echo "MCP server built"
     fi
 
-    # Build Tauri application for release
+    # Build Tauri application (app bundle only — DMG/installer built by CI)
     echo "Building Tauri app..."
-    {{pm}} run tauri -- build
+    {{pm}} run tauri -- build --bundles app
     
     # Find the built app bundle (handle different architectures)
     APP_PATH=""

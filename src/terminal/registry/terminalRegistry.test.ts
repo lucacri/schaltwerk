@@ -626,6 +626,7 @@ describe('terminalRegistry stream flushing', () => {
     expect(rawWrite.mock.calls[0][0].length).toBe(64 * 1024)
 
     writeCallbacks[0]()
+    await vi.runAllTimersAsync()
     expect(rawWrite).toHaveBeenCalledTimes(2)
     expect(rawWrite.mock.calls[1][0].length).toBe(64 * 1024)
 
@@ -635,5 +636,60 @@ describe('terminalRegistry stream flushing', () => {
     expect(totalWritten).toBe(128 * 1024)
 
     removeTerminalInstance('large-payload-test')
+  })
+
+  it('yields to the event loop between chunked writes', async () => {
+    const writeCallbacks: Array<() => void> = []
+    const rawWrite = vi.fn((_data: string, cb?: unknown) => {
+      if (typeof cb === 'function') {
+        writeCallbacks.push(cb as () => void)
+      }
+    })
+    const factory = () =>
+      ({
+        raw: {
+          write: rawWrite,
+          scrollToBottom: vi.fn(),
+          buffer: {
+            active: {
+              baseY: 10,
+              viewportY: 10,
+            },
+          },
+        },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('yield-test', factory)
+    attachTerminalInstance('yield-test', document.createElement('div'))
+
+    const listener = addListenerMock.mock.calls[addListenerMock.mock.calls.length - 1][1] as (chunk: string) => void
+
+    const largeChunk = 'x'.repeat(192 * 1024)
+    listener(largeChunk)
+
+    await vi.runAllTimersAsync()
+    expect(rawWrite).toHaveBeenCalledTimes(1)
+
+    writeCallbacks[0]()
+    expect(rawWrite).toHaveBeenCalledTimes(1)
+
+    await vi.runAllTimersAsync()
+    expect(rawWrite).toHaveBeenCalledTimes(2)
+
+    writeCallbacks[1]()
+    await vi.runAllTimersAsync()
+    expect(rawWrite).toHaveBeenCalledTimes(3)
+
+    writeCallbacks[2]()
+
+    const totalWritten = rawWrite.mock.calls.reduce((sum: number, call: unknown[]) => sum + (call[0] as string).length, 0)
+    expect(totalWritten).toBe(192 * 1024)
+
+    removeTerminalInstance('yield-test')
   })
 })
