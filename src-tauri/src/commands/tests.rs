@@ -126,6 +126,7 @@ async fn test_command_functions_exist_and_callable() {
 
 #[cfg(target_os = "macos")]
 #[tokio::test]
+#[serial_test::serial]
 async fn test_clipboard_write_text_sets_content() {
     use arboard::Clipboard;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -157,6 +158,45 @@ async fn test_clipboard_write_text_sets_content() {
     );
 
     if let Some(prev) = previous {
+        let _ = clipboard.set_text(prev);
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[tokio::test]
+#[serial_test::serial]
+async fn test_clipboard_read_text_returns_previously_set_content() {
+    use arboard::Clipboard;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let payload = format!(
+        "schaltwerk-read-test-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after epoch")
+            .as_nanos()
+    );
+
+    let mut clipboard =
+        Clipboard::new().expect("should create clipboard handle for setup");
+    let previous = clipboard.get_text().ok();
+    clipboard
+        .set_text(payload.clone())
+        .expect("should set clipboard text for read test");
+    drop(clipboard);
+
+    let result = super::clipboard_read_text()
+        .await
+        .expect("clipboard read command should succeed on macOS");
+
+    assert_eq!(
+        result, payload,
+        "clipboard_read_text should return the text previously set via arboard"
+    );
+
+    if let Some(prev) = previous {
+        let mut clipboard =
+            Clipboard::new().expect("should create clipboard handle for cleanup");
         let _ = clipboard.set_text(prev);
     }
 }

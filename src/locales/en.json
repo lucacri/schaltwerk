@@ -289,6 +289,21 @@
       "authenticated": "Authenticated:",
       "projectPath": "Project path:"
     },
+    "docker": {
+      "title": "Docker Sandbox",
+      "description": "Run agent sessions inside Docker containers for filesystem isolation. Agents can only access the mounted project directory.",
+      "notAvailable": "Docker not available",
+      "notAvailableDesc": "Install Docker Desktop and ensure the daemon is running to use sandbox mode.",
+      "enableSandbox": "Enable sandbox",
+      "enableSandboxDesc": "Wrap agent processes in Docker containers",
+      "sandboxImage": "Sandbox image",
+      "imageReady": "schaltwerk-sandbox:latest \u2014 ready",
+      "imageNotBuilt": "Not built yet",
+      "building": "Building\u2026",
+      "rebuild": "Rebuild",
+      "buildImage": "Build Image",
+      "credentialsHint": "Credentials can be staged for containers by placing config files in ~/.config/schaltwerk/docker-mounts/. Subdirectories (claude/, codex/, gemini/) are mounted read-only into the container."
+    },
     "mcp": {
       "title": "MCP Server Configuration",
       "enableMcp": "Enable MCP",
@@ -504,7 +519,9 @@
     "opening": "Opening..."
   },
   "sessionCard": {
-    "newFollowUp": "New follow-up message received"
+    "newFollowUp": "New follow-up message received",
+    "dockerBadge": "sandbox",
+    "dockerBadgeTitle": "Running in Docker sandbox"
   },
   "permissionPrompt": {
     "title": "Folder Access Required",

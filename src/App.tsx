@@ -99,6 +99,7 @@ import {
   refreshKeepAwakeStateActionAtom,
   registerKeepAwakeEventListenerActionAtom,
 } from './store/atoms/powerSettings'
+import { registerDockerEventListenersActionAtom } from './store/atoms/docker'
 import { registerDevErrorListeners } from './dev/registerDevErrorListeners'
 import { AgentCliMissingModal } from './components/agentBinary/AgentCliMissingModal'
 import type { SettingsCategory } from './types/settings'
@@ -136,6 +137,7 @@ function AppContent() {
   const refreshSessions = useSetAtom(refreshSessionsActionAtom)
   const refreshKeepAwakeState = useSetAtom(refreshKeepAwakeStateActionAtom)
   const registerKeepAwakeListener = useSetAtom(registerKeepAwakeEventListenerActionAtom)
+  const registerDockerListener = useSetAtom(registerDockerEventListenersActionAtom)
   const expectSession = useSetAtom(expectSessionActionAtom)
   const { isOnboardingOpen, completeOnboarding, closeOnboarding, openOnboarding } = useOnboarding()
   const { fetchSessionForPrefill } = useSessionPrefill()
@@ -200,6 +202,15 @@ function AppContent() {
       }
     }
   }, [refreshKeepAwakeState, registerKeepAwakeListener])
+
+  useEffect(() => {
+    const { unlistenBuild, unlistenStatus } = registerDockerListener()
+
+    return () => {
+      void unlistenBuild.then(fn => fn())
+      void unlistenStatus.then(fn => fn())
+    }
+  }, [registerDockerListener])
 
   useEffect(() => {
     void initializeSessionsSettings()

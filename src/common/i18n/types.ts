@@ -291,6 +291,21 @@ export interface Translations {
       authenticated: string
       projectPath: string
     }
+    docker: {
+      title: string
+      description: string
+      notAvailable: string
+      notAvailableDesc: string
+      enableSandbox: string
+      enableSandboxDesc: string
+      sandboxImage: string
+      imageReady: string
+      imageNotBuilt: string
+      building: string
+      rebuild: string
+      buildImage: string
+      credentialsHint: string
+    }
     mcp: {
       title: string
       enableMcp: string
@@ -507,6 +522,8 @@ export interface Translations {
   }
   sessionCard: {
     newFollowUp: string
+    dockerBadge: string
+    dockerBadgeTitle: string
   }
   permissionPrompt: {
     title: string

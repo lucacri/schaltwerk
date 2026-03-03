@@ -295,6 +295,8 @@ pub static SETTINGS_MANAGER: OnceCell<Arc<Mutex<SettingsManager>>> = OnceCell::c
 pub static ATTENTION_REGISTRY: OnceCell<Arc<Mutex<AttentionStateRegistry>>> = OnceCell::const_new();
 pub static FILE_WATCHER_MANAGER: OnceCell<Arc<schaltwerk::domains::workspace::FileWatcherManager>> =
     OnceCell::const_new();
+pub static DOCKER_MANAGER: OnceCell<Arc<schaltwerk::domains::docker::DockerManager>> =
+    OnceCell::const_new();
 static LAST_CORE_WRITE: Lazy<StdMutex<Option<(Uuid, std::time::Instant)>>> =
     Lazy::new(|| StdMutex::new(None));
 
@@ -1218,6 +1220,7 @@ fn main() {
             get_environment_variable,
             get_app_version,
             clipboard_write_text,
+            clipboard_read_text,
             check_for_updates_now,
             restart_app,
             report_attention_snapshot,
@@ -1404,12 +1407,30 @@ fn main() {
             get_amp_mcp_servers,
             set_amp_mcp_servers,
             get_agent_command_prefix,
-            set_agent_command_prefix
+            set_agent_command_prefix,
+            get_docker_status,
+            set_docker_sandbox_enabled,
+            build_docker_image,
+            rebuild_docker_image
         ])
         .setup(move |app| {
             if ATTENTION_REGISTRY.get().is_none() {
                 let registry = Arc::new(Mutex::new(AttentionStateRegistry::default()));
                 let _ = ATTENTION_REGISTRY.set(registry);
+            }
+
+            if DOCKER_MANAGER.get().is_none() {
+                let docker_manager = Arc::new(
+                    schaltwerk::domains::docker::DockerManager::new(
+                        schaltwerk::domains::docker::image::DEFAULT_IMAGE_TAG.to_string(),
+                    ),
+                );
+                let _ = DOCKER_MANAGER.set(docker_manager);
+            }
+
+            if let Some(dm) = DOCKER_MANAGER.get() {
+                let dm = dm.clone();
+                tokio::spawn(async move { dm.cleanup_orphaned_containers().await });
             }
 
             // Initialize session attention state global in library crate
@@ -1627,6 +1648,12 @@ fn main() {
                 tauri::async_runtime::block_on(async {
                     let manager = get_project_manager().await;
                     manager.force_kill_all().await;
+
+                    if let Some(docker_manager) = DOCKER_MANAGER.get()
+                        && let Err(e) = docker_manager.stop_all().await
+                    {
+                        log::warn!("Failed to stop Docker containers on exit: {e}");
+                    }
                 });
 
                 // Stop MCP server if running
