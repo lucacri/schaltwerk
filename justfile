@@ -854,3 +854,39 @@ run-x11:
     set -euo pipefail
     echo "Starting Lucode with X11 backend..."
     GDK_BACKEND=x11 {{pm}} run tauri:dev
+
+# Sync upstream changes into dev and reapply the Lucode rebrand
+sync-upstream:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    ORIGINAL_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+    echo "Fetching upstream..."
+    git fetch upstream
+
+    echo "Updating main from upstream..."
+    git checkout main
+    git merge upstream/main
+
+    echo "Merging main into dev..."
+    git checkout dev
+    git merge main
+
+    if git diff dev main --name-only | xargs grep -li 'schaltwerk\|Schaltwerk\|SCHALTWERK' 2>/dev/null | grep -v schaltwerk_core | grep -v SchaltEvent | grep -v SchaltwerkCore | head -1 > /dev/null 2>&1; then
+        echo ""
+        echo "⚠  New upstream files may contain un-rebranded Schaltwerk references."
+        echo "   Review with: git diff main..dev --name-only"
+        echo "   Then update any new user-visible 'Schaltwerk' strings to 'Lucode'."
+    fi
+
+    echo ""
+    echo "Running validation..."
+    just test
+
+    echo ""
+    echo "✓ Upstream sync complete. dev is up to date."
+
+    if [ "$ORIGINAL_BRANCH" != "dev" ] && [ "$ORIGINAL_BRANCH" != "main" ]; then
+        git checkout "$ORIGINAL_BRANCH"
+    fi
