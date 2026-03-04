@@ -617,23 +617,23 @@ describe('terminalRegistry stream flushing', () => {
 
     const listener = addListenerMock.mock.calls[0][1] as (chunk: string) => void
 
-    const largeChunk = 'x'.repeat(128 * 1024)
+    const largeChunk = 'x'.repeat(16 * 1024)
     listener(largeChunk)
 
     await vi.runAllTimersAsync()
 
     expect(rawWrite).toHaveBeenCalledTimes(1)
-    expect(rawWrite.mock.calls[0][0].length).toBe(64 * 1024)
+    expect(rawWrite.mock.calls[0][0].length).toBe(8 * 1024)
 
     writeCallbacks[0]()
     await vi.runAllTimersAsync()
     expect(rawWrite).toHaveBeenCalledTimes(2)
-    expect(rawWrite.mock.calls[1][0].length).toBe(64 * 1024)
+    expect(rawWrite.mock.calls[1][0].length).toBe(8 * 1024)
 
     writeCallbacks[1]()
 
     const totalWritten = rawWrite.mock.calls.reduce((sum: number, call: unknown[]) => sum + (call[0] as string).length, 0)
-    expect(totalWritten).toBe(128 * 1024)
+    expect(totalWritten).toBe(16 * 1024)
 
     removeTerminalInstance('large-payload-test')
   })
@@ -669,7 +669,7 @@ describe('terminalRegistry stream flushing', () => {
 
     const listener = addListenerMock.mock.calls[addListenerMock.mock.calls.length - 1][1] as (chunk: string) => void
 
-    const largeChunk = 'x'.repeat(192 * 1024)
+    const largeChunk = 'x'.repeat(24 * 1024)
     listener(largeChunk)
 
     await vi.runAllTimersAsync()
@@ -688,8 +688,106 @@ describe('terminalRegistry stream flushing', () => {
     writeCallbacks[2]()
 
     const totalWritten = rawWrite.mock.calls.reduce((sum: number, call: unknown[]) => sum + (call[0] as string).length, 0)
-    expect(totalWritten).toBe(192 * 1024)
+    expect(totalWritten).toBe(24 * 1024)
 
     removeTerminalInstance('yield-test')
+  })
+
+  it('defers flush when xterm parser is still processing previous write', async () => {
+    const writeCallbacks: Array<() => void> = []
+    const rawWrite = vi.fn((_data: string, cb?: unknown) => {
+      if (typeof cb === 'function') {
+        writeCallbacks.push(cb as () => void)
+      }
+    })
+    const factory = () =>
+      ({
+        raw: {
+          write: rawWrite,
+          scrollToBottom: vi.fn(),
+          buffer: {
+            active: {
+              baseY: 0,
+              viewportY: 0,
+            },
+          },
+        },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('backpressure-test', factory)
+    attachTerminalInstance('backpressure-test', document.createElement('div'))
+
+    const listener = addListenerMock.mock.calls[addListenerMock.mock.calls.length - 1][1] as (chunk: string) => void
+
+    listener('first batch')
+    await vi.runAllTimersAsync()
+    expect(rawWrite).toHaveBeenCalledTimes(1)
+    expect(rawWrite.mock.calls[0][0]).toBe('first batch')
+
+    listener('second batch')
+    await vi.runAllTimersAsync()
+    expect(rawWrite).toHaveBeenCalledTimes(1)
+
+    writeCallbacks[0]()
+    await vi.runAllTimersAsync()
+    expect(rawWrite).toHaveBeenCalledTimes(2)
+    expect(rawWrite.mock.calls[1][0]).toBe('second batch')
+
+    removeTerminalInstance('backpressure-test')
+  })
+
+  it('caps pending buffer for attached terminals under backpressure', async () => {
+    const writeCallbacks: Array<() => void> = []
+    const rawWrite = vi.fn((_data: string, cb?: unknown) => {
+      if (typeof cb === 'function') {
+        writeCallbacks.push(cb as () => void)
+      }
+    })
+    const factory = () =>
+      ({
+        raw: {
+          write: rawWrite,
+          scrollToBottom: vi.fn(),
+          buffer: {
+            active: {
+              baseY: 0,
+              viewportY: 0,
+            },
+          },
+        },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('cap-test', factory)
+    attachTerminalInstance('cap-test', document.createElement('div'))
+
+    const listener = addListenerMock.mock.calls[addListenerMock.mock.calls.length - 1][1] as (chunk: string) => void
+
+    listener('initial')
+    await vi.runAllTimersAsync()
+    expect(rawWrite).toHaveBeenCalledTimes(1)
+
+    for (let i = 0; i < 10; i++) {
+      listener('x'.repeat(1024 * 1024))
+    }
+
+    writeCallbacks[0]()
+    await vi.runAllTimersAsync()
+
+    const totalWritten = rawWrite.mock.calls.reduce(
+      (sum: number, call: unknown[]) => sum + (call[0] as string).length, 0,
+    )
+    expect(totalWritten).toBeLessThanOrEqual(4 * 1024 * 1024 + 128 * 1024)
+
+    removeTerminalInstance('cap-test')
   })
 })
