@@ -116,8 +116,6 @@ export function SessionActions({
     ? `${t.sessionActions.resolveConflictsShortcut}${mergeConflictingPaths?.length ? ` • ${mergeConflictingPaths.slice(0, 3).join(', ')}${mergeConflictingPaths.length > 3 ? '…' : ''}` : ''}`
     : t.sessionActions.resolveConflictsShortcut;
 
-  const isGitlab = forge === 'gitlab'
-
   const canCreatePr = github.canCreatePr;
   const prTooltip = canCreatePr
     ? t.sessionActions.createPr
@@ -149,7 +147,7 @@ export function SessionActions({
     await fetchAndCopyToClipboard(prNumber)
   }, [prNumber, pushToast, fetchAndCopyToClipboard, t])
 
-  const forgeButton = isGitlab ? (
+  const forgeButton = forge === 'gitlab' ? (
     <IconButton
       icon={<FaGitlab />}
       onClick={handleOpenGitlabMr}
@@ -158,7 +156,7 @@ export function SessionActions({
       disabled={!canCreateGitlabMr || !onCreateGitlabMr}
       className={!canCreateGitlabMr || !onCreateGitlabMr ? 'opacity-60' : undefined}
     />
-  ) : (
+  ) : forge === 'github' ? (
     <IconButton
       icon={<FaGithub />}
       onClick={handleOpenPullRequest}
@@ -167,7 +165,7 @@ export function SessionActions({
       disabled={!canCreatePr || !onCreatePullRequest}
       className={!canCreatePr ? 'opacity-60' : undefined}
     />
-  )
+  ) : null
 
   return (
     <div className={`flex items-center ${spacing}`} data-onboarding="session-actions">

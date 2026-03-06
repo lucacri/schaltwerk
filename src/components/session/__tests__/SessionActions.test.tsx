@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { Provider, createStore } from 'jotai'
 import { SessionActions } from '../SessionActions'
 import { GithubIntegrationContext } from '../../../contexts/GithubIntegrationContext'
 import type { GithubIntegrationValue } from '../../../hooks/useGithubIntegration'
 import { GitlabIntegrationContext } from '../../../contexts/GitlabIntegrationContext'
 import type { GitlabIntegrationValue } from '../../../hooks/useGitlabIntegration'
+import { forgeBaseAtom, type ForgeType } from '../../../store/atoms/forge'
 
 const pushToast = vi.fn()
 
@@ -29,6 +31,12 @@ const defaultGitlabValue: GitlabIntegrationValue = {
   refreshStatus: async () => {},
   loadSources: async () => {},
   saveSources: async () => {},
+}
+
+function createGithubStore() {
+  const store = createStore()
+  store.set(forgeBaseAtom, 'github')
+  return store
 }
 
 function renderWithGithub(value: Partial<GithubIntegrationValue>) {
@@ -59,16 +67,18 @@ function renderWithGithub(value: Partial<GithubIntegrationValue>) {
   const contextValue: GithubIntegrationValue = { ...defaultValue, ...value }
 
   return render(
-    <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
-      <GithubIntegrationContext.Provider value={contextValue}>
-        <SessionActions
-          sessionState="reviewed"
-          isReadyToMerge={true}
-          sessionId="session-123"
-          onCreatePullRequest={vi.fn()}
-        />
-      </GithubIntegrationContext.Provider>
-    </GitlabIntegrationContext.Provider>
+    <Provider store={createGithubStore()}>
+      <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+        <GithubIntegrationContext.Provider value={contextValue}>
+          <SessionActions
+            sessionState="reviewed"
+            isReadyToMerge={true}
+            sessionId="session-123"
+            onCreatePullRequest={vi.fn()}
+          />
+        </GithubIntegrationContext.Provider>
+      </GitlabIntegrationContext.Provider>
+    </Provider>
   )
 }
 
@@ -106,16 +116,18 @@ describe('SessionActions – GitHub PR button', () => {
     }
 
     render(
-      <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
-        <GithubIntegrationContext.Provider value={defaultValue}>
-          <SessionActions
-            sessionState="reviewed"
-            isReadyToMerge={true}
-            sessionId="session-123"
-            onCreatePullRequest={onCreatePullRequest}
-          />
-        </GithubIntegrationContext.Provider>
-      </GitlabIntegrationContext.Provider>
+      <Provider store={createGithubStore()}>
+        <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+          <GithubIntegrationContext.Provider value={defaultValue}>
+            <SessionActions
+              sessionState="reviewed"
+              isReadyToMerge={true}
+              sessionId="session-123"
+              onCreatePullRequest={onCreatePullRequest}
+            />
+          </GithubIntegrationContext.Provider>
+        </GitlabIntegrationContext.Provider>
+      </Provider>
     )
 
     const button = screen.getByLabelText('Create pull request')
@@ -134,15 +146,17 @@ describe('SessionActions – GitHub PR button', () => {
     } as unknown as GithubIntegrationValue
 
     render(
-      <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
-        <GithubIntegrationContext.Provider value={defaultValue}>
-          <SessionActions
-            sessionState="reviewed"
-            isReadyToMerge={true}
-            sessionId="session-123"
-          />
-        </GithubIntegrationContext.Provider>
-      </GitlabIntegrationContext.Provider>
+      <Provider store={createGithubStore()}>
+        <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+          <GithubIntegrationContext.Provider value={defaultValue}>
+            <SessionActions
+              sessionState="reviewed"
+              isReadyToMerge={true}
+              sessionId="session-123"
+            />
+          </GithubIntegrationContext.Provider>
+        </GitlabIntegrationContext.Provider>
+      </Provider>
     )
 
     const button = screen.getByLabelText('Create pull request') as HTMLButtonElement
@@ -160,16 +174,18 @@ describe('SessionActions – Running state', () => {
   it('shows quick merge button when onQuickMerge is provided', () => {
     const onQuickMerge = vi.fn()
     render(
-      <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
-        <GithubIntegrationContext.Provider value={mockGithub}>
-          <SessionActions
-            sessionState="running"
-            isReadyToMerge={false}
-            sessionId="session-123"
-            onQuickMerge={onQuickMerge}
-          />
-        </GithubIntegrationContext.Provider>
-      </GitlabIntegrationContext.Provider>
+      <Provider store={createGithubStore()}>
+        <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+          <GithubIntegrationContext.Provider value={mockGithub}>
+            <SessionActions
+              sessionState="running"
+              isReadyToMerge={false}
+              sessionId="session-123"
+              onQuickMerge={onQuickMerge}
+            />
+          </GithubIntegrationContext.Provider>
+        </GitlabIntegrationContext.Provider>
+      </Provider>
     )
 
     const button = screen.getByLabelText('Quick merge session')
@@ -180,18 +196,80 @@ describe('SessionActions – Running state', () => {
 
   it('does not show quick merge button when onQuickMerge is missing', () => {
     render(
-      <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
-        <GithubIntegrationContext.Provider value={mockGithub}>
-          <SessionActions
-            sessionState="running"
-            isReadyToMerge={false}
-            sessionId="session-123"
-          />
-        </GithubIntegrationContext.Provider>
-      </GitlabIntegrationContext.Provider>
+      <Provider store={createGithubStore()}>
+        <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+          <GithubIntegrationContext.Provider value={mockGithub}>
+            <SessionActions
+              sessionState="running"
+              isReadyToMerge={false}
+              sessionId="session-123"
+            />
+          </GithubIntegrationContext.Provider>
+        </GitlabIntegrationContext.Provider>
+      </Provider>
     )
 
     const button = screen.queryByLabelText('Quick merge session')
     expect(button).not.toBeInTheDocument()
+  })
+})
+
+describe('SessionActions – Forge button visibility', () => {
+  const mockGithub: GithubIntegrationValue = {
+    status: {
+      installed: true,
+      authenticated: true,
+      userLogin: 'tester',
+      repository: { nameWithOwner: 'owner/repo', defaultBranch: 'main' },
+    },
+    loading: false,
+    isAuthenticating: false,
+    isConnecting: false,
+    isCreatingPr: () => false,
+    authenticate: vi.fn(),
+    connectProject: vi.fn(),
+    createReviewedPr: vi.fn(),
+    getCachedPrUrl: () => undefined,
+    canCreatePr: true,
+    isGhMissing: false,
+    hasRepository: true,
+    refreshStatus: vi.fn(),
+  }
+
+  function renderWithForge(forgeType: ForgeType) {
+    const store = createStore()
+    store.set(forgeBaseAtom, forgeType)
+    return render(
+      <Provider store={store}>
+        <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+          <GithubIntegrationContext.Provider value={mockGithub}>
+            <SessionActions
+              sessionState="running"
+              sessionId="session-forge"
+              onCreatePullRequest={vi.fn()}
+              onCreateGitlabMr={vi.fn()}
+            />
+          </GithubIntegrationContext.Provider>
+        </GitlabIntegrationContext.Provider>
+      </Provider>
+    )
+  }
+
+  it('shows GitHub button when forge is github', () => {
+    renderWithForge('github')
+    expect(screen.getByLabelText('Create pull request')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Create GitLab merge request')).not.toBeInTheDocument()
+  })
+
+  it('shows GitLab button when forge is gitlab', () => {
+    renderWithForge('gitlab')
+    expect(screen.getByLabelText('Create GitLab merge request')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Create pull request')).not.toBeInTheDocument()
+  })
+
+  it('shows no forge button when forge is unknown', () => {
+    renderWithForge('unknown')
+    expect(screen.queryByLabelText('Create pull request')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Create GitLab merge request')).not.toBeInTheDocument()
   })
 })

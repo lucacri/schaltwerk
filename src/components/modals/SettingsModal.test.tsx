@@ -7,6 +7,18 @@ import { ModalProvider } from '../../contexts/ModalContext'
 import { defaultShortcutConfig } from '../../keyboardShortcuts/config'
 import { TauriCommands } from '../../common/tauriCommands'
 import { renderWithProviders } from '../../tests/test-utils'
+import type { ForgeType } from '../../store/atoms/forge'
+
+const { forgeValueRef, testForgeAtom } = vi.hoisted(() => {
+  const { atom } = require('jotai') as typeof import('jotai')
+  const forgeValueRef = { current: 'unknown' as ForgeType }
+  const testForgeAtom = atom(() => forgeValueRef.current)
+  return { forgeValueRef, testForgeAtom }
+})
+
+vi.mock('../../store/atoms/forge', () => ({
+  projectForgeAtom: testForgeAtom,
+}))
 
 // Mock MarkdownEditor to avoid CodeMirror coordinate calculation issues in happy-dom
 vi.mock('../specs/MarkdownEditor', async () => {
@@ -124,7 +136,11 @@ vi.mock('../settings/MCPConfigPanel', () => ({
 }))
 
 vi.mock('../settings/GithubProjectIntegrationCard', () => ({
-  GithubProjectIntegrationCard: () => null,
+  GithubProjectIntegrationCard: () => <div data-testid="github-integration-card">GitHub Integration</div>,
+}))
+
+vi.mock('../settings/GitlabProjectIntegrationCard', () => ({
+  GitlabProjectIntegrationCard: () => <div data-testid="gitlab-integration-card">GitLab Integration</div>,
 }))
 
 vi.mock('../settings/SettingsArchivesSection', () => ({
@@ -678,5 +694,63 @@ describe('SettingsModal project settings navigation', () => {
     })
 
     confirmSpy.mockRestore()
+  })
+})
+
+describe('SettingsModal forge-conditional integration cards', () => {
+  beforeEach(() => {
+    useSettingsMock.mockReset()
+    useSettingsMock.mockReturnValue(createDefaultUseSettingsValue())
+    useSessionsMock.mockReset()
+    useSessionsMock.mockReturnValue(createDefaultUseSessionsValue())
+    invokeMock.mockClear()
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === TauriCommands.GetActiveProjectPath) {
+        return Promise.resolve('/Users/test/project')
+      }
+      return baseInvokeImplementation(command, args)
+    })
+    forgeValueRef.current = 'unknown'
+    requestDockBounceMock.mockReset()
+    window.confirm = vi.fn() as unknown as typeof window.confirm
+  })
+
+  it('shows only GitHub card when forge is github', async () => {
+    forgeValueRef.current = 'github'
+
+    renderWithProviders(
+      <SettingsModal open={true} onClose={() => {}} />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('github-integration-card')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('gitlab-integration-card')).not.toBeInTheDocument()
+  })
+
+  it('shows only GitLab card when forge is gitlab', async () => {
+    forgeValueRef.current = 'gitlab'
+
+    renderWithProviders(
+      <SettingsModal open={true} onClose={() => {}} />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('gitlab-integration-card')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('github-integration-card')).not.toBeInTheDocument()
+  })
+
+  it('shows both cards when forge is unknown', async () => {
+    forgeValueRef.current = 'unknown'
+
+    renderWithProviders(
+      <SettingsModal open={true} onClose={() => {}} />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('github-integration-card')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('gitlab-integration-card')).toBeInTheDocument()
   })
 })

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import * as splitDragCoordinator from '../../utils/splitDragCoordinator'
 import type { ReactNode } from 'react'
 import type { EnrichedSession, SessionInfo } from '../../types/session'
+import type { TabKey } from './RightPanelTabs.types'
 import { emitUiEvent, UiEvent } from '../../common/uiEvents'
 
 interface MockSplitProps {
@@ -46,7 +47,18 @@ vi.mock('react-split', () => {
 import { Provider, createStore } from 'jotai'
 import { RightPanelTabs } from './RightPanelTabs'
 import { projectPathAtom } from '../../store/atoms/project'
+import { rightPanelTabAtom } from '../../store/atoms/rightPanelTab'
 import type { ReactElement } from 'react'
+import type { ForgeType } from '../../store/atoms/forge'
+
+const { mockForgeAtom } = vi.hoisted(() => {
+  const { atom } = require('jotai') as typeof import('jotai')
+  return { mockForgeAtom: atom<ForgeType>('unknown') }
+})
+
+vi.mock('../../store/atoms/forge', () => ({
+  projectForgeAtom: mockForgeAtom,
+}))
 
 // Mock contexts used by RightPanelTabs
 vi.mock('../../hooks/useSelection', () => ({
@@ -111,13 +123,15 @@ vi.mock('./CopyContextBar', () => ({
   CopyContextBar: () => <div data-testid="copy-bundle-bar">CopyContextBar</div>
 }))
 
+let mockGitlabSources: Array<{ issuesEnabled: boolean; mrsEnabled: boolean }> = []
+
 vi.mock('../../contexts/GitlabIntegrationContext', () => ({
   useGitlabIntegrationContext: () => ({
     status: null,
-    sources: [],
+    sources: mockGitlabSources,
     loading: false,
     isGlabMissing: false,
-    hasSources: false,
+    hasSources: mockGitlabSources.length > 0,
     refreshStatus: vi.fn(),
     loadSources: vi.fn(),
     saveSources: vi.fn(),
@@ -138,12 +152,20 @@ vi.mock('./GitlabMrsTab', () => ({
   GitlabMrsTab: () => <div data-testid="gitlab-mrs-tab" />
 }))
 
-function renderWithProject(ui: ReactElement, projectPath: string | null = '/tmp/project') {
+function renderWithProject(ui: ReactElement, opts?: { projectPath?: string | null; forge?: ForgeType; initialTab?: string }) {
+  const projectPath = opts?.projectPath ?? '/tmp/project'
   const store = createStore()
   store.set(projectPathAtom, projectPath)
+  if (opts?.forge) {
+    store.set(mockForgeAtom, opts.forge)
+  }
+  if (opts?.initialTab) {
+    void store.set(rightPanelTabAtom, opts.initialTab as TabKey)
+  }
   const result = render(<Provider store={store}>{ui}</Provider>)
   return {
     ...result,
+    store,
     rerender(nextUi: ReactElement) {
       result.rerender(<Provider store={store}>{nextUi}</Provider>)
     },
@@ -155,6 +177,7 @@ describe('RightPanelTabs split layout', () => {
     vi.clearAllMocks()
     splitPropsStore.current = null
     mockSessions.length = 0
+    mockGitlabSources.length = 0
     mockSetFocusForSession.mockReset()
   })
 
@@ -601,6 +624,7 @@ describe('RightPanelTabs spec workspace isolation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSessions.length = 0
+    mockGitlabSources.length = 0
   })
 
   it('does NOT show SpecWorkspacePanel when SpecCreated event fires while running session is selected', async () => {
@@ -700,5 +724,131 @@ describe('RightPanelTabs spec workspace isolation', () => {
 
     expect(screen.queryByTestId('spec-workspace-panel')).toBeNull()
     expect(screen.getByTestId('diff-panel')).toBeInTheDocument()
+  })
+})
+
+describe('RightPanelTabs forge-aware GitLab tab visibility', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    splitPropsStore.current = null
+    mockSessions.length = 0
+    mockGitlabSources.length = 0
+    mockSetFocusForSession.mockReset()
+  })
+
+  it('hides GitLab tabs when forge is github even if sources are enabled', () => {
+    mockSessions.push(createRunningSession({
+      session_id: 'test-session',
+      worktree_path: '/tmp/session-worktree',
+      branch: 'feature/test'
+    }))
+    mockGitlabSources.push({ issuesEnabled: true, mrsEnabled: true })
+
+    renderWithProject(
+      <RightPanelTabs
+        selectionOverride={{ kind: 'session', payload: 'test-session', worktreePath: '/tmp/session-worktree' }}
+        isSpecOverride={false}
+      />,
+      { forge: 'github' }
+    )
+
+    expect(screen.queryByTitle('GitLab Issues')).toBeNull()
+    expect(screen.queryByTitle('GitLab Merge Requests')).toBeNull()
+  })
+
+  it('shows GitLab tabs when forge is gitlab and sources are enabled', () => {
+    mockSessions.push(createRunningSession({
+      session_id: 'test-session',
+      worktree_path: '/tmp/session-worktree',
+      branch: 'feature/test'
+    }))
+    mockGitlabSources.push({ issuesEnabled: true, mrsEnabled: true })
+
+    renderWithProject(
+      <RightPanelTabs
+        selectionOverride={{ kind: 'session', payload: 'test-session', worktreePath: '/tmp/session-worktree' }}
+        isSpecOverride={false}
+      />,
+      { forge: 'gitlab' }
+    )
+
+    expect(screen.getByTitle('GitLab Issues')).toBeInTheDocument()
+    expect(screen.getByTitle('GitLab Merge Requests')).toBeInTheDocument()
+  })
+
+  it('shows GitLab tabs when forge is unknown and sources are enabled', () => {
+    mockSessions.push(createRunningSession({
+      session_id: 'test-session',
+      worktree_path: '/tmp/session-worktree',
+      branch: 'feature/test'
+    }))
+    mockGitlabSources.push({ issuesEnabled: true, mrsEnabled: true })
+
+    renderWithProject(
+      <RightPanelTabs
+        selectionOverride={{ kind: 'session', payload: 'test-session', worktreePath: '/tmp/session-worktree' }}
+        isSpecOverride={false}
+      />,
+      { forge: 'unknown' }
+    )
+
+    expect(screen.getByTitle('GitLab Issues')).toBeInTheDocument()
+    expect(screen.getByTitle('GitLab Merge Requests')).toBeInTheDocument()
+  })
+
+  it('falls back to changes tab when active gitlab-issues tab becomes hidden', async () => {
+    mockSessions.push(createRunningSession({
+      session_id: 'test-session',
+      worktree_path: '/tmp/session-worktree',
+      branch: 'feature/test'
+    }))
+    mockGitlabSources.push({ issuesEnabled: true, mrsEnabled: true })
+
+    const { store } = renderWithProject(
+      <RightPanelTabs
+        selectionOverride={{ kind: 'session', payload: 'test-session', worktreePath: '/tmp/session-worktree' }}
+        isSpecOverride={false}
+      />,
+      { forge: 'gitlab', initialTab: 'gitlab-issues' }
+    )
+
+    expect(screen.getByTitle('GitLab Issues')).toBeInTheDocument()
+
+    act(() => {
+      store.set(mockForgeAtom, 'github')
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByTitle('GitLab Issues')).toBeNull()
+      expect(store.get(rightPanelTabAtom)).toBe('changes')
+    })
+  })
+
+  it('falls back to changes tab when active gitlab-mrs tab becomes hidden', async () => {
+    mockSessions.push(createRunningSession({
+      session_id: 'test-session',
+      worktree_path: '/tmp/session-worktree',
+      branch: 'feature/test'
+    }))
+    mockGitlabSources.push({ issuesEnabled: true, mrsEnabled: true })
+
+    const { store } = renderWithProject(
+      <RightPanelTabs
+        selectionOverride={{ kind: 'session', payload: 'test-session', worktreePath: '/tmp/session-worktree' }}
+        isSpecOverride={false}
+      />,
+      { forge: 'gitlab', initialTab: 'gitlab-mrs' }
+    )
+
+    expect(screen.getByTitle('GitLab Merge Requests')).toBeInTheDocument()
+
+    act(() => {
+      store.set(mockForgeAtom, 'github')
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByTitle('GitLab Merge Requests')).toBeNull()
+      expect(store.get(rightPanelTabAtom)).toBe('changes')
+    })
   })
 })
