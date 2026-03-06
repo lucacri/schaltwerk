@@ -1,5 +1,9 @@
 import { logger } from '../../utils/logger';
 import { XtermTerminal } from '../xterm/XtermTerminal';
+import {
+  profileSwitchPhase,
+  profileSwitchPhaseAsync,
+} from '../profiling/switchProfiler';
 import { disposeGpuRenderer } from '../gpu/gpuRendererRegistry';
 import { sessionTerminalBaseVariants, sanitizeSessionName } from '../../common/terminalIdentity';
 import { terminalOutputManager } from '../stream/terminalOutputManager';
@@ -118,6 +122,7 @@ export interface TerminalInstanceRecord {
   // VS Code-style dual-timestamp tracking for write synchronization
   latestWriteId: number;
   latestParseId: number;
+  hasWrittenToXterm: boolean;
 }
 
 export interface AcquireTerminalResult {
@@ -156,6 +161,7 @@ class TerminalInstanceRegistry {
       pendingByteLength: 0,
       latestWriteId: 0,
       latestParseId: 0,
+      hasWrittenToXterm: false,
     };
 
     this.instances.set(id, record);
@@ -199,7 +205,7 @@ class TerminalInstanceRegistry {
     const bufBefore = record.xterm.raw.buffer?.active;
     logger.debug(`[Registry] Attaching terminal ${id}: isTUI=${record.xterm.isTuiMode()}, wasAttached=${record.attached}, pendingChunks=${record.pendingChunks?.length ?? 0}, baseY=${bufBefore?.baseY}, viewportY=${bufBefore?.viewportY}`);
 
-    record.xterm.attach(container);
+    profileSwitchPhase('xterm.attach.registry', () => record.xterm.attach(container), { terminalId: id });
     record.attached = true;
     this.scheduleFlush(record, 'attach');
 
@@ -468,6 +474,8 @@ class TerminalInstanceRegistry {
     // update parse ID in callback when xterm finishes parsing.
     // This allows checking if all buffered data has been processed.
     const writeId = ++record.latestWriteId;
+    const writePhase = record.hasWrittenToXterm ? 'xterm.write' : 'xterm.firstWrite';
+    record.hasWrittenToXterm = true;
 
     const terminalDebug = typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1';
     const baseYBefore = terminalDebug ? record.xterm.raw.buffer?.active?.baseY : undefined;
@@ -475,11 +483,16 @@ class TerminalInstanceRegistry {
 
     try {
       const rawWithWriteSync = record.xterm.raw as unknown as { writeSync?: (data: string) => void };
-      if (record.xterm.isTuiMode() && hasFullScreenRedrawControl && typeof rawWithWriteSync.writeSync === 'function') {
+      const writeSync = rawWithWriteSync.writeSync;
+      if (record.xterm.isTuiMode() && hasFullScreenRedrawControl && typeof writeSync === 'function') {
         if (terminalDebug) {
           logger.debug(`[Registry ${record.id}] Using writeSync for full-frame TUI batch (chars=${payload.length})`);
         }
-        rawWithWriteSync.writeSync(payload);
+        profileSwitchPhase(writePhase, () => writeSync(payload), {
+          terminalId: record.id,
+          chars: payload.length,
+          reason: _reason,
+        });
         record.latestParseId = writeId;
 
         if (terminalDebug) {
@@ -502,25 +515,31 @@ class TerminalInstanceRegistry {
       }
 
       if (payload.length <= FLUSH_CHUNK_SIZE) {
-        record.xterm.raw.write(payload, () => {
-          record.latestParseId = writeId;
+        profileSwitchPhase(writePhase, () => {
+          record.xterm.raw.write(payload, () => {
+            record.latestParseId = writeId;
 
-          if (terminalDebug) {
-            const bufAfter = record.xterm.raw.buffer?.active;
-            if (bufAfter && (bufAfter.baseY !== baseYBefore || bufAfter.viewportY !== viewportYBefore)) {
-              logger.debug(`[Registry ${record.id}] Viewport changed after write: baseY ${baseYBefore}→${bufAfter.baseY}, viewportY ${viewportYBefore}→${bufAfter.viewportY}`);
+            if (terminalDebug) {
+              const bufAfter = record.xterm.raw.buffer?.active;
+              if (bufAfter && (bufAfter.baseY !== baseYBefore || bufAfter.viewportY !== viewportYBefore)) {
+                logger.debug(`[Registry ${record.id}] Viewport changed after write: baseY ${baseYBefore}→${bufAfter.baseY}, viewportY ${viewportYBefore}→${bufAfter.viewportY}`);
+              }
             }
-          }
 
-          if (hadClear) {
-            this.notifyClearCallbacks(record);
-          }
-          this.notifyOutputCallbacks(record);
+            if (hadClear) {
+              this.notifyClearCallbacks(record);
+            }
+            this.notifyOutputCallbacks(record);
 
-          if (record.flushAfterParse && record.pendingChunks && record.pendingChunks.length > 0 && !record.tuiHoldRedraw) {
-            record.flushAfterParse = false;
-            this.scheduleFlush(record, 'after-parse');
-          }
+            if (record.flushAfterParse && record.pendingChunks && record.pendingChunks.length > 0 && !record.tuiHoldRedraw) {
+              record.flushAfterParse = false;
+              this.scheduleFlush(record, 'after-parse');
+            }
+          });
+        }, {
+          terminalId: record.id,
+          chars: payload.length,
+          reason: _reason,
         });
       } else {
         this.writeChunked(record, payload, writeId, hadClear, terminalDebug, baseYBefore, viewportYBefore);
@@ -689,7 +708,11 @@ class TerminalInstanceRegistry {
     record.streamListener = listener;
     terminalOutputManager.addListener(record.id, listener);
     record.streamRegistered = true;
-    void terminalOutputManager.ensureStarted(record.id).catch(error => {
+    void profileSwitchPhaseAsync(
+      'hydration.ensureStarted',
+      () => terminalOutputManager.ensureStarted(record.id),
+      { terminalId: record.id },
+    ).catch(error => {
       logger.debug(`[Registry] ensureStarted failed for ${record.id}`, error);
     });
   }
@@ -741,7 +764,7 @@ class TerminalInstanceRegistry {
 const registry = new TerminalInstanceRegistry();
 
 export function acquireTerminalInstance(id: string, factory: TerminalInstanceFactory): AcquireTerminalResult {
-  return registry.acquire(id, factory);
+  return profileSwitchPhase('acquireTerminalInstance.registry', () => registry.acquire(id, factory), { terminalId: id });
 }
 
 export function releaseTerminalInstance(id: string): void {
