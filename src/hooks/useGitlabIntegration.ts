@@ -6,6 +6,8 @@ import type { GitlabSource } from '../types/gitlabTypes'
 import type { GitLabStatusPayload } from '../common/events'
 import { logger } from '../utils/logger'
 import { resolveErrorMessage } from '../utils/resolveErrorMessage'
+import { useAtomValue } from 'jotai'
+import { projectPathAtom } from '../store/atoms/project'
 
 export interface GitlabIntegrationValue {
   status: GitLabStatusPayload | null
@@ -23,6 +25,7 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
   const [sources, setSources] = useState<GitlabSource[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const unlistenRef = useRef<(() => void) | null>(null)
+  const projectPath = useAtomValue(projectPathAtom)
 
   const refreshStatus = useCallback(async () => {
     setLoading(true)
@@ -57,6 +60,7 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
 
   useEffect(() => {
     let mounted = true
+    setSources([])
 
     refreshStatus().catch((error) => {
       logger.error('[useGitlabIntegration] Initial status fetch failed', error)
@@ -97,7 +101,7 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
         }
       }
     }
-  }, [refreshStatus, loadSources])
+  }, [refreshStatus, loadSources, projectPath])
 
   const value = useMemo<GitlabIntegrationValue>(() => {
     return {

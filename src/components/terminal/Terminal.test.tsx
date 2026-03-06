@@ -12,6 +12,7 @@ import { useAgentTabs } from '../../hooks/useAgentTabs'
 import type { AgentType } from '../../types/session'
 import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../../common/tauriCommands'
+import { attachTerminalInstance } from '../../terminal/registry/terminalRegistry'
 
 const ATLAS_CONTRAST_BASE = 1.1
 
@@ -58,6 +59,7 @@ type HarnessConfig = {
 
 type HarnessInstance = {
   config: HarnessConfig
+  refresh: ReturnType<typeof vi.fn>
   applyConfig: ReturnType<typeof vi.fn>
   fitAddon: { fit: ReturnType<typeof vi.fn>; proposeDimensions?: () => { cols: number; rows: number } }
   searchAddon: { findNext: ReturnType<typeof vi.fn>; findPrevious: ReturnType<typeof vi.fn> }
@@ -639,6 +641,27 @@ describe('Terminal', () => {
     expect(instance.applyConfig).toHaveBeenCalledWith(expect.objectContaining({
       readOnly: true,
     }))
+  })
+
+  it('attaches terminal before issuing refresh during initialization', async () => {
+    const attachMock = vi.mocked(attachTerminalInstance)
+    attachMock.mockClear()
+
+    renderTerminal({ terminalId: 'session-refresh-order-top', sessionName: 'refresh-order' })
+
+    await waitFor(() => {
+      expect(terminalHarness.instances.length).toBeGreaterThan(0)
+      expect(attachMock).toHaveBeenCalled()
+    })
+
+    const instance = terminalHarness.instances[0] as HarnessInstance
+    await waitFor(() => {
+      expect(instance.refresh).toHaveBeenCalled()
+    })
+
+    const attachOrder = attachMock.mock.invocationCallOrder[0]
+    const firstRefreshOrder = instance.refresh.mock.invocationCallOrder[0]
+    expect(firstRefreshOrder).toBeGreaterThan(attachOrder)
   })
 
   it('registers an onData handler even when readOnly is true', async () => {

@@ -27,6 +27,7 @@ import { GitlabMrsTab } from './GitlabMrsTab'
 import { useGitlabIntegrationContext } from '../../contexts/GitlabIntegrationContext'
 import { useAtom, useAtomValue } from 'jotai'
 import { projectPathAtom } from '../../store/atoms/project'
+import { projectForgeAtom } from '../../store/atoms/forge'
 import { WebPreviewPanel } from './WebPreviewPanel'
 import { buildPreviewKey } from '../../store/atoms/preview'
 import { SPLIT_GUTTER_SIZE } from '../../common/splitLayout'
@@ -48,6 +49,7 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const { setFocusForSession, currentFocus } = useFocus()
   const { allSessions } = useSessions()
   const [rightPanelTab, setRightPanelTab] = useAtom(rightPanelTabAtom)
+  const forge = useAtomValue(projectForgeAtom)
   const gitlabIntegration = useGitlabIntegrationContext()
   const [localFocus, setLocalFocus] = useState<boolean>(false)
   const [showSpecPicker, setShowSpecPicker] = useState(false)
@@ -388,8 +390,8 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const showHistoryTab = isCommander || isRunningSession
   const showSpecsTab = isCommander
   const showPreviewTab = isCommander || isRunningSession
-  const showGitlabIssuesTab = (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.issuesEnabled)
-  const showGitlabMrsTab = (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.mrsEnabled)
+  const showGitlabIssuesTab = forge !== 'github' && (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.issuesEnabled)
+  const showGitlabMrsTab = forge !== 'github' && (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.mrsEnabled)
   const tabsPresent = showChangesTab || showInfoTab || showSpecTab || showHistoryTab || showSpecsTab || showPreviewTab || showGitlabIssuesTab || showGitlabMrsTab
   // Enable split mode when viewing Changes for normal running sessions
   const useSplitMode = isRunningSession && activeTab === 'changes'
@@ -417,6 +419,13 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
       { reformatSidebar: reformatSidebarEnabled, hasFiles: isInlineReviewing ? inlineHasFiles : true },
     )
   }, [isAnyReviewModeActive, onInlineReviewModeChange, reformatSidebarEnabled, inlineHasFiles, isInlineReviewing])
+
+  useEffect(() => {
+    if ((rightPanelTab === 'gitlab-issues' && !showGitlabIssuesTab) ||
+        (rightPanelTab === 'gitlab-mrs' && !showGitlabMrsTab)) {
+      void setRightPanelTab('changes')
+    }
+  }, [rightPanelTab, showGitlabIssuesTab, showGitlabMrsTab, setRightPanelTab])
 
   return (
     <div

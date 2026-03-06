@@ -56,6 +56,11 @@ import {
 } from './terminalSizing'
 import { shouldEmitControlPaste, shouldEmitControlNewline } from './terminalKeybindings'
 import { parseTerminalFileReference, resolveTerminalFileReference } from '../../terminal/xterm/fileLinks/terminalFileLinks'
+import {
+    profileSwitchPhase,
+    profileSwitchPhaseAsync,
+    startSwitchPhaseProfile,
+} from '../../terminal/profiling/switchProfiler'
 
 import { TERMINAL_FILE_DRAG_TYPE, type TerminalFileDragPayload } from '../../common/dragTypes'
 import { TerminalScrollButton } from './TerminalScrollButton'
@@ -1261,6 +1266,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
     }, [agentType, terminalId]);
 
     useEffect(() => {
+        const stopMountProfile = startSwitchPhaseProfile('react.mount', { terminalId })
         debugCountersRef.current.initRuns += 1;
         if (termDebug()) {
             logger.debug(`[Terminal ${terminalId}] [init] effect run #${debugCountersRef.current.initRuns}`);
@@ -1270,6 +1276,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         // track mounted lifecycle only; no timer-based logic tied to mount time
         if (!termRef.current) {
             logger.error(`[Terminal ${terminalId}] No ref available!`);
+            stopMountProfile()
             return;
         }
 
@@ -1278,13 +1285,17 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
 
         const initialUiMode = isTuiAgent(agentTypeRef.current) ? 'tui' : 'standard';
         logger.debug(`[Terminal ${terminalId}] Creating terminal: agentTypeRef.current=${agentTypeRef.current}, initialUiMode=${initialUiMode}`);
-        const { record, isNew } = acquireTerminalInstance(terminalId, () => new XtermTerminal({
-            terminalId,
-            config: currentConfig,
-            uiMode: initialUiMode,
-            onLinkClick: (uri: string) => handleLinkClickRef.current?.(uri) ?? false,
-            theme: initialTheme,
-        }));
+        const { record, isNew } = profileSwitchPhase(
+            'acquireTerminalInstance',
+            () => acquireTerminalInstance(terminalId, () => new XtermTerminal({
+                terminalId,
+                config: currentConfig,
+                uiMode: initialUiMode,
+                onLinkClick: (uri: string) => handleLinkClickRef.current?.(uri) ?? false,
+                theme: initialTheme,
+            })),
+            { terminalId },
+        );
 
         // Always start with hydrated=false and let onRender set it to true
         // This prevents the flash where CSS shows opacity-100 before xterm renders
@@ -1307,13 +1318,19 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         }
         terminal.current = instance.raw;
         terminal.current.options.theme = initialTheme;
-        xtermWrapperRef.current?.refresh();
         fitAddon.current = instance.fitAddon;
         searchAddon.current = instance.searchAddon;
-        
-        if (termRef.current) {
-            attachTerminalInstance(terminalId, termRef.current);
+
+        const attachTarget = termRef.current;
+        if (attachTarget) {
+            profileSwitchPhase('xterm.attach', () => attachTerminalInstance(terminalId, attachTarget), { terminalId });
         }
+        requestAnimationFrame(() => {
+            if (cancelled || !xtermWrapperRef.current) {
+                return;
+            }
+            profileSwitchPhase('xterm.refresh', () => xtermWrapperRef.current?.refresh(), { terminalId });
+        });
         logScrollSnapshot('attached');
         applyLetterSpacingRef.current?.(webglRendererActiveRef.current);
         // Allow streaming immediately; proper fits will still run later
@@ -1333,20 +1350,28 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                 return;
             }
 
-            try {
-                requestResizeRef.current?.('initial-fit', { immediate: true, force: true });
-                const { cols, rows } = terminal.current;
-                logger.info(`[Terminal ${terminalId}] Initial fit: ${cols}x${rows} (container: ${containerWidth}x${containerHeight})`);
-            } catch (e) {
-                logger.warn(`[Terminal ${terminalId}] Initial fit failed:`, e);
-            }
+            profileSwitchPhase('fitAddon.initialFit', () => {
+                try {
+                    const rawTerminal = terminal.current
+                    if (!rawTerminal) {
+                        return
+                    }
+                    requestResizeRef.current?.('initial-fit', { immediate: true, force: true });
+                    const { cols, rows } = rawTerminal;
+                    logger.info(`[Terminal ${terminalId}] Initial fit: ${cols}x${rows} (container: ${containerWidth}x${containerHeight})`);
+                } catch (e) {
+                    logger.warn(`[Terminal ${terminalId}] Initial fit failed:`, e);
+                }
+            }, { terminalId, containerWidth, containerHeight });
         };
 
         performInitialFit();
 
         let rendererInitialized = false;
         const initializeRenderer = async () => {
+            const stopRendererProfile = startSwitchPhaseProfile('webgl.initializeRenderer', { terminalId })
             if (rendererInitialized || cancelled || !terminal.current || !termRef.current) {
+                stopRendererProfile()
                 return;
             }
 
@@ -1362,7 +1387,13 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                     }
 
                     if (gpuEnabledForTerminal) {
-                        await ensureRendererRef.current?.();
+                        await profileSwitchPhaseAsync(
+                            'webgl.ensureRenderer',
+                            async () => {
+                                await ensureRendererRef.current?.();
+                            },
+                            { terminalId },
+                        );
                     }
 
                     rendererReadyRef.current = true;
@@ -1379,8 +1410,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                 } catch (e) {
                     logger.warn(`[Terminal ${terminalId}] Renderer initialization failed:`, e);
                     rendererReadyRef.current = true;
+                } finally {
+                    stopRendererProfile()
                 }
+                return
             }
+            stopRendererProfile()
         };
         
         // Use ResizeObserver to deterministically initialize renderer when container is ready
@@ -1784,6 +1819,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                 requestAnimationFrame(() => handleResize());
             }
         })();
+        stopMountProfile()
 
         // After split drag ends, perform a strong fit + resize
         const doFinalFit = () => {
@@ -1807,6 +1843,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         // Cleanup - dispose UI but keep terminal process running
         // Terminal processes will be cleaned up when the app exits
         return () => {
+            const stopUnmountProfile = startSwitchPhaseProfile('react.unmount', { terminalId })
             mountedRef.current = false;
             cancelled = true;
             rendererReadyRef.current = false;
@@ -1850,7 +1887,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
 
             // Do not emit mouse disable on unmount; agents may still be shutting down and interpret it as stdin.
 
-            detachTerminalInstance(terminalId);
+            profileSwitchPhase('react.unmount.detachTerminalInstance', () => detachTerminalInstance(terminalId), { terminalId });
             logScrollSnapshot('cleanup:after-detach');
             xtermWrapperRef.current = null;
             gpuRenderer.current = null;
@@ -1860,6 +1897,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             // Note: We intentionally don't close terminals here to allow switching between sessions
             // All terminals are cleaned up when the app exits via the backend cleanup handler
             // useCleanupRegistry handles other cleanup automatically
+            stopUnmountProfile()
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs are stable; isAgentTopTerminal is read at call-time and shouldn't trigger re-init
     }, [

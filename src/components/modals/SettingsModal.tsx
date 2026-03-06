@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, ReactElement 
 import { TauriCommands } from '../../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
-import { useAtom } from 'jotai'
+import { useAtom, useAtomValue } from 'jotai'
 import { terminalFontSizeAtom, uiFontSizeAtom } from '../../store/atoms/fontSize'
+import { projectForgeAtom } from '../../store/atoms/forge'
 import { useSettings } from '../../hooks/useSettings'
 import type { AgentType, ProjectMergePreferences, AttentionNotificationMode, AgentPreferenceConfig } from '../../hooks/useSettings'
 import { useSessions } from '../../hooks/useSessions'
@@ -303,6 +304,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const { t } = useTranslation()
     const [terminalFontSize, setTerminalFontSize] = useAtom(terminalFontSizeAtom)
     const [uiFontSize, setUiFontSize] = useAtom(uiFontSizeAtom)
+    const forge = useAtomValue(projectForgeAtom)
     const { applyOverrides: applyShortcutOverrides } = useKeyboardShortcutsConfig()
 
     useEffect(() => {
@@ -1084,8 +1086,8 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         <div className="flex flex-col h-full">
             <div className="flex-1 overflow-y-auto p-6">
                 <div className="space-y-6">
-                    <GithubProjectIntegrationCard projectPath={projectPath} onNotify={showNotification} />
-                    <GitlabProjectIntegrationCard onNotify={showNotification} />
+                    {forge !== 'gitlab' && <GithubProjectIntegrationCard projectPath={projectPath} onNotify={showNotification} />}
+                    {forge !== 'github' && <GitlabProjectIntegrationCard onNotify={showNotification} />}
 
                     <div>
                         <h3 className="text-body font-medium text-text-primary mb-2">{t.settings.projectGeneral.branchPrefix}</h3>
