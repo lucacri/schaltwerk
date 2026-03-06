@@ -211,6 +211,10 @@ export function useTerminalGpu({
       renderer = new WebGLTerminalRenderer(terminal, terminalId);
       setGpuRenderer(terminalId, renderer);
     }
+    
+    // Check if the renderer is already initialized to avoid redundant refreshes
+    const wasAlreadyWebgl = renderer.getState().type === 'webgl';
+    
     gpuRenderer.current = renderer;
     renderer.setCallbacks({
       onContextLost: handleContextLost,
@@ -227,12 +231,14 @@ export function useTerminalGpu({
       if (!gpuRefreshState.current.refreshing && !gpuRefreshState.current.queued) {
         // Keep xterm.js' WebGL atlas intact on renderer reuse; only refresh when transitioning
         // from a non-WebGL renderer (mirrors VS Code's behaviour and prevents atlas corruption).
-        if (previousRendererType !== 'webgl') {
+        // Skip refresh if the renderer was already in webgl state (e.g. during a session switch/remount).
+        if (previousRendererType !== 'webgl' && !wasAlreadyWebgl) {
           refreshGpuFontRendering();
         }
       }
       applyLetterSpacing(true);
     } else {
+
       if (preference !== 'off') {
         logger.warn(
           `[Terminal ${terminalId}] WebGL renderer unavailable, continuing with DOM renderer`,

@@ -141,6 +141,25 @@ class TerminalInstanceRegistry {
 
     const created = factory();
 
+    // Pre-open off-screen to avoid synchronous xterm.js overhead during the first session visit.
+    // This performs DOM tree creation, font measurement, and canvas initialization early.
+    if (typeof document !== 'undefined') {
+      const offscreen = document.createElement('div');
+      offscreen.style.position = 'absolute';
+      offscreen.style.top = '-9999px';
+      offscreen.style.left = '-9999px';
+      offscreen.style.visibility = 'hidden';
+      // Give it reasonable initial dimensions to allow early fitAddon work
+      offscreen.style.width = '1024px';
+      offscreen.style.height = '768px';
+      document.body.appendChild(offscreen);
+      try {
+        created.attach(offscreen);
+      } catch (error) {
+        logger.debug(`[Registry] Failed to pre-open terminal ${id}`, error);
+      }
+    }
+
     const record: TerminalInstanceRecord = {
       id,
       xterm: created,
@@ -399,7 +418,8 @@ class TerminalInstanceRegistry {
     });
   }
 
-  private flushChunks(record: TerminalInstanceRecord, _reason: string): void {
+  private flushChunks(record: TerminalInstanceRecord, reason: string): void {
+    const flushStart = performance.now();
     record.rafScheduled = false;
     record.rafHandle = undefined;
 
@@ -423,6 +443,7 @@ class TerminalInstanceRegistry {
     }
 
     const combined = record.pendingChunks.join('');
+    const chunkCount = record.pendingChunks.length;
     record.pendingChunks = [];
     record.pendingByteLength = 0;
     const hadClear = record.hadClearInBatch ?? false;
@@ -464,9 +485,13 @@ class TerminalInstanceRegistry {
       if (record.xterm.isTuiMode() && hasFullScreenRedrawControl && typeof rawWithWriteSync.writeSync === 'function') {
         if (terminalDebug) {
           logger.debug(`[Registry ${record.id}] Using writeSync for full-frame TUI batch (chars=${payload.length})`);
+          console.log(`[SwitchProfile] START flushChunks writeSync (id=${record.id}, reason=${reason}, chunks=${chunkCount}, bytes=${payload.length})`);
         }
         rawWithWriteSync.writeSync(payload);
         record.latestParseId = writeId;
+        if (terminalDebug) {
+          console.log(`[SwitchProfile] END flushChunks writeSync (id=${record.id}): ${(performance.now() - flushStart).toFixed(2)}ms`);
+        }
 
         if (terminalDebug) {
           const bufAfter = record.xterm.raw.buffer?.active;
@@ -488,8 +513,14 @@ class TerminalInstanceRegistry {
       }
 
       if (payload.length <= FLUSH_CHUNK_SIZE) {
+        if (terminalDebug) {
+          console.log(`[SwitchProfile] START flushChunks write (id=${record.id}, reason=${reason}, chunks=${chunkCount}, bytes=${payload.length})`);
+        }
         record.xterm.raw.write(payload, () => {
           record.latestParseId = writeId;
+          if (terminalDebug) {
+            console.log(`[SwitchProfile] END flushChunks write callback (id=${record.id}): ${(performance.now() - flushStart).toFixed(2)}ms`);
+          }
 
           if (terminalDebug) {
             const bufAfter = record.xterm.raw.buffer?.active;
@@ -509,7 +540,10 @@ class TerminalInstanceRegistry {
           }
         });
       } else {
-        this.writeChunked(record, payload, writeId, hadClear, terminalDebug, baseYBefore, viewportYBefore);
+        if (terminalDebug) {
+          console.log(`[SwitchProfile] START flushChunks writeChunked (id=${record.id}, reason=${reason}, chunks=${chunkCount}, bytes=${payload.length})`);
+        }
+        this.writeChunked(record, payload, writeId, hadClear, terminalDebug, baseYBefore, viewportYBefore, flushStart);
       }
     } catch (error) {
       record.flushAfterParse = false;
@@ -525,12 +559,16 @@ class TerminalInstanceRegistry {
     terminalDebug: boolean,
     baseYBefore: number | undefined,
     viewportYBefore: number | undefined,
+    flushStart: number,
   ): void {
     let offset = 0;
 
     const writeNextChunk = () => {
       if (offset >= payload.length) {
         record.latestParseId = writeId;
+        if (terminalDebug) {
+          console.log(`[SwitchProfile] END flushChunks writeChunked callback (id=${record.id}): ${(performance.now() - flushStart).toFixed(2)}ms`);
+        }
 
         if (terminalDebug) {
           const bufAfter = record.xterm.raw.buffer?.active;
@@ -558,6 +596,7 @@ class TerminalInstanceRegistry {
 
     writeNextChunk();
   }
+
 
   private ensureStream(record: TerminalInstanceRecord): void {
     if (record.streamRegistered) {

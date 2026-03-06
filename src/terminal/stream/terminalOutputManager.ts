@@ -144,20 +144,36 @@ class TerminalOutputManager {
   }
 
   private async hydrate(id: string, stream: TerminalStream): Promise<number | null> {
+    const hydrateStart = performance.now();
+    const terminalDebug = typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1';
+    if (terminalDebug) {
+      console.log(`[SwitchProfile] START hydrate (id=${id})`);
+    }
+
     const fallbackSeq = stream.seqCursor ?? this.lastSeqById.get(id) ?? null
     try {
       const snapshot = await invoke<TerminalBufferResponse | null>(TauriCommands.GetTerminalBuffer, {
         id,
         from_seq: fallbackSeq,
       })
+      if (terminalDebug) {
+        console.log(`[SwitchProfile] GetTerminalBuffer fetch (id=${id}): ${(performance.now() - hydrateStart).toFixed(2)}ms`);
+      }
       if (!snapshot || typeof snapshot.seq !== 'number') {
         return stream.seqCursor ?? fallbackSeq
       }
       if (snapshot.data && snapshot.data.length > 0) {
+        const dispatchStart = performance.now();
         this.dispatch(id, snapshot.data)
+        if (terminalDebug) {
+          console.log(`[SwitchProfile] dispatch hydration data (id=${id}, bytes=${snapshot.data.length}): ${(performance.now() - dispatchStart).toFixed(2)}ms`);
+        }
       }
       stream.seqCursor = snapshot.seq
       this.lastSeqById.set(id, snapshot.seq)
+      if (terminalDebug) {
+        console.log(`[SwitchProfile] END hydrate (id=${id}): ${(performance.now() - hydrateStart).toFixed(2)}ms`);
+      }
       return snapshot.seq
     } catch (error) {
       logger.debug(`[TerminalOutput] hydration failed for ${id}`, error)
@@ -215,6 +231,7 @@ class TerminalOutputManager {
       }
     }
   }
+
 
   // Test hook for injecting output into a terminal stream without Tauri
   __emit(id: string, chunk: string): void {

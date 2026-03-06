@@ -1261,9 +1261,13 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
     }, [agentType, terminalId]);
 
     useEffect(() => {
+        const setupStart = performance.now();
         debugCountersRef.current.initRuns += 1;
         if (termDebug()) {
             logger.debug(`[Terminal ${terminalId}] [init] effect run #${debugCountersRef.current.initRuns}`);
+        }
+        if (typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+            console.log(`[SwitchProfile] START Terminal setup effect (id=${terminalId})`);
         }
         mountedRef.current = true;
         let cancelled = false;
@@ -1278,6 +1282,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
 
         const initialUiMode = isTuiAgent(agentTypeRef.current) ? 'tui' : 'standard';
         logger.debug(`[Terminal ${terminalId}] Creating terminal: agentTypeRef.current=${agentTypeRef.current}, initialUiMode=${initialUiMode}`);
+        
+        const acquireStart = performance.now();
         const { record, isNew } = acquireTerminalInstance(terminalId, () => new XtermTerminal({
             terminalId,
             config: currentConfig,
@@ -1285,6 +1291,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             onLinkClick: (uri: string) => handleLinkClickRef.current?.(uri) ?? false,
             theme: initialTheme,
         }));
+        if (typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+            console.log(`[SwitchProfile] acquireTerminalInstance (new=${isNew}): ${(performance.now() - acquireStart).toFixed(2)}ms`);
+        }
 
         // Always start with hydrated=false and let onRender set it to true
         // This prevents the flash where CSS shows opacity-100 before xterm renders
@@ -1307,12 +1316,19 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         }
         terminal.current = instance.raw;
         terminal.current.options.theme = initialTheme;
-        xtermWrapperRef.current?.refresh();
+        
+        // Removed synchronous xtermWrapperRef.current?.refresh() - Redundant during mount/attach cycle
+        // xterm.js will handle initial render upon DOM attachment; deferred fits will handle the rest.
+
         fitAddon.current = instance.fitAddon;
         searchAddon.current = instance.searchAddon;
         
         if (termRef.current) {
+            const attachStart = performance.now();
             attachTerminalInstance(terminalId, termRef.current);
+            if (typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+                console.log(`[SwitchProfile] attachTerminalInstance: ${(performance.now() - attachStart).toFixed(2)}ms`);
+            }
         }
         logScrollSnapshot('attached');
         applyLetterSpacingRef.current?.(webglRendererActiveRef.current);
@@ -1322,6 +1338,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         // Ensure proper initial fit after terminal is opened
         // CRITICAL: Wait for container dimensions before fitting - essential for xterm.js 5.x cursor positioning
         const performInitialFit = () => {
+            const fitStart = performance.now();
             if (!fitAddon.current || !termRef.current || !terminal.current) return;
 
             const containerWidth = termRef.current.clientWidth;
@@ -1334,18 +1351,25 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             }
 
             try {
-                requestResizeRef.current?.('initial-fit', { immediate: true, force: true });
+                // requestResizeRef.current?.('initial-fit', { immediate: true, force: true });
+                // Defer to avoid blocking the mount cycle
+                requestResizeRef.current?.('initial-fit', { immediate: false, force: true });
                 const { cols, rows } = terminal.current;
                 logger.info(`[Terminal ${terminalId}] Initial fit: ${cols}x${rows} (container: ${containerWidth}x${containerHeight})`);
+                if (typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+                    console.log(`[SwitchProfile] performInitialFit: ${(performance.now() - fitStart).toFixed(2)}ms`);
+                }
             } catch (e) {
                 logger.warn(`[Terminal ${terminalId}] Initial fit failed:`, e);
             }
         };
 
+
         performInitialFit();
 
         let rendererInitialized = false;
         const initializeRenderer = async () => {
+            const rendererStart = performance.now();
             if (rendererInitialized || cancelled || !terminal.current || !termRef.current) {
                 return;
             }
@@ -1362,7 +1386,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                     }
 
                     if (gpuEnabledForTerminal) {
+                        const gpuInitStart = performance.now();
                         await ensureRendererRef.current?.();
+                        if (typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+                            console.log(`[SwitchProfile] gpuInit: ${(performance.now() - gpuInitStart).toFixed(2)}ms`);
+                        }
                     }
 
                     rendererReadyRef.current = true;
@@ -1376,12 +1404,16 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                             }
                         }
                     });
+                    if (typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+                        console.log(`[SwitchProfile] initializeRenderer: ${(performance.now() - rendererStart).toFixed(2)}ms`);
+                    }
                 } catch (e) {
                     logger.warn(`[Terminal ${terminalId}] Renderer initialization failed:`, e);
                     rendererReadyRef.current = true;
                 }
             }
         };
+
         
         // Use ResizeObserver to deterministically initialize renderer when container is ready
         // This avoids polling and ensures we initialize exactly once when dimensions are available
@@ -1785,6 +1817,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             }
         })();
 
+        if (typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+            console.log(`[SwitchProfile] END Terminal setup effect (id=${terminalId}): ${(performance.now() - setupStart).toFixed(2)}ms`);
+        }
+
         // After split drag ends, perform a strong fit + resize
         const doFinalFit = () => {
             // After drag ends, run a strong fit on next frame
@@ -1807,6 +1843,10 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         // Cleanup - dispose UI but keep terminal process running
         // Terminal processes will be cleaned up when the app exits
         return () => {
+            const cleanupStart = performance.now();
+            if (typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+                console.log(`[SwitchProfile] START Terminal cleanup effect (id=${terminalId})`);
+            }
             mountedRef.current = false;
             cancelled = true;
             rendererReadyRef.current = false;
@@ -1860,7 +1900,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             // Note: We intentionally don't close terminals here to allow switching between sessions
             // All terminals are cleaned up when the app exits via the backend cleanup handler
             // useCleanupRegistry handles other cleanup automatically
+            if (typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+                console.log(`[SwitchProfile] END Terminal cleanup effect (id=${terminalId}): ${(performance.now() - cleanupStart).toFixed(2)}ms`);
+            }
         };
+
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs are stable; isAgentTopTerminal is read at call-time and shouldn't trigger re-init
     }, [
         terminalId,
