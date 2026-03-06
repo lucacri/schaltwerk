@@ -5,6 +5,7 @@ import { listenTerminalOutput } from '../../common/eventSystem'
 import { TauriCommands } from '../../common/tauriCommands'
 import { ackTerminalBackend, isPluginTerminal, subscribeTerminalBackend } from '../transport/backend'
 import { logger } from '../../utils/logger'
+import { profileSwitchPhase, profileSwitchPhaseAsync } from '../profiling/switchProfiler'
 
 type TerminalStreamListener = (chunk: string) => void
 
@@ -78,13 +79,14 @@ class TerminalOutputManager {
   }
 
   async ensureStarted(id: string): Promise<void> {
+    const streamContext = { terminalId: id }
     const stream = this.ensureStream(id)
     if (stream.started) return
     if (stream.starting) {
       await stream.starting
       return
     }
-    const startPromise = this.startStream(id, stream)
+    const startPromise = profileSwitchPhaseAsync('hydration.startStream', () => this.startStream(id, stream), streamContext)
     stream.starting = startPromise
     try {
       await startPromise
@@ -144,17 +146,25 @@ class TerminalOutputManager {
   }
 
   private async hydrate(id: string, stream: TerminalStream): Promise<number | null> {
+    const streamContext = { terminalId: id }
     const fallbackSeq = stream.seqCursor ?? this.lastSeqById.get(id) ?? null
     try {
-      const snapshot = await invoke<TerminalBufferResponse | null>(TauriCommands.GetTerminalBuffer, {
-        id,
-        from_seq: fallbackSeq,
-      })
+      const snapshot = await profileSwitchPhaseAsync(
+        'hydration.fetch',
+        () => invoke<TerminalBufferResponse | null>(TauriCommands.GetTerminalBuffer, {
+          id,
+          from_seq: fallbackSeq,
+        }),
+        streamContext,
+      )
       if (!snapshot || typeof snapshot.seq !== 'number') {
         return stream.seqCursor ?? fallbackSeq
       }
       if (snapshot.data && snapshot.data.length > 0) {
-        this.dispatch(id, snapshot.data)
+        profileSwitchPhase('hydration.dispatch', () => this.dispatch(id, snapshot.data, 'hydration'), {
+          ...streamContext,
+          chars: snapshot.data.length,
+        })
       }
       stream.seqCursor = snapshot.seq
       this.lastSeqById.set(id, snapshot.seq)
@@ -171,7 +181,7 @@ class TerminalOutputManager {
         if (typeof chunk !== 'string' || chunk.length === 0) {
           return
         }
-        this.dispatch(id, chunk)
+        this.dispatch(id, chunk, 'stream')
       })
     } catch (error) {
       logger.debug(`[TerminalOutput] standard listener failed for ${id}`, error)
@@ -191,7 +201,7 @@ class TerminalOutputManager {
       try {
         const text = decoder.decode(message.bytes, { stream: true })
         if (text && text.length > 0) {
-          this.dispatch(id, text)
+          this.dispatch(id, text, 'plugin')
         }
       } catch (error) {
         logger.debug(`[TerminalOutput] decode failed for ${id}`, error)
@@ -202,10 +212,23 @@ class TerminalOutputManager {
     })
   }
 
-  private dispatch(id: string, chunk: string): void {
+  private dispatch(id: string, chunk: string, source: 'hydration' | 'stream' | 'plugin' | 'test'): void {
     const stream = this.streams.get(id)
     if (!stream) return
     const normalized = enforceTextPresentation(chunk)
+    if (source === 'hydration') {
+      profileSwitchPhase('hydration.dispatch.listeners', () => {
+        this.updateSeqCursor(id, stream, normalized)
+        for (const listener of stream.listeners) {
+          try {
+            listener(normalized)
+          } catch (error) {
+            logger.debug(`[TerminalOutput] listener error for ${id}`, error)
+          }
+        }
+      }, { terminalId: id, chars: normalized.length })
+      return
+    }
     this.updateSeqCursor(id, stream, normalized)
     for (const listener of stream.listeners) {
       try {
@@ -218,7 +241,7 @@ class TerminalOutputManager {
 
   // Test hook for injecting output into a terminal stream without Tauri
   __emit(id: string, chunk: string): void {
-    this.dispatch(id, chunk)
+    this.dispatch(id, chunk, 'test')
   }
 
   private updateSeqCursor(id: string, stream: TerminalStream, chunk: string): void {
