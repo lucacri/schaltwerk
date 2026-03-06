@@ -7,6 +7,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 import { buildTerminalTheme } from '../../common/themes/terminalTheme'
 import { logger } from '../../utils/logger'
+import { isSwitchProfilingEnabled } from '../profiling/switchProfiler'
 import { XtermAddonImporter } from './xtermAddonImporter'
 import { TauriCommands } from '../../common/tauriCommands'
 import { RegexLinkProvider } from './fileLinkProvider'
@@ -187,18 +188,27 @@ export class XtermTerminal {
 
   attach(target: HTMLElement): void {
     const buffer = this.raw.buffer?.active
+    const profiling = isSwitchProfilingEnabled()
     logger.debug(`[XtermTerminal ${this.terminalId}] attach(): uiMode=${this.uiMode}, opened=${this.opened}, baseY=${buffer?.baseY}, viewportY=${buffer?.viewportY}`)
 
     if (!this.opened) {
+      const t0 = profiling ? performance.now() : 0
       this.raw.open(this.container)
       this.opened = true
+      if (profiling) {
+        logger.info(`[SwitchProfile ${this.terminalId}] xterm.open=${(performance.now() - t0).toFixed(1)}ms`)
+      }
       logger.debug(`[XtermTerminal ${this.terminalId}] Opened terminal (first attach)`)
     }
     if (this.uiMode === 'tui') {
       this.applyTuiMode()
     }
     if (this.container.parentElement !== target) {
+      const t0 = profiling ? performance.now() : 0
       target.appendChild(this.container)
+      if (profiling) {
+        logger.info(`[SwitchProfile ${this.terminalId}] appendChild=${(performance.now() - t0).toFixed(1)}ms`)
+      }
     }
     this.container.style.display = 'block'
 
