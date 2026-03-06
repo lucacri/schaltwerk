@@ -16,6 +16,10 @@ import { logger } from '../../utils/logger'
 import type { RawSession } from '../../types/session'
 import { FilterMode } from '../../types/sessionFilters'
 import { projectPathAtom } from './project'
+import {
+  profileSwitchPhase,
+  startSwitchPhaseProfile,
+} from '../../terminal/profiling/switchProfiler'
 
 export interface Selection {
   kind: 'session' | 'orchestrator'
@@ -496,6 +500,7 @@ async function ensureTerminal(
 export const setSelectionActionAtom = atom(
   null,
   async (get, set, payload: SetSelectionPayload): Promise<void> => {
+    const stopSelectionProfile = startSwitchPhaseProfile('selection.atom.update')
     const {
       selection,
       forceRecreate = false,
@@ -566,7 +571,11 @@ export const setSelectionActionAtom = atom(
       const unchanged = !forceRecreate && selectionEquals(current, enrichedSelection)
 
       if (!unchanged) {
-        set(selectionAtom, enrichedSelection)
+        profileSwitchPhase(
+          'selection.atom.write',
+          () => set(selectionAtom, enrichedSelection),
+          { selectionKind: enrichedSelection.kind, selectionPayload: enrichedSelection.payload ?? null },
+        )
       }
 
       if (unchanged && !effectiveForceRecreate && !missingTop && !missingBottom) {
@@ -613,6 +622,7 @@ export const setSelectionActionAtom = atom(
       if (wasIntentional) {
         intentionalSwitchInProgress = false
       }
+      stopSelectionProfile()
     }
   },
 )
