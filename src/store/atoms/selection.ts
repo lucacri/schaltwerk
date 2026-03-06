@@ -496,6 +496,7 @@ async function ensureTerminal(
 export const setSelectionActionAtom = atom(
   null,
   async (get, set, payload: SetSelectionPayload): Promise<void> => {
+    const switchStart = performance.now();
     const {
       selection,
       forceRecreate = false,
@@ -510,6 +511,9 @@ export const setSelectionActionAtom = atom(
     const wasIntentional = isIntentional
     if (wasIntentional) {
       intentionalSwitchInProgress = true
+      if (typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+        console.log(`[SwitchProfile] START setSelectionActionAtom (intentional=${wasIntentional})`);
+      }
     }
 
     try {
@@ -574,6 +578,9 @@ export const setSelectionActionAtom = atom(
         if (isIntentional) {
           emitUiEvent(UiEvent.SelectionChanged, enrichedSelection)
         }
+        if (wasIntentional && typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+          console.log(`[SwitchProfile] END setSelectionActionAtom (unchanged): ${(performance.now() - switchStart).toFixed(2)}ms`);
+        }
         return
       }
 
@@ -609,6 +616,9 @@ export const setSelectionActionAtom = atom(
       if (isIntentional) {
         emitUiEvent(UiEvent.SelectionChanged, enrichedSelection)
       }
+      if (wasIntentional && typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1') {
+        console.log(`[SwitchProfile] END setSelectionActionAtom: ${(performance.now() - switchStart).toFixed(2)}ms`);
+      }
     } finally {
       if (wasIntentional) {
         intentionalSwitchInProgress = false
@@ -616,6 +626,7 @@ export const setSelectionActionAtom = atom(
     }
   },
 )
+
 
 export const clearTerminalTrackingActionAtom = atom(
   null,

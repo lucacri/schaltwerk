@@ -186,13 +186,19 @@ export class XtermTerminal {
   }
 
   attach(target: HTMLElement): void {
+    const attachStart = performance.now();
+    const terminalDebug = typeof window !== 'undefined' && localStorage.getItem('TERMINAL_DEBUG') === '1';
     const buffer = this.raw.buffer?.active
     logger.debug(`[XtermTerminal ${this.terminalId}] attach(): uiMode=${this.uiMode}, opened=${this.opened}, baseY=${buffer?.baseY}, viewportY=${buffer?.viewportY}`)
 
     if (!this.opened) {
+      const openStart = performance.now();
       this.raw.open(this.container)
       this.opened = true
       logger.debug(`[XtermTerminal ${this.terminalId}] Opened terminal (first attach)`)
+      if (terminalDebug) {
+        console.log(`[SwitchProfile] xterm.open (id=${this.terminalId}): ${(performance.now() - openStart).toFixed(2)}ms`);
+      }
     }
     if (this.uiMode === 'tui') {
       this.applyTuiMode()
@@ -220,9 +226,17 @@ export class XtermTerminal {
         }
       })
     } else {
+      const scrollbarStart = performance.now();
       this.forceScrollbarRefresh()
+      if (terminalDebug) {
+        console.log(`[SwitchProfile] forceScrollbarRefresh (id=${this.terminalId}): ${(performance.now() - scrollbarStart).toFixed(2)}ms`);
+      }
+    }
+    if (terminalDebug) {
+      console.log(`[SwitchProfile] XtermTerminal.attach total (id=${this.terminalId}): ${(performance.now() - attachStart).toFixed(2)}ms`);
     }
   }
+
 
   isAtBottom(): boolean {
     const buffer = this.raw.buffer?.active
