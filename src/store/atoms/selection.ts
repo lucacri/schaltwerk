@@ -13,6 +13,7 @@ import { listenEvent, SchaltEvent } from '../../common/eventSystem'
 import { createTerminalBackend, closeTerminalBackend } from '../../terminal/transport/backend'
 import { clearTerminalStartedTracking } from '../../components/terminal/Terminal'
 import { logger } from '../../utils/logger'
+import { startSwitchPhaseProfile } from '../../terminal/profiling/switchProfiler'
 import type { RawSession } from '../../types/session'
 import { FilterMode } from '../../types/sessionFilters'
 import { projectPathAtom } from './project'
@@ -496,6 +497,7 @@ async function ensureTerminal(
 export const setSelectionActionAtom = atom(
   null,
   async (get, set, payload: SetSelectionPayload): Promise<void> => {
+    const stopSelectionProfile = startSwitchPhaseProfile('selection.setSelectionActionAtom')
     const {
       selection,
       forceRecreate = false,
@@ -505,6 +507,7 @@ export const setSelectionActionAtom = atom(
     } = payload
 
     if (intentionalSwitchInProgress && !isIntentional) {
+      stopSelectionProfile()
       return
     }
     const wasIntentional = isIntentional
@@ -613,6 +616,7 @@ export const setSelectionActionAtom = atom(
       if (wasIntentional) {
         intentionalSwitchInProgress = false
       }
+      stopSelectionProfile()
     }
   },
 )

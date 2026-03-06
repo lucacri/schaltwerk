@@ -5,6 +5,7 @@ import { listenTerminalOutput } from '../../common/eventSystem'
 import { TauriCommands } from '../../common/tauriCommands'
 import { ackTerminalBackend, isPluginTerminal, subscribeTerminalBackend } from '../transport/backend'
 import { logger } from '../../utils/logger'
+import { profileSwitchPhase, profileSwitchPhaseAsync } from '../profiling/switchProfiler'
 
 type TerminalStreamListener = (chunk: string) => void
 
@@ -84,7 +85,7 @@ class TerminalOutputManager {
       await stream.starting
       return
     }
-    const startPromise = this.startStream(id, stream)
+    const startPromise = profileSwitchPhaseAsync('hydration.startStream', () => this.startStream(id, stream), { terminalId: id })
     stream.starting = startPromise
     try {
       await startPromise
@@ -146,15 +147,22 @@ class TerminalOutputManager {
   private async hydrate(id: string, stream: TerminalStream): Promise<number | null> {
     const fallbackSeq = stream.seqCursor ?? this.lastSeqById.get(id) ?? null
     try {
-      const snapshot = await invoke<TerminalBufferResponse | null>(TauriCommands.GetTerminalBuffer, {
-        id,
-        from_seq: fallbackSeq,
-      })
+      const snapshot = await profileSwitchPhaseAsync(
+        'hydration.fetch',
+        () => invoke<TerminalBufferResponse | null>(TauriCommands.GetTerminalBuffer, {
+          id,
+          from_seq: fallbackSeq,
+        }),
+        { terminalId: id },
+      )
       if (!snapshot || typeof snapshot.seq !== 'number') {
         return stream.seqCursor ?? fallbackSeq
       }
       if (snapshot.data && snapshot.data.length > 0) {
-        this.dispatch(id, snapshot.data)
+        profileSwitchPhase('hydration.dispatch', () => this.dispatch(id, snapshot.data), {
+          terminalId: id,
+          chars: snapshot.data.length,
+        })
       }
       stream.seqCursor = snapshot.seq
       this.lastSeqById.set(id, snapshot.seq)
