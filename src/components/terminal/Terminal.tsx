@@ -44,6 +44,7 @@ import {
     hasTerminalInstance,
     isTerminalBracketedPasteEnabled,
 } from '../../terminal/registry/terminalRegistry'
+import { SwitchProfiler, isSwitchProfilingEnabled } from '../../terminal/profiling/switchProfiler'
 import { XtermTerminal } from '../../terminal/xterm/XtermTerminal'
 import { useTerminalGpu } from '../../hooks/useTerminalGpu'
 import { TerminalResizeCoordinator } from './resize/TerminalResizeCoordinator'
@@ -1267,6 +1268,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         }
         mountedRef.current = true;
         let cancelled = false;
+        const profiler = isSwitchProfilingEnabled() ? new SwitchProfiler(terminalId) : null;
         // track mounted lifecycle only; no timer-based logic tied to mount time
         if (!termRef.current) {
             logger.error(`[Terminal ${terminalId}] No ref available!`);
@@ -1278,6 +1280,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
 
         const initialUiMode = isTuiAgent(agentTypeRef.current) ? 'tui' : 'standard';
         logger.debug(`[Terminal ${terminalId}] Creating terminal: agentTypeRef.current=${agentTypeRef.current}, initialUiMode=${initialUiMode}`);
+        profiler?.begin('acquire');
         const { record, isNew } = acquireTerminalInstance(terminalId, () => new XtermTerminal({
             terminalId,
             config: currentConfig,
@@ -1285,6 +1288,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             onLinkClick: (uri: string) => handleLinkClickRef.current?.(uri) ?? false,
             theme: initialTheme,
         }));
+        profiler?.end('acquire');
 
         // Always start with hydrated=false and let onRender set it to true
         // This prevents the flash where CSS shows opacity-100 before xterm renders
@@ -1293,6 +1297,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         if (isNew) {
             hydratedOnceRef.current = false;
         }
+        profiler?.begin('configure');
         const instance = record.xterm;
         if (!isNew) {
             instance.applyConfig(currentConfig);
@@ -1307,13 +1312,21 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         }
         terminal.current = instance.raw;
         terminal.current.options.theme = initialTheme;
-        xtermWrapperRef.current?.refresh();
+        profiler?.end('configure');
+
+        profiler?.begin('refresh');
+        if (isNew) {
+            xtermWrapperRef.current?.refresh();
+        }
+        profiler?.end('refresh');
         fitAddon.current = instance.fitAddon;
         searchAddon.current = instance.searchAddon;
-        
+
+        profiler?.begin('attach');
         if (termRef.current) {
             attachTerminalInstance(terminalId, termRef.current);
         }
+        profiler?.end('attach');
         logScrollSnapshot('attached');
         applyLetterSpacingRef.current?.(webglRendererActiveRef.current);
         // Allow streaming immediately; proper fits will still run later
@@ -1334,15 +1347,22 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             }
 
             try {
+                profiler?.begin('initial-fit');
                 requestResizeRef.current?.('initial-fit', { immediate: true, force: true });
+                profiler?.end('initial-fit');
                 const { cols, rows } = terminal.current;
                 logger.info(`[Terminal ${terminalId}] Initial fit: ${cols}x${rows} (container: ${containerWidth}x${containerHeight})`);
             } catch (e) {
+                profiler?.end('initial-fit');
                 logger.warn(`[Terminal ${terminalId}] Initial fit failed:`, e);
             }
         };
 
         performInitialFit();
+
+        if (profiler) {
+            logger.info(profiler.summary());
+        }
 
         let rendererInitialized = false;
         const initializeRenderer = async () => {
@@ -1850,7 +1870,13 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
 
             // Do not emit mouse disable on unmount; agents may still be shutting down and interpret it as stdin.
 
+            const cleanupProfiler = isSwitchProfilingEnabled() ? new SwitchProfiler(terminalId) : null;
+            cleanupProfiler?.begin('detach');
             detachTerminalInstance(terminalId);
+            cleanupProfiler?.end('detach');
+            if (cleanupProfiler) {
+                logger.info(cleanupProfiler.summary());
+            }
             logScrollSnapshot('cleanup:after-detach');
             xtermWrapperRef.current = null;
             gpuRenderer.current = null;

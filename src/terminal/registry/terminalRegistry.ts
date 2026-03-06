@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger';
 import { XtermTerminal } from '../xterm/XtermTerminal';
+import { isSwitchProfilingEnabled } from '../profiling/switchProfiler';
 import { disposeGpuRenderer } from '../gpu/gpuRendererRegistry';
 import { sessionTerminalBaseVariants, sanitizeSessionName } from '../../common/terminalIdentity';
 import { terminalOutputManager } from '../stream/terminalOutputManager';
@@ -194,10 +195,15 @@ class TerminalInstanceRegistry {
       return;
     }
 
+    const profiling = isSwitchProfilingEnabled();
     const bufBefore = record.xterm.raw.buffer?.active;
     logger.debug(`[Registry] Attaching terminal ${id}: isTUI=${record.xterm.isTuiMode()}, wasAttached=${record.attached}, pendingChunks=${record.pendingChunks?.length ?? 0}, baseY=${bufBefore?.baseY}, viewportY=${bufBefore?.viewportY}`);
 
+    const t0 = profiling ? performance.now() : 0;
     record.xterm.attach(container);
+    if (profiling) {
+      logger.info(`[SwitchProfile ${id}] registry.attach.xterm=${(performance.now() - t0).toFixed(1)}ms`);
+    }
     record.attached = true;
     this.scheduleFlush(record, 'attach');
 
