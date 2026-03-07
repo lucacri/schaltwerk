@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { TopBar } from './TopBar'
+import { useForgeType } from '../hooks/useForgeType'
 
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({
@@ -40,7 +41,17 @@ vi.mock('./WindowControls', () => ({
   WindowControls: () => <div data-testid="window-controls" />
 }))
 
+vi.mock('../hooks/useForgeType', () => ({
+  useForgeType: vi.fn(() => 'unknown')
+}))
+
+const mockUseForgeType = useForgeType as ReturnType<typeof vi.fn>
+
 describe('TopBar', () => {
+  beforeEach(() => {
+    mockUseForgeType.mockReturnValue('unknown')
+  })
+
   const baseProps = {
     tabs: [{ projectPath: '/tmp/project', projectName: 'Project' }],
     activeTabPath: '/tmp/project',
@@ -75,5 +86,32 @@ describe('TopBar', () => {
     )
 
     expect(screen.getByLabelText('Show right panel')).toBeInTheDocument()
+  })
+
+  it('hides GitHub button when forge is gitlab', () => {
+    mockUseForgeType.mockReturnValue('gitlab')
+
+    render(<TopBar {...baseProps} />)
+
+    expect(screen.queryByTestId('github-menu')).not.toBeInTheDocument()
+    expect(screen.getByTestId('gitlab-menu')).toBeInTheDocument()
+  })
+
+  it('hides GitLab button when forge is github', () => {
+    mockUseForgeType.mockReturnValue('github')
+
+    render(<TopBar {...baseProps} />)
+
+    expect(screen.queryByTestId('gitlab-menu')).not.toBeInTheDocument()
+    expect(screen.getByTestId('github-menu')).toBeInTheDocument()
+  })
+
+  it('shows both buttons when forge is unknown', () => {
+    mockUseForgeType.mockReturnValue('unknown')
+
+    render(<TopBar {...baseProps} />)
+
+    expect(screen.getByTestId('github-menu')).toBeInTheDocument()
+    expect(screen.getByTestId('gitlab-menu')).toBeInTheDocument()
   })
 })

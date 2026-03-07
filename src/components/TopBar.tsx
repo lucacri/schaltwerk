@@ -18,6 +18,7 @@ import { getPlatform } from '../utils/platform'
 import { detectPlatformSafe } from '../keyboardShortcuts/helpers'
 import { GlobalKeepAwakeButton } from './GlobalKeepAwakeButton'
 import { useTranslation } from '../common/i18n'
+import { useForgeType } from '../hooks/useForgeType'
 
 type UiPlatform = 'mac' | 'linux' | 'windows'
 
@@ -60,6 +61,7 @@ export function TopBar({
   triggerOpenCounter
 }: TopBarProps) {
   const { t } = useTranslation()
+  const forge = useForgeType()
   const dragAreaRef = useRef<HTMLDivElement>(null)
   const topBarRef = useRef<HTMLDivElement>(null)
   const openButtonRef = useRef<{ triggerOpen: () => Promise<void> } | null>(null)
@@ -195,10 +197,14 @@ export function TopBar({
         )}
 
         {/* GitHub status/actions */}
-        <GithubMenuButton className="mr-2" hasActiveProject={Boolean(activeTabPath)} />
+        {forge !== 'gitlab' && (
+          <GithubMenuButton className="mr-2" hasActiveProject={Boolean(activeTabPath)} disabled={forge === 'unknown'} />
+        )}
 
         {/* GitLab status/actions */}
-        <GitlabMenuButton className="mr-2" onConfigureSources={onOpenSettings} />
+        {forge !== 'github' && (
+          <GitlabMenuButton className="mr-2" onConfigureSources={onOpenSettings} disabled={forge === 'unknown'} />
+        )}
 
         {/* Global keep-awake toggle */}
         <div className="mr-2" data-no-drag>

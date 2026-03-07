@@ -12,6 +12,7 @@ import { useOutsideDismiss } from '../../hooks/useOutsideDismiss'
 interface GithubMenuButtonProps {
   className?: string
   hasActiveProject?: boolean
+  disabled?: boolean
 }
 
 const menuContainerStyle: CSSProperties = {
@@ -29,7 +30,7 @@ const dividerStyle: CSSProperties = {
 
 type MenuButtonKey = 'connect' | 'reconnect' | 'refresh'
 
-export function GithubMenuButton({ className, hasActiveProject = false }: GithubMenuButtonProps) {
+export function GithubMenuButton({ className, hasActiveProject = false, disabled = false }: GithubMenuButtonProps) {
   const { t } = useTranslation()
   const { pushToast } = useToast()
   const github = useGithubIntegrationContext()
@@ -167,12 +168,13 @@ export function GithubMenuButton({ className, hasActiveProject = false }: Github
           backgroundColor: 'var(--color-bg-elevated)',
           borderColor: 'var(--color-border-subtle)',
           color: 'var(--color-text-primary)',
+          opacity: disabled ? 0.3 : 1,
         }}
-        disabled={busy}
-        onClick={() => setOpen((value) => !value)}
+        disabled={busy || disabled}
+        onClick={() => !disabled && setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="GitHub integration"
+        title={disabled ? 'This project does not use GitHub' : 'GitHub integration'}
       >
         <FaGithub className="text-[12px]" />
         <span className="truncate max-w-[120px]">{statusLabel}</span>

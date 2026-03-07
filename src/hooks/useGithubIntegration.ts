@@ -72,6 +72,9 @@ export function useGithubIntegration(): GithubIntegrationValue {
   useEffect(() => {
     let mounted = true
 
+    setStatus(null)
+    setLastPrUrls({})
+
     refreshStatus().catch((error) => {
       logger.error('[useGithubIntegration] Initial status fetch failed', error)
     })
@@ -107,7 +110,7 @@ export function useGithubIntegration(): GithubIntegrationValue {
         }
       }
     }
-  }, [refreshStatus])
+  }, [refreshStatus, projectPath])
 
   const authenticate = useCallback(async () => {
     setIsAuthenticating(true)

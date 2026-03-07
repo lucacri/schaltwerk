@@ -215,7 +215,7 @@ describe('SessionActions – forge-aware buttons', () => {
     }
     const gitlab: GitlabIntegrationValue = {
       ...defaultGitlabValue,
-      sources: [{ url: 'https://gitlab.example.com', token: 't', issuesEnabled: true, mrsEnabled: true }],
+      sources: [{ id: '1', label: 'Backend', projectPath: 'group/backend', hostname: 'gitlab.example.com', issuesEnabled: true, mrsEnabled: true, pipelinesEnabled: false }],
       hasSources: true,
     }
 

@@ -169,4 +169,26 @@ describe('GitlabMenuButton', () => {
     fireEvent.mouseDown(document.body)
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
+
+  it('renders in disabled state with reduced opacity and prevents menu opening', () => {
+    renderWithProviders(
+      <GitlabMenuButton disabled />, {
+        gitlabOverrides: {
+          status: { installed: true, authenticated: true, userLogin: 'dev', hostname: 'gitlab.com' },
+          sources: [],
+          loading: false,
+          isGlabMissing: false,
+          hasSources: false,
+          refreshStatus: vi.fn(),
+          loadSources: vi.fn(),
+          saveSources: vi.fn(),
+        }
+      }
+    )
+
+    const button = screen.getByTitle('This project does not use GitLab')
+    expect(button).toBeDisabled()
+    fireEvent.click(button)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
 })
