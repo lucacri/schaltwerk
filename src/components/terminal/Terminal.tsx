@@ -45,6 +45,7 @@ import {
     isTerminalBracketedPasteEnabled,
 } from '../../terminal/registry/terminalRegistry'
 import { XtermTerminal } from '../../terminal/xterm/XtermTerminal'
+import { profileSwitchPhase } from '../../terminal/profiling/switchProfiler'
 import { useTerminalGpu } from '../../hooks/useTerminalGpu'
 import { TerminalResizeCoordinator } from './resize/TerminalResizeCoordinator'
 import {
@@ -1278,13 +1279,13 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
 
         const initialUiMode = isTuiAgent(agentTypeRef.current) ? 'tui' : 'standard';
         logger.debug(`[Terminal ${terminalId}] Creating terminal: agentTypeRef.current=${agentTypeRef.current}, initialUiMode=${initialUiMode}`);
-        const { record, isNew } = acquireTerminalInstance(terminalId, () => new XtermTerminal({
+        const { record, isNew } = profileSwitchPhase('terminal.acquire', () => acquireTerminalInstance(terminalId, () => new XtermTerminal({
             terminalId,
             config: currentConfig,
             uiMode: initialUiMode,
             onLinkClick: (uri: string) => handleLinkClickRef.current?.(uri) ?? false,
             theme: initialTheme,
-        }));
+        })), { terminalId });
 
         // Always start with hydrated=false and let onRender set it to true
         // This prevents the flash where CSS shows opacity-100 before xterm renders
@@ -1312,7 +1313,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         searchAddon.current = instance.searchAddon;
         
         if (termRef.current) {
-            attachTerminalInstance(terminalId, termRef.current);
+            profileSwitchPhase('terminal.attach', () => attachTerminalInstance(terminalId, termRef.current!), { terminalId });
         }
         logScrollSnapshot('attached');
         applyLetterSpacingRef.current?.(webglRendererActiveRef.current);
@@ -1342,7 +1343,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             }
         };
 
-        performInitialFit();
+        profileSwitchPhase('terminal.initial-fit', () => performInitialFit(), { terminalId });
 
         let rendererInitialized = false;
         const initializeRenderer = async () => {

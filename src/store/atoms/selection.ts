@@ -13,6 +13,7 @@ import { listenEvent, SchaltEvent } from '../../common/eventSystem'
 import { createTerminalBackend, closeTerminalBackend } from '../../terminal/transport/backend'
 import { clearTerminalStartedTracking } from '../../components/terminal/Terminal'
 import { logger } from '../../utils/logger'
+import { startSwitchPhaseProfile, profileSwitchPhase } from '../../terminal/profiling/switchProfiler'
 import type { RawSession } from '../../types/session'
 import { FilterMode } from '../../types/sessionFilters'
 import { projectPathAtom } from './project'
@@ -503,6 +504,7 @@ export const setSelectionActionAtom = atom(
       remember,
       rememberProjectPath,
     } = payload
+    const stopSelection = startSwitchPhaseProfile('selection.full-update', { sessionName: selection.kind === 'session' ? selection.payload : 'orchestrator' })
 
     if (intentionalSwitchInProgress && !isIntentional) {
       return
@@ -566,7 +568,7 @@ export const setSelectionActionAtom = atom(
       const unchanged = !forceRecreate && selectionEquals(current, enrichedSelection)
 
       if (!unchanged) {
-        set(selectionAtom, enrichedSelection)
+        profileSwitchPhase('selection.atom.write', () => set(selectionAtom, enrichedSelection), { sessionId: enrichedSelection.kind === 'session' ? enrichedSelection.payload : 'orchestrator' })
       }
 
       if (unchanged && !effectiveForceRecreate && !missingTop && !missingBottom) {
@@ -609,6 +611,7 @@ export const setSelectionActionAtom = atom(
       if (isIntentional) {
         emitUiEvent(UiEvent.SelectionChanged, enrichedSelection)
       }
+      stopSelection()
     } finally {
       if (wasIntentional) {
         intentionalSwitchInProgress = false

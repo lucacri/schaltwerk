@@ -4,6 +4,7 @@ import { disposeGpuRenderer } from '../gpu/gpuRendererRegistry';
 import { sessionTerminalBaseVariants, sanitizeSessionName } from '../../common/terminalIdentity';
 import { terminalOutputManager } from '../stream/terminalOutputManager';
 import { slicePreservingSurrogates } from '../paste/bracketedPaste';
+import { profileSwitchPhase } from '../profiling/switchProfiler';
 
 const ESC = '\x1b';
 const CLEAR_SCROLLBACK_SEQ = `${ESC}[3J`;
@@ -199,7 +200,7 @@ class TerminalInstanceRegistry {
     const bufBefore = record.xterm.raw.buffer?.active;
     logger.debug(`[Registry] Attaching terminal ${id}: isTUI=${record.xterm.isTuiMode()}, wasAttached=${record.attached}, pendingChunks=${record.pendingChunks?.length ?? 0}, baseY=${bufBefore?.baseY}, viewportY=${bufBefore?.viewportY}`);
 
-    record.xterm.attach(container);
+    profileSwitchPhase('registry.attach.xterm', () => record.xterm.attach(container), { terminalId: id });
     record.attached = true;
     this.scheduleFlush(record, 'attach');
 

@@ -6,6 +6,7 @@ import { TauriCommands } from '../../common/tauriCommands'
 import { ackTerminalBackend, isPluginTerminal, subscribeTerminalBackend } from '../transport/backend'
 import { logger } from '../../utils/logger'
 import { slicePreservingSurrogates } from '../paste/bracketedPaste'
+import { profileSwitchPhaseAsync, profileSwitchPhase } from '../profiling/switchProfiler'
 
 type TerminalStreamListener = (chunk: string) => void
 
@@ -87,7 +88,7 @@ class TerminalOutputManager {
       await stream.starting
       return
     }
-    const startPromise = this.startStream(id, stream)
+    const startPromise = profileSwitchPhaseAsync('hydration.startStream', () => this.startStream(id, stream), { terminalId: id })
     stream.starting = startPromise
     try {
       await startPromise
@@ -149,10 +150,10 @@ class TerminalOutputManager {
   private async hydrate(id: string, stream: TerminalStream): Promise<number | null> {
     const fallbackSeq = stream.seqCursor ?? this.lastSeqById.get(id) ?? null
     try {
-      const snapshot = await invoke<TerminalBufferResponse | null>(TauriCommands.GetTerminalBuffer, {
+      const snapshot = await profileSwitchPhaseAsync('hydration.fetch', () => invoke<TerminalBufferResponse | null>(TauriCommands.GetTerminalBuffer, {
         id,
         from_seq: fallbackSeq,
-      })
+      }), { terminalId: id })
       if (!snapshot || typeof snapshot.seq !== 'number') {
         return stream.seqCursor ?? fallbackSeq
       }
@@ -210,13 +211,15 @@ class TerminalOutputManager {
     if (!stream) return
     const normalized = enforceTextPresentation(chunk)
     this.updateSeqCursor(id, stream, normalized)
-    for (const listener of stream.listeners) {
-      try {
-        listener(normalized)
-      } catch (error) {
-        logger.debug(`[TerminalOutput] listener error for ${id}`, error)
+    profileSwitchPhase('hydration.dispatch', () => {
+      for (const listener of stream.listeners) {
+        try {
+          listener(normalized)
+        } catch (error) {
+          logger.debug(`[TerminalOutput] listener error for ${id}`, error)
+        }
       }
-    }
+    }, { terminalId: id, chars: normalized.length })
   }
 
   private async dispatchHydrationData(id: string, data: string): Promise<void> {
