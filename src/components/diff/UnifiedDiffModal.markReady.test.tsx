@@ -4,7 +4,6 @@ import { UnifiedDiffModal } from './UnifiedDiffModal'
 import { TestProviders } from '../../tests/test-utils'
 import { TauriCommands } from '../../common/tauriCommands'
 import type { EnrichedSession } from '../../types/session'
-import { FilterMode } from '../../types/sessionFilters'
 import { sessionTerminalGroup, stableSessionTerminalId } from '../../common/terminalIdentity'
 
 let selectionState: {
@@ -45,7 +44,7 @@ vi.mock('../../hooks/useSessions', async () => {
       filteredSessions: sessionsState,
       sortedSessions: sessionsState,
       loading: false,
-      filterMode: FilterMode.Running,
+      filterMode: 'running',
       searchQuery: '',
       isSearchVisible: false,
       setFilterMode: vi.fn(),

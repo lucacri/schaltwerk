@@ -5,11 +5,9 @@ import { useModal } from '../contexts/ModalContext'
 import { useToast } from '../common/toast/ToastProvider'
 import { getSessionDisplayName } from '../utils/sessionDisplayName'
 import { logger } from '../utils/logger'
-import { FilterMode } from '../types/sessionFilters'
 import type { EnrichedSession } from '../types/session'
 
 interface UseSessionMergeShortcutOptions {
-  enableFilterPivot?: boolean
   getCommitDraftForSession?: (sessionId: string) => string | undefined
   onExpandReviewedSection?: () => void
 }
@@ -17,14 +15,12 @@ interface UseSessionMergeShortcutOptions {
 type HandleMergeShortcut = (sessionIdOverride?: string | null) => Promise<void>
 
 export function useSessionMergeShortcut(options: UseSessionMergeShortcutOptions = {}) {
-  const { enableFilterPivot = false, getCommitDraftForSession, onExpandReviewedSection } = options
+  const { getCommitDraftForSession, onExpandReviewedSection } = options
   const { selection } = useSelection()
   const {
     sessions,
     allSessions,
     quickMergeSession,
-    filterMode,
-    setFilterMode,
     mergeDialogState,
     isMergeInFlight,
   } = useSessions()
@@ -78,12 +74,6 @@ export function useSessionMergeShortcut(options: UseSessionMergeShortcutOptions 
     setIsMerging(true)
     try {
       const result = await quickMergeSession(selectedSessionId, { commitMessage: commitDraft })
-      const shouldPivotFilter =
-        enableFilterPivot && filterMode === FilterMode.Running && Boolean(result.autoMarkedReady)
-
-      if (shouldPivotFilter) {
-        setFilterMode(FilterMode.Reviewed)
-      }
 
       if (result.autoMarkedReady && onExpandReviewedSection) {
         onExpandReviewedSection()
@@ -95,13 +85,6 @@ export function useSessionMergeShortcut(options: UseSessionMergeShortcutOptions 
           title: `Merging ${getSessionDisplayName(session.info)}`,
           description: `Fast-forwarding ${session.info.base_branch ?? 'main'}...`,
         })
-        if (shouldPivotFilter) {
-          pushToast({
-            tone: 'info',
-            title: 'Session moved to review',
-            description: 'Switched to the "Reviewed" filter so the reviewed session stays visible. Switch back anytime.',
-          })
-        }
         return
       }
 
@@ -176,8 +159,6 @@ export function useSessionMergeShortcut(options: UseSessionMergeShortcutOptions 
       setIsMerging(false)
     }
   }, [
-    enableFilterPivot,
-    filterMode,
     findSessionById,
     getCommitDraftForSession,
     isAnyModalOpen,
@@ -185,7 +166,6 @@ export function useSessionMergeShortcut(options: UseSessionMergeShortcutOptions 
     pushToast,
     quickMergeSession,
     selection,
-    setFilterMode,
   ])
 
   return {

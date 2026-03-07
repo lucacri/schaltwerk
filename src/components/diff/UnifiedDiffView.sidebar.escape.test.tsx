@@ -6,7 +6,6 @@ import { TauriCommands } from '../../common/tauriCommands'
 import type { FileDiffData } from './loadDiffs'
 import type { EnrichedSession } from '../../types/session'
 import type { ChangedFile } from '../../common/events'
-import { FilterMode } from '../../types/sessionFilters'
 import { sessionTerminalGroup, stableSessionTerminalId } from '../../common/terminalIdentity'
 
 let selectionState: {
@@ -43,7 +42,7 @@ vi.mock('../../hooks/useSessions', async () => {
       filteredSessions: sessionsState,
       sortedSessions: sessionsState,
       loading: false,
-      filterMode: FilterMode.Running,
+      filterMode: 'running',
       searchQuery: '',
       isSearchVisible: false,
       setFilterMode: vi.fn(),
