@@ -11,15 +11,12 @@ import {
   getSessionSnapshotActionAtom,
   initializeSelectionEventsActionAtom,
   setProjectPathActionAtom,
-  setSelectionFilterModeActionAtom,
   resetSelectionAtomsForTest,
   waitForSelectionAsyncEffectsForTest,
-  getFilterModeForProjectForTest,
   isSwitchInProgressForTest,
 } from './selection'
 import { projectPathAtom } from './project'
 import { TauriCommands } from '../../common/tauriCommands'
-import { FilterMode } from '../../types/sessionFilters'
 import { stableSessionTerminalId } from '../../common/terminalIdentity'
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -702,23 +699,6 @@ describe('selection atoms', () => {
     expect(getInvokeCallCount(TauriCommands.SchaltwerkCoreGetSession)).toBeGreaterThanOrEqual(1)
   })
 
-  it('ignores backend spec selection when running filter active', async () => {
-    await store.set(setProjectPathActionAtom, '/projects/alpha')
-    await store.set(setSelectionFilterModeActionAtom, FilterMode.Running)
-    await store.set(setSelectionActionAtom, {
-      selection: { kind: 'session', payload: 'running-session', sessionState: 'running', worktreePath: '/tmp/run' },
-    })
-    await store.set(initializeSelectionEventsActionAtom)
-
-    nextSessionResponse = createRawSession({ name: 'spec-session', session_state: 'spec', worktree_path: null })
-    selectionEventHandlers[0]?.({ selection: { kind: 'session', payload: 'spec-session' } })
-    await waitForSelectionAsyncEffectsForTest()
-
-    const selection = store.get(selectionValueAtom)
-    expect(selection.payload).toBe('running-session')
-    expect(selection.sessionState).toBe('running')
-  })
-
   it('reuses orchestrator terminals when revisiting a project', async () => {
     await withNodeEnv('development', async () => {
       const backend = await import('../../terminal/transport/backend')
@@ -906,12 +886,11 @@ describe('selection atoms', () => {
     expect(restoredSelection.payload).toBe('alpha-session')
   })
 
-  it('restores selection and filter per project without recreating terminals', async () => {
+  it('restores selection per project without recreating terminals', async () => {
     await withNodeEnv('development', async () => {
       const backend = await import('../../terminal/transport/backend')
 
       await store.set(setProjectPathActionAtom, '/projects/alpha')
-      await store.set(setSelectionFilterModeActionAtom, FilterMode.Running)
       await store.set(setSelectionActionAtom, {
         selection: {
           kind: 'session',
@@ -923,7 +902,6 @@ describe('selection atoms', () => {
       })
 
       await store.set(setProjectPathActionAtom, '/projects/beta')
-      await store.set(setSelectionFilterModeActionAtom, FilterMode.Spec)
       await store.set(setSelectionActionAtom, {
         selection: {
           kind: 'session',
@@ -940,8 +918,6 @@ describe('selection atoms', () => {
 
       const restoredSelection = store.get(selectionValueAtom)
       expect(restoredSelection.payload).toBe('alpha-session')
-      expect(getFilterModeForProjectForTest('/projects/alpha')).toBe(FilterMode.Running)
-      expect(getFilterModeForProjectForTest('/projects/beta')).toBe(FilterMode.Spec)
       expect(vi.mocked(backend.createTerminalBackend)).not.toHaveBeenCalled()
     })
   })
