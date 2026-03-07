@@ -1,36 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriCommands } from '../../common/tauriCommands'
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { Sidebar } from './Sidebar'
 import { TestProviders } from '../../tests/test-utils'
 import { invoke } from '@tauri-apps/api/core'
-import { FilterMode } from '../../types/sessionFilters'
 import { EnrichedSession } from '../../types/session'
 
 vi.mock('@tauri-apps/api/core')
 
-let eventHandlers: Record<string, ((_event: unknown) => void)[]> = {}
-
 vi.mock('@tauri-apps/api/event', () => ({
-  listen: vi.fn((event: string, handler: (_event: unknown) => void) => {
-    if (!eventHandlers[event]) {
-      eventHandlers[event] = []
-    }
-    eventHandlers[event].push(handler)
-    return Promise.resolve(() => {
-      eventHandlers[event] = eventHandlers[event].filter(h => h !== handler)
-    })
-  }),
+  listen: vi.fn(() => Promise.resolve(() => {})),
   emit: vi.fn()
 }))
-
-const emitEvent = async (eventName: string, payload?: unknown) => {
-  const handlers = eventHandlers[eventName] || []
-  await Promise.all(handlers.map(handler => Promise.resolve(handler({ payload }))))
-}
-
-// TestProviders supplies a default project path for Sidebar
-
 
 const createSession = (id: string, readyToMerge = false, sessionState?: 'spec' | 'active'): EnrichedSession => ({
   info: {
@@ -47,12 +28,15 @@ const createSession = (id: string, readyToMerge = false, sessionState?: 'spec' |
   terminals: []
 })
 
+function getSectionToggle(section: HTMLElement): HTMLElement {
+  return within(section).getByRole('button', { expanded: true }) ??
+    within(section).getByRole('button', { expanded: false })
+}
 
-describe('Sidebar filter functionality and persistence', () => {
+describe('Sidebar section layout', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    eventHandlers = {}
 
     const sessions = [
       createSession('alpha', false, 'spec'),
@@ -70,7 +54,7 @@ describe('Sidebar filter functionality and persistence', () => {
       if (cmd === 'get_buffer') return ''
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
       if (cmd === TauriCommands.GetProjectSessionsSettings) {
-        return { filter_mode: FilterMode.Running }
+        return { filter_mode: 'running' }
       }
       if (cmd === TauriCommands.SetProjectSessionsSettings) {
         return undefined
@@ -83,333 +67,73 @@ describe('Sidebar filter functionality and persistence', () => {
     vi.restoreAllMocks()
   })
 
-  it('filters sessions: Running -> Specs -> Reviewed', async () => {
+  it('renders all three sections with correct session counts', async () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Wait for sessions to load (verify by filter counts) - defaults to Running filter
-    await waitFor(() => {
-      const runningButton = screen.getByTitle('Show running agents')
-      // bravo is running (not spec, not reviewed)
-      expect(runningButton.textContent).toContain('1')
-    })
+    const runningSection = await screen.findByTestId('sidebar-section-running')
+    expect(runningSection).toHaveTextContent('1')
 
-    // Click Specs
-    fireEvent.click(screen.getByTitle('Show spec agents'))
+    const specsSection = screen.getByTestId('sidebar-section-specs')
+    expect(specsSection).toHaveTextContent('2')
 
-    await waitFor(() => {
-      const specsButton = screen.getByTitle('Show spec agents')
-      expect(specsButton.textContent).toContain('2') // alpha and charlie are specs (session_state: 'spec')
-    })
+    const reviewedSection = screen.getByTestId('sidebar-section-reviewed')
+    expect(reviewedSection).toHaveTextContent('2')
+  })
 
-    // Click Reviewed
-    fireEvent.click(screen.getByTitle('Show reviewed agents'))
+  it('shows running sessions in Running section expanded by default', async () => {
+    render(<TestProviders><Sidebar /></TestProviders>)
+
+    await screen.findByTestId('sidebar-section-running')
 
     await waitFor(() => {
-      // Check that the filter counter shows the right numbers
-      const reviewedButton = screen.getByTitle('Show reviewed agents')
-      expect(reviewedButton.textContent).toContain('2') // bravo and delta are reviewed
-    })
-
-    // Back to Running
-    fireEvent.click(screen.getByTitle('Show running agents'))
-
-    await waitFor(() => {
-      const runningButton = screen.getByTitle('Show running agents')
-      expect(runningButton.textContent).toContain('1')
+      expect(screen.getByText('bravo')).toBeInTheDocument()
     })
   })
 
-  it('persists filterMode to backend and restores it', async () => {
-    // Mock backend settings storage
-    let savedFilterMode = 'running'
-    let settingsLoadCalled = false
-
-    const allSessions = [
-      createSession('session1'),
-      createSession('session2'),
-      createSession('session3', true),
-      createSession('session4', true),
-    ]
-
-    vi.mocked(invoke).mockImplementation(async (command: string, args?: unknown) => {
-      if (command === TauriCommands.GetProjectSessionsSettings) {
-        settingsLoadCalled = true
-        return { filter_mode: savedFilterMode }
-      }
-      if (command === TauriCommands.SetProjectSessionsSettings) {
-        if (settingsLoadCalled) {
-          const s = (args as Record<string, unknown>)?.settings as Record<string, unknown> || {}
-          savedFilterMode = (s.filter_mode as string) || 'running'
-        }
-        return undefined
-      }
-      if (command === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
-        return allSessions
-      }
-      if (command === TauriCommands.GetCurrentDirectory) return '/test/dir'
-      if (command === TauriCommands.TerminalExists) return false
-      if (command === TauriCommands.CreateTerminal) return true
-      if (command === 'get_buffer') return ''
-      if (command === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      return undefined
-    })
-
-    // First render: starts at Running, switch to Reviewed
-    const { unmount } = render(<TestProviders><Sidebar /></TestProviders>)
-
-    await waitFor(() => {
-      const runningButton = screen.getByTitle('Show running agents')
-      expect(runningButton.textContent).toContain('2') // session1 and session2 are running
-    })
-
-    fireEvent.click(screen.getByTitle('Show reviewed agents'))
-
-    await waitFor(() => {
-      expect(savedFilterMode).toBe('reviewed')
-    })
-
-    unmount()
-
-    // Second render should restore 'reviewed'
+  it('shows spec sessions in Specs section expanded by default', async () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
+    await screen.findByTestId('sidebar-section-specs')
+
     await waitFor(() => {
-      const reviewedButton = screen.getByTitle('Show reviewed agents')
-      expect(reviewedButton.textContent).toContain('2') // session3 and session4 are reviewed
+      expect(screen.getByText('alpha')).toBeInTheDocument()
+      expect(screen.getByText('charlie')).toBeInTheDocument()
     })
   })
 
-  describe('Reviewed session preservation with Running filter', () => {
-    it('preserves selection when currently selected session is marked as reviewed while Running filter is active', async () => {
-      let sessionsList: EnrichedSession[] = [
-        createSession('running-1', false, 'active'),
-        createSession('running-2', false, 'active'),
-        createSession('running-3', false, 'active'),
-      ]
+  it('keeps Reviewed section collapsed by default and shows sessions on expand', async () => {
+    render(<TestProviders><Sidebar /></TestProviders>)
 
-      const mockSetSelection = vi.fn()
-      let currentFilterMode = FilterMode.Running
+    const reviewedSection = await screen.findByTestId('sidebar-section-reviewed')
 
-      vi.mocked(invoke).mockImplementation(async (cmd, args?: unknown) => {
-        if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
-          return sessionsList
-        }
-        if (cmd === TauriCommands.GetProjectSessionsSettings) {
-          return { filter_mode: currentFilterMode }
-        }
-        if (cmd === TauriCommands.SetProjectSessionsSettings) {
-          const settings = (args as Record<string, unknown>)?.settings as Record<string, unknown>
-          if (settings?.filter_mode) {
-            currentFilterMode = settings.filter_mode as FilterMode
-          }
-          return undefined
-        }
-        if (cmd === TauriCommands.GetCurrentDirectory) return '/test/dir'
-        if (cmd === TauriCommands.TerminalExists) return false
-        if (cmd === TauriCommands.CreateTerminal) return true
-        if (cmd === 'get_buffer') return ''
-        if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-        return undefined
-      })
+    expect(screen.queryByText('delta')).not.toBeInTheDocument()
 
-      render(<TestProviders><Sidebar /></TestProviders>)
+    const toggle = within(reviewedSection).getByRole('button', { expanded: false })
+    fireEvent.click(toggle)
 
-      await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('3')
-      })
+    await waitFor(() => {
+      expect(screen.getByText('delta')).toBeInTheDocument()
+      expect(screen.getByText('echo')).toBeInTheDocument()
+    })
+  })
 
-      const runningButton = screen.getByTitle('Show running agents')
-      fireEvent.click(runningButton)
+  it('collapses and expands sections independently', async () => {
+    render(<TestProviders><Sidebar /></TestProviders>)
 
-      await waitFor(() => {
-        const sessions = screen.getAllByRole('button').filter(b => (b.textContent || '').includes('para/'))
-        expect(sessions).toHaveLength(3)
-      })
+    await screen.findByTestId('sidebar-section-running')
 
-      const firstSessionButton = screen.getAllByRole('button').find(b => b.textContent?.includes('running-1'))
-      expect(firstSessionButton).toBeInTheDocument()
-      fireEvent.click(firstSessionButton!)
-
-      sessionsList = [
-        createSession('running-1', true, 'active'),
-        createSession('running-2', false, 'active'),
-        createSession('running-3', false, 'active'),
-      ]
-
-      await act(async () => {
-        await emitEvent('schaltwerk:sessions-refreshed', sessionsList)
-      })
-
-      await waitFor(() => {
-        const runningCount = screen.getByTitle('Show running agents')
-        expect(runningCount.textContent).toContain('2')
-      })
-
-      expect(mockSetSelection).not.toHaveBeenCalledWith(
-        expect.objectContaining({ payload: 'running-2' }),
-        expect.anything(),
-        expect.anything()
-      )
+    await waitFor(() => {
+      expect(screen.getByText('bravo')).toBeInTheDocument()
     })
 
-    it('preserves selection when first session moves to reviewed with Running filter active', async () => {
-      let sessionsList: EnrichedSession[] = [
-        createSession('alpha', false, 'active'),
-        createSession('beta', false, 'active'),
-        createSession('gamma', false, 'active'),
-      ]
+    const runningSection = screen.getByTestId('sidebar-section-running')
+    const runningToggle = within(runningSection).getByRole('button', { expanded: true })
 
-      vi.mocked(invoke).mockImplementation(async (cmd, _args?: unknown) => {
-        if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
-          return sessionsList
-        }
-        if (cmd === TauriCommands.GetProjectSessionsSettings) {
-          return { filter_mode: FilterMode.Running }
-        }
-        if (cmd === TauriCommands.SetProjectSessionsSettings) {
-          return undefined
-        }
-        if (cmd === TauriCommands.GetCurrentDirectory) return '/test/dir'
-        if (cmd === TauriCommands.TerminalExists) return false
-        if (cmd === TauriCommands.CreateTerminal) return true
-        if (cmd === 'get_buffer') return ''
-        if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-        return undefined
-      })
+    fireEvent.click(runningToggle)
 
-      render(<TestProviders><Sidebar /></TestProviders>)
+    expect(screen.queryByText('bravo')).not.toBeInTheDocument()
 
-      await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('3')
-      })
-
-      const alphaButton = screen.getAllByRole('button').find(b => b.textContent?.includes('alpha'))
-      expect(alphaButton).toBeInTheDocument()
-      fireEvent.click(alphaButton!)
-
-      sessionsList = [
-        createSession('alpha', true, 'active'),
-        createSession('beta', false, 'active'),
-        createSession('gamma', false, 'active'),
-      ]
-
-      await act(async () => {
-        await emitEvent('schaltwerk:sessions-refreshed', sessionsList)
-      })
-
-      await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('2')
-        const reviewedButton = screen.getByTitle('Show reviewed agents')
-        expect(reviewedButton.textContent).toContain('1')
-      })
-    })
-
-    it('allows switching to different session after reviewed session disappears from Running filter', async () => {
-      let sessionsList: EnrichedSession[] = [
-        createSession('session-1', false, 'active'),
-        createSession('session-2', false, 'active'),
-      ]
-
-      vi.mocked(invoke).mockImplementation(async (cmd, _args?: unknown) => {
-        if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
-          return sessionsList
-        }
-        if (cmd === TauriCommands.GetProjectSessionsSettings) {
-          return { filter_mode: FilterMode.Running }
-        }
-        if (cmd === TauriCommands.SetProjectSessionsSettings) {
-          return undefined
-        }
-        if (cmd === TauriCommands.GetCurrentDirectory) return '/test/dir'
-        if (cmd === TauriCommands.TerminalExists) return false
-        if (cmd === TauriCommands.CreateTerminal) return true
-        if (cmd === 'get_buffer') return ''
-        if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-        return undefined
-      })
-
-      render(<TestProviders><Sidebar /></TestProviders>)
-
-      await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('2')
-      })
-
-      const session1Button = screen.getAllByRole('button').find(b => b.textContent?.includes('session-1'))
-      fireEvent.click(session1Button!)
-
-      sessionsList = [
-        createSession('session-1', true, 'active'),
-        createSession('session-2', false, 'active'),
-      ]
-
-      await act(async () => {
-        await emitEvent('schaltwerk:sessions-refreshed', sessionsList)
-      })
-
-      await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('1')
-      })
-
-      const session2Button = screen.getAllByRole('button').find(b => b.textContent?.includes('session-2'))
-      expect(session2Button).toBeInTheDocument()
-      fireEvent.click(session2Button!)
-
-      await waitFor(() => {
-        expect(session2Button).toHaveClass('session-ring')
-      })
-    })
-
-    it('does not preserve selection when session is removed (not just marked reviewed)', async () => {
-      let sessionsList: EnrichedSession[] = [
-        createSession('temp-1', false, 'active'),
-        createSession('temp-2', false, 'active'),
-      ]
-
-      vi.mocked(invoke).mockImplementation(async (cmd, _args?: unknown) => {
-        if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
-          return sessionsList
-        }
-        if (cmd === TauriCommands.GetProjectSessionsSettings) {
-          return { filter_mode: FilterMode.Running }
-        }
-        if (cmd === TauriCommands.SetProjectSessionsSettings) {
-          return undefined
-        }
-        if (cmd === TauriCommands.GetCurrentDirectory) return '/test/dir'
-        if (cmd === TauriCommands.TerminalExists) return false
-        if (cmd === TauriCommands.CreateTerminal) return true
-        if (cmd === 'get_buffer') return ''
-        if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-        return undefined
-      })
-
-      render(<TestProviders><Sidebar /></TestProviders>)
-
-      await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('2')
-      })
-
-      const temp1Button = screen.getAllByRole('button').find(b => b.textContent?.includes('temp-1'))
-      fireEvent.click(temp1Button!)
-
-      sessionsList = [
-        createSession('temp-2', false, 'active'),
-      ]
-
-      await act(async () => {
-        await emitEvent('schaltwerk:sessions-refreshed', sessionsList)
-      })
-
-      await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('1')
-      })
-    })
+    // Specs section should still be expanded
+    expect(screen.getByText('alpha')).toBeInTheDocument()
   })
 })

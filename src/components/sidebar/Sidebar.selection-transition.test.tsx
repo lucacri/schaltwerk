@@ -15,7 +15,6 @@ import { Sidebar } from './Sidebar'
 import { TestProviders } from '../../tests/test-utils'
 import { useSelection } from '../../hooks/useSelection'
 import { useSessions } from '../../hooks/useSessions'
-import { FilterMode } from '../../types/sessionFilters'
 
 const mockInvoke = invoke as MockedFunction<typeof invoke>
 
@@ -138,7 +137,7 @@ describe('Sidebar selection transitions', () => {
     })
   })
 
-  it('advances to the next running session when the current one is marked reviewed under Running filter', async () => {
+  it('preserves selection when a session is marked reviewed (all sections visible)', async () => {
     const sessionA = createEnrichedSession('session-a', '/worktrees/a', SessionState.Running, false)
     const sessionB = createEnrichedSession('session-b', '/worktrees/b', SessionState.Running, false)
     enrichedSessions = [sessionA, sessionB]
@@ -152,10 +151,6 @@ describe('Sidebar selection transitions', () => {
 
     await waitFor(() => {
       expect(result.current.selectionCtx.isReady).toBe(true)
-    })
-
-    await waitFor(() => {
-      expect(result.current.sessionsCtx.filterMode).toBe(FilterMode.Running)
     })
 
     await act(async () => {
@@ -179,63 +174,12 @@ describe('Sidebar selection transitions', () => {
       await result.current.sessionsCtx.reloadSessions()
     })
 
+    // In unified sections, session-a is still visible (in Reviewed section),
+    // so selection should remain on session-a
     await waitFor(() => {
-      const visible = result.current.sessionsCtx.sessions.map(session => ({
-        id: session.info.session_id,
-        ready: session.info.ready_to_merge,
-      }))
-      const runningIds = visible
-        .filter(session => !session.ready)
-        .map(session => session.id)
-      expect(runningIds).toContain('session-b')
-      expect(runningIds).not.toContain('session-a')
-    })
-
-    await waitFor(() => {
-      expect(result.current.selectionCtx.selection.payload).toBe('session-b')
+      expect(result.current.selectionCtx.selection.payload).toBe('session-a')
     })
     expect(result.current.selectionCtx.selection.kind).toBe('session')
   })
 
-  it('re-focuses when switching filter after project switch without waiting for ProjectSwitchComplete', async () => {
-    const sessionA = createEnrichedSession('session-a', '/worktrees/a', SessionState.Running, false)
-    const sessionB = createEnrichedSession('session-b', '/worktrees/b', SessionState.Reviewed, true)
-    enrichedSessions = [sessionA, sessionB]
-    rawSessions['session-a'] = createRawSession('session-a', '/worktrees/a', SessionState.Running, false)
-    rawSessions['session-b'] = createRawSession('session-b', '/worktrees/b', SessionState.Reviewed, true)
-
-    const { result } = renderHook(() => ({
-      selectionCtx: useSelection(),
-      sessionsCtx: useSessions(),
-    }), { wrapper })
-
-    await waitFor(() => {
-      expect(result.current.sessionsCtx.sessions.length).toBeGreaterThan(0)
-    })
-
-    // Start in Running filter automatically (mock settings) and select the running session
-    await act(async () => {
-      await result.current.selectionCtx.setSelection({
-        kind: 'session',
-        payload: 'session-a',
-        sessionState: 'running',
-        worktreePath: '/worktrees/a',
-      })
-    })
-
-    // Simulate project switch flag set (without ProjectSwitchComplete firing yet)
-    await act(async () => {
-      // trigger filter change to Reviewed while switch flag would be true
-      result.current.sessionsCtx.setFilterMode(FilterMode.Reviewed)
-    })
-
-    await waitFor(() => {
-      expect(result.current.sessionsCtx.filterMode).toBe(FilterMode.Reviewed)
-    })
-
-    await waitFor(() => {
-      // Should refocus to the reviewed session, not stay on the hidden running one
-      expect(result.current.selectionCtx.selection.payload).toBe('session-b')
-    })
-  })
 })

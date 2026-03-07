@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { Sidebar } from './Sidebar'
 import { TestProviders } from '../../tests/test-utils'
 import { invoke } from '@tauri-apps/api/core'
@@ -70,7 +70,7 @@ describe('Sidebar epic grouping', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders epic headers and ungrouped section', async () => {
+  it('renders epic headers and ungrouped section within sections', async () => {
     render(
       <TestProviders>
         <Sidebar />
@@ -81,7 +81,8 @@ describe('Sidebar epic grouping', () => {
       expect(screen.getByText('billing-handler')).toBeInTheDocument()
     })
 
-    expect(screen.getByTestId('epic-header-epic-1')).toHaveTextContent('billing-v2')
-    expect(screen.getByTestId('epic-ungrouped-header')).toHaveTextContent('Ungrouped')
+    const runningSection = screen.getByTestId('sidebar-section-running')
+    expect(within(runningSection).getByTestId('epic-header-epic-1')).toHaveTextContent('billing-v2')
+    expect(within(runningSection).getByTestId('epic-ungrouped-header-running')).toHaveTextContent('Ungrouped')
   })
 })

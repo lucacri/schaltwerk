@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriCommands } from '../../common/tauriCommands'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { Sidebar } from './Sidebar'
 import { TestProviders } from '../../tests/test-utils'
 import { invoke } from '@tauri-apps/api/core'
-import { FilterMode } from '../../types/sessionFilters'
 import type { EnrichedSession } from '../../types/session'
 import type { MockTauriInvokeArgs } from '../../types/testing'
 
@@ -32,12 +31,12 @@ const createSession = (id: string, createdAt: string, readyToMerge = false): Enr
 })
 
 describe('Sidebar session ordering and persistence', () => {
-  let savedFilterMode: string = FilterMode.Running
+  let savedFilterMode: string = 'running'
   let lastPersistedSettings: Record<string, unknown> | null = null
 
   beforeEach(() => {
     vi.clearAllMocks()
-    savedFilterMode = FilterMode.Running
+    savedFilterMode = 'running'
     lastPersistedSettings = null
 
     const sessions = [
@@ -104,46 +103,23 @@ describe('Sidebar session ordering and persistence', () => {
     expect(orderedButtons[2]).toHaveTextContent('test_session_c') // oldest
   })
 
-  it('shows reviewed sessions separately in reviewed filter', async () => {
+  it('shows reviewed sessions in the Reviewed section when expanded', async () => {
     render(
       <TestProviders>
         <Sidebar />
       </TestProviders>,
     )
 
-    await waitFor(() => {
-      expect(screen.getByTitle('Show reviewed agents')).toBeInTheDocument()
-    })
-
-    fireEvent.click(screen.getByTitle('Show reviewed agents'))
+    const reviewedSection = await screen.findByTestId('sidebar-section-reviewed')
+    fireEvent.click(within(reviewedSection).getByRole('button'))
 
     await waitFor(() => {
       const sessionButtons = screen.getAllByRole('button').filter(btn => {
         const text = btn.textContent || ''
-        return text.includes('para/') && !text.includes('main (orchestrator)')
+        return text.includes('reviewed_session')
       })
       expect(sessionButtons).toHaveLength(1)
       expect(sessionButtons[0]).toHaveTextContent('reviewed_session')
-    })
-  })
-
-  it('persists filter mode changes without emitting legacy sort state', async () => {
-    render(
-      <TestProviders>
-        <Sidebar />
-      </TestProviders>,
-    )
-
-    await waitFor(() => {
-      expect(screen.getByTitle('Show spec agents')).toBeInTheDocument()
-    })
-
-    const specsButton = screen.getByTitle('Show spec agents')
-    fireEvent.click(specsButton)
-
-    await waitFor(() => {
-      expect(savedFilterMode).toBe(FilterMode.Spec)
-      expect(lastPersistedSettings).toEqual({ filter_mode: FilterMode.Spec })
     })
   })
 })

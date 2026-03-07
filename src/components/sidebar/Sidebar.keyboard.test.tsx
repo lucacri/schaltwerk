@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriCommands } from '../../common/tauriCommands'
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, fireEvent, within } from '@testing-library/react'
 import { Sidebar } from './Sidebar'
 import { TestProviders } from '../../tests/test-utils'
 import * as uiEvents from '../../common/uiEvents'
@@ -372,7 +372,7 @@ describe('Sidebar keyboard navigation basic', () => {
       if (cmd === TauriCommands.DirectoryExists) return true
       if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
       if (cmd === TauriCommands.GetProjectSessionsSettings) {
-        return { filter_mode: 'reviewed', sort_mode: 'name' }
+        return { filter_mode: 'running', sort_mode: 'name' }
       }
       if (cmd === TauriCommands.SetProjectSessionsSettings) {
         return undefined
@@ -381,6 +381,12 @@ describe('Sidebar keyboard navigation basic', () => {
     })
 
     await renderSidebar()
+
+    // Expand the Reviewed section (collapsed by default)
+    const reviewedSection = screen.getByTestId('sidebar-section-reviewed')
+    await act(async () => {
+      fireEvent.click(within(reviewedSection).getByRole('button'))
+    })
 
     await waitFor(() => {
       expect(screen.getByText('reviewed-session')).toBeInTheDocument()
