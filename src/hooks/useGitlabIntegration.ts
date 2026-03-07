@@ -61,6 +61,7 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
   useEffect(() => {
     let mounted = true
 
+    setStatus(null)
     setSources([])
 
     refreshStatus().catch((error) => {

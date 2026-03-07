@@ -390,8 +390,8 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const showHistoryTab = isCommander || isRunningSession
   const showSpecsTab = isCommander
   const showPreviewTab = isCommander || isRunningSession
-  const showGitlabIssuesTab = forge !== 'github' && (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.issuesEnabled)
-  const showGitlabMrsTab = forge !== 'github' && (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.mrsEnabled)
+  const showGitlabIssuesTab = forge === 'gitlab' && (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.issuesEnabled)
+  const showGitlabMrsTab = forge === 'gitlab' && (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.mrsEnabled)
   const tabsPresent = showChangesTab || showInfoTab || showSpecTab || showHistoryTab || showSpecsTab || showPreviewTab || showGitlabIssuesTab || showGitlabMrsTab
 
   useEffect(() => {

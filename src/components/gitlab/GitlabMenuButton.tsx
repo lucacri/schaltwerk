@@ -12,6 +12,7 @@ import { useOutsideDismiss } from '../../hooks/useOutsideDismiss'
 interface GitlabMenuButtonProps {
   className?: string
   onConfigureSources?: () => void
+  disabled?: boolean
 }
 
 const menuContainerStyle: CSSProperties = {
@@ -29,7 +30,7 @@ const dividerStyle: CSSProperties = {
 
 type MenuButtonKey = 'configure' | 'refresh'
 
-export function GitlabMenuButton({ className, onConfigureSources }: GitlabMenuButtonProps) {
+export function GitlabMenuButton({ className, onConfigureSources, disabled = false }: GitlabMenuButtonProps) {
   const { t } = useTranslation()
   const { pushToast } = useToast()
   const gitlab = useGitlabIntegrationContext()
@@ -145,12 +146,13 @@ export function GitlabMenuButton({ className, onConfigureSources }: GitlabMenuBu
           backgroundColor: 'var(--color-bg-elevated)',
           borderColor: 'var(--color-border-subtle)',
           color: 'var(--color-text-primary)',
+          opacity: disabled ? 0.3 : 1,
         }}
-        disabled={gitlab.loading}
-        onClick={() => setOpen((value) => !value)}
+        disabled={gitlab.loading || disabled}
+        onClick={() => !disabled && setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="GitLab integration"
+        title={disabled ? 'This project does not use GitLab' : 'GitLab integration'}
       >
         <FaGitlab className="text-caption" />
         <span className="truncate max-w-[120px]">{statusLabel}</span>

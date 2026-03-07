@@ -289,4 +289,103 @@ describe('useGithubIntegration', () => {
       expect(args).toEqual({ path: projectPath })
     })
   })
+
+  it('status resets to null when projectPath changes', async () => {
+    const store = createStore()
+    store.set(projectPathAtom, '/tmp/project-a')
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <Provider store={store}>{children}</Provider>
+    )
+
+    const status: GitHubStatusPayload = {
+      installed: true,
+      authenticated: true,
+      userLogin: 'octocat',
+      repository: {
+        nameWithOwner: 'octo/hello',
+        defaultBranch: 'main',
+      },
+    }
+
+    mockInvoke
+      .mockResolvedValueOnce(undefined) // InitializeProject for project-a
+      .mockResolvedValueOnce(status) // GitHubGetStatus for project-a
+
+    const { result } = renderHook(() => useGithubIntegration(), { wrapper })
+
+    await waitFor(() => {
+      expect(result.current.status).toEqual(status)
+    })
+
+    mockInvoke
+      .mockResolvedValueOnce(undefined) // InitializeProject for project-b
+      .mockResolvedValueOnce(status) // GitHubGetStatus for project-b
+
+    act(() => {
+      store.set(projectPathAtom, '/tmp/project-b')
+    })
+
+    await waitFor(() => {
+      expect(result.current.status).toBeNull()
+    })
+  })
+
+  it('lastPrUrls clears on project switch', async () => {
+    const store = createStore()
+    store.set(projectPathAtom, '/tmp/project-a')
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <Provider store={store}>{children}</Provider>
+    )
+
+    const status: GitHubStatusPayload = {
+      installed: true,
+      authenticated: true,
+      userLogin: 'octocat',
+      repository: {
+        nameWithOwner: 'octo/hello',
+        defaultBranch: 'main',
+      },
+    }
+
+    const prPayload: GitHubPrPayload = {
+      branch: 'reviewed/session-1',
+      url: 'https://github.com/octo/hello/pull/42',
+    }
+
+    mockInvoke
+      .mockResolvedValueOnce(undefined) // InitializeProject for project-a
+      .mockResolvedValueOnce(status) // GitHubGetStatus for project-a
+      .mockResolvedValueOnce(undefined) // ensureActiveProjectInitialized before PR
+      .mockResolvedValueOnce(prPayload) // GitHubCreateReviewedPr
+
+    const { result } = renderHook(() => useGithubIntegration(), { wrapper })
+
+    await waitFor(() => {
+      expect(result.current.status).toEqual(status)
+    })
+
+    await act(async () => {
+      await result.current.createReviewedPr({
+        sessionId: 'session-1',
+        sessionSlug: 'session-1',
+        worktreePath: '/tmp/worktree',
+      })
+    })
+
+    expect(result.current.getCachedPrUrl('session-1')).toBe(prPayload.url)
+
+    mockInvoke
+      .mockResolvedValueOnce(undefined) // InitializeProject for project-b
+      .mockResolvedValueOnce(status) // GitHubGetStatus for project-b
+
+    act(() => {
+      store.set(projectPathAtom, '/tmp/project-b')
+    })
+
+    await waitFor(() => {
+      expect(result.current.getCachedPrUrl('session-1')).toBeUndefined()
+    })
+  })
 })

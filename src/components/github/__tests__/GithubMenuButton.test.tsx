@@ -88,4 +88,24 @@ describe('GithubMenuButton', () => {
       screen.getAllByText((content) => content.toLowerCase().includes('default branch main')).length
     ).toBeGreaterThan(0)
   })
+
+  it('renders in disabled state with reduced opacity and prevents menu opening', () => {
+    renderWithProviders(
+      <GithubMenuButton disabled />, {
+        githubOverrides: {
+          status: { installed: true, authenticated: true, userLogin: 'octocat', repository: { nameWithOwner: 'owner/repo', defaultBranch: 'main' } },
+          loading: false,
+          authenticate: vi.fn(),
+          connectProject: vi.fn(),
+          refreshStatus: vi.fn(),
+          createReviewedPr: vi.fn(),
+        }
+      }
+    )
+
+    const button = screen.getByTitle('This project does not use GitHub')
+    expect(button).toBeDisabled()
+    fireEvent.click(button)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
 })
