@@ -25,6 +25,7 @@ import { RightPanelTabsHeader } from './RightPanelTabsHeader'
 import { GitlabIssuesTab } from './GitlabIssuesTab'
 import { GitlabMrsTab } from './GitlabMrsTab'
 import { useGitlabIntegrationContext } from '../../contexts/GitlabIntegrationContext'
+import { useForgeType } from '../../hooks/useForgeType'
 import { useAtom, useAtomValue } from 'jotai'
 import { projectPathAtom } from '../../store/atoms/project'
 import { WebPreviewPanel } from './WebPreviewPanel'
@@ -49,6 +50,7 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const { allSessions } = useSessions()
   const [rightPanelTab, setRightPanelTab] = useAtom(rightPanelTabAtom)
   const gitlabIntegration = useGitlabIntegrationContext()
+  const forge = useForgeType()
   const [localFocus, setLocalFocus] = useState<boolean>(false)
   const [showSpecPicker, setShowSpecPicker] = useState(false)
   const [pendingSpecToOpen, setPendingSpecToOpen] = useState<string | null>(null)
@@ -388,9 +390,16 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const showHistoryTab = isCommander || isRunningSession
   const showSpecsTab = isCommander
   const showPreviewTab = isCommander || isRunningSession
-  const showGitlabIssuesTab = (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.issuesEnabled)
-  const showGitlabMrsTab = (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.mrsEnabled)
+  const showGitlabIssuesTab = forge !== 'github' && (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.issuesEnabled)
+  const showGitlabMrsTab = forge !== 'github' && (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.mrsEnabled)
   const tabsPresent = showChangesTab || showInfoTab || showSpecTab || showHistoryTab || showSpecsTab || showPreviewTab || showGitlabIssuesTab || showGitlabMrsTab
+
+  useEffect(() => {
+    if ((activeTab === 'gitlab-issues' && !showGitlabIssuesTab) || (activeTab === 'gitlab-mrs' && !showGitlabMrsTab)) {
+      void setRightPanelTab('changes')
+    }
+  }, [activeTab, showGitlabIssuesTab, showGitlabMrsTab, setRightPanelTab])
+
   // Enable split mode when viewing Changes for normal running sessions
   const useSplitMode = isRunningSession && activeTab === 'changes'
   const isInlineReviewing = (isCommander || isRunningSession)
