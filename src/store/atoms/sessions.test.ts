@@ -77,6 +77,9 @@ import {
     sessionsAtom,
     filteredSessionsAtom,
     sortedSessionsAtom,
+    specSessionsAtom,
+    runningSessionsAtom,
+    reviewedSessionsAtom,
     filterModeAtom,
     searchQueryAtom,
     isSearchVisibleAtom,
@@ -1373,6 +1376,61 @@ describe('sessions atoms', () => {
 
         await vi.waitFor(() => {
             expect(startSessionTop).toHaveBeenCalledWith(expect.objectContaining({ sessionName: 'reviewed-session' }))
+        })
+    })
+
+    describe('section atoms', () => {
+        it('partitions sessions by state', () => {
+            const sessions = [
+                createSession({ session_id: 'spec-1', display_name: 'Spec One', status: 'spec', session_state: SessionState.Spec, created_at: '2024-01-01T00:00:00.000Z' }),
+                createSession({ session_id: 'spec-2', display_name: 'Spec Two', status: 'spec', session_state: SessionState.Spec, created_at: '2024-01-02T00:00:00.000Z' }),
+                createSession({ session_id: 'running-1', display_name: 'Running One', status: 'active', session_state: SessionState.Running, created_at: '2024-01-03T00:00:00.000Z' }),
+                createSession({ session_id: 'reviewed-1', display_name: 'Reviewed One', status: 'active', session_state: SessionState.Reviewed, ready_to_merge: true, created_at: '2024-01-04T00:00:00.000Z' }),
+                createSession({ session_id: 'reviewed-2', display_name: 'Reviewed Two', status: 'active', session_state: SessionState.Reviewed, ready_to_merge: true, created_at: '2024-01-05T00:00:00.000Z' }),
+            ]
+
+            store.set(allSessionsAtom, sessions)
+
+            const specs = store.get(specSessionsAtom)
+            expect(specs).toHaveLength(2)
+            expect(specs.map(s => s.info.session_id)).toEqual(['spec-2', 'spec-1'])
+
+            const running = store.get(runningSessionsAtom)
+            expect(running).toHaveLength(1)
+            expect(running[0]?.info.session_id).toBe('running-1')
+
+            const reviewed = store.get(reviewedSessionsAtom)
+            expect(reviewed).toHaveLength(2)
+            expect(reviewed.map(s => s.info.session_id)).toEqual(['reviewed-1', 'reviewed-2'])
+        })
+
+        it('returns empty arrays when no sessions match a state', () => {
+            const sessions = [
+                createSession({ session_id: 'running-only', status: 'active', session_state: SessionState.Running }),
+            ]
+
+            store.set(allSessionsAtom, sessions)
+
+            expect(store.get(specSessionsAtom)).toHaveLength(0)
+            expect(store.get(runningSessionsAtom)).toHaveLength(1)
+            expect(store.get(reviewedSessionsAtom)).toHaveLength(0)
+        })
+
+        it('respects search query filtering', () => {
+            const sessions = [
+                createSession({ session_id: 'spec-match', display_name: 'alpha spec', status: 'spec', session_state: SessionState.Spec }),
+                createSession({ session_id: 'spec-no-match', display_name: 'beta spec', status: 'spec', session_state: SessionState.Spec }),
+                createSession({ session_id: 'running-match', display_name: 'alpha runner', status: 'active', session_state: SessionState.Running }),
+            ]
+
+            store.set(allSessionsAtom, sessions)
+            store.set(searchQueryAtom, 'alpha')
+
+            expect(store.get(specSessionsAtom)).toHaveLength(1)
+            expect(store.get(specSessionsAtom)[0]?.info.session_id).toBe('spec-match')
+            expect(store.get(runningSessionsAtom)).toHaveLength(1)
+            expect(store.get(runningSessionsAtom)[0]?.info.session_id).toBe('running-match')
+            expect(store.get(reviewedSessionsAtom)).toHaveLength(0)
         })
     })
 })

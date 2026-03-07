@@ -884,6 +884,24 @@ export const filteredSessionsAtom = atom((get) => {
     return filterSessions(sessions, filterMode)
 })
 
+export const specSessionsAtom = atom((get) => {
+    const sessions = get(searchedSessionsAtom)
+    return sortSessionsByCreationDate(sessions.filter(s => mapSessionUiState(s.info) === SessionState.Spec))
+})
+
+export const runningSessionsAtom = atom((get) => {
+    const sessions = get(searchedSessionsAtom)
+    return sortSessionsByCreationDate(sessions.filter(s => {
+        const state = mapSessionUiState(s.info)
+        return state === SessionState.Running || state === SessionState.Processing
+    }))
+})
+
+export const reviewedSessionsAtom = atom((get) => {
+    const sessions = get(searchedSessionsAtom)
+    return sortSessionsByCreationDate(sessions.filter(s => mapSessionUiState(s.info) === SessionState.Reviewed))
+})
+
 export const sortedSessionsAtom = atom((get) => {
     const sessions = get(filteredSessionsAtom)
     return sortSessionsByCreationDate(sessions)

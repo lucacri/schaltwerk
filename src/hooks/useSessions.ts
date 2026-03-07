@@ -26,6 +26,9 @@ import {
   shortcutMergeActionAtom,
   mergeInFlightSelectorAtom,
   mergeStatusSelectorAtom,
+  specSessionsAtom,
+  runningSessionsAtom,
+  reviewedSessionsAtom,
   autoCancelAfterMergeAtom,
   autoCancelAfterPrAtom,
   updateAutoCancelAfterMergeActionAtom,
@@ -40,6 +43,9 @@ export interface UseSessionsResult {
   allSessions: EnrichedSession[]
   filteredSessions: EnrichedSession[]
   sortedSessions: EnrichedSession[]
+  specSessions: EnrichedSession[]
+  runningSessions: EnrichedSession[]
+  reviewedSessions: EnrichedSession[]
   loading: boolean
   filterMode: FilterMode
   setFilterMode: (mode: FilterMode) => void
@@ -75,6 +81,9 @@ export function useSessions(): UseSessionsResult {
   const allSessions = useAtomValue(allSessionsAtom)
   const filteredSessions = useAtomValue(filteredSessionsAtom)
   const sortedSessions = useAtomValue(sortedSessionsAtom)
+  const specSessions = useAtomValue(specSessionsAtom)
+  const runningSessions = useAtomValue(runningSessionsAtom)
+  const reviewedSessions = useAtomValue(reviewedSessionsAtom)
   const loading = useAtomValue(sessionsLoadingAtom)
   const [filterMode, setFilterMode] = useAtom(filterModeAtom)
   const [searchQuery, setSearchQuery] = useAtom(searchQueryAtom)
@@ -179,6 +188,9 @@ export function useSessions(): UseSessionsResult {
     allSessions,
     filteredSessions,
     sortedSessions,
+    specSessions,
+    runningSessions,
+    reviewedSessions,
     loading,
     filterMode,
     setFilterMode,
@@ -212,6 +224,9 @@ export function useSessions(): UseSessionsResult {
     allSessions,
     filteredSessions,
     sortedSessions,
+    specSessions,
+    runningSessions,
+    reviewedSessions,
     loading,
     filterMode,
     setFilterMode,
