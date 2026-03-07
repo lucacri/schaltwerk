@@ -831,7 +831,6 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
             removalCandidate: removalCandidateFromEvent,
             mergedCandidate,
             shouldAdvanceFromMerged,
-            shouldPreserveForReviewedRemoval: false,
             allSessions: allSessionsSnapshot
         })
 
