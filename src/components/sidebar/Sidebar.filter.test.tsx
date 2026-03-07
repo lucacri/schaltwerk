@@ -28,11 +28,6 @@ const createSession = (id: string, readyToMerge = false, sessionState?: 'spec' |
   terminals: []
 })
 
-function getSectionToggle(section: HTMLElement): HTMLElement {
-  return within(section).getByRole('button', { expanded: true }) ??
-    within(section).getByRole('button', { expanded: false })
-}
-
 describe('Sidebar section layout', () => {
   beforeEach(() => {
     vi.clearAllMocks()

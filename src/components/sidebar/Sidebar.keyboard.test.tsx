@@ -459,4 +459,44 @@ describe('Sidebar keyboard navigation basic', () => {
     })
   })
 
+  it('Cmd+ArrowRight cycles section focus forward', async () => {
+    await renderSidebar()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-section-running')).toBeInTheDocument()
+    })
+
+    await press('ArrowRight', { metaKey: true })
+
+    await waitFor(() => {
+      const runningSection = screen.getByTestId('sidebar-section-running')
+      const button = within(runningSection).getByRole('button', { expanded: true })
+      expect(button.style.outlineStyle).not.toBe('none')
+    })
+
+    await press('ArrowRight', { metaKey: true })
+
+    await waitFor(() => {
+      const specsSection = screen.getByTestId('sidebar-section-specs')
+      const button = within(specsSection).getByRole('button')
+      expect(button.style.outlineStyle).not.toBe('none')
+    })
+  })
+
+  it('Cmd+ArrowLeft cycles section focus backward', async () => {
+    await renderSidebar()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-section-running')).toBeInTheDocument()
+    })
+
+    await press('ArrowLeft', { metaKey: true })
+
+    await waitFor(() => {
+      const reviewedSection = screen.getByTestId('sidebar-section-reviewed')
+      const button = within(reviewedSection).getByRole('button')
+      expect(button.style.outlineStyle).not.toBe('none')
+    })
+  })
+
 })

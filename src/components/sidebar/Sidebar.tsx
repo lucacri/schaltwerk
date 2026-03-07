@@ -272,6 +272,20 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
         setCollapsedSections(prev => ({ ...prev, reviewed: false }))
     }, [])
 
+    const sectionCollapseKeyLoadedRef = useRef<string | null>(null)
+    useEffect(() => {
+        if (!sectionCollapseStorageKey || sectionCollapseStorageKey === sectionCollapseKeyLoadedRef.current) return
+        sectionCollapseKeyLoadedRef.current = sectionCollapseStorageKey
+        try {
+            const raw = localStorage.getItem(sectionCollapseStorageKey)
+            if (raw) {
+                setCollapsedSections(JSON.parse(raw) as Record<SectionKey, boolean>)
+            }
+        } catch (e) {
+            logger.warn('[Sidebar] Failed to load section collapse state:', e)
+        }
+    }, [sectionCollapseStorageKey])
+
     useEffect(() => {
         if (!sectionCollapseStorageKey) return
         try {

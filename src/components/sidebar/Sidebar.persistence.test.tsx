@@ -32,12 +32,12 @@ const createSession = (id: string, createdAt: string, readyToMerge = false): Enr
 
 describe('Sidebar session ordering and persistence', () => {
   let savedFilterMode: string = 'running'
-  let lastPersistedSettings: Record<string, unknown> | null = null
+  let _lastPersistedSettings: Record<string, unknown> | null = null
 
   beforeEach(() => {
     vi.clearAllMocks()
     savedFilterMode = 'running'
-    lastPersistedSettings = null
+    _lastPersistedSettings = null
 
     const sessions = [
       createSession('test_session_a', '2024-01-01T10:00:00Z'),
@@ -65,7 +65,7 @@ describe('Sidebar session ordering and persistence', () => {
         case TauriCommands.SetProjectSessionsSettings: {
           const incoming = (args as { settings?: { filter_mode?: string } })?.settings ?? {}
           savedFilterMode = incoming.filter_mode || savedFilterMode
-          lastPersistedSettings = incoming
+          _lastPersistedSettings = incoming
           return undefined
         }
         default:
@@ -76,6 +76,7 @@ describe('Sidebar session ordering and persistence', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    localStorage.clear()
   })
 
   it('sorts running sessions by creation date descending', async () => {
@@ -101,6 +102,45 @@ describe('Sidebar session ordering and persistence', () => {
     expect(orderedButtons[0]).toHaveTextContent('test_session_b') // newest
     expect(orderedButtons[1]).toHaveTextContent('test_session_a')
     expect(orderedButtons[2]).toHaveTextContent('test_session_c') // oldest
+  })
+
+  it('persists section collapse state to localStorage', async () => {
+    render(
+      <TestProviders>
+        <Sidebar />
+      </TestProviders>,
+    )
+
+    const runningSection = await screen.findByTestId('sidebar-section-running')
+    fireEvent.click(within(runningSection).getByRole('button', { expanded: true }))
+
+    await waitFor(() => {
+      const stored = localStorage.getItem('lucode:section-collapse:/test/project')
+      expect(stored).toBeTruthy()
+      const parsed = JSON.parse(stored!)
+      expect(parsed.running).toBe(true)
+    })
+  })
+
+  it('restores section collapse state from localStorage', async () => {
+    localStorage.setItem(
+      'lucode:section-collapse:/test/project',
+      JSON.stringify({ running: true, specs: false, reviewed: false }),
+    )
+
+    render(
+      <TestProviders>
+        <Sidebar />
+      </TestProviders>,
+    )
+
+    await waitFor(() => {
+      const runningSection = screen.getByTestId('sidebar-section-running')
+      expect(within(runningSection).getByRole('button', { expanded: false })).toBeInTheDocument()
+    })
+
+    const reviewedSection = screen.getByTestId('sidebar-section-reviewed')
+    expect(within(reviewedSection).getByRole('button', { expanded: true })).toBeInTheDocument()
   })
 
   it('shows reviewed sessions in the Reviewed section when expanded', async () => {

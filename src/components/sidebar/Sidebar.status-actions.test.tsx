@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriCommands } from '../../common/tauriCommands'
-import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { Sidebar } from './Sidebar'
 import { TestProviders } from '../../tests/test-utils'
 import * as uiEvents from '../../common/uiEvents'
