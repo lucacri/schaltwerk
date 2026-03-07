@@ -11,6 +11,7 @@ import { XtermAddonImporter } from './xtermAddonImporter'
 import { TauriCommands } from '../../common/tauriCommands'
 import { RegexLinkProvider } from './fileLinkProvider'
 import { parseTerminalFileReference, TERMINAL_FILE_LINK_REGEX } from './fileLinks/terminalFileLinks'
+import { profileSwitchPhase } from '../profiling/switchProfiler'
 
 export interface XtermTerminalConfig {
   scrollback: number
@@ -190,7 +191,7 @@ export class XtermTerminal {
     logger.debug(`[XtermTerminal ${this.terminalId}] attach(): uiMode=${this.uiMode}, opened=${this.opened}, baseY=${buffer?.baseY}, viewportY=${buffer?.viewportY}`)
 
     if (!this.opened) {
-      this.raw.open(this.container)
+      profileSwitchPhase('xterm.open', () => this.raw.open(this.container), { terminalId: this.terminalId })
       this.opened = true
       logger.debug(`[XtermTerminal ${this.terminalId}] Opened terminal (first attach)`)
     }
@@ -198,7 +199,7 @@ export class XtermTerminal {
       this.applyTuiMode()
     }
     if (this.container.parentElement !== target) {
-      target.appendChild(this.container)
+      profileSwitchPhase('xterm.appendChild', () => target.appendChild(this.container), { terminalId: this.terminalId })
     }
     this.container.style.display = 'block'
 

@@ -5,6 +5,8 @@ import { listenTerminalOutput } from '../../common/eventSystem'
 import { TauriCommands } from '../../common/tauriCommands'
 import { ackTerminalBackend, isPluginTerminal, subscribeTerminalBackend } from '../transport/backend'
 import { logger } from '../../utils/logger'
+import { slicePreservingSurrogates } from '../paste/bracketedPaste'
+import { profileSwitchPhaseAsync, profileSwitchPhase } from '../profiling/switchProfiler'
 
 type TerminalStreamListener = (chunk: string) => void
 
@@ -29,6 +31,8 @@ interface TerminalStream {
   decoder?: TextDecoder
   encoder?: TextEncoder
 }
+
+const HYDRATION_DISPATCH_CHUNK_SIZE = 64 * 1024
 
 const TEXT_PRESENTATION_RULES = [
   {
@@ -84,7 +88,7 @@ class TerminalOutputManager {
       await stream.starting
       return
     }
-    const startPromise = this.startStream(id, stream)
+    const startPromise = profileSwitchPhaseAsync('hydration.startStream', () => this.startStream(id, stream), { terminalId: id })
     stream.starting = startPromise
     try {
       await startPromise
@@ -146,15 +150,15 @@ class TerminalOutputManager {
   private async hydrate(id: string, stream: TerminalStream): Promise<number | null> {
     const fallbackSeq = stream.seqCursor ?? this.lastSeqById.get(id) ?? null
     try {
-      const snapshot = await invoke<TerminalBufferResponse | null>(TauriCommands.GetTerminalBuffer, {
+      const snapshot = await profileSwitchPhaseAsync('hydration.fetch', () => invoke<TerminalBufferResponse | null>(TauriCommands.GetTerminalBuffer, {
         id,
         from_seq: fallbackSeq,
-      })
+      }), { terminalId: id })
       if (!snapshot || typeof snapshot.seq !== 'number') {
         return stream.seqCursor ?? fallbackSeq
       }
       if (snapshot.data && snapshot.data.length > 0) {
-        this.dispatch(id, snapshot.data)
+        await this.dispatchHydrationData(id, snapshot.data)
       }
       stream.seqCursor = snapshot.seq
       this.lastSeqById.set(id, snapshot.seq)
@@ -207,11 +211,35 @@ class TerminalOutputManager {
     if (!stream) return
     const normalized = enforceTextPresentation(chunk)
     this.updateSeqCursor(id, stream, normalized)
-    for (const listener of stream.listeners) {
-      try {
-        listener(normalized)
-      } catch (error) {
-        logger.debug(`[TerminalOutput] listener error for ${id}`, error)
+    profileSwitchPhase('hydration.dispatch', () => {
+      for (const listener of stream.listeners) {
+        try {
+          listener(normalized)
+        } catch (error) {
+          logger.debug(`[TerminalOutput] listener error for ${id}`, error)
+        }
+      }
+    }, { terminalId: id, chars: normalized.length })
+  }
+
+  private async dispatchHydrationData(id: string, data: string): Promise<void> {
+    if (data.length <= HYDRATION_DISPATCH_CHUNK_SIZE) {
+      this.dispatch(id, data)
+      return
+    }
+
+    let offset = 0
+    while (offset < data.length) {
+      const chunk = slicePreservingSurrogates(data, offset, offset + HYDRATION_DISPATCH_CHUNK_SIZE)
+      if (chunk.length === 0) {
+        break
+      }
+      this.dispatch(id, chunk)
+      offset += chunk.length
+      if (offset < data.length) {
+        await new Promise<void>(resolve => {
+          setTimeout(resolve, 0)
+        })
       }
     }
   }

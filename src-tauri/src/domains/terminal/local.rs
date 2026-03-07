@@ -24,6 +24,7 @@ use tokio::time::{Instant as TokioInstant, sleep};
 
 const DEFAULT_MAX_BUFFER_SIZE: usize = 2 * 1024 * 1024;
 const AGENT_MAX_BUFFER_SIZE: usize = 64 * 1024 * 1024;
+const MAX_HYDRATION_SNAPSHOT_BYTES: usize = 1024 * 1024;
 
 pub(crate) fn max_buffer_size_for_terminal(terminal_id: &str) -> usize {
     if lifecycle::is_agent_terminal(terminal_id) {
@@ -1162,11 +1163,24 @@ impl TerminalBackend for LocalPtyAdapter {
             let start_seq = state.start_seq;
             let seq = state.seq;
             let from_requested = from_seq.unwrap_or(start_seq);
-            let effective_from = if from_requested > seq {
+            let mut effective_from = if from_requested > seq {
                 start_seq
             } else {
                 from_requested.max(start_seq)
             };
+            if from_seq.is_none() {
+                let hydration_floor = seq
+                    .saturating_sub(MAX_HYDRATION_SNAPSHOT_BYTES as u64)
+                    .max(start_seq);
+                if effective_from < hydration_floor {
+                    info!(
+                        "snapshot {id}: capping hydration from {:.2}MB to {:.2}MB (tail only)",
+                        (seq - effective_from) as f64 / (1024.0 * 1024.0),
+                        MAX_HYDRATION_SNAPSHOT_BYTES as f64 / (1024.0 * 1024.0)
+                    );
+                    effective_from = hydration_floor;
+                }
+            }
             let offset = effective_from.saturating_sub(start_seq) as usize;
             let data = if offset >= state.buffer.len() {
                 Vec::new()
@@ -1261,7 +1275,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
     use tokio::time::sleep;
 
     static COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -1671,5 +1685,83 @@ mod tests {
         assert!(adapter.exists(&id).await.unwrap());
 
         safe_close(&adapter, &id).await;
+    }
+
+    fn hydration_test_state(id: &str, buffer: Vec<u8>, seq: u64) -> TerminalState {
+        TerminalState {
+            buffer,
+            seq,
+            start_seq: 0,
+            last_output: SystemTime::now(),
+            screen: VisibleScreen::new(24, 80, id.to_string()),
+            idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.to_string()),
+            session_id: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_caps_initial_hydration_to_recent_bytes() {
+        let adapter = LocalPtyAdapter::new();
+        let id = unique_id("hydration-cap");
+
+        let tail = b"recent-output-tail";
+        let buffer_len = MAX_HYDRATION_SNAPSHOT_BYTES + 4096;
+        let mut buffer = vec![b'a'; buffer_len];
+        buffer.extend_from_slice(tail);
+        let seq = buffer.len() as u64;
+
+        {
+            let mut terminals = adapter.terminals.write().await;
+            terminals.insert(id.clone(), hydration_test_state(&id, buffer.clone(), seq));
+        }
+
+        let snapshot = adapter.snapshot(&id, None).await.unwrap();
+        assert_eq!(snapshot.seq, seq);
+        assert_eq!(snapshot.data.len(), MAX_HYDRATION_SNAPSHOT_BYTES);
+        assert!(snapshot.data.ends_with(tail));
+        assert_eq!(
+            snapshot.data,
+            buffer[buffer.len() - MAX_HYDRATION_SNAPSHOT_BYTES..]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_does_not_cap_small_buffers() {
+        let adapter = LocalPtyAdapter::new();
+        let id = unique_id("hydration-small");
+
+        let small_data = vec![b'A'; 1024];
+
+        {
+            let mut terminals = adapter.terminals.write().await;
+            terminals.insert(
+                id.clone(),
+                hydration_test_state(&id, small_data.clone(), small_data.len() as u64),
+            );
+        }
+
+        let snapshot = adapter.snapshot(&id, None).await.unwrap();
+        assert_eq!(snapshot.data.len(), 1024);
+        assert_eq!(snapshot.data, small_data);
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_from_seq_is_not_capped() {
+        let adapter = LocalPtyAdapter::new();
+        let id = unique_id("hydration-from-seq");
+
+        let buffer_len = MAX_HYDRATION_SNAPSHOT_BYTES + 4096;
+        let buffer = vec![b'b'; buffer_len];
+        let seq = buffer.len() as u64;
+        let from_seq = 1024u64;
+
+        {
+            let mut terminals = adapter.terminals.write().await;
+            terminals.insert(id.clone(), hydration_test_state(&id, buffer, seq));
+        }
+
+        let snapshot = adapter.snapshot(&id, Some(from_seq)).await.unwrap();
+        assert_eq!(snapshot.data.len(), (seq - from_seq) as usize);
+        assert!(snapshot.data.len() > MAX_HYDRATION_SNAPSHOT_BYTES);
     }
 }

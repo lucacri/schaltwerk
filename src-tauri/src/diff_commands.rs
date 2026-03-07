@@ -5,16 +5,16 @@ use crate::get_project_manager;
 use git2::{
     Delta, DiffFindOptions, DiffOptions, ErrorCode, ObjectType, Oid, Repository, Sort, Tree,
 };
-use schaltwerk::binary_detection::{get_unsupported_reason, is_binary_file_by_extension, is_likely_binary_content};
-use schaltwerk::domains::git;
-use schaltwerk::domains::git::stats::build_changed_files_from_diff;
-use schaltwerk::domains::sessions::entity::ChangedFile;
-use schaltwerk::domains::workspace::diff_engine::{
+use lucode::binary_detection::{get_unsupported_reason, is_binary_file_by_extension, is_likely_binary_content};
+use lucode::domains::git;
+use lucode::domains::git::stats::build_changed_files_from_diff;
+use lucode::domains::sessions::entity::ChangedFile;
+use lucode::domains::workspace::diff_engine::{
     DiffResponse, FileInfo, SplitDiffResponse, add_collapsible_sections, calculate_diff_stats,
     add_collapsible_sections_split, calculate_split_diff_stats, compute_split_diff,
     compute_unified_diff, get_file_language,
 };
-use schaltwerk::domains::workspace::file_utils;
+use lucode::domains::workspace::file_utils;
 use serde::Serialize;
 use std::path::Path;
 
@@ -277,13 +277,13 @@ mod tests {
         let temp_dir = setup_test_git_repo();
         let repo_path = temp_dir.path();
 
-        // Create various files including .schaltwerk files
+        // Create various files including .lucode files
         fs::write(repo_path.join("normal_file.txt"), "content").unwrap();
-        fs::create_dir_all(repo_path.join(".schaltwerk")).unwrap();
-        fs::write(repo_path.join(".schaltwerk/session.db"), "db content").unwrap();
-        fs::create_dir_all(repo_path.join(".schaltwerk/worktrees")).unwrap();
+        fs::create_dir_all(repo_path.join(".lucode")).unwrap();
+        fs::write(repo_path.join(".lucode/session.db"), "db content").unwrap();
+        fs::create_dir_all(repo_path.join(".lucode/worktrees")).unwrap();
         fs::write(
-            repo_path.join(".schaltwerk/worktrees/test.txt"),
+            repo_path.join(".lucode/worktrees/test.txt"),
             "worktree content",
         )
         .unwrap();
@@ -291,18 +291,18 @@ mod tests {
         // Mock the get_repo_path function by testing the core logic directly
         let mut file_map: HashMap<String, String> = HashMap::new();
 
-        // Simulate git output that would include .schaltwerk files
+        // Simulate git output that would include .lucode files
         file_map.insert("normal_file.txt".to_string(), "M".to_string());
-        file_map.insert(".schaltwerk".to_string(), "A".to_string());
-        file_map.insert(".schaltwerk/session.db".to_string(), "A".to_string());
+        file_map.insert(".lucode".to_string(), "A".to_string());
+        file_map.insert(".lucode/session.db".to_string(), "A".to_string());
         file_map.insert(
-            ".schaltwerk/worktrees/test.txt".to_string(),
+            ".lucode/worktrees/test.txt".to_string(),
             "A".to_string(),
         );
 
         let mut changed_files: Vec<ChangedFile> = file_map
             .into_iter()
-            .filter(|(path, _)| !path.starts_with(".schaltwerk/") && path != ".schaltwerk")
+            .filter(|(path, _)| !path.starts_with(".lucode/") && path != ".lucode")
             .map(|(path, status)| {
                 let change_type = match status.as_str() {
                     "M" => "modified".to_string(),
@@ -319,7 +319,7 @@ mod tests {
         // Sort files alphabetically by path for consistent ordering
         changed_files.sort_by(|a, b| a.path.cmp(&b.path));
 
-        // Should only contain normal_file.txt, all .schaltwerk files filtered out
+        // Should only contain normal_file.txt, all .lucode files filtered out
         assert_eq!(changed_files.len(), 1);
         assert_eq!(changed_files[0].path, "normal_file.txt");
         assert_eq!(changed_files[0].change_type, "modified");
@@ -410,7 +410,7 @@ mod tests {
                     let core = get_core_write().await.unwrap();
                     core.session_manager()
                 };
-                let params = schaltwerk::domains::sessions::service::SessionCreationParams {
+                let params = lucode::domains::sessions::service::SessionCreationParams {
                     name: "diff-non-main",
                     prompt: None,
                     base_branch: None,
@@ -458,7 +458,7 @@ mod tests {
 
         let mut changed_files: Vec<ChangedFile> = file_map
             .into_iter()
-            .filter(|(path, _)| !path.starts_with(".schaltwerk/") && path != ".schaltwerk")
+            .filter(|(path, _)| !path.starts_with(".lucode/") && path != ".lucode")
             .map(|(path, status)| {
                 let change_type = match status.as_str() {
                     "M" => "modified".to_string(),
@@ -524,7 +524,7 @@ mod tests {
 
         let mut changed_files: Vec<ChangedFile> = file_map
             .into_iter()
-            .filter(|(path, _)| !path.starts_with(".schaltwerk/") && path != ".schaltwerk")
+            .filter(|(path, _)| !path.starts_with(".lucode/") && path != ".lucode")
             .map(|(path, status)| {
                 let change_type = match status.as_str() {
                     "M" => "modified".to_string(),
@@ -549,18 +549,18 @@ mod tests {
 
         // Test various patterns that should and shouldn't be filtered
         file_map.insert("src/main.rs".to_string(), "M".to_string());
-        file_map.insert(".schaltwerk".to_string(), "A".to_string()); // Should be filtered
-        file_map.insert(".schaltwerk/config.json".to_string(), "M".to_string()); // Should be filtered
+        file_map.insert(".lucode".to_string(), "A".to_string()); // Should be filtered
+        file_map.insert(".lucode/config.json".to_string(), "M".to_string()); // Should be filtered
         file_map.insert(
-            ".schaltwerk/worktrees/branch1/file.txt".to_string(),
+            ".lucode/worktrees/branch1/file.txt".to_string(),
             "A".to_string(),
         ); // Should be filtered
         file_map.insert("not_schaltwerk.txt".to_string(), "M".to_string()); // Should NOT be filtered
-        file_map.insert("src/.schaltwerk_related.txt".to_string(), "A".to_string()); // Should NOT be filtered (different pattern)
+        file_map.insert("src/.lucode_related.txt".to_string(), "A".to_string()); // Should NOT be filtered (different pattern)
 
         let mut changed_files: Vec<ChangedFile> = file_map
             .into_iter()
-            .filter(|(path, _)| !path.starts_with(".schaltwerk/") && path != ".schaltwerk")
+            .filter(|(path, _)| !path.starts_with(".lucode/") && path != ".lucode")
             .map(|(path, status)| {
                 let change_type = match status.as_str() {
                     "M" => "modified".to_string(),
@@ -576,18 +576,18 @@ mod tests {
 
         changed_files.sort_by(|a, b| a.path.cmp(&b.path));
 
-        // Should contain 3 files: src/main.rs, not_schaltwerk.txt, src/.schaltwerk_related.txt
+        // Should contain 3 files: src/main.rs, not_schaltwerk.txt, src/.lucode_related.txt
         assert_eq!(changed_files.len(), 3);
 
         let file_paths: Vec<&String> = changed_files.iter().map(|f| &f.path).collect();
         assert!(file_paths.contains(&&"src/main.rs".to_string()));
         assert!(file_paths.contains(&&"not_schaltwerk.txt".to_string()));
-        assert!(file_paths.contains(&&"src/.schaltwerk_related.txt".to_string()));
+        assert!(file_paths.contains(&&"src/.lucode_related.txt".to_string()));
 
-        // Should NOT contain any .schaltwerk files
-        assert!(!file_paths.contains(&&".schaltwerk".to_string()));
-        assert!(!file_paths.contains(&&".schaltwerk/config.json".to_string()));
-        assert!(!file_paths.contains(&&".schaltwerk/worktrees/branch1/file.txt".to_string()));
+        // Should NOT contain any .lucode files
+        assert!(!file_paths.contains(&&".lucode".to_string()));
+        assert!(!file_paths.contains(&&".lucode/config.json".to_string()));
+        assert!(!file_paths.contains(&&".lucode/worktrees/branch1/file.txt".to_string()));
     }
 }
 
@@ -645,7 +645,7 @@ pub async fn get_current_branch_name(session_name: Option<String>) -> Result<Str
     match repo.head() {
         Ok(head) => Ok(head.shorthand().unwrap_or("").to_string()),
         Err(err) if err.code() == ErrorCode::UnbornBranch => {
-            schaltwerk::domains::git::repository::get_unborn_head_branch(Path::new(&repo_path))
+            lucode::domains::git::repository::get_unborn_head_branch(Path::new(&repo_path))
                 .map_err(|e| SchaltError::git("get_unborn_head_branch", e))
         }
         Err(err) => Err(SchaltError::git("get_head", err)),
@@ -1100,12 +1100,12 @@ async fn resolve_base_branch_structured(session_name: Option<&str>) -> Result<St
     } else {
         let manager = get_project_manager().await;
         if let Ok(project) = manager.current_project().await {
-            schaltwerk::domains::git::get_default_branch(&project.path)
+            lucode::domains::git::get_default_branch(&project.path)
                 .map_err(|e| SchaltError::git("get_default_branch", e))
         } else {
             let current_dir =
                 std::env::current_dir().map_err(|e| SchaltError::io("current_dir", ".", e))?;
-            schaltwerk::domains::git::get_default_branch(&current_dir)
+            lucode::domains::git::get_default_branch(&current_dir)
                 .map_err(|e| SchaltError::git("get_default_branch", e))
         }
     }
@@ -1473,8 +1473,8 @@ pub async fn set_session_diff_base_branch(
     session_name: String,
     new_base_branch: String,
 ) -> Result<(), String> {
-    use schaltwerk::domains::sessions::db_sessions::SessionMethods;
-    use schaltwerk::infrastructure::events::{emit_event, SchaltEvent};
+    use lucode::domains::sessions::db_sessions::SessionMethods;
+    use lucode::infrastructure::events::{emit_event, SchaltEvent};
 
     let project_manager = get_project_manager().await;
     let project = project_manager

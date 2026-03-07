@@ -124,6 +124,10 @@ vi.mock('../../contexts/GitlabIntegrationContext', () => ({
   })
 }))
 
+vi.mock('../../hooks/useForgeType', () => ({
+  useForgeType: () => 'unknown',
+}))
+
 vi.mock('../specs/SpecWorkspacePanel', () => ({
   SpecWorkspacePanel: ({ openTabs }: { openTabs: string[] }) => (
     <div data-testid="spec-workspace-panel" data-open-tabs={openTabs.join(',')} />

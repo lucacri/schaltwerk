@@ -1,4 +1,4 @@
-# CLAUDE.md - Schaltwerk Development Guidelines
+# CLAUDE.md - Lucode Development Guidelines
 
 ## Project Overview
 Tauri-based desktop app for managing AI coding sessions using git worktrees. Each session gets an isolated branch/worktree where AI agents (Claude, GitHub Copilot CLI, Kilo Code, Gemini, OpenCode, Codex, Factory Droid, etc.) can work without affecting the main codebase.
@@ -14,7 +14,7 @@ Tauri-based desktop app for managing AI coding sessions using git worktrees. Eac
 **Your starting working directory is where you work. Do not navigate away from it.**
 
 - Check `<env>` for your working directory and current branch
-- If in a worktree (branch: `schaltwerk/*`): All files are here. Make changes here.
+- If in a worktree (branch: `lucode/*`): All files are here. Make changes here.
 - If in main repo (branch: `main`): Work here directly.
 - Do NOT infer parent paths from directory structure
 - Do NOT `cd` to other locations unless explicitly required
@@ -34,7 +34,7 @@ Tauri-based desktop app for managing AI coding sessions using git worktrees. Eac
 ### Key Data Flows
 
 **Session Creation → Agent Startup:**
-1. `App.tsx:handleCreateSession()` → Tauri command `schaltwerk_core_create_session`
+1. `App.tsx:handleCreateSession()` → Tauri command `lucode_core_create_session`
 2. `domains/sessions/service.rs:SessionManager::create_session()` → Creates DB entry + worktree
 3. Frontend switches via `SelectionContext` → Lazy terminal creation
 4. Agent starts in terminal with worktree as working directory
@@ -57,7 +57,7 @@ Tauri-based desktop app for managing AI coding sessions using git worktrees. Eac
 
 **Backend Core:**
 - `main.rs`: Tauri commands entry point
-- `schaltwerk_core/mod.rs`: Session gateway + database access
+- `lucode_core/mod.rs`: Session gateway + database access
 - `domains/terminal/manager.rs`: PTY lifecycle management
 - `domains/git/worktrees.rs`: Git worktree operations
 
@@ -68,7 +68,7 @@ Tauri-based desktop app for managing AI coding sessions using git worktrees. Eac
 
 ### State Management (MANDATORY)
 - Shared UI/application state lives in Jotai atoms under `src/store/atoms`; expose read-only atoms plus action atoms when updates require side effects.
-- Example: `src/store/atoms/fontSize.ts` stores terminal/UI font sizes, updates CSS variables, emits `UiEvent.FontSizeChanged`, and persists via `SchaltwerkCoreSetFontSizes`.
+- Example: `src/store/atoms/fontSize.ts` stores terminal/UI font sizes, updates CSS variables, emits `UiEvent.FontSizeChanged`, and persists via `LucodeCoreSetFontSizes`.
 - Reach for Jotai when state crosses components, needs persistence, or must be accessed from tests using the Jotai `Provider`/`createStore`; keep purely local state in React `useState`.
 - Access atoms with `useAtomValue`, `useSetAtom`, or `useAtom` instead of creating new context providers for the same data.
 
@@ -89,7 +89,7 @@ just test          # Run ALL validations: TypeScript, Rust lints, tests, and bui
 ```bash
 # Starting Development
 bun run tauri:dev       # Start app in development mode with hot reload
-RUST_LOG=schaltwerk=debug bun run tauri:dev  # With debug logging
+RUST_LOG=lucode=debug bun run tauri:dev  # With debug logging
 
 # Testing & Validation
 just test               # Full validation suite (ALWAYS run before commits)
@@ -147,14 +147,14 @@ just release major      # Create major release (x.0.0) - creates DRAFT
 ## How Things Actually Work
 
 ### Session Storage
-Sessions use SQLite `sessions.db` under `~/Library/Application Support/schaltwerk/projects/{project-name_hash}` (macOS) or `~/.local/share/schaltwerk/projects/{project-name_hash}` (Linux) to store:
-- Git branch + worktree path (`.schaltwerk/worktrees/{session-name}/`)
+Sessions use SQLite `sessions.db` under `~/Library/Application Support/lucode/projects/{project-name_hash}` (macOS) or `~/.local/share/lucode/projects/{project-name_hash}` (Linux) to store:
+- Git branch + worktree path (`.lucode/worktrees/{session-name}/`)
 - Session state (Spec/Running/Reviewed)
 - Spec content (markdown planning docs)
 - Git stats (files changed, lines added/removed)
 
 ### Configuration Storage
-- Application settings live in OS config (`~/Library/Application Support/com.mariuswichtner.schaltwerk/settings.json` on macOS, `~/.config/schaltwerk/settings.json` on Linux).
+- Application settings live in OS config (`~/Library/Application Support/com.lucacri.lucode/settings.json` on macOS, `~/.config/lucode/settings.json` on Linux).
 - Project-scoped data (sessions, specs, git stats, project config) reuse the same `sessions.db`.
 
 ### Terminal Management
@@ -226,7 +226,7 @@ When creating specs for implementation agents:
 - **Structure**: Components → Implementation → Configuration → Phases
 - **Omit**: Resource constraints, obvious details, verbose explanations
 - **Include**: Platform-specific APIs, code snippets, data flows, dependencies
-- When a user asks for a “spec” use the Schaltwerk MCP spec commands instead of creating local plan files. Only create Markdown plan files when the request explicitly mentions a plan file/`.md` output.
+- When a user asks for a “spec” use the Lucode MCP spec commands instead of creating local plan files. Only create Markdown plan files when the request explicitly mentions a plan file/`.md` output.
 
 ### Before ANY Commit
 Run `bun run test` - ALL must pass:
@@ -271,7 +271,7 @@ emit_event(&app, SchaltEvent::SessionsRefreshed, &sessions)?;
 ### Tauri Commands (MANDATORY)
 - NEVER call `invoke('some_command')` with raw strings in TS/TSX.
 - ALWAYS use the centralized enum in `src/common/tauriCommands.ts`.
-- Example: `invoke(TauriCommands.SchaltwerkCoreCreateSession, { name, prompt })`.
+- Example: `invoke(TauriCommands.LucodeCoreCreateSession, { name, prompt })`.
 - When adding a new backend command/event:
   - Add the entry to `src/common/tauriCommands.ts` (PascalCase key → exact command string).
   - Use that enum entry everywhere (including tests) instead of string literals.
@@ -351,17 +351,17 @@ Example: Instead of `setTimeout(() => checkIfReady(), 100)`, use proper event li
 
 ### Configuration
 ```bash
-RUST_LOG=schaltwerk=debug bun run tauri:dev  # Debug our code
+RUST_LOG=lucode=debug bun run tauri:dev  # Debug our code
 RUST_LOG=trace bun run tauri:dev             # Maximum verbosity
 ```
 
 ### Location
-macOS: `~/Library/Application Support/schaltwerk/logs/schaltwerk-{timestamp}.log`
+macOS: `~/Library/Application Support/lucode/logs/lucode-{timestamp}.log`
 
 ### Quick Access
 - Each backend launch prints the log path; grab the latest file with:
   ```bash
-  LOG_FILE=$(ls -t ~/Library/Application\ Support/schaltwerk/logs/schaltwerk-*.log | head -1)
+  LOG_FILE=$(ls -t ~/Library/Application\ Support/lucode/logs/lucode-*.log | head -1)
   tail -n 200 "$LOG_FILE"
   ```
 - Works from main or any session worktree—no repo navigation required.
@@ -414,7 +414,7 @@ Automatically updates versions, commits, tags, and triggers GitHub Actions.
 - Fix problems directly, no fallbacks/alternatives
 - All code must be used now (no YAGNI)
 - Always use the project 'logger' with the appropriate log level instead of using console logs when introducing logging
-- Session database runs with WAL + `synchronous=NORMAL` and a pooled connection manager (default pool size `4`, override with `SCHALTWERK_DB_POOL_SIZE`). Keep this tuned rather than reverting to a single shared connection.
+- Session database runs with WAL + `synchronous=NORMAL` and a pooled connection manager (default pool size `4`, override with `LUCODE_DB_POOL_SIZE`). Keep this tuned rather than reverting to a single shared connection.
 
 ## Plan Files
 

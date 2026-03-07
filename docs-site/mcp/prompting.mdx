@@ -1,33 +1,33 @@
 ---
 title: Prompting Guide
-description: 'How to use Claude Code with Schaltwerk MCP'
+description: 'How to use Claude Code with Lucode MCP'
 ---
 
-When Claude Code has MCP access to Schaltwerk, you can manage sessions using natural language.
+When Claude Code has MCP access to Lucode, you can manage sessions using natural language.
 
 ## What You Can Ask
 
 <AccordionGroup>
   <Accordion title="Create a New Spec">
-    **You:** "Create a Schaltwerk spec to add user authentication with JWT tokens"
+    **You:** "Create a Lucode spec to add user authentication with JWT tokens"
 
     **Claude:** Creates a spec with the task description, ready to start when you're ready
   </Accordion>
 
   <Accordion title="Check Session Status">
-    **You:** "Which Schaltwerk sessions are ready for review?"
+    **You:** "Which Lucode sessions are ready for review?"
 
     **Claude:** Lists all reviewed sessions that need your attention
   </Accordion>
 
   <Accordion title="Start Existing Specs">
-    **You:** "Start the user-auth spec in Schaltwerk"
+    **You:** "Start the user-auth spec in Lucode"
 
     **Claude:** Converts the spec to a running session with worktree
   </Accordion>
 
   <Accordion title="Decide What to Work On">
-    **You:** "What Schaltwerk specs should I prioritize?"
+    **You:** "What Lucode specs should I prioritize?"
 
     **Claude:** Reviews your specs and suggests what to work on based on dependencies and importance
   </Accordion>
@@ -43,7 +43,7 @@ When Claude Code has MCP access to Schaltwerk, you can manage sessions using nat
 
 ### 1. Creating Multiple Specs
 
-**You:** "I need to build a complete authentication system. Create Schaltwerk specs for each part."
+**You:** "I need to build a complete authentication system. Create Lucode specs for each part."
 
 **Claude creates:**
 - `auth-registration` - User signup with validation
@@ -75,14 +75,14 @@ When Claude Code has MCP access to Schaltwerk, you can manage sessions using nat
 
 **You:** "List the specs in this project with their sizes"
 
-**Claude:** Uses `schaltwerk_spec_list` to return something like:
+**Claude:** Uses `lucode_spec_list` to return something like:
 
 - `auth-password-reset` — 1.2 KB (updated 2 minutes ago)
 - `auth-session-management` — 3.6 KB (updated yesterday)
 
 **You:** "Open the full markdown for `auth-password-reset`"
 
-**Claude:** Calls `schaltwerk_spec_read` and shows the spec content so you can review it before starting work.
+**Claude:** Calls `lucode_spec_read` and shows the spec content so you can review it before starting work.
 
 ### 5. Merging Work
 
@@ -128,7 +128,7 @@ When Claude Code has MCP access to Schaltwerk, you can manage sessions using nat
   <Card title="MCP Setup" icon="plug" href="/mcp/integration">
     Set up Claude Code with MCP
   </Card>
-  <Card title="Using Schaltwerk" icon="play" href="/guides/using-schaltwerk">
+  <Card title="Using Lucode" icon="play" href="/guides/using-lucode">
     Learn the workflow
   </Card>
 </CardGroup>

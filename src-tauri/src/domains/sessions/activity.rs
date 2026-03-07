@@ -458,13 +458,13 @@ mod tests {
 
         // create worktree
         let worktree_path = repo_path
-            .join(".schaltwerk")
+            .join(".lucode")
             .join("worktrees")
             .join("test-session");
         let parent_branch = get_current_branch(&repo_path).unwrap();
         create_worktree_from_base(
             &repo_path,
-            "schaltwerk/test-session",
+            "lucode/test-session",
             &worktree_path,
             &parent_branch,
         )
@@ -485,7 +485,7 @@ mod tests {
             epic_id: None,
             repository_path: repo_path.clone(),
             repository_name: "repo".into(),
-            branch: "schaltwerk/test-session".into(),
+            branch: "lucode/test-session".into(),
             parent_branch: parent_branch.clone(),
             original_parent_branch: Some(parent_branch.clone()),
             worktree_path: worktree_path.clone(),
@@ -555,7 +555,7 @@ mod tests {
             epic_id: None,
             repository_path: temp.path().to_path_buf(),
             repository_name: "repo".into(),
-            branch: "schaltwerk/fallback".into(),
+            branch: "lucode/fallback".into(),
             parent_branch: "main".into(),
             original_parent_branch: Some("main".into()),
             worktree_path: dir.clone(),

@@ -24,10 +24,10 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 describe('PermissionPrompt', () => {
   const diagnostics = {
-    bundleIdentifier: 'com.mariuswichtner.schaltwerk',
-    executablePath: '/Applications/Schaltwerk.app/Contents/MacOS/schaltwerk',
+    bundleIdentifier: 'com.lucacri.lucode',
+    executablePath: '/Applications/Lucode.app/Contents/MacOS/lucode',
     installKind: 'app-bundle' as const,
-    appDisplayName: 'Schaltwerk',
+    appDisplayName: 'Lucode',
   }
 
   beforeEach(() => {
@@ -53,7 +53,7 @@ describe('PermissionPrompt', () => {
     })
 
     expect(
-      await screen.findByText(/Enable Documents access for Schaltwerk in System Settings/i)
+      await screen.findByText(/Enable Documents access for Lucode in System Settings/i)
     ).toBeInTheDocument()
     expect(
       screen.getByText(/Current executable:/i)

@@ -1,6 +1,6 @@
- # Schaltwerk MCP Server
+ # Lucode MCP Server
 
- This is the Model Context Protocol (MCP) server for Schaltwerk, enabling AI assistants to manage Schaltwerk sessions programmatically.
+ This is the Model Context Protocol (MCP) server for Lucode, enabling AI assistants to manage Lucode sessions programmatically.
 
 ## 🔒 Security & Safety
 
@@ -45,7 +45,7 @@
 - Preserve all Git commits and history even after session operations
 
 ### Safe Operation Guidelines
-- Use `schaltwerk_pause` instead of `schaltwerk_cancel` when uncertain about session state
+- Use `lucode_pause` instead of `lucode_cancel` when uncertain about session state
 - If MCP server is not accessible or operations fail, ask user for help immediately
 - Never attempt manual operations when MCP server access is unavailable
 - Always prefer safe operations that preserve work over destructive ones
@@ -61,7 +61,7 @@
 
 ### Quick Setup (Recommended)
 
-From the schaltwerk repository root:
+From the lucode repository root:
 
 ```bash
 just mcp-setup
@@ -92,7 +92,7 @@ Since the orchestrator runs Claude Code CLI (not Claude Desktop), configure it u
 
 ##### Option 1: CLI Command (Recommended)
 ```bash
-claude mcp add --transport stdio --scope project schaltwerk node /path/to/schaltwerk/mcp-server/build/schaltwerk-mcp-server.js
+claude mcp add --transport stdio --scope project lucode node /path/to/lucode/mcp-server/build/lucode-mcp-server.js
 ```
 
 ##### Option 2: Manual Configuration
@@ -101,20 +101,20 @@ Add to `.claude.json` in your project root:
 ```json
 {
   "mcpServers": {
-    "schaltwerk": {
+    "lucode": {
       "type": "stdio",
       "command": "node",
-      "args": ["/path/to/schaltwerk/mcp-server/build/schaltwerk-mcp-server.js"]
+      "args": ["/path/to/lucode/mcp-server/build/lucode-mcp-server.js"]
     }
   }
 }
 ```
 
-Replace `/path/to/schaltwerk` with the actual path to your schaltwerk repository.
+Replace `/path/to/lucode` with the actual path to your lucode repository.
 
 ### 3. Restart Orchestrator
 
-Use the Settings modal (⌘,) in Schaltwerk to restart the orchestrator and reload the MCP configuration.
+Use the Settings modal (⌘,) in Lucode to restart the orchestrator and reload the MCP configuration.
 
 ## Usage
 
@@ -123,7 +123,7 @@ Once configured, Claude (and other supported agents) can use the following tools
 ### Creating Sessions
 
 ```
-Use schaltwerk_create to start a new session:
+Use lucode_create to start a new session:
 - name: "feature-auth"
 - prompt: "implement user authentication with JWT"
 - agent_type: "claude" (supported: claude, opencode, gemini, codex, droid, qwen, amp, kilocode, terminal)
@@ -136,7 +136,7 @@ Note: Use agent_type "terminal" for manual work without AI agents - opens only a
 ### Listing Sessions
 
 ```
-Use schaltwerk_list to see all sessions:
+Use lucode_list to see all sessions:
 - Shows review status ([NEW] or [REVIEWED])
 - Shows last modified time
 - Shows agent type used
@@ -146,13 +146,13 @@ Use schaltwerk_list to see all sessions:
  ### Cancelling Sessions (EXTREME CAUTION REQUIRED)
 
   ```
-  Use schaltwerk_cancel ONLY for sessions that are fully committed and merged:
+  Use lucode_cancel ONLY for sessions that are fully committed and merged:
   - session_name: "feature-auth"
   - force: true (required for safety bypass)
   - CRITICAL: Only cancel after successful merge to main AND passing tests
   - DANGER: This permanently deletes Git branch and loses ALL uncommitted work
   - PROTECTION: NEVER cancel reviewed sessions without user consent and merge validation
-  - SAFETY: Use schaltwerk_pause for uncertain sessions (preserves all work)
+  - SAFETY: Use lucode_pause for uncertain sessions (preserves all work)
   - RECOVERY: Git commits can be recovered, but uncommitted changes are permanently lost
   ```
 
@@ -160,9 +160,9 @@ Use schaltwerk_list to see all sessions:
 
 The MCP server also exposes resources you can read:
 
-- `schaltwerk://sessions` - All active sessions
-- `schaltwerk://sessions/reviewed` - Only reviewed sessions
-- `schaltwerk://sessions/new` - Only new (unreviewed) sessions
+- `lucode://sessions` - All active sessions
+- `lucode://sessions/reviewed` - Only reviewed sessions
+- `lucode://sessions/new` - Only new (unreviewed) sessions
 
 ## Development
 
@@ -171,7 +171,7 @@ The MCP server also exposes resources you can read:
 ```bash
 cd mcp-server
 bun run dev  # Watch mode for TypeScript (or: npm run dev)
-node build/schaltwerk-mcp-server.js  # Run the server
+node build/lucode-mcp-server.js  # Run the server
 ```
 
 ### Testing
@@ -203,7 +203,7 @@ bun run test     # or: npm run test
   - **Always preserve Git state** for failed merge operations
 
   ### Best Practices
-  - Use `schaltwerk_pause` instead of `schaltwerk_cancel` when uncertain
+  - Use `lucode_pause` instead of `lucode_cancel` when uncertain
   - Never delete reviewed sessions without successful merge validation
   - Preserve Git state for all session operations
   - Ask user for help if MCP server is not accessible
@@ -211,9 +211,9 @@ bun run test     # or: npm run test
 
  ## Architecture
 
- The MCP server communicates directly with the Schaltwerk SQLite database to manage sessions. It:
+ The MCP server communicates directly with the Lucode SQLite database to manage sessions. It:
 
- 1. Reads session data from `~/Library/Application Support/schaltwerk/sessions.db`
+ 1. Reads session data from `~/Library/Application Support/lucode/sessions.db`
  2. Creates Git worktrees for new sessions
  3. Updates session metadata in the database
  4. Manages review status tracking

@@ -61,7 +61,7 @@ mod tests {
             epic_id: None,
             repository_path: repo.to_path_buf(),
             repository_name: "test-repo".into(),
-            branch: "schaltwerk/test-session".into(),
+            branch: "lucode/test-session".into(),
             parent_branch: "main".into(),
             original_parent_branch: Some("main".into()),
             worktree_path: repo.join("worktrees").join("test-session"),
@@ -98,7 +98,7 @@ mod tests {
             .update_session_display_name(&session.id, "friendly-name")
             .unwrap();
         gateway
-            .update_session_branch(&session.id, "schaltwerk/friendly-name")
+            .update_session_branch(&session.id, "lucode/friendly-name")
             .unwrap();
         gateway
             .update_parent_branch(&session.id, "develop")

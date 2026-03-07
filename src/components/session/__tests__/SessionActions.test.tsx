@@ -150,6 +150,88 @@ describe('SessionActions – GitHub PR button', () => {
   })
 })
 
+describe('SessionActions – forge-aware buttons', () => {
+  it('hides both forge buttons when forge is unknown', () => {
+    const github: GithubIntegrationValue = {
+      status: null,
+      loading: false,
+      isAuthenticating: false,
+      isConnecting: false,
+      isCreatingPr: () => false,
+      authenticate: vi.fn(),
+      connectProject: vi.fn(),
+      createReviewedPr: vi.fn(),
+      getCachedPrUrl: () => undefined,
+      canCreatePr: false,
+      isGhMissing: false,
+      hasRepository: false,
+      refreshStatus: vi.fn(),
+    }
+
+    render(
+      <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+        <GithubIntegrationContext.Provider value={github}>
+          <SessionActions
+            sessionState="running"
+            sessionId="s1"
+            onCreatePullRequest={vi.fn()}
+            onCreateGitlabMr={vi.fn()}
+          />
+        </GithubIntegrationContext.Provider>
+      </GitlabIntegrationContext.Provider>
+    )
+
+    expect(screen.queryByLabelText('Create pull request')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Create GitLab merge request')).not.toBeInTheDocument()
+  })
+
+  it('shows GitHub button and hides GitLab when forge is github', () => {
+    const github: GithubIntegrationValue = {
+      status: { installed: true, authenticated: true, userLogin: 'u', repository: { nameWithOwner: 'o/r', defaultBranch: 'main' } },
+      loading: false, isAuthenticating: false, isConnecting: false,
+      isCreatingPr: () => false, authenticate: vi.fn(), connectProject: vi.fn(),
+      createReviewedPr: vi.fn(), getCachedPrUrl: () => undefined,
+      canCreatePr: true, isGhMissing: false, hasRepository: true, refreshStatus: vi.fn(),
+    }
+
+    render(
+      <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+        <GithubIntegrationContext.Provider value={github}>
+          <SessionActions sessionState="running" sessionId="s1" onCreatePullRequest={vi.fn()} onCreateGitlabMr={vi.fn()} />
+        </GithubIntegrationContext.Provider>
+      </GitlabIntegrationContext.Provider>
+    )
+
+    expect(screen.getByLabelText('Create pull request')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Create GitLab merge request')).not.toBeInTheDocument()
+  })
+
+  it('shows GitLab button and hides GitHub when forge is gitlab', () => {
+    const github: GithubIntegrationValue = {
+      status: null, loading: false, isAuthenticating: false, isConnecting: false,
+      isCreatingPr: () => false, authenticate: vi.fn(), connectProject: vi.fn(),
+      createReviewedPr: vi.fn(), getCachedPrUrl: () => undefined,
+      canCreatePr: false, isGhMissing: false, hasRepository: false, refreshStatus: vi.fn(),
+    }
+    const gitlab: GitlabIntegrationValue = {
+      ...defaultGitlabValue,
+      sources: [{ url: 'https://gitlab.example.com', token: 't', issuesEnabled: true, mrsEnabled: true }],
+      hasSources: true,
+    }
+
+    render(
+      <GitlabIntegrationContext.Provider value={gitlab}>
+        <GithubIntegrationContext.Provider value={github}>
+          <SessionActions sessionState="running" sessionId="s1" onCreatePullRequest={vi.fn()} onCreateGitlabMr={vi.fn()} />
+        </GithubIntegrationContext.Provider>
+      </GitlabIntegrationContext.Provider>
+    )
+
+    expect(screen.queryByLabelText('Create pull request')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Create GitLab merge request')).toBeInTheDocument()
+  })
+})
+
 describe('SessionActions – Running state', () => {
   const mockGithub = {
     canCreatePr: true,

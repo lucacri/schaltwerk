@@ -921,7 +921,7 @@ mod tests {
         let (_tmp, repo_path) = create_temp_repo_path();
 
         // Trigger an insert via another settings path to simulate real initialization order
-        db.set_project_branch_prefix(&repo_path, "schaltwerk")
+        db.set_project_branch_prefix(&repo_path, "lucode")
             .expect("store branch prefix");
 
         let preferences = db

@@ -1,18 +1,18 @@
 {
-  "name": "schaltwerk-docs",
+  "name": "lucode-docs",
   "version": "1.0.0",
-  "description": "Schaltwerk documentation built with Mintlify",
+  "description": "Lucode documentation built with Mintlify",
   "scripts": {
     "dev": "mintlify dev",
     "build": "mintlify build",
     "preview": "mintlify preview"
   },
   "keywords": [
-    "schaltwerk",
+    "lucode",
     "documentation",
     "mintlify"
   ],
-  "author": "Schaltwerk Team",
+  "author": "Lucode Team",
   "license": "MIT",
   "devDependencies": {
     "mintlify": "^4.2.257"

@@ -3,7 +3,7 @@ title: Worktrees & Terminals
 description: 'Why each session gets its own sandbox—and how to work inside it'
 ---
 
-Every session owns a dedicated git worktree under `.schaltwerk/worktrees/`. Think of it as spinning up a miniature sub-team with their own clone of the repo: the agent can install dependencies, run tests, and even break things without disturbing your main branch. This page explains why that isolation matters, how the built-in terminals behave, and the handful of tools you have for jumping in manually.
+Every session owns a dedicated git worktree under `.lucode/worktrees/`. Think of it as spinning up a miniature sub-team with their own clone of the repo: the agent can install dependencies, run tests, and even break things without disturbing your main branch. This page explains why that isolation matters, how the built-in terminals behave, and the handful of tools you have for jumping in manually.
 
 ## Why Worktree Isolation Matters
 
@@ -18,7 +18,7 @@ Every session owns a dedicated git worktree under `.schaltwerk/worktrees/`. Thin
 
 ## Terminal Behavior
 
-Schaltwerk attaches a pair of PTY terminals to every session so agents and humans can work side by side.
+Lucode attaches a pair of PTY terminals to every session so agents and humans can work side by side.
 
 <CardGroup cols={2}>
   <Card title="Top Terminal (Agent)" icon="robot" color="#ec4899">
@@ -37,7 +37,7 @@ Schaltwerk attaches a pair of PTY terminals to every session so agents and human
 
 Need hands-on control? Use the **Open** button in the top bar.
 
-- **Open session worktree** – Pick VS Code, Cursor, Zed, your terminal, etc., and Schaltwerk launches the session’s worktree there so you can pair-program with the agent. Zed’s Agent Client Protocol (ACP) is supported so future automations can attach directly to the editor from the session view.
+- **Open session worktree** – Pick VS Code, Cursor, Zed, your terminal, etc., and Lucode launches the session’s worktree there so you can pair-program with the agent. Zed’s Agent Client Protocol (ACP) is supported so future automations can attach directly to the editor from the session view.
 - **Open orchestrator** – From the orchestrator tab, Open launches the main/feature branch directly (ideal for finishing tricky fixes yourself).
 
 ![Open dropdown menu showing options for Finder, Cursor, VS Code (checked), Zed, IntelliJ IDEA, Ghostty, Warp, and Terminal](/images/open-in-editor.png)
@@ -49,10 +49,10 @@ Agents and humans can edit the same worktree together—just remember to review 
 Configure Run Mode per project via **Settings → Run & Environment → Run Script** with a command like `bun run test` / `npm run test` or `bun run dev` / `npm run dev`. Once set:
 
 - Press `⌘E` or click **Run** in the bottom terminal to execute the script inside the session worktree.
-- Schaltwerk shows the running state, so you can see which sessions are testing or serving right now.
+- Lucode shows the running state, so you can see which sessions are testing or serving right now.
 - Agents keep working in the top terminal while you observe logs below.
 
-For setup details, see [Using Schaltwerk → Run Mode](/guides/using-schaltwerk#run-mode).
+For setup details, see [Using Lucode → Run Mode](/guides/using-lucode#run-mode).
 
 ## Dependencies & Shared Services
 

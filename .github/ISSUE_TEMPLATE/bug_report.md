@@ -21,9 +21,9 @@ What should happen
 What actually happens
 
 ## Environment
-- Schaltwerk version:
+- Lucode version:
 - macOS version:
 - Git version:
 
 ## Logs
-Relevant logs from `~/Library/Application Support/schaltwerk/logs/`
+Relevant logs from `~/Library/Application Support/lucode/logs/`

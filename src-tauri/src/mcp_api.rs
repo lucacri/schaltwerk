@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use url::form_urlencoded;
 
-use schaltwerk::domains::settings::setup_script::SetupScriptService;
+use lucode::domains::settings::setup_script::SetupScriptService;
 use crate::commands::github::{CreateSessionPrArgs, github_create_session_pr_impl};
 use crate::commands::schaltwerk_core::{
     MergeCommandError, merge_session_with_events, schaltwerk_core_cancel_session,
@@ -20,15 +20,15 @@ use crate::commands::schaltwerk_core::{
 use crate::commands::sessions_refresh::{SessionsRefreshReason, request_sessions_refresh};
 use crate::mcp_api::diff_api::{DiffApiError, DiffChunkRequest, DiffScope, SummaryQuery};
 use crate::{REQUEST_PROJECT_OVERRIDE, get_core_read, get_core_write, SETTINGS_MANAGER};
-use schaltwerk::infrastructure::database::db_project_config::ProjectConfigMethods;
-use schaltwerk::schaltwerk_core::db_app_config::AppConfigMethods;
-use schaltwerk::shared::terminal_id::terminal_id_for_orchestrator_top;
+use lucode::infrastructure::database::db_project_config::ProjectConfigMethods;
+use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
+use lucode::shared::terminal_id::terminal_id_for_orchestrator_top;
 use crate::commands::schaltwerk_core::agent_launcher;
-use schaltwerk::domains::attention::get_session_attention_state;
-use schaltwerk::domains::merge::MergeMode;
-use schaltwerk::domains::sessions::entity::{Session, Spec};
-use schaltwerk::infrastructure::events::{emit_event, SchaltEvent};
-use schaltwerk::schaltwerk_core::{SessionManager, SessionState};
+use lucode::domains::attention::get_session_attention_state;
+use lucode::domains::merge::MergeMode;
+use lucode::domains::sessions::entity::{Session, Spec};
+use lucode::infrastructure::events::{emit_event, SchaltEvent};
+use lucode::schaltwerk_core::{SessionManager, SessionState};
 
 mod diff_api;
 
@@ -528,7 +528,7 @@ mod tests {
     use chrono::Utc;
     use git2::Repository;
     use hyper::HeaderMap;
-    use schaltwerk::schaltwerk_core::Database;
+    use lucode::schaltwerk_core::Database;
     use std::cell::RefCell;
     use std::path::Path;
     use std::path::PathBuf;
@@ -1136,7 +1136,7 @@ async fn start_spec_session(
     let manager = match get_core_write().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
-            error!("Failed to get schaltwerk core: {e}");
+            error!("Failed to get lucode core: {e}");
             return Ok(error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Internal error: {e}"),
@@ -1258,7 +1258,7 @@ async fn create_session(
     let was_user_edited = user_edited_name.unwrap_or(false);
     let was_auto_generated = looks_docker_style && !was_user_edited;
 
-    use schaltwerk::domains::sessions::service::SessionCreationParams;
+    use lucode::domains::sessions::service::SessionCreationParams;
 
     let params = SessionCreationParams {
         name,
@@ -1966,7 +1966,7 @@ async fn mark_session_reviewed(
     let manager = match get_core_write().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
-            error!("Failed to get schaltwerk core: {e}");
+            error!("Failed to get lucode core: {e}");
             return Ok(error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Internal error: {e}"),
@@ -1999,7 +1999,7 @@ async fn convert_session_to_spec(
     let manager = match get_core_write().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
-            error!("Failed to get schaltwerk core: {e}");
+            error!("Failed to get lucode core: {e}");
             return Ok(error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Internal error: {e}"),
@@ -2250,7 +2250,7 @@ async fn execute_project_run_script() -> Result<Response<String>, hyper::Error> 
         .map(std::path::Path::new)
         .unwrap_or(repo_path.as_path());
 
-    let invocation = schaltwerk::domains::terminal::build_login_shell_invocation(&run_script.command);
+    let invocation = lucode::domains::terminal::build_login_shell_invocation(&run_script.command);
 
     let mut cmd = tokio::process::Command::new(&invocation.program);
     cmd.args(&invocation.args)

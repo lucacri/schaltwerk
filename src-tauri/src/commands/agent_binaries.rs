@@ -1,8 +1,8 @@
 use crate::SETTINGS_MANAGER;
 use futures::future::join_all;
 use log::{debug, info};
-use schaltwerk::binary_detector::{BinaryDetector, DetectedBinary};
-use schaltwerk::services::AgentBinaryConfig;
+use lucode::binary_detector::{BinaryDetector, DetectedBinary};
+use lucode::services::AgentBinaryConfig;
 use tauri::async_runtime::spawn_blocking;
 
 pub async fn detect_agent_binaries_nonblocking(
@@ -196,7 +196,7 @@ pub async fn get_all_agent_binary_configs() -> Result<Vec<AgentBinaryConfig>, St
         .ok_or_else(|| "Settings manager not initialized".to_string())?;
 
     let known_agents: Vec<String> =
-        schaltwerk::domains::agents::manifest::AgentManifest::supported_agents();
+        lucode::domains::agents::manifest::AgentManifest::supported_agents();
 
     let futures = known_agents.into_iter().map(|agent| {
         let settings_manager = settings_manager.clone();
@@ -249,7 +249,7 @@ pub async fn detect_all_agent_binaries() -> Result<Vec<AgentBinaryConfig>, Strin
         .ok_or_else(|| "Settings manager not initialized".to_string())?;
 
     let known_agents: Vec<String> =
-        schaltwerk::domains::agents::manifest::AgentManifest::supported_agents();
+        lucode::domains::agents::manifest::AgentManifest::supported_agents();
 
     let futures = known_agents.into_iter().map(|agent| {
         let settings_manager = settings_manager.clone();

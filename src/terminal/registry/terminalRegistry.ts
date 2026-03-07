@@ -4,6 +4,7 @@ import { disposeGpuRenderer } from '../gpu/gpuRendererRegistry';
 import { sessionTerminalBaseVariants, sanitizeSessionName } from '../../common/terminalIdentity';
 import { terminalOutputManager } from '../stream/terminalOutputManager';
 import { slicePreservingSurrogates } from '../paste/bracketedPaste';
+import { profileSwitchPhase } from '../profiling/switchProfiler';
 
 const ESC = '\x1b';
 const CLEAR_SCROLLBACK_SEQ = `${ESC}[3J`;
@@ -19,7 +20,9 @@ const ALT_SCREEN_ENABLE_1047 = `${ESC}[?1047h`;
 const ALT_SCREEN_DISABLE_1047 = `${ESC}[?1047l`;
 const CONTROL_SEQUENCE_TAIL_MAX = 32;
 const MAX_PENDING_CHARS_WHILE_DETACHED = 512 * 1024;
-const FLUSH_CHUNK_SIZE = 64 * 1024;
+const MAX_PENDING_CHARS_WHILE_ATTACHED = 4 * 1024 * 1024;
+const MAX_FLUSH_PAYLOAD_CHARS = 8 * 1024;
+const FLUSH_CHUNK_SIZE = 8 * 1024;
 
 function stripAnsiSequences(text: string): string {
   // Minimal ANSI strip to detect "boundary-only" chunks without using control-character regexes.
@@ -197,7 +200,7 @@ class TerminalInstanceRegistry {
     const bufBefore = record.xterm.raw.buffer?.active;
     logger.debug(`[Registry] Attaching terminal ${id}: isTUI=${record.xterm.isTuiMode()}, wasAttached=${record.attached}, pendingChunks=${record.pendingChunks?.length ?? 0}, baseY=${bufBefore?.baseY}, viewportY=${bufBefore?.viewportY}`);
 
-    record.xterm.attach(container);
+    profileSwitchPhase('registry.attach.xterm', () => record.xterm.attach(container), { terminalId: id });
     record.attached = true;
     this.scheduleFlush(record, 'attach');
 
@@ -411,20 +414,32 @@ class TerminalInstanceRegistry {
       return;
     }
 
-    if (record.xterm.isTuiMode()) {
-      if (record.tuiHoldRedraw) {
-        return;
-      }
-      const parsingInFlight = record.latestWriteId !== record.latestParseId;
-      if (parsingInFlight) {
-        record.flushAfterParse = true;
-        return;
-      }
+    if (record.xterm.isTuiMode() && record.tuiHoldRedraw) {
+      return;
     }
 
-    const combined = record.pendingChunks.join('');
-    record.pendingChunks = [];
-    record.pendingByteLength = 0;
+    const parsingInFlight = record.latestWriteId !== record.latestParseId;
+    if (parsingInFlight) {
+      record.flushAfterParse = true;
+      return;
+    }
+
+    let combined = '';
+    while (record.pendingChunks.length > 0 && combined.length < MAX_FLUSH_PAYLOAD_CHARS) {
+      combined += record.pendingChunks.shift();
+    }
+
+    if (combined.length > FLUSH_CHUNK_SIZE) {
+      const overflow = slicePreservingSurrogates(combined, FLUSH_CHUNK_SIZE, combined.length);
+      combined = slicePreservingSurrogates(combined, 0, FLUSH_CHUNK_SIZE);
+      record.pendingChunks.unshift(overflow);
+    }
+
+    record.pendingByteLength -= combined.length;
+
+    if (record.pendingChunks.length > 0) {
+      this.scheduleFlush(record, 'overflow');
+    }
     const hadClear = record.hadClearInBatch ?? false;
     record.hadClearInBatch = false;
 
@@ -553,7 +568,9 @@ class TerminalInstanceRegistry {
 
       const chunk = slicePreservingSurrogates(payload, offset, offset + FLUSH_CHUNK_SIZE);
       offset += chunk.length;
-      record.xterm.raw.write(chunk, writeNextChunk);
+      record.xterm.raw.write(chunk, () => {
+        setTimeout(writeNextChunk, 0);
+      });
     };
 
     writeNextChunk();
@@ -633,16 +650,17 @@ class TerminalInstanceRegistry {
         record.pendingChunks.push(processedChunk);
         record.pendingByteLength += processedChunk.length;
 
-        if (!record.attached && record.pendingByteLength > MAX_PENDING_CHARS_WHILE_DETACHED) {
-          while (record.pendingChunks.length > 1 && record.pendingByteLength > MAX_PENDING_CHARS_WHILE_DETACHED) {
+        const cap = record.attached ? MAX_PENDING_CHARS_WHILE_ATTACHED : MAX_PENDING_CHARS_WHILE_DETACHED;
+        if (record.pendingByteLength > cap) {
+          while (record.pendingChunks.length > 1 && record.pendingByteLength > cap) {
             const dropped = record.pendingChunks.shift();
             if (!dropped) break;
             record.pendingByteLength -= dropped.length;
           }
 
-          if (record.pendingByteLength > MAX_PENDING_CHARS_WHILE_DETACHED && record.pendingChunks.length === 1) {
+          if (record.pendingByteLength > cap && record.pendingChunks.length === 1) {
             const kept = record.pendingChunks[0];
-            const sliceStart = Math.max(0, kept.length - MAX_PENDING_CHARS_WHILE_DETACHED);
+            const sliceStart = Math.max(0, kept.length - cap);
             record.pendingChunks[0] = kept.slice(sliceStart);
             record.pendingByteLength = record.pendingChunks[0].length;
           }

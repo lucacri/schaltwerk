@@ -59,24 +59,24 @@ pub fn get_app_version() -> String {
 #[cfg(test)]
 mod current_directory_tests {
     use super::*;
-    use schaltwerk::utils::env_adapter::EnvAdapter;
+    use lucode::utils::env_adapter::EnvAdapter;
     use serial_test::serial;
 
     #[tokio::test]
     #[serial]
     async fn get_current_directory_ignores_env_override() {
-        EnvAdapter::remove_var("SCHALTWERK_START_DIR");
+        EnvAdapter::remove_var("LUCODE_START_DIR");
         let baseline = get_current_directory()
             .await
             .expect("baseline current directory");
-        EnvAdapter::set_var("SCHALTWERK_START_DIR", "/tmp/schaltwerk_should_ignore");
+        EnvAdapter::set_var("LUCODE_START_DIR", "/tmp/lucode_should_ignore");
 
         let actual = get_current_directory().await.expect("current directory");
 
-        EnvAdapter::remove_var("SCHALTWERK_START_DIR");
+        EnvAdapter::remove_var("LUCODE_START_DIR");
         assert_eq!(
             actual, baseline,
-            "should ignore SCHALTWERK_START_DIR override"
+            "should ignore LUCODE_START_DIR override"
         );
     }
 }
@@ -107,7 +107,7 @@ pub fn schaltwerk_core_log_frontend_message(level: String, message: String) -> R
     Ok(())
 }
 
-const ALLOWED_ENV_VARS: &[&str] = &["SCHALTWERK_TERMINAL_TRANSPORT"];
+const ALLOWED_ENV_VARS: &[&str] = &["LUCODE_TERMINAL_TRANSPORT"];
 
 #[tauri::command]
 pub fn get_environment_variable(name: String) -> Result<Option<String>, String> {

@@ -60,7 +60,7 @@ impl ProcessMcpBackend {
         let path = project_root
             .join("mcp-server")
             .join("build")
-            .join("schaltwerk-mcp-server.js");
+            .join("lucode-mcp-server.js");
         if !path.exists() {
             Err(format!("MCP server not found at: {}", path.display()))
         } else {

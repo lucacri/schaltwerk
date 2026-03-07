@@ -427,7 +427,7 @@ function AppContent() {
 
             toast.pushToast({
               tone: 'success',
-              title: `Schaltwerk updated to ${versionLabel}`,
+              title: `Lucode updated to ${versionLabel}`,
               description: 'Restart to finish applying the update.',
               durationMs: 10000,
               action: {
@@ -445,7 +445,7 @@ function AppContent() {
               toast.pushToast({
                 tone: 'info',
                 title: `You're up to date`,
-                description: `Schaltwerk ${payload.currentVersion} is the latest release.`,
+                description: `Lucode ${payload.currentVersion} is the latest release.`,
                 durationMs: 3500,
               })
             }
@@ -476,7 +476,7 @@ function AppContent() {
                 case 'network':
                   return 'Connect to the internet and try again.'
                 case 'permission':
-                  return 'Schaltwerk could not replace the application. Open it directly from /Applications or reinstall from the latest DMG.'
+                  return 'Lucode could not replace the application. Open it directly from /Applications or reinstall from the latest DMG.'
                 case 'signature':
                   return 'The downloaded update failed verification. A fresh build will be published shortly.'
                 default:

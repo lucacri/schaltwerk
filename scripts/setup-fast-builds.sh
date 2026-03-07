@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "Setting up fast build optimizations for Schaltwerk"
+echo "Setting up fast build optimizations for Lucode"
 echo ""
 
 OS=$(uname -s)

@@ -120,7 +120,7 @@ const diffLineSchema = {
 } as const
 
 export const toolOutputSchemas = {
-  schaltwerk_create: {
+  lucode_create: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -145,7 +145,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_list: {
+  lucode_list: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -158,7 +158,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_send_message: {
+  lucode_send_message: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -170,7 +170,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_cancel: {
+  lucode_cancel: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -182,7 +182,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_spec_create: {
+  lucode_spec_create: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -205,7 +205,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_draft_update: {
+  lucode_draft_update: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -219,7 +219,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_current_spec_update: {
+  lucode_current_spec_update: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -233,7 +233,7 @@ export const toolOutputSchemas = {
     additionalProperties: true,
   },
 
-  schaltwerk_get_setup_script: {
+  lucode_get_setup_script: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -244,7 +244,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_set_setup_script: {
+  lucode_set_setup_script: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -255,7 +255,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_get_worktree_base_directory: {
+  lucode_get_worktree_base_directory: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -266,7 +266,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_set_worktree_base_directory: {
+  lucode_set_worktree_base_directory: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -277,7 +277,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_spec_list: {
+  lucode_spec_list: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -290,12 +290,12 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_spec_read: {
+  lucode_spec_read: {
     $schema: draft2020,
     ...specDocumentSchema,
   },
 
-  schaltwerk_diff_summary: {
+  lucode_diff_summary: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -322,7 +322,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_diff_chunk: {
+  lucode_diff_chunk: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -357,7 +357,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_session_spec: {
+  lucode_session_spec: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -369,7 +369,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_draft_start: {
+  lucode_draft_start: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -383,7 +383,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_draft_list: {
+  lucode_draft_list: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -409,7 +409,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_draft_delete: {
+  lucode_draft_delete: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -420,7 +420,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_get_current_tasks: {
+  lucode_get_current_tasks: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -433,7 +433,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_mark_session_reviewed: {
+  lucode_mark_session_reviewed: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -444,7 +444,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_convert_to_spec: {
+  lucode_convert_to_spec: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -455,7 +455,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_merge_session: {
+  lucode_merge_session: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -482,7 +482,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_create_pr: {
+  lucode_create_pr: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -497,7 +497,7 @@ export const toolOutputSchemas = {
     required: ['session', 'branch', 'cancel_requested', 'cancel_queued'],
     additionalProperties: false,
   },
-  schaltwerk_run_script: {
+  lucode_run_script: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -510,7 +510,7 @@ export const toolOutputSchemas = {
     required: ['success', 'command', 'exit_code', 'stdout', 'stderr'],
     additionalProperties: false,
   },
-  schaltwerk_create_epic: {
+  lucode_create_epic: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -519,7 +519,7 @@ export const toolOutputSchemas = {
     required: ['epic'],
     additionalProperties: false,
   },
-  schaltwerk_list_epics: {
+  lucode_list_epics: {
     $schema: draft2020,
     type: 'object',
     properties: {
@@ -532,7 +532,7 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  schaltwerk_prepare_merge: {
+  lucode_prepare_merge: {
     $schema: draft2020,
     type: 'object',
     properties: {

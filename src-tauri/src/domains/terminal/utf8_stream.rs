@@ -1,4 +1,4 @@
-// schaltwerk/domains/terminal/utf8_stream.rs
+// lucode/domains/terminal/utf8_stream.rs
 use std::time::{Duration, Instant};
 
 /// How to handle malformed UTF‑8 subparts.
@@ -128,7 +128,7 @@ impl Utf8Stream {
                 InvalidPolicy::Replace => {
                     // Keep a WARN if you *want* to see visible replacements.
                     log::warn!(
-                        target: "schaltwerk::domains::terminal::coalescing",
+                        target: "lucode::domains::terminal::coalescing",
                         "Terminal {}: malformed UTF‑8; replaced with U+FFFD (not dropped). \
                          ({} replacements since last notice)",
                         terminal_id,
@@ -138,7 +138,7 @@ impl Utf8Stream {
                 InvalidPolicy::Remove => {
                     // Be quiet by default; using DEBUG prevents log storms.
                     log::debug!(
-                        target: "schaltwerk::domains::terminal::coalescing",
+                        target: "lucode::domains::terminal::coalescing",
                         "Terminal {}: suppressed malformed UTF‑8 subparts. \
                          ({} events since last notice)",
                         terminal_id,

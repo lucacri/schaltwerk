@@ -1,15 +1,15 @@
 {
-  "name": "schaltwerk-mcp-server",
+  "name": "lucode-mcp-server",
   "version": "1.0.0",
-  "description": "Schaltwerk MCP Server - TypeScript implementation for session management",
+  "description": "Lucode MCP Server - TypeScript implementation for session management",
   "type": "module",
   "license": "MIT",
-  "author": "Schaltwerk Contributors",
+  "author": "Lucode Contributors",
   "bin": {
-    "schaltwerk-mcp-server": "./build/schaltwerk-mcp-server.js"
+    "lucode-mcp-server": "./build/lucode-mcp-server.js"
   },
   "scripts": {
-    "build": "mkdir -p node_modules/.cache && tsc && chmod +x build/schaltwerk-mcp-server.js",
+    "build": "mkdir -p node_modules/.cache && tsc && chmod +x build/lucode-mcp-server.js",
     "dev": "mkdir -p node_modules/.cache && tsc --watch",
     "test": "bun test",
     "test:watch": "bun test --watch",

@@ -72,9 +72,9 @@ const mockSessions = [
     name: 'alpha',
     repository_path: mockProjectPath,
     repository_name: 'mock-project-structured',
-    branch: 'schaltwerk/alpha',
+    branch: 'lucode/alpha',
     parent_branch: 'main',
-    worktree_path: `${mockProjectPath}/.schaltwerk/worktrees/alpha`,
+    worktree_path: `${mockProjectPath}/.lucode/worktrees/alpha`,
     status: 'spec',
     created_at: Date.now(),
     updated_at: Date.now(),
@@ -92,7 +92,7 @@ const mockTasks = [
     display_name: 'Alpha',
     status: 'spec',
     session_state: 'Spec',
-    branch: 'schaltwerk/alpha',
+    branch: 'lucode/alpha',
     ready_to_merge: false,
     original_agent_type: 'claude',
     initial_prompt: 'prompt',
@@ -105,15 +105,15 @@ const getCurrentTasksMock = mock(() => Promise.resolve(mockTasks))
 const createSessionMock = mock(() =>
   Promise.resolve({
     name: 'beta',
-    branch: 'schaltwerk/beta',
-    worktree_path: `${mockProjectPath}/.schaltwerk/worktrees/beta`,
+    branch: 'lucode/beta',
+    worktree_path: `${mockProjectPath}/.lucode/worktrees/beta`,
     parent_branch: 'main',
     ready_to_merge: false,
     initial_prompt: 'do work',
   })
 )
 
-let bridgeModule: typeof import('../src/schaltwerk-bridge')
+let bridgeModule: typeof import('../src/lucode-bridge')
 let originalListSessions: ((filter?: any) => Promise<any>) | undefined
 let originalGetCurrentTasks: (() => Promise<any>) | undefined
 let originalCreateSession: ((...args: any[]) => Promise<any>) | undefined
@@ -125,18 +125,18 @@ describe('Structured content responses', () => {
       fs.mkdirSync(mockProjectPath, { recursive: true })
       createdProjectDir = true
     }
-    process.env.SCHALTWERK_PROJECT_PATH = mockProjectPath
-    bridgeModule = await import('../src/schaltwerk-bridge')
+    process.env.LUCODE_PROJECT_PATH = mockProjectPath
+    bridgeModule = await import('../src/lucode-bridge')
 
-    originalListSessions = bridgeModule.SchaltwerkBridge.prototype.listSessionsByState
-    originalGetCurrentTasks = bridgeModule.SchaltwerkBridge.prototype.getCurrentTasks
-    originalCreateSession = bridgeModule.SchaltwerkBridge.prototype.createSession
+    originalListSessions = bridgeModule.LucodeBridge.prototype.listSessionsByState
+    originalGetCurrentTasks = bridgeModule.LucodeBridge.prototype.getCurrentTasks
+    originalCreateSession = bridgeModule.LucodeBridge.prototype.createSession
 
-    bridgeModule.SchaltwerkBridge.prototype.listSessionsByState = () => listSessionsMock()
-    bridgeModule.SchaltwerkBridge.prototype.getCurrentTasks = () => getCurrentTasksMock()
-    bridgeModule.SchaltwerkBridge.prototype.createSession = (...args: any[]) => createSessionMock(...args)
+    bridgeModule.LucodeBridge.prototype.listSessionsByState = () => listSessionsMock()
+    bridgeModule.LucodeBridge.prototype.getCurrentTasks = () => getCurrentTasksMock()
+    bridgeModule.LucodeBridge.prototype.createSession = (...args: any[]) => createSessionMock(...args)
 
-    await import(`../src/schaltwerk-mcp-server?structured=${Date.now()}`)
+    await import(`../src/lucode-mcp-server?structured=${Date.now()}`)
   })
 
   beforeEach(() => {
@@ -146,16 +146,16 @@ describe('Structured content responses', () => {
   })
 
   afterAll(() => {
-    delete process.env.SCHALTWERK_PROJECT_PATH
+    delete process.env.LUCODE_PROJECT_PATH
     if (bridgeModule) {
       if (originalListSessions) {
-        bridgeModule.SchaltwerkBridge.prototype.listSessionsByState = originalListSessions
+        bridgeModule.LucodeBridge.prototype.listSessionsByState = originalListSessions
       }
       if (originalGetCurrentTasks) {
-        bridgeModule.SchaltwerkBridge.prototype.getCurrentTasks = originalGetCurrentTasks
+        bridgeModule.LucodeBridge.prototype.getCurrentTasks = originalGetCurrentTasks
       }
       if (originalCreateSession) {
-        bridgeModule.SchaltwerkBridge.prototype.createSession = originalCreateSession
+        bridgeModule.LucodeBridge.prototype.createSession = originalCreateSession
       }
     }
 
@@ -170,22 +170,22 @@ describe('Structured content responses', () => {
 
     const listHandler = server.handlers.get(ListToolsRequestSchema)
     const response = await listHandler()
-    const listTool = response.tools.find((tool: any) => tool.name === 'schaltwerk_list')
-    const tasksTool = response.tools.find((tool: any) => tool.name === 'schaltwerk_get_current_tasks')
-    const createTool = response.tools.find((tool: any) => tool.name === 'schaltwerk_create')
+    const listTool = response.tools.find((tool: any) => tool.name === 'lucode_list')
+    const tasksTool = response.tools.find((tool: any) => tool.name === 'lucode_get_current_tasks')
+    const createTool = response.tools.find((tool: any) => tool.name === 'lucode_create')
 
     expect(listTool?.outputSchema).toBeDefined()
     expect(tasksTool?.outputSchema).toBeDefined()
     expect(createTool?.outputSchema).toBeDefined()
   })
 
-  it('returns structured sessions for schaltwerk_list', async () => {
+  it('returns structured sessions for lucode_list', async () => {
     const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
     const server = getServer()
 
     const callHandler = server.handlers.get(CallToolRequestSchema)
     const response = await callHandler({
-      params: { name: 'schaltwerk_list', arguments: { filter: 'spec', json: false } },
+      params: { name: 'lucode_list', arguments: { filter: 'spec', json: false } },
     })
 
     expect(listSessionsMock).toHaveBeenCalledTimes(1)
@@ -193,13 +193,13 @@ describe('Structured content responses', () => {
     expect(response.structuredContent?.sessions?.[0]?.name).toBe('alpha')
   })
 
-  it('returns structured tasks for schaltwerk_get_current_tasks', async () => {
+  it('returns structured tasks for lucode_get_current_tasks', async () => {
     const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
     const server = getServer()
 
     const callHandler = server.handlers.get(CallToolRequestSchema)
     const response = await callHandler({
-      params: { name: 'schaltwerk_get_current_tasks', arguments: { fields: ['name', 'status', 'branch'] } },
+      params: { name: 'lucode_get_current_tasks', arguments: { fields: ['name', 'status', 'branch'] } },
     })
 
     expect(getCurrentTasksMock).toHaveBeenCalledTimes(1)
@@ -207,13 +207,13 @@ describe('Structured content responses', () => {
     expect(response.structuredContent?.tasks?.[0]?.status).toBe('spec')
   })
 
-  it('returns structured session info for schaltwerk_create', async () => {
+  it('returns structured session info for lucode_create', async () => {
     const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
     const server = getServer()
 
     const callHandler = server.handlers.get(CallToolRequestSchema)
     const response = await callHandler({
-      params: { name: 'schaltwerk_create', arguments: { name: 'beta', prompt: 'do work', agent_type: 'claude' } },
+      params: { name: 'lucode_create', arguments: { name: 'beta', prompt: 'do work', agent_type: 'claude' } },
     })
 
     expect(createSessionMock).toHaveBeenCalledTimes(1)

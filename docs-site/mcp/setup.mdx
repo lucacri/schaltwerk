@@ -1,12 +1,12 @@
 ---
 title: MCP Server Setup
-description: 'Enable the bundled Schaltwerk MCP server so AI agents can manage sessions'
+description: 'Enable the bundled Lucode MCP server so AI agents can manage sessions'
 ---
 
-Schaltwerk ships with a prebuilt Model Context Protocol (MCP) server. In most cases you only need to **toggle it on in Settings** so your AI agent (Claude Code, Codex, OpenCode, or Gemini) can control sessions. Node.js is **not required** unless you plan to rebuild the server from source.
+Lucode ships with a prebuilt Model Context Protocol (MCP) server. In most cases you only need to **toggle it on in Settings** so your AI agent (Claude Code, Codex, OpenCode, or Gemini) can control sessions. Node.js is **not required** unless you plan to rebuild the server from source.
 
 <Info>
-  MCP automation works while Schaltwerk is running and the project is open. Make sure the relevant agent CLI (Claude Code, Codex, OpenCode, or Gemini) is installed and authenticated before enabling MCP.
+  MCP automation works while Lucode is running and the project is open. Make sure the relevant agent CLI (Claude Code, Codex, OpenCode, or Gemini) is installed and authenticated before enabling MCP.
 </Info>
 
 ## Enable the Bundled MCP Server (Recommended)
@@ -21,7 +21,7 @@ Schaltwerk ships with a prebuilt Model Context Protocol (MCP) server. In most ca
   </Step>
 
   <Step title="Enable the MCP toggle">
-    In the **MCP Server Configuration** panel, turn on **Enable MCP**. Schaltwerk writes the necessary `.mcp.json` entry using the embedded server binary.
+    In the **MCP Server Configuration** panel, turn on **Enable MCP**. Lucode writes the necessary `.mcp.json` entry using the embedded server binary.
 
     - If the agent CLI is missing, install it first (for example `brew install claude-code`).
     - When the toggle succeeds you’ll see the server status marked as **📦 Embedded** and configuration **✅ Configured**.
@@ -32,7 +32,7 @@ Schaltwerk ships with a prebuilt Model Context Protocol (MCP) server. In most ca
   </Step>
 
   <Step title="Verify">
-    In your agent (e.g., Claude Code) run a query such as “List my Schaltwerk sessions.” You should see the active sessions from this project.
+    In your agent (e.g., Claude Code) run a query such as “List my Lucode sessions.” You should see the active sessions from this project.
   </Step>
 </Steps>
 
@@ -55,7 +55,7 @@ Schaltwerk ships with a prebuilt Model Context Protocol (MCP) server. In most ca
   </Accordion>
 
   <Accordion title="Need to remove MCP configuration">
-    Turn off the **Enable MCP** toggle. Schaltwerk removes the entry from `.mcp.json` (or the agent’s global config).
+    Turn off the **Enable MCP** toggle. Lucode removes the entry from `.mcp.json` (or the agent’s global config).
   </Accordion>
 </AccordionGroup>
 
@@ -65,20 +65,20 @@ Once MCP is enabled, agents can call these tools:
 
 <CardGroup cols={2}>
   <Card title="Create Sessions" icon="plus">
-    `schaltwerk_create` — Create new specs or running sessions
+    `lucode_create` — Create new specs or running sessions
   </Card>
   <Card title="List Sessions" icon="list">
-    `schaltwerk_list` — Retrieve sessions with status info
+    `lucode_list` — Retrieve sessions with status info
   </Card>
   <Card title="Browse Specs" icon="document">
-    `schaltwerk_spec_list` — See spec names, sizes, and timestamps<br />
-    `schaltwerk_spec_read` — Fetch full markdown for a single spec
+    `lucode_spec_list` — See spec names, sizes, and timestamps<br />
+    `lucode_spec_read` — Fetch full markdown for a single spec
   </Card>
   <Card title="Cancel Sessions" icon="trash">
-    `schaltwerk_cancel` — Remove sessions after they merge (deletes worktree & branch; spec moves to Archives)
+    `lucode_cancel` — Remove sessions after they merge (deletes worktree & branch; spec moves to Archives)
   </Card>
   <Card title="Setup Scripts" icon="bolt">
-    `schaltwerk_get_setup_script` to read the current worktree bootstrap script, `schaltwerk_set_setup_script` to replace it after confirming which untracked config to copy.
+    `lucode_get_setup_script` to read the current worktree bootstrap script, `lucode_set_setup_script` to replace it after confirming which untracked config to copy.
   </Card>
 </CardGroup>
 
@@ -94,8 +94,8 @@ Once MCP is enabled, agents can call these tools:
 
 **Critical Rules:**
 - ✅ Canceling after merge is routine cleanup—it deletes the session worktree/branch and reclaims disk while keeping the spec in Archives
-- ❌ Canceling before merge or without tests risks losing uncommitted work; use `schaltwerk_pause` if you’re unsure
-- ⚠️ `schaltwerk_cancel` (and the UI’s cancel action) removes the session worktree & branch immediately. Any uncommitted changes vanish. The spec content is archived in **Settings → Archives** for recovery.
+- ❌ Canceling before merge or without tests risks losing uncommitted work; use `lucode_pause` if you’re unsure
+- ⚠️ `lucode_cancel` (and the UI’s cancel action) removes the session worktree & branch immediately. Any uncommitted changes vanish. The spec content is archived in **Settings → Archives** for recovery.
 
 ---
 

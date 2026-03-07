@@ -1,10 +1,10 @@
-# Schaltwerk MCP Server - Prompting Guide
+# Lucode MCP Server - Prompting Guide
 
-This guide helps AI assistants effectively use the Schaltwerk MCP server for managing development sessions.
+This guide helps AI assistants effectively use the Lucode MCP server for managing development sessions.
 
 ## System Prompt for AI Assistants
 
-When the Schaltwerk MCP server is available, you can manage development sessions directly. Here's how to use it effectively:
+When the Lucode MCP server is available, you can manage development sessions directly. Here's how to use it effectively:
 
 ### 🔒 Critical Security Guidelines
 
@@ -66,15 +66,15 @@ git commit -m "Recover lost session: <description>"
 
 ### Session Management Capabilities
 
-You have access to tools for managing Schaltwerk sessions:
+You have access to tools for managing Lucode sessions:
 
-1. **schaltwerk_create** - Create new isolated development sessions
-2. **schaltwerk_list** - View all sessions with their review status
-3. **schaltwerk_cancel** - Remove abandoned sessions
+1. **lucode_create** - Create new isolated development sessions
+2. **lucode_list** - View all sessions with their review status
+3. **lucode_cancel** - Remove abandoned sessions
 
 ### Creating Effective Sessions
 
-When creating sessions with `schaltwerk_create`, follow these guidelines:
+When creating sessions with `lucode_create`, follow these guidelines:
 
 #### Good Session Names
 - Use descriptive, hyphenated names: `user-auth`, `api-endpoints`, `fix-login-bug`
@@ -103,14 +103,14 @@ Be specific and detailed in your prompts:
 
 ### Monitoring Sessions
 
-Use `schaltwerk_list` to monitor session status:
+Use `lucode_list` to monitor session status:
 
 ```javascript
 // Get human-readable list
-schaltwerk_list()
+lucode_list()
 
 // Get JSON for parsing
-schaltwerk_list({ json: true })
+lucode_list({ json: true })
 ```
 
 Look for:
@@ -126,7 +126,7 @@ Look for:
 3. **Detailed Prompts**: Provide comprehensive context in initial prompts
 4. **Regular Monitoring**: Check session status periodically
 5. **Safe Session Management**:
-   - Use `schaltwerk_pause` instead of `schaltwerk_cancel` when uncertain about session state
+   - Use `lucode_pause` instead of `lucode_cancel` when uncertain about session state
    - Never cancel reviewed sessions without successful merge validation
    - Preserve Git state for all session operations
    - Ask user for help if MCP server operations fail or are unclear
@@ -136,8 +136,8 @@ Look for:
 
 #### Starting a New Feature
 ```
-"I'll create a new Schaltwerk session for the authentication feature."
-Use: schaltwerk_create(
+"I'll create a new Lucode session for the authentication feature."
+Use: lucode_create(
   name: "user-authentication",
   prompt: "Implement complete user authentication system with registration, login, JWT tokens, password reset via email, and session management",
   agent_type: "claude"
@@ -147,19 +147,19 @@ Use: schaltwerk_create(
 #### Managing Multiple Sessions
 ```
 "Let me check the status of all development sessions."
-Use: schaltwerk_list()
+Use: lucode_list()
 
 "I see there are 3 new sessions and 2 reviewed ones. Let me get details."
-Use: schaltwerk_list({ json: true })
+Use: lucode_list({ json: true })
 ```
 
 #### Cleaning Up (SAFE OPERATIONS ONLY)
 ```
 "For experimental sessions that are fully committed and merged, I can safely remove them."
-Use: schaltwerk_cancel(session_name: "experiment-feature", force: true)  // ONLY after merge validation
+Use: lucode_cancel(session_name: "experiment-feature", force: true)  // ONLY after merge validation
 
 "For uncertain sessions, use pause instead:"
-Use: schaltwerk_pause(session_name: "uncertain-session")  // SAFE - preserves all work
+Use: lucode_pause(session_name: "uncertain-session")  // SAFE - preserves all work
 ```
 
 ## Prompt Templates for Common Agents
@@ -172,7 +172,7 @@ Create a session for [FEATURE]:
 - Follow existing code patterns
 - Document as needed
 
-schaltwerk_create(
+lucode_create(
   name: "[feature-name]",
   prompt: "Implement [FEATURE] including [SPECIFIC REQUIREMENTS]. Ensure proper error handling, validation, and test coverage."
 )
@@ -186,7 +186,7 @@ Create a session to fix [BUG]:
 - Add regression tests
 - Verify no side effects
 
-schaltwerk_create(
+lucode_create(
   name: "fix-[bug-identifier]",
   prompt: "Fix the bug where [SPECIFIC BUG DESCRIPTION]. Add tests to prevent regression."
 )
@@ -200,7 +200,7 @@ Create a session for refactoring [MODULE]:
 - Ensure tests pass
 - Document changes
 
-schaltwerk_create(
+lucode_create(
   name: "refactor-[module]",
   prompt: "Refactor [MODULE] to [IMPROVEMENT GOAL] while maintaining all existing functionality and tests."
 )
@@ -212,13 +212,13 @@ When acting as an orchestrator managing multiple AI agents:
 
 1. **Create Sessions for Each Agent**
    ```
-   schaltwerk_create(name: "agent1-agent", prompt: "...", skip_permissions: true)
-   schaltwerk_create(name: "agent2-agent", prompt: "...", skip_permissions: true)
+   lucode_create(name: "agent1-agent", prompt: "...", skip_permissions: true)
+   lucode_create(name: "agent2-agent", prompt: "...", skip_permissions: true)
    ```
 
 2. **Monitor Progress**
    ```
-   schaltwerk_list({ json: true }) // Parse and track status
+   lucode_list({ json: true }) // Parse and track status
    ```
 
 3. **Coordinate Work**
@@ -228,15 +228,15 @@ When acting as an orchestrator managing multiple AI agents:
 
 4. **Cleanup**
    ```
-   schaltwerk_cancel(session_name: "completed-agent")
+   lucode_cancel(session_name: "completed-agent")
    ```
 
 ### Worktree Setup Script (bootstrap new worktrees)
-- Always fetch the current script first with `schaltwerk_get_setup_script` before making any changes.
+- Always fetch the current script first with `lucode_get_setup_script` before making any changes.
 - Inspect the repo for untracked config/secrets that need to be present in worktrees (e.g., `.env`, `.env.local`, `.npmrc`, tool auth files), then confirm with the user which ones to copy.
-- Edit locally, then replace it via `schaltwerk_set_setup_script` (include the shebang). It runs once per worktree with `WORKTREE_PATH`, `REPO_PATH`, `SESSION_NAME`, `BRANCH_NAME` env vars.
+- Edit locally, then replace it via `lucode_set_setup_script` (include the shebang). It runs once per worktree with `WORKTREE_PATH`, `REPO_PATH`, `SESSION_NAME`, `BRANCH_NAME` env vars.
 - Keep it short and idempotent: copy `.env` files, install local deps, create needed folders—avoid global installs or interactive prompts.
-- **Safety:** The Schaltwerk UI will prompt the user to confirm before saving changes to the setup script.
+- **Safety:** The Lucode UI will prompt the user to confirm before saving changes to the setup script.
 
 ## Error Handling
 
@@ -244,15 +244,15 @@ Common errors and solutions:
 
 - **"Session already exists"**: Use a different name or cancel the existing session first
 - **"Repository not found"**: Ensure you're in a Git repository
-- **"Database connection failed"**: Check that Schaltwerk app has been run at least once
+- **"Database connection failed"**: Check that Lucode app has been run at least once
 - **"Branch creation failed"**: Verify the base branch exists and you have permissions
 
 ## Resources
 
 Access session data programmatically:
 
-- `schaltwerk://sessions` - Full session list with metadata
-- `schaltwerk://sessions/reviewed` - Only reviewed sessions
-- `schaltwerk://sessions/new` - Only unreviewed sessions
+- `lucode://sessions` - Full session list with metadata
+- `lucode://sessions/reviewed` - Only reviewed sessions
+- `lucode://sessions/new` - Only unreviewed sessions
 
 Use these resources to build custom workflows and monitoring.

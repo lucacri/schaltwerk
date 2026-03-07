@@ -15,7 +15,7 @@ mock.module('node-fetch', () => ({
   default: mockFetch
 }))
 
-const { SchaltwerkBridge } = await import('../src/schaltwerk-bridge')
+const { LucodeBridge } = await import('../src/lucode-bridge')
 
 const createResponse = (payload: unknown) => ({
   ok: true,
@@ -31,20 +31,20 @@ const createConnectionError = (message: string) => {
   return error
 }
 
-describe('SchaltwerkBridge port discovery', () => {
+describe('LucodeBridge port discovery', () => {
   let tempDir: string
 
   beforeEach(() => {
     mockFetch.mockReset()
 
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'schaltwerk-port-test-'))
-    process.env.SCHALTWERK_PROJECT_PATH = tempDir
-    delete process.env.SCHALTWERK_MCP_PORT
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lucode-port-test-'))
+    process.env.LUCODE_PROJECT_PATH = tempDir
+    delete process.env.LUCODE_MCP_PORT
   })
 
   afterEach(() => {
-    delete process.env.SCHALTWERK_PROJECT_PATH
-    delete process.env.SCHALTWERK_MCP_PORT
+    delete process.env.LUCODE_PROJECT_PATH
+    delete process.env.LUCODE_MCP_PORT
     if (tempDir && fs.existsSync(tempDir)) {
       fs.rmSync(tempDir, { recursive: true, force: true })
     }
@@ -52,14 +52,14 @@ describe('SchaltwerkBridge port discovery', () => {
 
   it('retries alternate ports after connection errors and remembers the working port', async () => {
     const isoNow = new Date().toISOString()
-    const worktreePath = path.join(tempDir, '.schaltwerk', 'worktrees', 'session-1')
+    const worktreePath = path.join(tempDir, '.lucode', 'worktrees', 'session-1')
 
     const enrichedSessions = [
       {
         info: {
           session_id: 'session-1',
           display_name: 'session-1',
-          branch: 'schaltwerk/session-1',
+          branch: 'lucode/session-1',
           base_branch: 'main',
           worktree_path: worktreePath,
           session_state: 'Running',
@@ -85,7 +85,7 @@ describe('SchaltwerkBridge port discovery', () => {
         display_name: 'session-1',
         repository_path: '',
         repository_name: '',
-        branch: 'schaltwerk/session-1',
+        branch: 'lucode/session-1',
         parent_branch: 'main',
         worktree_path: worktreePath,
         status: 'active',
@@ -109,7 +109,7 @@ describe('SchaltwerkBridge port discovery', () => {
       .mockResolvedValueOnce(createResponse(enrichedSessions))
       .mockResolvedValueOnce(createResponse(enrichedSessions))
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
 
     const firstResult = await bridge.listSessions()
     expect(firstResult).toEqual(expectedSessions)

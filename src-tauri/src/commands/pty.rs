@@ -5,7 +5,7 @@ use pty_host::{
 use serde::Deserialize;
 use tauri::AppHandle;
 
-use schaltwerk::infrastructure::pty::get_pty_host;
+use lucode::infrastructure::pty::get_pty_host;
 
 #[tauri::command]
 pub async fn pty_spawn(app: AppHandle, options: SpawnOptions) -> Result<SpawnResponse, String> {

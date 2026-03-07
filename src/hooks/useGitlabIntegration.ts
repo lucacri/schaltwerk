@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAtomValue } from 'jotai'
 import { invoke } from '@tauri-apps/api/core'
 import { listenEvent, SchaltEvent } from '../common/eventSystem'
 import { TauriCommands } from '../common/tauriCommands'
@@ -6,6 +7,7 @@ import type { GitlabSource } from '../types/gitlabTypes'
 import type { GitLabStatusPayload } from '../common/events'
 import { logger } from '../utils/logger'
 import { resolveErrorMessage } from '../utils/resolveErrorMessage'
+import { projectPathAtom } from '../store/atoms/project'
 
 export interface GitlabIntegrationValue {
   status: GitLabStatusPayload | null
@@ -19,6 +21,7 @@ export interface GitlabIntegrationValue {
 }
 
 export function useGitlabIntegration(): GitlabIntegrationValue {
+  const projectPath = useAtomValue(projectPathAtom)
   const [status, setStatus] = useState<GitLabStatusPayload | null>(null)
   const [sources, setSources] = useState<GitlabSource[]>([])
   const [loading, setLoading] = useState<boolean>(true)
@@ -57,6 +60,8 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
 
   useEffect(() => {
     let mounted = true
+
+    setSources([])
 
     refreshStatus().catch((error) => {
       logger.error('[useGitlabIntegration] Initial status fetch failed', error)
@@ -97,7 +102,7 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
         }
       }
     }
-  }, [refreshStatus, loadSources])
+  }, [refreshStatus, loadSources, projectPath])
 
   const value = useMemo<GitlabIntegrationValue>(() => {
     return {

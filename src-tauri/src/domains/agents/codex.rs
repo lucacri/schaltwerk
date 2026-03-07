@@ -182,7 +182,7 @@ impl CodexSessionIndex {
     ) -> Result<Option<MatchResult>, std::io::Error> {
         if *DISABLE_INDEXING {
             log::info!(
-                "Codex session indexing disabled via SCHALTWERK_DISABLE_CODEX_INDEX, skipping lookup"
+                "Codex session indexing disabled via LUCODE_DISABLE_CODEX_INDEX, skipping lookup"
             );
             self.clear();
             return Ok(None);
@@ -320,7 +320,7 @@ impl CodexSessionIndex {
 static CODEX_SESSION_INDEX: LazyLock<CodexSessionIndex> = LazyLock::new(CodexSessionIndex::new);
 
 static DISABLE_INDEXING: LazyLock<bool> =
-    LazyLock::new(|| match std::env::var("SCHALTWERK_DISABLE_CODEX_INDEX") {
+    LazyLock::new(|| match std::env::var("LUCODE_DISABLE_CODEX_INDEX") {
         Ok(value) => {
             let normalized = value.trim().to_ascii_lowercase();
             if normalized.is_empty() {
@@ -333,7 +333,7 @@ static DISABLE_INDEXING: LazyLock<bool> =
     });
 
 fn cache_file_path(sessions_dir: &Path) -> PathBuf {
-    sessions_dir.join("_schaltwerk_session_index_cache.json")
+    sessions_dir.join("_lucode_session_index_cache.json")
 }
 
 fn load_disk_cache(sessions_dir: &Path) -> HashMap<PathBuf, CachedFileEntry> {

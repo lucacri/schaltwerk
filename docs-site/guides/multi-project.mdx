@@ -3,17 +3,17 @@ title: Multi-Project Workflows
 description: 'Manage multiple repositories and agent teams side by side'
 ---
 
-Schaltwerk makes it easy to orchestrate several repos at once—perfect for teams that split backend, frontend, and infrastructure into separate projects. Each repository opens in its own top-level tab, complete with orchestrator and session columns. Use the shortcuts below to keep everything in sync.
+Lucode makes it easy to orchestrate several repos at once—perfect for teams that split backend, frontend, and infrastructure into separate projects. Each repository opens in its own top-level tab, complete with orchestrator and session columns. Use the shortcuts below to keep everything in sync.
 
 ## Open Multiple Projects
 
 <Steps>
   <Step title="Open first project">
-    Launch Schaltwerk and open your primary repository (e.g., backend). The orchestrator runs on its base branch and manages specs/sessions for that repo.
+    Launch Lucode and open your primary repository (e.g., backend). The orchestrator runs on its base branch and manages specs/sessions for that repo.
   </Step>
 
   <Step title="Add another repo">
-    Click **Home** in the top-left corner, choose the next repository (e.g., frontend), and open it. Schaltwerk adds a new project tab with its own orchestrator and session list.
+    Click **Home** in the top-left corner, choose the next repository (e.g., frontend), and open it. Lucode adds a new project tab with its own orchestrator and session list.
   </Step>
 
   <Step title="Repeat for additional services">
@@ -39,7 +39,7 @@ Schaltwerk makes it easy to orchestrate several repos at once—perfect for team
 ## Keep Worktrees Lean
 
 <Tip>
-  Each project tab maintains its own `.schaltwerk/worktrees/` folder. Cancel or merge sessions when you finish to reclaim disk space—especially when juggling multiple repos.
+  Each project tab maintains its own `.lucode/worktrees/` folder. Cancel or merge sessions when you finish to reclaim disk space—especially when juggling multiple repos.
 </Tip>
 
 ## Coordinate Cross-Repo Features
@@ -60,7 +60,7 @@ Schaltwerk makes it easy to orchestrate several repos at once—perfect for team
 
 ## Troubleshooting
 
-- **Project tab missing?** Reopen the repository with `⌘⇧O`—Schaltwerk restores the orchestrator and session list automatically.
+- **Project tab missing?** Reopen the repository with `⌘⇧O`—Lucode restores the orchestrator and session list automatically.
 - **Worktrees piling up?** Cancel reviewed sessions (`⌘D`) or convert them to specs to clean up disk usage.
 - **Need shared context?** Store shared prompts or instructions in a workspace-wide `AGENTS.md` and link to it from each repo’s specs.
 

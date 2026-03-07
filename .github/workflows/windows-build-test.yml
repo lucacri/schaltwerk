@@ -21,7 +21,7 @@ jobs:
     if: false  # Temporarily disabled - Windows CI needs fixes
     runs-on: windows-latest
     env:
-      SCHALTWERK_PM: bun
+      LUCODE_PM: bun
     steps:
       - uses: actions/checkout@v6
 
@@ -67,7 +67,7 @@ jobs:
     if: false  # Temporarily disabled - Windows CI needs fixes
     runs-on: windows-latest
     env:
-      SCHALTWERK_PM: bun
+      LUCODE_PM: bun
     steps:
       - uses: actions/checkout@v6
 

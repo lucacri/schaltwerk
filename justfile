@@ -1,8 +1,8 @@
-# Schaltwerk Development Commands
+# Lucode Development Commands
 #
 # Run modes:
 #   just run              - Dev mode with auto-detected port (hot-reload enabled, FASTEST compile)
-#   just run-port 2235    - Release binary on specific port (NO hot-reload) - use for Schaltwerk-on-Schaltwerk
+#   just run-port 2235    - Release binary on specific port (NO hot-reload) - use for Lucode-on-Lucode
 #   just run-port-dev 2235 - Dev mode on specific port (hot-reload enabled, standard dev performance)
 #   just run-port-release 2235 - Force rebuild release binary on specific port (NO hot-reload)
 #   just run-release      - Run pre-built release binary (NO hot-reload)
@@ -17,10 +17,10 @@ pm := "node scripts/package-manager.mjs"
 # Clear all caches (build and application)
 clear:
     rm -rf node_modules/.vite dist dist-ssr src-tauri/target/debug/incremental src-tauri/target/debug/deps src-tauri/target/debug/build
-    rm -rf ~/Library/Application\ Support/schaltwerk/cache ~/Library/Application\ Support/schaltwerk/WebKit ~/.schaltwerk/cache
+    rm -rf ~/Library/Application\ Support/lucode/cache ~/Library/Application\ Support/lucode/WebKit ~/.lucode/cache
     rm -rf src-tauri/target/.rustc_info.json src-tauri/target/debug/.fingerprint
-    rm -rf ~/Library/Caches/schaltwerk* ~/Library/WebKit/schaltwerk* /tmp/schaltwerk* 2>/dev/null || true
-    pkill -f "schaltwerk" || true
+    rm -rf ~/Library/Caches/lucode* ~/Library/WebKit/lucode* /tmp/lucode* 2>/dev/null || true
+    pkill -f "lucode" || true
     rm -rf .parcel-cache .turbo
 
 # Release a new version (automatically bumps version, commits, tags, and pushes)
@@ -82,7 +82,7 @@ release version="patch":
     NODE
 
     # Update Cargo.lock
-    cd src-tauri && cargo update -p schaltwerk && cd ..
+    cd src-tauri && cargo update -p lucode && cd ..
 
     # Commit version bump
     git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
@@ -104,7 +104,7 @@ release version="patch":
     echo "  - Update Homebrew tap"
     echo ""
     echo "Monitor progress at:"
-    echo "  https://github.com/2mawi2/schaltwerk/actions"
+    echo "  https://github.com/lucacri/lucode/actions"
 
 # Setup dependencies for development
 setup:
@@ -128,7 +128,7 @@ install:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    echo "Building Schaltwerk for macOS..."
+    echo "Building Lucode for macOS..."
 
     # Check if node_modules exists, if not run setup first
     if [ ! -d "node_modules" ]; then
@@ -154,24 +154,24 @@ install:
         echo "MCP server built"
     fi
 
-    # Build Tauri application for release
+    # Build Tauri application (app bundle only — DMG/installer built by CI)
     echo "Building Tauri app..."
-    {{pm}} run tauri -- build
+    {{pm}} run tauri -- build --bundles app
     
     # Find the built app bundle (handle different architectures)
     APP_PATH=""
-    if [ -d "src-tauri/target/release/bundle/macos/Schaltwerk.app" ]; then
-        APP_PATH="src-tauri/target/release/bundle/macos/Schaltwerk.app"
-    elif [ -d "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Schaltwerk.app" ]; then
-        APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Schaltwerk.app"
-    elif [ -d "src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Schaltwerk.app" ]; then
-        APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Schaltwerk.app"
-    elif [ -d "src-tauri/target/universal-apple-darwin/release/bundle/macos/Schaltwerk.app" ]; then
-        APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/Schaltwerk.app"
+    if [ -d "src-tauri/target/release/bundle/macos/Lucode.app" ]; then
+        APP_PATH="src-tauri/target/release/bundle/macos/Lucode.app"
+    elif [ -d "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Lucode.app" ]; then
+        APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Lucode.app"
+    elif [ -d "src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Lucode.app" ]; then
+        APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Lucode.app"
+    elif [ -d "src-tauri/target/universal-apple-darwin/release/bundle/macos/Lucode.app" ]; then
+        APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/Lucode.app"
     fi
     
     if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
-        echo "Build failed - Schaltwerk.app not found"
+        echo "Build failed - Lucode.app not found"
         echo "Searched in:"
         echo "  - src-tauri/target/release/bundle/macos/"
         echo "  - src-tauri/target/aarch64-apple-darwin/release/bundle/macos/"
@@ -196,28 +196,28 @@ install:
     INSTALL_DIR="/Applications"
 
     # Remove old installation if it exists
-    if [ -d "$INSTALL_DIR/Schaltwerk.app" ]; then
-        echo "Removing existing Schaltwerk installation..."
+    if [ -d "$INSTALL_DIR/Lucode.app" ]; then
+        echo "Removing existing Lucode installation..."
         echo "Admin password required to remove old installation"
-        sudo rm -rf "$INSTALL_DIR/Schaltwerk.app"
+        sudo rm -rf "$INSTALL_DIR/Lucode.app"
     fi
 
     # Copy the app to Applications
-    echo "Installing Schaltwerk to $INSTALL_DIR..."
+    echo "Installing Lucode to $INSTALL_DIR..."
     echo "Admin password required for installation"
     sudo cp -R "$APP_PATH" "$INSTALL_DIR/"
 
     # Set proper permissions
-    sudo chmod -R 755 "$INSTALL_DIR/Schaltwerk.app"
+    sudo chmod -R 755 "$INSTALL_DIR/Lucode.app"
 
     # Clear quarantine attributes to avoid Gatekeeper issues
-    sudo xattr -cr "$INSTALL_DIR/Schaltwerk.app" 2>/dev/null || true
+    sudo xattr -cr "$INSTALL_DIR/Lucode.app" 2>/dev/null || true
 
-    echo "Schaltwerk installed successfully!"
+    echo "Lucode installed successfully!"
     echo ""
-    echo "Launch Schaltwerk:"
-    echo "  - From Spotlight: Press Cmd+Space and type 'Schaltwerk'"
-    echo "  - From Terminal: open /Applications/Schaltwerk.app"
+    echo "Launch Lucode:"
+    echo "  - From Spotlight: Press Cmd+Space and type 'Lucode'"
+    echo "  - From Terminal: open /Applications/Lucode.app"
 
 # Find an available port starting from a base port
 _find_available_port base_port:
@@ -250,11 +250,11 @@ run:
 
     # Find available port starting from 1420
     port=$(just _find_available_port 1420)
-    echo "Starting Schaltwerk on port $port (branch: $branch)"
+    echo "Starting Lucode on port $port (branch: $branch)"
     echo "Using dev profile (opt-level=0) for fastest compilation"
 
     if [[ -z "${CARGO_TARGET_DIR:-}" ]]; then
-        export CARGO_TARGET_DIR="$(git rev-parse --git-common-dir)/schaltwerk-target"
+        export CARGO_TARGET_DIR="$(git rev-parse --git-common-dir)/lucode-target"
     fi
     export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-1}"
     mkdir -p "$CARGO_TARGET_DIR"
@@ -361,15 +361,15 @@ run-port port:
         exit 1
     fi
 
-    echo "Starting Schaltwerk on port {{port}} (no hot-reload mode)"
+    echo "Starting Lucode on port {{port}} (no hot-reload mode)"
 
     # Check if release binary exists
     PROJECT_ROOT="$(pwd)"
-    BINARY_PATH="$PROJECT_ROOT/src-tauri/target/release/schaltwerk"
+    BINARY_PATH="$PROJECT_ROOT/src-tauri/target/release/lucode"
 
     # Check shared target first
-    if [ -f "/tmp/schaltwerk-shared-target/release/schaltwerk" ]; then
-        BINARY_PATH="/tmp/schaltwerk-shared-target/release/schaltwerk"
+    if [ -f "/tmp/lucode-shared-target/release/lucode" ]; then
+        BINARY_PATH="/tmp/lucode-shared-target/release/lucode"
     fi
 
     if [ ! -f "$BINARY_PATH" ]; then
@@ -378,8 +378,8 @@ run-port port:
         {{pm}} run build
         {{pm}} run tauri -- build
         # Re-check for binary after build
-        if [ -f "/tmp/schaltwerk-shared-target/release/schaltwerk" ]; then
-            BINARY_PATH="/tmp/schaltwerk-shared-target/release/schaltwerk"
+        if [ -f "/tmp/lucode-shared-target/release/lucode" ]; then
+            BINARY_PATH="/tmp/lucode-shared-target/release/lucode"
         elif [ ! -f "$BINARY_PATH" ]; then
             echo "Error: Binary not found after build"
             exit 1
@@ -406,11 +406,11 @@ run-port-dev port:
         exit 1
     fi
 
-    echo "Starting Schaltwerk on port {{port}} (WITH hot-reload - dev mode)"
+    echo "Starting Lucode on port {{port}} (WITH hot-reload - dev mode)"
     echo "Using standard dev profile (opt-level=0) for fast compilation"
 
     if [[ -z "${CARGO_TARGET_DIR:-}" ]]; then
-        export CARGO_TARGET_DIR="$(git rev-parse --git-common-dir)/schaltwerk-target"
+        export CARGO_TARGET_DIR="$(git rev-parse --git-common-dir)/lucode-target"
     fi
     export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-1}"
     mkdir -p "$CARGO_TARGET_DIR"
@@ -451,7 +451,7 @@ build:
 
 # Build and run the application in production mode
 run-build:
-    {{pm}} run build && {{pm}} run tauri -- build && ./src-tauri/target/release/schaltwerk
+    {{pm}} run build && {{pm}} run tauri -- build && ./src-tauri/target/release/lucode
 
 # Run all tests and lints (uses dev-fast profile for FASTEST compilation)
 test:
@@ -517,7 +517,7 @@ test-rust *ARGS:
 run-release:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Building Schaltwerk (release bundle, no auto-reload)..."
+    echo "Building Lucode (release bundle, no auto-reload)..."
     {{pm}} run build
     {{pm}} run tauri -- build
     echo "Build complete. Launching binary from HOME directory..."
@@ -526,9 +526,9 @@ run-release:
     PROJECT_ROOT="$(pwd)"
 
     # Check for binary in shared target directory first, then fallback to local
-    BINARY_PATH="/tmp/schaltwerk-shared-target/release/schaltwerk"
+    BINARY_PATH="/tmp/lucode-shared-target/release/lucode"
     if [ ! -f "$BINARY_PATH" ]; then
-        BINARY_PATH="$PROJECT_ROOT/src-tauri/target/release/schaltwerk"
+        BINARY_PATH="$PROJECT_ROOT/src-tauri/target/release/lucode"
     fi
 
     if [ ! -f "$BINARY_PATH" ]; then
@@ -539,7 +539,7 @@ run-release:
     cd "$HOME" && PARA_REPO_PATH="$PROJECT_ROOT" "$BINARY_PATH"
 
 # Run the release binary with adjustable logging (defaults to debug)
-run-release-logs log_level="debug" rust_log="schaltwerk=debug":
+run-release-logs log_level="debug" rust_log="lucode=debug":
     #!/usr/bin/env bash
     set -euo pipefail
     RUST_LOG="{{rust_log}}" LOG_LEVEL="{{log_level}}" just run-release
@@ -549,7 +549,7 @@ run-release-logs log_level="debug" rust_log="schaltwerk=debug":
 run-port-release port:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Building Schaltwerk release on port {{port}}..."
+    echo "Building Lucode release on port {{port}}..."
 
     # Export port for any runtime components that need it
     export VITE_PORT={{port}}
@@ -557,9 +557,9 @@ run-port-release port:
 
     # Clean old binaries to force rebuild (check both shared and local target dirs)
     echo "Cleaning old release binaries..."
-    rm -f ./src-tauri/target/release/schaltwerk
+    rm -f ./src-tauri/target/release/lucode
     rm -f ./src-tauri/target/release/ui
-    rm -f /tmp/schaltwerk-shared-target/release/schaltwerk
+    rm -f /tmp/lucode-shared-target/release/lucode
 
     # Build frontend
     echo "Building frontend..."
@@ -576,9 +576,9 @@ run-port-release port:
     PROJECT_ROOT="$(pwd)"
 
     # Check for binary in shared target directory first, then fallback to local
-    BINARY_PATH="/tmp/schaltwerk-shared-target/release/schaltwerk"
+    BINARY_PATH="/tmp/lucode-shared-target/release/lucode"
     if [ ! -f "$BINARY_PATH" ]; then
-        BINARY_PATH="$PROJECT_ROOT/src-tauri/target/release/schaltwerk"
+        BINARY_PATH="$PROJECT_ROOT/src-tauri/target/release/lucode"
     fi
 
     if [ ! -f "$BINARY_PATH" ]; then
@@ -690,7 +690,7 @@ install-linux:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    echo "Building Schaltwerk for Linux..."
+    echo "Building Lucode for Linux..."
 
     # Check if node_modules exists, if not run setup first
     if [ ! -d "node_modules" ]; then
@@ -716,16 +716,16 @@ install-linux:
 
     # Find the built binary (handle different architectures)
     BINARY_PATH=""
-    if [ -f "src-tauri/target/release/schaltwerk" ]; then
-        BINARY_PATH="src-tauri/target/release/schaltwerk"
-    elif [ -f "src-tauri/target/x86_64-unknown-linux-gnu/release/schaltwerk" ]; then
-        BINARY_PATH="src-tauri/target/x86_64-unknown-linux-gnu/release/schaltwerk"
-    elif [ -f "src-tauri/target/aarch64-unknown-linux-gnu/release/schaltwerk" ]; then
-        BINARY_PATH="src-tauri/target/aarch64-unknown-linux-gnu/release/schaltwerk"
+    if [ -f "src-tauri/target/release/lucode" ]; then
+        BINARY_PATH="src-tauri/target/release/lucode"
+    elif [ -f "src-tauri/target/x86_64-unknown-linux-gnu/release/lucode" ]; then
+        BINARY_PATH="src-tauri/target/x86_64-unknown-linux-gnu/release/lucode"
+    elif [ -f "src-tauri/target/aarch64-unknown-linux-gnu/release/lucode" ]; then
+        BINARY_PATH="src-tauri/target/aarch64-unknown-linux-gnu/release/lucode"
     fi
     
     if [ -z "$BINARY_PATH" ] || [ ! -f "$BINARY_PATH" ]; then
-        echo "Build failed - schaltwerk binary not found"
+        echo "Build failed - lucode binary not found"
         echo "Searched in:"
         echo "  - src-tauri/target/release/"
         echo "  - src-tauri/target/x86_64-unknown-linux-gnu/release/"
@@ -742,32 +742,32 @@ install-linux:
     mkdir -p ~/.local/share/icons/hicolor/128x128/apps
 
     # Copy the binary
-    cp "$BINARY_PATH" ~/.local/bin/schaltwerk
-    chmod +x ~/.local/bin/schaltwerk
+    cp "$BINARY_PATH" ~/.local/bin/lucode
+    chmod +x ~/.local/bin/lucode
 
     # Copy icon (if it exists)
     if [ -f "src-tauri/icons/128x128.png" ]; then
-        cp src-tauri/icons/128x128.png ~/.local/share/icons/hicolor/128x128/apps/schaltwerk.png
+        cp src-tauri/icons/128x128.png ~/.local/share/icons/hicolor/128x128/apps/lucode.png
     elif [ -f "src-tauri/icons/icon.png" ]; then
-        cp src-tauri/icons/icon.png ~/.local/share/icons/hicolor/128x128/apps/schaltwerk.png
+        cp src-tauri/icons/icon.png ~/.local/share/icons/hicolor/128x128/apps/lucode.png
     fi
 
     # Create desktop entry
-    echo "#!/usr/bin/env xdg-open" > ~/.local/share/applications/schaltwerk.desktop
-    echo "[Desktop Entry]" >> ~/.local/share/applications/schaltwerk.desktop
-    echo "Type=Application" >> ~/.local/share/applications/schaltwerk.desktop
-    echo "Name=Schaltwerk" >> ~/.local/share/applications/schaltwerk.desktop
-    echo "Exec=schaltwerk" >> ~/.local/share/applications/schaltwerk.desktop
-    echo "Icon=schaltwerk" >> ~/.local/share/applications/schaltwerk.desktop
-    echo "Categories=Development;" >> ~/.local/share/applications/schaltwerk.desktop
-    echo "Terminal=false" >> ~/.local/share/applications/schaltwerk.desktop
-    chmod +x ~/.local/share/applications/schaltwerk.desktop
+    echo "#!/usr/bin/env xdg-open" > ~/.local/share/applications/lucode.desktop
+    echo "[Desktop Entry]" >> ~/.local/share/applications/lucode.desktop
+    echo "Type=Application" >> ~/.local/share/applications/lucode.desktop
+    echo "Name=Lucode" >> ~/.local/share/applications/lucode.desktop
+    echo "Exec=lucode" >> ~/.local/share/applications/lucode.desktop
+    echo "Icon=lucode" >> ~/.local/share/applications/lucode.desktop
+    echo "Categories=Development;" >> ~/.local/share/applications/lucode.desktop
+    echo "Terminal=false" >> ~/.local/share/applications/lucode.desktop
+    chmod +x ~/.local/share/applications/lucode.desktop
 
-    echo "Schaltwerk installed successfully!"
+    echo "Lucode installed successfully!"
     echo ""
-    echo "Launch Schaltwerk:"
+    echo "Launch Lucode:"
     echo "  - From application menu"
-    echo "  - From Terminal: schaltwerk"
+    echo "  - From Terminal: lucode"
     echo ""
     echo "If you encounter issues, ensure you have the required system libraries:"
     echo "  - libwebkit2gtk-4.1-dev"
@@ -781,39 +781,39 @@ uninstall-linux:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    echo "Uninstalling Schaltwerk..."
+    echo "Uninstalling Lucode..."
 
     # Remove the binary
-    if [ -f ~/.local/bin/schaltwerk ]; then
-        rm ~/.local/bin/schaltwerk
-        echo "Removed binary from ~/.local/bin/schaltwerk"
+    if [ -f ~/.local/bin/lucode ]; then
+        rm ~/.local/bin/lucode
+        echo "Removed binary from ~/.local/bin/lucode"
     else
-        echo "Binary not found at ~/.local/bin/schaltwerk"
+        echo "Binary not found at ~/.local/bin/lucode"
     fi
 
     # Remove desktop entry
-    if [ -f ~/.local/share/applications/schaltwerk.desktop ]; then
-        rm ~/.local/share/applications/schaltwerk.desktop
-        echo "Removed desktop entry from ~/.local/share/applications/schaltwerk.desktop"
+    if [ -f ~/.local/share/applications/lucode.desktop ]; then
+        rm ~/.local/share/applications/lucode.desktop
+        echo "Removed desktop entry from ~/.local/share/applications/lucode.desktop"
     else
-        echo "Desktop entry not found at ~/.local/share/applications/schaltwerk.desktop"
+        echo "Desktop entry not found at ~/.local/share/applications/lucode.desktop"
     fi
 
     # Remove icon
-    if [ -f ~/.local/share/icons/hicolor/128x128/apps/schaltwerk.png ]; then
-        rm ~/.local/share/icons/hicolor/128x128/apps/schaltwerk.png
-        echo "Removed icon from ~/.local/share/icons/hicolor/128x128/apps/schaltwerk.png"
+    if [ -f ~/.local/share/icons/hicolor/128x128/apps/lucode.png ]; then
+        rm ~/.local/share/icons/hicolor/128x128/apps/lucode.png
+        echo "Removed icon from ~/.local/share/icons/hicolor/128x128/apps/lucode.png"
     else
-        echo "Icon not found at ~/.local/share/icons/hicolor/128x128/apps/schaltwerk.png"
+        echo "Icon not found at ~/.local/share/icons/hicolor/128x128/apps/lucode.png"
     fi
 
     # Remove MCP server data if it exists
-    if [ -d ~/.local/share/schaltwerk ]; then
-        rm -rf ~/.local/share/schaltwerk
-        echo "Removed MCP server data from ~/.local/share/schaltwerk"
+    if [ -d ~/.local/share/lucode ]; then
+        rm -rf ~/.local/share/lucode
+        echo "Removed MCP server data from ~/.local/share/lucode"
     fi
 
-    echo "Schaltwerk uninstalled successfully!"
+    echo "Lucode uninstalled successfully!"
     echo "You may need to run 'update-desktop-database' if you use a desktop environment."
 
 # Build all Linux packages (AppImage, deb, rpm)
@@ -845,12 +845,48 @@ build-linux-rpm:
 run-wayland:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Starting Schaltwerk with Wayland debugging..."
-    WAYLAND_DEBUG=1 WAYLAND_DISPLAY=wayland-0 RUST_LOG=schaltwerk=debug {{pm}} run tauri:dev
+    echo "Starting Lucode with Wayland debugging..."
+    WAYLAND_DEBUG=1 WAYLAND_DISPLAY=wayland-0 RUST_LOG=lucode=debug {{pm}} run tauri:dev
 
 # Force X11 backend (fallback mode)
 run-x11:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Starting Schaltwerk with X11 backend..."
+    echo "Starting Lucode with X11 backend..."
     GDK_BACKEND=x11 {{pm}} run tauri:dev
+
+# Sync upstream changes into dev and reapply the Lucode rebrand
+sync-upstream:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    ORIGINAL_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+    echo "Fetching upstream..."
+    git fetch upstream
+
+    echo "Updating main from upstream..."
+    git checkout main
+    git merge upstream/main
+
+    echo "Merging main into dev..."
+    git checkout dev
+    git merge main
+
+    if git diff dev main --name-only | xargs grep -li 'schaltwerk\|Schaltwerk\|SCHALTWERK' 2>/dev/null | grep -v schaltwerk_core | grep -v SchaltEvent | grep -v SchaltwerkCore | head -1 > /dev/null 2>&1; then
+        echo ""
+        echo "⚠  New upstream files may contain un-rebranded Schaltwerk references."
+        echo "   Review with: git diff main..dev --name-only"
+        echo "   Then update any new user-visible 'Schaltwerk' strings to 'Lucode'."
+    fi
+
+    echo ""
+    echo "Running validation..."
+    just test
+
+    echo ""
+    echo "✓ Upstream sync complete. dev is up to date."
+
+    if [ "$ORIGINAL_BRANCH" != "dev" ] && [ "$ORIGINAL_BRANCH" != "main" ]; then
+        git checkout "$ORIGINAL_BRANCH"
+    fi

@@ -275,7 +275,7 @@ Respond with JSON: {{"name": "short-kebab-case-name"}}"#
     );
 
     let temp_base = std::env::temp_dir();
-    let unique_temp_dir = temp_base.join(format!("schaltwerk_namegen_{target_id}"));
+    let unique_temp_dir = temp_base.join(format!("lucode_namegen_{target_id}"));
 
     if let Err(e) = std::fs::create_dir_all(&unique_temp_dir) {
         log::warn!("Failed to create temp directory for name generation: {e}");
@@ -322,7 +322,7 @@ Respond with JSON: {{"name": "short-kebab-case-name"}}"#
             extra.retain(|a| a != "--search" && a != "-search");
             args.extend(extra);
         }
-        let tmp_file = std::env::temp_dir().join(format!("schaltwerk_codex_name_{target_id}.txt"));
+        let tmp_file = std::env::temp_dir().join(format!("lucode_codex_name_{target_id}.txt"));
         args.push("--output-last-message".into());
         args.push(tmp_file.to_string_lossy().to_string());
         args.push(prompt_plain.clone());
@@ -1260,7 +1260,7 @@ Line 4"
             session_id: "test-session",
             worktree_path: &worktree_path,
             repo_path: &repo_path,
-            current_branch: "schaltwerk/old-name",
+            current_branch: "lucode/old-name",
             agent_type: "claude",
             initial_prompt: Some("Test prompt"),
             cli_args: Some("--model sonnet".to_string()),

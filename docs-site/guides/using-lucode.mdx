@@ -1,5 +1,5 @@
 ---
-title: Using Schaltwerk
+title: Using Lucode
 description: 'Day-to-day workflow of running agents, reviewing output, and managing sessions'
 ---
 
@@ -97,8 +97,8 @@ The **keep-awake** button (coffee icon in top bar) prevents your machine from sl
   </Step>
 
   <Step title="Worktree created">
-    Schaltwerk creates:
-    - New git worktree in `.schaltwerk/worktrees/<session-name>/`
+    Lucode creates:
+    - New git worktree in `.lucode/worktrees/<session-name>/`
     - Dedicated branch with project's branch prefix
     - Two PTY terminals
   </Step>
@@ -151,7 +151,7 @@ Configure a run script via **Settings → Run & Environment → Run Script** (e.
 
 ### Web Preview
 
-When your run script starts a dev server, click the localhost URL in the terminal to open Schaltwerk's built-in [Web Preview](/guides/web-preview). The preview panel displays your site directly in the app—no browser switching needed. Use the element picker to inspect UI and send HTML snippets to the agent for feedback.
+When your run script starts a dev server, click the localhost URL in the terminal to open Lucode's built-in [Web Preview](/guides/web-preview). The preview panel displays your site directly in the app—no browser switching needed. Use the element picker to inspect UI and send HTML snippets to the agent for feedback.
 
 <Info>
   See the full [Web Preview guide](/guides/web-preview) for URL formats, zoom controls, and element picker details.
@@ -244,7 +244,7 @@ Need to scrap a run but keep the notes?
 
 **What happens:**
 - Worktree is removed (all uncommitted changes are lost)
-- Session branch is deleted from `.schaltwerk/worktrees`
+- Session branch is deleted from `.lucode/worktrees`
 - Markdown spec is preserved
 - Session returns to **Specs** filter
 - Can be restarted later as a fresh session
@@ -269,7 +269,7 @@ Need to scrap a run but keep the notes?
   </Step>
 
   <Step title="Cleanup happens">
-    - Worktree is removed from `.schaltwerk/worktrees/`
+    - Worktree is removed from `.lucode/worktrees/`
     - Terminals are closed
     - Session disappears from sidebar
   </Step>
@@ -282,7 +282,7 @@ Need to scrap a run but keep the notes?
 </Steps>
 
 <Check>
-  Schaltwerk never cancels sessions automatically, so it's safe to keep a branch around while you validate changes.
+  Lucode never cancels sessions automatically, so it's safe to keep a branch around while you validate changes.
 </Check>
 
 <Tip>

@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::errors::SchaltError;
 
-pub const DEFAULT_SIGNATURE: &str = "schaltwerk-keep-awake";
+pub const DEFAULT_SIGNATURE: &str = "lucode-keep-awake";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PidFileData {
@@ -221,7 +221,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let (ctx, _inspector) = build_ctx(&tmp);
 
-        ctx.write_pid_file(1234, "caffeinate -d # schaltwerk-keep-awake")
+        ctx.write_pid_file(1234, "caffeinate -d # lucode-keep-awake")
             .unwrap();
 
         let data = ctx.read_pid_file().unwrap().expect("pid file should exist");
@@ -234,9 +234,9 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let (ctx, inspector) = build_ctx(&tmp);
         inspector.running.store(false, Ordering::SeqCst);
-        *inspector.cmdline.lock().unwrap() = "caffeinate -d # schaltwerk-keep-awake".into();
+        *inspector.cmdline.lock().unwrap() = "caffeinate -d # lucode-keep-awake".into();
 
-        ctx.write_pid_file(42, "caffeinate -d # schaltwerk-keep-awake")
+        ctx.write_pid_file(42, "caffeinate -d # lucode-keep-awake")
             .unwrap();
         ctx.cleanup_on_startup().unwrap();
 
@@ -249,9 +249,9 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let (ctx, inspector) = build_ctx(&tmp);
         inspector.running.store(true, Ordering::SeqCst);
-        *inspector.cmdline.lock().unwrap() = "caffeinate -d # schaltwerk-keep-awake".into();
+        *inspector.cmdline.lock().unwrap() = "caffeinate -d # lucode-keep-awake".into();
 
-        ctx.write_pid_file(77, "caffeinate -d # schaltwerk-keep-awake")
+        ctx.write_pid_file(77, "caffeinate -d # lucode-keep-awake")
             .unwrap();
         ctx.cleanup_on_startup().unwrap();
 
@@ -266,7 +266,7 @@ mod tests {
         inspector.running.store(true, Ordering::SeqCst);
         *inspector.cmdline.lock().unwrap() = "bash".into();
 
-        ctx.write_pid_file(99, "caffeinate -d # schaltwerk-keep-awake")
+        ctx.write_pid_file(99, "caffeinate -d # lucode-keep-awake")
             .unwrap();
         ctx.cleanup_on_startup().unwrap();
 

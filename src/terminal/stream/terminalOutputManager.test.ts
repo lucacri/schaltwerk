@@ -65,6 +65,31 @@ describe('terminalOutputManager', () => {
     expect(unlisten).toHaveBeenCalled()
   })
 
+  it('dispatches large hydration snapshots in bounded chunks', async () => {
+    vi.useFakeTimers()
+    try {
+      const unlisten = vi.fn()
+      listenMock.mockResolvedValueOnce(unlisten)
+      const hydrationPayload = 'a'.repeat(170_000)
+      invokeMock.mockResolvedValueOnce({ seq: 170_000, startSeq: 0, data: hydrationPayload })
+
+      const chunks: string[] = []
+      terminalOutputManager.addListener(TERMINAL_ID, chunk => {
+        chunks.push(chunk)
+      })
+
+      const startPromise = terminalOutputManager.ensureStarted(TERMINAL_ID)
+      await vi.runAllTimersAsync()
+      await startPromise
+
+      expect(chunks.length).toBeGreaterThan(1)
+      expect(chunks.every(chunk => chunk.length <= 64 * 1024)).toBe(true)
+      expect(chunks.join('')).toBe(hydrationPayload)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('streams plugin terminal output and acknowledges bytes', async () => {
     isPluginMock.mockReturnValue(true)
     const unsubscribe = vi.fn()

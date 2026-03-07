@@ -278,7 +278,7 @@ fn test_get_changed_files_uses_base_branch_from_config() {
 }
 
 // ============================================================================
-// Tests for .schaltwerk filtering
+// Tests for .lucode filtering
 // ============================================================================
 
 #[test]
@@ -293,10 +293,10 @@ fn test_schaltwerk_directory_files_filtered_out() {
         .output()
         .unwrap();
 
-    // Create .schaltwerk directory structure
-    fs::create_dir_all(p.join(".schaltwerk/worktrees")).unwrap();
-    fs::write(p.join(".schaltwerk/config.json"), "{}").unwrap();
-    fs::write(p.join(".schaltwerk/worktrees/session.db"), "db").unwrap();
+    // Create .lucode directory structure
+    fs::create_dir_all(p.join(".lucode/worktrees")).unwrap();
+    fs::write(p.join(".lucode/config.json"), "{}").unwrap();
+    fs::write(p.join(".lucode/worktrees/session.db"), "db").unwrap();
     fs::write(p.join("normal_file.txt"), "normal").unwrap();
 
     // Add files to git
@@ -317,32 +317,32 @@ fn test_schaltwerk_directory_files_filtered_out() {
     // Should contain normal_file.txt
     assert!(paths.contains(&"normal_file.txt"));
 
-    // Should NOT contain any .schaltwerk files
-    assert!(!paths.iter().any(|p| p.contains(".schaltwerk")));
+    // Should NOT contain any .lucode files
+    assert!(!paths.iter().any(|p| p.contains(".lucode")));
 }
 
 #[test]
 fn test_schaltwerk_exact_directory_filtered() {
-    // Test that .schaltwerk/ prefix matching works correctly
+    // Test that .lucode/ prefix matching works correctly
     let file_paths = vec![
-        ".schaltwerk",
-        ".schaltwerk/config.json",
-        ".schaltwerk/worktrees/branch1/file.txt",
+        ".lucode",
+        ".lucode/config.json",
+        ".lucode/worktrees/branch1/file.txt",
         "not_schaltwerk.txt",
-        "src/.schaltwerk_related.txt",
+        "src/.lucode_related.txt",
     ];
 
     let filtered: Vec<_> = file_paths
         .iter()
-        .filter(|&&p| !p.starts_with(".schaltwerk/") && p != ".schaltwerk")
+        .filter(|&&p| !p.starts_with(".lucode/") && p != ".lucode")
         .copied()
         .collect();
 
     assert_eq!(filtered.len(), 2);
     assert!(filtered.contains(&"not_schaltwerk.txt"));
-    assert!(filtered.contains(&"src/.schaltwerk_related.txt"));
-    assert!(!filtered.contains(&".schaltwerk"));
-    assert!(!filtered.iter().any(|p| p.contains(".schaltwerk/")));
+    assert!(filtered.contains(&"src/.lucode_related.txt"));
+    assert!(!filtered.contains(&".lucode"));
+    assert!(!filtered.iter().any(|p| p.contains(".lucode/")));
 }
 
 // ============================================================================

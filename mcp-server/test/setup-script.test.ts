@@ -17,20 +17,20 @@ mock.module('node-fetch', () => ({
   default: fetchMock,
 }))
 
-const { SchaltwerkBridge } = await import('../src/schaltwerk-bridge')
+const { LucodeBridge } = await import('../src/lucode-bridge')
 
-describe('SchaltwerkBridge setup script helpers', () => {
+describe('LucodeBridge setup script helpers', () => {
   let consoleErrorSpy: ReturnType<typeof spyOn>
 
   beforeEach(() => {
     fetchMock.mockReset()
-    process.env.SCHALTWERK_PROJECT_PATH = path.resolve(__dirname, '..', '..')
+    process.env.LUCODE_PROJECT_PATH = path.resolve(__dirname, '..', '..')
     consoleErrorSpy = spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
     consoleErrorSpy.mockRestore()
-    delete process.env.SCHALTWERK_PROJECT_PATH
+    delete process.env.LUCODE_PROJECT_PATH
   })
 
   it('fetches project setup script with project headers', async () => {
@@ -45,7 +45,7 @@ describe('SchaltwerkBridge setup script helpers', () => {
         }),
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const result = await bridge.getProjectSetupScript()
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -71,7 +71,7 @@ describe('SchaltwerkBridge setup script helpers', () => {
         }),
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const script = '#!/bin/bash\necho set'
     const result = await bridge.setProjectSetupScript(script)
 
@@ -98,7 +98,7 @@ describe('SchaltwerkBridge setup script helpers', () => {
         }),
     })
 
-    const bridge = new SchaltwerkBridge()
+    const bridge = new LucodeBridge()
     const result = await bridge.setProjectSetupScript('')
 
     const [url, init] = fetchMock.mock.calls[0]

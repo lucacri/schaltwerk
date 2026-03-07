@@ -26,7 +26,7 @@ mod tests {
 
     #[test]
     fn test_set_and_remove_var() {
-        let key = "SCHALTWERK_TEST_ENV_ADAPTER";
+        let key = "LUCODE_TEST_ENV_ADAPTER";
         let value = "test_value";
 
         EnvAdapter::set_var(key, value);
@@ -38,7 +38,7 @@ mod tests {
 
     #[test]
     fn test_set_var_overwrites() {
-        let key = "SCHALTWERK_TEST_ENV_ADAPTER_OVERWRITE";
+        let key = "LUCODE_TEST_ENV_ADAPTER_OVERWRITE";
 
         EnvAdapter::set_var(key, "first");
         assert_eq!(std::env::var(key).unwrap(), "first");

@@ -3,7 +3,7 @@ title: Pull Requests
 description: 'Create GitHub PRs from sessions, import PR context, and work with review comments'
 ---
 
-Schaltwerk integrates with GitHub (via the `gh` CLI) so you can:
+Lucode integrates with GitHub (via the `gh` CLI) so you can:
 
 - Start a session from an existing PR (imports description + conversation comments and checks out the PR branch)
 - Create a GitHub PR from a running/reviewed session (`⌘⇧P`)
@@ -21,14 +21,14 @@ Schaltwerk integrates with GitHub (via the `gh` CLI) so you can:
   </Step>
 
   <Step title="Authenticate `gh` in your terminal">
-    Schaltwerk can’t complete interactive login for you. Run this in your own terminal:
+    Lucode can’t complete interactive login for you. Run this in your own terminal:
 
     ```bash
     gh auth login
     ```
   </Step>
 
-  <Step title="Connect the project in Schaltwerk">
+  <Step title="Connect the project in Lucode">
     In **Settings → GitHub Integration**, connect the current project to a GitHub repository.
 
     This stores the repo (`owner/name`) and default branch so PR automation knows where to target.
@@ -53,7 +53,7 @@ Use this when you want an agent to work with real PR context (description + disc
   </Step>
 
   <Step title="Search and select the PR">
-    Schaltwerk pulls:
+    Lucode pulls:
     - PR title, number, link, head branch, labels
     - PR description
     - PR conversation comments (the main discussion thread)
@@ -91,11 +91,11 @@ You can create PRs from both **Running** and **Reviewed** sessions.
   - Best when you want a clean, one-commit PR
 - **Use existing commits**
   - Keeps the session’s commit history intact
-  - If you have uncommitted changes, Schaltwerk adds one extra commit for them on the PR branch
+  - If you have uncommitted changes, Lucode adds one extra commit for them on the PR branch
 
 ### Default Title, Body, and Base Branch
 
-When the dialog opens, Schaltwerk pre-fills:
+When the dialog opens, Lucode pre-fills:
 
 - **PR title**
   - If the session has exactly one commit: uses that commit summary
@@ -108,7 +108,7 @@ When the dialog opens, Schaltwerk pre-fills:
 
 ### Custom PR Branch Name
 
-By default, Schaltwerk uses the session branch as the PR head branch. Enable **Use custom PR branch name** to push the PR to a different branch instead (useful for avoiding conflicts or keeping the session branch untouched).
+By default, Lucode uses the session branch as the PR head branch. Enable **Use custom PR branch name** to push the PR to a different branch instead (useful for avoiding conflicts or keeping the session branch untouched).
 
 ### Auto-Cancel After PR
 
@@ -120,7 +120,7 @@ Enable **Auto-cancel after PR** to automatically cancel the session after the PR
 
 ## Branch Conflicts and Guardrails
 
-Schaltwerk blocks PR creation in a few common “this will likely fail” cases:
+Lucode blocks PR creation in a few common “this will likely fail” cases:
 
 - **Branch conflict detected**
   - The remote branch already exists with different commits (non-fast-forward).
@@ -129,7 +129,7 @@ Schaltwerk blocks PR creation in a few common “this will likely fail” cases:
   - If the branch already exists on the remote, squashing would rewrite history and `git push` will be rejected.
   - Fix by switching to **Use existing commits** or choosing a custom PR branch name.
 - **Uncommitted changes conflict with pushed branch**
-  - If the branch is already on the remote and your worktree is dirty, Schaltwerk requires you to either commit/push first or use a custom PR branch name.
+  - If the branch is already on the remote and your worktree is dirty, Lucode requires you to either commit/push first or use a custom PR branch name.
 
 ## Link a Session to a PR (and Unlink)
 
@@ -151,18 +151,18 @@ Linked PRs show up on session/diff actions and unlock review-comment tooling.
 
 ## Fetch PR Review Comments
 
-When a session is linked to a PR, Schaltwerk can fetch GitHub **review comments** (inline comments on files/lines):
+When a session is linked to a PR, Lucode can fetch GitHub **review comments** (inline comments on files/lines):
 
 - **Send to terminal** from the diff header actions (great for “fix these review comments” loops)
 - **Copy to clipboard** from the Reviewed session actions (quickly paste into a spec, Slack, or an external tool)
 
-Schaltwerk groups comments by file, preserves line locations when available, and includes replies in the thread.
+Lucode groups comments by file, preserves line locations when available, and includes replies in the thread.
 
 ## MCP: Let an Agent Open the PR Modal
 
-If you have MCP enabled, agents can request that Schaltwerk open the PR modal for a session:
+If you have MCP enabled, agents can request that Lucode open the PR modal for a session:
 
-- Tool: `schaltwerk_create_pr`
+- Tool: `lucode_create_pr`
 - Behavior: triggers the **Create Pull Request** modal in the UI with suggested values
 - Important: the tool **does not create the PR** by itself — you review/edit and confirm in the modal
 

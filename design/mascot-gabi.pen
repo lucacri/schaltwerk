@@ -1,0 +1,154 @@
+{
+  "version": "2.8",
+  "children": [
+    {
+      "type": "rectangle",
+      "id": "Lq95T",
+      "x": -2099,
+      "y": 95,
+      "name": "Gabi reference photo",
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "images/Screenshot 2026-03-05 at 1.12.59 PM.png",
+        "mode": "fill"
+      },
+      "width": 930,
+      "height": 777
+    },
+    {
+      "type": "rectangle",
+      "id": "8Jkxa",
+      "x": -2586,
+      "y": 944,
+      "name": "Gabi reference photo 2",
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "images/IMG_9702.jpeg",
+        "mode": "fill"
+      },
+      "width": 1433,
+      "height": 1075
+    },
+    {
+      "type": "frame",
+      "id": "TITDj",
+      "x": 0,
+      "y": 3300,
+      "name": "Gabi Variation 5: Matrix Digital",
+      "width": 1024,
+      "height": 1024,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "./images/generated-1772736659609.png",
+        "mode": "fill"
+      },
+      "cornerRadius": 230,
+      "layout": "none"
+    },
+    {
+      "type": "frame",
+      "id": "GPR9j",
+      "x": 0,
+      "y": 4400,
+      "name": "Gabi Variation 7: Cartoon Hacker",
+      "width": 1024,
+      "height": 1024,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "./images/generated-1772737170808.png",
+        "mode": "fill"
+      },
+      "cornerRadius": 230,
+      "layout": "none"
+    },
+    {
+      "type": "frame",
+      "id": "wiwiH",
+      "x": 1100,
+      "y": 4400,
+      "name": "Gabi Variation 8: 3D Pixar Bot",
+      "width": 1024,
+      "height": 1024,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "./images/generated-1772737176069.png",
+        "mode": "fill"
+      },
+      "cornerRadius": 230,
+      "layout": "none"
+    },
+    {
+      "type": "frame",
+      "id": "Uhyta",
+      "x": -1138,
+      "y": 4417,
+      "name": "Gabi Variation 12: Pixar Bot (No Halo)",
+      "width": 1024,
+      "height": 1024,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "./images/generated-1772737744337.png",
+        "mode": "fill"
+      },
+      "cornerRadius": 230,
+      "layout": "none"
+    },
+    {
+      "type": "frame",
+      "id": "lAMCi",
+      "x": -38,
+      "y": 5517,
+      "name": "Gabi: Vibrant Warm BG",
+      "width": 1024,
+      "height": 1024,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "./images/generated-1772739280331.png",
+        "mode": "fill"
+      },
+      "cornerRadius": 230,
+      "layout": "none"
+    },
+    {
+      "type": "frame",
+      "id": "SpOj2",
+      "x": 1062,
+      "y": 5517,
+      "name": "Gabi: 3D Pixar Bot (Black & White)",
+      "width": 1024,
+      "height": 1024,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "./images/generated-1772757815422.png",
+        "mode": "fill"
+      },
+      "cornerRadius": 230,
+      "layout": "none"
+    },
+    {
+      "type": "frame",
+      "id": "AGUc5",
+      "x": 2162,
+      "y": 5517,
+      "name": "Gabi: 3D Pixar Bot (Fun Pose)",
+      "width": 1024,
+      "height": 1024,
+      "fill": {
+        "type": "image",
+        "enabled": true,
+        "url": "./images/generated-1772757866781.png",
+        "mode": "fill"
+      },
+      "cornerRadius": 230,
+      "layout": "none"
+    }
+  ]
+}

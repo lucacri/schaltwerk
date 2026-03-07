@@ -1193,7 +1193,7 @@ export interface Translations {
     closeMergeDialog: string
     closePrDialog: string
     selectOrchestrator: string
-    schaltwerkLogo: string
+    lucodeLogo: string
   }
   placeholders: {
     gitRemoteUrl: string

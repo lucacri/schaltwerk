@@ -124,7 +124,7 @@ fn test_create_session() {
     // Verify worktree path
     let expected_worktree = env
         .repo_path
-        .join(".schaltwerk")
+        .join(".lucode")
         .join("worktrees")
         .join("test-feature");
     assert_eq!(session.worktree_path, expected_worktree);
@@ -707,7 +707,7 @@ fn test_corrupted_worktree_recovery() {
     // Create a corrupted worktree situation
     let worktree_path = env
         .repo_path
-        .join(".schaltwerk")
+        .join(".lucode")
         .join("worktrees")
         .join("corrupted");
     std::fs::create_dir_all(&worktree_path).unwrap();
@@ -798,7 +798,7 @@ fn test_cleanup_orphaned_worktrees() {
     // Create an orphaned worktree manually (not through session manager)
     let orphan_path = env
         .repo_path
-        .join(".schaltwerk")
+        .join(".lucode")
         .join("worktrees")
         .join("orphan");
     std::fs::create_dir_all(orphan_path.parent().unwrap()).unwrap();
@@ -850,8 +850,8 @@ fn test_cleanup_orphaned_worktrees_fast_moves_trash_dir() {
     let env = TestEnvironment::new().unwrap();
     let manager = env.get_session_manager().unwrap();
 
-    let worktrees_dir = env.repo_path.join(".schaltwerk").join("worktrees");
-    let trash_dir = worktrees_dir.join(".schaltwerk-trash");
+    let worktrees_dir = env.repo_path.join(".lucode").join("worktrees");
+    let trash_dir = worktrees_dir.join(".lucode-trash");
     std::fs::create_dir_all(&trash_dir).unwrap();
 
     // Make the trash directory non-trivial so the background cleanup is unlikely to finish
@@ -874,7 +874,7 @@ fn test_cleanup_orphaned_worktrees_fast_moves_trash_dir() {
         .collect();
 
     assert!(
-        entries.iter().any(|name| name.starts_with(".schaltwerk-trash-cleanup-")),
+        entries.iter().any(|name| name.starts_with(".lucode-trash-cleanup-")),
         "expected a staged trash cleanup directory, got entries={entries:?}"
     );
 }

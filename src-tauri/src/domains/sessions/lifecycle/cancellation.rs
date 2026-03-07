@@ -561,7 +561,7 @@ mod tests {
             epic_id: None,
             repository_path: repo_path.to_path_buf(),
             repository_name: "test-repo".to_string(),
-            branch: "schaltwerk/test-session".to_string(),
+            branch: "lucode/test-session".to_string(),
             parent_branch: "master".to_string(),
             original_parent_branch: Some("master".to_string()),
             worktree_path,
@@ -593,7 +593,7 @@ mod tests {
         let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
 
         let mut session =
-            create_test_session(&repo_path, repo_path.join(".schaltwerk/worktrees/test"));
+            create_test_session(&repo_path, repo_path.join(".lucode/worktrees/test"));
         session.session_state = SessionState::Spec;
 
         let result = coordinator.cancel_session(&session, CancellationConfig::default());
@@ -615,7 +615,7 @@ mod tests {
 
         let session = create_test_session(
             &repo_path,
-            repo_path.join(".schaltwerk/worktrees/nonexistent"),
+            repo_path.join(".lucode/worktrees/nonexistent"),
         );
         db_manager.create_session(&session).unwrap();
 
@@ -653,7 +653,7 @@ mod tests {
             epic_id: None,
             repository_path: repo_path.clone(),
             repository_name: "test-repo".to_string(),
-            branch: "schaltwerk/panic-guard".to_string(),
+            branch: "lucode/panic-guard".to_string(),
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: worktree_path.clone(),
@@ -690,10 +690,10 @@ mod tests {
         let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
         let db_manager = SessionDbManager::new(db, repo_path.clone());
 
-        let worktree_path = repo_path.join(".schaltwerk/worktrees/test");
+        let worktree_path = repo_path.join(".lucode/worktrees/test");
         git::create_worktree_from_base(
             &repo_path,
-            "schaltwerk/test-session",
+            "lucode/test-session",
             &worktree_path,
             "master",
         )
@@ -710,7 +710,7 @@ mod tests {
 
         let result = coordinator.cancel_session(&session, config).unwrap();
         assert!(!result.branch_deleted);
-        assert!(git::branch_exists(&repo_path, "schaltwerk/test-session").unwrap());
+        assert!(git::branch_exists(&repo_path, "lucode/test-session").unwrap());
     }
 
     #[test]
@@ -720,7 +720,7 @@ mod tests {
         let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
         let db_manager = SessionDbManager::new(db, repo_path.clone());
 
-        let session = create_test_session(&repo_path, repo_path.join(".schaltwerk/worktrees/test"));
+        let session = create_test_session(&repo_path, repo_path.join(".lucode/worktrees/test"));
         db_manager.create_session(&session).unwrap();
 
         let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
@@ -741,10 +741,10 @@ mod tests {
         let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
         let db_manager = SessionDbManager::new(db, repo_path.clone());
 
-        let worktree_path = repo_path.join(".schaltwerk/worktrees/test");
+        let worktree_path = repo_path.join(".lucode/worktrees/test");
         git::create_worktree_from_base(
             &repo_path,
-            "schaltwerk/test-session",
+            "lucode/test-session",
             &worktree_path,
             "master",
         )

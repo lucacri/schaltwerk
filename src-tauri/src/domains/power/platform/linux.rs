@@ -6,8 +6,8 @@ use crate::errors::SchaltError;
 
 use super::PlatformAdapter;
 
-const WHO: &str = "Schaltwerk-KeepAwake";
-const WHY: &str = "AI agent sessions active (schaltwerk-keep-awake)";
+const WHO: &str = "Lucode-KeepAwake";
+const WHY: &str = "AI agent sessions active (lucode-keep-awake)";
 
 pub struct LinuxAdapter {
     inhibit_path: PathBuf,
@@ -51,7 +51,7 @@ impl PlatformAdapter for LinuxAdapter {
     fn find_existing_inhibitor(&self) -> Result<Option<u32>, SchaltError> {
         let output = Command::new("pgrep")
             .arg("-f")
-            .arg("systemd-inhibit.*Schaltwerk-KeepAwake")
+            .arg("systemd-inhibit.*Lucode-KeepAwake")
             .output()
             .map_err(|e| SchaltError::IoError {
                 operation: "pgrep".into(),
