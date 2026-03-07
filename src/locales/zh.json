@@ -360,6 +360,11 @@
       "result": "个结果",
       "close": "关闭搜索"
     },
+    "sections": {
+      "running": "运行中",
+      "specs": "规格",
+      "reviewed": "已审核"
+    },
     "empty": "没有活动代理",
     "ungrouped": "未分组",
     "states": {

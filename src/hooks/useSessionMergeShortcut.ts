@@ -11,12 +11,13 @@ import type { EnrichedSession } from '../types/session'
 interface UseSessionMergeShortcutOptions {
   enableFilterPivot?: boolean
   getCommitDraftForSession?: (sessionId: string) => string | undefined
+  onExpandReviewedSection?: () => void
 }
 
 type HandleMergeShortcut = (sessionIdOverride?: string | null) => Promise<void>
 
 export function useSessionMergeShortcut(options: UseSessionMergeShortcutOptions = {}) {
-  const { enableFilterPivot = false, getCommitDraftForSession } = options
+  const { enableFilterPivot = false, getCommitDraftForSession, onExpandReviewedSection } = options
   const { selection } = useSelection()
   const {
     sessions,
@@ -82,6 +83,10 @@ export function useSessionMergeShortcut(options: UseSessionMergeShortcutOptions 
 
       if (shouldPivotFilter) {
         setFilterMode(FilterMode.Reviewed)
+      }
+
+      if (result.autoMarkedReady && onExpandReviewedSection) {
+        onExpandReviewedSection()
       }
 
       if (result.status === 'started') {

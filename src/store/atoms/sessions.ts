@@ -891,10 +891,7 @@ export const specSessionsAtom = atom((get) => {
 
 export const runningSessionsAtom = atom((get) => {
     const sessions = get(searchedSessionsAtom)
-    return sortSessionsByCreationDate(sessions.filter(s => {
-        const state = mapSessionUiState(s.info)
-        return state === SessionState.Running || state === SessionState.Processing
-    }))
+    return sortSessionsByCreationDate(sessions.filter(s => mapSessionUiState(s.info) === SessionState.Running))
 })
 
 export const reviewedSessionsAtom = atom((get) => {
