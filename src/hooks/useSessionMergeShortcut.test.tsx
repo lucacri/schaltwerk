@@ -1,6 +1,7 @@
 import { renderHook, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { EnrichedSession } from '../types/session'
+import { FilterMode } from '../types/sessionFilters'
 import type { MergeDialogState } from '../store/atoms/sessions'
 import { useSessionMergeShortcut } from './useSessionMergeShortcut'
 
@@ -62,6 +63,7 @@ function createMergeDialogState(overrides: Partial<MergeDialogState> = {}): Merg
 
 describe('useSessionMergeShortcut', () => {
   const quickMergeSession = vi.fn()
+  const setFilterMode = vi.fn()
   const isMergeInFlight = vi.fn()
   const isAnyModalOpen = vi.fn()
 
@@ -69,6 +71,7 @@ describe('useSessionMergeShortcut', () => {
     vi.clearAllMocks()
     const session = createSession()
     quickMergeSession.mockResolvedValue({ status: 'needs-modal', reason: 'confirm' })
+    setFilterMode.mockReset()
     isMergeInFlight.mockReturnValue(false)
     isAnyModalOpen.mockReturnValue(false)
 
@@ -80,7 +83,8 @@ describe('useSessionMergeShortcut', () => {
       sessions: [session],
       allSessions: [session],
       quickMergeSession,
-      filterMode: 'running',
+      filterMode: FilterMode.Running,
+      setFilterMode,
       mergeDialogState: createMergeDialogState(),
       isMergeInFlight,
     })
@@ -116,6 +120,31 @@ describe('useSessionMergeShortcut', () => {
     expect(quickMergeSession).not.toHaveBeenCalled()
   })
 
+  it('keeps filter steady by default even after auto-marking ready', async () => {
+    quickMergeSession.mockResolvedValueOnce({ status: 'needs-modal', reason: 'confirm' })
+    const { result } = renderHook(() => useSessionMergeShortcut())
+
+    await act(async () => {
+      await result.current.handleMergeShortcut()
+    })
+
+    expect(setFilterMode).not.toHaveBeenCalled()
+    expect(quickMergeSession).toHaveBeenCalledWith('session-1', { commitMessage: null })
+  })
+
+  it('does not pivot filter even when filter pivot opt-in is on (no auto-ready)', async () => {
+    quickMergeSession.mockResolvedValueOnce({ status: 'needs-modal', reason: 'confirm' })
+    const { result } = renderHook(() =>
+      useSessionMergeShortcut({ enableFilterPivot: true }),
+    )
+
+    await act(async () => {
+      await result.current.handleMergeShortcut()
+    })
+
+    expect(setFilterMode).not.toHaveBeenCalled()
+  })
+
   it('passes cached commit drafts into quick merges', async () => {
     quickMergeSession.mockResolvedValueOnce({ status: 'needs-modal', reason: 'confirm' })
     const getCommitDraftForSession = vi.fn().mockReturnValue('cached message')
@@ -137,7 +166,8 @@ describe('useSessionMergeShortcut', () => {
       sessions: [session],
       allSessions: [session],
       quickMergeSession,
-      filterMode: 'running',
+      filterMode: FilterMode.Running,
+      setFilterMode,
       mergeDialogState: createMergeDialogState({ status: 'running', sessionName: 'session-1' }),
       isMergeInFlight,
     })

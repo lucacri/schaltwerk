@@ -2,6 +2,7 @@ import { renderHook, act, waitFor } from '@testing-library/react'
 import { useSpecMode, getSpecToSelect } from './useSpecMode'
 import { Selection } from '../hooks/useSelection'
 import { EnrichedSession } from '../types/session'
+import { FilterMode } from '../types/sessionFilters'
 import { UiEvent } from '../common/uiEvents'
 
 // Mock event system
@@ -25,6 +26,7 @@ vi.mock('../utils/logger', () => ({
 
 describe('useSpecMode', () => {
   const mockOrchestratorSelection: Selection = { kind: 'orchestrator' }
+  const mockSetFilterMode = vi.fn()
   const mockSetSelection = vi.fn().mockResolvedValue(undefined)
   
   const createMockSpec = (id: string, createdAt = '2023-01-01T00:00:00Z'): EnrichedSession => ({
@@ -58,6 +60,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -69,6 +72,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -86,6 +90,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -101,6 +106,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -120,6 +126,7 @@ describe('useSpecMode', () => {
         projectPath: null,
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -137,12 +144,13 @@ describe('useSpecMode', () => {
       const spec = createMockSpec('saved-spec')
 
       const { result, rerender } = renderHook(
-        (props: { projectPath: string | null; selection: Selection; sessions: EnrichedSession[]; setSelection: typeof mockSetSelection }) => useSpecMode(props),
+        (props: { projectPath: string | null; selection: Selection; sessions: EnrichedSession[]; setFilterMode: typeof mockSetFilterMode; setSelection: typeof mockSetSelection }) => useSpecMode(props),
         {
           initialProps: {
             projectPath: null as string | null,
             selection: mockOrchestratorSelection,
             sessions: [spec],
+            setFilterMode: mockSetFilterMode,
             setSelection: mockSetSelection
           }
         }
@@ -156,6 +164,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       })
 
@@ -170,6 +179,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [], // No specs available
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -185,6 +195,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -204,6 +215,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -223,6 +235,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -243,6 +256,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -260,6 +274,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -276,6 +291,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -311,6 +327,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec1, spec2, runningSession],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -331,6 +348,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [], // No specs available
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -357,8 +375,9 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec1, spec2],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection,
-
+        currentFilterMode: FilterMode.Running
       }))
 
       // Select spec-2
@@ -382,8 +401,9 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection,
-
+        currentFilterMode: FilterMode.Running
       }))
 
       act(() => {
@@ -401,8 +421,9 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec1, spec2],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection,
-
+        currentFilterMode: FilterMode.Running
       }))
 
       // Select spec-2
@@ -420,8 +441,9 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec1], // spec-2 removed
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection,
-
+        currentFilterMode: FilterMode.Running
       })
 
       // Check that when toggling with removed spec, it would fall back
@@ -429,6 +451,109 @@ describe('useSpecMode', () => {
       // so we just verify the getSpecToSelect helper works correctly
       const specToSelect = getSpecToSelect([spec1], 'spec-2')
       expect(specToSelect).toBe('spec-1')
+    })
+  })
+
+  describe('filter mode restoration', () => {
+    it('should save and restore filter mode when entering/exiting spec mode', async () => {
+      const spec = createMockSpec('test-spec')
+      
+      const { result } = renderHook(() => useSpecMode({
+        projectPath: '/test/project',
+        selection: mockOrchestratorSelection,
+        sessions: [spec],
+        setFilterMode: mockSetFilterMode,
+        setSelection: mockSetSelection,
+        currentFilterMode: FilterMode.Running // Start with Running filter
+      }))
+
+      // Toggle spec mode on
+      await act(async () => {
+        await result.current.toggleSpecMode()
+      })
+
+      // Should switch to Spec filter
+      expect(mockSetFilterMode).toHaveBeenCalledWith(FilterMode.Spec)
+
+      // Exit spec mode
+      await act(async () => {
+        await result.current.handleExitSpecMode()
+      })
+
+      // Should restore to Running filter
+      expect(mockSetFilterMode).toHaveBeenCalledWith(FilterMode.Running)
+    })
+
+    it('should persist previous filter mode to sessionStorage', async () => {
+      const spec = createMockSpec('test-spec')
+      
+      const { result } = renderHook(() => useSpecMode({
+        projectPath: '/test/project',
+        selection: mockOrchestratorSelection,
+        sessions: [spec],
+        setFilterMode: mockSetFilterMode,
+        setSelection: mockSetSelection,
+        currentFilterMode: FilterMode.Reviewed
+      }))
+
+      await act(async () => {
+        await result.current.toggleSpecMode()
+      })
+
+      expect(sessionStorage.getItem('schaltwerk:prev-filter:project')).toBe(FilterMode.Reviewed)
+    })
+
+    it('should keep Spec filter if it was already selected', async () => {
+      const spec = createMockSpec('test-spec')
+      
+      const { result } = renderHook(() => useSpecMode({
+        projectPath: '/test/project',
+        selection: mockOrchestratorSelection,
+        sessions: [spec],
+        setFilterMode: mockSetFilterMode,
+        setSelection: mockSetSelection,
+        currentFilterMode: FilterMode.Spec // Already in Spec filter
+      }))
+
+      // Toggle spec mode on
+      await act(async () => {
+        await result.current.toggleSpecMode()
+      })
+
+      // Clear previous calls
+      mockSetFilterMode.mockClear()
+
+      // Exit spec mode
+      await act(async () => {
+        await result.current.handleExitSpecMode()
+      })
+
+      // Should restore to Spec filter (same as before)
+      expect(mockSetFilterMode).toHaveBeenCalledWith(FilterMode.Spec)
+    })
+
+    it('should default to Running filter if no previous filter was saved', async () => {
+      const { result } = renderHook(() => useSpecMode({
+        projectPath: '/test/project',
+        selection: mockOrchestratorSelection,
+        sessions: [],
+        setFilterMode: mockSetFilterMode,
+        setSelection: mockSetSelection,
+        currentFilterMode: undefined
+      }))
+
+      // Manually set spec mode without going through toggle
+      act(() => {
+        result.current.setCommanderSpecModeSession('test-spec')
+      })
+
+      // Exit spec mode
+      await act(async () => {
+        await result.current.handleExitSpecMode()
+      })
+
+      // Should default to Running filter
+      expect(mockSetFilterMode).toHaveBeenCalledWith(FilterMode.Running)
     })
   })
 
@@ -445,8 +570,9 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: sessionSelection, // Start in a session
         sessions: [spec],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection,
-
+        currentFilterMode: FilterMode.Running
       }))
 
       // Toggle spec mode on
@@ -479,8 +605,9 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: sessionSelection,
         sessions: [spec],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection,
-
+        currentFilterMode: FilterMode.Running
       }))
 
       await act(async () => {
@@ -499,8 +626,9 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection, // Already in orchestrator
         sessions: [spec],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection,
-
+        currentFilterMode: FilterMode.Running
       }))
 
       await act(async () => {
@@ -553,6 +681,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -564,6 +693,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -578,6 +708,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -592,6 +723,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -610,6 +742,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -629,6 +762,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec1, spec2],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -650,6 +784,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec1, spec2],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -674,6 +809,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec1, spec2],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 
@@ -700,6 +836,7 @@ describe('useSpecMode', () => {
           projectPath: '/test/project',
           selection: mockOrchestratorSelection,
           sessions,
+          setFilterMode: mockSetFilterMode,
           setSelection: mockSetSelection
         }),
         {
@@ -731,6 +868,7 @@ describe('useSpecMode', () => {
           projectPath: '/test/project',
           selection: mockOrchestratorSelection,
           sessions,
+          setFilterMode: mockSetFilterMode,
           setSelection: mockSetSelection
         }),
         {
@@ -757,6 +895,7 @@ describe('useSpecMode', () => {
         projectPath: '/test/project',
         selection: mockOrchestratorSelection,
         sessions: [spec],
+        setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection
       }))
 

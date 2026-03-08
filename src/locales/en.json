@@ -362,11 +362,6 @@
       "result": "result",
       "close": "Close search"
     },
-    "sections": {
-      "running": "Running",
-      "specs": "Specs",
-      "reviewed": "Reviewed"
-    },
     "empty": "No active agents",
     "ungrouped": "Ungrouped",
     "states": {

@@ -16,11 +16,11 @@ import { useSessions } from '../../hooks/useSessions'
 import { captureSelectionSnapshot, SelectionMemoryEntry } from '../../utils/selectionMemory'
 import { computeSelectionCandidate } from '../../utils/selectionPostMerge'
 import { ConvertToSpecConfirmation } from '../modals/ConvertToSpecConfirmation'
-import { mapSessionUiState, isReviewed, isSpec } from '../../utils/sessionFilters'
+import { FilterMode, FILTER_MODES } from '../../types/sessionFilters'
+import { calculateFilterCounts, mapSessionUiState, isReviewed, isSpec } from '../../utils/sessionFilters'
 import { theme } from '../../common/theme'
 import { groupSessionsByVersion, selectBestVersionAndCleanup, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
 import { SessionVersionGroup } from './SessionVersionGroup'
-import { SidebarSection } from './SidebarSection'
 import { CollapsedSidebarRail } from './CollapsedSidebarRail'
 import { PromoteVersionConfirmation } from '../modals/PromoteVersionConfirmation'
 import { useSessionManagement } from '../../hooks/useSessionManagement'
@@ -145,15 +145,14 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
     const github = useGithubIntegrationContext()
     const forge = useAtomValue(projectForgeAtom)
     const { pushToast } = useToast()
-    const {
+    const { 
         sessions,
         allSessions,
-        specSessions,
-        runningSessions,
-        reviewedSessions,
         loading,
+        filterMode,
         searchQuery,
         isSearchVisible,
+        setFilterMode,
         setSearchQuery,
         setIsSearchVisible,
         reloadSessions,
@@ -242,59 +241,7 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
             setOrchestratorBranch("main")
         }
     })
-    const SECTION_ORDER = ['running', 'specs', 'reviewed'] as const
-    type SectionKey = (typeof SECTION_ORDER)[number]
-
-    const sectionCollapseStorageKey = useMemo(
-        () => projectPath ? `lucode:section-collapse:${projectPath}` : null,
-        [projectPath],
-    )
-
-    const [collapsedSections, setCollapsedSections] = useState<Record<SectionKey, boolean>>(() => {
-        if (sectionCollapseStorageKey) {
-            try {
-                const raw = localStorage.getItem(sectionCollapseStorageKey)
-                if (raw) return JSON.parse(raw) as Record<SectionKey, boolean>
-            } catch (e) {
-                logger.warn('[Sidebar] Failed to load section collapse state:', e)
-            }
-        }
-        return { running: false, specs: false, reviewed: true }
-    })
-
-    const [focusedSection, setFocusedSection] = useState<SectionKey | null>(null)
-
-    const toggleSection = useCallback((key: SectionKey) => {
-        setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }))
-    }, [])
-
-    const expandReviewedSection = useCallback(() => {
-        setCollapsedSections(prev => ({ ...prev, reviewed: false }))
-    }, [])
-
-    const sectionCollapseKeyLoadedRef = useRef<string | null>(null)
-    useEffect(() => {
-        if (!sectionCollapseStorageKey || sectionCollapseStorageKey === sectionCollapseKeyLoadedRef.current) return
-        sectionCollapseKeyLoadedRef.current = sectionCollapseStorageKey
-        try {
-            const raw = localStorage.getItem(sectionCollapseStorageKey)
-            if (raw) {
-                setCollapsedSections(JSON.parse(raw) as Record<SectionKey, boolean>)
-            }
-        } catch (e) {
-            logger.warn('[Sidebar] Failed to load section collapse state:', e)
-        }
-    }, [sectionCollapseStorageKey])
-
-    useEffect(() => {
-        if (!sectionCollapseStorageKey) return
-        try {
-            localStorage.setItem(sectionCollapseStorageKey, JSON.stringify(collapsedSections))
-        } catch (e) {
-            logger.warn('[Sidebar] Failed to persist section collapse state:', e)
-        }
-    }, [sectionCollapseStorageKey, collapsedSections])
-
+    const [keyboardNavigatedFilter, setKeyboardNavigatedFilter] = useState<FilterMode | null>(null)
     const [switchOrchestratorModal, setSwitchOrchestratorModal] = useState<{ open: boolean; initialAgentType?: AgentType; initialSkipPermissions?: boolean; targetSessionId?: string | null }>({ open: false })
     const [switchModelSessionId, setSwitchModelSessionId] = useState<string | null>(null)
     const orchestratorResetting = resettingSelection?.kind === 'orchestrator'
@@ -308,7 +255,6 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
     )
     const { handleMergeShortcut, isSessionMerging } = useSessionMergeShortcut({
         getCommitDraftForSession,
-        onExpandReviewedSection: expandReviewedSection,
     })
     const { updateSessionFromParent } = useUpdateSessionFromParent()
     const openMergeDialogWithPrefill = useSetAtom(openMergeDialogActionAtom)
@@ -523,14 +469,21 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
     const sessionScrollTopRef = useRef(0)
     const isProjectSwitching = useRef(false)
     const previousProjectPathRef = useRef<string | null>(null)
-    const selectionMemoryRef = useRef<Map<string, SelectionMemoryEntry>>(new Map())
+    const previousFilterModeRef = useRef<FilterMode>(filterMode)
+    const needsFilterAutoCorrect = useRef(true)
+
+    const selectionMemoryRef = useRef<Map<string, Record<FilterMode, SelectionMemoryEntry>>>(new Map())
 
     const ensureProjectMemory = useCallback(() => {
-      const key = projectPath || '__default__'
+      const key = projectPath || '__default__';
       if (!selectionMemoryRef.current.has(key)) {
-        selectionMemoryRef.current.set(key, { lastSelection: null, lastSessions: [] })
+        selectionMemoryRef.current.set(key, {
+          [FilterMode.Spec]: { lastSelection: null, lastSessions: [] },
+          [FilterMode.Running]: { lastSelection: null, lastSessions: [] },
+          [FilterMode.Reviewed]: { lastSelection: null, lastSessions: [] },
+        });
       }
-      return selectionMemoryRef.current.get(key)!
+      return selectionMemoryRef.current.get(key)!;
     }, [projectPath]);
 
     const epicCollapseStorageKey = useMemo(
@@ -581,57 +534,47 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
     }, [])
 
     const hasAnyEpicAssigned = useMemo(() => allSessions.some(session => session.info.epic), [allSessions])
-
-    const runningVersionGroups = useMemo(() => groupSessionsByVersion(runningSessions), [runningSessions])
-    const specVersionGroups = useMemo(() => groupSessionsByVersion(specSessions), [specSessions])
-    const reviewedVersionGroups = useMemo(() => groupSessionsByVersion(reviewedSessions), [reviewedSessions])
-
-    const runningEpicGrouping = useMemo<EpicGroupingResult>(() => {
-        if (!hasAnyEpicAssigned) return { epicGroups: [], ungroupedGroups: runningVersionGroups }
-        return groupVersionGroupsByEpic(runningVersionGroups)
-    }, [hasAnyEpicAssigned, runningVersionGroups])
-
-    const specEpicGrouping = useMemo<EpicGroupingResult>(() => {
-        if (!hasAnyEpicAssigned) return { epicGroups: [], ungroupedGroups: specVersionGroups }
-        return groupVersionGroupsByEpic(specVersionGroups)
-    }, [hasAnyEpicAssigned, specVersionGroups])
-
-    const reviewedEpicGrouping = useMemo<EpicGroupingResult>(() => {
-        if (!hasAnyEpicAssigned) return { epicGroups: [], ungroupedGroups: reviewedVersionGroups }
-        return groupVersionGroupsByEpic(reviewedVersionGroups)
-    }, [hasAnyEpicAssigned, reviewedVersionGroups])
-
+    const versionGroups = useMemo(() => groupSessionsByVersion(sessions), [sessions])
+    const epicGrouping = useMemo<EpicGroupingResult>(() => {
+        if (!hasAnyEpicAssigned) {
+            return { epicGroups: [], ungroupedGroups: versionGroups }
+        }
+        return groupVersionGroupsByEpic(versionGroups)
+    }, [hasAnyEpicAssigned, versionGroups])
 
     const flattenedSessions = useMemo(() => {
-        const result: EnrichedSession[] = []
-        const addSection = (groups: SessionVersionGroupType[], eg: EpicGroupingResult, collapsed: boolean) => {
-            if (collapsed) return
-            if (!hasAnyEpicAssigned) {
-                result.push(...flattenVersionGroups(groups))
-                return
-            }
-            const expandedEpicGroups = eg.epicGroups.flatMap(g =>
-                collapsedEpicIds[g.epic.id] ? [] : g.groups
-            )
-            result.push(...flattenVersionGroups([...expandedEpicGroups, ...eg.ungroupedGroups]))
+        if (!hasAnyEpicAssigned) {
+            return flattenVersionGroups(versionGroups)
         }
-        addSection(runningVersionGroups, runningEpicGrouping, collapsedSections.running)
-        addSection(specVersionGroups, specEpicGrouping, collapsedSections.specs)
-        addSection(reviewedVersionGroups, reviewedEpicGrouping, collapsedSections.reviewed)
-        return result
-    }, [
-        hasAnyEpicAssigned, collapsedEpicIds, collapsedSections,
-        runningVersionGroups, runningEpicGrouping,
-        specVersionGroups, specEpicGrouping,
-        reviewedVersionGroups, reviewedEpicGrouping,
-    ])
+
+        const expandedEpicGroups = epicGrouping.epicGroups.flatMap((group) => {
+            if (collapsedEpicIds[group.epic.id]) {
+                return []
+            }
+            return group.groups
+        })
+
+        return flattenVersionGroups([...expandedEpicGroups, ...epicGrouping.ungroupedGroups])
+    }, [hasAnyEpicAssigned, versionGroups, epicGrouping, collapsedEpicIds])
 
     useEffect(() => {
         if (previousProjectPathRef.current !== null && previousProjectPathRef.current !== projectPath) {
             isProjectSwitching.current = true
+            previousFilterModeRef.current = filterMode
+            needsFilterAutoCorrect.current = true
         }
         previousProjectPathRef.current = projectPath
-    }, [projectPath]);
+    }, [projectPath, filterMode]);
+
+    useEffect(() => {
+        if (loading || !needsFilterAutoCorrect.current) return
+        needsFilterAutoCorrect.current = false
+        if (filterMode !== FilterMode.Spec) return
+        const hasSpecs = allSessions.some(s => isSpec(s.info))
+        if (!hasSpecs) {
+            setFilterMode(FilterMode.Running)
+        }
+    }, [loading, filterMode, allSessions, setFilterMode])
 
     useEffect(() => {
         let unsubscribe: (() => void) | null = null
@@ -775,17 +718,19 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
         }
     }, [createSafeUnlistener, openMergeDialogWithPrefill, pushToast])
 
-    // Maintain selection memory and choose the next best session when visibility changes
+    // Maintain per-filter selection memory and choose the next best session when visibility changes
     useEffect(() => {
         if (isProjectSwitching.current) {
+            // Allow refocus even if the project switch completion event is delayed
             isProjectSwitching.current = false
         }
 
         const allSessionsSnapshot = allSessions.length > 0 ? allSessions : latestSessionsRef.current
 
-        const entry = ensureProjectMemory()
+        const memory = ensureProjectMemory();
+        const entry = memory[filterMode];
 
-        const visibleSessions = allSessions
+        const visibleSessions = sessions
         const visibleIds = new Set(visibleSessions.map(s => s.info.session_id))
         const currentSelectionId = selection.kind === 'session' ? (selection.payload ?? null) : null
 
@@ -809,9 +754,34 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
             lastMergedReviewedSessionRef.current = null
         }
 
+        const removalCandidateSession = removalCandidateFromEvent
+            ? allSessionsSnapshot.find(s => s.info.session_id === removalCandidateFromEvent)
+            : undefined
+        const wasReviewedSession = removalCandidateSession ? isReviewed(removalCandidateSession.info) : false
+        const shouldPreserveForReviewedRemoval = Boolean(wasReviewedSession && removalCandidateFromEvent && filterMode !== FilterMode.Reviewed)
+
+        const filterModeChanged = previousFilterModeRef.current !== filterMode
+        previousFilterModeRef.current = filterMode
+
+        const currentSelectionSession = currentSelectionId
+            ? allSessionsSnapshot.find(s => s.info.session_id === currentSelectionId)
+            : undefined
+        const currentSessionMovedToReviewed = Boolean(
+            !filterModeChanged &&
+            currentSelectionId &&
+            !visibleIds.has(currentSelectionId) &&
+            currentSelectionSession &&
+            isReviewed(currentSelectionSession.info) &&
+            filterMode === FilterMode.Running
+        )
+
+        const effectiveRemovalCandidate = currentSessionMovedToReviewed && currentSelectionId
+            ? currentSelectionId
+            : removalCandidateFromEvent
+
         if (selection.kind === 'orchestrator') {
             entry.lastSelection = null
-            if (!removalCandidateFromEvent && !shouldAdvanceFromMerged) {
+            if (!effectiveRemovalCandidate && !shouldAdvanceFromMerged) {
                 return
             }
         }
@@ -842,9 +812,10 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
             visibleSessions,
             previousSessions,
             rememberedId,
-            removalCandidate: removalCandidateFromEvent,
+            removalCandidate: effectiveRemovalCandidate,
             mergedCandidate,
             shouldAdvanceFromMerged,
+            shouldPreserveForReviewedRemoval,
             allSessions: allSessionsSnapshot
         })
 
@@ -873,7 +844,7 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
         if (shouldAdvanceFromMerged) {
             lastMergedReviewedSessionRef.current = null
         }
-    }, [sessions, selection, ensureProjectMemory, allSessions, setSelection])
+    }, [sessions, selection, filterMode, ensureProjectMemory, allSessions, setSelection])
 
     useEffect(() => { void fetchOrchestratorBranch() }, [])
 
@@ -1196,15 +1167,33 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
     }
 
     const handleNavigateToPrevFilter = () => {
-        const currentIndex = focusedSection ? SECTION_ORDER.indexOf(focusedSection) : 0
-        const prevIndex = currentIndex === 0 ? SECTION_ORDER.length - 1 : currentIndex - 1
-        setFocusedSection(SECTION_ORDER[prevIndex])
+        const currentIndex = FILTER_MODES.indexOf(filterMode)
+        const prevIndex = currentIndex === 0 ? FILTER_MODES.length - 1 : currentIndex - 1
+        const nextFilter = FILTER_MODES[prevIndex]
+
+        setKeyboardNavigatedFilter(nextFilter)
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                setKeyboardNavigatedFilter(null)
+            })
+        })
+
+        setFilterMode(nextFilter)
     }
 
     const handleNavigateToNextFilter = () => {
-        const currentIndex = focusedSection ? SECTION_ORDER.indexOf(focusedSection) : -1
-        const nextIndex = (currentIndex + 1) % SECTION_ORDER.length
-        setFocusedSection(SECTION_ORDER[nextIndex])
+        const currentIndex = FILTER_MODES.indexOf(filterMode)
+        const nextIndex = (currentIndex + 1) % FILTER_MODES.length
+        const nextFilter = FILTER_MODES[nextIndex]
+
+        setKeyboardNavigatedFilter(nextFilter)
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                setKeyboardNavigatedFilter(null)
+            })
+        })
+
+        setFilterMode(nextFilter)
     }
 
     const findSessionById = useCallback((sessionId?: string | null) => {
@@ -1495,6 +1484,9 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
 
     useEffect(() => () => cancelMarkReadyCooldown(), [cancelMarkReadyCooldown])
 
+    // Calculate counts based on all sessions (unaffected by search)
+    const { specsCount, runningCount, reviewedCount } = calculateFilterCounts(allSessions)
+
     return (
         <div
             ref={sidebarRef}
@@ -1625,6 +1617,28 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                 </div>
             </div>
 
+            {isCollapsed && (
+                <div className="py-1 px-0.5 flex items-center justify-center" aria-hidden="true">
+                    <span
+                        className="px-1 py-[2px] rounded border"
+                        style={{
+                            color: 'var(--color-text-secondary)',
+                            borderColor: 'var(--color-border-subtle)',
+                            backgroundColor: 'var(--color-bg-elevated)',
+                            fontSize: theme.fontSize.caption,
+                            lineHeight: theme.lineHeight.compact,
+                            minWidth: '24px',
+                            textAlign: 'center',
+                        }}
+                        title={`Filter: ${filterMode}`}
+                    >
+                        {filterMode === FilterMode.Spec && t.sidebar.filters.specShort}
+                        {filterMode === FilterMode.Running && t.sidebar.filters.runShort}
+                        {filterMode === FilterMode.Reviewed && t.sidebar.filters.revShort}
+                    </span>
+                </div>
+            )}
+
             {!isCollapsed && (
                 <div
                     className="h-8 px-3 border-t border-b text-xs flex items-center bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)]"
@@ -1632,23 +1646,26 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                 >
                     <div className="flex items-center gap-2 w-full">
                         <div className="flex items-center gap-1 ml-auto flex-nowrap overflow-x-auto" style={{ scrollbarGutter: 'stable both-edges' }}>
+                            {/* Search Icon */}
                             <button
                                 onClick={() => {
-                                    setIsSearchVisible(true)
-                                    if (selection.kind === 'session' && selection.payload) {
-                                        emitUiEvent(UiEvent.OpencodeSearchResize, { kind: 'session', sessionId: selection.payload })
-                                    } else {
-                                        emitUiEvent(UiEvent.OpencodeSearchResize, { kind: 'orchestrator' })
-                                    }
-                                    try {
-                                        if (selection.kind === 'session' && selection.payload) {
-                                            emitUiEvent(UiEvent.TerminalResizeRequest, { target: 'session', sessionId: selection.payload })
-                                        } else {
-                                            emitUiEvent(UiEvent.TerminalResizeRequest, { target: 'orchestrator' })
-                                        }
-                                    } catch (e) {
-                                        logger.warn('[Sidebar] Failed to dispatch generic terminal resize request (search open)', e)
-                                    }
+                                            setIsSearchVisible(true)
+                                            // Trigger OpenCode TUI resize workaround for the active context
+                                            if (selection.kind === 'session' && selection.payload) {
+                                                emitUiEvent(UiEvent.OpencodeSearchResize, { kind: 'session', sessionId: selection.payload })
+                                            } else {
+                                                emitUiEvent(UiEvent.OpencodeSearchResize, { kind: 'orchestrator' })
+                                            }
+                                            // Generic resize request for all terminals in the active context
+                                            try {
+                                                if (selection.kind === 'session' && selection.payload) {
+                                                    emitUiEvent(UiEvent.TerminalResizeRequest, { target: 'session', sessionId: selection.payload })
+                                                } else {
+                                                    emitUiEvent(UiEvent.TerminalResizeRequest, { target: 'orchestrator' })
+                                                }
+                                            } catch (e) {
+                                                logger.warn('[Sidebar] Failed to dispatch generic terminal resize request (search open)', e)
+                                            }
                                 }}
                                 className={clsx(
                                     'px-1 py-0.5 rounded flex items-center flex-shrink-0 border border-transparent transition-colors',
@@ -1661,6 +1678,45 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
                                 </svg>
+                            </button>
+                            <button
+                                className={clsx(
+                                    'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
+                                    filterMode === FilterMode.Spec
+                                        ? 'bg-[var(--color-bg-hover)] text-[var(--color-text-primary)] border-[var(--color-border-default)]'
+                                        : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
+                                    keyboardNavigatedFilter === FilterMode.Spec && ''
+                                )}
+                                onClick={() => setFilterMode(FilterMode.Spec)}
+                                title={t.sidebar.filters.showSpecs}
+                            >
+                                {t.sidebar.filters.specs} <span className="text-[var(--color-text-muted)]">({specsCount})</span>
+                            </button>
+                            <button
+                                className={clsx(
+                                    'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
+                                    filterMode === FilterMode.Running
+                                        ? 'bg-[var(--color-bg-hover)] text-[var(--color-text-primary)] border-[var(--color-border-default)]'
+                                        : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
+                                    keyboardNavigatedFilter === FilterMode.Running && ''
+                                )}
+                                onClick={() => setFilterMode(FilterMode.Running)}
+                                title={t.sidebar.filters.showRunning}
+                            >
+                                {t.sidebar.filters.running} <span className="text-[var(--color-text-muted)]">({runningCount})</span>
+                            </button>
+                            <button
+                                className={clsx(
+                                    'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
+                                    filterMode === FilterMode.Reviewed
+                                        ? 'bg-[var(--color-bg-hover)] text-[var(--color-text-primary)] border-[var(--color-border-default)]'
+                                        : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
+                                    keyboardNavigatedFilter === FilterMode.Reviewed && ''
+                                )}
+                                onClick={() => setFilterMode(FilterMode.Reviewed)}
+                                title={t.sidebar.filters.showReviewed}
+                            >
+                                {t.sidebar.filters.reviewed} <span className="text-[var(--color-text-muted)]">({reviewedCount})</span>
                             </button>
                         </div>
                     </div>
@@ -1744,7 +1800,7 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                 data-testid="session-scroll-container"
                 data-onboarding="session-list"
             >
-                {allSessions.length === 0 && !loading ? (
+                {sessions.length === 0 && !loading ? (
                     <div className="text-center text-slate-500 py-4">{t.sidebar.empty}</div>
                 ) : (
                     isCollapsed ? (
@@ -1760,210 +1816,185 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                         (() => {
                             let globalIndex = 0
 
-                            const versionGroupProps = {
-                                selection,
-                                hasFollowUpMessage: (sessionId: string) => sessionsWithNotifications.has(sessionId),
-                                onSelect: (sessionOrIndex: string | number) => { void handleSelectSession(sessionOrIndex) },
-                                onMarkReady: (sessionId: string) => {
-                                    if (markReadyCooldownRef.current) return
-                                    void triggerMarkReady(sessionId)
-                                },
-                                onUnmarkReady: (sessionId: string) => {
-                                    if (markReadyCooldownRef.current) return
-                                    engageMarkReadyCooldown('unmark-ready-click')
-                                    void (async () => {
-                                        try {
-                                            await invoke(TauriCommands.SchaltwerkCoreUnmarkSessionReady, { name: sessionId })
-                                            await reloadSessionsAndRefreshIdle()
-                                        } catch (err) {
-                                            logger.error('Failed to unmark reviewed session:', err)
-                                        } finally {
-                                            scheduleMarkReadyCooldownRelease('unmark-ready-click-complete')
-                                        }
-                                    })()
-                                },
-                                onCancel: (sessionId: string, hasUncommitted: boolean) => {
-                                    const session = allSessions.find(s => s.info.session_id === sessionId)
-                                    if (session) {
-                                        emitUiEvent(UiEvent.SessionAction, {
-                                            action: 'cancel',
-                                            sessionId,
-                                            sessionName: sessionId,
-                                            sessionDisplayName: getSessionDisplayName(session.info),
-                                            branch: session.info.branch,
-                                            hasUncommittedChanges: hasUncommitted,
-                                        })
-                                    }
-                                },
-                                onConvertToSpec: (sessionId: string) => {
-                                    const session = allSessions.find(s => s.info.session_id === sessionId)
-                                    if (session) {
-                                        if (isReviewed(session.info)) {
-                                            logger.warn(`Cannot convert reviewed session "${sessionId}" to spec. Only running sessions can be converted.`)
-                                            return
-                                        }
-                                        setConvertToDraftModal({
-                                            open: true,
-                                            sessionName: sessionId,
-                                            sessionDisplayName: getSessionDisplayName(session.info),
-                                            hasUncommitted: session.info.has_uncommitted_changes || false
-                                        })
-                                    }
-                                },
-                                onRunDraft: (sessionId: string) => {
-                                    try {
-                                        emitUiEvent(UiEvent.StartAgentFromSpec, { name: sessionId })
-                                    } catch (err) {
-                                        logger.error('Failed to open start modal from spec:', err)
-                                    }
-                                },
-                                onRefineSpec: (sessionId: string) => {
-                                    const target = allSessions.find(s => s.info.session_id === sessionId)
-                                    const displayName = target ? getSessionDisplayName(target.info) : undefined
-                                    runRefineSpecFlow(sessionId, displayName)
-                                },
-                                onDeleteSpec: (sessionId: string) => {
-                                    const session = allSessions.find(s => s.info.session_id === sessionId)
-                                    const sessionDisplayName = session ? getSessionDisplayName(session.info) : sessionId
-                                    emitUiEvent(UiEvent.SessionAction, {
-                                        action: 'delete-spec',
-                                        sessionId,
-                                        sessionName: sessionId,
-                                        sessionDisplayName,
-                                        branch: session?.info.branch,
-                                        hasUncommittedChanges: false,
-                                    })
-                                },
-                                onSelectBestVersion: handleSelectBestVersion,
-                                onReset: (sessionId: string) => {
-                                    void (async () => {
-                                        const currentSelection = selection.kind === 'session' && selection.payload === sessionId
-                                            ? selection
-                                            : { kind: 'session' as const, payload: sessionId }
-                                        await resetSession(currentSelection, terminals)
-                                    })()
-                                },
-                                onSwitchModel: (sessionId: string) => {
-                                    setSwitchModelSessionId(sessionId)
-                                    const session = allSessions.find(s => s.info.session_id === sessionId)
-                                    const initialAgentType = normalizeAgentType(session?.info.original_agent_type)
-                                    const initialSkipPermissions = Boolean(session?.info && (session.info as { original_skip_permissions?: boolean }).original_skip_permissions)
-                                    setSwitchOrchestratorModal({ open: true, initialAgentType, initialSkipPermissions, targetSessionId: sessionId })
-                                },
-                                onCreatePullRequest: (sessionId: string) => { void handlePrShortcut(sessionId) },
-                                onCreateGitlabMr: (sessionId: string) => { handleOpenGitlabMrModal(sessionId) },
-                                resettingSelection,
-                                isSessionRunning,
-                                onMerge: handleMergeSession,
-                                onQuickMerge: (sessionId: string) => { void handleMergeShortcut(sessionId) },
-                                isMergeDisabled: isSessionMerging,
-                                getMergeStatus,
-                                isMarkReadyDisabled: isMarkReadyCoolingDown,
-                                isSessionBusy: isSessionMutating,
-                                onRename: handleRenameSession,
-                                onLinkPr: (sessionId: string, prNumber: number, prUrl: string) => { void handleLinkPr(sessionId, prNumber, prUrl) },
-                            }
-
                             const renderVersionGroup = (group: SessionVersionGroupType) => {
                                 const groupStartIndex = globalIndex
                                 globalIndex += group.versions.length
+
                                 return (
                                     <SessionVersionGroup
                                         key={group.id}
                                         group={group}
+                                        selection={selection}
                                         startIndex={groupStartIndex}
-                                        {...versionGroupProps}
+
+                                        hasFollowUpMessage={(sessionId: string) => sessionsWithNotifications.has(sessionId)}
+                                        onSelect={(sessionOrIndex) => {
+                                            void handleSelectSession(sessionOrIndex)
+                                        }}
+                                        onMarkReady={(sessionId) => {
+                                            if (markReadyCooldownRef.current) {
+                                                return
+                                            }
+                                            void triggerMarkReady(sessionId)
+                                        }}
+                                        onUnmarkReady={(sessionId) => {
+                                            if (markReadyCooldownRef.current) {
+                                                return
+                                            }
+
+                                            engageMarkReadyCooldown('unmark-ready-click')
+                                            void (async () => {
+                                                try {
+                                                    await invoke(TauriCommands.SchaltwerkCoreUnmarkSessionReady, { name: sessionId })
+                                                    await reloadSessionsAndRefreshIdle()
+                                                } catch (err) {
+                                                    logger.error('Failed to unmark reviewed session:', err)
+                                                } finally {
+                                                    scheduleMarkReadyCooldownRelease('unmark-ready-click-complete')
+                                                }
+                                            })()
+                                        }}
+                                        onCancel={(sessionId, hasUncommitted) => {
+                                            const session = sessions.find(s => s.info.session_id === sessionId)
+                                            if (session) {
+                                                const sessionDisplayName = getSessionDisplayName(session.info)
+                                                emitUiEvent(UiEvent.SessionAction, {
+                                                    action: 'cancel',
+                                                    sessionId,
+                                                    sessionName: sessionId,
+                                                    sessionDisplayName,
+                                                    branch: session.info.branch,
+                                                    hasUncommittedChanges: hasUncommitted,
+                                                })
+                                            }
+                                        }}
+                                        onConvertToSpec={(sessionId) => {
+                                            const session = sessions.find(s => s.info.session_id === sessionId)
+                                            if (session) {
+                                                // Only allow converting running sessions to specs, not reviewed sessions
+                                                if (isReviewed(session.info)) {
+                                                    logger.warn(`Cannot convert reviewed session "${sessionId}" to spec. Only running sessions can be converted.`)
+                                                    return
+                                                }
+                                                // Open confirmation modal
+                                                setConvertToDraftModal({
+                                                    open: true,
+                                                    sessionName: sessionId,
+                                                    sessionDisplayName: getSessionDisplayName(session.info),
+                                                    hasUncommitted: session.info.has_uncommitted_changes || false
+                                                })
+                                            }
+                                        }}
+                                        onRunDraft={(sessionId) => {
+                                            try {
+                                                emitUiEvent(UiEvent.StartAgentFromSpec, { name: sessionId })
+                                            } catch (err) {
+                                                logger.error('Failed to open start modal from spec:', err)
+                                            }
+                                        }}
+                                        onRefineSpec={(sessionId) => {
+                                            const target = sessions.find(s => s.info.session_id === sessionId)
+                                            const displayName = target ? getSessionDisplayName(target.info) : undefined
+                                            runRefineSpecFlow(sessionId, displayName)
+                                        }}
+                                        onDeleteSpec={(sessionId) => {
+                                            const session = sessions.find(s => s.info.session_id === sessionId)
+                                            const sessionDisplayName = session ? getSessionDisplayName(session.info) : sessionId
+
+                                            emitUiEvent(UiEvent.SessionAction, {
+                                                action: 'delete-spec',
+                                                sessionId,
+                                                sessionName: sessionId,
+                                                sessionDisplayName,
+                                                branch: session?.info.branch,
+                                                hasUncommittedChanges: false,
+                                            })
+                                        }}
+                                        onSelectBestVersion={handleSelectBestVersion}
+                                        onReset={(sessionId) => {
+                                            void (async () => {
+                                                const currentSelection = selection.kind === 'session' && selection.payload === sessionId
+                                                    ? selection
+                                                    : { kind: 'session' as const, payload: sessionId }
+                                                await resetSession(currentSelection, terminals)
+                                            })()
+                                        }}
+                                        onSwitchModel={(sessionId) => {
+                                            setSwitchModelSessionId(sessionId)
+                                            const session = sessions.find(s => s.info.session_id === sessionId)
+                                            const initialAgentType = normalizeAgentType(session?.info.original_agent_type)
+                                            const initialSkipPermissions = Boolean(session?.info && (session.info as { original_skip_permissions?: boolean }).original_skip_permissions)
+                                            setSwitchOrchestratorModal({ open: true, initialAgentType, initialSkipPermissions, targetSessionId: sessionId })
+                                        }}
+                                        onCreatePullRequest={(sessionId) => { void handlePrShortcut(sessionId) }}
+                                        onCreateGitlabMr={(sessionId) => { handleOpenGitlabMrModal(sessionId) }}
+                                        resettingSelection={resettingSelection}
+                                        isSessionRunning={isSessionRunning}
+                                        onMerge={handleMergeSession}
+                                        onQuickMerge={(sessionId) => { void handleMergeShortcut(sessionId) }}
+                                        isMergeDisabled={isSessionMerging}
+                                        getMergeStatus={getMergeStatus}
+                                        isMarkReadyDisabled={isMarkReadyCoolingDown}
+                                        isSessionBusy={isSessionMutating}
+                                        onRename={handleRenameSession}
+                                        onLinkPr={(sessionId, prNumber, prUrl) => { void handleLinkPr(sessionId, prNumber, prUrl) }}
                                     />
                                 )
                             }
 
-                            const renderSectionGroups = (sectionVersionGroups: SessionVersionGroupType[], sectionEpicGrouping: EpicGroupingResult, sectionKey: string) => {
-                                if (!hasAnyEpicAssigned) {
-                                    return sectionVersionGroups.map(renderVersionGroup)
-                                }
+                            if (!hasAnyEpicAssigned) {
+                                return versionGroups.map(renderVersionGroup)
+                            }
 
-                                const elements: ReactNode[] = []
+	                            const elements: ReactNode[] = []
 
-                                for (const epicGroup of sectionEpicGrouping.epicGroups) {
-                                    const epic = epicGroup.epic
-                                    const sessionCount = epicGroup.groups.reduce((acc, group) => acc + group.versions.length, 0)
-                                    const collapsed = Boolean(collapsedEpicIds[epic.id])
-                                    const countLabel = `${sessionCount} session${sessionCount === 1 ? '' : 's'}`
+	                            for (const epicGroup of epicGrouping.epicGroups) {
+	                                const epic = epicGroup.epic
+	                                const sessionCount = epicGroup.groups.reduce((acc, group) => acc + group.versions.length, 0)
+	                                const collapsed = Boolean(collapsedEpicIds[epic.id])
+	                                const countLabel = `${sessionCount} session${sessionCount === 1 ? '' : 's'}`
 
-                                    elements.push(
-                                        <EpicGroupHeader
-                                            key={`epic-header-${sectionKey}-${epic.id}`}
-                                            epic={epic}
-                                            collapsed={collapsed}
-                                            countLabel={countLabel}
-                                            menuOpen={epicMenuOpenId === epic.id}
-                                            onMenuOpenChange={(open) => setEpicMenuOpenId(open ? epic.id : null)}
-                                            onToggleCollapsed={() => toggleEpicCollapsed(epic.id)}
-                                            onEdit={() => setEditingEpic(epic)}
-                                            onDelete={() => setDeleteEpicTarget(epic)}
-                                        />
-                                    )
+	                                elements.push(
+	                                    <EpicGroupHeader
+	                                        key={`epic-header-${epic.id}`}
+	                                        epic={epic}
+	                                        collapsed={collapsed}
+	                                        countLabel={countLabel}
+	                                        menuOpen={epicMenuOpenId === epic.id}
+	                                        onMenuOpenChange={(open) => setEpicMenuOpenId(open ? epic.id : null)}
+	                                        onToggleCollapsed={() => toggleEpicCollapsed(epic.id)}
+	                                        onEdit={() => setEditingEpic(epic)}
+	                                        onDelete={() => setDeleteEpicTarget(epic)}
+	                                    />
+	                                )
 
-                                    if (!collapsed) {
-                                        for (const group of epicGroup.groups) {
-                                            elements.push(renderVersionGroup(group))
-                                        }
-                                    }
-                                }
-
-                                if (sectionEpicGrouping.ungroupedGroups.length > 0) {
-                                    elements.push(
-                                        <div
-                                            key={`ungrouped-header-${sectionKey}`}
-                                            data-testid={`epic-ungrouped-header-${sectionKey}`}
-                                            className="mt-4 mb-2 px-2 flex items-center gap-2"
-                                            style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}
-                                        >
-                                            <div style={{ flex: 1, height: 1, backgroundColor: 'var(--color-border-subtle)' }} />
-                                            <span>{t.sidebar.ungrouped}</span>
-                                            <div style={{ flex: 1, height: 1, backgroundColor: 'var(--color-border-subtle)' }} />
-                                        </div>
-                                    )
-
-                                    for (const group of sectionEpicGrouping.ungroupedGroups) {
+                                if (!collapsed) {
+                                    for (const group of epicGroup.groups) {
                                         elements.push(renderVersionGroup(group))
                                     }
                                 }
-
-                                return elements
                             }
 
-                            return (
-                                <>
-                                    <SidebarSection
-                                        label={t.sidebar.sections.running}
-                                        count={runningSessions.length}
-                                        expanded={!collapsedSections.running}
-                                        onToggle={() => toggleSection('running')}
-                                        focused={focusedSection === 'running'}
+                            if (epicGrouping.ungroupedGroups.length > 0) {
+                                elements.push(
+                                    <div
+                                        key="ungrouped-header"
+                                        data-testid="epic-ungrouped-header"
+                                        className="mt-4 mb-2 px-2 flex items-center gap-2"
+                                        style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}
                                     >
-                                        {renderSectionGroups(runningVersionGroups, runningEpicGrouping, 'running')}
-                                    </SidebarSection>
-                                    <SidebarSection
-                                        label={t.sidebar.sections.specs}
-                                        count={specSessions.length}
-                                        expanded={!collapsedSections.specs}
-                                        onToggle={() => toggleSection('specs')}
-                                        focused={focusedSection === 'specs'}
-                                    >
-                                        {renderSectionGroups(specVersionGroups, specEpicGrouping, 'specs')}
-                                    </SidebarSection>
-                                    <SidebarSection
-                                        label={t.sidebar.sections.reviewed}
-                                        count={reviewedSessions.length}
-                                        expanded={!collapsedSections.reviewed}
-                                        onToggle={() => toggleSection('reviewed')}
-                                        focused={focusedSection === 'reviewed'}
-                                    >
-                                        {renderSectionGroups(reviewedVersionGroups, reviewedEpicGrouping, 'reviewed')}
-                                    </SidebarSection>
-                                </>
-                            )
+                                        <div style={{ flex: 1, height: 1, backgroundColor: 'var(--color-border-subtle)' }} />
+                                        <span>{t.sidebar.ungrouped}</span>
+                                        <div style={{ flex: 1, height: 1, backgroundColor: 'var(--color-border-subtle)' }} />
+                                    </div>
+                                )
+
+                                for (const group of epicGrouping.ungroupedGroups) {
+                                    elements.push(renderVersionGroup(group))
+                                }
+                            }
+
+                            return elements
                         })()
                     )
                 )}

@@ -364,11 +364,6 @@ export interface Translations {
       result: string
       close: string
     }
-    sections: {
-      running: string
-      specs: string
-      reviewed: string
-    }
     empty: string
     ungrouped: string
     states: {

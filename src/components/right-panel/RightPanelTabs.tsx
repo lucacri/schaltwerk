@@ -17,6 +17,7 @@ import { beginSplitDrag, endSplitDrag } from '../../utils/splitDragCoordinator'
 import { SpecWorkspacePanel } from '../specs/SpecWorkspacePanel'
 import { useSpecMode } from '../../hooks/useSpecMode'
 import { isSpec as isSpecSession } from '../../utils/sessionFilters'
+import { FilterMode } from '../../types/sessionFilters'
 import { useKeyboardShortcutsConfig } from '../../contexts/KeyboardShortcutsContext'
 import { KeyboardShortcutAction } from '../../keyboardShortcuts/config'
 import { detectPlatformSafe, isShortcutForAction } from '../../keyboardShortcuts/helpers'
@@ -72,7 +73,9 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
     projectPath,
     selection,
     sessions: allSessions,
+    setFilterMode: () => { },
     setSelection,
+    currentFilterMode: FilterMode.Running
   })
 
   const { openSpecInWorkspace, closeSpecTab, openTabs, activeTab: specActiveTab } = specModeHook

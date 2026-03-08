@@ -35,6 +35,7 @@ describe('computeSelectionCandidate', () => {
             removalCandidate: null,
             mergedCandidate: 'reviewed-one',
             shouldAdvanceFromMerged: true,
+            shouldPreserveForReviewedRemoval: false,
             allSessions: [reviewedOne, reviewedTwo, running]
         })
 
@@ -52,10 +53,30 @@ describe('computeSelectionCandidate', () => {
             removalCandidate: null,
             mergedCandidate: 'solo-reviewed',
             shouldAdvanceFromMerged: true,
+            shouldPreserveForReviewedRemoval: false,
             allSessions: [reviewed]
         })
 
         expect(candidate).toBeNull()
+    })
+
+    it('honours preservation when reviewed removed under other filter', () => {
+        const running = session('running-session')
+        const reviewed = session('reviewed-session', true, SessionState.Reviewed)
+
+        const candidate = computeSelectionCandidate({
+            currentSelectionId: 'running-session',
+            visibleSessions: [running],
+            previousSessions: [running, reviewed],
+            rememberedId: null,
+            removalCandidate: 'reviewed-session',
+            mergedCandidate: null,
+            shouldAdvanceFromMerged: false,
+            shouldPreserveForReviewedRemoval: true,
+            allSessions: [running, reviewed]
+        })
+
+        expect(candidate).toBe('running-session')
     })
 
     it('falls back to remembered id when still visible', () => {
@@ -70,6 +91,7 @@ describe('computeSelectionCandidate', () => {
             removalCandidate: null,
             mergedCandidate: null,
             shouldAdvanceFromMerged: false,
+            shouldPreserveForReviewedRemoval: false,
             allSessions: [running, other]
         })
 

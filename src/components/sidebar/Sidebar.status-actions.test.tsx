@@ -6,9 +6,11 @@ import { TestProviders } from '../../tests/test-utils'
 import * as uiEvents from '../../common/uiEvents'
 import { UiEvent, type SessionActionDetail } from '../../common/uiEvents'
 
+// Mock tauri
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }))
 
+// TestProviders supplies a default project path for Sidebar
 import { invoke } from '@tauri-apps/api/core'
 import { EnrichedSession } from '../../types/session'
 import { listen } from '@tauri-apps/api/event'
@@ -64,12 +66,13 @@ describe('Sidebar status indicators and actions', () => {
   it('shows Reviewed badge for ready sessions and toggles with Unmark', async () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Expand Reviewed section
-    const reviewedSection = await screen.findByTestId('sidebar-section-reviewed')
-    fireEvent.click(within(reviewedSection).getByRole('button'))
+    await waitFor(() => {
+      expect(screen.getByTitle('Show reviewed agents')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTitle('Show reviewed agents'))
 
     await waitFor(() => {
-      const items = screen.getAllByRole('button').filter(b => (b.textContent || '').includes('s2'))
+      const items = screen.getAllByRole('button').filter(b => (b.textContent || '').includes('para/'))
       expect(items.length).toBe(1)
     })
 
@@ -141,7 +144,12 @@ describe('Sidebar status indicators and actions', () => {
 
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Specs section is expanded by default
+    // Switch to Spec filter to see spec sessions
+    await waitFor(() => {
+      expect(screen.getByTitle('Show spec agents')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTitle('Show spec agents'))
+
     await waitFor(() => {
       expect(screen.getByText('Spec Alpha')).toBeInTheDocument()
     })
@@ -243,7 +251,12 @@ describe('Sidebar status indicators and actions', () => {
 
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Specs section is expanded by default
+    // Switch to Spec filter to see spec sessions
+    await waitFor(() => {
+      expect(screen.getByTitle('Show spec agents')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTitle('Show spec agents'))
+
     await waitFor(() => {
       expect(screen.getByText('Spec One')).toBeInTheDocument()
     })
@@ -375,20 +388,20 @@ describe('Sidebar status indicators and actions', () => {
     const confirmButton = screen.getByRole('button', { name: /Convert to Spec/ })
     fireEvent.click(confirmButton)
 
-    // Session should now appear in Specs section (expanded by default)
+    // Switch to spec filter to see the converted session
+    fireEvent.click(screen.getByTitle('Show spec agents'))
+
     await waitFor(() => {
       const specButtons = screen.getAllByRole('button').filter(b => /s1-spec/.test(b.textContent || ''))
       expect(specButtons).toHaveLength(1)
       expect(specButtons[0]).toHaveTextContent('Spec')
     })
 
-    // Reviewed section should not contain the session
-    const reviewedSection = screen.getByTestId('sidebar-section-reviewed')
-    fireEvent.click(within(reviewedSection).getByRole('button'))
+    // Switch to reviewed filter and ensure session is not present
+    fireEvent.click(screen.getByTitle('Show reviewed agents'))
 
     await waitFor(() => {
-      const reviewedButtons = within(reviewedSection).queryAllByRole('button').filter(b => /s1/.test(b.textContent || ''))
-      // Only the section header button, no session buttons
+      const reviewedButtons = screen.getAllByRole('button').filter(b => /s1/.test(b.textContent || ''))
       expect(reviewedButtons).toHaveLength(0)
     })
   })

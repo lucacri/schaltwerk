@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriCommands } from '../../common/tauriCommands'
-import { render, screen, waitFor, act, fireEvent, within } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import { Sidebar } from './Sidebar'
 import { TestProviders } from '../../tests/test-utils'
 import * as uiEvents from '../../common/uiEvents'
@@ -372,7 +372,7 @@ describe('Sidebar keyboard navigation basic', () => {
       if (cmd === TauriCommands.DirectoryExists) return true
       if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
       if (cmd === TauriCommands.GetProjectSessionsSettings) {
-        return { filter_mode: 'running', sort_mode: 'name' }
+        return { filter_mode: 'reviewed', sort_mode: 'name' }
       }
       if (cmd === TauriCommands.SetProjectSessionsSettings) {
         return undefined
@@ -381,12 +381,6 @@ describe('Sidebar keyboard navigation basic', () => {
     })
 
     await renderSidebar()
-
-    // Expand the Reviewed section (collapsed by default)
-    const reviewedSection = screen.getByTestId('sidebar-section-reviewed')
-    await act(async () => {
-      fireEvent.click(within(reviewedSection).getByRole('button'))
-    })
 
     await waitFor(() => {
       expect(screen.getByText('reviewed-session')).toBeInTheDocument()
@@ -456,46 +450,6 @@ describe('Sidebar keyboard navigation basic', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Convert to Spec')).toBeInTheDocument()
-    })
-  })
-
-  it('Cmd+ArrowRight cycles section focus forward', async () => {
-    await renderSidebar()
-
-    await waitFor(() => {
-      expect(screen.getByTestId('sidebar-section-running')).toBeInTheDocument()
-    })
-
-    await press('ArrowRight', { metaKey: true })
-
-    await waitFor(() => {
-      const runningSection = screen.getByTestId('sidebar-section-running')
-      const button = within(runningSection).getByRole('button', { expanded: true })
-      expect(button.style.outlineStyle).not.toBe('none')
-    })
-
-    await press('ArrowRight', { metaKey: true })
-
-    await waitFor(() => {
-      const specsSection = screen.getByTestId('sidebar-section-specs')
-      const button = within(specsSection).getByRole('button')
-      expect(button.style.outlineStyle).not.toBe('none')
-    })
-  })
-
-  it('Cmd+ArrowLeft cycles section focus backward', async () => {
-    await renderSidebar()
-
-    await waitFor(() => {
-      expect(screen.getByTestId('sidebar-section-running')).toBeInTheDocument()
-    })
-
-    await press('ArrowLeft', { metaKey: true })
-
-    await waitFor(() => {
-      const reviewedSection = screen.getByTestId('sidebar-section-reviewed')
-      const button = within(reviewedSection).getByRole('button')
-      expect(button.style.outlineStyle).not.toBe('none')
     })
   })
 

@@ -8,6 +8,7 @@ export interface SelectionCandidateInput {
     removalCandidate: string | null
     mergedCandidate: string | null
     shouldAdvanceFromMerged: boolean
+    shouldPreserveForReviewedRemoval: boolean
     allSessions: EnrichedSession[]
 }
 
@@ -48,6 +49,7 @@ export function computeSelectionCandidate(input: SelectionCandidateInput): strin
         removalCandidate,
         mergedCandidate,
         shouldAdvanceFromMerged,
+    shouldPreserveForReviewedRemoval,
     allSessions,
   } = input
 
@@ -72,6 +74,13 @@ export function computeSelectionCandidate(input: SelectionCandidateInput): strin
     if (nextReviewed) {
       return nextReviewed
     }
+    }
+
+    if (shouldPreserveForReviewedRemoval) {
+        if (currentSelectionId && visibleSessions.find(s => s.info.session_id === currentSelectionId)) {
+            return currentSelectionId
+        }
+        return null
     }
 
     const baselineId = currentSelectionId ?? rememberedId ?? removalCandidate ?? mergedCandidate ?? null

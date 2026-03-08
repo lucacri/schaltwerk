@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriCommands } from '../../common/tauriCommands'
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Sidebar } from './Sidebar'
 import { TestProviders } from '../../tests/test-utils'
 import { invoke } from '@tauri-apps/api/core'
+import { FilterMode } from '../../types/sessionFilters'
 import type { EnrichedSession } from '../../types/session'
 import type { MockTauriInvokeArgs } from '../../types/testing'
 
@@ -31,13 +32,13 @@ const createSession = (id: string, createdAt: string, readyToMerge = false): Enr
 })
 
 describe('Sidebar session ordering and persistence', () => {
-  let savedFilterMode: string = 'running'
-  let _lastPersistedSettings: Record<string, unknown> | null = null
+  let savedFilterMode: string = FilterMode.Running
+  let lastPersistedSettings: Record<string, unknown> | null = null
 
   beforeEach(() => {
     vi.clearAllMocks()
-    savedFilterMode = 'running'
-    _lastPersistedSettings = null
+    savedFilterMode = FilterMode.Running
+    lastPersistedSettings = null
 
     const sessions = [
       createSession('test_session_a', '2024-01-01T10:00:00Z'),
@@ -65,7 +66,7 @@ describe('Sidebar session ordering and persistence', () => {
         case TauriCommands.SetProjectSessionsSettings: {
           const incoming = (args as { settings?: { filter_mode?: string } })?.settings ?? {}
           savedFilterMode = incoming.filter_mode || savedFilterMode
-          _lastPersistedSettings = incoming
+          lastPersistedSettings = incoming
           return undefined
         }
         default:
@@ -76,7 +77,6 @@ describe('Sidebar session ordering and persistence', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-    localStorage.clear()
   })
 
   it('sorts running sessions by creation date descending', async () => {
@@ -104,30 +104,7 @@ describe('Sidebar session ordering and persistence', () => {
     expect(orderedButtons[2]).toHaveTextContent('test_session_c') // oldest
   })
 
-  it('persists section collapse state to localStorage', async () => {
-    render(
-      <TestProviders>
-        <Sidebar />
-      </TestProviders>,
-    )
-
-    const runningSection = await screen.findByTestId('sidebar-section-running')
-    fireEvent.click(within(runningSection).getByRole('button', { expanded: true }))
-
-    await waitFor(() => {
-      const stored = localStorage.getItem('lucode:section-collapse:/test/project')
-      expect(stored).toBeTruthy()
-      const parsed = JSON.parse(stored!)
-      expect(parsed.running).toBe(true)
-    })
-  })
-
-  it('restores section collapse state from localStorage', async () => {
-    localStorage.setItem(
-      'lucode:section-collapse:/test/project',
-      JSON.stringify({ running: true, specs: false, reviewed: false }),
-    )
-
+  it('shows reviewed sessions separately in reviewed filter', async () => {
     render(
       <TestProviders>
         <Sidebar />
@@ -135,31 +112,38 @@ describe('Sidebar session ordering and persistence', () => {
     )
 
     await waitFor(() => {
-      const runningSection = screen.getByTestId('sidebar-section-running')
-      expect(within(runningSection).getByRole('button', { expanded: false })).toBeInTheDocument()
+      expect(screen.getByTitle('Show reviewed agents')).toBeInTheDocument()
     })
 
-    const reviewedSection = screen.getByTestId('sidebar-section-reviewed')
-    expect(within(reviewedSection).getByRole('button', { expanded: true })).toBeInTheDocument()
-  })
-
-  it('shows reviewed sessions in the Reviewed section when expanded', async () => {
-    render(
-      <TestProviders>
-        <Sidebar />
-      </TestProviders>,
-    )
-
-    const reviewedSection = await screen.findByTestId('sidebar-section-reviewed')
-    fireEvent.click(within(reviewedSection).getByRole('button'))
+    fireEvent.click(screen.getByTitle('Show reviewed agents'))
 
     await waitFor(() => {
       const sessionButtons = screen.getAllByRole('button').filter(btn => {
         const text = btn.textContent || ''
-        return text.includes('reviewed_session')
+        return text.includes('para/') && !text.includes('main (orchestrator)')
       })
       expect(sessionButtons).toHaveLength(1)
       expect(sessionButtons[0]).toHaveTextContent('reviewed_session')
+    })
+  })
+
+  it('persists filter mode changes without emitting legacy sort state', async () => {
+    render(
+      <TestProviders>
+        <Sidebar />
+      </TestProviders>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTitle('Show spec agents')).toBeInTheDocument()
+    })
+
+    const specsButton = screen.getByTitle('Show spec agents')
+    fireEvent.click(specsButton)
+
+    await waitFor(() => {
+      expect(savedFilterMode).toBe(FilterMode.Spec)
+      expect(lastPersistedSettings).toEqual({ filter_mode: FilterMode.Spec })
     })
   })
 })

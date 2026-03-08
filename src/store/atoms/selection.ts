@@ -15,6 +15,7 @@ import { clearTerminalStartedTracking } from '../../components/terminal/Terminal
 import { logger } from '../../utils/logger'
 import { startSwitchPhaseProfile } from '../../terminal/profiling/switchProfiler'
 import type { RawSession } from '../../types/session'
+import { FilterMode } from '../../types/sessionFilters'
 import { projectPathAtom } from './project'
 
 export interface Selection {
@@ -56,6 +57,9 @@ interface SnapshotRequest {
 }
 
 const selectionAtom = atom<Selection>({ kind: 'orchestrator', projectPath: null })
+let currentFilterMode: FilterMode = FilterMode.Running
+const projectFilterModes = new Map<string, FilterMode>()
+let defaultFilterModeForProjects: FilterMode = FilterMode.Running
 let lastProcessedProjectPath: string | null = null
 
 export const selectionValueAtom = atom(get => {
@@ -178,7 +182,38 @@ function buildOrchestratorSelection(projectPath: string | null): Selection {
   return { kind: 'orchestrator', projectPath }
 }
 
+function selectionMatchesCurrentFilter(selection: Selection): boolean {
+  if (selection.kind === 'orchestrator') {
+    return true
+  }
+
+  const state = selection.sessionState ?? null
+  switch (currentFilterMode) {
+    case FilterMode.Spec:
+      return state === 'spec'
+    case FilterMode.Running:
+      return state === 'running' || state === 'processing'
+    case FilterMode.Reviewed:
+      return state === 'reviewed'
+    default:
+      return state === 'running'
+  }
+}
+
 export const terminalsAtom = atom<TerminalSet>(get => computeTerminals(get(selectionValueAtom), get(projectPathAtom)))
+
+export const setSelectionFilterModeActionAtom = atom(
+  null,
+  (get, _set, mode: FilterMode) => {
+    currentFilterMode = mode
+    const projectPath = get(projectPathAtom)
+    if (projectPath) {
+      projectFilterModes.set(projectPath, mode)
+    } else {
+      defaultFilterModeForProjects = mode
+    }
+  },
+)
 
 function normalizeSessionState(state?: string | null, status?: string, readyToMerge?: boolean): NormalizedSessionState {
   if (state === 'spec' || state === 'processing' || state === 'running' || state === 'reviewed') {
@@ -740,6 +775,8 @@ export const setProjectPathActionAtom = atom(
       return
     }
 
+    currentFilterMode = path ? (projectFilterModes.get(path) ?? defaultFilterModeForProjects) : defaultFilterModeForProjects
+
     const resolveRememberedSelectionForProject = async (project: string): Promise<{ selection: Selection; hadRemembered: boolean }> => {
       const remembered = lastSelectionByProject.get(project)
       if (!remembered) {
@@ -795,12 +832,21 @@ export const setProjectPathActionAtom = atom(
     }
 
     let nextSelection: Selection = { kind: 'orchestrator' }
+    let remembered: Selection | null = null
     if (path) {
       const resolved = await resolveRememberedSelectionForProject(path)
       nextSelection = resolved.selection
+      remembered = resolved.hadRemembered ? resolved.selection : null
     }
 
-    if (path) {
+    const matchesFilter = selectionMatchesCurrentFilter(nextSelection)
+    if (!matchesFilter) {
+      nextSelection = { kind: 'orchestrator' }
+    }
+
+    if (path && matchesFilter) {
+      rememberSelectionForProject(path, nextSelection)
+    } else if (path && !matchesFilter && !remembered) {
       rememberSelectionForProject(path, nextSelection)
     }
 
@@ -835,9 +881,12 @@ export const initializeSelectionEventsActionAtom = atom(
 
       void (async () => {
         let target = value
+        let targetIsSpec = false
 
         if (value.kind === 'session' && value.payload) {
-          if (value.sessionState === undefined) {
+          if (value.sessionState === 'spec') {
+            targetIsSpec = true
+          } else if (value.sessionState === undefined) {
             const snapshot = await set(getSessionSnapshotActionAtom, { sessionId: value.payload })
             if (snapshot) {
               target = {
@@ -845,8 +894,25 @@ export const initializeSelectionEventsActionAtom = atom(
                 worktreePath: snapshot.worktreePath,
                 sessionState: snapshot.sessionState,
               }
+              targetIsSpec = snapshot.sessionState === 'spec'
             }
           }
+        }
+
+        const currentSelection = get(selectionAtom)
+        const currentIsSpec = currentSelection.kind === 'session' && (currentSelection.sessionState ?? null) === 'spec'
+        if (
+          currentFilterMode === FilterMode.Running &&
+          target.kind === 'session' &&
+          target.payload &&
+          targetIsSpec &&
+          currentSelection.kind === 'session' &&
+          !currentIsSpec
+        ) {
+          logger.info('[selection] ignoring backend spec selection under running filter', {
+            sessionId: target.payload,
+          })
+          return
         }
 
         await set(setSelectionActionAtom, { selection: target, isIntentional: false })
@@ -1032,6 +1098,9 @@ export function resetSelectionAtomsForTest(): void {
   // ignoredSpecReverts.clear()
   cachedProjectPath = null
   cachedProjectId = 'default'
+  currentFilterMode = FilterMode.Running
+  projectFilterModes.clear()
+  defaultFilterModeForProjects = FilterMode.Running
   lastProcessedProjectPath = null
   intentionalSwitchInProgress = false
   if (eventCleanup) {
@@ -1051,6 +1120,12 @@ export async function waitForSelectionAsyncEffectsForTest(): Promise<void> {
   }
 }
 
+export function getFilterModeForProjectForTest(projectPath: string | null): FilterMode {
+  if (!projectPath) {
+    return defaultFilterModeForProjects
+  }
+  return projectFilterModes.get(projectPath) ?? defaultFilterModeForProjects
+}
 function sessionSnapshotCacheKey(sessionId: string, projectPath: string | null): string {
   return `${projectPath ?? 'none'}::${sessionId}`
 }

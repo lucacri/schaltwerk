@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act, fireEvent, within } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { invoke } from '@tauri-apps/api/core'
@@ -146,17 +146,14 @@ describe('Reviewed session cancellation focus preservation', () => {
         return match ? toRawSession(match) : null
       }
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'running', sort_mode: 'name' }
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'reviewed', sort_mode: 'name' }
       if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
       return undefined
     })
 
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Expand Reviewed section to see reviewed sessions
-    const reviewedSection = await screen.findByTestId('sidebar-section-reviewed')
-    fireEvent.click(within(reviewedSection).getByRole('button'))
-
+    // Wait for sessions to load (using reviewed filter to see reviewed sessions)
     await waitFor(() => {
       const sessionButtons = screen.getAllByRole('button').filter(btn => {
         const text = btn.textContent || ''
@@ -182,7 +179,7 @@ describe('Reviewed session cancellation focus preservation', () => {
     })
   })
 
-  it('selects next reviewed session when current reviewed session is removed', async () => {
+  it('selects next reviewed session when current reviewed session is removed while filtering reviewed', async () => {
     const reviewedOne = mockEnrichedSession('reviewed-one', SessionState.Reviewed, true)
     const reviewedTwo = mockEnrichedSession('reviewed-two', SessionState.Reviewed, true)
 
@@ -200,16 +197,12 @@ describe('Reviewed session cancellation focus preservation', () => {
         return match ? toRawSession(match) : null
       }
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'running', sort_mode: 'name' }
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'reviewed', sort_mode: 'name' }
       if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
       return undefined
     })
 
     render(<TestProviders><Sidebar /></TestProviders>)
-
-    // Expand Reviewed section
-    const reviewedSection = await screen.findByTestId('sidebar-section-reviewed')
-    fireEvent.click(within(reviewedSection).getByRole('button'))
 
     await waitFor(() => {
       const sessionButtons = screen.getAllByRole('button').filter(btn => {
@@ -274,7 +267,7 @@ describe('Reviewed session cancellation focus preservation', () => {
     })
   })
 
-  it('selects the next spec after deleting the focused spec', async () => {
+  it('selects the next spec after deleting the focused spec in spec filter', async () => {
     const spec1 = mockEnrichedSession('spec-1', SessionState.Spec, false)
     const spec2 = mockEnrichedSession('spec-2', SessionState.Spec, false)
 
@@ -283,7 +276,12 @@ describe('Reviewed session cancellation focus preservation', () => {
 
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Specs section is expanded by default
+    await waitFor(() => {
+      expect(screen.getByTitle('Show spec agents')).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByTitle('Show spec agents'))
+
     await waitFor(() => {
       const specButtons = screen.getAllByRole('button').filter(btn => (btn.textContent || '').includes('spec-'))
       expect(specButtons).toHaveLength(2)
@@ -369,17 +367,14 @@ describe('Reviewed session cancellation focus preservation', () => {
         return match ? toRawSession(match) : null
       }
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'running', sort_mode: 'name' }
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'reviewed', sort_mode: 'name' }
       if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
       return undefined
     })
 
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Expand Reviewed section
-    const reviewedSection = await screen.findByTestId('sidebar-section-reviewed')
-    fireEvent.click(within(reviewedSection).getByRole('button'))
-
+    // Wait for sessions to load (using reviewed filter to see reviewed sessions)
     await waitFor(() => {
       const sessionButtons = screen.getAllByRole('button').filter(btn => {
         const text = btn.textContent || ''
@@ -480,7 +475,7 @@ describe('Merge selection progression', () => {
         return match ? toRawSession(match) : null
       }
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'running', sort_mode: 'name' }
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'reviewed', sort_mode: 'name' }
       if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
       return undefined
     })
@@ -506,10 +501,6 @@ describe('Merge selection progression', () => {
 
   it('selects the next reviewed session after completing a merge', async () => {
     render(<TestProviders><Sidebar /></TestProviders>)
-
-    // Expand Reviewed section
-    const reviewedSection = await screen.findByTestId('sidebar-section-reviewed')
-    fireEvent.click(within(reviewedSection).getByRole('button'))
 
     await waitFor(() => {
       expect(screen.getByText('reviewed-one')).toBeInTheDocument()
@@ -554,9 +545,7 @@ describe('Merge selection progression', () => {
       expect(selectedButtons[0]?.textContent ?? '').toContain('reviewed-two')
     })
 
-    // reviewed-one is now in the Running section (state changed to running after merge)
-    const reviewedSectionAfterMerge = screen.getByTestId('sidebar-section-reviewed')
-    expect(within(reviewedSectionAfterMerge).queryByText('reviewed-one')).toBeNull()
+    expect(screen.queryByText('reviewed-one')).toBeNull()
   })
 
   it('falls back to orchestrator when no reviewed sessions remain after merge', async () => {
@@ -573,16 +562,12 @@ describe('Merge selection progression', () => {
         return match ? toRawSession(match) : null
       }
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'running', sort_mode: 'name' }
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'reviewed', sort_mode: 'name' }
       if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
       return undefined
     })
 
     render(<TestProviders><Sidebar /></TestProviders>)
-
-    // Expand Reviewed section
-    const reviewedSection = await screen.findByTestId('sidebar-section-reviewed')
-    fireEvent.click(within(reviewedSection).getByRole('button'))
 
     await waitFor(() => {
       expect(screen.getByText('solo-reviewed')).toBeInTheDocument()
@@ -622,8 +607,6 @@ describe('Merge selection progression', () => {
       expect(selectedButtons[0]?.textContent ?? '').toMatch(/orchestrator/i)
     })
 
-    // solo-reviewed moved to Running section (state changed), not in Reviewed anymore
-    const reviewedSectionAfterMerge = screen.getByTestId('sidebar-section-reviewed')
-    expect(within(reviewedSectionAfterMerge).queryByText('solo-reviewed')).toBeNull()
+    expect(screen.queryByText('solo-reviewed')).toBeNull()
   })
 })

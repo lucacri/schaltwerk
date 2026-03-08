@@ -8,7 +8,7 @@ import { mapSessionUiState, searchSessions as searchSessionsUtil } from '../../u
 import { SessionState, type SessionInfo } from '../../types/session'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
 import { projectPathAtom } from './project'
-import { clearTerminalTrackingActionAtom } from './selection'
+import { setSelectionFilterModeActionAtom, clearTerminalTrackingActionAtom } from './selection'
 import type { GitOperationFailedPayload, GitOperationPayload, SessionsRefreshedEventPayload } from '../../common/events'
 import { hasInflight, singleflight } from '../../utils/singleflight'
 import { stableSessionTerminalId, isTopTerminalId } from '../../common/terminalIdentity'
@@ -853,6 +853,7 @@ export const filterModeAtom = atom(
             return
         }
         set(filterModeStateAtom, mode)
+        set(setSelectionFilterModeActionAtom, mode)
         void set(persistSessionsSettingsAtom)
     },
 )
@@ -881,21 +882,6 @@ export const filteredSessionsAtom = atom((get) => {
     const sessions = get(searchedSessionsAtom)
     const filterMode = get(filterModeStateAtom)
     return filterSessions(sessions, filterMode)
-})
-
-export const specSessionsAtom = atom((get) => {
-    const sessions = get(searchedSessionsAtom)
-    return sortSessionsByCreationDate(sessions.filter(s => mapSessionUiState(s.info) === SessionState.Spec))
-})
-
-export const runningSessionsAtom = atom((get) => {
-    const sessions = get(searchedSessionsAtom)
-    return sortSessionsByCreationDate(sessions.filter(s => mapSessionUiState(s.info) === SessionState.Running))
-})
-
-export const reviewedSessionsAtom = atom((get) => {
-    const sessions = get(searchedSessionsAtom)
-    return sortSessionsByCreationDate(sessions.filter(s => mapSessionUiState(s.info) === SessionState.Reviewed))
 })
 
 export const sortedSessionsAtom = atom((get) => {
@@ -1148,6 +1134,7 @@ export const initializeSessionsSettingsActionAtom = atom(
             const settings = await invoke<{ filter_mode?: string } | null>(TauriCommands.GetProjectSessionsSettings)
             const filter = settings && isValidFilterMode(settings.filter_mode) ? (settings.filter_mode as FilterMode) : getDefaultFilterMode()
             set(filterModeStateAtom, filter)
+            set(setSelectionFilterModeActionAtom, filter)
             lastPersistedFilterMode = filter
         } catch {
             lastPersistedFilterMode = null
