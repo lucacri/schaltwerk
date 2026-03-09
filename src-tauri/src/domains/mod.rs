@@ -7,4 +7,5 @@ pub mod projects;
 pub mod sessions;
 pub mod settings;
 pub mod terminal;
+pub mod usage;
 pub mod workspace;
