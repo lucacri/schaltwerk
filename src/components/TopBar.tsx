@@ -13,6 +13,7 @@ import { BranchIndicator } from './BranchIndicator'
 import { logger } from '../utils/logger'
 import { GithubMenuButton } from './github/GithubMenuButton'
 import { GitlabMenuButton } from './gitlab/GitlabMenuButton'
+import { UsageIndicator } from './UsageIndicator'
 import { WindowControls } from './WindowControls'
 import { getPlatform } from '../utils/platform'
 import { detectPlatformSafe } from '../keyboardShortcuts/helpers'
@@ -199,6 +200,11 @@ export function TopBar({
 
         {/* GitLab status/actions */}
         <GitlabMenuButton className="mr-2" onConfigureSources={onOpenSettings} />
+
+        {/* Usage indicator */}
+        <div className="mr-2" data-no-drag>
+          <UsageIndicator />
+        </div>
 
         {/* Global keep-awake toggle */}
         <div className="mr-2" data-no-drag>

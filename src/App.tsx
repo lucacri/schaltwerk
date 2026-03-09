@@ -99,6 +99,10 @@ import {
   refreshKeepAwakeStateActionAtom,
   registerKeepAwakeEventListenerActionAtom,
 } from './store/atoms/powerSettings'
+import {
+  fetchUsageActionAtom,
+  registerUsageEventListenerActionAtom,
+} from './store/atoms/usage'
 import { registerDevErrorListeners } from './dev/registerDevErrorListeners'
 import { AgentCliMissingModal } from './components/agentBinary/AgentCliMissingModal'
 import type { SettingsCategory } from './types/settings'
@@ -136,6 +140,8 @@ function AppContent() {
   const refreshSessions = useSetAtom(refreshSessionsActionAtom)
   const refreshKeepAwakeState = useSetAtom(refreshKeepAwakeStateActionAtom)
   const registerKeepAwakeListener = useSetAtom(registerKeepAwakeEventListenerActionAtom)
+  const fetchUsage = useSetAtom(fetchUsageActionAtom)
+  const registerUsageListener = useSetAtom(registerUsageEventListenerActionAtom)
   const expectSession = useSetAtom(expectSessionActionAtom)
   const { isOnboardingOpen, completeOnboarding, closeOnboarding, openOnboarding } = useOnboarding()
   const { fetchSessionForPrefill } = useSessionPrefill()
@@ -200,6 +206,24 @@ function AppContent() {
       }
     }
   }, [refreshKeepAwakeState, registerKeepAwakeListener])
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    void (async () => {
+      await fetchUsage()
+      try {
+        unlisten = await registerUsageListener()
+      } catch (error) {
+        logger.debug('Failed to register usage event listener', error)
+      }
+    })()
+
+    return () => {
+      if (unlisten) {
+        unlisten()
+      }
+    }
+  }, [fetchUsage, registerUsageListener])
 
   useEffect(() => {
     void initializeSessionsSettings()

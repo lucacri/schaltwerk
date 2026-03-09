@@ -38,6 +38,7 @@ export enum SchaltEvent {
   OpenMergeModal = 'schaltwerk:open-merge-modal',
   OpenGitlabMrModal = 'schaltwerk:open-gitlab-mr-modal',
   SelectAllRequested = 'schaltwerk:select-all-requested',
+  UsageUpdated = 'schaltwerk:usage-updated',
 }
 
 
@@ -203,6 +204,15 @@ export interface OpenMergeModalPayload {
   commitMessage?: string
 }
 
+export interface UsageUpdatedPayload {
+  session_percent: number
+  session_reset_time: string | null
+  weekly_percent: number
+  weekly_reset_time: string | null
+  provider: string
+  fetched_at: string
+}
+
 export interface OpenGitlabMrModalPayload {
   sessionName: string
   suggestedTitle?: string
@@ -279,4 +289,5 @@ export type EventPayloadMap = {
   [SchaltEvent.OpenMergeModal]: OpenMergeModalPayload
   [SchaltEvent.OpenGitlabMrModal]: OpenGitlabMrModalPayload
   [SchaltEvent.SelectAllRequested]: null
+  [SchaltEvent.UsageUpdated]: UsageUpdatedPayload
 }

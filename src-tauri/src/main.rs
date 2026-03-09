@@ -1404,7 +1404,9 @@ fn main() {
             get_amp_mcp_servers,
             set_amp_mcp_servers,
             get_agent_command_prefix,
-            set_agent_command_prefix
+            set_agent_command_prefix,
+            // Usage commands
+            fetch_usage
         ])
         .setup(move |app| {
             if ATTENTION_REGISTRY.get().is_none() {
@@ -1612,6 +1614,27 @@ fn main() {
                 tokio::spawn(async move {
                     if !start_webhook_server(webhook_handle).await {
                         log::warn!("Webhook server failed to start - likely another instance is running");
+                    }
+                });
+
+                // Start usage polling
+                let usage_handle = app_handle.clone();
+                tokio::spawn(async move {
+                    use lucode::domains::usage::anthropic::AnthropicUsageProvider;
+                    use lucode::domains::usage::provider::UsageProvider;
+                    let provider = AnthropicUsageProvider::new();
+                    loop {
+                        match provider.fetch_usage().await {
+                            Ok(snapshot) => {
+                                if let Err(e) = emit_event(&usage_handle, SchaltEvent::UsageUpdated, &snapshot) {
+                                    log::warn!("Failed to emit usage event: {e}");
+                                }
+                            }
+                            Err(err) => {
+                                log::debug!("Usage fetch failed: {err}");
+                            }
+                        }
+                        tokio::time::sleep(std::time::Duration::from_secs(300)).await;
                     }
                 });
             });
