@@ -6,7 +6,7 @@ import { TauriCommands } from '../../common/tauriCommands'
 import { ackTerminalBackend, isPluginTerminal, subscribeTerminalBackend } from '../transport/backend'
 import { logger } from '../../utils/logger'
 import { slicePreservingSurrogates } from '../paste/bracketedPaste'
-import { profileSwitchPhase, profileSwitchPhaseAsync } from '../profiling/switchProfiler'
+import { profileSwitchPhaseAsync } from '../profiling/switchProfiler'
 
 type TerminalStreamListener = (chunk: string) => void
 
