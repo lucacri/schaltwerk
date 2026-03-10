@@ -27,6 +27,7 @@ export enum SchaltEvent {
   ProjectFilesUpdated = 'schaltwerk:project-files-updated',
   GitHubStatusChanged = 'schaltwerk:github-status-changed',
   GitLabStatusChanged = 'schaltwerk:gitlab-status-changed',
+  ForgeStatusChanged = 'schaltwerk:forge-status-changed',
   AppUpdateResult = 'schaltwerk:app-update-result',
   DevBackendError = 'schaltwerk:dev-backend-error',
   SetupScriptRequested = 'schaltwerk:setup-script-request',
@@ -212,6 +213,7 @@ export interface OpenGitlabMrModalPayload {
 }
 
 import { type EnrichedSession, type Epic } from '../types/session'
+import { type ForgeStatusPayload } from '../types/forgeTypes'
 
 export interface SessionsRefreshedEventPayload {
   projectPath: string
@@ -268,6 +270,7 @@ export type EventPayloadMap = {
   [SchaltEvent.ProjectFilesUpdated]: string[]
   [SchaltEvent.GitHubStatusChanged]: GitHubStatusPayload
   [SchaltEvent.GitLabStatusChanged]: GitLabStatusPayload
+  [SchaltEvent.ForgeStatusChanged]: ForgeStatusPayload
   [SchaltEvent.AppUpdateResult]: AppUpdateResultPayload
   [SchaltEvent.DevBackendError]: DevBackendErrorPayload
   [SchaltEvent.SetupScriptRequested]: SetupScriptRequestPayload

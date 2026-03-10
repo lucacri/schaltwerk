@@ -1167,7 +1167,18 @@ fn main() {
             github_create_session_pr,
             github_preview_pr,
             github_get_pr_review_comments,
-            // GitLab commands
+            // Unified forge commands
+            forge_get_status,
+            forge_search_issues,
+            forge_get_issue_details,
+            forge_search_prs,
+            forge_get_pr_details,
+            forge_create_session_pr,
+            forge_get_review_comments,
+            forge_approve_pr,
+            forge_merge_pr,
+            forge_comment_on_pr,
+            // GitLab commands (TODO: remove after frontend migration to forge_* commands)
             gitlab_get_status,
             gitlab_search_issues,
             gitlab_get_issue_details,

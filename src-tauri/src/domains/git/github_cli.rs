@@ -5,6 +5,7 @@ use std::process::Command as StdCommand;
 use std::sync::OnceLock;
 
 use anyhow::Error as AnyhowError;
+use async_trait::async_trait;
 use git2::Repository;
 use log::{debug, info, warn};
 use serde::Deserialize;
@@ -2000,6 +2001,411 @@ struct PrReviewCommentResponse {
     created_at: String,
     html_url: String,
     in_reply_to_id: Option<u64>,
+}
+
+use super::forge::{
+    ForgeAuthStatus, ForgeCiStatus, ForgeComment, ForgeCommitMode, ForgeCreatePrParams,
+    ForgeCreateSessionPrParams, ForgeError, ForgeIssueDetails, ForgeIssueSummary, ForgeLabel,
+    ForgePrDetails, ForgePrResult, ForgePrSummary, ForgeProvider, ForgeProviderData,
+    ForgeRepositoryInfo, ForgeReview, ForgeReviewComment, ForgeSourceConfig, ForgeStatusCheck,
+};
+use super::repository::ForgeType;
+
+#[async_trait]
+impl<R: CommandRunner> ForgeProvider for GitHubCli<R> {
+    fn forge_type(&self) -> ForgeType {
+        ForgeType::GitHub
+    }
+
+    async fn ensure_installed(&self) -> Result<(), ForgeError> {
+        self.ensure_installed().map_err(ForgeError::from)
+    }
+
+    async fn check_auth(
+        &self,
+        _hostname: Option<&str>,
+    ) -> Result<ForgeAuthStatus, ForgeError> {
+        let status = self.check_auth().map_err(ForgeError::from)?;
+        Ok(ForgeAuthStatus {
+            authenticated: status.authenticated,
+            user_login: status.user_login,
+            hostname: None,
+        })
+    }
+
+    async fn view_repository(
+        &self,
+        repo_path: &Path,
+    ) -> Result<ForgeRepositoryInfo, ForgeError> {
+        let info = self.view_repository(repo_path).map_err(ForgeError::from)?;
+        Ok(ForgeRepositoryInfo {
+            name: info.name_with_owner.clone(),
+            default_branch: info.default_branch,
+            url: format!("https://github.com/{}", info.name_with_owner),
+        })
+    }
+
+    async fn search_issues(
+        &self,
+        repo_path: &Path,
+        query: Option<&str>,
+        limit: Option<u32>,
+        source: &ForgeSourceConfig,
+    ) -> Result<Vec<ForgeIssueSummary>, ForgeError> {
+        let q = query.unwrap_or("");
+        let l = limit.unwrap_or(30) as usize;
+        let repo = if source.project_identifier.is_empty() {
+            None
+        } else {
+            Some(source.project_identifier.as_str())
+        };
+        let issues = self
+            .search_issues(repo_path, q, l, repo)
+            .map_err(ForgeError::from)?;
+        Ok(issues
+            .into_iter()
+            .map(|i| ForgeIssueSummary {
+                id: i.number.to_string(),
+                title: i.title,
+                state: i.state,
+                updated_at: Some(i.updated_at),
+                author: i.author_login,
+                labels: i
+                    .labels
+                    .into_iter()
+                    .map(|l| ForgeLabel {
+                        name: l.name,
+                        color: l.color,
+                    })
+                    .collect(),
+                url: Some(i.url),
+            })
+            .collect())
+    }
+
+    async fn get_issue_details(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<ForgeIssueDetails, ForgeError> {
+        let number: u64 = id
+            .parse()
+            .map_err(|_| ForgeError::InvalidInput(format!("Invalid issue number: {id}")))?;
+        let repo = if source.project_identifier.is_empty() {
+            None
+        } else {
+            Some(source.project_identifier.as_str())
+        };
+        let details = self
+            .get_issue_with_comments(repo_path, number, repo)
+            .map_err(ForgeError::from)?;
+        Ok(ForgeIssueDetails {
+            summary: ForgeIssueSummary {
+                id: details.number.to_string(),
+                title: details.title,
+                state: String::new(),
+                updated_at: None,
+                author: None,
+                labels: details
+                    .labels
+                    .into_iter()
+                    .map(|l| ForgeLabel {
+                        name: l.name,
+                        color: l.color,
+                    })
+                    .collect(),
+                url: Some(details.url),
+            },
+            body: Some(details.body),
+            comments: details
+                .comments
+                .into_iter()
+                .map(|c| ForgeComment {
+                    author: c.author_login,
+                    body: c.body,
+                    created_at: Some(c.created_at),
+                })
+                .collect(),
+        })
+    }
+
+    async fn search_prs(
+        &self,
+        repo_path: &Path,
+        query: Option<&str>,
+        limit: Option<u32>,
+        source: &ForgeSourceConfig,
+    ) -> Result<Vec<ForgePrSummary>, ForgeError> {
+        let q = query.unwrap_or("");
+        let l = limit.unwrap_or(30) as usize;
+        let repo = if source.project_identifier.is_empty() {
+            None
+        } else {
+            Some(source.project_identifier.as_str())
+        };
+        let prs = self
+            .search_prs(repo_path, q, l, repo)
+            .map_err(ForgeError::from)?;
+        Ok(prs
+            .into_iter()
+            .map(|p| ForgePrSummary {
+                id: p.number.to_string(),
+                title: p.title,
+                state: p.state,
+                author: p.author_login,
+                labels: p
+                    .labels
+                    .into_iter()
+                    .map(|l| ForgeLabel {
+                        name: l.name,
+                        color: l.color,
+                    })
+                    .collect(),
+                source_branch: p.head_ref_name,
+                target_branch: String::new(),
+                url: Some(p.url),
+            })
+            .collect())
+    }
+
+    async fn get_pr_details(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<ForgePrDetails, ForgeError> {
+        let number: u64 = id
+            .parse()
+            .map_err(|_| ForgeError::InvalidInput(format!("Invalid PR number: {id}")))?;
+        let repo = if source.project_identifier.is_empty() {
+            None
+        } else {
+            Some(source.project_identifier.as_str())
+        };
+        let details = self
+            .get_pr_with_comments(repo_path, number, repo)
+            .map_err(ForgeError::from)?;
+
+        let status_checks: Vec<ForgeStatusCheck> = details
+            .status_check_rollup
+            .iter()
+            .map(|c| ForgeStatusCheck {
+                name: String::new(),
+                status: c.status.clone().unwrap_or_default(),
+                conclusion: c.conclusion.clone(),
+                url: None,
+            })
+            .collect();
+
+        Ok(ForgePrDetails {
+            summary: ForgePrSummary {
+                id: details.number.to_string(),
+                title: details.title,
+                state: String::new(),
+                author: None,
+                labels: details
+                    .labels
+                    .into_iter()
+                    .map(|l| ForgeLabel {
+                        name: l.name,
+                        color: l.color,
+                    })
+                    .collect(),
+                source_branch: details.head_ref_name,
+                target_branch: String::new(),
+                url: Some(details.url),
+            },
+            body: Some(details.body),
+            ci_status: if status_checks.is_empty() {
+                None
+            } else {
+                Some(ForgeCiStatus {
+                    state: String::new(),
+                    checks: status_checks,
+                })
+            },
+            reviews: details
+                .latest_reviews
+                .into_iter()
+                .map(|r| ForgeReview {
+                    author: r.author_login,
+                    state: r.state,
+                    body: None,
+                })
+                .collect(),
+            review_comments: details
+                .comments
+                .into_iter()
+                .map(|c| ForgeReviewComment {
+                    author: c.author_login,
+                    body: c.body,
+                    path: None,
+                    line: None,
+                })
+                .collect(),
+            provider_data: ForgeProviderData::GitHub {
+                review_decision: details.review_decision,
+                status_checks: details
+                    .status_check_rollup
+                    .into_iter()
+                    .map(|c| ForgeStatusCheck {
+                        name: String::new(),
+                        status: c.status.unwrap_or_default(),
+                        conclusion: c.conclusion,
+                        url: None,
+                    })
+                    .collect(),
+                is_fork: details.is_fork,
+            },
+        })
+    }
+
+    async fn create_pr(
+        &self,
+        params: ForgeCreatePrParams<'_>,
+    ) -> Result<ForgePrResult, ForgeError> {
+        let content = match params.body {
+            Some(body) => PrContent::Explicit {
+                title: params.title,
+                body,
+            },
+            None => PrContent::Fill,
+        };
+        let url = self
+            .create_pull_request(
+                params.source_branch,
+                if params.source.project_identifier.is_empty() {
+                    None
+                } else {
+                    Some(params.source.project_identifier.as_str())
+                },
+                params.repo_path,
+                content,
+                Some(params.target_branch),
+            )
+            .map_err(ForgeError::from)?;
+        Ok(ForgePrResult {
+            branch: params.source_branch.to_string(),
+            url,
+        })
+    }
+
+    async fn create_session_pr(
+        &self,
+        params: ForgeCreateSessionPrParams<'_>,
+    ) -> Result<ForgePrResult, ForgeError> {
+        let mode = match params.mode {
+            ForgeCommitMode::Squash => PrCommitMode::Squash,
+            ForgeCommitMode::Reapply => PrCommitMode::Reapply,
+        };
+        let content = match params.body {
+            Some(body) => PrContent::Explicit {
+                title: params.title,
+                body,
+            },
+            None => PrContent::Explicit {
+                title: params.title,
+                body: "",
+            },
+        };
+        let repo = if params.source.project_identifier.is_empty() {
+            None
+        } else {
+            Some(params.source.project_identifier.as_str())
+        };
+        let opts = CreateSessionPrOptions {
+            repo_path: params.repo_path,
+            session_worktree_path: params.session_worktree_path,
+            session_slug: params.session_slug,
+            session_branch: params.session_branch,
+            base_branch: params.base_branch,
+            pr_branch_name: params.pr_branch_name,
+            content,
+            commit_message: params.commit_message,
+            repository: repo,
+            mode,
+        };
+        let result = self.create_session_pr(opts).map_err(ForgeError::from)?;
+        Ok(ForgePrResult {
+            branch: result.branch,
+            url: result.url,
+        })
+    }
+
+    async fn get_pr_ci_status(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<Option<ForgeCiStatus>, ForgeError> {
+        let details = self.get_pr_details(repo_path, id, source).await?;
+        Ok(details.ci_status)
+    }
+
+    async fn get_review_comments(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<Vec<ForgeReviewComment>, ForgeError> {
+        let number: u64 = id
+            .parse()
+            .map_err(|_| ForgeError::InvalidInput(format!("Invalid PR number: {id}")))?;
+        let repo = if source.project_identifier.is_empty() {
+            None
+        } else {
+            Some(source.project_identifier.as_str())
+        };
+        let comments = self
+            .get_pr_review_comments(repo_path, number, repo)
+            .map_err(ForgeError::from)?;
+        Ok(comments
+            .into_iter()
+            .map(|c| ForgeReviewComment {
+                author: c.author_login,
+                body: c.body,
+                path: Some(c.path),
+                line: c.line,
+            })
+            .collect())
+    }
+
+    async fn approve_pr(
+        &self,
+        _repo_path: &Path,
+        _id: &str,
+        _source: &ForgeSourceConfig,
+    ) -> Result<(), ForgeError> {
+        Err(ForgeError::InvalidInput(
+            "GitHub does not support approving PRs via the CLI.".into(),
+        ))
+    }
+
+    async fn merge_pr(
+        &self,
+        _repo_path: &Path,
+        _id: &str,
+        _squash: bool,
+        _delete_branch: bool,
+        _source: &ForgeSourceConfig,
+    ) -> Result<(), ForgeError> {
+        Err(ForgeError::InvalidInput(
+            "GitHub PR merge via CLI is not supported yet.".into(),
+        ))
+    }
+
+    async fn comment_on_pr(
+        &self,
+        _repo_path: &Path,
+        _id: &str,
+        _message: &str,
+        _source: &ForgeSourceConfig,
+    ) -> Result<(), ForgeError> {
+        Err(ForgeError::InvalidInput(
+            "GitHub PR commenting via CLI is not supported yet.".into(),
+        ))
+    }
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+use async_trait::async_trait;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 
@@ -1347,6 +1348,367 @@ fn resolve_gitlab_cli_program_uncached() -> String {
 
     warn!("[GitlabCli] Falling back to plain 'glab' - binary may not be found");
     command.to_string()
+}
+
+use super::forge::{
+    ForgeAuthStatus, ForgeCiStatus, ForgeComment, ForgeCommitMode, ForgeCreatePrParams,
+    ForgeCreateSessionPrParams, ForgeError, ForgeIssueDetails, ForgeIssueSummary, ForgeLabel,
+    ForgePrDetails, ForgePrResult, ForgePrSummary, ForgeProvider, ForgeProviderData,
+    ForgeRepositoryInfo, ForgeReviewComment, ForgeSourceConfig,
+};
+use super::repository::ForgeType;
+
+#[async_trait]
+impl<R: CommandRunner> ForgeProvider for GitlabCli<R> {
+    fn forge_type(&self) -> ForgeType {
+        ForgeType::GitLab
+    }
+
+    async fn ensure_installed(&self) -> Result<(), ForgeError> {
+        self.ensure_installed().map_err(ForgeError::from)
+    }
+
+    async fn check_auth(
+        &self,
+        hostname: Option<&str>,
+    ) -> Result<ForgeAuthStatus, ForgeError> {
+        let status = self.check_auth(hostname).map_err(ForgeError::from)?;
+        Ok(ForgeAuthStatus {
+            authenticated: status.authenticated,
+            user_login: status.user_login,
+            hostname: status.hostname,
+        })
+    }
+
+    async fn view_repository(
+        &self,
+        _repo_path: &Path,
+    ) -> Result<ForgeRepositoryInfo, ForgeError> {
+        Err(ForgeError::InvalidInput(
+            "GitLab CLI does not support viewing repository info directly.".into(),
+        ))
+    }
+
+    async fn search_issues(
+        &self,
+        repo_path: &Path,
+        query: Option<&str>,
+        limit: Option<u32>,
+        source: &ForgeSourceConfig,
+    ) -> Result<Vec<ForgeIssueSummary>, ForgeError> {
+        let q = query.unwrap_or("");
+        let l = limit.unwrap_or(30) as usize;
+        let issues = self
+            .search_issues(
+                repo_path,
+                q,
+                l,
+                &source.project_identifier,
+                source.hostname.as_deref(),
+            )
+            .map_err(ForgeError::from)?;
+        Ok(issues
+            .into_iter()
+            .map(|i| ForgeIssueSummary {
+                id: i.iid.to_string(),
+                title: i.title,
+                state: i.state,
+                updated_at: Some(i.updated_at),
+                author: i.author.map(|a| a.username),
+                labels: i
+                    .labels
+                    .into_iter()
+                    .map(|name| ForgeLabel { name, color: None })
+                    .collect(),
+                url: Some(i.web_url),
+            })
+            .collect())
+    }
+
+    async fn get_issue_details(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<ForgeIssueDetails, ForgeError> {
+        let iid: u64 = id
+            .parse()
+            .map_err(|_| ForgeError::InvalidInput(format!("Invalid issue IID: {id}")))?;
+        let details = self
+            .get_issue_details(
+                repo_path,
+                iid,
+                &source.project_identifier,
+                source.hostname.as_deref(),
+            )
+            .map_err(ForgeError::from)?;
+        let non_system_notes: Vec<_> = details
+            .notes
+            .into_iter()
+            .filter(|n| !n.system)
+            .collect();
+        Ok(ForgeIssueDetails {
+            summary: ForgeIssueSummary {
+                id: details.iid.to_string(),
+                title: details.title,
+                state: details.state,
+                updated_at: None,
+                author: details.author.map(|a| a.username),
+                labels: details
+                    .labels
+                    .into_iter()
+                    .map(|name| ForgeLabel { name, color: None })
+                    .collect(),
+                url: Some(details.web_url),
+            },
+            body: details.description,
+            comments: non_system_notes
+                .into_iter()
+                .map(|n| ForgeComment {
+                    author: n.author.map(|a| a.username),
+                    body: n.body,
+                    created_at: Some(n.created_at),
+                })
+                .collect(),
+        })
+    }
+
+    async fn search_prs(
+        &self,
+        repo_path: &Path,
+        query: Option<&str>,
+        limit: Option<u32>,
+        source: &ForgeSourceConfig,
+    ) -> Result<Vec<ForgePrSummary>, ForgeError> {
+        let q = query.unwrap_or("");
+        let l = limit.unwrap_or(30) as usize;
+        let mrs = self
+            .search_mrs(
+                repo_path,
+                q,
+                l,
+                &source.project_identifier,
+                source.hostname.as_deref(),
+            )
+            .map_err(ForgeError::from)?;
+        Ok(mrs
+            .into_iter()
+            .map(|m| ForgePrSummary {
+                id: m.iid.to_string(),
+                title: m.title,
+                state: m.state,
+                author: m.author.map(|a| a.username),
+                labels: m
+                    .labels
+                    .into_iter()
+                    .map(|name| ForgeLabel { name, color: None })
+                    .collect(),
+                source_branch: m.source_branch,
+                target_branch: m.target_branch,
+                url: Some(m.web_url),
+            })
+            .collect())
+    }
+
+    async fn get_pr_details(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<ForgePrDetails, ForgeError> {
+        let iid: u64 = id
+            .parse()
+            .map_err(|_| ForgeError::InvalidInput(format!("Invalid MR IID: {id}")))?;
+        let details = self
+            .get_mr_details(
+                repo_path,
+                iid,
+                &source.project_identifier,
+                source.hostname.as_deref(),
+            )
+            .map_err(ForgeError::from)?;
+
+        let pipeline_status = details.pipeline.as_ref().map(|p| p.status.clone());
+        let pipeline_url = details.pipeline.as_ref().and_then(|p| p.web_url.clone());
+
+        let non_system_notes: Vec<_> = details
+            .notes
+            .iter()
+            .filter(|n| !n.system)
+            .collect();
+
+        Ok(ForgePrDetails {
+            summary: ForgePrSummary {
+                id: details.iid.to_string(),
+                title: details.title,
+                state: details.state,
+                author: details.author.map(|a| a.username),
+                labels: details
+                    .labels
+                    .into_iter()
+                    .map(|name| ForgeLabel { name, color: None })
+                    .collect(),
+                source_branch: details.source_branch,
+                target_branch: details.target_branch,
+                url: Some(details.web_url),
+            },
+            body: details.description,
+            ci_status: pipeline_status.as_ref().map(|status| ForgeCiStatus {
+                state: status.clone(),
+                checks: Vec::new(),
+            }),
+            reviews: Vec::new(),
+            review_comments: non_system_notes
+                .into_iter()
+                .map(|n| ForgeReviewComment {
+                    author: n.author.as_ref().map(|a| a.username.clone()),
+                    body: n.body.clone(),
+                    path: None,
+                    line: None,
+                })
+                .collect(),
+            provider_data: ForgeProviderData::GitLab {
+                merge_status: details.merge_status,
+                pipeline_status,
+                pipeline_url,
+                reviewers: details
+                    .reviewers
+                    .into_iter()
+                    .map(|r| r.username)
+                    .collect(),
+            },
+        })
+    }
+
+    async fn create_pr(
+        &self,
+        params: ForgeCreatePrParams<'_>,
+    ) -> Result<ForgePrResult, ForgeError> {
+        let mr_params = CreateMrParams {
+            project_path: params.repo_path,
+            gitlab_project: &params.source.project_identifier,
+            title: params.title,
+            description: params.body,
+            source_branch: params.source_branch,
+            target_branch: params.target_branch,
+            hostname: params.source.hostname.as_deref(),
+        };
+        let result = self.create_mr(mr_params).map_err(ForgeError::from)?;
+        Ok(ForgePrResult {
+            branch: result.source_branch,
+            url: result.url,
+        })
+    }
+
+    async fn create_session_pr(
+        &self,
+        params: ForgeCreateSessionPrParams<'_>,
+    ) -> Result<ForgePrResult, ForgeError> {
+        let mode = match params.mode {
+            ForgeCommitMode::Squash => MrCommitMode::Squash,
+            ForgeCommitMode::Reapply => MrCommitMode::Reapply,
+        };
+        let opts = CreateSessionMrOptions {
+            repo_path: params.repo_path,
+            session_worktree_path: params.session_worktree_path,
+            session_slug: params.session_slug,
+            session_branch: params.session_branch,
+            base_branch: params.base_branch,
+            mr_branch_name: params.pr_branch_name,
+            title: params.title,
+            description: params.body,
+            gitlab_project: &params.source.project_identifier,
+            hostname: params.source.hostname.as_deref(),
+            squash: matches!(params.mode, ForgeCommitMode::Squash),
+            mode,
+            commit_message: params.commit_message,
+        };
+        let result = self.create_session_mr(opts).map_err(ForgeError::from)?;
+        Ok(ForgePrResult {
+            branch: result.source_branch,
+            url: result.url,
+        })
+    }
+
+    async fn get_pr_ci_status(
+        &self,
+        repo_path: &Path,
+        _id: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<Option<ForgeCiStatus>, ForgeError> {
+        let details = self.get_pr_details(repo_path, _id, source).await?;
+        Ok(details.ci_status)
+    }
+
+    async fn get_review_comments(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<Vec<ForgeReviewComment>, ForgeError> {
+        let details = self.get_pr_details(repo_path, id, source).await?;
+        Ok(details.review_comments)
+    }
+
+    async fn approve_pr(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<(), ForgeError> {
+        let iid: u64 = id
+            .parse()
+            .map_err(|_| ForgeError::InvalidInput(format!("Invalid MR IID: {id}")))?;
+        self.approve_mr(
+            repo_path,
+            iid,
+            &source.project_identifier,
+            source.hostname.as_deref(),
+        )
+        .map_err(ForgeError::from)
+    }
+
+    async fn merge_pr(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        squash: bool,
+        delete_branch: bool,
+        source: &ForgeSourceConfig,
+    ) -> Result<(), ForgeError> {
+        let iid: u64 = id
+            .parse()
+            .map_err(|_| ForgeError::InvalidInput(format!("Invalid MR IID: {id}")))?;
+        self.merge_mr(
+            repo_path,
+            iid,
+            &source.project_identifier,
+            squash,
+            delete_branch,
+            source.hostname.as_deref(),
+        )
+        .map_err(ForgeError::from)
+    }
+
+    async fn comment_on_pr(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        message: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<(), ForgeError> {
+        let iid: u64 = id
+            .parse()
+            .map_err(|_| ForgeError::InvalidInput(format!("Invalid MR IID: {id}")))?;
+        self.comment_on_mr(
+            repo_path,
+            iid,
+            &source.project_identifier,
+            message,
+            source.hostname.as_deref(),
+        )
+        .map_err(ForgeError::from)
+    }
 }
 
 #[cfg(test)]

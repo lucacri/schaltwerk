@@ -1,6 +1,7 @@
 pub mod branches;
 pub mod clone;
 pub mod db_git_stats;
+pub mod forge;
 pub mod github_cli;
 pub mod gitlab_cli;
 pub mod history;

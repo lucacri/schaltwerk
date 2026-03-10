@@ -29,6 +29,13 @@ pub use super::stats::{
     has_remote_tracking_branch, DiffCompareMode,
 };
 
+pub use super::forge::{
+    ForgeAuthStatus, ForgeCiStatus, ForgeComment, ForgeCommitMode, ForgeCreatePrParams,
+    ForgeCreateSessionPrParams, ForgeError, ForgeIssueDetails, ForgeIssueSummary, ForgeLabel,
+    ForgePrDetails, ForgePrResult, ForgePrSummary, ForgeProvider, ForgeProviderData,
+    ForgeRepositoryInfo, ForgeReview, ForgeReviewComment, ForgeSourceConfig, ForgeStatusCheck,
+    create_provider,
+};
 pub use super::gitlab_cli::{
     CreateMrParams, CreateSessionMrOptions, GitlabCli, GitlabCliError, GitlabIssueDetails,
     GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary, GitlabNote, GitlabPipelineDetails,

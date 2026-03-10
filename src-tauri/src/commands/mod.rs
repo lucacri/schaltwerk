@@ -1,6 +1,7 @@
 pub mod agent_binaries;
 pub mod attention;
 pub mod clone;
+pub mod forge;
 pub mod git;
 pub mod github;
 pub mod gitlab;
@@ -25,6 +26,7 @@ mod tests;
 pub use agent_binaries::*;
 pub use attention::*;
 pub use clone::*;
+pub use forge::*;
 pub use git::*;
 pub use github::*;
 pub use gitlab::*;
