@@ -10,10 +10,11 @@ import {
   setTerminalFontFamilyActionAtom,
 } from '../store/atoms/terminal'
 import { terminalFontSizeAtom } from '../store/atoms/fontSize'
+import { buildTerminalFontFamily } from '../utils/terminalFonts'
 
 const SCROLLBACK_LINES = 20000
 const ATLAS_CONTRAST_BASE = 1.1
-const DEFAULT_FONT_FAMILY = 'Menlo, Monaco, ui-monospace, SFMono-Regular, monospace'
+const DEFAULT_FONT_FAMILY = buildTerminalFontFamily(null)
 
 interface TerminalConfigOptions {
   readOnly: boolean

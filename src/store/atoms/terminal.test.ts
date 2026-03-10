@@ -380,7 +380,7 @@ describe('Terminal Atoms', () => {
       const webgl = store.get(webglEnabledAtom)
       const initialized = store.get(terminalSettingsInitializedReadAtom)
 
-      expect(resolvedFont).toContain('Menlo')
+      expect(resolvedFont).toContain('monospace')
       expect(customFont).toBeNull()
       expect(smoothScrolling).toBe(true)
       expect(webgl).toBe(true)

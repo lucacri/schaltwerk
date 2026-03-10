@@ -5,7 +5,7 @@ import { logger } from '../../utils/logger'
 
 export type ForgeType = 'github' | 'gitlab' | 'unknown'
 
-const forgeBaseAtom = atom<ForgeType>('unknown')
+export const forgeBaseAtom = atom<ForgeType>('unknown')
 
 export const projectForgeAtom = atom(get => get(forgeBaseAtom))
 
