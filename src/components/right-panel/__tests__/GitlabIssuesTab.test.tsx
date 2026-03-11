@@ -2,7 +2,7 @@ import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { invoke } from '@tauri-apps/api/core'
 import { renderWithProviders } from '../../../tests/test-utils'
 import { GitlabIssuesTab } from '../GitlabIssuesTab'
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
+import { describe, it, expect, beforeEach, type Mock } from 'vitest'
 import type { GitlabIssueSummary } from '../../../types/gitlabTypes'
 
 const mockInvoke = invoke as Mock
