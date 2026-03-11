@@ -239,37 +239,37 @@ describe('gitlabSearch atoms', () => {
       await promise
     })
 
-    it('preserves cached results on error', async () => {
+    it('returns empty results when a single source fails (per-source error isolation)', async () => {
       const store = createStore()
       const source = makeSource()
-      const mr = makeMr()
-
-      mockInvoke.mockResolvedValueOnce([mr])
-      await store.set(searchGitlabMrsActionAtom, { sources: [source], query: 'q' })
 
       mockInvoke.mockRejectedValueOnce(new Error('network error'))
-      await store.set(searchGitlabMrsActionAtom, { sources: [source], query: 'q', force: true })
-
-      const key = buildCacheKey('mrs', [source], 'q')
-      const entry = store.get(gitlabMrSearchEntryAtomFamily(key))
-      expect(entry.results).toHaveLength(1)
-      expect(entry.error).toBe('network error')
-      expect(entry.isLoading).toBe(false)
-      expect(entry.isRevalidating).toBe(false)
-    })
-
-    it('sets error with empty results when no cached data exists', async () => {
-      const store = createStore()
-      const source = makeSource()
-
-      mockInvoke.mockRejectedValueOnce(new Error('server error'))
       await store.set(searchGitlabMrsActionAtom, { sources: [source], query: 'q' })
 
       const key = buildCacheKey('mrs', [source], 'q')
       const entry = store.get(gitlabMrSearchEntryAtomFamily(key))
       expect(entry.results).toEqual([])
-      expect(entry.error).toBe('server error')
+      expect(entry.error).toBeNull()
       expect(entry.isLoading).toBe(false)
+    })
+
+    it('returns partial results when one source fails and another succeeds', async () => {
+      const store = createStore()
+      const src1 = makeSource({ id: '1', label: 'P1', projectPath: 'g/p1' })
+      const src2 = makeSource({ id: '2', label: 'P2', projectPath: 'g/p2' })
+      const mr = makeMr({ iid: 42, sourceLabel: 'P2' })
+
+      mockInvoke
+        .mockRejectedValueOnce(new Error('source 1 down'))
+        .mockResolvedValueOnce([mr])
+
+      await store.set(searchGitlabMrsActionAtom, { sources: [src1, src2], query: '' })
+
+      const key = buildCacheKey('mrs', [src1, src2], '')
+      const entry = store.get(gitlabMrSearchEntryAtomFamily(key))
+      expect(entry.results).toHaveLength(1)
+      expect(entry.results[0].iid).toBe(42)
+      expect(entry.error).toBeNull()
     })
   })
 
@@ -323,21 +323,36 @@ describe('gitlabSearch atoms', () => {
       expect(entry.results.map(r => r.iid)).toEqual([2, 1])
     })
 
-    it('preserves cached results on error', async () => {
+    it('returns empty results when a single source fails (per-source error isolation)', async () => {
       const store = createStore()
       const source = makeSource()
-      const issue = makeIssue()
-
-      mockInvoke.mockResolvedValueOnce([issue])
-      await store.set(searchGitlabIssuesActionAtom, { sources: [source], query: 'q' })
 
       mockInvoke.mockRejectedValueOnce(new Error('timeout'))
-      await store.set(searchGitlabIssuesActionAtom, { sources: [source], query: 'q', force: true })
+      await store.set(searchGitlabIssuesActionAtom, { sources: [source], query: 'q' })
 
       const key = buildCacheKey('issues', [source], 'q')
       const entry = store.get(gitlabIssueSearchEntryAtomFamily(key))
+      expect(entry.results).toEqual([])
+      expect(entry.error).toBeNull()
+    })
+
+    it('returns partial results when one source fails and another succeeds', async () => {
+      const store = createStore()
+      const src1 = makeSource({ id: '1', label: 'P1', projectPath: 'g/p1' })
+      const src2 = makeSource({ id: '2', label: 'P2', projectPath: 'g/p2' })
+      const issue = makeIssue({ iid: 42, sourceLabel: 'P2' })
+
+      mockInvoke
+        .mockRejectedValueOnce(new Error('source 1 down'))
+        .mockResolvedValueOnce([issue])
+
+      await store.set(searchGitlabIssuesActionAtom, { sources: [src1, src2], query: '' })
+
+      const key = buildCacheKey('issues', [src1, src2], '')
+      const entry = store.get(gitlabIssueSearchEntryAtomFamily(key))
       expect(entry.results).toHaveLength(1)
-      expect(entry.error).toBe('timeout')
+      expect(entry.results[0].iid).toBe(42)
+      expect(entry.error).toBeNull()
     })
   })
 
