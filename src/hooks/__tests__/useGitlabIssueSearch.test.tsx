@@ -1,5 +1,5 @@
 import { renderHook, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { useGitlabIssueSearch } from '../useGitlabIssueSearch'
 import { invoke } from '@tauri-apps/api/core'
 import type { GitlabSource, GitlabIssueSummary } from '../../types/gitlabTypes'
@@ -7,6 +7,8 @@ import type { GitlabSource, GitlabIssueSummary } from '../../types/gitlabTypes'
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn()
 }))
+
+const mockInvoke = invoke as Mock
 
 vi.mock('../../utils/logger', () => ({
   logger: {
@@ -26,8 +28,6 @@ const makeIssue = (iid: number, sourceLabel: string, updatedAt = '2026-01-01T00:
 })
 
 describe('useGitlabIssueSearch', () => {
-  const mockInvoke = vi.mocked(invoke)
-
   beforeEach(() => { vi.clearAllMocks() })
 
   it('merges results from multiple sources', async () => {
@@ -36,9 +36,9 @@ describe('useGitlabIssueSearch', () => {
     const issuesA = [makeIssue(1, 'Project A', '2026-01-02T00:00:00Z')]
     const issuesB = [makeIssue(2, 'Project B', '2026-01-03T00:00:00Z')]
 
-    mockInvoke.mockImplementation((_cmd: string, args: Record<string, unknown>) => {
-      if (args.sourceProject === 'group/project-a') return Promise.resolve(issuesA)
-      if (args.sourceProject === 'group/project-b') return Promise.resolve(issuesB)
+    mockInvoke.mockImplementation((_cmd: string, args?: Record<string, unknown>) => {
+      if (args?.sourceProject === 'group/project-a') return Promise.resolve(issuesA)
+      if (args?.sourceProject === 'group/project-b') return Promise.resolve(issuesB)
       return Promise.resolve([])
     })
 
@@ -57,9 +57,9 @@ describe('useGitlabIssueSearch', () => {
     const issuesA = [makeIssue(1, 'Project A')]
     const issuesB = [makeIssue(2, 'Project B')]
 
-    mockInvoke.mockImplementation((_cmd: string, args: Record<string, unknown>) => {
-      if (args.sourceProject === 'group/project-a') return Promise.resolve(issuesA)
-      if (args.sourceProject === 'group/project-b') return Promise.resolve(issuesB)
+    mockInvoke.mockImplementation((_cmd: string, args?: Record<string, unknown>) => {
+      if (args?.sourceProject === 'group/project-a') return Promise.resolve(issuesA)
+      if (args?.sourceProject === 'group/project-b') return Promise.resolve(issuesB)
       return Promise.resolve([])
     })
 
@@ -81,9 +81,9 @@ describe('useGitlabIssueSearch', () => {
     const sourceB = makeSource('2', 'Project B', 'group/project-b')
     const issuesA = [makeIssue(1, 'Project A')]
 
-    mockInvoke.mockImplementation((_cmd: string, args: Record<string, unknown>) => {
-      if (args.sourceProject === 'group/project-a') return Promise.resolve(issuesA)
-      if (args.sourceProject === 'group/project-b') return Promise.reject(new Error('auth failed'))
+    mockInvoke.mockImplementation((_cmd: string, args?: Record<string, unknown>) => {
+      if (args?.sourceProject === 'group/project-a') return Promise.resolve(issuesA)
+      if (args?.sourceProject === 'group/project-b') return Promise.reject(new Error('auth failed'))
       return Promise.resolve([])
     })
 

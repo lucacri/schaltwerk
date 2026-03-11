@@ -1,5 +1,5 @@
 import { renderHook, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { useGitlabMrSearch } from '../useGitlabMrSearch'
 import { invoke } from '@tauri-apps/api/core'
 import type { GitlabSource, GitlabMrSummary } from '../../types/gitlabTypes'
@@ -7,6 +7,8 @@ import type { GitlabSource, GitlabMrSummary } from '../../types/gitlabTypes'
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn()
 }))
+
+const mockInvoke = invoke as Mock
 
 vi.mock('../../utils/logger', () => ({
   logger: {
@@ -27,17 +29,15 @@ const makeMr = (iid: number, sourceLabel: string, updatedAt = '2026-01-01T00:00:
 })
 
 describe('useGitlabMrSearch', () => {
-  const mockInvoke = vi.mocked(invoke)
-
   beforeEach(() => { vi.clearAllMocks() })
 
   it('merges results from multiple sources', async () => {
     const sourceA = makeSource('1', 'Project A', 'group/project-a')
     const sourceB = makeSource('2', 'Project B', 'group/project-b', 'gitlab.example.com')
 
-    mockInvoke.mockImplementation((_cmd: string, args: Record<string, unknown>) => {
-      if (args.sourceProject === 'group/project-a') return Promise.resolve([makeMr(1, 'Project A', '2026-01-02T00:00:00Z')])
-      if (args.sourceProject === 'group/project-b') return Promise.resolve([makeMr(2, 'Project B', '2026-01-03T00:00:00Z')])
+    mockInvoke.mockImplementation((_cmd: string, args?: Record<string, unknown>) => {
+      if (args?.sourceProject === 'group/project-a') return Promise.resolve([makeMr(1, 'Project A', '2026-01-02T00:00:00Z')])
+      if (args?.sourceProject === 'group/project-b') return Promise.resolve([makeMr(2, 'Project B', '2026-01-03T00:00:00Z')])
       return Promise.resolve([])
     })
 
@@ -54,9 +54,9 @@ describe('useGitlabMrSearch', () => {
     const sourceA = makeSource('1', 'Project A', 'group/project-a')
     const sourceB = makeSource('2', 'Project B', 'group/project-b')
 
-    mockInvoke.mockImplementation((_cmd: string, args: Record<string, unknown>) => {
-      if (args.sourceProject === 'group/project-a') return Promise.resolve([makeMr(1, 'Project A')])
-      if (args.sourceProject === 'group/project-b') return Promise.resolve([makeMr(2, 'Project B')])
+    mockInvoke.mockImplementation((_cmd: string, args?: Record<string, unknown>) => {
+      if (args?.sourceProject === 'group/project-a') return Promise.resolve([makeMr(1, 'Project A')])
+      if (args?.sourceProject === 'group/project-b') return Promise.resolve([makeMr(2, 'Project B')])
       return Promise.resolve([])
     })
 
@@ -77,9 +77,9 @@ describe('useGitlabMrSearch', () => {
     const sourceA = makeSource('1', 'Project A', 'group/project-a')
     const sourceB = makeSource('2', 'Project B', 'group/project-b')
 
-    mockInvoke.mockImplementation((_cmd: string, args: Record<string, unknown>) => {
-      if (args.sourceProject === 'group/project-a') return Promise.resolve([makeMr(1, 'Project A')])
-      if (args.sourceProject === 'group/project-b') return Promise.reject(new Error('auth failed'))
+    mockInvoke.mockImplementation((_cmd: string, args?: Record<string, unknown>) => {
+      if (args?.sourceProject === 'group/project-a') return Promise.resolve([makeMr(1, 'Project A')])
+      if (args?.sourceProject === 'group/project-b') return Promise.reject(new Error('auth failed'))
       return Promise.resolve([])
     })
 

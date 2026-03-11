@@ -1,4 +1,4 @@
-import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { invoke } from '@tauri-apps/api/core'
 import { renderWithProviders } from '../../../tests/test-utils'
 import { GitlabIssuesTab } from '../GitlabIssuesTab'
@@ -79,7 +79,7 @@ describe('GitlabIssuesTab', () => {
     expect(screen.getByText('Update button styles')).toBeInTheDocument()
   })
 
-  it('search input accepts typing without losing focus', async () => {
+  it('search input retains focus after typing', async () => {
     mockInvoke.mockImplementation(async () => [])
 
     renderWithProviders(<GitlabIssuesTab />, {
@@ -90,10 +90,55 @@ describe('GitlabIssuesTab', () => {
       },
     })
 
-    const input = screen.getByPlaceholderText(/search/i)
-    fireEvent.change(input, { target: { value: 'timeout' } })
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument()
+    })
 
+    const input = screen.getByPlaceholderText(/search/i)
+
+    await act(async () => {
+      input.focus()
+    })
+    expect(document.activeElement).toBe(input)
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'timeout' } })
+    })
     expect(input).toHaveValue('timeout')
-    expect(input).toBeInTheDocument()
+    expect(document.activeElement).toBe(input)
+  })
+
+  it('does not unmount when search triggers state updates', async () => {
+    let callCount = 0
+    mockInvoke.mockImplementation(async (_cmd: string, args?: Record<string, unknown>) => {
+      callCount++
+      if (args?.sourceProject === 'group/backend') return backendIssues
+      return []
+    })
+
+    renderWithProviders(<GitlabIssuesTab />, {
+      gitlabOverrides: {
+        sources: [backendSource],
+        hasSources: true,
+        status: { installed: true, authenticated: true },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Fix API timeout')).toBeInTheDocument()
+    })
+
+    const initialCallCount = callCount
+    const input = screen.getByPlaceholderText(/search/i)
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'test' } })
+    })
+
+    await waitFor(() => {
+      expect(callCount).toBeGreaterThan(initialCallCount)
+    })
+
+    expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument()
   })
 })

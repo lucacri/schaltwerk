@@ -27,6 +27,7 @@ const baseGitlab: GitlabIntegrationValue = {
   status: null,
   sources: [],
   loading: false,
+  sourcesLoaded: true,
   isGlabMissing: false,
   hasSources: false,
   refreshStatus: vi.fn(),

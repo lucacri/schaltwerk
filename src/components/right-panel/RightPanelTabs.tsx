@@ -204,9 +204,11 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   useEffect(() => {
     setLocalFocus(currentFocus === 'diff')
     if (currentFocus === 'diff') {
-      setTimeout(() => {
-        diffContainerRef.current?.focus()
-      }, 0)
+      const active = document.activeElement
+      if (active?.matches('input, textarea, select, [contenteditable="true"]')) {
+        return
+      }
+      diffContainerRef.current?.focus()
     }
   }, [currentFocus])
 
@@ -316,9 +318,11 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
     const sessionKey = effectiveSelection.kind === 'orchestrator' ? 'orchestrator' : effectiveSelection.payload || 'unknown'
     setFocusForSession(sessionKey, 'diff')
     setLocalFocus(true)
-    setTimeout(() => {
-      diffContainerRef.current?.focus()
-    }, 0)
+    const active = document.activeElement
+    if (active?.matches('input, textarea, select, [contenteditable="true"]')) {
+      return
+    }
+    diffContainerRef.current?.focus()
   }, [effectiveSelection, setFocusForSession])
 
   useEffect(() => {
@@ -399,10 +403,11 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const tabsPresent = showChangesTab || showInfoTab || showSpecTab || showHistoryTab || showSpecsTab || showPreviewTab || showGitlabIssuesTab || showGitlabMrsTab
 
   useEffect(() => {
+    if (!gitlabIntegration.sourcesLoaded) return
     if ((activeTab === 'gitlab-issues' && !showGitlabIssuesTab) || (activeTab === 'gitlab-mrs' && !showGitlabMrsTab)) {
       void setRightPanelTab('changes')
     }
-  }, [activeTab, showGitlabIssuesTab, showGitlabMrsTab, setRightPanelTab])
+  }, [activeTab, showGitlabIssuesTab, showGitlabMrsTab, setRightPanelTab, gitlabIntegration.sourcesLoaded])
 
   // Enable split mode when viewing Changes for normal running sessions
   const useSplitMode = isRunningSession && activeTab === 'changes'

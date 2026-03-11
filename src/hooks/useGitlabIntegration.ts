@@ -13,6 +13,7 @@ export interface GitlabIntegrationValue {
   status: GitLabStatusPayload | null
   sources: GitlabSource[]
   loading: boolean
+  sourcesLoaded: boolean
   isGlabMissing: boolean
   hasSources: boolean
   refreshStatus: () => Promise<void>
@@ -25,6 +26,7 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
   const [status, setStatus] = useState<GitLabStatusPayload | null>(null)
   const [sources, setSources] = useState<GitlabSource[]>([])
   const [loading, setLoading] = useState<boolean>(true)
+  const [sourcesLoaded, setSourcesLoaded] = useState(false)
   const unlistenRef = useRef<(() => void) | null>(null)
 
   const refreshStatus = useCallback(async () => {
@@ -45,6 +47,8 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
       setSources(result ?? [])
     } catch (error) {
       logger.error('[useGitlabIntegration] Failed to load GitLab sources', error)
+    } finally {
+      setSourcesLoaded(true)
     }
   }, [])
 
@@ -63,6 +67,7 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
 
     setStatus(null)
     setSources([])
+    setSourcesLoaded(false)
 
     refreshStatus().catch((error) => {
       logger.error('[useGitlabIntegration] Initial status fetch failed', error)
@@ -110,6 +115,7 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
       status,
       sources,
       loading,
+      sourcesLoaded,
       isGlabMissing: status ? !status.installed : false,
       hasSources: sources.length > 0,
       refreshStatus,
@@ -120,6 +126,7 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
     status,
     sources,
     loading,
+    sourcesLoaded,
     refreshStatus,
     loadSources,
     saveSources,
