@@ -349,7 +349,11 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
     }
   }, [effectiveSelection.kind, pendingSpecToOpen, openSpecInWorkspace])
 
-  const handlePanelClick = () => {
+  const handlePanelClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) {
+      return
+    }
     focusDiffArea()
   }
 
