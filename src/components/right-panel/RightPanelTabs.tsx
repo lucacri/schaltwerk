@@ -527,7 +527,7 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
             </Split>
           )
         ) : (
-          <div className="absolute inset-0" key={activeTab}>
+          <div className="absolute inset-0" key={activeTab} style={{ display: activeTab === 'gitlab-issues' || activeTab === 'gitlab-mrs' ? 'none' : undefined }}>
             {activeTab === 'preview' ? (
               previewKey ? (
                 <WebPreviewPanel previewKey={previewKey} isResizing={isDragging} />
@@ -573,10 +573,6 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
                 }}
                 onReviewModeChange={handleSpecReviewModeChange}
               />
-            ) : activeTab === 'gitlab-issues' ? (
-              <GitlabIssuesTab />
-            ) : activeTab === 'gitlab-mrs' ? (
-              <GitlabMrsTab />
             ) : activeTab === 'agent' ? (
               effectiveSelection.kind === 'session' ? (
                 <SpecContentView
@@ -613,6 +609,16 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
                 />
               )
             )}
+          </div>
+        )}
+        {showGitlabIssuesTab && (
+          <div className="absolute inset-0" style={{ display: activeTab === 'gitlab-issues' ? 'block' : 'none' }}>
+            <GitlabIssuesTab />
+          </div>
+        )}
+        {showGitlabMrsTab && (
+          <div className="absolute inset-0" style={{ display: activeTab === 'gitlab-mrs' ? 'block' : 'none' }}>
+            <GitlabMrsTab />
           </div>
         )}
       </div>
