@@ -349,6 +349,46 @@ describe('sessions atoms', () => {
         expect(alphaSession?.info.attention_required).toBe(true)
     })
 
+    it('preserves attention_required when TerminalAttention fires during applySessionsSnapshot', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                return [createSession({ session_id: 'race-session', worktree_path: '/tmp/race' })]
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        let session = store.get(allSessionsAtom).find(s => s.info.session_id === 'race-session')
+        expect(session?.info.attention_required).toBeUndefined()
+
+        listeners['schaltwerk:sessions-refreshed']?.({
+            projectPath: '/projects/alpha',
+            sessions: [createSession({ session_id: 'race-session', worktree_path: '/tmp/race' })],
+        })
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'race-session',
+            terminal_id: stableSessionTerminalId('race-session', 'top'),
+            needs_attention: true,
+        })
+
+        session = store.get(allSessionsAtom).find(s => s.info.session_id === 'race-session')
+        expect(session?.info.attention_required).toBe(true)
+
+        await vi.advanceTimersByTimeAsync(0)
+
+        session = store.get(allSessionsAtom).find(s => s.info.session_id === 'race-session')
+        expect(session?.info.attention_required).toBe(true)
+    })
+
     it('cleans up cached sessions when closing a background project', async () => {
         const { invoke } = await import('@tauri-apps/api/core')
         vi.mocked(invoke).mockImplementation(async (cmd) => {

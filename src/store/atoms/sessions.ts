@@ -669,21 +669,42 @@ async function applySessionsSnapshot(
     if (projectPath) {
         await releaseRemovedSessions(get, set, previousSessionsSnapshot, deduped)
     }
-    set(allSessionsAtom, deduped)
-    previousSessionsSnapshot = deduped
+    let resolved = deduped
+    set(allSessionsAtom, (current) => {
+        const liveAttention = new Map<string, boolean>()
+        for (const s of current) {
+            if (s.info.attention_required != null) {
+                liveAttention.set(s.info.session_id, s.info.attention_required)
+            }
+        }
+        if (liveAttention.size === 0) {
+            return deduped
+        }
+        resolved = deduped.map(session => {
+            const live = liveAttention.get(session.info.session_id)
+            if (live != null && session.info.attention_required == null) {
+                return {
+                    ...session,
+                    info: { ...session.info, attention_required: live },
+                }
+            }
+            return session
+        })
+        return resolved
+    })
+    previousSessionsSnapshot = resolved
 
-    syncMergeStatuses(set, deduped)
-    autoStartRunningSessions(get, set, deduped, {
+    syncMergeStatuses(set, resolved)
+    autoStartRunningSessions(get, set, resolved, {
         reason: options.reason,
         previousStates: options.previousStates ?? previousSessionStates,
     })
 
-    const stateMap = buildStateMap(deduped)
+    const stateMap = buildStateMap(resolved)
     previousSessionStates = stateMap
-    previousSessionsSnapshot = deduped
 
     if (projectPath) {
-        projectSessionsSnapshotCache.set(projectPath, deduped)
+        projectSessionsSnapshotCache.set(projectPath, resolved)
         projectSessionStatesCache.set(projectPath, new Map(stateMap))
     }
 }
