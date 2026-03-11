@@ -56,7 +56,8 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
     }
 
     setLoading(true)
-    setError(null)
+
+    const failedSources: string[] = []
 
     try {
       const allResults = await Promise.all(
@@ -67,6 +68,7 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
             sourceHostname: source.hostname === 'gitlab.com' ? undefined : source.hostname,
             sourceLabel: source.label,
           }).catch(err => {
+            failedSources.push(source.label)
             logger.warn(`Failed to search GitLab issues for source ${source.label}`, err)
             return [] as GitlabIssueSummary[]
           })
@@ -79,6 +81,12 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
         b.updatedAt.localeCompare(a.updatedAt)
       )
       setResults(merged)
+
+      if (failedSources.length > 0) {
+        setError(`Failed to fetch issues from ${failedSources.join(', ')}`)
+      } else {
+        setError(null)
+      }
     } catch (err) {
       if (searchVersionRef.current === version) {
         logger.error(`Failed to search GitLab issues for query: ${trimmed}`, err)

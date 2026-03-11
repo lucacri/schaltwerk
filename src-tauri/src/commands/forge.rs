@@ -87,8 +87,8 @@ pub async fn forge_search_issues(
         .await
         .map_err(|e| format!("No active project: {e}"))?;
 
-    let provider = create_provider(source.forge_type).map_err(|e| format_forge_error(e))?;
-    provider.ensure_installed().await.map_err(|e| format_forge_error(e))?;
+    let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
+    provider.ensure_installed().await.map_err(format_forge_error)?;
 
     provider
         .search_issues(&project.path, query.as_deref(), limit, &source)
@@ -111,8 +111,8 @@ pub async fn forge_get_issue_details(
         .await
         .map_err(|e| format!("No active project: {e}"))?;
 
-    let provider = create_provider(source.forge_type).map_err(|e| format_forge_error(e))?;
-    provider.ensure_installed().await.map_err(|e| format_forge_error(e))?;
+    let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
+    provider.ensure_installed().await.map_err(format_forge_error)?;
 
     provider
         .get_issue_details(&project.path, &id, &source)
@@ -136,8 +136,8 @@ pub async fn forge_search_prs(
         .await
         .map_err(|e| format!("No active project: {e}"))?;
 
-    let provider = create_provider(source.forge_type).map_err(|e| format_forge_error(e))?;
-    provider.ensure_installed().await.map_err(|e| format_forge_error(e))?;
+    let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
+    provider.ensure_installed().await.map_err(format_forge_error)?;
 
     provider
         .search_prs(&project.path, query.as_deref(), limit, &source)
@@ -160,8 +160,8 @@ pub async fn forge_get_pr_details(
         .await
         .map_err(|e| format!("No active project: {e}"))?;
 
-    let provider = create_provider(source.forge_type).map_err(|e| format_forge_error(e))?;
-    provider.ensure_installed().await.map_err(|e| format_forge_error(e))?;
+    let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
+    provider.ensure_installed().await.map_err(format_forge_error)?;
 
     provider
         .get_pr_details(&project.path, &id, &source)
@@ -194,8 +194,8 @@ pub async fn forge_create_session_pr(
 ) -> Result<ForgePrResult, String> {
     use crate::commands::schaltwerk_core::schaltwerk_core_cancel_session;
 
-    let provider = create_provider(args.source.forge_type).map_err(|e| format_forge_error(e))?;
-    provider.ensure_installed().await.map_err(|e| format_forge_error(e))?;
+    let provider = create_provider(args.source.forge_type).map_err(format_forge_error)?;
+    provider.ensure_installed().await.map_err(format_forge_error)?;
 
     let project_manager = get_project_manager().await;
     let project = project_manager
@@ -339,8 +339,8 @@ pub async fn forge_get_review_comments(
         .await
         .map_err(|e| format!("No active project: {e}"))?;
 
-    let provider = create_provider(source.forge_type).map_err(|e| format_forge_error(e))?;
-    provider.ensure_installed().await.map_err(|e| format_forge_error(e))?;
+    let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
+    provider.ensure_installed().await.map_err(format_forge_error)?;
 
     provider
         .get_review_comments(&project.path, &id, &source)
@@ -363,8 +363,8 @@ pub async fn forge_approve_pr(
         .await
         .map_err(|e| format!("No active project: {e}"))?;
 
-    let provider = create_provider(source.forge_type).map_err(|e| format_forge_error(e))?;
-    provider.ensure_installed().await.map_err(|e| format_forge_error(e))?;
+    let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
+    provider.ensure_installed().await.map_err(format_forge_error)?;
 
     provider
         .approve_pr(&project.path, &id, &source)
@@ -389,8 +389,8 @@ pub async fn forge_merge_pr(
         .await
         .map_err(|e| format!("No active project: {e}"))?;
 
-    let provider = create_provider(source.forge_type).map_err(|e| format_forge_error(e))?;
-    provider.ensure_installed().await.map_err(|e| format_forge_error(e))?;
+    let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
+    provider.ensure_installed().await.map_err(format_forge_error)?;
 
     provider
         .merge_pr(&project.path, &id, squash, delete_branch, &source)
@@ -414,8 +414,8 @@ pub async fn forge_comment_on_pr(
         .await
         .map_err(|e| format!("No active project: {e}"))?;
 
-    let provider = create_provider(source.forge_type).map_err(|e| format_forge_error(e))?;
-    provider.ensure_installed().await.map_err(|e| format_forge_error(e))?;
+    let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
+    provider.ensure_installed().await.map_err(format_forge_error)?;
 
     provider
         .comment_on_pr(&project.path, &id, &message, &source)

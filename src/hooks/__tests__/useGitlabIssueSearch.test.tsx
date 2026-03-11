@@ -76,7 +76,7 @@ describe('useGitlabIssueSearch', () => {
     await waitFor(() => { expect(result.current.results).toHaveLength(2) })
   })
 
-  it('shows results from successful source when another fails', async () => {
+  it('surfaces partial failures while keeping successful source results', async () => {
     const sourceA = makeSource('1', 'Project A', 'group/project-a')
     const sourceB = makeSource('2', 'Project B', 'group/project-b')
     const issuesA = [makeIssue(1, 'Project A')]
@@ -93,5 +93,6 @@ describe('useGitlabIssueSearch', () => {
 
     expect(result.current.results).toHaveLength(1)
     expect(result.current.results[0].sourceLabel).toBe('Project A')
+    expect(result.current.error).toContain('Project B')
   })
 })

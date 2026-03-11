@@ -57,7 +57,8 @@ export function useGitlabMrSearch(options: UseGitlabMrSearchOptions): UseGitlabM
     }
 
     setLoading(true)
-    setError(null)
+
+    const failedSources: string[] = []
 
     try {
       const allResults = await Promise.all(
@@ -68,6 +69,7 @@ export function useGitlabMrSearch(options: UseGitlabMrSearchOptions): UseGitlabM
             sourceHostname: source.hostname === 'gitlab.com' ? undefined : source.hostname,
             sourceLabel: source.label,
           }).catch(err => {
+            failedSources.push(source.label)
             logger.warn(`Failed to search GitLab MRs for source ${source.label}`, err)
             return [] as GitlabMrSummary[]
           })
@@ -80,6 +82,12 @@ export function useGitlabMrSearch(options: UseGitlabMrSearchOptions): UseGitlabM
         b.updatedAt.localeCompare(a.updatedAt)
       )
       setResults(merged)
+
+      if (failedSources.length > 0) {
+        setError(`Failed to fetch merge requests from ${failedSources.join(', ')}`)
+      } else {
+        setError(null)
+      }
     } catch (err) {
       if (searchVersionRef.current === version) {
         logger.error(`Failed to search GitLab MRs for query: ${trimmed}`, err)
