@@ -9,6 +9,12 @@
       "cancelSession": "取消会话",
       "keepSession": "保留会话"
     },
+    "closeApp": {
+      "title": "关闭应用程序？",
+      "bodyRunning": "您有 {count} 个正在运行的会话。关闭应用不会取消它们，但终端连接将断开。",
+      "confirm": "关闭",
+      "cancel": "保持打开"
+    },
     "deleteSpec": {
       "title": "删除规格：{name}？",
       "body": "这将归档规格提示，您可以稍后从「设置 → 归档」中恢复。",

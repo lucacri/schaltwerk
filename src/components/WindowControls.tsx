@@ -3,6 +3,7 @@ import { VscChromeMinimize, VscChromeMaximize, VscChromeClose } from 'react-icon
 import { useState, useEffect } from 'react'
 import { logger } from '../utils/logger'
 import { useTranslation } from '../common/i18n'
+import { emitUiEvent, UiEvent } from '../common/uiEvents'
 
 export function WindowControls() {
   const [isMaximized, setIsMaximized] = useState(false)
@@ -59,8 +60,8 @@ export function WindowControls() {
     setIsMaximized(!isMaximized)
   }
 
-  const handleClose = async () => {
-    await getCurrentWindow().close()
+  const handleClose = () => {
+    emitUiEvent(UiEvent.CloseRequested)
   }
 
   return (
@@ -84,7 +85,7 @@ export function WindowControls() {
         <VscChromeMaximize className="text-[14px]" />
       </button>
       <button
-        onClick={() => { void handleClose() }}
+        onClick={handleClose}
         className="h-6 w-8 inline-flex items-center justify-center rounded text-text-tertiary hover:text-text-secondary hover:bg-accent-red transition-colors"
         title={t.windowControls.close}
         aria-label={t.windowControls.closeWindow}

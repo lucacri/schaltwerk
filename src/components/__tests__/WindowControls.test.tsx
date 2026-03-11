@@ -67,14 +67,16 @@ describe('WindowControls', () => {
     })
   })
 
-  it('calls close when close button is clicked', async () => {
+  it('emits CloseRequested UI event when close button is clicked', () => {
     render(<WindowControls />)
+
+    const handler = vi.fn()
+    window.addEventListener('schaltwerk:close-requested', handler)
 
     const closeBtn = screen.getByTestId('window-close')
     fireEvent.click(closeBtn)
 
-    await waitFor(() => {
-      expect(mockWindow.close).toHaveBeenCalledTimes(1)
-    })
+    expect(handler).toHaveBeenCalledTimes(1)
+    window.removeEventListener('schaltwerk:close-requested', handler)
   })
 })

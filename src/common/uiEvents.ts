@@ -51,6 +51,7 @@ export enum UiEvent {
   SelectionChanged = 'schaltwerk:selection-changed',
   SessionStateChanged = 'schaltwerk:session-state-changed',
   AgentBinariesUpdated = 'schaltwerk:agent-binaries-updated',
+  CloseRequested = 'schaltwerk:close-requested',
 }
 
 export interface PermissionErrorDetail {
@@ -252,6 +253,7 @@ export type UiEventPayloads = {
   [UiEvent.InsertTerminalText]: InsertTerminalTextDetail
   [UiEvent.OpenSettings]: OpenSettingsDetail | undefined
   [UiEvent.AgentBinariesUpdated]: undefined
+  [UiEvent.CloseRequested]: undefined
 }
 
 type UiEventArgs<T extends UiEvent> = undefined extends UiEventPayloads[T]

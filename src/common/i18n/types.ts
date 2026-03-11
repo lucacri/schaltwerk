@@ -11,6 +11,12 @@ export interface Translations {
       cancelSession: string
       keepSession: string
     }
+    closeApp: {
+      title: string
+      bodyRunning: string
+      confirm: string
+      cancel: string
+    }
     deleteSpec: {
       title: string
       body: string

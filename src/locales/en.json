@@ -9,6 +9,12 @@
       "cancelSession": "Cancel Session",
       "keepSession": "Keep Session"
     },
+    "closeApp": {
+      "title": "Close Application?",
+      "bodyRunning": "You have {count} running session(s). Closing the app will not cancel them, but their terminals will be disconnected.",
+      "confirm": "Close",
+      "cancel": "Keep Open"
+    },
     "deleteSpec": {
       "title": "Delete Spec: {name}?",
       "body": "This will archive the spec prompt so you can recover it later from Settings → Archives.",

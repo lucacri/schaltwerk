@@ -13,11 +13,13 @@ import type { HistoryItem, CommitFileChange } from './components/git-graph/types
 import Split from 'react-split'
 import { NewSessionModal } from './components/modals/NewSessionModal'
 import { CancelConfirmation } from './components/modals/CancelConfirmation'
+import { CloseConfirmation } from './components/modals/CloseConfirmation'
 import { DeleteSpecConfirmation } from './components/modals/DeleteSpecConfirmation'
 import { SettingsModal } from './components/modals/SettingsModal'
 import { SetupScriptApprovalModal } from './components/modals/SetupScriptApprovalModal'
 import { ProjectSelectorModal } from './components/modals/ProjectSelectorModal'
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useSelection } from './hooks/useSelection'
 import { usePreviewPanelEvents } from './hooks/usePreviewPanelEvents'
 import { useSetupScriptApproval } from './hooks/useSetupScriptApproval'
@@ -95,7 +97,7 @@ import { AGENT_START_TIMEOUT_MESSAGE } from './common/agentSpawn'
 import { beginSplitDrag, endSplitDrag } from './utils/splitDragCoordinator'
 import { useOptionalToast } from './common/toast/ToastProvider'
 import { AppUpdateResultPayload } from './common/events'
-import { RawSession, AGENT_SUPPORTS_SKIP_PERMISSIONS, AgentType } from './types/session'
+import { RawSession, AGENT_SUPPORTS_SKIP_PERMISSIONS, AgentType, SessionState } from './types/session'
 import {
   refreshKeepAwakeStateActionAtom,
   registerKeepAwakeEventListenerActionAtom,
@@ -537,6 +539,7 @@ function AppContent() {
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false)
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [deleteSpecModalOpen, setDeleteSpecModalOpen] = useState(false)
+  const [closeModalOpen, setCloseModalOpen] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [currentSession, setCurrentSession] = useState<{ id: string; name: string; displayName: string; branch: string; hasUncommittedChanges: boolean } | null>(null)
   const [diffViewerState, setDiffViewerState] = useState<{ mode: 'session' | 'history'; filePath: string | null; historyContext?: HistoryDiffContext } | null>(null)
@@ -1247,6 +1250,40 @@ function AppContent() {
 
     return cleanup
   }, [handleCancelSession])
+
+  const runningSessionCount = useMemo(
+    () => allSessions.filter(s => s.info.session_state === SessionState.Running).length,
+    [allSessions]
+  )
+
+  const handleCloseRequested = useCallback(() => {
+    if (runningSessionCount > 0) {
+      setCloseModalOpen(true)
+    } else {
+      getCurrentWindow().destroy().catch(err => logger.error('[App] Failed to close window', err))
+    }
+  }, [runningSessionCount])
+
+  const handleCloseConfirmed = useCallback(() => {
+    setCloseModalOpen(false)
+    getCurrentWindow().destroy().catch(err => logger.error('[App] Failed to close window', err))
+  }, [])
+
+  useEffect(() => {
+    const uiCleanup = listenUiEvent(UiEvent.CloseRequested, handleCloseRequested)
+
+    let tauriCleanup: (() => void) | undefined
+    getCurrentWindow().onCloseRequested((event) => {
+      event.preventDefault()
+      handleCloseRequested()
+    }).then(unlisten => { tauriCleanup = unlisten })
+      .catch(err => logger.error('[App] Failed to register close listener', err))
+
+    return () => {
+      uiCleanup()
+      tauriCleanup?.()
+    }
+  }, [handleCloseRequested])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -2111,6 +2148,13 @@ function AppContent() {
                />
             </>
           )}
+
+          <CloseConfirmation
+            open={closeModalOpen}
+            runningCount={runningSessionCount}
+            onConfirm={handleCloseConfirmed}
+            onCancel={() => setCloseModalOpen(false)}
+          />
 
           {/* Diff Viewer Modal with Review - render only when open */}
           {isDiffViewerOpen && diffViewerState && (
