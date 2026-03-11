@@ -1243,8 +1243,12 @@ export function UnifiedDiffView({
 
   const prevFilePathForScrollRef = useRef<string | null>(filePath);
   const pendingScrollRef = useRef<string | null>(null);
+  const wasOpenRef = useRef(isOpen);
 
   useLayoutEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = isOpen;
+
     if (viewMode !== "sidebar" || !isOpen || !filePath) {
       prevFilePathForScrollRef.current = filePath;
       pendingScrollRef.current = null;
@@ -1253,7 +1257,8 @@ export function UnifiedDiffView({
     const prevPath = prevFilePathForScrollRef.current;
     prevFilePathForScrollRef.current = filePath;
 
-    if (prevPath === filePath) {
+    const isFirstOpen = !wasOpen && isOpen;
+    if (prevPath === filePath && !isFirstOpen) {
       return;
     }
 
