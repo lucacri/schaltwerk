@@ -100,7 +100,7 @@ function sourceHostnameParam(hostname: string): string | undefined {
 }
 
 function sortByUpdatedAtDesc<T extends { updatedAt: string }>(items: T[]): T[] {
-  return [...items].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  return [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
 export const searchGitlabMrsActionAtom = atom(
@@ -122,9 +122,9 @@ export const searchGitlabMrsActionAtom = atom(
     }
 
     const existing = inflightRequests.get(cacheKey)
-    if (existing && !force) {
+    if (existing) {
       await existing
-      return
+      if (!force) return
     }
 
     const hasCachedData = (get(gitlabMrSearchEntriesAtom).get(cacheKey)?.results.length ?? 0) > 0
@@ -145,6 +145,9 @@ export const searchGitlabMrsActionAtom = atom(
               sourceProject: source.projectPath,
               sourceHostname: sourceHostnameParam(source.hostname),
               sourceLabel: source.label,
+            }).catch(err => {
+              logger.warn(`[gitlabSearch] Failed to search MRs for source ${source.label}`, err)
+              return [] as GitlabMrSummary[]
             }),
           ),
         )
@@ -196,9 +199,9 @@ export const searchGitlabIssuesActionAtom = atom(
     }
 
     const existing = inflightRequests.get(cacheKey)
-    if (existing && !force) {
+    if (existing) {
       await existing
-      return
+      if (!force) return
     }
 
     const hasCachedData = (get(gitlabIssueSearchEntriesAtom).get(cacheKey)?.results.length ?? 0) > 0
@@ -219,6 +222,9 @@ export const searchGitlabIssuesActionAtom = atom(
               sourceProject: source.projectPath,
               sourceHostname: sourceHostnameParam(source.hostname),
               sourceLabel: source.label,
+            }).catch(err => {
+              logger.warn(`[gitlabSearch] Failed to search issues for source ${source.label}`, err)
+              return [] as GitlabIssueSummary[]
             }),
           ),
         )
