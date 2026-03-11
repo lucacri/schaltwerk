@@ -699,6 +699,25 @@ pub async fn set_agent_command_prefix(app: AppHandle, prefix: Option<String>) ->
     manager.set_agent_command_prefix(prefix)
 }
 
+#[tauri::command]
+pub async fn get_generation_settings(
+    app: AppHandle,
+) -> Result<lucode::domains::settings::GenerationSettings, String> {
+    let settings_manager = get_settings_manager(&app).await?;
+    let manager = settings_manager.lock().await;
+    Ok(manager.get_generation_settings())
+}
+
+#[tauri::command]
+pub async fn set_generation_settings(
+    app: AppHandle,
+    settings: lucode::domains::settings::GenerationSettings,
+) -> Result<(), String> {
+    let settings_manager = get_settings_manager(&app).await?;
+    let mut manager = settings_manager.lock().await;
+    manager.set_generation_settings(settings)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

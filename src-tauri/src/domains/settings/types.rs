@@ -207,6 +207,14 @@ impl Default for UpdaterPreferences {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct GenerationSettings {
+    #[serde(default)]
+    pub agent: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalSettings {
@@ -315,6 +323,8 @@ pub struct Settings {
     pub last_project_parent_directory: Option<String>,
     #[serde(default)]
     pub agent_command_prefix: Option<String>,
+    #[serde(default)]
+    pub generation: GenerationSettings,
 }
 
 impl Default for Settings {
@@ -339,6 +349,7 @@ impl Default for Settings {
             dev_error_toasts_enabled: default_true(),
             last_project_parent_directory: None,
             agent_command_prefix: None,
+            generation: GenerationSettings::default(),
         }
     }
 }

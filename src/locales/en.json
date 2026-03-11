@@ -66,6 +66,7 @@
       "projectGeneral": "Project Settings",
       "projectRun": "Run & Environment",
       "projectActions": "Action Buttons",
+      "generation": "AI Generation",
       "terminal": "Terminal",
       "sessions": "Sessions",
       "version": "Version"
@@ -294,6 +295,16 @@
       "cliInstalled": "CLI installed:",
       "authenticated": "Authenticated:",
       "projectPath": "Project path:"
+    },
+    "generation": {
+      "title": "AI Generation",
+      "description": "Configure which AI agent and model is used for generating session names and commit messages.",
+      "agent": "Agent",
+      "agentDesc": "Which agent CLI to use for AI generation. Default uses the session's agent.",
+      "agentDefault": "Default (session agent)",
+      "model": "Model",
+      "modelDesc": "Override the model used for generation. Leave empty to use the agent's default model.",
+      "modelPlaceholder": "e.g. gemini-2.0-flash"
     },
     "mcp": {
       "title": "MCP Server Configuration",

@@ -4,6 +4,7 @@ export type SettingsCategory =
   | 'projectActions'
   | 'archives'
   | 'appearance'
+  | 'generation'
   | 'keyboard'
   | 'environment'
   | 'terminal'

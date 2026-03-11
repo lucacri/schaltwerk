@@ -528,6 +528,18 @@ impl SettingsService {
             .filter(|value| !value.is_empty());
         self.save()
     }
+
+    pub fn get_generation_settings(&self) -> GenerationSettings {
+        self.settings.generation.clone()
+    }
+
+    pub fn set_generation_settings(
+        &mut self,
+        settings: GenerationSettings,
+    ) -> Result<(), SettingsServiceError> {
+        self.settings.generation = settings;
+        self.save()
+    }
 }
 
 #[cfg(test)]

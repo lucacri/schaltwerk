@@ -1418,7 +1418,9 @@ fn main() {
             get_amp_mcp_servers,
             set_amp_mcp_servers,
             get_agent_command_prefix,
-            set_agent_command_prefix
+            set_agent_command_prefix,
+            get_generation_settings,
+            set_generation_settings
         ])
         .setup(move |app| {
             if ATTENTION_REGISTRY.get().is_none() {

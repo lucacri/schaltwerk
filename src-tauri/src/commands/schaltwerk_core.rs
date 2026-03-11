@@ -138,6 +138,41 @@ async fn get_agent_env_and_cli_args_async(
     }
 }
 
+async fn resolve_generation_agent_and_args(
+    fallback_agent: &str,
+) -> (
+    String,
+    Vec<(String, String)>,
+    String,
+    Option<String>,
+    lucode::domains::settings::AgentPreference,
+) {
+    let generation_settings = if let Some(sm) = SETTINGS_MANAGER.get() {
+        sm.lock().await.get_generation_settings()
+    } else {
+        lucode::domains::settings::GenerationSettings::default()
+    };
+
+    let agent = generation_settings
+        .agent
+        .filter(|a| !a.is_empty())
+        .unwrap_or_else(|| fallback_agent.to_string());
+
+    let (env_vars, mut cli_args, binary_path, preferences) =
+        get_agent_env_and_cli_args_async(&agent).await;
+
+    if let Some(model) = generation_settings.model.as_deref().filter(|m| !m.is_empty()) {
+        let model_arg = format!("--model {model}");
+        if cli_args.is_empty() {
+            cli_args = model_arg;
+        } else {
+            cli_args = format!("{model_arg} {cli_args}");
+        }
+    }
+
+    (agent, env_vars, cli_args, binary_path, preferences)
+}
+
 fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: String) {
     tokio::spawn(async move {
         let session_name_clone = session_name.clone();
@@ -206,8 +241,8 @@ fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: Str
             })
         );
 
-        let (mut env_vars, cli_args, binary_path, _) =
-            get_agent_env_and_cli_args_async(&agent).await;
+        let (agent, mut env_vars, cli_args, binary_path, _) =
+            resolve_generation_agent_and_args(&agent).await;
 
         if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
             for (key, value) in project_env_vars {
@@ -284,8 +319,8 @@ fn spawn_spec_name_generation(
             }
         };
 
-        let (mut env_vars, cli_args, binary_path, _) =
-            get_agent_env_and_cli_args_async(&agent).await;
+        let (agent, mut env_vars, cli_args, binary_path, _) =
+            resolve_generation_agent_and_args(&agent).await;
 
         if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
             env_vars.extend(project_env_vars);
@@ -340,14 +375,14 @@ pub async fn schaltwerk_core_generate_session_name(
         }
     };
 
-    let agent = agent_type.unwrap_or_else(|| {
+    let fallback_agent = agent_type.unwrap_or_else(|| {
         db_clone
             .get_agent_type()
             .unwrap_or_else(|_| "claude".to_string())
     });
 
-    let (mut env_vars, cli_args, binary_path, _) =
-        get_agent_env_and_cli_args_async(&agent).await;
+    let (agent, mut env_vars, cli_args, binary_path, _) =
+        resolve_generation_agent_and_args(&fallback_agent).await;
 
     if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
         env_vars.extend(project_env_vars);
@@ -392,7 +427,7 @@ pub async fn schaltwerk_core_generate_commit_message(
 
     let worktree_path = session.worktree_path.clone();
     let parent_branch = session.parent_branch.clone();
-    let agent_type_str = session.original_agent_type.clone().unwrap_or_else(|| {
+    let fallback_agent_type = session.original_agent_type.clone().unwrap_or_else(|| {
         db_clone
             .get_agent_type()
             .unwrap_or_else(|_| "claude".to_string())
@@ -479,8 +514,8 @@ pub async fn schaltwerk_core_generate_commit_message(
         return Ok(None);
     }
 
-    let (mut env_vars, cli_args, binary_path, _) =
-        get_agent_env_and_cli_args_async(&agent_type_str).await;
+    let (agent_type_str, mut env_vars, cli_args, binary_path, _) =
+        resolve_generation_agent_and_args(&fallback_agent_type).await;
 
     if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
         env_vars.extend(project_env_vars);
@@ -1127,23 +1162,20 @@ pub async fn schaltwerk_core_rename_version_group(
     let first_session = &version_sessions[0];
     let worktree_path = first_session.worktree_path.clone();
     let repo_path = first_session.repository_path.clone();
-    let agent_type = first_session
+    let fallback_agent = first_session
         .original_agent_type
         .clone()
         .unwrap_or_else(|| db.get_agent_type().unwrap_or_else(|_| "claude".to_string()));
 
-    // Get environment variables for the agent
-    let (mut env_vars, cli_args, binary_path, _preferences) =
-        get_agent_env_and_cli_args_async(&agent_type).await;
+    let (agent_type, mut env_vars, cli_args, binary_path, _preferences) =
+        resolve_generation_agent_and_args(&fallback_agent).await;
 
-    // Add project-specific environment variables
     if let Ok(project_env_vars) = db.get_project_environment_variables(&repo_path) {
         for (key, value) in project_env_vars {
             env_vars.push((key, value));
         }
     }
 
-    // Generate a display name once for the entire group
     let name_args = lucode::domains::agents::naming::NameGenerationArgs {
         db: &db,
         target_id: &first_session.id,

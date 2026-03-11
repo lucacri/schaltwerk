@@ -188,6 +188,17 @@ const CATEGORIES: CategoryConfig[] = [
         )
     },
     {
+        id: 'generation',
+        label: 'AI Generation',
+        scope: 'application',
+        icon: (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+        )
+    },
+    {
         id: 'sessions',
         label: 'Sessions',
         scope: 'application',
@@ -343,6 +354,8 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const [initialDevErrorToastsEnabled, setInitialDevErrorToastsEnabled] = useState(false)
     const [agentCommandPrefix, setAgentCommandPrefix] = useState<string>('')
     const [initialAgentCommandPrefix, setInitialAgentCommandPrefix] = useState<string>('')
+    const [generationAgent, setGenerationAgent] = useState<string>('')
+    const [generationModel, setGenerationModel] = useState<string>('')
     const platform = useMemo(() => detectPlatformSafe(), [])
 
     const [keyboardShortcutsState, setKeyboardShortcutsState] = useState<KeyboardShortcutConfig>(() => mergeShortcutConfig(defaultShortcutConfig))
@@ -728,6 +741,16 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
             logger.info('Agent command prefix not available:', error)
         }
 
+        let loadedGenerationAgent = ''
+        let loadedGenerationModel = ''
+        try {
+            const genSettings = await invoke<{ agent: string | null; model: string | null }>(TauriCommands.GetGenerationSettings)
+            loadedGenerationAgent = genSettings.agent ?? ''
+            loadedGenerationModel = genSettings.model ?? ''
+        } catch (error) {
+            logger.info('Generation settings not available:', error)
+        }
+
         setEnvVars(loadedEnvVars)
         setCliArgs(loadedCliArgs)
         setProjectSettings(loadedProjectSettings)
@@ -740,6 +763,8 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         setInitialDevErrorToastsEnabled(loadedDevErrorToasts)
         setAgentCommandPrefix(loadedCommandPrefix)
         setInitialAgentCommandPrefix(loadedCommandPrefix)
+        setGenerationAgent(loadedGenerationAgent)
+        setGenerationModel(loadedGenerationModel)
         setAgentPreferences(loadedAgentPrefs)
         const normalizedShortcuts = mergeShortcutConfig(loadedShortcuts)
         setKeyboardShortcutsState(normalizedShortcuts)
@@ -894,6 +919,19 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         setEditableKeyboardShortcuts(reset)
         setShortcutsDirty(!shortcutConfigsEqual(reset, keyboardShortcutsState))
     }, [keyboardShortcutsState])
+
+    const saveGenerationSettings = useCallback(async (agent: string, model: string) => {
+        try {
+            await invoke(TauriCommands.SetGenerationSettings, {
+                settings: {
+                    agent: agent || null,
+                    model: model || null,
+                },
+            })
+        } catch (error) {
+            logger.error('Failed to save generation settings:', error)
+        }
+    }, [])
 
     const handleBinaryPathChange = async (agent: AgentType, path: string | null) => {
         try {
@@ -2350,6 +2388,64 @@ fi`}
         </div>
     )
 
+    const renderGenerationSettings = () => (
+        <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-y-auto p-6">
+                <div className="space-y-6">
+                    <div>
+                        <h3 className="text-body font-medium text-text-primary mb-1">
+                            {t.settings.generation.title}
+                        </h3>
+                        <p className="text-body text-text-tertiary mb-4">
+                            {t.settings.generation.description}
+                        </p>
+                    </div>
+
+                    <div>
+                        <label className="text-body font-medium text-text-primary block mb-1">
+                            {t.settings.generation.agent}
+                        </label>
+                        <p className="text-caption text-text-tertiary mb-2">
+                            {t.settings.generation.agentDesc}
+                        </p>
+                        <select
+                            className="w-full bg-bg-elevated text-text-primary border border-border-subtle rounded px-3 py-2 text-body"
+                            value={generationAgent}
+                            onChange={(e) => {
+                                setGenerationAgent(e.target.value)
+                                void saveGenerationSettings(e.target.value, generationModel)
+                            }}
+                        >
+                            <option value="">{t.settings.generation.agentDefault}</option>
+                            <option value="claude">Claude</option>
+                            <option value="gemini">Gemini</option>
+                            <option value="codex">Codex</option>
+                            <option value="opencode">OpenCode</option>
+                            <option value="kilocode">Kilocode</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="text-body font-medium text-text-primary block mb-1">
+                            {t.settings.generation.model}
+                        </label>
+                        <p className="text-caption text-text-tertiary mb-2">
+                            {t.settings.generation.modelDesc}
+                        </p>
+                        <input
+                            type="text"
+                            className="w-full bg-bg-elevated text-text-primary border border-border-subtle rounded px-3 py-2 text-body"
+                            placeholder={t.settings.generation.modelPlaceholder}
+                            value={generationModel}
+                            onChange={(e) => setGenerationModel(e.target.value)}
+                            onBlur={() => void saveGenerationSettings(generationAgent, generationModel)}
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+
     const renderSessionSettings = () => (
         <div className="flex flex-col h-full">
             <div className="flex-1 overflow-y-auto p-6">
@@ -2544,6 +2640,8 @@ fi`}
                 return renderEnvironmentSettings()
             case 'terminal':
                 return renderTerminalSettings()
+            case 'generation':
+                return renderGenerationSettings()
             case 'sessions':
                 return renderSessionSettings()
             case 'version':

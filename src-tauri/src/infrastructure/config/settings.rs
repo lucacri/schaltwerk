@@ -342,4 +342,17 @@ impl SettingsManager {
             .set_agent_command_prefix(prefix)
             .map_err(|e| e.to_string())
     }
+
+    pub fn get_generation_settings(&self) -> crate::domains::settings::GenerationSettings {
+        self.service.get_generation_settings()
+    }
+
+    pub fn set_generation_settings(
+        &mut self,
+        settings: crate::domains::settings::GenerationSettings,
+    ) -> Result<(), String> {
+        self.service
+            .set_generation_settings(settings)
+            .map_err(|e| e.to_string())
+    }
 }

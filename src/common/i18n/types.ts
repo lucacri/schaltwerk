@@ -68,6 +68,7 @@ export interface Translations {
       projectGeneral: string
       projectRun: string
       projectActions: string
+      generation: string
       terminal: string
       sessions: string
       version: string
@@ -296,6 +297,16 @@ export interface Translations {
       cliInstalled: string
       authenticated: string
       projectPath: string
+    }
+    generation: {
+      title: string
+      description: string
+      agent: string
+      agentDesc: string
+      agentDefault: string
+      model: string
+      modelDesc: string
+      modelPlaceholder: string
     }
     mcp: {
       title: string
