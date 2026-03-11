@@ -551,8 +551,7 @@ impl LocalPtyAdapter {
                         state.start_seq = state.start_seq.saturating_add(excess as u64);
                     }
 
-                    let now_segment = Instant::now();
-                    state.idle_detector.observe_bytes(now_segment, segment);
+                    state.idle_detector.observe_activity(Instant::now());
                 };
 
                 for offset in cursor_query_offsets.iter().copied() {

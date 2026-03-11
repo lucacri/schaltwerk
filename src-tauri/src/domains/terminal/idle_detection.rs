@@ -16,7 +16,6 @@ pub struct IdleDetector {
     last_snapshot: Option<ScreenSnapshot>,
     idle_reported: bool,
     dirty: bool,
-    pending_bytes: Vec<u8>,
 }
 
 impl IdleDetector {
@@ -29,31 +28,16 @@ impl IdleDetector {
             last_snapshot: None,
             idle_reported: false,
             dirty: false,
-            pending_bytes: Vec::with_capacity(65536),
         }
     }
 
-    pub fn observe_bytes(&mut self, now: Instant, bytes: &[u8]) {
+    pub fn observe_activity(&mut self, now: Instant) {
         self.last_bytes_at = Some(now);
-
-        if self.pending_bytes.len() + bytes.len() > 262144 {
-            self.pending_bytes.clear();
-        }
-
-        self.pending_bytes.extend_from_slice(bytes);
         self.dirty = true;
     }
 
     pub fn tick(&mut self, now: Instant, screen: &mut VisibleScreen) -> Option<IdleTransition> {
-        let had_pending = self.dirty;
-
-        if self.dirty {
-            if !self.pending_bytes.is_empty() {
-                screen.feed_bytes(&self.pending_bytes);
-                self.pending_bytes.clear();
-            }
-            self.dirty = false;
-        }
+        let had_pending = std::mem::take(&mut self.dirty);
 
         if had_pending {
             let current_snapshot = screen.take_snapshot();
@@ -128,6 +112,16 @@ mod tests {
     use crate::domains::terminal::visible::VisibleScreen;
     use std::time::{Duration, Instant};
 
+    fn simulate_reader(
+        screen: &mut VisibleScreen,
+        detector: &mut IdleDetector,
+        now: Instant,
+        bytes: &[u8],
+    ) {
+        screen.feed_bytes(bytes);
+        detector.observe_activity(now);
+    }
+
     #[test]
     fn does_not_mark_idle_before_any_input() {
         let threshold = 100u64;
@@ -148,7 +142,12 @@ mod tests {
         let mut screen = VisibleScreen::new(5, 40, "test-terminal".to_string());
 
         let baseline = Instant::now();
-        detector.observe_bytes(baseline, b"line1\nline2\nline3\nline4\nline5");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            baseline,
+            b"line1\nline2\nline3\nline4\nline5",
+        );
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let idle_time = baseline + Duration::from_millis(threshold + 10);
@@ -165,7 +164,7 @@ mod tests {
         let mut screen = VisibleScreen::new(5, 40, "test-terminal".to_string());
 
         let baseline = Instant::now();
-        detector.observe_bytes(baseline, b"initial content");
+        simulate_reader(&mut screen, &mut detector, baseline, b"initial content");
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let idle_time = baseline + Duration::from_millis(threshold + 10);
@@ -175,7 +174,12 @@ mod tests {
         );
 
         let activity_time = idle_time + Duration::from_millis(50);
-        detector.observe_bytes(activity_time, b"\nmore content that changes screen");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            activity_time,
+            b"\nmore content that changes screen",
+        );
         assert_eq!(
             detector.tick(activity_time, &mut screen),
             Some(IdleTransition::BecameActive)
@@ -189,7 +193,12 @@ mod tests {
         let mut screen = VisibleScreen::new(5, 40, "test-terminal".to_string());
 
         let baseline = Instant::now();
-        detector.observe_bytes(baseline, b"line1\nline2\nline3\nline4\nline5");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            baseline,
+            b"line1\nline2\nline3\nline4\nline5",
+        );
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let idle_time = baseline + Duration::from_millis(threshold + 10);
@@ -199,7 +208,7 @@ mod tests {
         );
 
         let activity_time = idle_time + Duration::from_millis(threshold / 2);
-        detector.observe_bytes(activity_time, b"more bytes");
+        simulate_reader(&mut screen, &mut detector, activity_time, b"more bytes");
 
         assert_eq!(
             detector.tick(activity_time, &mut screen),
@@ -215,21 +224,30 @@ mod tests {
 
         let baseline = Instant::now();
 
-        detector.observe_bytes(
+        simulate_reader(
+            &mut screen,
+            &mut detector,
             baseline,
             b"\x1b[?25lGallivanting\xe2\x80\xa6 (esc to interrupt)",
         );
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let t1 = baseline + Duration::from_millis(100);
-        detector.observe_bytes(
+        simulate_reader(
+            &mut screen,
+            &mut detector,
             t1,
             b"\x1b[1G\x1b[KCollecting\xe2\x80\xa6 (esc to interrupt)",
         );
         assert_eq!(detector.tick(t1, &mut screen), None);
 
         let t2 = t1 + Duration::from_millis(100);
-        detector.observe_bytes(t2, b"\x1b[1G\x1b[KPondering\xe2\x80\xa6 (esc to interrupt)");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            t2,
+            b"\x1b[1G\x1b[KPondering\xe2\x80\xa6 (esc to interrupt)",
+        );
         assert_eq!(detector.tick(t2, &mut screen), None);
 
         let idle_time = t2 + Duration::from_millis(threshold + 100);
@@ -248,25 +266,36 @@ mod tests {
 
         let baseline = Instant::now();
 
-        detector.observe_bytes(baseline, b" Working (3s \xe2\x80\xa2 esc to interrupt)");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            baseline,
+            b" Working (3s \xe2\x80\xa2 esc to interrupt)",
+        );
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let t1 = baseline + Duration::from_millis(200);
-        detector.observe_bytes(
+        simulate_reader(
+            &mut screen,
+            &mut detector,
             t1,
             b"\x1b[1G\x1b[K\xe2\x97\xa6 Working (3s \xe2\x80\xa2 esc to interrupt)",
         );
         assert_eq!(detector.tick(t1, &mut screen), None);
 
         let t2 = t1 + Duration::from_millis(200);
-        detector.observe_bytes(
+        simulate_reader(
+            &mut screen,
+            &mut detector,
             t2,
             b"\x1b[1G\x1b[K\xe2\x97\x86 Working (4s \xe2\x80\xa2 esc to interrupt)",
         );
         assert_eq!(detector.tick(t2, &mut screen), None);
 
         let t3 = t2 + Duration::from_millis(200);
-        detector.observe_bytes(
+        simulate_reader(
+            &mut screen,
+            &mut detector,
             t3,
             b"\x1b[1G\x1b[K\xe2\x97\x8b Working (4s \xe2\x80\xa2 esc to interrupt)",
         );
@@ -288,22 +317,39 @@ mod tests {
 
         let baseline = Instant::now();
 
-        detector.observe_bytes(
+        simulate_reader(
+            &mut screen,
+            &mut detector,
             baseline,
             b"> Implement {feature}\n\n  85% context left \xc2\xb7 ? for shortcuts",
         );
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let t1 = baseline + Duration::from_millis(500);
-        detector.observe_bytes(t1, b"\x1b[2;1H  84% context left \xc2\xb7 ? for shortcuts");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            t1,
+            b"\x1b[2;1H  84% context left \xc2\xb7 ? for shortcuts",
+        );
         assert_eq!(detector.tick(t1, &mut screen), None);
 
         let t2 = t1 + Duration::from_millis(500);
-        detector.observe_bytes(t2, b"\x1b[2;1H  83% context left \xc2\xb7 ? for shortcuts");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            t2,
+            b"\x1b[2;1H  83% context left \xc2\xb7 ? for shortcuts",
+        );
         assert_eq!(detector.tick(t2, &mut screen), None);
 
         let t3 = t2 + Duration::from_millis(500);
-        detector.observe_bytes(t3, b"\x1b[2;1H  82% context left \xc2\xb7 ? for shortcuts");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            t3,
+            b"\x1b[2;1H  82% context left \xc2\xb7 ? for shortcuts",
+        );
         assert_eq!(detector.tick(t3, &mut screen), None);
 
         let idle_time = t3 + Duration::from_millis(threshold + 100);
@@ -321,15 +367,25 @@ mod tests {
         let mut screen = VisibleScreen::new(24, 80, "agent-terminal".to_string());
 
         let baseline = Instant::now();
-        detector.observe_bytes(baseline, b"Analyzing codebase...\n");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            baseline,
+            b"Analyzing codebase...\n",
+        );
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let t1 = baseline + Duration::from_millis(100);
-        detector.observe_bytes(t1, b"Found 15 files\n");
+        simulate_reader(&mut screen, &mut detector, t1, b"Found 15 files\n");
         assert_eq!(detector.tick(t1, &mut screen), None);
 
         let t2 = t1 + Duration::from_millis(100);
-        detector.observe_bytes(t2, b"Processing file 1 of 15\n");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            t2,
+            b"Processing file 1 of 15\n",
+        );
         assert_eq!(detector.tick(t2, &mut screen), None);
 
         let idle_time = t2 + Duration::from_millis(threshold + 100);
@@ -340,7 +396,12 @@ mod tests {
         );
 
         let active_time = idle_time + Duration::from_millis(100);
-        detector.observe_bytes(active_time, b"Processing file 2 of 15\n");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            active_time,
+            b"Processing file 2 of 15\n",
+        );
         assert_eq!(
             detector.tick(active_time, &mut screen),
             Some(IdleTransition::BecameActive),
@@ -355,7 +416,7 @@ mod tests {
         let mut screen = VisibleScreen::new(24, 80, "cursor-terminal".to_string());
 
         let baseline = Instant::now();
-        detector.observe_bytes(baseline, b"line1\nline2\nline3");
+        simulate_reader(&mut screen, &mut detector, baseline, b"line1\nline2\nline3");
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let idle_time = baseline + Duration::from_millis(threshold + 100);
@@ -365,7 +426,7 @@ mod tests {
         );
 
         let active_time = idle_time + Duration::from_millis(100);
-        detector.observe_bytes(active_time, b"\x1b[1;1H");
+        simulate_reader(&mut screen, &mut detector, active_time, b"\x1b[1;1H");
         assert_eq!(
             detector.tick(active_time, &mut screen),
             Some(IdleTransition::BecameActive),
@@ -380,12 +441,13 @@ mod tests {
         let mut screen = VisibleScreen::new(24, 80, "rapid-terminal".to_string());
 
         let baseline = Instant::now();
-        detector.observe_bytes(baseline, b"Progress: 0%");
+        simulate_reader(&mut screen, &mut detector, baseline, b"Progress: 0%");
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         for i in 1..=10 {
             let t = baseline + Duration::from_millis(i * 100);
-            detector.observe_bytes(t, format!("\x1b[1G\x1b[KProgress: {}%", i * 10).as_bytes());
+            let bytes = format!("\x1b[1G\x1b[KProgress: {}%", i * 10);
+            simulate_reader(&mut screen, &mut detector, t, bytes.as_bytes());
             assert_eq!(
                 detector.tick(t, &mut screen),
                 None,
@@ -415,7 +477,12 @@ mod tests {
         let mut screen = VisibleScreen::new(24, 80, "stream-terminal".to_string());
 
         let baseline = Instant::now();
-        detector.observe_bytes(baseline, b"Header\n\nContent area:\n\n\n\n\n\n\n\nFooter");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            baseline,
+            b"Header\n\nContent area:\n\n\n\n\n\n\n\nFooter",
+        );
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let idle_time = baseline + Duration::from_millis(threshold + 100);
@@ -425,7 +492,12 @@ mod tests {
         );
 
         let t1 = idle_time + Duration::from_millis(100);
-        detector.observe_bytes(t1, b"\x1b[5;1Hstreaming data line 1");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            t1,
+            b"\x1b[5;1Hstreaming data line 1",
+        );
         assert_eq!(
             detector.tick(t1, &mut screen),
             Some(IdleTransition::BecameActive),
@@ -440,7 +512,7 @@ mod tests {
         let mut screen = VisibleScreen::new(24, 80, "novisual-terminal".to_string());
 
         let baseline = Instant::now();
-        detector.observe_bytes(baseline, b"static content");
+        simulate_reader(&mut screen, &mut detector, baseline, b"static content");
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let idle_time = baseline + Duration::from_millis(threshold + 100);
@@ -450,7 +522,7 @@ mod tests {
         );
 
         let t1 = idle_time + Duration::from_millis(50);
-        detector.observe_bytes(t1, b"\x07");
+        simulate_reader(&mut screen, &mut detector, t1, b"\x07");
         assert_eq!(
             detector.tick(t1, &mut screen),
             Some(IdleTransition::BecameActive),
@@ -459,27 +531,27 @@ mod tests {
     }
 
     #[test]
-    fn pending_bytes_buffer_overflow_protection() {
+    fn large_data_does_not_break_detection() {
         let threshold = 5000u64;
         let mut detector = IdleDetector::new(threshold, "overflow-terminal".to_string());
         let mut screen = VisibleScreen::new(24, 80, "overflow-terminal".to_string());
 
         let baseline = Instant::now();
         let large_data = vec![b'X'; 300000];
-        detector.observe_bytes(baseline, &large_data);
+        simulate_reader(&mut screen, &mut detector, baseline, &large_data);
 
         let t1 = baseline + Duration::from_millis(10);
         assert_eq!(
             detector.tick(t1, &mut screen),
             None,
-            "Should handle buffer overflow gracefully"
+            "Should handle large data gracefully"
         );
 
         let idle_time = t1 + Duration::from_millis(threshold + 100);
         assert_eq!(
             detector.tick(idle_time, &mut screen),
             Some(IdleTransition::BecameIdle),
-            "Should still detect idle after buffer overflow"
+            "Should still detect idle after large data"
         );
     }
 
@@ -490,7 +562,12 @@ mod tests {
         let mut screen = VisibleScreen::new(24, 80, "silent-terminal".to_string());
 
         let baseline = Instant::now();
-        detector.observe_bytes(baseline, b"> Implement {feature}\n\n  85% context left");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            baseline,
+            b"> Implement {feature}\n\n  85% context left",
+        );
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let t1 = baseline + Duration::from_millis(1000);
@@ -509,13 +586,42 @@ mod tests {
     }
 
     #[test]
+    fn does_not_double_feed_bytes_to_screen() {
+        let threshold = 5000u64;
+        let mut detector = IdleDetector::new(threshold, "double-feed-test".to_string());
+        let mut screen = VisibleScreen::new(5, 40, "double-feed-test".to_string());
+
+        let baseline = Instant::now();
+
+        screen.feed_bytes(b"Hello World\n");
+        detector.observe_activity(baseline);
+
+        let pre_tick_hash = screen.compute_full_screen_hash();
+
+        let t1 = baseline + Duration::from_millis(250);
+        detector.tick(t1, &mut screen);
+
+        let post_tick_hash = screen.compute_full_screen_hash();
+
+        assert_eq!(
+            pre_tick_hash, post_tick_hash,
+            "tick() should not modify screen state — reader already fed the bytes"
+        );
+    }
+
+    #[test]
     fn cannot_distinguish_silent_work_from_true_idle() {
         let threshold = 5000u64;
         let mut detector = IdleDetector::new(threshold, "ambiguous-terminal".to_string());
         let mut screen = VisibleScreen::new(24, 80, "ambiguous-terminal".to_string());
 
         let baseline = Instant::now();
-        detector.observe_bytes(baseline, b"Analyzing codebase...");
+        simulate_reader(
+            &mut screen,
+            &mut detector,
+            baseline,
+            b"Analyzing codebase...",
+        );
         assert_eq!(detector.tick(baseline, &mut screen), None);
 
         let long_analysis_time = baseline + Duration::from_millis(threshold + 100);
