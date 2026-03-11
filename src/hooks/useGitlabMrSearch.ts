@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../common/tauriCommands'
 import type { GitlabMrDetails, GitlabMrSummary, GitlabPipelinePayload, GitlabSource } from '../types/gitlabTypes'
@@ -32,13 +32,23 @@ export function useGitlabMrSearch(options: UseGitlabMrSearchOptions): UseGitlabM
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const searchVersionRef = useRef(0)
-  const hasInitialFetchedRef = useRef(false)
   const debounceHandle = useRef<number | null>(null)
+  const sourcesRef = useRef(sources)
+  const queryRef = useRef(query)
+  const prevQueryRef = useRef(query)
+
+  sourcesRef.current = sources
+  queryRef.current = query
+
+  const sourcesKey = useMemo(
+    () => sources.map(s => `${s.id}:${s.mrsEnabled}`).join(','),
+    [sources]
+  )
 
   const executeSearch = useCallback(async (term: string) => {
     const trimmed = term.trim()
     const version = ++searchVersionRef.current
-    const enabledSources = sources.filter(s => s.mrsEnabled)
+    const enabledSources = sourcesRef.current.filter(s => s.mrsEnabled)
 
     if (enabledSources.length === 0) {
       setResults([])
@@ -81,7 +91,7 @@ export function useGitlabMrSearch(options: UseGitlabMrSearchOptions): UseGitlabM
         setLoading(false)
       }
     }
-  }, [sources])
+  }, [])
 
   useEffect(() => {
     if (!enabled) {
@@ -89,22 +99,31 @@ export function useGitlabMrSearch(options: UseGitlabMrSearchOptions): UseGitlabM
         window.clearTimeout(debounceHandle.current)
         debounceHandle.current = null
       }
-      hasInitialFetchedRef.current = false
       setLoading(false)
       setResults([])
       return
     }
 
-    if (!hasInitialFetchedRef.current) {
-      hasInitialFetchedRef.current = true
-      void executeSearch('')
-    }
-  }, [enabled, executeSearch])
-
-  useEffect(() => {
-    if (!enabled || !hasInitialFetchedRef.current) {
+    const enabledSources = sourcesRef.current.filter(s => s.mrsEnabled)
+    if (enabledSources.length === 0) {
+      setResults([])
       return
     }
+
+    void executeSearch(queryRef.current)
+  }, [enabled, sourcesKey, executeSearch])
+
+  useEffect(() => {
+    if (!enabled) return
+
+    if (prevQueryRef.current === query) {
+      prevQueryRef.current = query
+      return
+    }
+    prevQueryRef.current = query
+
+    const enabledSources = sourcesRef.current.filter(s => s.mrsEnabled)
+    if (enabledSources.length === 0) return
 
     if (effectiveDebounce === 0) {
       void executeSearch(query)
@@ -127,11 +146,9 @@ export function useGitlabMrSearch(options: UseGitlabMrSearchOptions): UseGitlabM
   }, [query, effectiveDebounce, executeSearch, enabled])
 
   const refresh = useCallback(() => {
-    if (!enabled) {
-      return
-    }
-    void executeSearch(query)
-  }, [enabled, executeSearch, query])
+    if (!enabled) return
+    void executeSearch(queryRef.current)
+  }, [enabled, executeSearch])
 
   const fetchDetails = useCallback(async (iid: number, sourceProject: string, sourceHostname?: string, sourceLabel?: string) => {
     try {
