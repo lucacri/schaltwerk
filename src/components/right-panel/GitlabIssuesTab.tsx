@@ -3,6 +3,7 @@ import { VscClose, VscSearch } from 'react-icons/vsc'
 import { useGitlabIntegrationContext } from '../../contexts/GitlabIntegrationContext'
 import { useGitlabIssueSearch } from '../../hooks/useGitlabIssueSearch'
 import { GitlabIssueDetail } from '../gitlab/GitlabIssueDetail'
+import { GitlabErrorDetailsModal } from '../gitlab/GitlabErrorDetailsModal'
 import { useTranslation } from '../../common/i18n'
 import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
@@ -16,6 +17,7 @@ export function GitlabIssuesTab() {
   const [selectedIssue, setSelectedIssue] = useState<{ iid: number; sourceProject: string; sourceHostname?: string } | null>(null)
   const [details, setDetails] = useState<GitlabIssueDetails | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
+  const [showErrorDetails, setShowErrorDetails] = useState(false)
 
   const handleSelect = useCallback(async (issue: GitlabIssueSummary) => {
     const matchingSource = sources.find(s => s.label === issue.sourceLabel)
@@ -96,13 +98,28 @@ export function GitlabIssuesTab() {
           }}
         >
           <span className="truncate">{search.error}</span>
-          <button
-            type="button"
-            onClick={search.clearError}
-            style={{ color: 'var(--color-accent-red)', flexShrink: 0 }}
-          >
-            <VscClose className="w-3 h-3" />
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {search.errorDetails && (
+              <button
+                type="button"
+                onClick={() => setShowErrorDetails(true)}
+                style={{
+                  color: 'var(--color-accent-red)',
+                  textDecoration: 'underline',
+                  fontSize: theme.fontSize.caption,
+                }}
+              >
+                {t.gitlabIssueTab.errorDetails}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={search.clearError}
+              style={{ color: 'var(--color-accent-red)' }}
+            >
+              <VscClose className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -128,6 +145,13 @@ export function GitlabIssuesTab() {
           ))
         )}
       </div>
+
+      {showErrorDetails && search.errorDetails && (
+        <GitlabErrorDetailsModal
+          errors={search.errorDetails}
+          onClose={() => setShowErrorDetails(false)}
+        />
+      )}
     </div>
   )
 }

@@ -1248,6 +1248,7 @@ export interface Translations {
     notes: string
     noNotes: string
     labels: string
+    errorDetails: string
   }
   gitlabMrTab: {
     searchPlaceholder: string
@@ -1265,6 +1266,7 @@ export interface Translations {
     notes: string
     noNotes: string
     labels: string
+    errorDetails: string
     sourceBranch: string
     targetBranch: string
     pipeline: string

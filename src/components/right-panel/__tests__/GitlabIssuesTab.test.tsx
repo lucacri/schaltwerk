@@ -141,4 +141,31 @@ describe('GitlabIssuesTab', () => {
 
     expect(screen.getByPlaceholderText(/search/i)).toBeInTheDocument()
   })
+
+  it('shows error details modal when Details button is clicked', async () => {
+    mockInvoke.mockImplementation(async (_cmd: string, args?: Record<string, unknown>) => {
+      if (args?.sourceProject === 'group/backend') return backendIssues
+      if (args?.sourceProject === 'group/frontend') return Promise.reject('403 Forbidden')
+      return []
+    })
+
+    renderWithProviders(<GitlabIssuesTab />, {
+      gitlabOverrides: {
+        sources: [backendSource, frontendSource],
+        hasSources: true,
+        status: { installed: true, authenticated: true },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to fetch issues/)).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Details'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Frontend')).toBeInTheDocument()
+      expect(screen.getByText('403 Forbidden')).toBeInTheDocument()
+    })
+  })
 })

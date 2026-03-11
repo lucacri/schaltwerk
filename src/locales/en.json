@@ -1237,7 +1237,8 @@
     "description": "Description",
     "notes": "Notes",
     "noNotes": "No notes",
-    "labels": "Labels"
+    "labels": "Labels",
+    "errorDetails": "Details"
   },
   "gitlabMrTab": {
     "searchPlaceholder": "Search merge requests...",
@@ -1255,6 +1256,7 @@
     "notes": "Notes",
     "noNotes": "No notes",
     "labels": "Labels",
+    "errorDetails": "Details",
     "sourceBranch": "Source",
     "targetBranch": "Target",
     "pipeline": "Pipeline",

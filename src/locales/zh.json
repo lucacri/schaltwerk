@@ -1235,7 +1235,8 @@
     "description": "描述",
     "notes": "备注",
     "noNotes": "暂无备注",
-    "labels": "标签"
+    "labels": "标签",
+    "errorDetails": "详情"
   },
   "gitlabMrTab": {
     "searchPlaceholder": "搜索合并请求…",
@@ -1253,6 +1254,7 @@
     "notes": "备注",
     "noNotes": "暂无备注",
     "labels": "标签",
+    "errorDetails": "详情",
     "sourceBranch": "源分支",
     "targetBranch": "目标分支",
     "pipeline": "流水线",

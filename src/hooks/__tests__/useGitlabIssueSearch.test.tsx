@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { useGitlabIssueSearch } from '../useGitlabIssueSearch'
 import { invoke } from '@tauri-apps/api/core'
@@ -94,5 +94,41 @@ describe('useGitlabIssueSearch', () => {
     expect(result.current.results).toHaveLength(1)
     expect(result.current.results[0].sourceLabel).toBe('Project A')
     expect(result.current.error).toContain('Project B')
+  })
+
+  it('exposes per-source error details on partial failure', async () => {
+    const sourceA = makeSource('1', 'Project A', 'group/project-a')
+    const sourceB = makeSource('2', 'Project B', 'group/project-b')
+    const issuesA = [makeIssue(1, 'Project A')]
+
+    mockInvoke.mockImplementation((_cmd: string, args?: Record<string, unknown>) => {
+      if (args?.sourceProject === 'group/project-a') return Promise.resolve(issuesA)
+      if (args?.sourceProject === 'group/project-b') return Promise.reject('glab command failed (api list): 403 Forbidden')
+      return Promise.resolve([])
+    })
+
+    const { result } = renderHook(() => useGitlabIssueSearch({ sources: [sourceA, sourceB] }))
+
+    await waitFor(() => { expect(result.current.loading).toBe(false) })
+
+    expect(result.current.errorDetails).toHaveLength(1)
+    expect(result.current.errorDetails![0].source).toBe('Project B')
+    expect(result.current.errorDetails![0].message).toContain('403 Forbidden')
+  })
+
+  it('clearError clears errorDetails', async () => {
+    const sourceA = makeSource('1', 'Project A', 'group/project-a')
+
+    mockInvoke.mockImplementation(() => Promise.reject('network error'))
+
+    const { result } = renderHook(() => useGitlabIssueSearch({ sources: [sourceA] }))
+
+    await waitFor(() => { expect(result.current.loading).toBe(false) })
+    expect(result.current.errorDetails).toHaveLength(1)
+
+    act(() => { result.current.clearError() })
+
+    expect(result.current.error).toBeNull()
+    expect(result.current.errorDetails).toBeNull()
   })
 })

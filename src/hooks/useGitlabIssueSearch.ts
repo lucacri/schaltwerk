@@ -5,10 +5,16 @@ import type { GitlabIssueDetails, GitlabIssueSummary, GitlabSource } from '../ty
 import { logger } from '../utils/logger'
 import { resolveErrorMessage } from '../utils/resolveErrorMessage'
 
+export interface SourceError {
+  source: string
+  message: string
+}
+
 export interface UseGitlabIssueSearchResult {
   results: GitlabIssueSummary[]
   loading: boolean
   error: string | null
+  errorDetails: SourceError[] | null
   query: string
   setQuery: (next: string) => void
   refresh: () => void
@@ -29,6 +35,7 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
   const [results, setResults] = useState<GitlabIssueSummary[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorDetails, setErrorDetails] = useState<SourceError[] | null>(null)
   const [query, setQuery] = useState('')
   const searchVersionRef = useRef(0)
   const debounceHandle = useRef<number | null>(null)
@@ -57,7 +64,7 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
 
     setLoading(true)
 
-    const failedSources: string[] = []
+    const failedSources: SourceError[] = []
 
     try {
       const allResults = await Promise.all(
@@ -68,7 +75,7 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
             sourceHostname: source.hostname === 'gitlab.com' ? undefined : source.hostname,
             sourceLabel: source.label,
           }).catch(err => {
-            failedSources.push(source.label)
+            failedSources.push({ source: source.label, message: resolveErrorMessage(err) })
             logger.warn(`Failed to search GitLab issues for source ${source.label}`, err)
             return [] as GitlabIssueSummary[]
           })
@@ -83,15 +90,18 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
       setResults(merged)
 
       if (failedSources.length > 0) {
-        setError(`Failed to fetch issues from ${failedSources.join(', ')}`)
+        setError(`Failed to fetch issues from ${failedSources.map(f => f.source).join(', ')}`)
+        setErrorDetails(failedSources)
       } else {
         setError(null)
+        setErrorDetails(null)
       }
     } catch (err) {
       if (searchVersionRef.current === version) {
         logger.error(`Failed to search GitLab issues for query: ${trimmed}`, err)
         setResults([])
         setError(resolveErrorMessage(err))
+        setErrorDetails([{ source: 'unknown', message: resolveErrorMessage(err) }])
       }
     } finally {
       if (searchVersionRef.current === version) {
@@ -180,12 +190,14 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
 
   const clearError = useCallback(() => {
     setError(null)
+    setErrorDetails(null)
   }, [])
 
   return {
     results,
     loading,
     error,
+    errorDetails,
     query,
     setQuery,
     refresh,

@@ -3,6 +3,7 @@ import { VscClose, VscSearch } from 'react-icons/vsc'
 import { useGitlabIntegrationContext } from '../../contexts/GitlabIntegrationContext'
 import { useGitlabMrSearch } from '../../hooks/useGitlabMrSearch'
 import { GitlabMrDetail } from '../gitlab/GitlabMrDetail'
+import { GitlabErrorDetailsModal } from '../gitlab/GitlabErrorDetailsModal'
 import { useTranslation } from '../../common/i18n'
 import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
@@ -16,6 +17,7 @@ export function GitlabMrsTab() {
   const [selectedMr, setSelectedMr] = useState<{ iid: number; sourceProject: string; sourceHostname?: string } | null>(null)
   const [details, setDetails] = useState<GitlabMrDetails | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
+  const [showErrorDetails, setShowErrorDetails] = useState(false)
 
   const handleSelect = useCallback(async (mr: GitlabMrSummary) => {
     const matchingSource = sources.find(s => s.label === mr.sourceLabel)
@@ -104,13 +106,28 @@ export function GitlabMrsTab() {
           }}
         >
           <span className="truncate">{search.error}</span>
-          <button
-            type="button"
-            onClick={search.clearError}
-            style={{ color: 'var(--color-accent-red)', flexShrink: 0 }}
-          >
-            <VscClose className="w-3 h-3" />
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {search.errorDetails && (
+              <button
+                type="button"
+                onClick={() => setShowErrorDetails(true)}
+                style={{
+                  color: 'var(--color-accent-red)',
+                  textDecoration: 'underline',
+                  fontSize: theme.fontSize.caption,
+                }}
+              >
+                {t.gitlabMrTab.errorDetails}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={search.clearError}
+              style={{ color: 'var(--color-accent-red)' }}
+            >
+              <VscClose className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -136,6 +153,13 @@ export function GitlabMrsTab() {
           ))
         )}
       </div>
+
+      {showErrorDetails && search.errorDetails && (
+        <GitlabErrorDetailsModal
+          errors={search.errorDetails}
+          onClose={() => setShowErrorDetails(false)}
+        />
+      )}
     </div>
   )
 }
