@@ -711,6 +711,10 @@ pub async fn generate_spec_display_name(args: NameGenerationArgs<'_>) -> Result<
     .await
 }
 
+pub async fn generate_name_only(args: NameGenerationArgs<'_>) -> Result<Option<String>> {
+    generate_display_name_core(args, |_, _| Ok(())).await
+}
+
 fn build_claude_namegen_args(prompt_plain: &str, cli_args: Option<&str>) -> Vec<String> {
     let mut user_args: Vec<String> = Vec::new();
 

@@ -699,6 +699,8 @@ export interface Translations {
       connectGithubIssue: string
       usePrPrompt: string
       connectGithubPr: string
+      generateName: string
+      generatingName: string
     }
   }
   errorBoundary: {
@@ -771,6 +773,8 @@ export interface Translations {
       isMerging: string
       needsCommitMessage: string
       readyToMerge: string
+      generateCommitMessage: string
+      generatingCommitMessage: string
     }
   }
   diffViewer: {

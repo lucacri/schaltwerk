@@ -1292,6 +1292,8 @@ fn main() {
             schaltwerk_core_get_language,
             schaltwerk_core_set_language,
             schaltwerk_core_create_spec_session,
+            schaltwerk_core_generate_commit_message,
+            schaltwerk_core_generate_session_name,
             schaltwerk_core_update_session_state,
             schaltwerk_core_update_spec_content,
             schaltwerk_core_append_spec_content,

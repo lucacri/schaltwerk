@@ -696,7 +696,9 @@
       "useIssuePrompt": "Use a GitHub issue as the agent prompt",
       "connectGithubIssue": "Connect GitHub to enable GitHub issue prompts",
       "usePrPrompt": "Use a GitHub pull request as the agent prompt",
-      "connectGithubPr": "Connect GitHub to enable GitHub PR prompts"
+      "connectGithubPr": "Connect GitHub to enable GitHub PR prompts",
+      "generateName": "Generate name with AI",
+      "generatingName": "Generating name..."
     }
   },
   "errorBoundary": {
@@ -768,7 +770,9 @@
       "isUpToDate": "Session has no commits to merge into the parent branch.",
       "isMerging": "Merging…",
       "needsCommitMessage": "Enter a commit message to enable merge.",
-      "readyToMerge": "Merge session (⌘↵)"
+      "readyToMerge": "Merge session (⌘↵)",
+      "generateCommitMessage": "Generate commit message with AI",
+      "generatingCommitMessage": "Generating commit message..."
     }
   },
   "diffViewer": {

@@ -327,6 +327,185 @@ fn spawn_spec_name_generation(
         }
     });
 }
+
+#[tauri::command]
+pub async fn schaltwerk_core_generate_session_name(
+    content: String,
+    agent_type: Option<String>,
+) -> Result<Option<String>, String> {
+    let (db_clone, repo_path) = match get_core_read().await {
+        Ok(core) => (core.db.clone(), core.repo_path.clone()),
+        Err(e) => {
+            return Err(format!("Cannot load core for name generation: {e}"));
+        }
+    };
+
+    let agent = agent_type.unwrap_or_else(|| {
+        db_clone
+            .get_agent_type()
+            .unwrap_or_else(|_| "claude".to_string())
+    });
+
+    let (mut env_vars, cli_args, binary_path, _) =
+        get_agent_env_and_cli_args_async(&agent).await;
+
+    if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
+        env_vars.extend(project_env_vars);
+    }
+
+    let cli_args = if cli_args.is_empty() {
+        None
+    } else {
+        Some(cli_args)
+    };
+
+    let args = lucode::domains::agents::naming::NameGenerationArgs {
+        db: &db_clone,
+        target_id: "namegen-preview",
+        worktree_path: Path::new(""),
+        agent_type: &agent,
+        initial_prompt: Some(&content),
+        cli_args: cli_args.as_deref(),
+        env_vars: &env_vars,
+        binary_path: binary_path.as_deref(),
+    };
+
+    lucode::domains::agents::naming::generate_name_only(args)
+        .await
+        .map_err(|e| format!("Name generation failed: {e}"))
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_generate_commit_message(
+    session_name: String,
+) -> Result<Option<String>, String> {
+    let (db_clone, repo_path, session) = {
+        let core = get_core_read()
+            .await
+            .map_err(|e| format!("Cannot load core: {e}"))?;
+        let manager = core.session_manager();
+        let session = manager
+            .get_session(&session_name)
+            .map_err(|e| format!("Session not found: {e}"))?;
+        (core.db.clone(), core.repo_path.clone(), session)
+    };
+
+    let worktree_path = session.worktree_path.clone();
+    let parent_branch = session.parent_branch.clone();
+    let agent_type_str = session.original_agent_type.clone().unwrap_or_else(|| {
+        db_clone
+            .get_agent_type()
+            .unwrap_or_else(|_| "claude".to_string())
+    });
+
+    let commit_subjects = tokio::task::spawn_blocking({
+        let wt = worktree_path.clone();
+        let parent = parent_branch.clone();
+        move || -> Vec<String> {
+            let repo = match git2::Repository::open(&wt) {
+                Ok(r) => r,
+                Err(e) => {
+                    log::warn!("Failed to open repo for commit log: {e}");
+                    return vec![];
+                }
+            };
+            let head_oid = match repo.head().and_then(|r| r.peel_to_commit().map(|c| c.id())) {
+                Ok(oid) => oid,
+                Err(_) => return vec![],
+            };
+            let parent_oid = match repo
+                .revparse_single(&parent)
+                .and_then(|o| o.peel_to_commit().map(|c| c.id()))
+            {
+                Ok(oid) => oid,
+                Err(_) => return vec![],
+            };
+            let merge_base = match repo.merge_base(head_oid, parent_oid) {
+                Ok(oid) => oid,
+                Err(_) => return vec![],
+            };
+            let mut revwalk = match repo.revwalk() {
+                Ok(rw) => rw,
+                Err(_) => return vec![],
+            };
+            let _ = revwalk.push(head_oid);
+            let _ = revwalk.hide(merge_base);
+            revwalk
+                .filter_map(|oid| oid.ok())
+                .filter_map(|oid| repo.find_commit(oid).ok())
+                .take(50)
+                .filter_map(|c| c.summary().map(|s| s.to_string()))
+                .collect()
+        }
+    })
+    .await
+    .unwrap_or_default();
+
+    let changed_files_summary = tokio::task::spawn_blocking({
+        let wt = worktree_path.clone();
+        let parent = parent_branch.clone();
+        move || -> String {
+            match lucode::domains::git::stats::get_changed_files(&wt, &parent) {
+                Ok(files) => {
+                    let limited: Vec<_> = files.iter().take(50).collect();
+                    limited
+                        .iter()
+                        .map(|f| {
+                            let change = match f.change_type.as_str() {
+                                "added" => "A",
+                                "deleted" => "D",
+                                "renamed" => "R",
+                                _ => "M",
+                            };
+                            format!(
+                                "{} {} (+{} -{})",
+                                change, f.path, f.additions, f.deletions
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                }
+                Err(e) => {
+                    log::warn!("Failed to get changed files: {e}");
+                    String::new()
+                }
+            }
+        }
+    })
+    .await
+    .unwrap_or_default();
+
+    if commit_subjects.is_empty() && changed_files_summary.is_empty() {
+        return Ok(None);
+    }
+
+    let (mut env_vars, cli_args, binary_path, _) =
+        get_agent_env_and_cli_args_async(&agent_type_str).await;
+
+    if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
+        env_vars.extend(project_env_vars);
+    }
+
+    let cli_args_opt = if cli_args.is_empty() {
+        None
+    } else {
+        Some(cli_args)
+    };
+
+    let args = lucode::domains::agents::commit_message::CommitMessageArgs {
+        agent_type: &agent_type_str,
+        commit_subjects: &commit_subjects,
+        changed_files_summary: &changed_files_summary,
+        cli_args: cli_args_opt.as_deref(),
+        env_vars: &env_vars,
+        binary_path: binary_path.as_deref(),
+    };
+
+    lucode::domains::agents::commit_message::generate_commit_message(args)
+        .await
+        .map_err(|e| format!("Commit message generation failed: {e}"))
+}
+
 async fn session_manager_read() -> Result<SessionManager, String> {
     Ok(get_core_read().await?.session_manager())
 }

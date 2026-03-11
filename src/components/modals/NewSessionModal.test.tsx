@@ -1123,4 +1123,76 @@ describe('NewSessionModal', () => {
     consoleWarnSpy.mockRestore()
   })
 
+  describe('generate name button', () => {
+    it('renders the generate name button', () => {
+      openModal()
+      expect(screen.getByTestId('generate-name-button')).toBeInTheDocument()
+    })
+
+    it('is disabled when there is no task content', () => {
+      openModal()
+      const btn = screen.getByTestId('generate-name-button')
+      expect(btn).toBeDisabled()
+    })
+
+    it('calls the generate session name command when clicked with content', async () => {
+      invokeMock.mockImplementation((cmd: string) => {
+        if (cmd === TauriCommands.SchaltwerkCoreGenerateSessionName) {
+          return Promise.resolve('fix-login-bug')
+        }
+        return defaultInvokeImplementation(cmd)
+      })
+
+      openModal()
+      const textarea = screen.getByTestId('mock-markdown-editor').querySelector('textarea')!
+      fireEvent.change(textarea, { target: { value: 'Fix the login bug on the auth page' } })
+
+      const btn = screen.getByTestId('generate-name-button')
+      expect(btn).not.toBeDisabled()
+
+      fireEvent.click(btn)
+
+      await waitFor(() => {
+        expect(invokeMock).toHaveBeenCalledWith(
+          TauriCommands.SchaltwerkCoreGenerateSessionName,
+          expect.objectContaining({ content: 'Fix the login bug on the auth page' })
+        )
+      })
+
+      await waitFor(() => {
+        const nameInput = screen.getByPlaceholderText('eager_cosmos') as HTMLInputElement
+        expect(nameInput.value).toBe('fix-login-bug')
+      })
+    })
+
+    it('shows spinner while generating', async () => {
+      let resolveGenerate: (value: string | null) => void = () => {}
+      invokeMock.mockImplementation((cmd: string) => {
+        if (cmd === TauriCommands.SchaltwerkCoreGenerateSessionName) {
+          return new Promise(resolve => { resolveGenerate = resolve })
+        }
+        return defaultInvokeImplementation(cmd)
+      })
+
+      openModal()
+      const textarea = screen.getByTestId('mock-markdown-editor').querySelector('textarea')!
+      fireEvent.change(textarea, { target: { value: 'Add dark mode' } })
+
+      const btn = screen.getByTestId('generate-name-button')
+      fireEvent.click(btn)
+
+      await waitFor(() => {
+        expect(btn).toBeDisabled()
+      })
+
+      await act(async () => {
+        resolveGenerate('add-dark-mode')
+      })
+
+      await waitFor(() => {
+        expect(btn).not.toBeDisabled()
+      })
+    })
+  })
+
 })

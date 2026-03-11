@@ -133,6 +133,8 @@ export const TauriCommands = {
   SchaltwerkCoreCreateSession: 'schaltwerk_core_create_session',
   SchaltwerkCoreCloneProject: 'schaltwerk_core_clone_project',
   SchaltwerkCoreCreateSpecSession: 'schaltwerk_core_create_spec_session',
+  SchaltwerkCoreGenerateCommitMessage: 'schaltwerk_core_generate_commit_message',
+  SchaltwerkCoreGenerateSessionName: 'schaltwerk_core_generate_session_name',
   SchaltwerkCoreDeleteArchivedSpec: 'schaltwerk_core_delete_archived_spec',
   SchaltwerkCoreGetAgentType: 'schaltwerk_core_get_agent_type',
   SchaltwerkCoreGetOrchestratorAgentType: 'schaltwerk_core_get_orchestrator_agent_type',

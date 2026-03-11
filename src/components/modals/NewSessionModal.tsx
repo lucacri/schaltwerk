@@ -125,6 +125,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [githubPrSelection, setGithubPrSelection] = useState<GithubPrSelectionResult | null>(null)
     const [githubIssueLoading, setGithubIssueLoading] = useState(false)
     const [githubPrLoading, setGithubPrLoading] = useState(false)
+    const [generatingName, setGeneratingName] = useState(false)
     const [unifiedSearchOpen, setUnifiedSearchOpen] = useState(false)
     const unifiedSearchOpenRef = useRef(false)
     unifiedSearchOpenRef.current = unifiedSearchOpen
@@ -464,6 +465,33 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setValidationError('')
         }
     }
+
+    const handleGenerateName = useCallback(async () => {
+        if (generatingName) return
+        const content = promptSource === 'github_issue'
+            ? githubIssueSelection?.prompt ?? ''
+            : promptSource === 'github_pull_request'
+                ? githubPrSelection?.prompt ?? ''
+                : taskContent
+        if (!content.trim()) return
+
+        setGeneratingName(true)
+        try {
+            const generated = await invoke<string | null>(
+                TauriCommands.SchaltwerkCoreGenerateSessionName,
+                { content, agentType }
+            )
+            if (generated) {
+                setName(generated)
+                setWasEdited(true)
+                wasEditedRef.current = true
+            }
+        } catch (error) {
+            logger.warn('[NewSessionModal] Failed to generate name:', error)
+        } finally {
+            setGeneratingName(false)
+        }
+    }, [generatingName, promptSource, githubIssueSelection, githubPrSelection, taskContent, agentType])
 
     const handleCreate = useCallback(async () => {
         if (creating) return
@@ -1291,24 +1319,50 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
 	                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 	                    <div>
 	                        <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>{t.newSessionModal.agentName}</label>
-	                        <input
-	                            ref={nameInputRef}
-	                            value={name}
-	                            onChange={handleNameChange}
-                            onFocus={() => { setWasEdited(true); wasEditedRef.current = true }}
-                            onKeyDown={() => { setWasEdited(true); wasEditedRef.current = true }}
-                            onInput={() => { setWasEdited(true); wasEditedRef.current = true }}
-                            className={`w-full rounded px-3 py-2 border ${
-                                nameError ? 'border-red-500' : ''
-                            }`}
-                            style={{
-                                backgroundColor: 'var(--color-bg-elevated)',
-                                color: 'var(--color-text-primary)',
-                                borderColor: nameError ? undefined : 'var(--color-border-default)'
-                            }}
-                            placeholder="eager_cosmos"
-                            disabled={nameLocked}
-                        />
+	                        <div className="flex gap-1.5">
+	                            <input
+	                                ref={nameInputRef}
+	                                value={name}
+	                                onChange={handleNameChange}
+                                onFocus={() => { setWasEdited(true); wasEditedRef.current = true }}
+                                onKeyDown={() => { setWasEdited(true); wasEditedRef.current = true }}
+                                onInput={() => { setWasEdited(true); wasEditedRef.current = true }}
+                                className={`flex-1 min-w-0 rounded px-3 py-2 border ${
+                                    nameError ? 'border-red-500' : ''
+                                }`}
+                                style={{
+                                    backgroundColor: 'var(--color-bg-elevated)',
+                                    color: 'var(--color-text-primary)',
+                                    borderColor: nameError ? undefined : 'var(--color-border-default)'
+                                }}
+                                placeholder="eager_cosmos"
+                                disabled={nameLocked}
+                            />
+                            <button
+                                type="button"
+                                data-testid="generate-name-button"
+                                onClick={() => { void handleGenerateName() }}
+                                disabled={generatingName || nameLocked || !taskContent.trim()}
+                                className={`flex-shrink-0 w-9 h-9 rounded flex items-center justify-center border ${generatingName || nameLocked || !taskContent.trim() ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-80'}`}
+                                style={{
+                                    backgroundColor: 'var(--color-bg-elevated)',
+                                    borderColor: 'var(--color-border-default)',
+                                }}
+                                title={generatingName ? t.newSessionModal.tooltips.generatingName : t.newSessionModal.tooltips.generateName}
+                            >
+                                {generatingName ? (
+                                    <span
+                                        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
+                                        style={{ borderColor: 'var(--color-text-secondary)', borderTopColor: 'transparent' }}
+                                        aria-hidden="true"
+                                    />
+                                ) : (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-secondary)' }}>
+                                        <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" /><path d="M17.8 11.8 19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2 19 5" /><path d="M11 6.2 9.7 5" /><path d="M11 11.8 9.7 13" /><path d="M8 15h2c4.7 0 4.7 4 0 4H4c-.5 0-1-.2-1-.5S2 17 4 17c5 0 3 4 0 4" />
+                                    </svg>
+                                )}
+                            </button>
+                        </div>
                         {nameError && (
                             <div className="flex items-start gap-2 mt-1">
                                 <svg className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

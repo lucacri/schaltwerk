@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { theme } from '../../common/theme'
+import { TauriCommands } from '../../common/tauriCommands'
 import { useModal } from '../../contexts/ModalContext'
 import { LoadingSpinner } from '../common/LoadingSpinner'
 import { useTranslation } from '../../common/i18n'
+import { logger } from '../../utils/logger'
 
 export type MergeModeOption = 'squash' | 'reapply'
 
@@ -65,6 +68,7 @@ export function MergeSessionModal({
   const { registerModal, unregisterModal } = useModal()
   const [mode, setMode] = useState<MergeModeOption>('squash')
   const [commitMessage, setCommitMessage] = useState(() => cachedCommitMessage ?? '')
+  const [generatingCommitMessage, setGeneratingCommitMessage] = useState(false)
   const commitMessageInputRef = useRef<HTMLInputElement | null>(null)
 
   const focusCommitMessage = useCallback(() => {
@@ -133,6 +137,25 @@ export function MergeSessionModal({
     },
     [onCommitMessageChange]
   )
+
+  const handleGenerateCommitMessage = useCallback(async () => {
+    if (generatingCommitMessage || !sessionName) return
+    setGeneratingCommitMessage(true)
+    try {
+      const generated = await invoke<string | null>(
+        TauriCommands.SchaltwerkCoreGenerateCommitMessage,
+        { sessionName }
+      )
+      if (generated) {
+        setCommitMessage(generated)
+        onCommitMessageChange?.(generated)
+      }
+    } catch (error) {
+      logger.warn('[MergeSessionModal] Failed to generate commit message:', error)
+    } finally {
+      setGeneratingCommitMessage(false)
+    }
+  }, [generatingCommitMessage, sessionName, onCommitMessageChange])
 
   const parentBranch = preview?.parentBranch ?? '—'
   const sessionBranch = preview?.sessionBranch ?? '—'
@@ -315,20 +338,46 @@ export function MergeSessionModal({
                   <label style={fieldLabelStyle} htmlFor="merge-commit-message">
                     {t.mergeSessionModal.commitMessage}
                   </label>
-                  <input
-                    id="merge-commit-message"
-                    ref={commitMessageInputRef}
-                    autoFocus={mode === 'squash'}
-                    value={commitMessage}
-                    onChange={(event) => handleCommitMessageChange(event.target.value)}
-                    className="mt-1 w-full rounded px-3 py-2 text-sm"
-                    style={{
-                      backgroundColor: 'var(--color-bg-tertiary)',
-                      border: '1px solid var(--color-border-subtle)',
-                      color: 'var(--color-text-primary)',
-                    }}
-                    placeholder={preview?.defaultCommitMessage || t.mergeSessionModal.commitPlaceholder}
-                  />
+                  <div className="mt-1 flex gap-1.5">
+                    <input
+                      id="merge-commit-message"
+                      ref={commitMessageInputRef}
+                      autoFocus={mode === 'squash'}
+                      value={commitMessage}
+                      onChange={(event) => handleCommitMessageChange(event.target.value)}
+                      className="flex-1 min-w-0 rounded px-3 py-2 text-sm"
+                      style={{
+                        backgroundColor: 'var(--color-bg-tertiary)',
+                        border: '1px solid var(--color-border-subtle)',
+                        color: 'var(--color-text-primary)',
+                      }}
+                      placeholder={preview?.defaultCommitMessage || t.mergeSessionModal.commitPlaceholder}
+                    />
+                    <button
+                      type="button"
+                      data-testid="generate-commit-message-button"
+                      onClick={() => { void handleGenerateCommitMessage() }}
+                      disabled={generatingCommitMessage}
+                      className={`flex-shrink-0 w-9 h-9 rounded flex items-center justify-center border ${generatingCommitMessage ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-80'}`}
+                      style={{
+                        backgroundColor: 'var(--color-bg-tertiary)',
+                        borderColor: 'var(--color-border-subtle)',
+                      }}
+                      title={generatingCommitMessage ? t.mergeSessionModal.tooltips.generatingCommitMessage : t.mergeSessionModal.tooltips.generateCommitMessage}
+                    >
+                      {generatingCommitMessage ? (
+                        <span
+                          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
+                          style={{ borderColor: 'var(--color-text-secondary)', borderTopColor: 'transparent' }}
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-secondary)' }}>
+                          <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" /><path d="M17.8 11.8 19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2 19 5" /><path d="M11 6.2 9.7 5" /><path d="M11 11.8 9.7 13" /><path d="M8 15h2c4.7 0 4.7 4 0 4H4c-.5 0-1-.2-1-.5S2 17 4 17c5 0 3 4 0 4" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
 

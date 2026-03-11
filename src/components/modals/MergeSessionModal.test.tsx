@@ -1,8 +1,15 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { describe, it, expect, vi, type MockedFunction } from 'vitest'
 import { MergeSessionModal, MergeModeOption } from './MergeSessionModal'
 import { ModalProvider } from '../../contexts/ModalContext'
+import { TauriCommands } from '../../common/tauriCommands'
 import type { ReactNode } from 'react'
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn().mockResolvedValue(null)
+}))
+import { invoke } from '@tauri-apps/api/core'
+const invokeMock = invoke as MockedFunction<(cmd: string, args?: unknown) => Promise<unknown>>
 
 const preview = {
   sessionBranch: 'feature/test-session',
@@ -175,5 +182,67 @@ describe('MergeSessionModal', () => {
   it('selects squash mode when prefillMode is squash', () => {
     renderModal({ prefillMode: 'squash' })
     expect(screen.getByLabelText('Commit message')).toBeInTheDocument()
+  })
+
+  describe('generate commit message button', () => {
+    it('renders the generate commit message button in squash mode', () => {
+      renderModal()
+      expect(screen.getByTestId('generate-commit-message-button')).toBeInTheDocument()
+    })
+
+    it('does not render in reapply mode', () => {
+      renderModal({ prefillMode: 'reapply' })
+      expect(screen.queryByTestId('generate-commit-message-button')).toBeNull()
+    })
+
+    it('calls the generate command and populates commit message', async () => {
+      const onCommitMessageChange = vi.fn()
+      invokeMock.mockResolvedValueOnce('feat(auth): add login flow')
+
+      renderModal({ onCommitMessageChange })
+      const btn = screen.getByTestId('generate-commit-message-button')
+
+      await act(async () => {
+        fireEvent.click(btn)
+      })
+
+      await waitFor(() => {
+        expect(invokeMock).toHaveBeenCalledWith(
+          TauriCommands.SchaltwerkCoreGenerateCommitMessage,
+          { sessionName: 'test-session' }
+        )
+      })
+
+      await waitFor(() => {
+        const input = screen.getByLabelText('Commit message') as HTMLInputElement
+        expect(input.value).toBe('feat(auth): add login flow')
+      })
+
+      expect(onCommitMessageChange).toHaveBeenCalledWith('feat(auth): add login flow')
+    })
+
+    it('shows spinner while generating', async () => {
+      let resolveGenerate: (value: unknown) => void = () => {}
+      invokeMock.mockImplementationOnce(() => new Promise(resolve => { resolveGenerate = resolve }))
+
+      renderModal()
+      const btn = screen.getByTestId('generate-commit-message-button')
+
+      await act(async () => {
+        fireEvent.click(btn)
+      })
+
+      await waitFor(() => {
+        expect(btn).toBeDisabled()
+      })
+
+      await act(async () => {
+        resolveGenerate('fix: something')
+      })
+
+      await waitFor(() => {
+        expect(btn).not.toBeDisabled()
+      })
+    })
   })
 })
