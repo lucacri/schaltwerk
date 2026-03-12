@@ -4,6 +4,6 @@ pub mod types;
 
 pub use service::{update_session_from_parent, MergeService};
 pub use types::{
-    MergeMode, MergeOutcome, MergePreview, MergeState, UpdateFromParentStatus,
-    UpdateSessionFromParentResult,
+    MergeCommitSummary, MergeMode, MergeOutcome, MergePreview, MergeState,
+    UpdateFromParentStatus, UpdateSessionFromParentResult,
 };

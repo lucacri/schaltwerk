@@ -378,7 +378,7 @@ export function MergeSessionModal({
                       >
                         <code
                           className="flex-shrink-0"
-                          style={{ color: 'var(--color-accent-blue)', fontFamily: 'var(--font-family-mono)', fontSize: theme.fontSize?.caption || '0.7rem' }}
+                          style={{ color: 'var(--color-accent-blue)', fontFamily: theme.fontFamily?.mono, fontSize: theme.fontSize?.caption || '0.7rem' }}
                         >
                           {commit.id}
                         </code>
@@ -390,12 +390,12 @@ export function MergeSessionModal({
                         </span>
                       </div>
                     ))}
-                    {preview.commitsAheadCount > preview.commits.length && (
-                      <div className="px-3 py-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                        {t.mergeSessionModal.andMoreCommits.replace('{count}', String(preview.commitsAheadCount - preview.commits.length))}
-                      </div>
-                    )}
                   </div>
+                  {preview.commitsAheadCount > preview.commits.length && (
+                    <div className="px-3 py-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                      {t.mergeSessionModal.andMoreCommits.replace('{count}', String(preview.commitsAheadCount - preview.commits.length))}
+                    </div>
+                  )}
                 </div>
               )}
 

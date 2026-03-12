@@ -794,6 +794,8 @@
     "conflictingPaths": "冲突路径：{paths}。",
     "nothingToMerge": "无需合并",
     "nothingToMergeBody": "{sessionBranch} 没有需要合并到 {parentBranch} 的提交。",
+    "commitsCount": "即将合并 {count} 个提交",
+    "andMoreCommits": "…以及 {count} 个更多提交",
     "shortcutHint": "快捷键：⌘⇧M",
     "cancel": "取消",
     "mergeSession": "合并会话",
