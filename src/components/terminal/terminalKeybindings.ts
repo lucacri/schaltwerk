@@ -58,7 +58,7 @@ export function matchKeybinding(event: KeyboardEvent): KeyBindingMatch {
         return { matches: true, commandId: TerminalCommand.SwitchProject };
     }
 
-    if (modifierKey && event.shiftKey && (event.key === '~' || event.key === '`')) {
+    if (modifierKey && event.shiftKey && event.key === '~') {
         return { matches: true, commandId: TerminalCommand.CyclePrevProject };
     }
 

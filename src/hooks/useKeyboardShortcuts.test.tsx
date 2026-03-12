@@ -951,6 +951,83 @@ describe('useKeyboardShortcuts', () => {
       expect(event.defaultPrevented).toBe(false)
     })
 
+    it('does not switch project when modal is open', () => {
+      const onSwitchToProject = vi.fn()
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onSwitchToProject,
+        sessionCount: 0,
+        isModalOpen: true,
+      }))
+
+      const event = pressKey('1', { metaKey: true, shiftKey: true })
+      expect(onSwitchToProject).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not cycle next project when modal is open', () => {
+      const onCycleNextProject = vi.fn()
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onCycleNextProject,
+        sessionCount: 0,
+        isModalOpen: true,
+      }))
+
+      const event = pressKey('`', { metaKey: true })
+      expect(onCycleNextProject).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not cycle prev project when modal is open', () => {
+      const onCyclePrevProject = vi.fn()
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onCyclePrevProject,
+        sessionCount: 0,
+        isModalOpen: true,
+      }))
+
+      const event = pressKey('`', { metaKey: true, shiftKey: true })
+      expect(onCyclePrevProject).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not switch to project index beyond projectCount', () => {
+      const onSwitchToProject = vi.fn()
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onSwitchToProject,
+        sessionCount: 0,
+        projectCount: 2,
+      }))
+
+      pressKey('1', { metaKey: true, shiftKey: true })
+      expect(onSwitchToProject).toHaveBeenCalledWith(0)
+
+      pressKey('2', { metaKey: true, shiftKey: true })
+      expect(onSwitchToProject).toHaveBeenCalledWith(1)
+
+      pressKey('3', { metaKey: true, shiftKey: true })
+      expect(onSwitchToProject).toHaveBeenCalledTimes(2)
+    })
+
     it('Mod+Shift+1 triggers project switch, not session switch', () => {
       const onSwitchToProject = vi.fn()
       const onSelectOrchestrator = vi.fn()

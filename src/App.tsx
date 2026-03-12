@@ -1890,6 +1890,10 @@ function AppContent() {
     void switchToProject(index)
   }, [switchToProject])
 
+  const handleCycleNextProject = useCallback(() => {
+    void switchProject('next')
+  }, [switchProject])
+
   const handleCyclePrevProject = useCallback(() => {
     void switchProject('prev')
   }, [switchProject])
@@ -2063,7 +2067,7 @@ function AppContent() {
                           onSelectPrevProject={handleSelectPrevProject}
                           onSelectNextProject={handleSelectNextProject}
                           onSwitchToProject={handleSwitchToProject}
-                          onCycleNextProject={handleSelectNextProject}
+                          onCycleNextProject={handleCycleNextProject}
                           onCyclePrevProject={handleCyclePrevProject}
                           isCollapsed={isLeftPanelCollapsed}
                           onExpandRequest={toggleLeftPanelCollapsed}

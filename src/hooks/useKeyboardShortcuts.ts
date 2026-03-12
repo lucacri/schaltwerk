@@ -17,6 +17,7 @@ interface KeyboardShortcutsProps {
   onSpecSession?: () => void
   onPromoteSelectedVersion?: () => void
   sessionCount: number
+  projectCount?: number
   onSelectPrevSession?: () => void
   onSelectNextSession?: () => void
   onFocusSidebar?: () => void
@@ -55,6 +56,7 @@ export function useKeyboardShortcuts(
     onSpecSession,
     onPromoteSelectedVersion,
     sessionCount,
+    projectCount,
     onSelectPrevSession,
     onSelectNextSession,
     onFocusClaude,
@@ -122,8 +124,9 @@ export function useKeyboardShortcuts(
         }
       }
 
-      if (onSwitchToProject) {
+      if (!isModalOpen && onSwitchToProject) {
         for (let index = 0; index < projectActions.length; index++) {
+          if (projectCount !== undefined && index >= projectCount) break
           if (isShortcutForAction(event, projectActions[index], shortcutConfig, { platform })) {
             event.preventDefault()
             onSwitchToProject(index)
@@ -132,13 +135,13 @@ export function useKeyboardShortcuts(
         }
       }
 
-      if (onCyclePrevProject && isShortcutForAction(event, KeyboardShortcutAction.CyclePrevProject, shortcutConfig, { platform })) {
+      if (!isModalOpen && onCyclePrevProject && isShortcutForAction(event, KeyboardShortcutAction.CyclePrevProject, shortcutConfig, { platform })) {
         event.preventDefault()
         onCyclePrevProject()
         return
       }
 
-      if (onCycleNextProject && isShortcutForAction(event, KeyboardShortcutAction.CycleNextProject, shortcutConfig, { platform })) {
+      if (!isModalOpen && onCycleNextProject && isShortcutForAction(event, KeyboardShortcutAction.CycleNextProject, shortcutConfig, { platform })) {
         event.preventDefault()
         onCycleNextProject()
         return
@@ -277,6 +280,7 @@ export function useKeyboardShortcuts(
     onSelectOrchestrator,
     onSelectSession,
     sessionCount,
+    projectCount,
     onSelectPrevSession,
     onSelectNextSession,
     onSelectPrevProject,
