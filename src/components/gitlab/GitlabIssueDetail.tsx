@@ -1,6 +1,8 @@
+import { invoke } from '@tauri-apps/api/core'
 import { VscArrowLeft, VscLinkExternal } from 'react-icons/vsc'
 import type { GitlabIssueDetails } from '../../types/gitlabTypes'
 import { useTranslation } from '../../common/i18n'
+import { TauriCommands } from '../../common/tauriCommands'
 import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
@@ -43,11 +45,10 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
   const userNotes = details.notes.filter(n => n.body && n.body.trim().length > 0)
 
   const handleOpenInGitlab = () => {
-    try {
+    invoke<void>(TauriCommands.OpenExternalUrl, { url: details.url }).catch((err: unknown) => {
+      logger.warn('[GitlabIssueDetail] Failed to open URL via Tauri, falling back to window.open', err)
       window.open(details.url, '_blank', 'noopener,noreferrer')
-    } catch (err) {
-      logger.warn('[GitlabIssueDetail] Failed to open URL', err)
-    }
+    })
   }
 
   return (

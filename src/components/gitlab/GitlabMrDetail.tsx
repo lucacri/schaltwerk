@@ -115,11 +115,10 @@ function PipelineIndicator({ status, url }: { status: string; url?: string | nul
         className="inline-flex items-center gap-1"
         onClick={(e) => {
           e.preventDefault()
-          try {
+          invoke<void>(TauriCommands.OpenExternalUrl, { url }).catch((err: unknown) => {
+            logger.warn('[GitlabMrDetail] Failed to open pipeline URL via Tauri, falling back to window.open', err)
             window.open(url, '_blank', 'noopener,noreferrer')
-          } catch (err) {
-            logger.warn('[GitlabMrDetail] Failed to open pipeline URL', err)
-          }
+          })
         }}
       >
         {content}
@@ -186,11 +185,10 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
   const effectivePipelineUrl = pipelineOverride?.url ?? details.pipelineUrl
 
   const handleOpenInGitlab = () => {
-    try {
+    invoke<void>(TauriCommands.OpenExternalUrl, { url: details.url }).catch((err: unknown) => {
+      logger.warn('[GitlabMrDetail] Failed to open URL via Tauri, falling back to window.open', err)
       window.open(details.url, '_blank', 'noopener,noreferrer')
-    } catch (err) {
-      logger.warn('[GitlabMrDetail] Failed to open URL', err)
-    }
+    })
   }
 
   const handleRefreshPipeline = useCallback(async () => {
