@@ -796,6 +796,8 @@
     "conflictingPaths": "Conflicting paths: {paths}.",
     "nothingToMerge": "Nothing to merge",
     "nothingToMergeBody": "{sessionBranch} has no commits to merge into {parentBranch}.",
+    "commitsCount": "{count} commits to merge",
+    "andMoreCommits": "…and {count} more commits",
     "shortcutHint": "Shortcut: ⌘⇧M",
     "cancel": "Cancel",
     "mergeSession": "Merge session",

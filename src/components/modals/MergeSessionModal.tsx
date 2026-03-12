@@ -9,6 +9,13 @@ import { logger } from '../../utils/logger'
 
 export type MergeModeOption = 'squash' | 'reapply'
 
+interface MergeCommitSummary {
+  id: string
+  subject: string
+  author: string
+  timestamp: number
+}
+
 interface MergePreviewResponse {
   sessionBranch: string
   parentBranch: string
@@ -19,6 +26,7 @@ interface MergePreviewResponse {
   conflictingPaths: string[]
   isUpToDate: boolean
   commitsAheadCount: number
+  commits: MergeCommitSummary[]
 }
 
 interface MergeSessionModalProps {
@@ -346,6 +354,48 @@ export function MergeSessionModal({
                   <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                     {modeDescriptions[mode]}
                   </p>
+                </div>
+              )}
+
+              {preview.commits.length > 0 && !isUpToDate && (
+                <div>
+                  <span style={fieldLabelStyle}>
+                    {t.mergeSessionModal.commitsCount.replace('{count}', String(preview.commitsAheadCount))}
+                  </span>
+                  <div
+                    className="mt-1 overflow-y-auto rounded"
+                    style={{
+                      maxHeight: '12rem',
+                      backgroundColor: 'var(--color-bg-tertiary)',
+                      border: '1px solid var(--color-border-subtle)',
+                    }}
+                  >
+                    {preview.commits.map((commit) => (
+                      <div
+                        key={commit.id}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm"
+                        style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
+                      >
+                        <code
+                          className="flex-shrink-0"
+                          style={{ color: 'var(--color-accent-blue)', fontFamily: 'var(--font-family-mono)', fontSize: theme.fontSize?.caption || '0.7rem' }}
+                        >
+                          {commit.id}
+                        </code>
+                        <span className="truncate flex-1" style={{ color: 'var(--color-text-primary)' }}>
+                          {commit.subject}
+                        </span>
+                        <span className="flex-shrink-0 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                          {commit.author}
+                        </span>
+                      </div>
+                    ))}
+                    {preview.commitsAheadCount > preview.commits.length && (
+                      <div className="px-3 py-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                        {t.mergeSessionModal.andMoreCommits.replace('{count}', String(preview.commitsAheadCount - preview.commits.length))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

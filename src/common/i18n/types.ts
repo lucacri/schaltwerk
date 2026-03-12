@@ -798,6 +798,8 @@ export interface Translations {
     conflictingPaths: string
     nothingToMerge: string
     nothingToMergeBody: string
+    commitsCount: string
+    andMoreCommits: string
     shortcutHint: string
     cancel: string
     mergeSession: string

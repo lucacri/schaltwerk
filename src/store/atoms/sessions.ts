@@ -23,6 +23,13 @@ type MergeModeOption = 'squash' | 'reapply'
 
 export type MergeStatus = 'idle' | 'conflict' | 'merged'
 
+interface MergeCommitSummary {
+    id: string
+    subject: string
+    author: string
+    timestamp: number
+}
+
 interface MergePreviewResponse {
     sessionBranch: string
     parentBranch: string
@@ -33,6 +40,7 @@ interface MergePreviewResponse {
     conflictingPaths: string[]
     isUpToDate: boolean
     commitsAheadCount: number
+    commits: MergeCommitSummary[]
 }
 
 type MergeDialogStatus = 'idle' | 'loading' | 'ready' | 'running'
