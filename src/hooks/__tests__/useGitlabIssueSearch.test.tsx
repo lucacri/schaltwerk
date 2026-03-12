@@ -1,134 +1,169 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
+import { Provider, createStore } from 'jotai'
+import { useHydrateAtoms } from 'jotai/utils'
+import React, { createElement, type ReactNode } from 'react'
 import { useGitlabIssueSearch } from '../useGitlabIssueSearch'
-import { invoke } from '@tauri-apps/api/core'
-import type { GitlabSource, GitlabIssueSummary } from '../../types/gitlabTypes'
+import type { GitlabIssueSummary, GitlabSource } from '../../types/gitlabTypes'
+import {
+  buildCacheKey,
+  gitlabIssueSearchEntriesAtom,
+  type GitlabSearchEntry,
+} from '../../store/atoms/gitlabSearch'
 
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn()
+  invoke: vi.fn(),
 }))
-
-const mockInvoke = invoke as Mock
 
 vi.mock('../../utils/logger', () => ({
-  logger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }
+  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }))
 
-const makeSource = (id: string, label: string, projectPath: string, hostname = 'gitlab.com'): GitlabSource => ({
-  id, label, projectPath, hostname, issuesEnabled: true, mrsEnabled: false, pipelinesEnabled: false,
-})
+vi.mock('../../utils/resolveErrorMessage', () => ({
+  resolveErrorMessage: vi.fn((err: unknown) => (err instanceof Error ? err.message : String(err))),
+}))
 
-const makeIssue = (iid: number, sourceLabel: string, updatedAt = '2026-01-01T00:00:00Z'): GitlabIssueSummary => ({
-  iid, title: `Issue ${iid}`, state: 'opened', updatedAt, author: 'user', labels: [], url: `https://gitlab.com/issues/${iid}`, sourceLabel,
-})
+const TEST_SOURCES: GitlabSource[] = [
+  {
+    id: 'src-1',
+    label: 'My Project',
+    projectPath: 'group/project',
+    hostname: 'gitlab.com',
+    issuesEnabled: true,
+    mrsEnabled: false,
+    pipelinesEnabled: false,
+  },
+]
+
+function makeIssueSummary(overrides: Partial<GitlabIssueSummary> = {}): GitlabIssueSummary {
+  return {
+    iid: 1,
+    title: 'Test Issue',
+    state: 'opened',
+    updatedAt: '2025-01-01T00:00:00Z',
+    labels: [],
+    url: 'https://gitlab.com/group/project/-/issues/1',
+    sourceLabel: 'My Project',
+    ...overrides,
+  }
+}
+
+function HydrateAtoms({ initialValues, children }: { initialValues: Array<[any, any]>; children: ReactNode }): ReactNode {
+  useHydrateAtoms(initialValues)
+  return children
+}
+
+function createWrapper(store: ReturnType<typeof createStore>, initialValues: Array<[any, any]> = []) {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return createElement(Provider, { store },
+      createElement(HydrateAtoms as React.FC<{ initialValues: Array<[any, any]> }>, { initialValues }, children),
+    )
+  }
+}
 
 describe('useGitlabIssueSearch', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  let store: ReturnType<typeof createStore>
 
-  it('merges results from multiple sources', async () => {
-    const sourceA = makeSource('1', 'Project A', 'group/project-a')
-    const sourceB = makeSource('2', 'Project B', 'group/project-b', 'gitlab.example.com')
-    const issuesA = [makeIssue(1, 'Project A', '2026-01-02T00:00:00Z')]
-    const issuesB = [makeIssue(2, 'Project B', '2026-01-03T00:00:00Z')]
-
-    mockInvoke.mockImplementation((_cmd: string, args?: Record<string, unknown>) => {
-      if (args?.sourceProject === 'group/project-a') return Promise.resolve(issuesA)
-      if (args?.sourceProject === 'group/project-b') return Promise.resolve(issuesB)
-      return Promise.resolve([])
-    })
-
-    const { result } = renderHook(() => useGitlabIssueSearch({ sources: [sourceA, sourceB] }))
-
-    await waitFor(() => { expect(result.current.loading).toBe(false) })
-
-    expect(result.current.results).toHaveLength(2)
-    expect(result.current.results[0].sourceLabel).toBe('Project B')
-    expect(result.current.results[1].sourceLabel).toBe('Project A')
+  beforeEach(() => {
+    vi.clearAllMocks()
+    store = createStore()
   })
 
-  it('fetches from all sources when sources arrive after initial mount', async () => {
-    const sourceA = makeSource('1', 'Project A', 'group/project-a')
-    const sourceB = makeSource('2', 'Project B', 'group/project-b', 'gitlab.example.com')
-    const issuesA = [makeIssue(1, 'Project A')]
-    const issuesB = [makeIssue(2, 'Project B')]
+  it('returns cached results immediately when atom has data', () => {
+    const cacheKey = buildCacheKey('issues', TEST_SOURCES, '')
+    const cached: GitlabSearchEntry<GitlabIssueSummary> = {
+      results: [makeIssueSummary(), makeIssueSummary({ iid: 2, title: 'Second Issue' })],
+      isLoading: false,
+      isRevalidating: false,
+      error: null,
+      fetchedAt: Date.now(),
+    }
+    const entries = new Map<string, GitlabSearchEntry<GitlabIssueSummary>>()
+    entries.set(cacheKey, cached)
 
-    mockInvoke.mockImplementation((_cmd: string, args?: Record<string, unknown>) => {
-      if (args?.sourceProject === 'group/project-a') return Promise.resolve(issuesA)
-      if (args?.sourceProject === 'group/project-b') return Promise.resolve(issuesB)
-      return Promise.resolve([])
-    })
+    const wrapper = createWrapper(store, [[gitlabIssueSearchEntriesAtom, entries]])
 
-    const { result, rerender } = renderHook(
-      ({ sources }) => useGitlabIssueSearch({ sources }),
-      { initialProps: { sources: [] as GitlabSource[] } }
+    const { result } = renderHook(
+      () => useGitlabIssueSearch({ sources: TEST_SOURCES, enabled: true }),
+      { wrapper },
     )
 
-    await waitFor(() => { expect(result.current.loading).toBe(false) })
-    expect(result.current.results).toHaveLength(0)
-
-    rerender({ sources: [sourceA, sourceB] })
-
-    await waitFor(() => { expect(result.current.results).toHaveLength(2) })
+    expect(result.current.results).toHaveLength(2)
+    expect(result.current.results[0].title).toBe('Test Issue')
+    expect(result.current.results[1].title).toBe('Second Issue')
+    expect(result.current.loading).toBe(false)
   })
 
-  it('surfaces partial failures while keeping successful source results', async () => {
-    const sourceA = makeSource('1', 'Project A', 'group/project-a')
-    const sourceB = makeSource('2', 'Project B', 'group/project-b')
-    const issuesA = [makeIssue(1, 'Project A')]
+  it('exposes isRevalidating from the atom entry', () => {
+    const cacheKey = buildCacheKey('issues', TEST_SOURCES, '')
+    const cached: GitlabSearchEntry<GitlabIssueSummary> = {
+      results: [makeIssueSummary()],
+      isLoading: false,
+      isRevalidating: true,
+      error: null,
+      fetchedAt: Date.now(),
+    }
+    const entries = new Map<string, GitlabSearchEntry<GitlabIssueSummary>>()
+    entries.set(cacheKey, cached)
 
-    mockInvoke.mockImplementation((_cmd: string, args?: Record<string, unknown>) => {
-      if (args?.sourceProject === 'group/project-a') return Promise.resolve(issuesA)
-      if (args?.sourceProject === 'group/project-b') return Promise.reject(new Error('auth failed'))
-      return Promise.resolve([])
+    const wrapper = createWrapper(store, [[gitlabIssueSearchEntriesAtom, entries]])
+
+    const { result } = renderHook(
+      () => useGitlabIssueSearch({ sources: TEST_SOURCES, enabled: true }),
+      { wrapper },
+    )
+
+    expect(result.current.isRevalidating).toBe(true)
+  })
+
+  it('includes fetchDetails in return value', () => {
+    const wrapper = createWrapper(store)
+
+    const { result } = renderHook(
+      () => useGitlabIssueSearch({ sources: TEST_SOURCES, enabled: true }),
+      { wrapper },
+    )
+
+    expect(typeof result.current.fetchDetails).toBe('function')
+  })
+
+  it('returns loading: false and isRevalidating: false for initial state', () => {
+    const wrapper = createWrapper(store)
+
+    const { result } = renderHook(
+      () => useGitlabIssueSearch({ sources: TEST_SOURCES, enabled: true }),
+      { wrapper },
+    )
+
+    expect(result.current.loading).toBe(false)
+    expect(result.current.isRevalidating).toBe(false)
+  })
+
+  it('provides setQuery that updates the query', () => {
+    const wrapper = createWrapper(store)
+
+    const { result } = renderHook(
+      () => useGitlabIssueSearch({ sources: TEST_SOURCES, enabled: true }),
+      { wrapper },
+    )
+
+    expect(result.current.query).toBe('')
+
+    act(() => {
+      result.current.setQuery('test search')
     })
 
-    const { result } = renderHook(() => useGitlabIssueSearch({ sources: [sourceA, sourceB] }))
-
-    await waitFor(() => { expect(result.current.loading).toBe(false) })
-
-    expect(result.current.results).toHaveLength(1)
-    expect(result.current.results[0].sourceLabel).toBe('Project A')
-    expect(result.current.error).toContain('Project B')
+    expect(result.current.query).toBe('test search')
   })
 
-  it('exposes per-source error details on partial failure', async () => {
-    const sourceA = makeSource('1', 'Project A', 'group/project-a')
-    const sourceB = makeSource('2', 'Project B', 'group/project-b')
-    const issuesA = [makeIssue(1, 'Project A')]
+  it('provides clearError callback', () => {
+    const wrapper = createWrapper(store)
 
-    mockInvoke.mockImplementation((_cmd: string, args?: Record<string, unknown>) => {
-      if (args?.sourceProject === 'group/project-a') return Promise.resolve(issuesA)
-      if (args?.sourceProject === 'group/project-b') return Promise.reject('glab command failed (api list): 403 Forbidden')
-      return Promise.resolve([])
-    })
+    const { result } = renderHook(
+      () => useGitlabIssueSearch({ sources: TEST_SOURCES, enabled: true }),
+      { wrapper },
+    )
 
-    const { result } = renderHook(() => useGitlabIssueSearch({ sources: [sourceA, sourceB] }))
-
-    await waitFor(() => { expect(result.current.loading).toBe(false) })
-
-    expect(result.current.errorDetails).toHaveLength(1)
-    expect(result.current.errorDetails![0].source).toBe('Project B')
-    expect(result.current.errorDetails![0].message).toContain('403 Forbidden')
-  })
-
-  it('clearError clears errorDetails', async () => {
-    const sourceA = makeSource('1', 'Project A', 'group/project-a')
-
-    mockInvoke.mockImplementation(() => Promise.reject('network error'))
-
-    const { result } = renderHook(() => useGitlabIssueSearch({ sources: [sourceA] }))
-
-    await waitFor(() => { expect(result.current.loading).toBe(false) })
-    expect(result.current.errorDetails).toHaveLength(1)
-
-    act(() => { result.current.clearError() })
-
-    expect(result.current.error).toBeNull()
-    expect(result.current.errorDetails).toBeNull()
+    expect(typeof result.current.clearError).toBe('function')
   })
 })

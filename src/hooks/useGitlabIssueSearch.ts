@@ -1,20 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useAtomValue, useSetAtom } from 'jotai'
 import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../common/tauriCommands'
 import type { GitlabIssueDetails, GitlabIssueSummary, GitlabSource } from '../types/gitlabTypes'
-import { logger } from '../utils/logger'
 import { resolveErrorMessage } from '../utils/resolveErrorMessage'
-
-export interface SourceError {
-  source: string
-  message: string
-}
+import {
+  buildCacheKey,
+  gitlabIssueSearchEntryAtomFamily,
+  searchGitlabIssuesActionAtom,
+} from '../store/atoms/gitlabSearch'
 
 export interface UseGitlabIssueSearchResult {
   results: GitlabIssueSummary[]
   loading: boolean
+  isRevalidating: boolean
   error: string | null
-  errorDetails: SourceError[] | null
   query: string
   setQuery: (next: string) => void
   refresh: () => void
@@ -32,83 +32,14 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
   const { debounceMs = 300, enabled = true, sources } = options
   const isTestEnv = typeof import.meta !== 'undefined' && Boolean((import.meta as unknown as { vitest?: unknown }).vitest)
   const effectiveDebounce = isTestEnv ? 0 : debounceMs
-  const [results, setResults] = useState<GitlabIssueSummary[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [errorDetails, setErrorDetails] = useState<SourceError[] | null>(null)
   const [query, setQuery] = useState('')
-  const searchVersionRef = useRef(0)
+  const [detailError, setDetailError] = useState<string | null>(null)
+  const hasInitialFetchedRef = useRef(false)
   const debounceHandle = useRef<number | null>(null)
-  const sourcesRef = useRef(sources)
-  const queryRef = useRef(query)
-  const prevQueryRef = useRef(query)
 
-  sourcesRef.current = sources
-  queryRef.current = query
-
-  const sourcesKey = useMemo(
-    () => sources.map(s => `${s.id}:${s.issuesEnabled}`).join(','),
-    [sources]
-  )
-
-  const executeSearch = useCallback(async (term: string) => {
-    const trimmed = term.trim()
-    const version = ++searchVersionRef.current
-    const enabledSources = sourcesRef.current.filter(s => s.issuesEnabled)
-
-    if (enabledSources.length === 0) {
-      setResults([])
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-
-    const failedSources: SourceError[] = []
-
-    try {
-      const allResults = await Promise.all(
-        enabledSources.map(source =>
-          invoke<GitlabIssueSummary[]>(TauriCommands.GitLabSearchIssues, {
-            query: trimmed.length > 0 ? trimmed : undefined,
-            sourceProject: source.projectPath,
-            sourceHostname: source.hostname === 'gitlab.com' ? undefined : source.hostname,
-            sourceLabel: source.label,
-          }).catch(err => {
-            failedSources.push({ source: source.label, message: resolveErrorMessage(err) })
-            logger.warn(`Failed to search GitLab issues for source ${source.label}`, err)
-            return [] as GitlabIssueSummary[]
-          })
-        )
-      )
-
-      if (searchVersionRef.current !== version) return
-
-      const merged = allResults.flat().sort((a, b) =>
-        b.updatedAt.localeCompare(a.updatedAt)
-      )
-      setResults(merged)
-
-      if (failedSources.length > 0) {
-        setError(`Failed to fetch issues from ${failedSources.map(f => f.source).join(', ')}`)
-        setErrorDetails(failedSources)
-      } else {
-        setError(null)
-        setErrorDetails(null)
-      }
-    } catch (err) {
-      if (searchVersionRef.current === version) {
-        logger.error(`Failed to search GitLab issues for query: ${trimmed}`, err)
-        setResults([])
-        setError(resolveErrorMessage(err))
-        setErrorDetails([{ source: 'unknown', message: resolveErrorMessage(err) }])
-      }
-    } finally {
-      if (searchVersionRef.current === version) {
-        setLoading(false)
-      }
-    }
-  }, [])
+  const cacheKey = buildCacheKey('issues', sources, query)
+  const entry = useAtomValue(gitlabIssueSearchEntryAtomFamily(cacheKey))
+  const searchAction = useSetAtom(searchGitlabIssuesActionAtom)
 
   useEffect(() => {
     if (!enabled) {
@@ -116,34 +47,23 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
         window.clearTimeout(debounceHandle.current)
         debounceHandle.current = null
       }
-      setLoading(false)
-      setResults([])
+      hasInitialFetchedRef.current = false
       return
     }
 
-    const enabledSources = sourcesRef.current.filter(s => s.issuesEnabled)
-    if (enabledSources.length === 0) {
-      setResults([])
-      return
+    if (!hasInitialFetchedRef.current) {
+      hasInitialFetchedRef.current = true
+      void searchAction({ sources, query: '' })
     }
-
-    void executeSearch(queryRef.current)
-  }, [enabled, sourcesKey, executeSearch])
+  }, [enabled, searchAction, sources])
 
   useEffect(() => {
-    if (!enabled) return
-
-    if (prevQueryRef.current === query) {
-      prevQueryRef.current = query
+    if (!enabled || !hasInitialFetchedRef.current) {
       return
     }
-    prevQueryRef.current = query
-
-    const enabledSources = sourcesRef.current.filter(s => s.issuesEnabled)
-    if (enabledSources.length === 0) return
 
     if (effectiveDebounce === 0) {
-      void executeSearch(query)
+      void searchAction({ sources, query })
       return
     }
 
@@ -152,7 +72,7 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
     }
 
     debounceHandle.current = window.setTimeout(() => {
-      void executeSearch(query)
+      void searchAction({ sources, query })
     }, effectiveDebounce)
 
     return () => {
@@ -160,12 +80,12 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
         window.clearTimeout(debounceHandle.current)
       }
     }
-  }, [query, effectiveDebounce, executeSearch, enabled])
+  }, [query, effectiveDebounce, searchAction, sources, enabled])
 
   const refresh = useCallback(() => {
     if (!enabled) return
-    void executeSearch(queryRef.current)
-  }, [enabled, executeSearch])
+    void searchAction({ sources, query, force: true })
+  }, [enabled, searchAction, sources, query])
 
   const fetchDetails = useCallback(async (iid: number, sourceProject: string, sourceHostname?: string, sourceLabel?: string) => {
     try {
@@ -175,7 +95,7 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
         sourceHostname: sourceHostname === 'gitlab.com' ? undefined : sourceHostname,
         sourceLabel,
       })
-      setError(null)
+      setDetailError(null)
       return {
         ...payload,
         labels: payload.labels ?? [],
@@ -183,21 +103,20 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
       }
     } catch (err) {
       const message = resolveErrorMessage(err)
-      setError(message)
+      setDetailError(message)
       throw new Error(message)
     }
   }, [])
 
   const clearError = useCallback(() => {
-    setError(null)
-    setErrorDetails(null)
+    setDetailError(null)
   }, [])
 
   return {
-    results,
-    loading,
-    error,
-    errorDetails,
+    results: entry.results,
+    loading: entry.isLoading,
+    isRevalidating: entry.isRevalidating,
+    error: detailError ?? entry.error,
     query,
     setQuery,
     refresh,
