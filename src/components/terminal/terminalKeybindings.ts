@@ -12,6 +12,8 @@ export const enum TerminalCommand {
     Search = 'terminal.search',
     NewLine = 'terminal.newLine',
     ClaudeShiftEnter = 'terminal.claudeShiftEnter',
+    SwitchProject = 'terminal.switchProject',
+    CycleNextProject = 'terminal.cycleNextProject',
 }
 
 const COMMANDS_TO_SKIP_SHELL: TerminalCommand[] = [
@@ -21,6 +23,8 @@ const COMMANDS_TO_SKIP_SHELL: TerminalCommand[] = [
     TerminalCommand.Search,
     TerminalCommand.NewLine,
     TerminalCommand.ClaudeShiftEnter,
+    TerminalCommand.SwitchProject,
+    TerminalCommand.CycleNextProject,
 ];
 
 export function matchKeybinding(event: KeyboardEvent): KeyBindingMatch {
@@ -46,6 +50,14 @@ export function matchKeybinding(event: KeyboardEvent): KeyBindingMatch {
 
     if (modifierKey && event.key === 'Enter' && event.type === 'keydown') {
         return { matches: true, commandId: TerminalCommand.NewLine };
+    }
+
+    if (modifierKey && event.shiftKey && /^[1-9]$/.test(event.key)) {
+        return { matches: true, commandId: TerminalCommand.SwitchProject };
+    }
+
+    if (modifierKey && event.key === '`') {
+        return { matches: true, commandId: TerminalCommand.CycleNextProject };
     }
 
     return { matches: false };

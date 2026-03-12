@@ -57,6 +57,16 @@ export enum KeyboardShortcutAction {
   SelectPrevBottomTab = 'selectPrevBottomTab',
   SelectNextBottomTab = 'selectNextBottomTab',
   CloseTab = 'closeTab',
+  SwitchToProject1 = 'switchToProject1',
+  SwitchToProject2 = 'switchToProject2',
+  SwitchToProject3 = 'switchToProject3',
+  SwitchToProject4 = 'switchToProject4',
+  SwitchToProject5 = 'switchToProject5',
+  SwitchToProject6 = 'switchToProject6',
+  SwitchToProject7 = 'switchToProject7',
+  SwitchToProject8 = 'switchToProject8',
+  SwitchToProject9 = 'switchToProject9',
+  CycleNextProject = 'cycleNextProject',
 }
 
 export type KeyboardShortcutConfig = Record<KeyboardShortcutAction, string[]>
@@ -133,6 +143,16 @@ export const defaultShortcutConfig: KeyboardShortcutConfig = {
   [KeyboardShortcutAction.SelectPrevBottomTab]: createNormalizedBindings(['Mod+[']),
   [KeyboardShortcutAction.SelectNextBottomTab]: createNormalizedBindings(['Mod+]']),
   [KeyboardShortcutAction.CloseTab]: createNormalizedBindings(['Mod+W']),
+  [KeyboardShortcutAction.SwitchToProject1]: createNormalizedBindings(['Mod+Shift+1']),
+  [KeyboardShortcutAction.SwitchToProject2]: createNormalizedBindings(['Mod+Shift+2']),
+  [KeyboardShortcutAction.SwitchToProject3]: createNormalizedBindings(['Mod+Shift+3']),
+  [KeyboardShortcutAction.SwitchToProject4]: createNormalizedBindings(['Mod+Shift+4']),
+  [KeyboardShortcutAction.SwitchToProject5]: createNormalizedBindings(['Mod+Shift+5']),
+  [KeyboardShortcutAction.SwitchToProject6]: createNormalizedBindings(['Mod+Shift+6']),
+  [KeyboardShortcutAction.SwitchToProject7]: createNormalizedBindings(['Mod+Shift+7']),
+  [KeyboardShortcutAction.SwitchToProject8]: createNormalizedBindings(['Mod+Shift+8']),
+  [KeyboardShortcutAction.SwitchToProject9]: createNormalizedBindings(['Mod+Shift+9']),
+  [KeyboardShortcutAction.CycleNextProject]: createNormalizedBindings(['Mod+`']),
 }
 
 export const mergeShortcutConfig = (

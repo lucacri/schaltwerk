@@ -1858,18 +1858,16 @@ function AppContent() {
     const currentIndex = projectTabs.findIndex(tab => tab.projectPath === projectPath)
     if (currentIndex === -1) return
 
-    let newIndex = currentIndex
+    let newIndex: number
     if (direction === 'next') {
-      newIndex = Math.min(currentIndex + 1, projectTabs.length - 1)
+      newIndex = (currentIndex + 1) % projectTabs.length
     } else {
-      newIndex = Math.max(currentIndex - 1, 0)
+      newIndex = (currentIndex - 1 + projectTabs.length) % projectTabs.length
     }
 
-    if (newIndex !== currentIndex) {
-      const targetTab = projectTabs[newIndex]
-      if (targetTab?.projectPath) {
-        await handleSelectTab(targetTab.projectPath)
-      }
+    const targetTab = projectTabs[newIndex]
+    if (targetTab?.projectPath) {
+      await handleSelectTab(targetTab.projectPath)
     }
   }, [projectTabs, projectPath, handleSelectTab])
 
@@ -1878,6 +1876,21 @@ function AppContent() {
   }, [switchProject])
 
   const handleSelectNextProject = useCallback(() => {
+    void switchProject('next')
+  }, [switchProject])
+
+  const switchToProject = useCallback(async (index: number) => {
+    const tab = projectTabs[index]
+    if (tab?.projectPath) {
+      await handleSelectTab(tab.projectPath)
+    }
+  }, [projectTabs, handleSelectTab])
+
+  const handleSwitchToProject = useCallback((index: number) => {
+    void switchToProject(index)
+  }, [switchToProject])
+
+  const handleCycleNextProject = useCallback(() => {
     void switchProject('next')
   }, [switchProject])
 
@@ -2049,6 +2062,8 @@ function AppContent() {
                           openTabs={projectTabs}
                           onSelectPrevProject={handleSelectPrevProject}
                           onSelectNextProject={handleSelectNextProject}
+                          onSwitchToProject={handleSwitchToProject}
+                          onCycleNextProject={handleCycleNextProject}
                           isCollapsed={isLeftPanelCollapsed}
                           onExpandRequest={toggleLeftPanelCollapsed}
                           onToggleSidebar={toggleLeftPanelCollapsed}

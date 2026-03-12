@@ -852,6 +852,94 @@ describe('useKeyboardShortcuts', () => {
     })
   })
 
+  describe('Project switching shortcuts', () => {
+    it('switches to project by index with Mod+Shift+1-9', () => {
+      const onSwitchToProject = vi.fn()
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onSwitchToProject,
+        sessionCount: 0,
+      }))
+
+      pressKey('1', { metaKey: true, shiftKey: true })
+      expect(onSwitchToProject).toHaveBeenCalledWith(0)
+
+      pressKey('5', { metaKey: true, shiftKey: true })
+      expect(onSwitchToProject).toHaveBeenCalledWith(4)
+
+      pressKey('9', { metaKey: true, shiftKey: true })
+      expect(onSwitchToProject).toHaveBeenCalledWith(8)
+
+      expect(onSwitchToProject).toHaveBeenCalledTimes(3)
+    })
+
+    it('does not invoke project switch when callback not provided', () => {
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        sessionCount: 0,
+      }))
+
+      const event = pressKey('1', { metaKey: true, shiftKey: true })
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('cycles to next project with Mod+Backtick', () => {
+      const onCycleNextProject = vi.fn()
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onCycleNextProject,
+        sessionCount: 0,
+      }))
+
+      pressKey('`', { metaKey: true })
+      expect(onCycleNextProject).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not cycle project when callback not provided', () => {
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        sessionCount: 0,
+      }))
+
+      const event = pressKey('`', { metaKey: true })
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('Mod+Shift+1 triggers project switch, not session switch', () => {
+      const onSwitchToProject = vi.fn()
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onSwitchToProject,
+        sessionCount: 8,
+      }))
+
+      pressKey('1', { metaKey: true, shiftKey: true })
+      expect(onSwitchToProject).toHaveBeenCalledWith(0)
+      expect(onSelectOrchestrator).not.toHaveBeenCalled()
+      expect(onSelectSession).not.toHaveBeenCalled()
+    })
+  })
+
   describe('Edge cases and integration', () => {
     it('handles rapid key sequences', () => {
       const onSelectOrchestrator = vi.fn()

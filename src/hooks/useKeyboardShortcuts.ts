@@ -35,6 +35,8 @@ interface KeyboardShortcutsProps {
   onUpdateSessionFromParent?: () => void
   onCreatePullRequest?: () => void
   onOpenInApp?: () => void
+  onSwitchToProject?: (index: number) => void
+  onCycleNextProject?: () => void
 }
 
 interface KeyboardShortcutOptions {
@@ -69,6 +71,8 @@ export function useKeyboardShortcuts(
     onUpdateSessionFromParent,
     onCreatePullRequest,
     onOpenInApp,
+    onSwitchToProject,
+    onCycleNextProject,
   }: KeyboardShortcutsProps,
   options: KeyboardShortcutOptions = {},
 ) {
@@ -88,6 +92,18 @@ export function useKeyboardShortcuts(
       KeyboardShortcutAction.SwitchToSession8,
     ]
 
+    const projectActions: KeyboardShortcutAction[] = [
+      KeyboardShortcutAction.SwitchToProject1,
+      KeyboardShortcutAction.SwitchToProject2,
+      KeyboardShortcutAction.SwitchToProject3,
+      KeyboardShortcutAction.SwitchToProject4,
+      KeyboardShortcutAction.SwitchToProject5,
+      KeyboardShortcutAction.SwitchToProject6,
+      KeyboardShortcutAction.SwitchToProject7,
+      KeyboardShortcutAction.SwitchToProject8,
+      KeyboardShortcutAction.SwitchToProject9,
+    ]
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isShortcutForAction(event, KeyboardShortcutAction.SwitchToOrchestrator, shortcutConfig, { platform })) {
         event.preventDefault()
@@ -102,6 +118,22 @@ export function useKeyboardShortcuts(
           onSelectSession(index)
           return
         }
+      }
+
+      if (onSwitchToProject) {
+        for (let index = 0; index < projectActions.length; index++) {
+          if (isShortcutForAction(event, projectActions[index], shortcutConfig, { platform })) {
+            event.preventDefault()
+            onSwitchToProject(index)
+            return
+          }
+        }
+      }
+
+      if (onCycleNextProject && isShortcutForAction(event, KeyboardShortcutAction.CycleNextProject, shortcutConfig, { platform })) {
+        event.preventDefault()
+        onCycleNextProject()
+        return
       }
 
       if (!isDiffViewerOpen && !isModalOpen && onSelectPrevSession && isShortcutForAction(event, KeyboardShortcutAction.SelectPrevSession, shortcutConfig, { platform })) {
@@ -257,6 +289,8 @@ export function useKeyboardShortcuts(
     onUpdateSessionFromParent,
     onCreatePullRequest,
     onOpenInApp,
+    onSwitchToProject,
+    onCycleNextProject,
     isDiffViewerOpen,
     isModalOpen,
     shortcutConfig,

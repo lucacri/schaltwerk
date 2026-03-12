@@ -211,6 +211,48 @@ describe('terminalKeybindings', () => {
         });
     });
 
+    describe('project switching keybindings', () => {
+        it('should match Cmd+Shift+1 as SwitchProject on Mac', () => {
+            const event = new KeyboardEvent('keydown', {
+                key: '1',
+                metaKey: true,
+                shiftKey: true,
+            });
+            const result = matchKeybinding(event);
+            expect(result.matches).toBe(true);
+            expect(result.commandId).toBe(TerminalCommand.SwitchProject);
+        });
+
+        it('should match Cmd+Shift+9 as SwitchProject on Mac', () => {
+            const event = new KeyboardEvent('keydown', {
+                key: '9',
+                metaKey: true,
+                shiftKey: true,
+            });
+            const result = matchKeybinding(event);
+            expect(result.matches).toBe(true);
+            expect(result.commandId).toBe(TerminalCommand.SwitchProject);
+        });
+
+        it('should match Cmd+` as CycleNextProject on Mac', () => {
+            const event = new KeyboardEvent('keydown', {
+                key: '`',
+                metaKey: true,
+            });
+            const result = matchKeybinding(event);
+            expect(result.matches).toBe(true);
+            expect(result.commandId).toBe(TerminalCommand.CycleNextProject);
+        });
+
+        it('should skip shell for SwitchProject', () => {
+            expect(shouldSkipShell(TerminalCommand.SwitchProject)).toBe(true);
+        });
+
+        it('should skip shell for CycleNextProject', () => {
+            expect(shouldSkipShell(TerminalCommand.CycleNextProject)).toBe(true);
+        });
+    });
+
     describe('Ctrl+C behavior (critical for TUI compatibility)', () => {
         it('should allow Ctrl+C to pass through to xterm (not in skip list)', () => {
             const event = new KeyboardEvent('keydown', {
