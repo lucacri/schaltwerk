@@ -163,7 +163,14 @@ pub async fn get_uncommitted_file_diff(
     }
 
     let repo_path = resolve_repo_path_structured(Some(&session_name)).await?;
-    let repo = Repository::open(&repo_path).map_err(|e| SchaltError::git("open_repository", e))?;
+
+    let repo = tokio::task::spawn_blocking({
+        let path = repo_path.clone();
+        move || Repository::open(&path)
+    })
+    .await
+    .map_err(|e| SchaltError::git("spawn_blocking", git2::Error::from_str(&e.to_string())))?
+    .map_err(|e| SchaltError::git("open_repository", e))?;
 
     let worktree_path = Path::new(&repo_path).join(&file_path);
 
@@ -175,10 +182,12 @@ pub async fn get_uncommitted_file_diff(
         }
     }
 
+    let start_load = Instant::now();
     let old_content = read_blob_from_commit_path(&repo, None, &file_path)
         .map_err(|e| SchaltError::git("read_blob_from_commit_path", git2::Error::from_str(&e)))?;
     let new_content = read_workdir_text(&worktree_path)
         .map_err(|e| SchaltError::io("read_worktree_text", worktree_path.to_string_lossy(), e))?;
+    let load_duration = start_load.elapsed();
 
     let new_content_bytes = new_content.as_bytes();
     if let Some(reason) = get_unsupported_reason(&file_path, Some(new_content_bytes)) {
@@ -195,9 +204,18 @@ pub async fn get_uncommitted_file_diff(
         });
     }
 
+    let start_diff = Instant::now();
     let diff_lines = compute_unified_diff(&old_content, &new_content);
+    let diff_duration = start_diff.elapsed();
+
+    let start_collapse = Instant::now();
     let lines_with_collapsible = add_collapsible_sections(diff_lines);
+    let collapse_duration = start_collapse.elapsed();
+
+    let start_stats = Instant::now();
     let stats = calculate_diff_stats(&lines_with_collapsible);
+    let stats_duration = start_stats.elapsed();
+
     let file_info = FileInfo {
         language: get_file_language(&file_path),
         size_bytes: new_content.len(),
@@ -207,9 +225,13 @@ pub async fn get_uncommitted_file_diff(
 
     if total_duration.as_millis() > 100 || is_large_file {
         log::info!(
-            "Uncommitted diff performance for {}: total={}ms, size={}KB, lines={}",
+            "Uncommitted diff performance for {}: total={}ms (load={}ms, diff={}ms, collapse={}ms, stats={}ms), size={}KB, lines={}",
             file_path,
             total_duration.as_millis(),
+            load_duration.as_millis(),
+            diff_duration.as_millis(),
+            collapse_duration.as_millis(),
+            stats_duration.as_millis(),
             new_content.len() / 1024,
             lines_with_collapsible.len()
         );
@@ -692,6 +714,39 @@ mod tests {
         assert!(!file_paths.contains(&&".lucode".to_string()));
         assert!(!file_paths.contains(&&".lucode/config.json".to_string()));
         assert!(!file_paths.contains(&&".lucode/worktrees/branch1/file.txt".to_string()));
+    }
+
+    #[test]
+    fn uncommitted_files_returns_working_directory_changes() {
+        let temp_dir = setup_test_git_repo();
+        let repo_path = temp_dir.path();
+
+        fs::write(repo_path.join("new_file.txt"), "hello\nworld\n").unwrap();
+        fs::write(repo_path.join("README.md"), "modified content\n").unwrap();
+
+        let repo = Repository::open(repo_path).unwrap();
+        let files = collect_working_directory_changes(&repo).expect("collect changes");
+
+        assert!(files.len() >= 2);
+        let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
+        assert!(paths.contains(&"new_file.txt"));
+        assert!(paths.contains(&"README.md"));
+
+        let new_file = files.iter().find(|f| f.path == "new_file.txt").unwrap();
+        assert_eq!(new_file.change_type, "added");
+
+        let modified = files.iter().find(|f| f.path == "README.md").unwrap();
+        assert_eq!(modified.change_type, "modified");
+    }
+
+    #[test]
+    fn uncommitted_files_empty_when_clean() {
+        let temp_dir = setup_test_git_repo();
+        let repo_path = temp_dir.path();
+
+        let repo = Repository::open(repo_path).unwrap();
+        let files = collect_working_directory_changes(&repo).expect("collect changes");
+        assert!(files.is_empty());
     }
 }
 
