@@ -1275,7 +1275,9 @@
     "noNotes": "暂无备注",
     "source": "来源",
     "failedToLoadDetails": "加载详情失败",
-    "retry": "重试"
+    "retry": "重试",
+    "errorDetails": "详情",
+    "refreshing": "正在刷新\u2026"
   },
   "forgePrTab": {
     "searchPlaceholder": "搜索拉取请求...",
@@ -1309,7 +1311,22 @@
     "pipeline": "流水线",
     "refreshPipeline": "刷新流水线",
     "failedToLoadDetails": "加载详情失败",
-    "retry": "重试"
+    "retry": "重试",
+    "squashCommits": "压缩提交",
+    "removeSourceBranch": "删除源分支",
+    "approveSuccess": "MR 已成功批准",
+    "approveFailed": "批准 MR 失败",
+    "mergeSuccess": "MR 已成功合并",
+    "mergeFailed": "合并 MR 失败",
+    "commentSuccess": "评论已添加",
+    "commentFailed": "添加评论失败",
+    "commentPlaceholder": "写评论...",
+    "send": "发送",
+    "cancel": "取消",
+    "merging": "正在合并...",
+    "approving": "正在批准...",
+    "commenting": "正在发送...",
+    "refreshing": "正在刷新\u2026"
   },
   "historySearch": {
     "placeholder": "搜索提交…",

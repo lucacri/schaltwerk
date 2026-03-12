@@ -1277,7 +1277,9 @@
     "noNotes": "No notes yet",
     "source": "Source",
     "failedToLoadDetails": "Failed to load details",
-    "retry": "Retry"
+    "retry": "Retry",
+    "errorDetails": "Details",
+    "refreshing": "Refreshing\u2026"
   },
   "forgePrTab": {
     "searchPlaceholder": "Search pull requests...",
@@ -1311,7 +1313,22 @@
     "pipeline": "Pipeline",
     "refreshPipeline": "Refresh pipeline",
     "failedToLoadDetails": "Failed to load details",
-    "retry": "Retry"
+    "retry": "Retry",
+    "squashCommits": "Squash commits",
+    "removeSourceBranch": "Remove source branch",
+    "approveSuccess": "MR approved successfully",
+    "approveFailed": "Failed to approve MR",
+    "mergeSuccess": "MR merged successfully",
+    "mergeFailed": "Failed to merge MR",
+    "commentSuccess": "Comment added",
+    "commentFailed": "Failed to add comment",
+    "commentPlaceholder": "Write a comment...",
+    "send": "Send",
+    "cancel": "Cancel",
+    "merging": "Merging...",
+    "approving": "Approving...",
+    "commenting": "Sending...",
+    "refreshing": "Refreshing\u2026"
   },
   "historySearch": {
     "placeholder": "Search commits...",

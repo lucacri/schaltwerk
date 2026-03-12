@@ -1288,6 +1288,8 @@ export interface Translations {
     source: string
     failedToLoadDetails: string
     retry: string
+    errorDetails: string
+    refreshing: string
   }
   forgePrTab: {
     searchPlaceholder: string
@@ -1322,6 +1324,21 @@ export interface Translations {
     refreshPipeline: string
     failedToLoadDetails: string
     retry: string
+    squashCommits: string
+    removeSourceBranch: string
+    approveSuccess: string
+    approveFailed: string
+    mergeSuccess: string
+    mergeFailed: string
+    commentSuccess: string
+    commentFailed: string
+    commentPlaceholder: string
+    send: string
+    cancel: string
+    merging: string
+    approving: string
+    commenting: string
+    refreshing: string
   }
   historySearch: {
     placeholder: string
