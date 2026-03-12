@@ -30,8 +30,8 @@ function SessionBadges({ runningCount, attentionCount }: { runningCount?: number
             fontSize: theme.fontSize.caption,
             height: '16px',
             minWidth: '16px',
-            backgroundColor: 'var(--color-accent-blue-bg)',
-            color: 'var(--color-accent-blue-light)',
+            backgroundColor: 'var(--color-tab-running-badge-bg)',
+            color: 'var(--color-tab-running-badge-text)',
           }}
           data-testid="running-badge"
         >
@@ -45,8 +45,8 @@ function SessionBadges({ runningCount, attentionCount }: { runningCount?: number
             fontSize: theme.fontSize.caption,
             height: '16px',
             minWidth: '16px',
-            backgroundColor: 'var(--color-accent-amber-bg)',
-            color: 'var(--color-accent-amber-light)',
+            backgroundColor: 'var(--color-tab-badge-bg)',
+            color: 'var(--color-tab-badge-text)',
           }}
           data-testid="attention-badge"
         >

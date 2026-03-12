@@ -145,16 +145,7 @@ export function UnifiedTab({
         </span>
 
         {badgeContent && (
-          <span
-            className="inline-flex items-center justify-center px-1.5 rounded-full font-medium shrink-0"
-            style={{
-              fontSize: theme.fontSize.caption,
-              height: '16px',
-              minWidth: '16px',
-              backgroundColor: 'var(--color-tab-badge-bg)',
-              color: 'var(--color-tab-badge-text)',
-            }}
-          >
+          <span className="inline-flex items-center shrink-0">
             {badgeContent}
           </span>
         )}

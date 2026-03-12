@@ -463,6 +463,8 @@
   --color-tab-close-hover-color: #DCD7BA;
   --color-tab-badge-bg: #E6C384;
   --color-tab-badge-text: #1F1F28;
+  --color-tab-running-badge-bg: #7E9CD8;
+  --color-tab-running-badge-text: #1F1F28;
   --color-tab-running-indicator: #7E9CD8;
   --color-tab-running-glow: rgba(126, 156, 216, 0.3);
 

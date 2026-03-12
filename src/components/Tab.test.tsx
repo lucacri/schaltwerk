@@ -67,7 +67,8 @@ describe('Tab', () => {
     const badge = screen.getByTestId('running-badge')
     expect(badge).toBeInTheDocument()
     expect(badge.textContent).toBe('3')
-    expect(badge.style.backgroundColor).toBe('var(--color-accent-blue-bg)')
+    expect(badge.style.backgroundColor).toBe('var(--color-tab-running-badge-bg)')
+    expect(badge.style.color).toBe('var(--color-tab-running-badge-text)')
   })
 
   it('shows attention badge when attentionCount > 0', () => {
@@ -75,7 +76,8 @@ describe('Tab', () => {
     const badge = screen.getByTestId('attention-badge')
     expect(badge).toBeInTheDocument()
     expect(badge.textContent).toBe('2')
-    expect(badge.style.backgroundColor).toBe('var(--color-accent-amber-bg)')
+    expect(badge.style.backgroundColor).toBe('var(--color-tab-badge-bg)')
+    expect(badge.style.color).toBe('var(--color-tab-badge-text)')
   })
 
   it('shows both badges when both counts > 0', () => {
