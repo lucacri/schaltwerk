@@ -123,6 +123,26 @@ export async function loadFileDiff(
   }
 }
 
+export async function loadUncommittedFileDiff(
+  sessionName: string,
+  file: ChangedFile,
+): Promise<FileDiffDataUnified> {
+  const diffResponse = await invoke<DiffResponse>(TauriCommands.GetUncommittedFileDiff, {
+    sessionName,
+    filePath: file.path,
+  })
+  const changedLinesCount = diffResponse.stats.additions + diffResponse.stats.deletions
+  return {
+    file,
+    diffResult: diffResponse.lines,
+    changedLinesCount,
+    fileInfo: diffResponse.fileInfo,
+    isBinary: diffResponse.isBinary,
+    unsupportedReason: diffResponse.unsupportedReason,
+    totalLineCount: diffResponse.lines.length,
+  }
+}
+
 export async function loadAllFileDiffs(
   sessionName: string | null,
   files: ChangedFile[],

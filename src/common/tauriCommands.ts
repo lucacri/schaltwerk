@@ -85,6 +85,8 @@ export const TauriCommands = {
   GetAgentCommandPrefix: 'get_agent_command_prefix',
   SetAgentCommandPrefix: 'set_agent_command_prefix',
   GetOrchestratorWorkingChanges: 'get_orchestrator_working_changes',
+  GetUncommittedFiles: 'get_uncommitted_files',
+  GetUncommittedFileDiff: 'get_uncommitted_file_diff',
   GetProjectActionButtons: 'get_project_action_buttons',
   GetProjectDefaultBaseBranch: 'get_project_default_base_branch',
   GetProjectDefaultBranch: 'get_project_default_branch',

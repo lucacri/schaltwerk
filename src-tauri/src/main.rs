@@ -1319,6 +1319,8 @@ fn main() {
             diff_commands::get_changed_files_from_main,
             diff_commands::has_remote_tracking_branch,
             diff_commands::get_orchestrator_working_changes,
+            diff_commands::get_uncommitted_files,
+            diff_commands::get_uncommitted_file_diff,
             diff_commands::get_file_diff_from_main,
             diff_commands::get_current_branch_name,
             diff_commands::get_base_branch_name,

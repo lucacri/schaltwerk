@@ -614,7 +614,9 @@
     "selectSessionHint": "选择会话以查看更改",
     "filesChanged": "{count} 个文件已更改",
     "openInEditor": "在编辑器中打开文件",
-    "discardChanges": "放弃此文件的更改"
+    "discardChanges": "放弃此文件的更改",
+    "dirtyFiles": "未提交的更改 ({count})",
+    "committedChanges": "已提交的更改 ({count})"
   },
   "time": {
     "unknown": "未知",

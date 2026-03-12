@@ -616,7 +616,9 @@
     "selectSessionHint": "Select a session to view changes",
     "filesChanged": "{count} files changed",
     "openInEditor": "Open file in editor",
-    "discardChanges": "Discard changes for this file"
+    "discardChanges": "Discard changes for this file",
+    "dirtyFiles": "Uncommitted Changes ({count})",
+    "committedChanges": "Committed Changes ({count})"
   },
   "time": {
     "unknown": "unknown",

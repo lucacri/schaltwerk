@@ -221,6 +221,8 @@ async function defaultInvokeImpl(cmd: string, _args?: unknown) {
       return []
     case TauriCommands.GetAllAgentBinaryConfigs:
       return []
+    case TauriCommands.GetUncommittedFiles:
+      return []
     case TauriCommands.InitializeProject:
     case TauriCommands.AddRecentProject:
     case TauriCommands.SchaltwerkCoreCreateSession:

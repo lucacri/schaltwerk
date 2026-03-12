@@ -110,6 +110,8 @@ describe('UnifiedDiffView review submission behavior', () => {
           return { continuous_scroll: false, compact_diffs: true, sidebar_width: 320 }
         case TauriCommands.PasteAndSubmitTerminal:
           return undefined
+        case TauriCommands.GetUncommittedFiles:
+          return []
         default:
           return null
       }

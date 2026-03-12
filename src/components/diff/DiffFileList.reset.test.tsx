@@ -23,6 +23,7 @@ const invokeMock = vi.fn(async (cmd: string) => {
   if (cmd === TauriCommands.SchaltwerkCoreResetSessionWorktree) return undefined
   if (cmd === TauriCommands.StartFileWatcher) return undefined
   if (cmd === TauriCommands.StopFileWatcher) return undefined
+  if (cmd === TauriCommands.GetUncommittedFiles) return []
   return null
 })
 

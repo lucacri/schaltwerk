@@ -21,6 +21,7 @@ const invokeMock = vi.fn(async (cmd: string) => {
     }
   }
   if (cmd === TauriCommands.StopFileWatcher) return undefined
+  if (cmd === TauriCommands.GetUncommittedFiles) return []
   return null
 })
 

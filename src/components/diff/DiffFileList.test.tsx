@@ -67,6 +67,7 @@ async function defaultInvokeImplementation(cmd: string, args?: Record<string, un
   if (cmd === TauriCommands.OpenInApp) return undefined
   if (cmd === TauriCommands.StartFileWatcher) return undefined
   if (cmd === TauriCommands.StopFileWatcher) return undefined
+  if (cmd === TauriCommands.GetUncommittedFiles) return []
   return undefined
 }
 
@@ -265,7 +266,7 @@ describe('DiffFileList', () => {
     const fileEntry = await screen.findByText('a.ts')
     fireEvent.click(fileEntry)
 
-    expect(onFileSelect).toHaveBeenCalledWith('src/a.ts')
+    expect(onFileSelect).toHaveBeenCalledWith('src/a.ts', 'committed')
 
     // The selected row gets the bg class; the row is the grandparent container of the filename div
     await waitFor(() => {
@@ -310,6 +311,7 @@ describe('DiffFileList', () => {
       if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { worktree_path: '/tmp' }
       if (cmd === TauriCommands.StartFileWatcher) return undefined
       if (cmd === TauriCommands.StopFileWatcher) return undefined
+      if (cmd === TauriCommands.GetUncommittedFiles) return []
       return undefined
     })
 
@@ -345,6 +347,7 @@ describe('DiffFileList', () => {
         ]
       }
       if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
+      if (cmd === TauriCommands.GetUncommittedFiles) return []
       return undefined
     })
 
@@ -369,6 +372,7 @@ describe('DiffFileList', () => {
     mockInvoke.mockImplementation(async (cmd: string, _args?: Record<string, unknown>) => {
       if (cmd === TauriCommands.GetOrchestratorWorkingChanges) return []
       if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
+      if (cmd === TauriCommands.GetUncommittedFiles) return []
       return undefined
     })
 
@@ -395,6 +399,7 @@ describe('DiffFileList', () => {
         ]
       }
       if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
+      if (cmd === TauriCommands.GetUncommittedFiles) return []
       return undefined
     })
 
@@ -606,9 +611,10 @@ describe('DiffFileList', () => {
         return [createMockChangedFile({ path: 'test.ts', change_type: 'modified' })]
       }
       if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
+      if (cmd === TauriCommands.GetUncommittedFiles) return []
       return undefined
     })
-    
+
     render(
       <Wrapper>
         <DiffFileList onFileSelect={() => {}} isCommander={true} />
@@ -616,7 +622,7 @@ describe('DiffFileList', () => {
     )
 
     await screen.findByText('test.ts')
-    
+
     // Both commands should be called
     expect(invokeCallOrder).toContain(TauriCommands.GetOrchestratorWorkingChanges)
     expect(invokeCallOrder).toContain(TauriCommands.GetCurrentBranchName)
@@ -635,6 +641,7 @@ describe('DiffFileList', () => {
         })
       }
       if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
+      if (cmd === TauriCommands.GetUncommittedFiles) return []
       return undefined
     })
 
@@ -693,6 +700,7 @@ describe('DiffFileList', () => {
         if (cmd === TauriCommands.GetBaseBranchName) return 'main'
         if (cmd === TauriCommands.GetCommitComparisonInfo) return ['abc123', 'def456']
         if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { original_parent_branch: 'main' }
+        if (cmd === TauriCommands.GetUncommittedFiles) return []
         return undefined
       })
 
@@ -703,7 +711,7 @@ describe('DiffFileList', () => {
       )
 
       const { rerender } = render(<TestWrapper sessionName="session1" />)
-      
+
       // Wait for session1 data to load
       await screen.findByText('session1-file.ts')
       
@@ -742,6 +750,7 @@ describe('DiffFileList', () => {
         if (cmd === TauriCommands.GetBaseBranchName) return 'main'
         if (cmd === TauriCommands.GetCommitComparisonInfo) return ['abc123', 'def456']
         if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { original_parent_branch: 'main' }
+        if (cmd === TauriCommands.GetUncommittedFiles) return []
         return undefined
       })
 
@@ -784,6 +793,7 @@ describe('DiffFileList', () => {
         if (cmd === TauriCommands.GetBaseBranchName) return 'main'
         if (cmd === TauriCommands.GetCommitComparisonInfo) return ['abc123', 'def456']
         if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { original_parent_branch: 'main' }
+        if (cmd === TauriCommands.GetUncommittedFiles) return []
         return undefined
       })
 
@@ -827,6 +837,7 @@ describe('DiffFileList', () => {
         if (cmd === TauriCommands.GetBaseBranchName) return 'main'
         if (cmd === TauriCommands.GetCommitComparisonInfo) return ['abc', 'def']
         if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { original_parent_branch: 'main' }
+        if (cmd === TauriCommands.GetUncommittedFiles) return []
         return undefined
       })
 
@@ -946,6 +957,7 @@ describe('DiffFileList', () => {
         if (cmd === TauriCommands.GetBaseBranchName) return 'main'
         if (cmd === TauriCommands.GetCommitComparisonInfo) return ['abc123', 'def456']
         if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { original_parent_branch: 'main' }
+        if (cmd === TauriCommands.GetUncommittedFiles) return []
         return undefined
       })
 
@@ -996,6 +1008,7 @@ describe('DiffFileList', () => {
         if (cmd === TauriCommands.GetBaseBranchName) return 'main'
         if (cmd === TauriCommands.GetCommitComparisonInfo) return ['abc123', 'def456']
         if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { original_parent_branch: 'main' }
+        if (cmd === TauriCommands.GetUncommittedFiles) return []
         return undefined
       })
 
@@ -1036,6 +1049,7 @@ describe('DiffFileList', () => {
         }
         if (cmd === TauriCommands.GetBaseBranchName) return 'main'
         if (cmd === TauriCommands.GetCommitComparisonInfo) return ['abc', 'def']
+        if (cmd === TauriCommands.GetUncommittedFiles) return []
         return undefined
       })
 

@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
 import { useSelection } from '../../hooks/useSelection'
 import { useOpenInEditor } from '../../hooks/useOpenInEditor'
-import { VscFile, VscDiffAdded, VscDiffModified, VscDiffRemoved, VscFileBinary, VscDiscard, VscGoToFile } from 'react-icons/vsc'
+import { VscFile, VscDiffAdded, VscDiffModified, VscDiffRemoved, VscFileBinary, VscDiscard, VscGoToFile, VscChevronDown, VscChevronRight } from 'react-icons/vsc'
 import { isBinaryFileByExtension } from '../../utils/binaryDetection'
 import { logger } from '../../utils/logger'
 import { UiEvent, emitUiEvent, listenUiEvent } from '../../common/uiEvents'
@@ -33,8 +33,10 @@ import {
 import { useTranslation } from '../../common/i18n'
 import type { Translations } from '../../common/i18n/types'
 
+export type DiffSource = 'committed' | 'uncommitted'
+
 interface DiffFileListProps {
-  onFileSelect: (filePath: string) => void
+  onFileSelect: (filePath: string, source?: DiffSource) => void
   sessionNameOverride?: string
   isCommander?: boolean
   getCommentCountForFile?: (filePath: string) => number
@@ -164,6 +166,9 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
   const [discardOpen, setDiscardOpen] = useState(false)
   const [discardBusy, setDiscardBusy] = useState(false)
   const [pendingDiscardFile, setPendingDiscardFile] = useState<string | null>(null)
+  const [dirtyFiles, setDirtyFiles] = useState<ChangedFile[]>([])
+  const [dirtyCollapsed, setDirtyCollapsed] = useState(false)
+  const [committedCollapsed, setCommittedCollapsed] = useState(false)
   const lastResultRef = useRef<string>('')
   const lastSessionKeyRef = useRef<string | null>(null)
   const sessionDataCacheRef = useRef<Map<string, {
@@ -509,8 +514,31 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
     await loadChangedFilesRef.current?.(modeOverride)
   }, [])
 
-  // Path resolver used by top bar now; no local button anymore
-  
+  const loadDirtyFiles = useCallback(async () => {
+    const { sessionNameOverride: overrideSnapshot, selection: selectionSnapshot, isCommander: commanderSnapshot } = currentPropsRef.current
+    if (commanderSnapshot) return
+    const targetSession = overrideSnapshot ?? (selectionSnapshot.kind === 'session' ? selectionSnapshot.payload : null)
+    if (!targetSession) {
+      setDirtyFiles([])
+      return
+    }
+    try {
+      const result = await invoke<ChangedFile[]>(TauriCommands.GetUncommittedFiles, { sessionName: targetSession })
+      const { sessionNameOverride: latestOverride, selection: latestSelection } = currentPropsRef.current
+      const latestSession = latestOverride ?? (latestSelection.kind === 'session' ? latestSelection.payload : null)
+      if (latestSession === targetSession) {
+        const files = result ?? []
+        setDirtyFiles(prev => files.length === 0 && prev.length === 0 ? prev : files)
+      }
+    } catch (error: unknown) {
+      const message = String(error ?? '').toLowerCase()
+      if (!message.includes('not found') && !message.includes('no such file')) {
+        logger.error('Failed to load dirty files:', error)
+      }
+      setDirtyFiles(prev => prev.length === 0 ? prev : [])
+    }
+  }, [])
+
   useEffect(() => {
     // Reset component state immediately when session changes
     const { sessionNameOverride: currentOverride, selection: currentSelection, isCommander: currentIsCommander } = currentPropsRef.current
@@ -554,9 +582,16 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
       void loadChangedFiles()
     }
 
+    if (currentSession && !currentIsCommander) {
+      void loadDirtyFiles()
+    } else {
+      setDirtyFiles([])
+    }
+
     let pollInterval: NodeJS.Timeout | null = null
     let eventUnlisten: (() => void) | null = null
     let gitStatsUnlisten: (() => void) | null = null
+    let dirtyStatsUnlisten: (() => void) | null = null
     let orchestratorListenerCancelled = false
     let orchestratorTimeout: ReturnType<typeof setTimeout> | null = null
     let sessionCancellingUnlisten: (() => void) | null = null
@@ -741,6 +776,17 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
           }
         })()
       }, 0)
+
+      if (currentSession && !currentIsCommander) {
+        try {
+          dirtyStatsUnlisten = await listenEvent(SchaltEvent.SessionGitStats, (event) => {
+            if (event.session_name !== currentSession) return
+            void loadDirtyFiles()
+          })
+        } catch (error) {
+          logger.error('Failed to set up dirty files git stats listener:', error)
+        }
+      }
     }
 
     void setup()
@@ -758,13 +804,14 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
       }
       safeUnlisten(eventUnlisten, 'file-changes')
       safeUnlisten(gitStatsUnlisten, 'session-git-stats')
+      safeUnlisten(dirtyStatsUnlisten, 'dirty-git-stats')
       safeUnlisten(sessionCancellingUnlisten, 'session-cancelling')
       // Clean up polling if active
       if (pollInterval) {
         clearInterval(pollInterval)
       }
     }
-  }, [sessionNameOverride, selection, isCommander, loadChangedFiles])
+  }, [sessionNameOverride, selection, isCommander, loadChangedFiles, loadDirtyFiles])
 
   useEffect(() => {
     let unlisten: (() => void) | null = null
@@ -817,9 +864,9 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
     }
   }, [loadChangedFiles])
   
-  const handleFileClick = (file: ChangedFile) => {
+  const handleFileClick = (file: ChangedFile, source: DiffSource = 'committed') => {
     setSelectedFile(file.path)
-    onFileSelect(file.path)
+    onFileSelect(file.path, source)
   }
 
   useEffect(() => {
@@ -834,8 +881,8 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
     if (!hasLoadedInitialResult) {
       return
     }
-    onFilesChange?.(files.length > 0)
-  }, [files, hasLoadedInitialResult, onFilesChange])
+    onFilesChange?.(files.length > 0 || dirtyFiles.length > 0)
+  }, [files, dirtyFiles, hasLoadedInitialResult, onFilesChange])
   
   const getFileIcon = (changeType: string, filePath: string) => {
     if (isBinaryFileByExtension(filePath)) {
@@ -888,6 +935,79 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
     event.dataTransfer.setData('text/plain', normalizedPath)
     event.dataTransfer.effectAllowed = 'copy'
   }, [])
+
+  const renderDirtyFileNode = (node: FileNode, depth: number) => {
+    const additions = node.file.additions ?? 0
+    const deletions = node.file.deletions ?? 0
+    const totalChanges = node.file.changes ?? additions + deletions
+    const isBinary = node.file.is_binary ?? (node.file.change_type !== 'deleted' && isBinaryFileByExtension(node.file.path))
+
+    return (
+      <div
+        key={node.path}
+        className="group flex items-start gap-3 rounded cursor-pointer file-list-item"
+        data-selected={selectedFile === node.file.path ? 'true' : undefined}
+        style={{ paddingLeft: `${depth * 12 + 12}px`, paddingTop: '4px', paddingBottom: '4px' }}
+        onClick={() => handleFileClick(node.file, 'uncommitted')}
+        data-file-path={node.file.path}
+        draggable
+        onDragStart={handleFileDragStart(node.file.path)}
+      >
+        {getFileIcon(node.file.change_type, node.file.path)}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-2 justify-between">
+            <div className="text-sm truncate font-medium" style={{ color: 'var(--color-text-primary)' }}>
+              {node.name}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <DiffChangeBadges
+                additions={additions}
+                deletions={deletions}
+                changes={totalChanges}
+                isBinary={isBinary}
+                className="flex-shrink-0"
+                layout="row"
+                size="compact"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="ml-2 flex items-center justify-end gap-1 shrink-0">
+          <button
+            title={t.diffFileList.openInEditor}
+            aria-label={`Open ${node.file.path}`}
+            className="p-1 rounded"
+            style={{ color: 'var(--color-text-secondary)' }}
+            onClick={(e) => {
+              e.stopPropagation()
+              void openInEditor(node.file.path)
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--color-text-primary)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--color-text-secondary)'
+            }}
+          >
+            <VscGoToFile className="text-base" />
+          </button>
+          <button
+            title={t.diffFileList.discardChanges}
+            aria-label={`Discard ${node.file.path}`}
+            className="p-1 rounded"
+            style={{ color: 'var(--color-text-secondary)' }}
+            onClick={(e) => {
+              e.stopPropagation()
+              setPendingDiscardFile(node.file.path)
+              setDiscardOpen(true)
+            }}
+          >
+            <VscDiscard className="text-base" />
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const renderFileNode = (node: FileNode, depth: number) => {
     const additions = node.file.additions ?? 0
@@ -1074,53 +1194,102 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
             <div className="text-xs mt-1">{t.diffFileList.selectSessionHint}</div>
           </div>
         </div>
-      ) : files.length > 0 ? (
+      ) : files.length > 0 || dirtyFiles.length > 0 ? (
         <div className="flex-1 overflow-y-auto">
-          <div className="px-2">
-            <FileTree
-              files={files}
-              renderFileNode={renderFileNode}
-              renderFolderContent={(folder) => {
-                if (!showCopyContextControls) {
-                  return (
-                    <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>
-                      ({folder.fileCount})
-                    </span>
-                  )
-                }
+          {dirtyFiles.length > 0 && !isCommander && (
+            <div>
+              <button
+                className="flex items-center gap-2 w-full px-3 py-1.5 text-xs font-medium"
+                style={{
+                  color: 'var(--color-text-secondary)',
+                  borderBottom: '1px solid var(--color-border-subtle)',
+                  backgroundColor: 'var(--color-bg-secondary)',
+                }}
+                onClick={() => setDirtyCollapsed(!dirtyCollapsed)}
+              >
+                {dirtyCollapsed ? <VscChevronRight className="w-3 h-3" /> : <VscChevronDown className="w-3 h-3" />}
+                <span>{t.diffFileList.dirtyFiles.replace('{count}', String(dirtyFiles.length))}</span>
+              </button>
+              {!dirtyCollapsed && (
+                <div className="px-2" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+                  <FileTree
+                    files={dirtyFiles}
+                    renderFileNode={renderDirtyFileNode}
+                    renderFolderContent={(folder) => (
+                      <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+                        ({folder.fileCount})
+                      </span>
+                    )}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          {files.length > 0 && (
+            <div>
+              {dirtyFiles.length > 0 && !isCommander && (
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-xs font-medium"
+                  style={{
+                    color: 'var(--color-text-secondary)',
+                    borderBottom: '1px solid var(--color-border-subtle)',
+                    backgroundColor: 'var(--color-bg-secondary)',
+                  }}
+                  onClick={() => setCommittedCollapsed(!committedCollapsed)}
+                >
+                  {committedCollapsed ? <VscChevronRight className="w-3 h-3" /> : <VscChevronDown className="w-3 h-3" />}
+                  <span>{t.diffFileList.committedChanges.replace('{count}', String(files.length))}</span>
+                </button>
+              )}
+              {!committedCollapsed && (
+                <div className="px-2">
+                  <FileTree
+                    files={files}
+                    renderFileNode={renderFileNode}
+                    renderFolderContent={(folder) => {
+                      if (!showCopyContextControls) {
+                        return (
+                          <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+                            ({folder.fileCount})
+                          </span>
+                        )
+                      }
 
-                const folderFilePaths = collectFilePathsFromFolder(folder)
-                const total = folderFilePaths.length
-                let selectedCount = 0
-                for (const filePath of folderFilePaths) {
-                  if (isSelectedForCopyContext(filePath)) selectedCount += 1
-                }
-                const isAll = total > 0 && selectedCount === total
-                const isSome = selectedCount > 0 && selectedCount < total
+                      const folderFilePaths = collectFilePathsFromFolder(folder)
+                      const total = folderFilePaths.length
+                      let selectedCount = 0
+                      for (const filePath of folderFilePaths) {
+                        if (isSelectedForCopyContext(filePath)) selectedCount += 1
+                      }
+                      const isAll = total > 0 && selectedCount === total
+                      const isSome = selectedCount > 0 && selectedCount < total
 
-                return (
-                  <div className="flex-1 flex items-center justify-between min-w-0">
-                    <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>
-                      ({folder.fileCount})
-                    </span>
-                    <input
-                      type="checkbox"
-                      aria-label={`Include folder ${folder.path} in copied context`}
-                      checked={isAll}
-                      ref={(el) => {
-                        if (!el) return
-                        el.indeterminate = isSome
-                      }}
-                      onChange={(e) => setManySelectedForCopyContext(folderFilePaths, e.target.checked)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="shrink-0 w-4 h-4 opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
-                      style={{ accentColor: 'var(--color-accent-blue)' }}
-                    />
-                  </div>
-                )
-              }}
-            />
-          </div>
+                      return (
+                        <div className="flex-1 flex items-center justify-between min-w-0">
+                          <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+                            ({folder.fileCount})
+                          </span>
+                          <input
+                            type="checkbox"
+                            aria-label={`Include folder ${folder.path} in copied context`}
+                            checked={isAll}
+                            ref={(el) => {
+                              if (!el) return
+                              el.indeterminate = isSome
+                            }}
+                            onChange={(e) => setManySelectedForCopyContext(folderFilePaths, e.target.checked)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="shrink-0 w-4 h-4 opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
+                            style={{ accentColor: 'var(--color-accent-blue)' }}
+                          />
+                        </div>
+                      )
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--color-text-tertiary)' }}>

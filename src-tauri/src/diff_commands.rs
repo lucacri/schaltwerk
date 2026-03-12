@@ -121,6 +121,110 @@ pub async fn get_orchestrator_working_changes() -> Result<Vec<ChangedFile>, Stri
         .map_err(|e| format!("Failed to compute changed files: {e}"))
 }
 
+#[tauri::command]
+pub async fn get_uncommitted_files(session_name: String) -> Result<Vec<ChangedFile>, SchaltError> {
+    let repo_path = resolve_repo_path_structured(Some(&session_name)).await?;
+
+    let repo = tokio::task::spawn_blocking({
+        let path = repo_path.clone();
+        move || Repository::open(&path)
+    })
+    .await
+    .map_err(|e| SchaltError::git("spawn_blocking", git2::Error::from_str(&e.to_string())))?
+    .map_err(|e| SchaltError::git("open_repository", e))?;
+
+    tokio::task::spawn_blocking(move || collect_working_directory_changes(&repo))
+        .await
+        .map_err(|e| SchaltError::git("spawn_blocking", git2::Error::from_str(&e.to_string())))?
+        .map_err(|e| SchaltError::git("collect_working_directory_changes", git2::Error::from_str(&e.to_string())))
+}
+
+#[tauri::command]
+pub async fn get_uncommitted_file_diff(
+    session_name: String,
+    file_path: String,
+) -> Result<DiffResponse, SchaltError> {
+    use std::time::Instant;
+    let start_total = Instant::now();
+
+    if is_binary_file_by_extension(&file_path) {
+        let reason = get_unsupported_reason(&file_path, None);
+        return Ok(DiffResponse {
+            lines: vec![],
+            stats: calculate_diff_stats(&[]),
+            file_info: FileInfo {
+                language: None,
+                size_bytes: 0,
+            },
+            is_large_file: false,
+            is_binary: Some(true),
+            unsupported_reason: reason,
+        });
+    }
+
+    let repo_path = resolve_repo_path_structured(Some(&session_name)).await?;
+    let repo = Repository::open(&repo_path).map_err(|e| SchaltError::git("open_repository", e))?;
+
+    let worktree_path = Path::new(&repo_path).join(&file_path);
+
+    if worktree_path.exists() {
+        let diff_info = file_utils::check_file_diffability(&worktree_path);
+        if !diff_info.is_diffable {
+            let reason = diff_info.reason.unwrap_or_else(|| "Unknown reason".to_string());
+            return Err(SchaltError::invalid_input("file_path", reason));
+        }
+    }
+
+    let old_content = read_blob_from_commit_path(&repo, None, &file_path)
+        .map_err(|e| SchaltError::git("read_blob_from_commit_path", git2::Error::from_str(&e)))?;
+    let new_content = read_workdir_text(&worktree_path)
+        .map_err(|e| SchaltError::io("read_worktree_text", worktree_path.to_string_lossy(), e))?;
+
+    let new_content_bytes = new_content.as_bytes();
+    if let Some(reason) = get_unsupported_reason(&file_path, Some(new_content_bytes)) {
+        return Ok(DiffResponse {
+            lines: vec![],
+            stats: calculate_diff_stats(&[]),
+            file_info: FileInfo {
+                language: get_file_language(&file_path),
+                size_bytes: new_content_bytes.len(),
+            },
+            is_large_file: new_content_bytes.len() > 5 * 1024 * 1024,
+            is_binary: Some(true),
+            unsupported_reason: Some(reason),
+        });
+    }
+
+    let diff_lines = compute_unified_diff(&old_content, &new_content);
+    let lines_with_collapsible = add_collapsible_sections(diff_lines);
+    let stats = calculate_diff_stats(&lines_with_collapsible);
+    let file_info = FileInfo {
+        language: get_file_language(&file_path),
+        size_bytes: new_content.len(),
+    };
+    let is_large_file = new_content.len() > 5 * 1024 * 1024;
+    let total_duration = start_total.elapsed();
+
+    if total_duration.as_millis() > 100 || is_large_file {
+        log::info!(
+            "Uncommitted diff performance for {}: total={}ms, size={}KB, lines={}",
+            file_path,
+            total_duration.as_millis(),
+            new_content.len() / 1024,
+            lines_with_collapsible.len()
+        );
+    }
+
+    Ok(DiffResponse {
+        lines: lines_with_collapsible,
+        stats,
+        file_info,
+        is_large_file,
+        is_binary: Some(false),
+        unsupported_reason: None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

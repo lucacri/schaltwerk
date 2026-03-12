@@ -619,6 +619,8 @@ export interface Translations {
     filesChanged: string
     openInEditor: string
     discardChanges: string
+    dirtyFiles: string
+    committedChanges: string
   }
   time: {
     unknown: string

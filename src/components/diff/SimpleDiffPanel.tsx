@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
-import { DiffFileList } from './DiffFileList'
+import { DiffFileList, type DiffSource } from './DiffFileList'
 import { UnifiedDiffView } from './UnifiedDiffView'
 import { ProjectFileTree } from './ProjectFileTree'
 import { FileContentViewer } from './FileContentViewer'
@@ -115,8 +115,11 @@ export function SimpleDiffPanel({
     return () => { mounted = false }
   }, [prNumber, fetchDetails])
 
-  const handleSelectFile = useCallback((filePath: string) => {
+  const [activeDiffSource, setActiveDiffSource] = useState<DiffSource>('committed')
+
+  const handleSelectFile = useCallback((filePath: string, source: DiffSource = 'committed') => {
     onActiveFileChange(filePath)
+    setActiveDiffSource(source)
     if (preferInline) {
       onModeChange('review')
     } else {
@@ -314,6 +317,7 @@ const handleToggleInlinePreference = useCallback((event: ChangeEvent<HTMLInputEl
             viewMode="sidebar"
             className="h-full"
             onSelectedFileChange={handleViewerSelectionChange}
+            diffSource={activeDiffSource}
           />
         </div>
         {currentReview && currentReview.comments.length > 0 && (

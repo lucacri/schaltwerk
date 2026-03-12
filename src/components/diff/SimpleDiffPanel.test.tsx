@@ -47,6 +47,7 @@ const setupInvoke = (overrides: Record<string, (args?: Record<string, unknown>) 
     if (cmd === TauriCommands.GetDiffViewPreferences) {
       return defaultDiffPrefs
     }
+    if (cmd === TauriCommands.GetUncommittedFiles) return []
     const handler = overrides[cmd]
     if (handler) {
       return handler(args)
@@ -90,6 +91,7 @@ describe('SimpleDiffPanel', () => {
     invoke.mockImplementation(async (cmd: string) => {
       if (cmd === TauriCommands.GetDiffViewPreferences) return defaultDiffPrefs
       if (cmd === TauriCommands.GetChangedFilesFromMain) return []
+      if (cmd === TauriCommands.GetUncommittedFiles) return []
       return null
     })
     const { SimpleDiffPanel } = await import('./SimpleDiffPanel')
@@ -118,6 +120,7 @@ describe('SimpleDiffPanel', () => {
       if (cmd === TauriCommands.GetCommitComparisonInfo) return ['a', 'b']
       if (cmd === TauriCommands.GetDiffViewPreferences) return defaultDiffPrefs
       if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { original_parent_branch: 'main' }
+      if (cmd === TauriCommands.GetUncommittedFiles) return []
       return null
     })
     const { SimpleDiffPanel } = await import('./SimpleDiffPanel')
@@ -181,6 +184,7 @@ describe('SimpleDiffPanel', () => {
       if (cmd === TauriCommands.GetCommitComparisonInfo) return ['a', 'b']
       if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { initial_prompt: '' }
       if (cmd === TauriCommands.GetDiffViewPreferences) return defaultDiffPrefs
+      if (cmd === TauriCommands.GetUncommittedFiles) return []
       return null
     })
 

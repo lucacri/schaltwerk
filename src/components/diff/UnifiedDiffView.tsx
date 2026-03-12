@@ -17,10 +17,12 @@ import { useDiffHover } from "../../hooks/useDiffHover";
 import { useDiffKeyboardNavigation } from "../../hooks/useDiffKeyboardNavigation";
 import {
   loadFileDiff,
+  loadUncommittedFileDiff,
   loadCommitFileDiff,
   normalizeCommitChangeType,
   type FileDiffData,
 } from "./loadDiffs";
+import type { DiffSource } from "./DiffFileList";
 import { getFileLanguage } from "../../utils/diff";
 import { useReviewComments } from "../../hooks/useReviewComments";
 import { DiffFileExplorer, ChangedFile } from "./DiffFileExplorer";
@@ -87,6 +89,7 @@ interface UnifiedDiffViewProps {
   viewMode?: "modal" | "sidebar";
   className?: string;
   onSelectedFileChange?: (filePath: string | null) => void;
+  diffSource?: DiffSource;
 }
 
 interface DiffViewPreferences {
@@ -123,6 +126,7 @@ export function UnifiedDiffView({
   viewMode = "modal",
   className,
   onSelectedFileChange,
+  diffSource = "committed",
 }: UnifiedDiffViewProps) {
   const mode: "session" | "history" = incomingMode ?? "session";
   const { selection, setSelection, terminals } = useSelection();
@@ -436,6 +440,19 @@ export function UnifiedDiffView({
     return mapSessionUiState(targetSession.info) === "running";
   }, [targetSession]);
 
+  const diffSourceRef = useRef(diffSource);
+  diffSourceRef.current = diffSource;
+
+  const loadDiffForFile = useCallback(
+    (session: string | null, file: ChangedFile, viewMode: "unified" | "split") => {
+      if (diffSourceRef.current === "uncommitted" && session) {
+        return loadUncommittedFileDiff(session, file);
+      }
+      return loadFileDiff(session, file, viewMode);
+    },
+    [],
+  );
+
   const handleOpenFile = useCallback(
     async (filePath: string): Promise<OpenInAppRequest | undefined> => {
       if (mode === "history") {
@@ -621,7 +638,7 @@ export function UnifiedDiffView({
       const file = files.find((f) => f.path === selectedFile);
       if (file) {
         try {
-          const diff = await loadFileDiff(sessionName, file, diffLayout);
+          const diff = await loadDiffForFile(sessionName, file, diffLayout);
           setAllFileDiffs(new Map([[selectedFile, diff]]));
         } catch (e) {
           logger.error("Failed to reload selected file:", e);
@@ -675,7 +692,7 @@ export function UnifiedDiffView({
       return;
     }
 
-    void loadFileDiff(sessionName, file, diffLayout)
+    void loadDiffForFile(sessionName, file, diffLayout)
       .then((diff) => {
         setAllFileDiffs(new Map([[selectedFile, diff]]));
       })
@@ -937,7 +954,7 @@ export function UnifiedDiffView({
         if (targetFile) {
           try {
             const preloadedDiff = sessionName ? diffPreloader.getFileDiff(sessionName, targetFile.path) : null;
-            const primary = preloadedDiff ?? await loadFileDiff(
+            const primary = preloadedDiff ?? await loadDiffForFile(
               sessionName,
               targetFile,
               diffLayout,
@@ -1152,7 +1169,7 @@ export function UnifiedDiffView({
               }
             } else {
               const preloadedDiff = sessionName ? diffPreloader.getFileDiff(sessionName, path) : null;
-              diff = preloadedDiff ?? await loadFileDiff(sessionName, file, diffLayout);
+              diff = preloadedDiff ?? await loadDiffForFile(sessionName, file, diffLayout);
             }
 
             if (diff) {
@@ -1768,7 +1785,7 @@ export function UnifiedDiffView({
           }
 
           const preloadedDiff = sessionName ? diffPreloader.getFileDiff(sessionName, path) : null;
-          const diff = preloadedDiff ?? await loadFileDiff(sessionName, file, diffLayout);
+          const diff = preloadedDiff ?? await loadDiffForFile(sessionName, file, diffLayout);
           return { path, diff };
         } catch (e) {
           logger.error(`Failed to load diff for ${path}:`, e);
