@@ -50,9 +50,8 @@ pub fn truncate_prompt(prompt: &str) -> String {
     }
 }
 
-fn default_name_prompt_plain(truncated: &str) -> String {
-    format!(
-        r#"IMPORTANT: Do not use any tools. Answer this message directly without searching or reading files.
+pub fn default_name_prompt_template() -> String {
+    r#"IMPORTANT: Do not use any tools. Answer this message directly without searching or reading files.
 
 Generate a SHORT kebab-case name for this coding task.
 
@@ -75,41 +74,40 @@ Bad examples:
 - "session-1" (too generic)
 - "claude-task" (describes the agent, not the task)
 
-Task: {truncated}
+Task: {task}
 
 Name:"#
-    )
+        .to_string()
+}
+
+fn default_name_prompt_plain(truncated: &str) -> String {
+    default_name_prompt_template().replace("{task}", truncated)
 }
 
 fn default_name_prompt_json(truncated: &str) -> String {
-    format!(
-        r#"IMPORTANT: Do not use any tools. Answer this message directly without searching or reading files.
-
-Generate a SHORT kebab-case name for this coding task.
-
-Rules:
-- 2-4 words, prefer verb-noun format (e.g., fix-login, add-dark-mode)
-- 20 characters or less preferred
-- Use only lowercase letters, numbers, hyphens
-- Capture WHAT is being done, not HOW
-- Return ONLY JSON format: {{"name": "kebab-case-name"}}
-- Do NOT use tools or commands
-
-Good examples:
-- {{"name": "fix-pr-links"}} (for fixing pull request link behavior)
-- {{"name": "add-dark-mode"}} (for implementing dark mode theme)
-- {{"name": "refactor-auth"}} (for refactoring authentication)
-- {{"name": "update-nav-bar"}} (for changing navigation layout)
-
-Bad examples:
-- "implement-the-new-user-authentication-system" (too long)
-- "session-1" (too generic)
-- "claude-task" (describes the agent, not the task)
-
-Task: {truncated}
-
-Respond with JSON: {{"name": "short-kebab-case-name"}}"#
-    )
+    default_name_prompt_template()
+        .replace("{task}", truncated)
+        .replace(
+            "- Return ONLY the name, nothing else",
+            r#"- Return ONLY JSON format: {"name": "kebab-case-name"}"#,
+        )
+        .replace(
+            r#"- "fix-pr-links" (for fixing pull request link behavior)"#,
+            r#"- {"name": "fix-pr-links"} (for fixing pull request link behavior)"#,
+        )
+        .replace(
+            r#"- "add-dark-mode" (for implementing dark mode theme)"#,
+            r#"- {"name": "add-dark-mode"} (for implementing dark mode theme)"#,
+        )
+        .replace(
+            r#"- "refactor-auth" (for refactoring authentication)"#,
+            r#"- {"name": "refactor-auth"} (for refactoring authentication)"#,
+        )
+        .replace(
+            r#"- "update-nav-bar" (for changing navigation layout)"#,
+            r#"- {"name": "update-nav-bar"} (for changing navigation layout)"#,
+        )
+        .replace("Name:", r#"Respond with JSON: {"name": "short-kebab-case-name"}"#)
 }
 
 fn resolve_name_prompts(
@@ -1395,5 +1393,20 @@ Line 4"
             "some task",
         );
         assert_eq!(plain, "Just name it");
+    }
+
+    #[test]
+    fn default_name_prompt_template_contains_task_placeholder() {
+        let template = default_name_prompt_template();
+        assert!(template.contains("{task}"));
+        assert!(template.contains("kebab-case"));
+    }
+
+    #[test]
+    fn default_name_prompt_template_matches_plain_structure() {
+        let template = default_name_prompt_template();
+        let plain = default_name_prompt_plain("example task");
+        let substituted = template.replace("{task}", "example task");
+        assert_eq!(substituted, plain);
     }
 }

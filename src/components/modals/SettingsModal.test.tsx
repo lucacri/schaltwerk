@@ -680,3 +680,134 @@ describe('SettingsModal project settings navigation', () => {
     confirmSpy.mockRestore()
   })
 })
+
+describe('SettingsModal AI Generation custom prompts', () => {
+  const defaultNamePrompt = 'Default name prompt with {task} placeholder'
+  const defaultCommitPrompt = 'Default commit prompt with {commits} and {files}'
+
+  beforeEach(() => {
+    useSettingsMock.mockReset()
+    useSettingsMock.mockReturnValue(createDefaultUseSettingsValue())
+    useSessionsMock.mockReset()
+    useSessionsMock.mockReturnValue(createDefaultUseSessionsValue())
+    invokeMock.mockClear()
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === TauriCommands.GetDefaultGenerationPrompts) {
+        return { name_prompt: defaultNamePrompt, commit_prompt: defaultCommitPrompt }
+      }
+      if (command === TauriCommands.GetGenerationSettings) {
+        return { agent: null, cli_args: null, name_prompt: null, commit_prompt: null }
+      }
+      return baseInvokeImplementation(command, args)
+    })
+    requestDockBounceMock.mockReset()
+  })
+
+  it('pre-fills textareas with default prompts when no custom values are saved', async () => {
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    const customPromptsButton = await screen.findByText('Custom Prompts')
+    await user.click(customPromptsButton)
+
+    const textareas = await screen.findAllByRole('textbox')
+    const nameTextarea = textareas.find(el => (el as HTMLTextAreaElement).value === defaultNamePrompt)
+    const commitTextarea = textareas.find(el => (el as HTMLTextAreaElement).value === defaultCommitPrompt)
+
+    expect(nameTextarea).toBeDefined()
+    expect(commitTextarea).toBeDefined()
+  })
+
+  it('shows "Using default" indicator when prompts match defaults', async () => {
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    const customPromptsButton = await screen.findByText('Custom Prompts')
+    await user.click(customPromptsButton)
+
+    const indicators = await screen.findAllByText('Using default')
+    expect(indicators.length).toBe(2)
+  })
+
+  it('shows "Customized" and reset button when custom prompt is saved', async () => {
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === TauriCommands.GetDefaultGenerationPrompts) {
+        return { name_prompt: defaultNamePrompt, commit_prompt: defaultCommitPrompt }
+      }
+      if (command === TauriCommands.GetGenerationSettings) {
+        return { agent: null, cli_args: null, name_prompt: 'My custom name prompt', commit_prompt: null }
+      }
+      return baseInvokeImplementation(command, args)
+    })
+
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Customized')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('Reset to default')).toBeInTheDocument()
+  })
+
+  it('saves null when textarea content matches default prompt', async () => {
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    const customPromptsButton = await screen.findByText('Custom Prompts')
+    await user.click(customPromptsButton)
+
+    const textareas = await screen.findAllByRole('textbox')
+    const nameTextarea = textareas.find(el => (el as HTMLTextAreaElement).value === defaultNamePrompt) as HTMLTextAreaElement
+
+    await user.click(nameTextarea)
+    await user.tab()
+
+    await waitFor(() => {
+      const saveCall = invokeMock.mock.calls.find(
+        ([cmd]) => cmd === TauriCommands.SetGenerationSettings
+      )
+      if (saveCall) {
+        const settings = (saveCall[1] as { settings: { name_prompt: string | null } }).settings
+        expect(settings.name_prompt).toBeNull()
+      }
+    })
+  })
+
+  it('resets prompt to default when reset button is clicked', async () => {
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === TauriCommands.GetDefaultGenerationPrompts) {
+        return { name_prompt: defaultNamePrompt, commit_prompt: defaultCommitPrompt }
+      }
+      if (command === TauriCommands.GetGenerationSettings) {
+        return { agent: null, cli_args: null, name_prompt: 'Custom prompt', commit_prompt: null }
+      }
+      return baseInvokeImplementation(command, args)
+    })
+
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    const resetButton = await screen.findByText('Reset to default')
+    await user.click(resetButton)
+
+    await waitFor(() => {
+      const saveCall = invokeMock.mock.calls.find(
+        ([cmd]) => cmd === TauriCommands.SetGenerationSettings
+      )
+      if (saveCall) {
+        const settings = (saveCall[1] as { settings: { name_prompt: string | null } }).settings
+        expect(settings.name_prompt).toBeNull()
+      }
+    })
+  })
+})

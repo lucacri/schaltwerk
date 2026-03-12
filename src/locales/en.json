@@ -310,13 +310,16 @@
       "cliArgsDesc": "Extra command-line arguments passed to the agent for generation (e.g., --model gemini-2.0-flash).",
       "cliArgsPlaceholder": "e.g., --model gemini-2.0-flash",
       "customPrompts": "Custom Prompts",
-      "customPromptsDesc": "Override the default prompts used for AI generation. Leave empty to use defaults.",
+      "customPromptsDesc": "Customize the prompts used for AI generation. Pre-filled with defaults you can modify.",
       "namePrompt": "Name Generation Prompt",
       "namePromptDesc": "Prompt for generating session names. Use {task} as placeholder for the task description.",
       "namePromptPlaceholder": "Default prompt generates a short kebab-case name from the task description",
       "commitPrompt": "Commit Message Prompt",
       "commitPromptDesc": "Prompt for generating commit messages. Use {commits} for commit subjects and {files} for changed files.",
-      "commitPromptPlaceholder": "Default prompt generates a conventional commit message from the changes"
+      "commitPromptPlaceholder": "Default prompt generates a conventional commit message from the changes",
+      "resetToDefault": "Reset to default",
+      "usingDefault": "Using default",
+      "customized": "Customized"
     },
     "mcp": {
       "title": "MCP Server Configuration",

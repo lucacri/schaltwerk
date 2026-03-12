@@ -11,6 +11,28 @@ pub struct CommitMessageArgs<'a> {
     pub custom_commit_prompt: Option<&'a str>,
 }
 
+pub fn default_commit_prompt_template() -> String {
+    r#"IMPORTANT: Do not use any tools. Answer this message directly without searching or reading files.
+
+Generate a concise squash commit message for the following changes being merged.
+
+Commits:
+{commits}
+
+Changed files:
+{files}
+
+Rules:
+- Write a single-line summary (max 72 chars), optionally followed by a blank line and bullet points
+- Use conventional commit format: type(scope): description
+- Common types: feat, fix, refactor, chore, docs, style, test, perf
+- Focus on WHAT changed and WHY, not HOW
+- Do NOT include any markdown formatting, code blocks, or explanation
+- Return ONLY the commit message text, nothing else
+- Do NOT use tools or commands"#
+        .to_string()
+}
+
 fn build_commits_section(subjects: &[String]) -> String {
     if subjects.is_empty() {
         "No commits yet (uncommitted changes only).".to_string()
@@ -25,27 +47,9 @@ fn build_commits_section(subjects: &[String]) -> String {
 
 fn build_prompt(subjects: &[String], files_summary: &str) -> String {
     let commits_section = build_commits_section(subjects);
-
-    format!(
-        r#"IMPORTANT: Do not use any tools. Answer this message directly without searching or reading files.
-
-Generate a concise squash commit message for the following changes being merged.
-
-Commits:
-{commits_section}
-
-Changed files:
-{files_summary}
-
-Rules:
-- Write a single-line summary (max 72 chars), optionally followed by a blank line and bullet points
-- Use conventional commit format: type(scope): description
-- Common types: feat, fix, refactor, chore, docs, style, test, perf
-- Focus on WHAT changed and WHY, not HOW
-- Do NOT include any markdown formatting, code blocks, or explanation
-- Return ONLY the commit message text, nothing else
-- Do NOT use tools or commands"#
-    )
+    default_commit_prompt_template()
+        .replace("{commits}", &commits_section)
+        .replace("{files}", files_summary)
 }
 
 fn resolve_commit_prompt(
@@ -367,5 +371,26 @@ mod tests {
         );
         assert!(result.contains("No commits yet"));
         assert!(result.contains("A src/new.rs (+20)"));
+    }
+
+    #[test]
+    fn default_commit_prompt_template_contains_placeholders() {
+        let template = default_commit_prompt_template();
+        assert!(template.contains("{commits}"));
+        assert!(template.contains("{files}"));
+        assert!(template.contains("conventional commit"));
+    }
+
+    #[test]
+    fn default_commit_prompt_template_matches_build_prompt_structure() {
+        let subjects = vec!["feat: test".to_string()];
+        let files = "M src/lib.rs (+5 -2)";
+        let commits_section = "- feat: test";
+        let template = default_commit_prompt_template();
+        let substituted = template
+            .replace("{commits}", commits_section)
+            .replace("{files}", files);
+        let built = build_prompt(&subjects, files);
+        assert_eq!(substituted, built);
     }
 }

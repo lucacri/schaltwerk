@@ -69,6 +69,7 @@ export const TauriCommands = {
   GetCommitComparisonInfo: 'get_commit_comparison_info',
   GetCurrentBranchName: 'get_current_branch_name',
   GetCurrentDirectory: 'get_current_directory',
+  GetDefaultGenerationPrompts: 'get_default_generation_prompts',
   GetGenerationSettings: 'get_generation_settings',
   GetDefaultOpenApp: 'get_default_open_app',
   GetDevelopmentInfo: 'get_development_info',

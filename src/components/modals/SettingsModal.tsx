@@ -358,6 +358,10 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const [generationCliArgs, setGenerationCliArgs] = useState<string>('')
     const [generationNamePrompt, setGenerationNamePrompt] = useState<string>('')
     const [generationCommitPrompt, setGenerationCommitPrompt] = useState<string>('')
+    const [defaultNamePrompt, setDefaultNamePrompt] = useState<string>('')
+    const [defaultCommitPrompt, setDefaultCommitPrompt] = useState<string>('')
+    const [namePromptIsCustom, setNamePromptIsCustom] = useState<boolean>(false)
+    const [commitPromptIsCustom, setCommitPromptIsCustom] = useState<boolean>(false)
     const [showCustomPrompts, setShowCustomPrompts] = useState<boolean>(false)
     const platform = useMemo(() => detectPlatformSafe(), [])
 
@@ -774,12 +778,23 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         let loadedGenerationCliArgs = ''
         let loadedGenerationNamePrompt = ''
         let loadedGenerationCommitPrompt = ''
+        let loadedDefaultNamePrompt = ''
+        let loadedDefaultCommitPrompt = ''
+        let loadedNameIsCustom = false
+        let loadedCommitIsCustom = false
         try {
-            const genSettings = await invoke<{ agent: string | null; cli_args: string | null; name_prompt: string | null; commit_prompt: string | null }>(TauriCommands.GetGenerationSettings)
+            const [genSettings, defaults] = await Promise.all([
+                invoke<{ agent: string | null; cli_args: string | null; name_prompt: string | null; commit_prompt: string | null }>(TauriCommands.GetGenerationSettings),
+                invoke<{ name_prompt: string; commit_prompt: string }>(TauriCommands.GetDefaultGenerationPrompts),
+            ])
+            loadedDefaultNamePrompt = defaults.name_prompt
+            loadedDefaultCommitPrompt = defaults.commit_prompt
             loadedGenerationAgent = genSettings.agent ?? ''
             loadedGenerationCliArgs = genSettings.cli_args ?? ''
-            loadedGenerationNamePrompt = genSettings.name_prompt ?? ''
-            loadedGenerationCommitPrompt = genSettings.commit_prompt ?? ''
+            loadedNameIsCustom = genSettings.name_prompt !== null && genSettings.name_prompt !== ''
+            loadedCommitIsCustom = genSettings.commit_prompt !== null && genSettings.commit_prompt !== ''
+            loadedGenerationNamePrompt = genSettings.name_prompt ?? defaults.name_prompt
+            loadedGenerationCommitPrompt = genSettings.commit_prompt ?? defaults.commit_prompt
         } catch (error) {
             logger.info('Generation settings not available:', error)
         }
@@ -800,7 +815,11 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         setGenerationCliArgs(loadedGenerationCliArgs)
         setGenerationNamePrompt(loadedGenerationNamePrompt)
         setGenerationCommitPrompt(loadedGenerationCommitPrompt)
-        setShowCustomPrompts(loadedGenerationNamePrompt !== '' || loadedGenerationCommitPrompt !== '')
+        setDefaultNamePrompt(loadedDefaultNamePrompt)
+        setDefaultCommitPrompt(loadedDefaultCommitPrompt)
+        setNamePromptIsCustom(loadedNameIsCustom)
+        setCommitPromptIsCustom(loadedCommitIsCustom)
+        setShowCustomPrompts(loadedNameIsCustom || loadedCommitIsCustom)
         setAgentPreferences(loadedAgentPrefs)
         const normalizedShortcuts = mergeShortcutConfig(loadedShortcuts)
         setKeyboardShortcutsState(normalizedShortcuts)
@@ -963,18 +982,22 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         commitPrompt: string
     ) => {
         try {
+            const nameValue = (namePrompt && namePrompt.trim() !== defaultNamePrompt.trim()) ? namePrompt : null
+            const commitValue = (commitPrompt && commitPrompt.trim() !== defaultCommitPrompt.trim()) ? commitPrompt : null
+            setNamePromptIsCustom(nameValue !== null)
+            setCommitPromptIsCustom(commitValue !== null)
             await invoke(TauriCommands.SetGenerationSettings, {
                 settings: {
                     agent: agent || null,
                     cli_args: cliArgs || null,
-                    name_prompt: namePrompt || null,
-                    commit_prompt: commitPrompt || null,
+                    name_prompt: nameValue,
+                    commit_prompt: commitValue,
                 },
             })
         } catch (error) {
             logger.error('Failed to save generation settings:', error)
         }
-    }, [])
+    }, [defaultNamePrompt, defaultCommitPrompt])
 
     const handleBinaryPathChange = async (agent: AgentType, path: string | null) => {
         try {
@@ -2505,36 +2528,80 @@ fi`}
                         {showCustomPrompts && (
                             <div className="mt-4 ml-6 space-y-4">
                                 <div>
-                                    <label className="text-body font-medium text-text-primary block mb-1">
-                                        {t.settings.generation.namePrompt}
-                                    </label>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-body font-medium text-text-primary">
+                                            {t.settings.generation.namePrompt}
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-caption ${namePromptIsCustom ? 'text-accent-blue' : 'text-text-muted'}`}>
+                                                {namePromptIsCustom ? t.settings.generation.customized : t.settings.generation.usingDefault}
+                                            </span>
+                                            {namePromptIsCustom && (
+                                                <button
+                                                    onClick={() => {
+                                                        setGenerationNamePrompt(defaultNamePrompt)
+                                                        setNamePromptIsCustom(false)
+                                                        void saveGenerationSettings(generationAgent, generationCliArgs, defaultNamePrompt, generationCommitPrompt)
+                                                    }}
+                                                    className="text-caption text-accent-blue hover:text-text-primary cursor-pointer"
+                                                >
+                                                    {t.settings.generation.resetToDefault}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
                                     <p className="text-caption text-text-tertiary mb-2">
                                         {t.settings.generation.namePromptDesc}
                                     </p>
                                     <textarea
                                         value={generationNamePrompt}
-                                        onChange={(e) => setGenerationNamePrompt(e.target.value)}
+                                        onChange={(e) => {
+                                            setGenerationNamePrompt(e.target.value)
+                                            setNamePromptIsCustom(e.target.value.trim() !== defaultNamePrompt.trim())
+                                        }}
                                         onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationNamePrompt, generationCommitPrompt)}
                                         placeholder={t.settings.generation.namePromptPlaceholder}
                                         className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body min-h-[100px] resize-y"
-                                        rows={4}
+                                        rows={6}
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="text-body font-medium text-text-primary block mb-1">
-                                        {t.settings.generation.commitPrompt}
-                                    </label>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-body font-medium text-text-primary">
+                                            {t.settings.generation.commitPrompt}
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`text-caption ${commitPromptIsCustom ? 'text-accent-blue' : 'text-text-muted'}`}>
+                                                {commitPromptIsCustom ? t.settings.generation.customized : t.settings.generation.usingDefault}
+                                            </span>
+                                            {commitPromptIsCustom && (
+                                                <button
+                                                    onClick={() => {
+                                                        setGenerationCommitPrompt(defaultCommitPrompt)
+                                                        setCommitPromptIsCustom(false)
+                                                        void saveGenerationSettings(generationAgent, generationCliArgs, generationNamePrompt, defaultCommitPrompt)
+                                                    }}
+                                                    className="text-caption text-accent-blue hover:text-text-primary cursor-pointer"
+                                                >
+                                                    {t.settings.generation.resetToDefault}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
                                     <p className="text-caption text-text-tertiary mb-2">
                                         {t.settings.generation.commitPromptDesc}
                                     </p>
                                     <textarea
                                         value={generationCommitPrompt}
-                                        onChange={(e) => setGenerationCommitPrompt(e.target.value)}
+                                        onChange={(e) => {
+                                            setGenerationCommitPrompt(e.target.value)
+                                            setCommitPromptIsCustom(e.target.value.trim() !== defaultCommitPrompt.trim())
+                                        }}
                                         onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationNamePrompt, generationCommitPrompt)}
                                         placeholder={t.settings.generation.commitPromptPlaceholder}
                                         className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body min-h-[100px] resize-y"
-                                        rows={4}
+                                        rows={6}
                                     />
                                 </div>
                             </div>

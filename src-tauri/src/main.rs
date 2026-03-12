@@ -1425,6 +1425,7 @@ fn main() {
             set_amp_mcp_servers,
             get_agent_command_prefix,
             set_agent_command_prefix,
+            get_default_generation_prompts,
             get_generation_settings,
             set_generation_settings
         ])

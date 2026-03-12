@@ -713,6 +713,20 @@ pub async fn set_agent_command_prefix(app: AppHandle, prefix: Option<String>) ->
     manager.set_agent_command_prefix(prefix)
 }
 
+#[derive(serde::Serialize)]
+pub struct DefaultGenerationPrompts {
+    pub name_prompt: String,
+    pub commit_prompt: String,
+}
+
+#[tauri::command]
+pub fn get_default_generation_prompts() -> DefaultGenerationPrompts {
+    DefaultGenerationPrompts {
+        name_prompt: lucode::domains::agents::naming::default_name_prompt_template(),
+        commit_prompt: lucode::domains::agents::commit_message::default_commit_prompt_template(),
+    }
+}
+
 #[tauri::command]
 pub async fn get_generation_settings(
     app: AppHandle,
@@ -1351,5 +1365,15 @@ mod tests {
         for f in &out {
             assert!(seen.insert(f.family.to_lowercase()));
         }
+    }
+
+    #[test]
+    fn get_default_generation_prompts_returns_non_empty() {
+        let prompts = get_default_generation_prompts();
+        assert!(!prompts.name_prompt.is_empty());
+        assert!(!prompts.commit_prompt.is_empty());
+        assert!(prompts.name_prompt.contains("{task}"));
+        assert!(prompts.commit_prompt.contains("{commits}"));
+        assert!(prompts.commit_prompt.contains("{files}"));
     }
 }

@@ -319,6 +319,9 @@ export interface Translations {
       commitPrompt: string
       commitPromptDesc: string
       commitPromptPlaceholder: string
+      resetToDefault: string
+      usingDefault: string
+      customized: string
     }
     mcp: {
       title: string
