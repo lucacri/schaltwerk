@@ -12,6 +12,9 @@ Lucode is designed for keyboard-first workflows. You can manage multiple agents 
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+Shift+←→` | Switch between project tabs |
+| `Cmd+Shift+1-9` | Jump to project tab by index |
+| `` Cmd+` `` | Cycle to next project tab |
+| `` Cmd+Shift+` `` | Cycle to previous project tab |
 | `Cmd+←→` | Switch between filters (All/Specs/Running/Reviewed) |
 | `Cmd+↑↓` | Cycle through sessions in current filter |
 | `Cmd+1-9` | Jump directly to a session (1 = orchestrator) |
@@ -70,10 +73,10 @@ Review all running sessions without touching the mouse:
 Working on frontend and backend simultaneously:
 
 ```
-1. Cmd+Shift+→  →  Switch to backend project
+1. Cmd+Shift+→  →  Switch to backend project (or Cmd+` to cycle)
 2. Cmd+2        →  Jump to session 2
 3. Cmd+T        →  Check agent progress
-4. Cmd+Shift+←  →  Switch back to frontend
+4. Cmd+Shift+←  →  Switch back to frontend (or Cmd+Shift+` to cycle back)
 ```
 
 ## Customization
