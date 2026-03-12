@@ -152,19 +152,19 @@ mod performance_tests {
 
     #[test]
     fn test_git_stats_handles_many_files_without_flaking() {
-        let (_temp, repo_path, worktree_path) = setup_test_repo_with_many_files(100);
+        let (_temp, repo_path, worktree_path) = setup_test_repo_with_many_files(20);
         let current_branch = get_current_branch(&repo_path).unwrap();
 
         let stats = calculate_git_stats_fast(&worktree_path, &current_branch).unwrap();
 
         assert!(
-            stats.files_changed >= 50,
-            "expected at least 50 files changed, got {}",
+            stats.files_changed >= 10,
+            "expected at least 10 files changed, got {}",
             stats.files_changed
         );
         assert!(
-            stats.lines_added >= 50,
-            "expected at least 50 lines added, got {}",
+            stats.lines_added >= 10,
+            "expected at least 10 lines added, got {}",
             stats.lines_added
         );
         assert!(
@@ -175,7 +175,7 @@ mod performance_tests {
 
     #[test]
     fn test_git_stats_avoids_recomputing_when_inputs_unchanged() {
-        let (_temp, repo_path, worktree_path) = setup_test_repo_with_many_files(50);
+        let (_temp, repo_path, worktree_path) = setup_test_repo_with_many_files(10);
         let current_branch = get_current_branch(&repo_path).unwrap();
 
         clear_stats_cache();

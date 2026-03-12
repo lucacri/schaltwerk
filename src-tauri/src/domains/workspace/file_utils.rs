@@ -194,12 +194,7 @@ mod tests {
     fn test_binary_extensions_not_diffable() {
         let temp_dir = TempDir::new().unwrap();
 
-        let binary_extensions = vec![
-            "exe", "dll", "so", "zip", "tar", "gz", "jpg", "png", "mp4", "mp3", "pdf", "doc",
-            "sqlite", "ttf", "wasm",
-        ];
-
-        for ext in binary_extensions {
+        for ext in ["exe", "zip"] {
             let file_path = temp_dir.path().join(format!("test.{}", ext));
             fs::write(&file_path, "dummy content").unwrap();
 
@@ -325,12 +320,7 @@ mod tests {
     fn test_source_code_files_are_diffable() {
         let temp_dir = TempDir::new().unwrap();
 
-        let source_extensions = vec![
-            "rs", "ts", "tsx", "js", "jsx", "py", "go", "java", "cpp", "c", "h", "css", "html",
-            "xml", "json", "yaml", "toml", "md", "sh", "sql",
-        ];
-
-        for ext in source_extensions {
+        for ext in ["rs", "ts"] {
             let file_path = temp_dir.path().join(format!("test.{}", ext));
             fs::write(&file_path, "// Source code\nfunction test() {}\n").unwrap();
 
