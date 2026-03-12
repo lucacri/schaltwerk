@@ -54,8 +54,15 @@ interface AttentionSummary {
 
 export const shouldCountSessionForAttention = (session: EnrichedSession): boolean => {
   const requiresAttention = session.info.attention_required === true
-  const isReviewed = session.info.ready_to_merge === true
+  const isReviewed = session.info.ready_to_merge === true || session.info.session_state === 'reviewed'
   return requiresAttention && !isReviewed
+}
+
+export const isSessionActivelyRunning = (session: EnrichedSession): boolean => {
+  const isRunning = session.info.session_state === 'running'
+  const isIdle = session.info.attention_required === true
+  const isReviewed = session.info.ready_to_merge === true || session.info.session_state === 'reviewed'
+  return isRunning && !isIdle && !isReviewed
 }
 
 const formatProjectKey = (projectPath: string | null): string => {

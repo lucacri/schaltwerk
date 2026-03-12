@@ -4,6 +4,7 @@ export interface ProjectTab {
   projectPath: string
   projectName: string
   attentionCount?: number
+  runningCount?: number
   status?: ProjectLifecycleStatus
 }
 

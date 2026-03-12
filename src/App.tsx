@@ -69,7 +69,7 @@ import { OnboardingModal } from './components/onboarding/OnboardingModal'
 import { useOnboarding } from './hooks/useOnboarding'
 import { useSessionPrefill } from './hooks/useSessionPrefill'
 // useRightPanelPersistence removed
-import { useAttentionNotifications } from './hooks/useAttentionNotifications'
+import { useAttentionNotifications, isSessionActivelyRunning } from './hooks/useAttentionNotifications'
 import { useAgentBinarySnapshot } from './hooks/useAgentBinarySnapshot'
 import { useDiffPreloader } from './hooks/useDiffPreloader'
 import { theme } from './common/theme'
@@ -149,6 +149,7 @@ function AppContent() {
   const agentLifecycleStateRef = useRef(new Map<string, { state: 'spawned' | 'ready'; timestamp: number }>())
   const [devErrorToastsEnabled, setDevErrorToastsEnabled] = useState(false)
   const [attentionCounts, setAttentionCounts] = useState<Record<string, number>>({})
+  const [runningCounts, setRunningCounts] = useState<Record<string, number>>({})
   const [showCliMissingModal, setShowCliMissingModal] = useState(false)
   const [cliModalEverShown, setCliModalEverShown] = useState(false)
   usePreviewPanelEvents()
@@ -751,6 +752,15 @@ function AppContent() {
     }, [projectPath]),
     onAttentionSummaryChange: handleAttentionSummaryChange,
   })
+
+  useEffect(() => {
+    if (!projectPath) return
+    const count = allSessions.filter(isSessionActivelyRunning).length
+    setRunningCounts(prev => {
+      if (prev[projectPath] === count) return prev
+      return { ...prev, [projectPath]: count }
+    })
+  }, [allSessions, projectPath])
 
   const shouldBlockSessionModal = useCallback(
     (reason: string) => {
@@ -1764,6 +1774,14 @@ function AppContent() {
         return rest
       })
 
+      setRunningCounts(prev => {
+        if (!(path in prev)) {
+          return prev
+        }
+        const { [path]: _removed, ...rest } = prev
+        return rest
+      })
+
       setShowHome(result.nextActivePath === null)
     } catch (error) {
       logger.warn('Failed to cleanup closed project:', error)
@@ -1802,8 +1820,9 @@ function AppContent() {
 
   const tabsWithAttention = useMemo(() => projectTabs.map(tab => ({
     ...tab,
-    attentionCount: attentionCounts[tab.projectPath] ?? 0
-  })), [projectTabs, attentionCounts])
+    attentionCount: attentionCounts[tab.projectPath] ?? 0,
+    runningCount: runningCounts[tab.projectPath] ?? 0,
+  })), [projectTabs, attentionCounts, runningCounts])
 
   const [windowWidth, setWindowWidth] = useState<number>(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1440,

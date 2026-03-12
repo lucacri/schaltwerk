@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shouldCountSessionForAttention } from './useAttentionNotifications'
+import { shouldCountSessionForAttention, isSessionActivelyRunning } from './useAttentionNotifications'
 import type { EnrichedSession } from '../types/session'
 
 const createSession = (
@@ -47,5 +47,77 @@ describe('shouldCountSessionForAttention', () => {
     })
 
     expect(shouldCountSessionForAttention(session)).toBe(false)
+  })
+
+  it('excludes sessions with session_state reviewed even when ready_to_merge is false', () => {
+    const session = createSession({
+      attention_required: true,
+      ready_to_merge: false,
+      session_state: 'reviewed',
+    })
+
+    expect(shouldCountSessionForAttention(session)).toBe(false)
+  })
+})
+
+describe('isSessionActivelyRunning', () => {
+  it('returns true for running sessions without attention required', () => {
+    const session = createSession({
+      session_state: 'running',
+      attention_required: false,
+      ready_to_merge: false,
+    })
+
+    expect(isSessionActivelyRunning(session)).toBe(true)
+  })
+
+  it('returns false for running sessions that are idle (attention_required)', () => {
+    const session = createSession({
+      session_state: 'running',
+      attention_required: true,
+      ready_to_merge: false,
+    })
+
+    expect(isSessionActivelyRunning(session)).toBe(false)
+  })
+
+  it('returns false for reviewed sessions', () => {
+    const session = createSession({
+      session_state: 'reviewed',
+      attention_required: false,
+      ready_to_merge: false,
+    })
+
+    expect(isSessionActivelyRunning(session)).toBe(false)
+  })
+
+  it('returns false for reviewed sessions via ready_to_merge', () => {
+    const session = createSession({
+      session_state: 'running',
+      attention_required: false,
+      ready_to_merge: true,
+    })
+
+    expect(isSessionActivelyRunning(session)).toBe(false)
+  })
+
+  it('returns false for spec sessions', () => {
+    const session = createSession({
+      session_state: 'spec',
+      attention_required: false,
+      ready_to_merge: false,
+    })
+
+    expect(isSessionActivelyRunning(session)).toBe(false)
+  })
+
+  it('returns false for processing sessions', () => {
+    const session = createSession({
+      session_state: 'processing',
+      attention_required: false,
+      ready_to_merge: false,
+    })
+
+    expect(isSessionActivelyRunning(session)).toBe(false)
   })
 })

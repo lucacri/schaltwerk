@@ -23,6 +23,7 @@ export function TabBar({ tabs, activeTabPath, onSelectTab, onCloseTab, onOpenPro
           projectPath={tab.projectPath}
           projectName={tab.projectName}
           attentionCount={tab.attentionCount}
+          runningCount={tab.runningCount}
           isActive={tab.projectPath === activeTabPath}
           onSelect={() => onSelectTab(tab.projectPath)}
           onClose={() => onCloseTab(tab.projectPath)}
