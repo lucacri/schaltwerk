@@ -251,6 +251,21 @@ describe('terminalKeybindings', () => {
         it('should skip shell for CycleNextProject', () => {
             expect(shouldSkipShell(TerminalCommand.CycleNextProject)).toBe(true);
         });
+
+        it('should match Cmd+Shift+` as CyclePrevProject on Mac', () => {
+            const event = new KeyboardEvent('keydown', {
+                key: '~',
+                metaKey: true,
+                shiftKey: true,
+            });
+            const result = matchKeybinding(event);
+            expect(result.matches).toBe(true);
+            expect(result.commandId).toBe(TerminalCommand.CyclePrevProject);
+        });
+
+        it('should skip shell for CyclePrevProject', () => {
+            expect(shouldSkipShell(TerminalCommand.CyclePrevProject)).toBe(true);
+        });
     });
 
     describe('Ctrl+C behavior (critical for TUI compatibility)', () => {

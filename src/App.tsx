@@ -1890,8 +1890,8 @@ function AppContent() {
     void switchToProject(index)
   }, [switchToProject])
 
-  const handleCycleNextProject = useCallback(() => {
-    void switchProject('next')
+  const handleCyclePrevProject = useCallback(() => {
+    void switchProject('prev')
   }, [switchProject])
 
   const tabsWithAttention = useMemo(() => projectTabs.map(tab => ({
@@ -2063,7 +2063,8 @@ function AppContent() {
                           onSelectPrevProject={handleSelectPrevProject}
                           onSelectNextProject={handleSelectNextProject}
                           onSwitchToProject={handleSwitchToProject}
-                          onCycleNextProject={handleCycleNextProject}
+                          onCycleNextProject={handleSelectNextProject}
+                          onCyclePrevProject={handleCyclePrevProject}
                           isCollapsed={isLeftPanelCollapsed}
                           onExpandRequest={toggleLeftPanelCollapsed}
                           onToggleSidebar={toggleLeftPanelCollapsed}

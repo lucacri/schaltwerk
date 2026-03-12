@@ -66,6 +66,7 @@ interface SidebarProps {
     onSelectNextProject?: () => void
     onSwitchToProject?: (index: number) => void
     onCycleNextProject?: () => void
+    onCyclePrevProject?: () => void
     isCollapsed?: boolean
     onExpandRequest?: () => void
     onToggleSidebar?: () => void
@@ -137,7 +138,7 @@ const groupVersionGroupsByEpic = (sessionGroups: SessionVersionGroupType[]): Epi
     return { epicGroups, ungroupedGroups }
 }
 
-export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, onSelectNextProject, onSwitchToProject, onCycleNextProject, isCollapsed = false, onExpandRequest, onToggleSidebar }: SidebarProps) {
+export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, onSelectNextProject, onSwitchToProject, onCycleNextProject, onCyclePrevProject, isCollapsed = false, onExpandRequest, onToggleSidebar }: SidebarProps) {
     const { t } = useTranslation()
     const { selection, setSelection, terminals, clearTerminalTracking } = useSelection()
     const projectPath = useAtomValue(projectPathAtom)
@@ -1343,6 +1344,7 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
         onSelectNextProject: handleSelectNextProject,
         onSwitchToProject,
         onCycleNextProject,
+        onCyclePrevProject,
         onNavigateToPrevFilter: handleNavigateToPrevFilter,
         onNavigateToNextFilter: handleNavigateToNextFilter,
         onResetSelection: handleResetSelectionShortcut,

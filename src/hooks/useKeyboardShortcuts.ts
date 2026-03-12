@@ -37,6 +37,7 @@ interface KeyboardShortcutsProps {
   onOpenInApp?: () => void
   onSwitchToProject?: (index: number) => void
   onCycleNextProject?: () => void
+  onCyclePrevProject?: () => void
 }
 
 interface KeyboardShortcutOptions {
@@ -73,6 +74,7 @@ export function useKeyboardShortcuts(
     onOpenInApp,
     onSwitchToProject,
     onCycleNextProject,
+    onCyclePrevProject,
   }: KeyboardShortcutsProps,
   options: KeyboardShortcutOptions = {},
 ) {
@@ -128,6 +130,12 @@ export function useKeyboardShortcuts(
             return
           }
         }
+      }
+
+      if (onCyclePrevProject && isShortcutForAction(event, KeyboardShortcutAction.CyclePrevProject, shortcutConfig, { platform })) {
+        event.preventDefault()
+        onCyclePrevProject()
+        return
       }
 
       if (onCycleNextProject && isShortcutForAction(event, KeyboardShortcutAction.CycleNextProject, shortcutConfig, { platform })) {
@@ -291,6 +299,7 @@ export function useKeyboardShortcuts(
     onOpenInApp,
     onSwitchToProject,
     onCycleNextProject,
+    onCyclePrevProject,
     isDiffViewerOpen,
     isModalOpen,
     shortcutConfig,

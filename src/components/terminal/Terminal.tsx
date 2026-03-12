@@ -1568,6 +1568,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             if (modifierKey && event.key === '`') {
                 return true
             }
+            if (modifierKey && event.shiftKey && event.key === '~') {
+                return true
+            }
             // Prefer Shift+Modifier+N as "New spec"
             if (modifierKey && event.shiftKey && (event.key === 'n' || event.key === 'N')) {
                 emitUiEvent(UiEvent.NewSpecRequest)

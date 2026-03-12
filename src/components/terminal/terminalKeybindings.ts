@@ -14,6 +14,7 @@ export const enum TerminalCommand {
     ClaudeShiftEnter = 'terminal.claudeShiftEnter',
     SwitchProject = 'terminal.switchProject',
     CycleNextProject = 'terminal.cycleNextProject',
+    CyclePrevProject = 'terminal.cyclePrevProject',
 }
 
 const COMMANDS_TO_SKIP_SHELL: TerminalCommand[] = [
@@ -25,6 +26,7 @@ const COMMANDS_TO_SKIP_SHELL: TerminalCommand[] = [
     TerminalCommand.ClaudeShiftEnter,
     TerminalCommand.SwitchProject,
     TerminalCommand.CycleNextProject,
+    TerminalCommand.CyclePrevProject,
 ];
 
 export function matchKeybinding(event: KeyboardEvent): KeyBindingMatch {
@@ -56,7 +58,11 @@ export function matchKeybinding(event: KeyboardEvent): KeyBindingMatch {
         return { matches: true, commandId: TerminalCommand.SwitchProject };
     }
 
-    if (modifierKey && event.key === '`') {
+    if (modifierKey && event.shiftKey && (event.key === '~' || event.key === '`')) {
+        return { matches: true, commandId: TerminalCommand.CyclePrevProject };
+    }
+
+    if (modifierKey && !event.shiftKey && event.key === '`') {
         return { matches: true, commandId: TerminalCommand.CycleNextProject };
     }
 

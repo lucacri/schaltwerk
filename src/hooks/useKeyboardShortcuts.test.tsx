@@ -921,6 +921,36 @@ describe('useKeyboardShortcuts', () => {
       expect(event.defaultPrevented).toBe(false)
     })
 
+    it('cycles to previous project with Mod+Shift+Backtick', () => {
+      const onCyclePrevProject = vi.fn()
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onCyclePrevProject,
+        sessionCount: 0,
+      }))
+
+      pressKey('`', { metaKey: true, shiftKey: true })
+      expect(onCyclePrevProject).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not cycle prev project when callback not provided', () => {
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        sessionCount: 0,
+      }))
+
+      const event = pressKey('`', { metaKey: true, shiftKey: true })
+      expect(event.defaultPrevented).toBe(false)
+    })
+
     it('Mod+Shift+1 triggers project switch, not session switch', () => {
       const onSwitchToProject = vi.fn()
       const onSelectOrchestrator = vi.fn()
