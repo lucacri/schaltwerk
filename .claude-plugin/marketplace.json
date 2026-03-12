@@ -1,0 +1,16 @@
+{
+  "name": "lucode-marketplace",
+  "owner": {
+    "name": "Luca Critelli"
+  },
+  "plugins": [
+    {
+      "name": "lucode",
+      "source": {
+        "source": "github",
+        "repo": "lucacri/schaltwerk"
+      },
+      "description": "Skills for managing Lucode AI coding sessions"
+    }
+  ]
+}
