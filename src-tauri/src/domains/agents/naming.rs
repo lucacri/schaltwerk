@@ -23,6 +23,7 @@ pub struct SessionRenameContext<'a> {
     pub cli_args: Option<String>,
     pub env_vars: Vec<(String, String)>,
     pub binary_path: Option<String>,
+    pub custom_name_prompt: Option<String>,
 }
 
 pub struct NameGenerationArgs<'a> {
@@ -34,6 +35,7 @@ pub struct NameGenerationArgs<'a> {
     pub cli_args: Option<&'a str>,
     pub env_vars: &'a [(String, String)],
     pub binary_path: Option<&'a str>,
+    pub custom_name_prompt: Option<&'a str>,
 }
 
 pub fn truncate_prompt(prompt: &str) -> String {
@@ -46,6 +48,86 @@ pub fn truncate_prompt(prompt: &str) -> String {
     } else {
         first_lines
     }
+}
+
+fn default_name_prompt_plain(truncated: &str) -> String {
+    format!(
+        r#"IMPORTANT: Do not use any tools. Answer this message directly without searching or reading files.
+
+Generate a SHORT kebab-case name for this coding task.
+
+Rules:
+- 2-4 words, prefer verb-noun format (e.g., fix-login, add-dark-mode)
+- 20 characters or less preferred
+- Use only lowercase letters, numbers, hyphens
+- Capture WHAT is being done, not HOW
+- Return ONLY the name, nothing else
+- Do NOT use tools or commands
+
+Good examples:
+- "fix-pr-links" (for fixing pull request link behavior)
+- "add-dark-mode" (for implementing dark mode theme)
+- "refactor-auth" (for refactoring authentication)
+- "update-nav-bar" (for changing navigation layout)
+
+Bad examples:
+- "implement-the-new-user-authentication-system" (too long)
+- "session-1" (too generic)
+- "claude-task" (describes the agent, not the task)
+
+Task: {truncated}
+
+Name:"#
+    )
+}
+
+fn default_name_prompt_json(truncated: &str) -> String {
+    format!(
+        r#"IMPORTANT: Do not use any tools. Answer this message directly without searching or reading files.
+
+Generate a SHORT kebab-case name for this coding task.
+
+Rules:
+- 2-4 words, prefer verb-noun format (e.g., fix-login, add-dark-mode)
+- 20 characters or less preferred
+- Use only lowercase letters, numbers, hyphens
+- Capture WHAT is being done, not HOW
+- Return ONLY JSON format: {{"name": "kebab-case-name"}}
+- Do NOT use tools or commands
+
+Good examples:
+- {{"name": "fix-pr-links"}} (for fixing pull request link behavior)
+- {{"name": "add-dark-mode"}} (for implementing dark mode theme)
+- {{"name": "refactor-auth"}} (for refactoring authentication)
+- {{"name": "update-nav-bar"}} (for changing navigation layout)
+
+Bad examples:
+- "implement-the-new-user-authentication-system" (too long)
+- "session-1" (too generic)
+- "claude-task" (describes the agent, not the task)
+
+Task: {truncated}
+
+Respond with JSON: {{"name": "short-kebab-case-name"}}"#
+    )
+}
+
+fn resolve_name_prompts(
+    custom_name_prompt: Option<&str>,
+    truncated: &str,
+) -> (String, String) {
+    let has_custom = custom_name_prompt.is_some_and(|p| !p.is_empty());
+    let prompt_plain = if has_custom {
+        custom_name_prompt.unwrap().replace("{task}", truncated)
+    } else {
+        default_name_prompt_plain(truncated)
+    };
+    let prompt_json = if has_custom {
+        format!("{prompt_plain}\n\nRespond with JSON: {{\"name\": \"short-kebab-case-name\"}}")
+    } else {
+        default_name_prompt_json(truncated)
+    };
+    (prompt_plain, prompt_json)
 }
 
 pub fn sanitize_name(input: &str) -> String {
@@ -107,6 +189,7 @@ pub async fn generate_display_name_and_rename_branch(
         cli_args,
         env_vars,
         binary_path,
+        custom_name_prompt,
     } = ctx;
 
     let args = NameGenerationArgs {
@@ -118,6 +201,7 @@ pub async fn generate_display_name_and_rename_branch(
         cli_args: cli_args.as_deref(),
         env_vars: &env_vars,
         binary_path: binary_path.as_deref(),
+        custom_name_prompt: custom_name_prompt.as_deref(),
     };
 
     let result = generate_display_name_core(args, move |db, name| {
@@ -193,6 +277,7 @@ where
         cli_args,
         env_vars,
         binary_path,
+        custom_name_prompt,
     } = args;
 
     log::info!(
@@ -216,63 +301,7 @@ where
     let truncated = truncate_prompt(base_prompt);
     log::debug!("Truncated prompt for name generation: {truncated}");
 
-    let prompt_plain = format!(
-        r#"IMPORTANT: Do not use any tools. Answer this message directly without searching or reading files.
-
-Generate a SHORT kebab-case name for this coding task.
-
-Rules:
-- 2-4 words, prefer verb-noun format (e.g., fix-login, add-dark-mode)
-- 20 characters or less preferred
-- Use only lowercase letters, numbers, hyphens
-- Capture WHAT is being done, not HOW
-- Return ONLY the name, nothing else
-- Do NOT use tools or commands
-
-Good examples:
-- "fix-pr-links" (for fixing pull request link behavior)
-- "add-dark-mode" (for implementing dark mode theme)
-- "refactor-auth" (for refactoring authentication)
-- "update-nav-bar" (for changing navigation layout)
-
-Bad examples:
-- "implement-the-new-user-authentication-system" (too long)
-- "session-1" (too generic)
-- "claude-task" (describes the agent, not the task)
-
-Task: {truncated}
-
-Name:"#
-    );
-
-    let prompt_json = format!(
-        r#"IMPORTANT: Do not use any tools. Answer this message directly without searching or reading files.
-
-Generate a SHORT kebab-case name for this coding task.
-
-Rules:
-- 2-4 words, prefer verb-noun format (e.g., fix-login, add-dark-mode)
-- 20 characters or less preferred
-- Use only lowercase letters, numbers, hyphens
-- Capture WHAT is being done, not HOW
-- Return ONLY JSON format: {{"name": "kebab-case-name"}}
-- Do NOT use tools or commands
-
-Good examples:
-- {{"name": "fix-pr-links"}} (for fixing pull request link behavior)
-- {{"name": "add-dark-mode"}} (for implementing dark mode theme)
-- {{"name": "refactor-auth"}} (for refactoring authentication)
-- {{"name": "update-nav-bar"}} (for changing navigation layout)
-
-Bad examples:
-- "implement-the-new-user-authentication-system" (too long)
-- "session-1" (too generic)
-- "claude-task" (describes the agent, not the task)
-
-Task: {truncated}
-
-Respond with JSON: {{"name": "short-kebab-case-name"}}"#
-    );
+    let (prompt_plain, prompt_json) = resolve_name_prompts(custom_name_prompt, &truncated);
 
     let temp_base = std::env::temp_dir();
     let unique_temp_dir = temp_base.join(format!("lucode_namegen_{target_id}"));
@@ -1166,6 +1195,7 @@ Line 4"
                 cli_args: None,
                 env_vars: &[],
                 binary_path: None,
+                custom_name_prompt: None,
             }
         }
 
@@ -1209,6 +1239,7 @@ Line 4"
                 cli_args: None,
                 env_vars: &[],
                 binary_path: None,
+                custom_name_prompt: None,
             }),
         )
         .await;
@@ -1241,6 +1272,7 @@ Line 4"
             cli_args: None,
             env_vars: &[],
             binary_path: None,
+            custom_name_prompt: None,
         };
         let result = generate_display_name(args).await;
 
@@ -1270,6 +1302,7 @@ Line 4"
             cli_args: Some("--model sonnet".to_string()),
             env_vars: vec![("KEY".to_string(), "VALUE".to_string())],
             binary_path: Some("/usr/local/bin/claude".to_string()),
+            custom_name_prompt: None,
         };
 
         // Verify context fields are accessible
@@ -1326,5 +1359,41 @@ Line 4"
                 || token.starts_with("-m=")
         });
         assert!(!has_model_flag);
+    }
+
+    #[test]
+    fn resolve_name_prompts_uses_default_when_none() {
+        let (plain, json) = resolve_name_prompts(None, "fix login bug");
+        assert!(plain.contains("Generate a SHORT kebab-case name"));
+        assert!(plain.contains("fix login bug"));
+        assert!(json.contains("Return ONLY JSON format"));
+        assert!(json.contains("fix login bug"));
+    }
+
+    #[test]
+    fn resolve_name_prompts_uses_default_when_empty() {
+        let (plain, _) = resolve_name_prompts(Some(""), "fix login bug");
+        assert!(plain.contains("Generate a SHORT kebab-case name"));
+    }
+
+    #[test]
+    fn resolve_name_prompts_substitutes_custom_template() {
+        let (plain, json) = resolve_name_prompts(
+            Some("Name this task: {task}"),
+            "implement dark mode",
+        );
+        assert_eq!(plain, "Name this task: implement dark mode");
+        assert!(!plain.contains("Generate a SHORT kebab-case name"));
+        assert!(json.contains("Name this task: implement dark mode"));
+        assert!(json.contains("Respond with JSON"));
+    }
+
+    #[test]
+    fn resolve_name_prompts_custom_without_placeholder() {
+        let (plain, _) = resolve_name_prompts(
+            Some("Just name it"),
+            "some task",
+        );
+        assert_eq!(plain, "Just name it");
     }
 }

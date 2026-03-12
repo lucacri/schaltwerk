@@ -295,14 +295,22 @@
       "projectPath": "项目路径："
     },
     "generation": {
-      "title": "AI Generation",
-      "description": "Configure which AI agent and model is used for generating session names and commit messages.",
-      "agent": "Agent",
-      "agentDesc": "Which agent CLI to use for AI generation. Default uses the session's agent.",
-      "agentDefault": "Default (session agent)",
-      "model": "Model",
-      "modelDesc": "Override the model used for generation. Leave empty to use the agent's default model.",
-      "modelPlaceholder": "e.g. gemini-2.0-flash"
+      "title": "AI 生成",
+      "description": "配置用于生成会话名称和提交消息的 AI 代理。",
+      "agent": "代理",
+      "agentDesc": "用于 AI 生成的代理命令行工具。默认使用会话的代理。",
+      "agentDefault": "默认（会话代理）",
+      "cliArgs": "命令行参数",
+      "cliArgsDesc": "传递给代理的额外命令行参数（例如 --model gemini-2.0-flash）。",
+      "cliArgsPlaceholder": "例如 --model gemini-2.0-flash",
+      "customPrompts": "自定义提示词",
+      "customPromptsDesc": "覆盖 AI 生成使用的默认提示词。留空使用默认值。",
+      "namePrompt": "名称生成提示词",
+      "namePromptDesc": "用于生成会话名称的提示词。使用 {task} 作为任务描述的占位符。",
+      "namePromptPlaceholder": "默认提示词会从任务描述生成简短的短横线命名",
+      "commitPrompt": "提交消息提示词",
+      "commitPromptDesc": "用于生成提交消息的提示词。使用 {commits} 表示提交主题，{files} 表示更改的文件。",
+      "commitPromptPlaceholder": "默认提示词会从更改内容生成规范的提交消息"
     },
     "mcp": {
       "title": "MCP 服务器配置",

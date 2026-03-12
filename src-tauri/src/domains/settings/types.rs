@@ -213,6 +213,12 @@ pub struct GenerationSettings {
     pub agent: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(default)]
+    pub cli_args: Option<String>,
+    #[serde(default)]
+    pub name_prompt: Option<String>,
+    #[serde(default)]
+    pub commit_prompt: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

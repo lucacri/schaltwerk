@@ -304,9 +304,17 @@ export interface Translations {
       agent: string
       agentDesc: string
       agentDefault: string
-      model: string
-      modelDesc: string
-      modelPlaceholder: string
+      cliArgs: string
+      cliArgsDesc: string
+      cliArgsPlaceholder: string
+      customPrompts: string
+      customPromptsDesc: string
+      namePrompt: string
+      namePromptDesc: string
+      namePromptPlaceholder: string
+      commitPrompt: string
+      commitPromptDesc: string
+      commitPromptPlaceholder: string
     }
     mcp: {
       title: string

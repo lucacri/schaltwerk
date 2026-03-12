@@ -50,6 +50,7 @@ async fn spec_name_generation_updates_spec_display_name() {
         cli_args: None,
         env_vars: &[],
         binary_path: Some(fake_claude_lossy.as_ref()),
+        custom_name_prompt: None,
     };
 
     let result = generate_spec_display_name(args).await.unwrap();

@@ -298,13 +298,21 @@
     },
     "generation": {
       "title": "AI Generation",
-      "description": "Configure which AI agent and model is used for generating session names and commit messages.",
+      "description": "Configure which AI agent is used for generating session names and commit messages.",
       "agent": "Agent",
       "agentDesc": "Which agent CLI to use for AI generation. Default uses the session's agent.",
       "agentDefault": "Default (session agent)",
-      "model": "Model",
-      "modelDesc": "Override the model used for generation. Leave empty to use the agent's default model.",
-      "modelPlaceholder": "e.g. gemini-2.0-flash"
+      "cliArgs": "CLI Arguments",
+      "cliArgsDesc": "Extra command-line arguments passed to the agent for generation (e.g., --model gemini-2.0-flash).",
+      "cliArgsPlaceholder": "e.g., --model gemini-2.0-flash",
+      "customPrompts": "Custom Prompts",
+      "customPromptsDesc": "Override the default prompts used for AI generation. Leave empty to use defaults.",
+      "namePrompt": "Name Generation Prompt",
+      "namePromptDesc": "Prompt for generating session names. Use {task} as placeholder for the task description.",
+      "namePromptPlaceholder": "Default prompt generates a short kebab-case name from the task description",
+      "commitPrompt": "Commit Message Prompt",
+      "commitPromptDesc": "Prompt for generating commit messages. Use {commits} for commit subjects and {files} for changed files.",
+      "commitPromptPlaceholder": "Default prompt generates a conventional commit message from the changes"
     },
     "mcp": {
       "title": "MCP Server Configuration",

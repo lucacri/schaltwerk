@@ -146,6 +146,8 @@ async fn resolve_generation_agent_and_args(
     String,
     Option<String>,
     lucode::domains::settings::AgentPreference,
+    Option<String>,
+    Option<String>,
 ) {
     let generation_settings = if let Some(sm) = SETTINGS_MANAGER.get() {
         sm.lock().await.get_generation_settings()
@@ -161,16 +163,23 @@ async fn resolve_generation_agent_and_args(
     let (env_vars, mut cli_args, binary_path, preferences) =
         get_agent_env_and_cli_args_async(&agent).await;
 
-    if let Some(model) = generation_settings.model.as_deref().filter(|m| !m.is_empty()) {
-        let model_arg = format!("--model {model}");
+    if let Some(gen_cli_args) = generation_settings.cli_args.as_deref().filter(|a| !a.is_empty()) {
         if cli_args.is_empty() {
-            cli_args = model_arg;
+            cli_args = gen_cli_args.to_string();
         } else {
-            cli_args = format!("{model_arg} {cli_args}");
+            cli_args = format!("{gen_cli_args} {cli_args}");
         }
     }
 
-    (agent, env_vars, cli_args, binary_path, preferences)
+    (
+        agent,
+        env_vars,
+        cli_args,
+        binary_path,
+        preferences,
+        generation_settings.name_prompt,
+        generation_settings.commit_prompt,
+    )
 }
 
 fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: String) {
@@ -241,7 +250,7 @@ fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: Str
             })
         );
 
-        let (agent, mut env_vars, cli_args, binary_path, _) =
+        let (agent, mut env_vars, cli_args, binary_path, _, custom_name_prompt, _) =
             resolve_generation_agent_and_args(&agent).await;
 
         if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
@@ -267,6 +276,7 @@ fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: Str
             cli_args,
             env_vars,
             binary_path,
+            custom_name_prompt,
         };
 
         match lucode::domains::agents::naming::generate_display_name_and_rename_branch(ctx)
@@ -319,7 +329,7 @@ fn spawn_spec_name_generation(
             }
         };
 
-        let (agent, mut env_vars, cli_args, binary_path, _) =
+        let (agent, mut env_vars, cli_args, binary_path, _, custom_name_prompt, _) =
             resolve_generation_agent_and_args(&agent).await;
 
         if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
@@ -341,6 +351,7 @@ fn spawn_spec_name_generation(
             cli_args: cli_args.as_deref(),
             env_vars: &env_vars,
             binary_path: binary_path.as_deref(),
+            custom_name_prompt: custom_name_prompt.as_deref(),
         };
 
         match lucode::domains::agents::naming::generate_spec_display_name(args).await {
@@ -381,7 +392,7 @@ pub async fn schaltwerk_core_generate_session_name(
             .unwrap_or_else(|_| "claude".to_string())
     });
 
-    let (agent, mut env_vars, cli_args, binary_path, _) =
+    let (agent, mut env_vars, cli_args, binary_path, _, custom_name_prompt, _) =
         resolve_generation_agent_and_args(&fallback_agent).await;
 
     if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
@@ -403,6 +414,7 @@ pub async fn schaltwerk_core_generate_session_name(
         cli_args: cli_args.as_deref(),
         env_vars: &env_vars,
         binary_path: binary_path.as_deref(),
+        custom_name_prompt: custom_name_prompt.as_deref(),
     };
 
     lucode::domains::agents::naming::generate_name_only(args)
@@ -514,7 +526,7 @@ pub async fn schaltwerk_core_generate_commit_message(
         return Ok(None);
     }
 
-    let (agent_type_str, mut env_vars, cli_args, binary_path, _) =
+    let (agent_type_str, mut env_vars, cli_args, binary_path, _, _, custom_commit_prompt) =
         resolve_generation_agent_and_args(&fallback_agent_type).await;
 
     if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
@@ -534,6 +546,7 @@ pub async fn schaltwerk_core_generate_commit_message(
         cli_args: cli_args_opt.as_deref(),
         env_vars: &env_vars,
         binary_path: binary_path.as_deref(),
+        custom_commit_prompt: custom_commit_prompt.as_deref(),
     };
 
     lucode::domains::agents::commit_message::generate_commit_message(args)
@@ -1167,7 +1180,7 @@ pub async fn schaltwerk_core_rename_version_group(
         .clone()
         .unwrap_or_else(|| db.get_agent_type().unwrap_or_else(|_| "claude".to_string()));
 
-    let (agent_type, mut env_vars, cli_args, binary_path, _preferences) =
+    let (agent_type, mut env_vars, cli_args, binary_path, _preferences, custom_name_prompt, _) =
         resolve_generation_agent_and_args(&fallback_agent).await;
 
     if let Ok(project_env_vars) = db.get_project_environment_variables(&repo_path) {
@@ -1189,6 +1202,7 @@ pub async fn schaltwerk_core_rename_version_group(
         },
         env_vars: &env_vars,
         binary_path: binary_path.as_deref(),
+        custom_name_prompt: custom_name_prompt.as_deref(),
     };
 
     let generated_name =

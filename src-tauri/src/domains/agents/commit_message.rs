@@ -8,10 +8,11 @@ pub struct CommitMessageArgs<'a> {
     pub cli_args: Option<&'a str>,
     pub env_vars: &'a [(String, String)],
     pub binary_path: Option<&'a str>,
+    pub custom_commit_prompt: Option<&'a str>,
 }
 
-fn build_prompt(subjects: &[String], files_summary: &str) -> String {
-    let commits_section = if subjects.is_empty() {
+fn build_commits_section(subjects: &[String]) -> String {
+    if subjects.is_empty() {
         "No commits yet (uncommitted changes only).".to_string()
     } else {
         subjects
@@ -19,7 +20,11 @@ fn build_prompt(subjects: &[String], files_summary: &str) -> String {
             .map(|s| format!("- {s}"))
             .collect::<Vec<_>>()
             .join("\n")
-    };
+    }
+}
+
+fn build_prompt(subjects: &[String], files_summary: &str) -> String {
+    let commits_section = build_commits_section(subjects);
 
     format!(
         r#"IMPORTANT: Do not use any tools. Answer this message directly without searching or reading files.
@@ -41,6 +46,21 @@ Rules:
 - Return ONLY the commit message text, nothing else
 - Do NOT use tools or commands"#
     )
+}
+
+fn resolve_commit_prompt(
+    custom_commit_prompt: Option<&str>,
+    commit_subjects: &[String],
+    changed_files_summary: &str,
+) -> String {
+    if let Some(custom) = custom_commit_prompt.filter(|p| !p.is_empty()) {
+        let commits_section = build_commits_section(commit_subjects);
+        custom
+            .replace("{commits}", &commits_section)
+            .replace("{files}", changed_files_summary)
+    } else {
+        build_prompt(commit_subjects, changed_files_summary)
+    }
 }
 
 fn build_env(env_vars: &[(String, String)]) -> Vec<(String, String)> {
@@ -102,9 +122,10 @@ pub async fn generate_commit_message(args: CommitMessageArgs<'_>) -> Result<Opti
         cli_args,
         env_vars,
         binary_path,
+        custom_commit_prompt,
     } = args;
 
-    let prompt = build_prompt(commit_subjects, changed_files_summary);
+    let prompt = resolve_commit_prompt(custom_commit_prompt, commit_subjects, changed_files_summary);
     let temp_dir = std::env::temp_dir().join("lucode_commitmsg");
     if let Err(e) = std::fs::create_dir_all(&temp_dir) {
         log::warn!("Failed to create temp directory for commit message gen: {e}");
@@ -298,5 +319,53 @@ mod tests {
     fn strip_ansi_codes() {
         let input = "\x1b[32mfeat: hello\x1b[0m";
         assert_eq!(strip_ansi(input), "feat: hello");
+    }
+
+    #[test]
+    fn resolve_commit_prompt_uses_default_when_none() {
+        let subjects = vec!["fix: bug".to_string()];
+        let files = "M src/lib.rs (+5 -2)";
+        let result = resolve_commit_prompt(None, &subjects, files);
+        assert!(result.contains("conventional commit format"));
+        assert!(result.contains("fix: bug"));
+    }
+
+    #[test]
+    fn resolve_commit_prompt_uses_default_when_empty() {
+        let subjects = vec!["fix: bug".to_string()];
+        let files = "M src/lib.rs (+5 -2)";
+        let result = resolve_commit_prompt(Some(""), &subjects, files);
+        assert!(result.contains("conventional commit format"));
+    }
+
+    #[test]
+    fn resolve_commit_prompt_substitutes_custom_template() {
+        let subjects = vec![
+            "feat: add auth".to_string(),
+            "test: auth tests".to_string(),
+        ];
+        let files = "M src/auth.rs (+10 -3)";
+        let result = resolve_commit_prompt(
+            Some("Summarize:\n{commits}\n\nFiles:\n{files}"),
+            &subjects,
+            files,
+        );
+        assert!(result.contains("- feat: add auth"));
+        assert!(result.contains("- test: auth tests"));
+        assert!(result.contains("M src/auth.rs (+10 -3)"));
+        assert!(!result.contains("conventional commit format"));
+    }
+
+    #[test]
+    fn resolve_commit_prompt_custom_with_empty_commits() {
+        let subjects: Vec<String> = vec![];
+        let files = "A src/new.rs (+20)";
+        let result = resolve_commit_prompt(
+            Some("Changes: {commits}\nFiles: {files}"),
+            &subjects,
+            files,
+        );
+        assert!(result.contains("No commits yet"));
+        assert!(result.contains("A src/new.rs (+20)"));
     }
 }

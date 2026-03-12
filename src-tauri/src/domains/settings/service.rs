@@ -31,10 +31,25 @@ pub struct SettingsService {
     settings: Settings,
 }
 
+fn migrate_generation_model_to_cli_args(settings: &mut Settings) {
+    if let Some(model) = settings.generation.model.take()
+        && !model.is_empty()
+        && settings
+            .generation
+            .cli_args
+            .as_deref()
+            .unwrap_or("")
+            .is_empty()
+    {
+        settings.generation.cli_args = Some(format!("--model {model}"));
+    }
+}
+
 impl SettingsService {
     pub fn new(repository: Box<dyn SettingsRepository>) -> Self {
         let mut settings = repository.load().unwrap_or_default();
         clean_invalid_binary_paths(&mut settings);
+        migrate_generation_model_to_cli_args(&mut settings);
 
         Self {
             repository,
@@ -994,5 +1009,83 @@ mod tests {
             .expect("should clear agent command prefix");
 
         assert!(service.get_agent_command_prefix().is_none());
+    }
+
+    #[test]
+    fn generation_settings_cli_args_persists() {
+        let repo = InMemoryRepository::default();
+        let repo_handle = repo.clone();
+        let mut service = SettingsService::new(Box::new(repo));
+        let settings = GenerationSettings {
+            agent: Some("gemini".to_string()),
+            model: None,
+            cli_args: Some("--model gemini-2.0-flash".to_string()),
+            name_prompt: None,
+            commit_prompt: None,
+        };
+        service
+            .set_generation_settings(settings)
+            .expect("should save");
+        let loaded = service.get_generation_settings();
+        assert_eq!(
+            loaded.cli_args,
+            Some("--model gemini-2.0-flash".to_string())
+        );
+        assert_eq!(loaded.agent, Some("gemini".to_string()));
+        assert_eq!(
+            repo_handle.snapshot().generation.cli_args,
+            Some("--model gemini-2.0-flash".to_string())
+        );
+    }
+
+    #[test]
+    fn generation_settings_custom_prompts_persist() {
+        let repo = InMemoryRepository::default();
+        let mut service = SettingsService::new(Box::new(repo));
+        let settings = GenerationSettings {
+            agent: None,
+            model: None,
+            cli_args: None,
+            name_prompt: Some("Custom: {task}".to_string()),
+            commit_prompt: Some("Custom: {commits}\n{files}".to_string()),
+        };
+        service
+            .set_generation_settings(settings)
+            .expect("should save");
+        let loaded = service.get_generation_settings();
+        assert_eq!(loaded.name_prompt, Some("Custom: {task}".to_string()));
+        assert_eq!(
+            loaded.commit_prompt,
+            Some("Custom: {commits}\n{files}".to_string())
+        );
+    }
+
+    #[test]
+    fn generation_settings_migrates_model_to_cli_args() {
+        let repo = InMemoryRepository::default();
+        {
+            let mut state = repo.state.lock().unwrap();
+            state.generation.model = Some("gemini-2.0-flash".to_string());
+        }
+        let service = SettingsService::new(Box::new(repo));
+        let loaded = service.get_generation_settings();
+        assert_eq!(
+            loaded.cli_args,
+            Some("--model gemini-2.0-flash".to_string())
+        );
+        assert!(loaded.model.is_none());
+    }
+
+    #[test]
+    fn generation_settings_migration_skips_when_cli_args_set() {
+        let repo = InMemoryRepository::default();
+        {
+            let mut state = repo.state.lock().unwrap();
+            state.generation.model = Some("old-model".to_string());
+            state.generation.cli_args = Some("--model new-model".to_string());
+        }
+        let service = SettingsService::new(Box::new(repo));
+        let loaded = service.get_generation_settings();
+        assert_eq!(loaded.cli_args, Some("--model new-model".to_string()));
     }
 }
