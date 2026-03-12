@@ -126,6 +126,7 @@ mod tests {
             has_conflicts: true,
             conflicting_paths: vec!["src/lib.rs".into()],
             is_up_to_date: false,
+            commits_ahead_count: 1,
         };
 
         let snapshot = MergeSnapshotGateway::from_preview(Some(&preview));

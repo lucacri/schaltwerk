@@ -771,6 +771,7 @@
     "reapplyCommits": "Reapply commits",
     "squashDesc": "Create a single commit with your message, then fast-forward the parent branch.",
     "reapplyDesc": "Replay all session commits onto the latest parent branch, preserving history.",
+    "fastForwardDesc": "Only one commit — fast-forward the parent branch directly.",
     "commitMessage": "Commit message",
     "commitPlaceholder": "Describe the changes that landed in this session",
     "resolveConflicts": "Resolve merge conflicts before proceeding.",

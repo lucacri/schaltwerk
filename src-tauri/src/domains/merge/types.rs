@@ -27,6 +27,7 @@ pub struct MergePreview {
     pub has_conflicts: bool,
     pub conflicting_paths: Vec<String>,
     pub is_up_to_date: bool,
+    pub commits_ahead_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -153,6 +154,7 @@ mod tests {
             has_conflicts: false,
             conflicting_paths: vec!["conflict.txt".into()],
             is_up_to_date: true,
+            commits_ahead_count: 0,
         };
         let snapshot = MergeStateSnapshot::from_preview(Some(&preview));
         assert_eq!(snapshot.merge_has_conflicts, Some(false));

@@ -20,6 +20,12 @@ const preview = {
   hasConflicts: false,
   conflictingPaths: [],
   isUpToDate: false,
+  commitsAheadCount: 3,
+}
+
+const singleCommitPreview = {
+  ...preview,
+  commitsAheadCount: 1,
 }
 
 function renderModal(
@@ -243,6 +249,38 @@ describe('MergeSessionModal', () => {
       await waitFor(() => {
         expect(btn).not.toBeDisabled()
       })
+    })
+  })
+
+  describe('single commit fast-forward', () => {
+    it('hides strategy buttons when commitsAheadCount is 1', () => {
+      renderModal({ preview: singleCommitPreview })
+      expect(screen.queryByRole('button', { name: 'Squash & fast-forward' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Reapply commits' })).toBeNull()
+    })
+
+    it('shows fast-forward description when commitsAheadCount is 1', () => {
+      renderModal({ preview: singleCommitPreview })
+      expect(screen.getByText(/fast-forward the parent branch directly/)).toBeInTheDocument()
+    })
+
+    it('hides commit message input when commitsAheadCount is 1', () => {
+      renderModal({ preview: singleCommitPreview })
+      expect(screen.queryByLabelText('Commit message')).toBeNull()
+    })
+
+    it('confirms with reapply mode when commitsAheadCount is 1', () => {
+      const { onConfirm } = renderModal({ preview: singleCommitPreview })
+      const confirm = findConfirmButton()
+      expect(confirm).not.toBeDisabled()
+      fireEvent.click(confirm)
+      expect(onConfirm).toHaveBeenCalledWith('reapply')
+    })
+
+    it('shows strategy buttons when commitsAheadCount > 1', () => {
+      renderModal({ preview: { ...preview, commitsAheadCount: 3 } })
+      expect(screen.getByRole('button', { name: 'Squash & fast-forward' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Reapply commits' })).toBeInTheDocument()
     })
   })
 })

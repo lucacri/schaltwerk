@@ -174,6 +174,9 @@ impl MergeService {
 
         let default_message = format!("Merge session {} into {}", session.name, parent_branch);
 
+        let commits_ahead_count =
+            count_commits_ahead(&repo, session_commit.id(), parent_commit.id())?;
+
         Ok(MergePreview {
             session_branch: session.branch.clone(),
             parent_branch: parent_branch.to_string(),
@@ -193,6 +196,7 @@ impl MergeService {
             has_conflicts,
             conflicting_paths,
             is_up_to_date,
+            commits_ahead_count,
         })
     }
 
@@ -221,6 +225,10 @@ impl MergeService {
 
         let assessment = self.assess_context(&context)?;
 
+        let repo = Repository::open(&context.repo_path)?;
+        let commits_ahead_count =
+            count_commits_ahead(&repo, context.session_oid, context.parent_oid)?;
+
         Ok(MergePreview {
             session_branch: context.session_branch,
             parent_branch: context.parent_branch,
@@ -230,6 +238,7 @@ impl MergeService {
             has_conflicts: assessment.has_conflicts,
             conflicting_paths: assessment.conflicting_paths,
             is_up_to_date: assessment.is_up_to_date,
+            commits_ahead_count,
         })
     }
 
@@ -868,7 +877,7 @@ pub fn compute_merge_state(
     session_branch: &str,
     parent_branch: &str,
 ) -> Result<MergeState> {
-    if !commits_ahead(repo, session_oid, parent_oid)? {
+    if count_commits_ahead(repo, session_oid, parent_oid)? == 0 {
         return Ok(MergeState {
             has_conflicts: false,
             conflicting_paths: Vec::new(),
@@ -953,16 +962,16 @@ fn run_git(current_dir: &Path, args: Vec<OsString>) -> Result<()> {
     Err(anyhow!(combined))
 }
 
-fn commits_ahead(repo: &Repository, session_oid: Oid, parent_oid: Oid) -> Result<bool> {
+fn count_commits_ahead(repo: &Repository, session_oid: Oid, parent_oid: Oid) -> Result<u32> {
     if session_oid == parent_oid {
-        return Ok(false);
+        return Ok(0);
     }
 
     let mut revwalk = repo.revwalk()?;
     revwalk.push(session_oid)?;
     revwalk.hide(parent_oid).ok();
 
-    Ok(revwalk.next().is_some())
+    Ok(u32::try_from(revwalk.count()).unwrap_or(u32::MAX))
 }
 
 fn collect_conflicting_paths(index: &git2::Index) -> Result<Vec<String>> {
@@ -1723,6 +1732,7 @@ mod tests {
         assert!(!preview.has_conflicts);
         assert!(!preview.is_up_to_date);
         assert!(preview.conflicting_paths.is_empty());
+        assert_eq!(preview.commits_ahead_count, 1);
     }
 
     #[tokio::test]
@@ -1855,6 +1865,7 @@ mod tests {
         assert!(preview.is_up_to_date);
         assert!(!preview.has_conflicts);
         assert!(preview.conflicting_paths.is_empty());
+        assert_eq!(preview.commits_ahead_count, 0);
     }
 
     #[tokio::test]

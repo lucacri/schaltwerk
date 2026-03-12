@@ -773,6 +773,7 @@ export interface Translations {
     reapplyCommits: string
     squashDesc: string
     reapplyDesc: string
+    fastForwardDesc: string
     commitMessage: string
     commitPlaceholder: string
     resolveConflicts: string

@@ -32,6 +32,7 @@ interface MergePreviewResponse {
     hasConflicts: boolean
     conflictingPaths: string[]
     isUpToDate: boolean
+    commitsAheadCount: number
 }
 
 type MergeDialogStatus = 'idle' | 'loading' | 'ready' | 'running'

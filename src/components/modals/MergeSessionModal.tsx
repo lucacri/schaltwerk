@@ -18,6 +18,7 @@ interface MergePreviewResponse {
   hasConflicts: boolean
   conflictingPaths: string[]
   isUpToDate: boolean
+  commitsAheadCount: number
 }
 
 interface MergeSessionModalProps {
@@ -70,6 +71,7 @@ export function MergeSessionModal({
   const [commitMessage, setCommitMessage] = useState(() => cachedCommitMessage ?? '')
   const [generatingCommitMessage, setGeneratingCommitMessage] = useState(false)
   const commitMessageInputRef = useRef<HTMLInputElement | null>(null)
+  const isSingleCommit = preview?.commitsAheadCount === 1
 
   const focusCommitMessage = useCallback(() => {
     if (mode !== 'squash') return
@@ -104,6 +106,11 @@ export function MergeSessionModal({
     if (!open || !prefillMode) return
     setMode(prefillMode)
   }, [open, prefillMode])
+
+  useLayoutEffect(() => {
+    if (!open || !isSingleCommit) return
+    setMode('reapply')
+  }, [open, isSingleCommit])
 
   useLayoutEffect(() => {
     if (!open) {
@@ -298,40 +305,49 @@ export function MergeSessionModal({
                 <div className="text-sm" style={{ color: 'var(--color-text-primary)' }}>{sessionBranch}</div>
               </div>
 
-              <div>
-                <span style={fieldLabelStyle}>{t.mergeSessionModal.mergeStrategy}</span>
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleModeChange('squash')}
-                    className="px-3 py-2 rounded text-sm"
-                    style={{
-                      backgroundColor:
-                        mode === 'squash' ? 'var(--color-accent-green-bg)' : 'var(--color-bg-tertiary)',
-                      border: `1px solid ${mode === 'squash' ? 'var(--color-accent-green-border)' : 'var(--color-border-subtle)'}`,
-                      color: 'var(--color-text-primary)',
-                    }}
-                  >
-                    {t.mergeSessionModal.squashFastForward}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleModeChange('reapply')}
-                    className="px-3 py-2 rounded text-sm"
-                    style={{
-                      backgroundColor:
-                        mode === 'reapply' ? 'var(--color-accent-blue-bg)' : 'var(--color-bg-tertiary)',
-                      border: `1px solid ${mode === 'reapply' ? 'var(--color-accent-blue-border)' : 'var(--color-border-subtle)'}`,
-                      color: 'var(--color-text-primary)',
-                    }}
-                  >
-                    {t.mergeSessionModal.reapplyCommits}
-                  </button>
+              {isSingleCommit ? (
+                <div>
+                  <span style={fieldLabelStyle}>{t.mergeSessionModal.mergeStrategy}</span>
+                  <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                    {t.mergeSessionModal.fastForwardDesc}
+                  </p>
                 </div>
-                <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                  {modeDescriptions[mode]}
-                </p>
-              </div>
+              ) : (
+                <div>
+                  <span style={fieldLabelStyle}>{t.mergeSessionModal.mergeStrategy}</span>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleModeChange('squash')}
+                      className="px-3 py-2 rounded text-sm"
+                      style={{
+                        backgroundColor:
+                          mode === 'squash' ? 'var(--color-accent-green-bg)' : 'var(--color-bg-tertiary)',
+                        border: `1px solid ${mode === 'squash' ? 'var(--color-accent-green-border)' : 'var(--color-border-subtle)'}`,
+                        color: 'var(--color-text-primary)',
+                      }}
+                    >
+                      {t.mergeSessionModal.squashFastForward}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleModeChange('reapply')}
+                      className="px-3 py-2 rounded text-sm"
+                      style={{
+                        backgroundColor:
+                          mode === 'reapply' ? 'var(--color-accent-blue-bg)' : 'var(--color-bg-tertiary)',
+                        border: `1px solid ${mode === 'reapply' ? 'var(--color-accent-blue-border)' : 'var(--color-border-subtle)'}`,
+                        color: 'var(--color-text-primary)',
+                      }}
+                    >
+                      {t.mergeSessionModal.reapplyCommits}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                    {modeDescriptions[mode]}
+                  </p>
+                </div>
+              )}
 
               {mode === 'squash' && (
                 <div>

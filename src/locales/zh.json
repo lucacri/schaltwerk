@@ -769,6 +769,7 @@
     "reapplyCommits": "重新应用提交",
     "squashDesc": "使用您的消息创建单个提交，然后快进父分支。",
     "reapplyDesc": "将所有会话提交重新应用到最新的父分支上，保留历史记录。",
+    "fastForwardDesc": "仅有一个提交——直接快进父分支。",
     "commitMessage": "提交消息",
     "commitPlaceholder": "描述此会话中的更改",
     "resolveConflicts": "请先解决合并冲突再继续。",
