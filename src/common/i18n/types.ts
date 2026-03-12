@@ -175,6 +175,10 @@ export interface Translations {
         toggle: string
       }
     }
+    restoreOpenProjects: {
+      label: string
+      description: string
+    }
     version: {
       title: string
       versionLabel: string

@@ -1349,6 +1349,8 @@ fn main() {
             repository_is_empty,
             get_active_project_path,
             close_project,
+            get_open_tabs_state,
+            save_open_tabs_state,
             // Settings commands
             get_project_default_base_branch,
             set_project_default_base_branch,
@@ -1374,6 +1376,8 @@ fn main() {
             get_dev_error_toasts_enabled,
             set_auto_update_enabled,
             set_dev_error_toasts_enabled,
+            get_restore_open_projects,
+            set_restore_open_projects,
             get_last_project_parent_directory,
             set_last_project_parent_directory,
             get_keyboard_shortcuts,

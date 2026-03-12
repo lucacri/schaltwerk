@@ -58,6 +58,17 @@ let inflightSwitch:
 
 let switchQueue: Promise<unknown> = Promise.resolve()
 
+function saveOpenTabsState(get: GetAtomFunction): void {
+  const tabs = get(projectTabsInternalAtom)
+  const activePath = get(baseProjectPathAtom)
+  invoke(TauriCommands.SaveOpenTabsState, {
+    tabs: tabs.map(t => t.projectPath),
+    active: activePath,
+  }).catch(error => {
+    logger.warn('[projects] Failed to save open tabs state', { error })
+  })
+}
+
 function enqueueSwitch<T>(task: () => Promise<T>): Promise<T> {
   const run = async () => task()
   const chained = switchQueue.then(run, run) as Promise<T>
@@ -216,6 +227,7 @@ export const openProjectActionAtom = atom(
         lastOpenedAt: Date.now(),
       }))
       await recordRecentProject(normalized)
+      saveOpenTabsState(get as GetAtomFunction)
       return true
     }
 
@@ -252,6 +264,7 @@ export const openProjectActionAtom = atom(
       }))
 
       await recordRecentProject(normalized)
+      saveOpenTabsState(get as GetAtomFunction)
       return true
     } catch (error) {
       logger.error('[projects] Failed to open project', { path: normalized, error })
@@ -325,6 +338,7 @@ export const selectProjectActionAtom = atom(
         lastError: undefined,
         lastOpenedAt: Date.now(),
       }))
+      saveOpenTabsState(get as GetAtomFunction)
       return true
     } catch (error) {
       logger.error('[projects] Failed to switch project', { path: normalized, error })
@@ -426,6 +440,7 @@ export const closeProjectActionAtom = atom(
 
     const remaining = get(projectTabsInternalAtom).filter(tab => tab.projectPath !== normalized)
     set(projectTabsInternalAtom, remaining)
+    saveOpenTabsState(get as GetAtomFunction)
 
     if (!closingActive) {
       nextActivePath = get(projectPathAtom)
@@ -437,8 +452,9 @@ export const closeProjectActionAtom = atom(
 
 export const deactivateProjectActionAtom = atom(
   null,
-  async (_get, set): Promise<void> => {
+  async (get, set): Promise<void> => {
     await set(setProjectPathActionAtom, null)
+    saveOpenTabsState(get as GetAtomFunction)
   },
 )
 

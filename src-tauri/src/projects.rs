@@ -92,6 +92,40 @@ impl ProjectHistory {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OpenTabsState {
+    pub tabs: Vec<String>,
+    pub active: Option<String>,
+}
+
+impl OpenTabsState {
+    pub fn load() -> Result<Option<Self>> {
+        let path = Self::config_path()?;
+        if !path.exists() {
+            return Ok(None);
+        }
+        let content = fs::read_to_string(&path)?;
+        let state: OpenTabsState = serde_json::from_str(&content)?;
+        Ok(Some(state))
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let path = Self::config_path()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let content = serde_json::to_string_pretty(self)?;
+        fs::write(path, content)?;
+        Ok(())
+    }
+
+    fn config_path() -> Result<PathBuf> {
+        let config_dir =
+            dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Failed to get config directory"))?;
+        Ok(config_dir.join("lucode").join("open_tabs.json"))
+    }
+}
+
 pub fn is_git_repository(path: &Path) -> bool {
     let git_dir = path.join(".git");
     git_dir.exists() && (git_dir.is_dir() || git_dir.is_file())
@@ -228,6 +262,44 @@ mod tests {
         } else {
             EnvAdapter::remove_var("XDG_CONFIG_HOME");
         }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_open_tabs_state_save_and_load_round_trip() {
+        use lucode::utils::env_adapter::EnvAdapter;
+        let tmp = TempDir::new().unwrap();
+        let prev_home = env::var("HOME").ok();
+        let prev_xdg = env::var("XDG_CONFIG_HOME").ok();
+
+        EnvAdapter::set_var("HOME", &tmp.path().to_string_lossy());
+        EnvAdapter::set_var(
+            "XDG_CONFIG_HOME",
+            &tmp.path().join(".config").to_string_lossy(),
+        );
+        std::fs::create_dir_all(tmp.path().join(".config")).unwrap();
+
+        let loaded = OpenTabsState::load().unwrap();
+        assert!(loaded.is_none());
+
+        let state = OpenTabsState {
+            tabs: vec!["/a/b".to_string(), "/x/y".to_string()],
+            active: Some("/x/y".to_string()),
+        };
+        state.save().unwrap();
+
+        let loaded = OpenTabsState::load().unwrap().unwrap();
+        assert_eq!(loaded.tabs, vec!["/a/b", "/x/y"]);
+        assert_eq!(loaded.active, Some("/x/y".to_string()));
+
+        let empty = OpenTabsState { tabs: vec![], active: None };
+        empty.save().unwrap();
+        let loaded = OpenTabsState::load().unwrap().unwrap();
+        assert!(loaded.tabs.is_empty());
+        assert!(loaded.active.is_none());
+
+        if let Some(p) = prev_home { EnvAdapter::set_var("HOME", &p); } else { EnvAdapter::remove_var("HOME"); }
+        if let Some(p) = prev_xdg { EnvAdapter::set_var("XDG_CONFIG_HOME", &p); } else { EnvAdapter::remove_var("XDG_CONFIG_HOME"); }
     }
 
     #[test]

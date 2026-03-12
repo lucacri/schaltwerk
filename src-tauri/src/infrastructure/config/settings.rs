@@ -355,4 +355,14 @@ impl SettingsManager {
             .set_generation_settings(settings)
             .map_err(|e| e.to_string())
     }
+
+    pub fn get_restore_open_projects(&self) -> bool {
+        self.service.get_restore_open_projects()
+    }
+
+    pub fn set_restore_open_projects(&mut self, enabled: bool) -> Result<(), String> {
+        self.service
+            .set_restore_open_projects(enabled)
+            .map_err(|e| e.to_string())
+    }
 }

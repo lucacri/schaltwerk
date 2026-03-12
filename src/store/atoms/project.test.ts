@@ -239,6 +239,49 @@ describe('project lifecycle atoms', () => {
     expect(store.get(projectPathAtom)).toBe('/repo/shared')
     expect(initializeCalls(invoke)).toHaveLength(1)
   })
+
+  it('saves open tabs state after opening a project', async () => {
+    await store.set(openProjectActionAtom, { path: '/repo/alpha' })
+    await flushMicrotask()
+
+    const calls = saveTabsCalls(invoke)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.[1]).toEqual({ tabs: ['/repo/alpha'], active: '/repo/alpha' })
+  })
+
+  it('saves open tabs state with all tabs after opening multiple projects', async () => {
+    await store.set(openProjectActionAtom, { path: '/repo/alpha' })
+    await store.set(openProjectActionAtom, { path: '/repo/beta' })
+    await flushMicrotask()
+
+    const calls = saveTabsCalls(invoke)
+    const lastCall = calls[calls.length - 1]
+    expect(lastCall?.[1]).toEqual({ tabs: ['/repo/alpha', '/repo/beta'], active: '/repo/beta' })
+  })
+
+  it('saves open tabs state after closing a project', async () => {
+    await store.set(openProjectActionAtom, { path: '/repo/alpha' })
+    await store.set(openProjectActionAtom, { path: '/repo/beta' })
+    await store.set(closeProjectActionAtom, { path: '/repo/beta' })
+    await flushMicrotask()
+
+    const calls = saveTabsCalls(invoke)
+    const lastCall = calls[calls.length - 1]
+    expect(lastCall?.[1]).toEqual({ tabs: ['/repo/alpha'], active: '/repo/alpha' })
+  })
+
+  it('saves open tabs state after selecting a different project', async () => {
+    await store.set(openProjectActionAtom, { path: '/repo/alpha' })
+    await store.set(openProjectActionAtom, { path: '/repo/beta' })
+    invoke.mockClear()
+
+    await store.set(selectProjectActionAtom, { path: '/repo/alpha' })
+    await flushMicrotask()
+
+    const calls = saveTabsCalls(invoke)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.[1]).toEqual({ tabs: ['/repo/alpha', '/repo/beta'], active: '/repo/alpha' })
+  })
 })
 
 function deferredPromise() {
@@ -255,4 +298,8 @@ async function flushMicrotask() {
 
 function initializeCalls(mock: ReturnType<typeof vi.fn>) {
   return mock.mock.calls.filter(([command]) => command === TauriCommands.InitializeProject)
+}
+
+function saveTabsCalls(mock: ReturnType<typeof vi.fn>) {
+  return mock.mock.calls.filter(([command]) => command === TauriCommands.SaveOpenTabsState)
 }

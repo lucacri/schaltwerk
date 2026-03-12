@@ -66,7 +66,7 @@
       "projectGeneral": "项目设置",
       "projectRun": "运行与环境",
       "projectActions": "操作按钮",
-      "generation": "AI Generation",
+      "generation": "AI 生成",
       "terminal": "终端",
       "sessions": "会话",
       "version": "版本"
@@ -172,6 +172,10 @@
         "useful": "适合需要更快工作流程的资深用户",
         "toggle": "可随时切换以恢复确认提示"
       }
+    },
+    "restoreOpenProjects": {
+      "label": "启动时恢复打开的项目",
+      "description": "重新打开上次退出时打开的项目"
     },
     "version": {
       "title": "应用程序信息",

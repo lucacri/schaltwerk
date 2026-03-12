@@ -331,6 +331,8 @@ pub struct Settings {
     pub agent_command_prefix: Option<String>,
     #[serde(default)]
     pub generation: GenerationSettings,
+    #[serde(default = "default_true")]
+    pub restore_open_projects: bool,
 }
 
 impl Default for Settings {
@@ -356,6 +358,7 @@ impl Default for Settings {
             last_project_parent_directory: None,
             agent_command_prefix: None,
             generation: GenerationSettings::default(),
+            restore_open_projects: default_true(),
         }
     }
 }

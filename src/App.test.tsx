@@ -237,6 +237,13 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(defaultInvokeImpl),
 }))
 
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: vi.fn(() => ({
+    onCloseRequested: vi.fn(() => Promise.resolve(vi.fn())),
+    destroy: vi.fn(() => Promise.resolve()),
+  })),
+}))
+
 vi.mock('./utils/platform', () => ({
   isMacOS: vi.fn().mockResolvedValue(true),
   isLinux: vi.fn().mockResolvedValue(false),
@@ -336,6 +343,75 @@ describe('App.tsx', () => {
       expect(newSessionModalMock).toHaveBeenCalled()
     })
   }
+
+  it('restores open tabs on startup when setting is enabled', async () => {
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      switch (cmd) {
+        case TauriCommands.GetRestoreOpenProjects:
+          return true
+        case TauriCommands.GetOpenTabsState:
+          return { tabs: ['/Users/me/project-a', '/Users/me/project-b'], active: '/Users/me/project-b' }
+        case TauriCommands.DirectoryExists:
+          return true
+        case TauriCommands.IsGitRepository:
+          return true
+        default:
+          return defaultInvokeImpl(cmd, args)
+      }
+    })
+
+    await renderApp()
+
+    await waitFor(() => {
+      const openHomeHandler = listenEventHandlers.find(
+        e => String(e.event) === String(SchaltEvent.OpenHome)
+      )
+      expect(openHomeHandler).toBeTruthy()
+    })
+
+    const openHomeHandler = listenEventHandlers.find(
+      e => String(e.event) === String(SchaltEvent.OpenHome)
+    )!
+    await act(async () => {
+      await openHomeHandler.handler('/Users/me/non-git-dir')
+    })
+
+    await waitFor(() => {
+      const latestTopBar = topBarPropsMock.mock.calls.at(-1)?.[0]
+      expect(latestTopBar?.tabs?.length).toBe(2)
+    })
+
+    expect(screen.queryByTestId('home-screen')).not.toBeInTheDocument()
+  })
+
+  it('shows home screen when restore setting is disabled', async () => {
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.GetRestoreOpenProjects) return false
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await renderApp()
+
+    await waitFor(() => {
+      const openHomeHandler = listenEventHandlers.find(
+        e => String(e.event) === String(SchaltEvent.OpenHome)
+      )
+      expect(openHomeHandler).toBeTruthy()
+    })
+
+    const openHomeHandler = listenEventHandlers.find(
+      e => String(e.event) === String(SchaltEvent.OpenHome)
+    )!
+    await act(async () => {
+      await openHomeHandler.handler('/Users/me/non-git-dir')
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('home-screen')).toBeInTheDocument()
+    })
+  })
 
   it('renders without crashing (shows Home by default)', async () => {
     await renderApp()

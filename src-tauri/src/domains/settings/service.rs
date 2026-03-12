@@ -555,6 +555,15 @@ impl SettingsService {
         self.settings.generation = settings;
         self.save()
     }
+
+    pub fn get_restore_open_projects(&self) -> bool {
+        self.settings.restore_open_projects
+    }
+
+    pub fn set_restore_open_projects(&mut self, enabled: bool) -> Result<(), SettingsServiceError> {
+        self.settings.restore_open_projects = enabled;
+        self.save()
+    }
 }
 
 #[cfg(test)]
@@ -994,6 +1003,24 @@ mod tests {
             .expect("should set agent command prefix");
 
         assert_eq!(service.get_agent_command_prefix(), Some("vt".to_string()));
+    }
+
+    #[test]
+    fn restore_open_projects_defaults_to_true() {
+        let repo = InMemoryRepository::default();
+        let service = SettingsService::new(Box::new(repo));
+        assert!(service.get_restore_open_projects());
+    }
+
+    #[test]
+    fn set_restore_open_projects_persists_value() {
+        let repo = InMemoryRepository::default();
+        let repo_handle = repo.clone();
+        let mut service = SettingsService::new(Box::new(repo));
+
+        service.set_restore_open_projects(false).expect("should persist");
+        assert!(!service.get_restore_open_projects());
+        assert!(!repo_handle.snapshot().restore_open_projects);
     }
 
     #[test]

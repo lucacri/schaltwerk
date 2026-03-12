@@ -469,6 +469,8 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     })
     const [appVersion, setAppVersion] = useState<string>('')
     const toast = useOptionalToast()
+    const [restoreOpenProjects, setRestoreOpenProjects] = useState<boolean>(true)
+    const [loadingRestoreOpenProjects, setLoadingRestoreOpenProjects] = useState<boolean>(true)
     const [autoUpdateEnabled, setAutoUpdateEnabled] = useState<boolean>(true)
     const [loadingAutoUpdate, setLoadingAutoUpdate] = useState<boolean>(true)
     const [checkingUpdate, setCheckingUpdate] = useState<boolean>(false)
@@ -584,6 +586,21 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         }
     }, [autoUpdateEnabled, toast])
 
+    const handleRestoreOpenProjectsToggle = useCallback(async () => {
+        const previous = restoreOpenProjects
+        const next = !previous
+        setRestoreOpenProjects(next)
+        setLoadingRestoreOpenProjects(true)
+        try {
+            await invoke(TauriCommands.SetRestoreOpenProjects, { enabled: next })
+        } catch (error) {
+            logger.error('Failed to update restore open projects preference:', error)
+            setRestoreOpenProjects(previous)
+        } finally {
+            setLoadingRestoreOpenProjects(false)
+        }
+    }, [restoreOpenProjects])
+
     const handleManualUpdateCheck = useCallback(async () => {
         setCheckingUpdate(true)
         try {
@@ -630,6 +647,15 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                 if (!cancelled) {
                     setLoadingAutoUpdate(false)
                 }
+            }
+
+            try {
+                const restoreEnabled = await invoke<boolean>(TauriCommands.GetRestoreOpenProjects)
+                if (!cancelled) setRestoreOpenProjects(restoreEnabled)
+            } catch (error) {
+                logger.warn('Failed to load restore open projects preference:', error)
+            } finally {
+                if (!cancelled) setLoadingRestoreOpenProjects(false)
             }
         }
 
@@ -2649,6 +2675,28 @@ fi`}
                                 <span className="text-body font-mono text-text-secondary bg-bg-tertiary/50 px-3 py-1 rounded">
                                     {appVersion || 'Loading...'}
                                 </span>
+                            </div>
+                            <div className="flex items-center justify-between py-3 px-4 bg-bg-elevated/50 rounded-lg">
+                                <div className="flex flex-col">
+                                    <span className="text-body font-medium text-text-primary">{t.settings.restoreOpenProjects.label}</span>
+                                    <span className="text-caption text-text-tertiary mt-1">
+                                        {t.settings.restoreOpenProjects.description}
+                                    </span>
+                                </div>
+                                <label className="flex items-center gap-3" htmlFor="restore-open-projects-toggle">
+                                    <input
+                                        id="restore-open-projects-toggle"
+                                        type="checkbox"
+                                        aria-label={t.settings.restoreOpenProjects.label}
+                                        className="w-4 h-4 text-accent-blue bg-bg-elevated border-border-strong rounded focus:ring-accent-blue focus:ring-2"
+                                        checked={restoreOpenProjects}
+                                        disabled={loadingRestoreOpenProjects}
+                                        onChange={() => { void handleRestoreOpenProjectsToggle() }}
+                                    />
+                                    <span className="text-caption text-text-secondary">
+                                        {loadingRestoreOpenProjects ? t.settings.common.loading : restoreOpenProjects ? t.settings.common.enabled : t.settings.common.disabled}
+                                    </span>
+                                </label>
                             </div>
                             <div className="flex items-center justify-between py-3 px-4 bg-bg-elevated/50 rounded-lg">
                                 <div className="flex flex-col">

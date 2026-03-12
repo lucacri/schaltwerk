@@ -173,6 +173,10 @@
         "toggle": "Can be toggled at any time to restore confirmation prompts"
       }
     },
+    "restoreOpenProjects": {
+      "label": "Restore open projects on startup",
+      "description": "Reopen the projects you had open when you last quit"
+    },
     "version": {
       "title": "Application Information",
       "versionLabel": "Version",

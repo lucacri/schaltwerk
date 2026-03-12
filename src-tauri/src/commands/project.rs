@@ -160,3 +160,19 @@ pub async fn repository_is_empty() -> Result<bool, String> {
 
     Ok(!lucode::domains::git::repository_has_commits(&repo_path).unwrap_or(true))
 }
+
+#[tauri::command]
+pub fn get_open_tabs_state() -> Result<Option<projects::OpenTabsState>, String> {
+    projects::OpenTabsState::load().map_err(|e| format!("Failed to load open tabs state: {e}"))
+}
+
+#[tauri::command]
+pub fn save_open_tabs_state(
+    tabs: Vec<String>,
+    active: Option<String>,
+) -> Result<(), String> {
+    let state = projects::OpenTabsState { tabs, active };
+    state
+        .save()
+        .map_err(|e| format!("Failed to save open tabs state: {e}"))
+}

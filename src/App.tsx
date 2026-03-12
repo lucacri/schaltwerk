@@ -23,7 +23,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useSelection } from './hooks/useSelection'
 import { usePreviewPanelEvents } from './hooks/usePreviewPanelEvents'
 import { useSetupScriptApproval } from './hooks/useSetupScriptApproval'
-import { useAtom, useSetAtom, useAtomValue } from 'jotai'
+import { useAtom, useSetAtom, useAtomValue, useStore } from 'jotai'
 import {
   increaseFontSizesActionAtom,
   decreaseFontSizesActionAtom,
@@ -112,6 +112,11 @@ import { sanitizeSplitSizes, areSizesEqual } from './utils/splitStorage'
 const COLLAPSED_LEFT_PANEL_PX = 50
 import { finalizeSplitCommit, selectSplitRenderSizes } from './utils/splitDragState'
 
+interface OpenTabsState {
+  tabs: string[]
+  active: string | null
+}
+
 
 
 import { FocusSync } from './components/FocusSync'
@@ -152,6 +157,7 @@ function AppContent() {
   const [runningCounts, setRunningCounts] = useState<Record<string, number>>({})
   const [showCliMissingModal, setShowCliMissingModal] = useState(false)
   const [cliModalEverShown, setCliModalEverShown] = useState(false)
+  const store = useStore()
   usePreviewPanelEvents()
   useDiffPreloader()
   const {
@@ -171,6 +177,22 @@ function AppContent() {
   useEffect(() => {
     void isNotificationPermissionGranted()
   }, [])
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const tabs = store.get(projectTabsAtom)
+      const activePath = store.get(projectPathAtom)
+      invoke(TauriCommands.SaveOpenTabsState, {
+        tabs: tabs.map(t => t.projectPath),
+        active: activePath,
+      }).catch(error => {
+        logger.warn('[App] Failed to save open tabs state on close', { error })
+      })
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [store])
 
   useEffect(() => {
     if (agentDetectLoading) return
@@ -1149,11 +1171,52 @@ function AppContent() {
       await openProjectOnce(directoryPath, 'open-directory-event')
     })
 
-    // Handle opening home screen for non-Git directories
     const unlistenHomePromise = listenEvent(SchaltEvent.OpenHome, async (directoryPath) => {
-      logger.info('Received open-home event for non-Git directory:', directoryPath)
+      logger.info('Received open-home event:', directoryPath)
+
+      try {
+        const restoreEnabled = await invoke<boolean>(TauriCommands.GetRestoreOpenProjects)
+        if (restoreEnabled) {
+          const state = await invoke<OpenTabsState | null>(TauriCommands.GetOpenTabsState)
+          if (state && state.tabs.length > 0) {
+            logger.info('[App] Restoring open tabs:', state.tabs.length)
+            const restoredPaths = new Set<string>()
+
+            for (const tabPath of state.tabs) {
+              try {
+                const exists = await invoke<boolean>(TauriCommands.DirectoryExists, { path: tabPath })
+                const isGit = exists && await invoke<boolean>(TauriCommands.IsGitRepository, { path: tabPath })
+                if (isGit) {
+                  await openProjectOnce(tabPath, 'restore-tabs')
+                  restoredPaths.add(tabPath)
+                } else {
+                  logger.info('[App] Skipping invalid tab during restore:', tabPath)
+                }
+              } catch (error) {
+                logger.warn('[App] Failed to validate tab during restore:', tabPath, error)
+              }
+            }
+
+            if (restoredPaths.size > 0) {
+              const activePath = (state.active && restoredPaths.has(state.active))
+                ? state.active
+                : restoredPaths.values().next().value
+              if (activePath) {
+                try {
+                  await selectProject({ path: activePath })
+                } catch (error) {
+                  logger.warn('[App] Failed to restore active project', { path: activePath, error })
+                }
+              }
+              return
+            }
+          }
+        }
+      } catch (error) {
+        logger.warn('[App] Failed to restore open tabs:', error)
+      }
+
       setShowHome(true)
-      logger.info('Opened home screen because', directoryPath, 'is not a Git repository')
     })
 
     // Handle CLI project validation errors

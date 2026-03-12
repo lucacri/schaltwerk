@@ -20,7 +20,7 @@ export function GitlabErrorDetailsModal({ errors, onClose }: GitlabErrorDetailsM
   return (
     <div
       className="fixed inset-0 flex items-center justify-center"
-      style={{ zIndex: theme.layers.modalOverlay, backgroundColor: 'rgba(0,0,0,0.5)' }}
+      style={{ zIndex: theme.layers.modalOverlay, backgroundColor: 'var(--color-overlay-backdrop)' }}
       onClick={onClose}
     >
       <div
