@@ -287,11 +287,10 @@ fn build_login_shell_invocation(command: &str) -> (String, Vec<String>) {
         .to_ascii_lowercase();
 
     let args = match shell_name.as_str() {
-        "tcsh" | "csh" => vec!["-ic".to_string(), command.to_string()],
+        "tcsh" | "csh" => vec!["-lc".to_string(), command.to_string()],
         "fish" => vec!["-l".to_string(), "-c".to_string(), command.to_string()],
         "nu" | "nushell" => vec![
-            "-i".to_string(),
-            "-l".to_string(),
+            "--login".to_string(),
             "-c".to_string(),
             command.to_string(),
         ],
@@ -299,13 +298,11 @@ fn build_login_shell_invocation(command: &str) -> (String, Vec<String>) {
             vec!["-Login".to_string(), "-Command".to_string(), command.to_string()]
         }
         "xonsh" => vec![
-            "-i".to_string(),
             "-l".to_string(),
             "-c".to_string(),
             command.to_string(),
         ],
         _ => vec![
-            "-i".to_string(),
             "-l".to_string(),
             "-c".to_string(),
             command.to_string(),
@@ -3217,5 +3214,48 @@ mod tests {
         );
         assert!(!args.contains(&"--title".to_string()));
         assert!(!args.contains(&"--body".to_string()));
+    }
+
+    #[test]
+    fn build_login_shell_no_interactive_flag() {
+        let (_, args) = build_login_shell_invocation("echo hello");
+        assert!(
+            !args.iter().any(|a| a == "-i" || a.contains('i')),
+            "Shell invocation must not use -i (interactive) flag to avoid ZLE errors. Args: {args:?}"
+        );
+        assert!(
+            args.contains(&"-l".to_string()),
+            "Shell invocation must include -l (login) flag. Args: {args:?}"
+        );
+        assert!(
+            args.contains(&"-c".to_string()),
+            "Shell invocation must include -c flag. Args: {args:?}"
+        );
+        assert_eq!(
+            args.last().unwrap(),
+            "echo hello",
+            "Command must be the last argument"
+        );
+    }
+
+    #[test]
+    fn build_inner_command_includes_env_vars() {
+        let cmd = build_inner_command(
+            "glab",
+            &["issue", "list"],
+            &[("GITLAB_HOST", "gitlab.example.com"), ("NO_COLOR", "1")],
+        );
+        assert!(cmd.contains("GITLAB_HOST="));
+        assert!(cmd.contains("gitlab.example.com"));
+        assert!(cmd.contains("NO_COLOR="));
+        assert!(cmd.contains("'glab'"));
+        assert!(cmd.contains("'issue'"));
+        assert!(cmd.contains("'list'"));
+    }
+
+    #[test]
+    fn build_inner_command_quotes_values_with_spaces() {
+        let cmd = build_inner_command("gh", &["pr", "create"], &[("MSG", "hello world")]);
+        assert!(cmd.contains("MSG='hello world'"));
     }
 }
