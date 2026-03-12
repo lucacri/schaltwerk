@@ -390,12 +390,12 @@ export function MergeSessionModal({
                         </span>
                       </div>
                     ))}
-                    {preview.commitsAheadCount > preview.commits.length && (
-                      <div className="px-3 py-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                        {t.mergeSessionModal.andMoreCommits.replace('{count}', String(preview.commitsAheadCount - preview.commits.length))}
-                      </div>
-                    )}
                   </div>
+                  {preview.commitsAheadCount > preview.commits.length && (
+                    <div className="px-3 py-1.5 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                      {t.mergeSessionModal.andMoreCommits.replace('{count}', String(preview.commitsAheadCount - preview.commits.length))}
+                    </div>
+                  )}
                 </div>
               )}
 
