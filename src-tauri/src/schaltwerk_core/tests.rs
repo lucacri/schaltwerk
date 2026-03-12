@@ -853,12 +853,7 @@ fn test_cleanup_orphaned_worktrees_fast_moves_trash_dir() {
     let worktrees_dir = env.repo_path.join(".lucode").join("worktrees");
     let trash_dir = worktrees_dir.join(".lucode-trash");
     std::fs::create_dir_all(&trash_dir).unwrap();
-
-    // Make the trash directory non-trivial so the background cleanup is unlikely to finish
-    // before we assert on the staging rename.
-    for i in 0..5_000 {
-        std::fs::write(trash_dir.join(format!("file_{i}.txt")), "x").unwrap();
-    }
+    std::fs::write(trash_dir.join("placeholder.txt"), "x").unwrap();
 
     manager.cleanup_orphaned_worktrees().unwrap();
 

@@ -29,6 +29,14 @@ import App from './App'
 import { validatePanelPercentage } from './utils/panel'
 import { __getSessionsEventHandlerForTest } from './store/atoms/sessions'
 
+// ---- Mock: @tauri-apps/api/window ----
+vi.mock('@tauri-apps/api/window', () => ({
+  getCurrentWindow: () => ({
+    onCloseRequested: vi.fn().mockResolvedValue(() => {}),
+    destroy: vi.fn().mockResolvedValue(undefined),
+  }),
+}))
+
 // ---- Mock: react-split (layout only) ----
 vi.mock('react-split', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="split">{children}</div>,
