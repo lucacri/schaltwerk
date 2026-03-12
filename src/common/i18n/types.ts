@@ -1280,6 +1280,7 @@ export interface Translations {
     noNotes: string
     labels: string
     errorDetails: string
+    refreshing: string
   }
   gitlabMrTab: {
     searchPlaceholder: string
@@ -1326,6 +1327,7 @@ export interface Translations {
     merging: string
     approving: string
     commenting: string
+    refreshing: string
   }
   historySearch: {
     placeholder: string

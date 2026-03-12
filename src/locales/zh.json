@@ -1267,7 +1267,8 @@
     "notes": "备注",
     "noNotes": "暂无备注",
     "labels": "标签",
-    "errorDetails": "详情"
+    "errorDetails": "详情",
+    "refreshing": "正在刷新\u2026"
   },
   "gitlabMrTab": {
     "searchPlaceholder": "搜索合并请求…",
@@ -1313,7 +1314,8 @@
     "cancel": "取消",
     "merging": "正在合并...",
     "approving": "正在批准...",
-    "commenting": "正在发送..."
+    "commenting": "正在发送...",
+    "refreshing": "正在刷新\u2026"
   },
   "historySearch": {
     "placeholder": "搜索提交…",
