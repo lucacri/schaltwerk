@@ -76,6 +76,7 @@ describe('useGitlabIssueSearch', () => {
       isLoading: false,
       isRevalidating: false,
       error: null,
+      errorDetails: null,
       fetchedAt: Date.now(),
     }
     const entries = new Map<string, GitlabSearchEntry<GitlabIssueSummary>>()
@@ -101,6 +102,7 @@ describe('useGitlabIssueSearch', () => {
       isLoading: false,
       isRevalidating: true,
       error: null,
+      errorDetails: null,
       fetchedAt: Date.now(),
     }
     const entries = new Map<string, GitlabSearchEntry<GitlabIssueSummary>>()
