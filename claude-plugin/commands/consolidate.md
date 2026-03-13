@@ -55,7 +55,7 @@ If the call fails, report the error to the user and stop.
 
 ### Step 6: Report
 
-Output the created session name and branch. Remind the user the agent is now working in Lucode.
+Output the created session name and branch. Tell the user to select the session in Lucode and start an agent to begin the consolidation work.
 
 ## Consolidation Prompt Template
 
