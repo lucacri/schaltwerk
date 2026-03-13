@@ -7,10 +7,10 @@
     {
       "name": "lucode",
       "source": {
-        "source": "github",
+        "type": "github",
         "repo": "lucacri/schaltwerk"
       },
-      "description": "Skills for managing Lucode AI coding sessions"
+      "description": "Consolidate parallel Lucode AI coding sessions into a single best-of-breed implementation"
     }
   ]
 }

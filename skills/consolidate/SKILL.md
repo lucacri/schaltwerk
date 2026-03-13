@@ -23,9 +23,9 @@ If no eligible groups found, inform the user and stop.
 
 ### Step 2: Select target spec
 
-Parse `$ARGUMENTS`: split on spaces, detect `--auto` flag, remaining token is the spec name.
+Parse `$ARGUMENTS`: detect `--auto` flag, remaining text (after removing the flag) is the spec name — this may contain spaces.
 
-- If a session-name argument was provided, match it against group keys (display_name). Select that group directly. Error if not found.
+- If a session-name argument was provided, match it case-insensitively against group keys (display_name). Use substring matching if no exact match is found. Select that group directly. Error if no match.
 - If `--auto` flag AND no argument: pick the first eligible group automatically.
 - Otherwise (interactive mode): present eligible groups as a numbered list showing `display_name` and session count. Ask the user to pick ONE.
 
@@ -45,12 +45,14 @@ Ask for confirmation before proceeding.
 
 ### Step 5: Create consolidation session
 
+Before creating, check if a session named `consolidate-{display_name}` already exists by searching the session list from Step 1. If it does, increment the suffix (`-v2`, `-v3`, etc.) until an unused name is found.
+
 Call `mcp__lucode__lucode_create` with:
-- `name`: `consolidate-{display_name}` (truncated/sanitized if needed)
+- `name`: the resolved unique name (sanitized: lowercase, spaces replaced with hyphens, max 50 chars)
 - `skip_permissions`: true
 - `prompt`: the consolidation prompt (see template below)
 
-If `consolidate-{display_name}` already exists, append `-v2`, `-v3`, etc.
+If the call fails, report the error to the user and stop.
 
 ### Step 6: Report
 
@@ -84,10 +86,10 @@ You are consolidating work from {N} parallel agent sessions that all worked on t
 
 4. **Validate** - run `just test` and ensure everything passes before considering the work done.
 
-{custom_criteria section if user provided any, formatted as:
+If the user provided custom criteria in Step 3, include this section (omit entirely otherwise):
+
 ### Additional criteria
-- {user's custom criteria}
-}
+- {user's custom criteria, one bullet per item}
 
 ### Important
 - Follow all CLAUDE.md guidelines
