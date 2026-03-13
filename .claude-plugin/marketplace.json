@@ -6,10 +6,7 @@
   "plugins": [
     {
       "name": "lucode",
-      "source": {
-        "type": "github",
-        "repo": "lucacri/schaltwerk"
-      },
+      "source": ".",
       "description": "Consolidate parallel Lucode AI coding sessions into a single best-of-breed implementation"
     }
   ]
