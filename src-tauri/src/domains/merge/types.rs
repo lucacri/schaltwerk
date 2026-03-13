@@ -18,6 +18,15 @@ impl MergeMode {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MergeCommitSummary {
+    pub id: String,
+    pub subject: String,
+    pub author: String,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MergePreview {
     pub session_branch: String,
     pub parent_branch: String,
@@ -28,6 +37,7 @@ pub struct MergePreview {
     pub conflicting_paths: Vec<String>,
     pub is_up_to_date: bool,
     pub commits_ahead_count: u32,
+    pub commits: Vec<MergeCommitSummary>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -155,6 +165,7 @@ mod tests {
             conflicting_paths: vec!["conflict.txt".into()],
             is_up_to_date: true,
             commits_ahead_count: 0,
+            commits: vec![],
         };
         let snapshot = MergeStateSnapshot::from_preview(Some(&preview));
         assert_eq!(snapshot.merge_has_conflicts, Some(false));

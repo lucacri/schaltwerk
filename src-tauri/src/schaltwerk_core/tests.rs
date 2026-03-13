@@ -910,45 +910,26 @@ fn test_concurrent_session_creation() {
 }
 
 #[test]
-fn test_list_enriched_sessions_performance_caching() {
-    use std::time::Instant;
-
+fn test_list_enriched_sessions_caching_populates_db() {
     let env = TestEnvironment::new().unwrap();
     let manager = env.get_session_manager().unwrap();
 
-    // Create multiple sessions to amplify the effect
-    let session_count = 8usize;
+    let session_count = 3usize;
+    let mut session_ids = Vec::new();
     for i in 0..session_count {
-        let name = format!("perf-{i}");
-        manager.create_session(&name, None, None).unwrap();
+        let s = manager
+            .create_session(&format!("cache-pop-{i}"), None, None)
+            .unwrap();
+        session_ids.push(s.id);
     }
 
-    // First call: cold (computes git stats for each session)
-    let start_cold = Instant::now();
-    let enriched_cold = manager.list_enriched_sessions().unwrap();
-    let dur_cold = start_cold.elapsed();
-    assert_eq!(enriched_cold.len(), session_count);
+    let enriched = manager.list_enriched_sessions().unwrap();
+    assert_eq!(enriched.len(), session_count);
 
-    // Second call: warm (should mostly use cached stats)
-    let start_warm = Instant::now();
-    let enriched_warm = manager.list_enriched_sessions().unwrap();
-    let dur_warm = start_warm.elapsed();
-    assert_eq!(enriched_warm.len(), session_count);
-
-    // Expect warm run to be no slower than cold (with tolerance)
-    // Performance tests are inherently sensitive to system timing variations.
-    // Use generous tolerance to prevent flaky failures while still catching regressions.
-    use std::time::Duration;
-    let tolerance = if dur_cold < Duration::from_millis(50) {
-        // Allow generous headroom for cache warm-up and spec/session merges
-        dur_cold * 20
-    } else {
-        dur_cold * 5
-    };
-    assert!(
-        dur_warm <= dur_cold + tolerance,
-        "Expected warm ( {dur_warm:?} ) to be <= cold + tolerance ( cold={dur_cold:?}, tol={tolerance:?} )"
-    );
+    for id in &session_ids {
+        let stats = manager.db_ref().get_git_stats(id).unwrap();
+        assert!(stats.is_some(), "expected cached stats for session {id}");
+    }
 }
 
 #[test]

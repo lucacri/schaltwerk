@@ -10,7 +10,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use git2::{
-    BranchType, ErrorCode, IndexAddOption, MergeOptions, Oid, Repository, build::CheckoutBuilder,
+    BranchType, ErrorCode, IndexAddOption, MergeOptions, Oid, Repository, Sort,
+    build::CheckoutBuilder,
 };
 #[cfg(test)]
 use log::error;
@@ -28,8 +29,8 @@ use crate::domains::git::operations::{
 use crate::domains::git::service as git;
 use crate::domains::merge::lock;
 use crate::domains::merge::types::{
-    MergeMode, MergeOutcome, MergePreview, MergeState, UpdateFromParentStatus,
-    UpdateSessionFromParentResult,
+    MergeCommitSummary, MergeMode, MergeOutcome, MergePreview, MergeState,
+    UpdateFromParentStatus, UpdateSessionFromParentResult,
 };
 use crate::domains::sessions::db_sessions::SessionMethods;
 use crate::domains::sessions::entity::SessionState;
@@ -39,6 +40,7 @@ use crate::infrastructure::database::Database;
 const MERGE_TIMEOUT: Duration = Duration::from_secs(180);
 const OPERATION_LABEL: &str = "merge_session";
 const CONFLICT_SAMPLE_LIMIT: usize = 5;
+const COMMIT_LIST_LIMIT: usize = 50;
 
 #[derive(Clone)]
 struct SessionMergeContext {
@@ -176,6 +178,7 @@ impl MergeService {
 
         let commits_ahead_count =
             count_commits_ahead(&repo, session_commit.id(), parent_commit.id())?;
+        let commits = collect_commits_ahead(&repo, session_commit.id(), parent_commit.id(), COMMIT_LIST_LIMIT)?;
 
         Ok(MergePreview {
             session_branch: session.branch.clone(),
@@ -197,6 +200,7 @@ impl MergeService {
             conflicting_paths,
             is_up_to_date,
             commits_ahead_count,
+            commits,
         })
     }
 
@@ -228,6 +232,7 @@ impl MergeService {
         let repo = Repository::open(&context.repo_path)?;
         let commits_ahead_count =
             count_commits_ahead(&repo, context.session_oid, context.parent_oid)?;
+        let commits = collect_commits_ahead(&repo, context.session_oid, context.parent_oid, COMMIT_LIST_LIMIT)?;
 
         Ok(MergePreview {
             session_branch: context.session_branch,
@@ -239,6 +244,7 @@ impl MergeService {
             conflicting_paths: assessment.conflicting_paths,
             is_up_to_date: assessment.is_up_to_date,
             commits_ahead_count,
+            commits,
         })
     }
 
@@ -972,6 +978,38 @@ fn count_commits_ahead(repo: &Repository, session_oid: Oid, parent_oid: Oid) -> 
     revwalk.hide(parent_oid).ok();
 
     Ok(u32::try_from(revwalk.count()).unwrap_or(u32::MAX))
+}
+
+
+fn collect_commits_ahead(
+    repo: &Repository,
+    session_oid: Oid,
+    parent_oid: Oid,
+    limit: usize,
+) -> Result<Vec<MergeCommitSummary>> {
+    if session_oid == parent_oid {
+        return Ok(Vec::new());
+    }
+    let mut revwalk = repo.revwalk()?;
+    revwalk.set_sorting(Sort::TOPOLOGICAL | Sort::TIME)?;
+    revwalk.push(session_oid)?;
+    revwalk.hide(parent_oid).ok();
+
+    let mut commits = Vec::new();
+    for oid_result in revwalk {
+        if commits.len() >= limit {
+            break;
+        }
+        let oid = oid_result?;
+        let commit = repo.find_commit(oid)?;
+        commits.push(MergeCommitSummary {
+            id: oid.to_string()[..7].to_string(),
+            subject: commit.summary().unwrap_or("(no message)").to_string(),
+            author: commit.author().name().unwrap_or("Unknown").to_string(),
+            timestamp: commit.time().seconds() * 1000,
+        });
+    }
+    Ok(commits)
 }
 
 fn collect_conflicting_paths(index: &git2::Index) -> Result<Vec<String>> {
@@ -3902,5 +3940,102 @@ mod tests {
                 .any(|path| path == "conflict.txt"),
             "conflict.txt should surface despite internal noise"
         );
+    }
+
+    #[test]
+    fn collect_commits_ahead_returns_empty_when_same_oid() {
+        let temp = TempDir::new().unwrap();
+        let (_manager, _db, repo_path) = create_session_manager(&temp);
+        let repo = Repository::open(&repo_path).unwrap();
+        let head = repo.head().unwrap().peel_to_commit().unwrap();
+        let commits = collect_commits_ahead(&repo, head.id(), head.id(), 50).unwrap();
+        assert!(commits.is_empty());
+    }
+
+    #[test]
+    fn collect_commits_ahead_returns_single_commit() {
+        let temp = TempDir::new().unwrap();
+        let (_manager, _db, repo_path) = create_session_manager(&temp);
+        let repo = Repository::open(&repo_path).unwrap();
+        let parent_oid = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        commit_file(&repo_path, "new.txt", "content\n", "add new file");
+
+        let repo = Repository::open(&repo_path).unwrap();
+        let session_oid = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        let commits = collect_commits_ahead(&repo, session_oid, parent_oid, 50).unwrap();
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].subject, "add new file");
+        assert_eq!(commits[0].id.len(), 7);
+        assert!(commits[0].timestamp > 0);
+    }
+
+    #[test]
+    fn collect_commits_ahead_respects_limit() {
+        let temp = TempDir::new().unwrap();
+        let (_manager, _db, repo_path) = create_session_manager(&temp);
+        let repo = Repository::open(&repo_path).unwrap();
+        let parent_oid = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        for i in 0..5 {
+            commit_file(
+                &repo_path,
+                &format!("file{i}.txt"),
+                &format!("content{i}\n"),
+                &format!("commit {i}"),
+            );
+        }
+
+        let repo = Repository::open(&repo_path).unwrap();
+        let session_oid = repo.head().unwrap().peel_to_commit().unwrap().id();
+
+        let all = collect_commits_ahead(&repo, session_oid, parent_oid, 50).unwrap();
+        assert_eq!(all.len(), 5);
+
+        let limited = collect_commits_ahead(&repo, session_oid, parent_oid, 2).unwrap();
+        assert_eq!(limited.len(), 2);
+    }
+
+    #[test]
+    fn preview_includes_commits_field() {
+        let temp = TempDir::new().unwrap();
+        let (manager, db, repo_path) = create_session_manager(&temp);
+
+        let params = SessionCreationParams {
+            name: "commits-preview",
+            prompt: Some("test commits"),
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: None,
+            version_number: None,
+            epic_id: None,
+            agent_type: None,
+            skip_permissions: None,
+            pr_number: None,
+        };
+
+        let session = manager.create_session_with_agent(params).unwrap();
+
+        commit_file(
+            &session.worktree_path,
+            "feature.txt",
+            "feature\n",
+            "add feature",
+        );
+        commit_file(&session.worktree_path, "fix.txt", "fix\n", "fix bug");
+
+        manager.mark_session_ready(&session.name).unwrap();
+
+        let service = MergeService::new(db.clone(), repo_path.clone());
+        let preview = service.preview(&session.name).unwrap();
+
+        assert_eq!(preview.commits_ahead_count, 2);
+        assert_eq!(preview.commits.len(), 2);
+        assert_eq!(preview.commits[0].subject, "fix bug");
+        assert_eq!(preview.commits[1].subject, "add feature");
     }
 }

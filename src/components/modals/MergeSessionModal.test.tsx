@@ -21,11 +21,19 @@ const preview = {
   conflictingPaths: [],
   isUpToDate: false,
   commitsAheadCount: 3,
+  commits: [
+    { id: 'abc1234', subject: 'feat: add login', author: 'Alice', timestamp: 1700000000000 },
+    { id: 'def5678', subject: 'fix: resolve bug', author: 'Bob', timestamp: 1700000100000 },
+    { id: 'ghi9012', subject: 'chore: update deps', author: 'Alice', timestamp: 1700000200000 },
+  ],
 }
 
 const singleCommitPreview = {
   ...preview,
   commitsAheadCount: 1,
+  commits: [
+    { id: 'abc1234', subject: 'feat: add login', author: 'Alice', timestamp: 1700000000000 },
+  ],
 }
 
 function renderModal(
@@ -249,6 +257,47 @@ describe('MergeSessionModal', () => {
       await waitFor(() => {
         expect(btn).not.toBeDisabled()
       })
+    })
+  })
+
+  describe('commit list', () => {
+    it('renders commit list when commits are present', () => {
+      renderModal()
+      expect(screen.getByText('abc1234')).toBeInTheDocument()
+      expect(screen.getByText('feat: add login')).toBeInTheDocument()
+      expect(screen.getAllByText('Alice').length).toBeGreaterThan(0)
+    })
+
+    it('shows overflow footer when commitsAheadCount exceeds commits length', () => {
+      renderModal({
+        preview: {
+          ...preview,
+          commitsAheadCount: 55,
+          commits: preview.commits,
+        },
+      })
+      expect(screen.getByText(/52 more commits/)).toBeInTheDocument()
+    })
+
+    it('does not show overflow footer when all commits are shown', () => {
+      renderModal()
+      expect(screen.queryByText(/more commits/)).toBeNull()
+    })
+
+    it('does not render commit list when up to date', () => {
+      renderModal({
+        preview: {
+          ...preview,
+          isUpToDate: true,
+        },
+      })
+      expect(screen.queryByText('abc1234')).toBeNull()
+    })
+
+    it('shows commit list for single commit', () => {
+      renderModal({ preview: singleCommitPreview })
+      expect(screen.getByText('abc1234')).toBeInTheDocument()
+      expect(screen.getByText('feat: add login')).toBeInTheDocument()
     })
   })
 
