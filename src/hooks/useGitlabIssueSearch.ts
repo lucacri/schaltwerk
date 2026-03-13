@@ -8,13 +8,17 @@ import {
   buildCacheKey,
   gitlabIssueSearchEntryAtomFamily,
   searchGitlabIssuesActionAtom,
+  type SourceError,
 } from '../store/atoms/gitlabSearch'
+
+export type { SourceError }
 
 export interface UseGitlabIssueSearchResult {
   results: GitlabIssueSummary[]
   loading: boolean
   isRevalidating: boolean
   error: string | null
+  errorDetails: SourceError[] | null
   query: string
   setQuery: (next: string) => void
   refresh: () => void
@@ -117,6 +121,7 @@ export function useGitlabIssueSearch(options: UseGitlabIssueSearchOptions): UseG
     loading: entry.isLoading,
     isRevalidating: entry.isRevalidating,
     error: detailError ?? entry.error,
+    errorDetails: entry.errorDetails,
     query,
     setQuery,
     refresh,

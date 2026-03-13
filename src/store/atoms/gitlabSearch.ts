@@ -4,12 +4,19 @@ import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../../common/tauriCommands'
 import type { GitlabSource, GitlabMrSummary, GitlabIssueSummary } from '../../types/gitlabTypes'
 import { logger } from '../../utils/logger'
+import { resolveErrorMessage } from '../../utils/resolveErrorMessage'
+
+export interface SourceError {
+  source: string
+  message: string
+}
 
 export interface GitlabSearchEntry<T> {
   results: T[]
   isLoading: boolean
   isRevalidating: boolean
   error: string | null
+  errorDetails: SourceError[] | null
   fetchedAt: number
 }
 
@@ -24,6 +31,7 @@ const DEFAULT_MR_ENTRY: GitlabSearchEntry<GitlabMrSummary> = Object.freeze({
   isLoading: false,
   isRevalidating: false,
   error: null,
+  errorDetails: null,
   fetchedAt: 0,
 })
 
@@ -32,6 +40,7 @@ const DEFAULT_ISSUE_ENTRY: GitlabSearchEntry<GitlabIssueSummary> = Object.freeze
   isLoading: false,
   isRevalidating: false,
   error: null,
+  errorDetails: null,
   fetchedAt: 0,
 })
 
@@ -116,6 +125,7 @@ export const searchGitlabMrsActionAtom = atom(
         isLoading: false,
         isRevalidating: false,
         error: null,
+        errorDetails: null,
         fetchedAt: Date.now(),
       }))
       return
@@ -138,6 +148,7 @@ export const searchGitlabMrsActionAtom = atom(
 
     const request = (async () => {
       try {
+        const failedSources: SourceError[] = []
         const allResults = await Promise.all(
           enabledSources.map(source =>
             invoke<GitlabMrSummary[]>(TauriCommands.GitLabSearchMrs, {
@@ -146,6 +157,7 @@ export const searchGitlabMrsActionAtom = atom(
               sourceHostname: sourceHostnameParam(source.hostname),
               sourceLabel: source.label,
             }).catch(err => {
+              failedSources.push({ source: source.label, message: resolveErrorMessage(err) })
               logger.warn(`[gitlabSearch] Failed to search MRs for source ${source.label}`, err)
               return [] as GitlabMrSummary[]
             }),
@@ -158,7 +170,8 @@ export const searchGitlabMrsActionAtom = atom(
           results: merged,
           isLoading: false,
           isRevalidating: false,
-          error: null,
+          error: failedSources.length > 0 ? `Failed to fetch merge requests from ${failedSources.map(f => f.source).join(', ')}` : null,
+          errorDetails: failedSources.length > 0 ? failedSources : null,
           fetchedAt: Date.now(),
         }))
       } catch (error) {
@@ -168,6 +181,7 @@ export const searchGitlabMrsActionAtom = atom(
           isLoading: false,
           isRevalidating: false,
           error: message,
+          errorDetails: [{ source: 'unknown', message }],
         }))
         logger.error('[gitlabSearch] Failed to search MRs', error)
       } finally {
@@ -193,6 +207,7 @@ export const searchGitlabIssuesActionAtom = atom(
         isLoading: false,
         isRevalidating: false,
         error: null,
+        errorDetails: null,
         fetchedAt: Date.now(),
       }))
       return
@@ -215,6 +230,7 @@ export const searchGitlabIssuesActionAtom = atom(
 
     const request = (async () => {
       try {
+        const failedSources: SourceError[] = []
         const allResults = await Promise.all(
           enabledSources.map(source =>
             invoke<GitlabIssueSummary[]>(TauriCommands.GitLabSearchIssues, {
@@ -223,6 +239,7 @@ export const searchGitlabIssuesActionAtom = atom(
               sourceHostname: sourceHostnameParam(source.hostname),
               sourceLabel: source.label,
             }).catch(err => {
+              failedSources.push({ source: source.label, message: resolveErrorMessage(err) })
               logger.warn(`[gitlabSearch] Failed to search issues for source ${source.label}`, err)
               return [] as GitlabIssueSummary[]
             }),
@@ -235,7 +252,8 @@ export const searchGitlabIssuesActionAtom = atom(
           results: merged,
           isLoading: false,
           isRevalidating: false,
-          error: null,
+          error: failedSources.length > 0 ? `Failed to fetch issues from ${failedSources.map(f => f.source).join(', ')}` : null,
+          errorDetails: failedSources.length > 0 ? failedSources : null,
           fetchedAt: Date.now(),
         }))
       } catch (error) {
@@ -245,6 +263,7 @@ export const searchGitlabIssuesActionAtom = atom(
           isLoading: false,
           isRevalidating: false,
           error: message,
+          errorDetails: [{ source: 'unknown', message }],
         }))
         logger.error('[gitlabSearch] Failed to search issues', error)
       } finally {

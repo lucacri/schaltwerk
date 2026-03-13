@@ -239,7 +239,7 @@ describe('gitlabSearch atoms', () => {
       await promise
     })
 
-    it('returns empty results when a single source fails (per-source error isolation)', async () => {
+    it('returns empty results and surfaces error when a single source fails (per-source error isolation)', async () => {
       const store = createStore()
       const source = makeSource()
 
@@ -249,11 +249,12 @@ describe('gitlabSearch atoms', () => {
       const key = buildCacheKey('mrs', [source], 'q')
       const entry = store.get(gitlabMrSearchEntryAtomFamily(key))
       expect(entry.results).toEqual([])
-      expect(entry.error).toBeNull()
+      expect(entry.error).toBe('Failed to fetch merge requests from My Project')
+      expect(entry.errorDetails).toEqual([{ source: 'My Project', message: 'network error' }])
       expect(entry.isLoading).toBe(false)
     })
 
-    it('returns partial results when one source fails and another succeeds', async () => {
+    it('returns partial results and surfaces error when one source fails and another succeeds', async () => {
       const store = createStore()
       const src1 = makeSource({ id: '1', label: 'P1', projectPath: 'g/p1' })
       const src2 = makeSource({ id: '2', label: 'P2', projectPath: 'g/p2' })
@@ -269,7 +270,8 @@ describe('gitlabSearch atoms', () => {
       const entry = store.get(gitlabMrSearchEntryAtomFamily(key))
       expect(entry.results).toHaveLength(1)
       expect(entry.results[0].iid).toBe(42)
-      expect(entry.error).toBeNull()
+      expect(entry.error).toBe('Failed to fetch merge requests from P1')
+      expect(entry.errorDetails).toEqual([{ source: 'P1', message: 'source 1 down' }])
     })
   })
 
@@ -323,7 +325,7 @@ describe('gitlabSearch atoms', () => {
       expect(entry.results.map(r => r.iid)).toEqual([2, 1])
     })
 
-    it('returns empty results when a single source fails (per-source error isolation)', async () => {
+    it('returns empty results and surfaces error when a single source fails (per-source error isolation)', async () => {
       const store = createStore()
       const source = makeSource()
 
@@ -333,10 +335,11 @@ describe('gitlabSearch atoms', () => {
       const key = buildCacheKey('issues', [source], 'q')
       const entry = store.get(gitlabIssueSearchEntryAtomFamily(key))
       expect(entry.results).toEqual([])
-      expect(entry.error).toBeNull()
+      expect(entry.error).toBe('Failed to fetch issues from My Project')
+      expect(entry.errorDetails).toEqual([{ source: 'My Project', message: 'timeout' }])
     })
 
-    it('returns partial results when one source fails and another succeeds', async () => {
+    it('returns partial results and surfaces error when one source fails and another succeeds', async () => {
       const store = createStore()
       const src1 = makeSource({ id: '1', label: 'P1', projectPath: 'g/p1' })
       const src2 = makeSource({ id: '2', label: 'P2', projectPath: 'g/p2' })
@@ -352,7 +355,8 @@ describe('gitlabSearch atoms', () => {
       const entry = store.get(gitlabIssueSearchEntryAtomFamily(key))
       expect(entry.results).toHaveLength(1)
       expect(entry.results[0].iid).toBe(42)
-      expect(entry.error).toBeNull()
+      expect(entry.error).toBe('Failed to fetch issues from P1')
+      expect(entry.errorDetails).toEqual([{ source: 'P1', message: 'source 1 down' }])
     })
   })
 
