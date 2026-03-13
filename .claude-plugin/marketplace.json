@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "lucode",
-      "source": "./",
+      "source": "./claude-plugin",
       "description": "Consolidate parallel Lucode AI coding sessions into a single best-of-breed implementation"
     }
   ]
