@@ -1588,7 +1588,7 @@ mod tests {
     use super::*;
     use crate::domains::sessions::service::SessionCreationParams;
     use crate::infrastructure::database::Database;
-    use serial_test::serial;
+    use serial_test::{parallel, serial};
     use std::sync::atomic::Ordering;
     use tempfile::TempDir;
 
@@ -1720,6 +1720,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn preview_includes_expected_commands() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -1863,6 +1864,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn preview_marks_up_to_date_when_no_commits() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -1907,6 +1909,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn preview_with_worktree_handles_unstaged_changes_without_marking_ready() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -1946,6 +1949,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn update_session_from_parent_stashes_and_restores_dirty_worktree() {
         let temp = TempDir::new().unwrap();
         let (manager, _db, repo_path) = create_session_manager(&temp);
@@ -1993,6 +1997,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn update_session_from_parent_detects_commit_conflicts_without_writing() {
         let temp = TempDir::new().unwrap();
         let (manager, _db, repo_path) = create_session_manager(&temp);
@@ -2042,6 +2047,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn update_session_from_parent_detects_local_change_conflicts_without_stashing() {
         let temp = TempDir::new().unwrap();
         let (manager, _db, repo_path) = create_session_manager(&temp);
@@ -2090,6 +2096,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn update_session_from_parent_prefers_local_parent_over_origin_tracking() {
         let temp = TempDir::new().unwrap();
         let (manager, _db, repo_path) = create_session_manager(&temp);
@@ -2154,6 +2161,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn update_session_from_parent_fetches_and_merges_remote_changes() {
         let temp = TempDir::new().unwrap();
         let (manager, _db, repo_path) = create_session_manager(&temp);
@@ -2281,6 +2289,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn update_session_from_parent_skips_fetch_when_parent_checked_out() {
         let temp = TempDir::new().unwrap();
         let (manager, _db, repo_path) = create_session_manager(&temp);
@@ -2348,6 +2357,7 @@ mod tests {
     }
 
     #[test]
+    #[parallel]
     fn update_session_from_parent_blocks_when_merge_in_progress() {
         let temp = TempDir::new().unwrap();
         let (manager, _db, repo_path) = create_session_manager(&temp);
@@ -2401,6 +2411,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn merge_from_modal_squash_commits_dirty_worktree() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -2444,6 +2455,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn merge_from_modal_squash_allows_running_session_without_ready_flag() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -2487,6 +2499,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn merge_from_modal_reapply_blocks_dirty_worktree() {
         let temp = TempDir::new().unwrap();
         let (_manager, db, repo_path) = create_session_manager(&temp);
@@ -2526,6 +2539,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn merge_from_modal_does_not_mark_ready_when_up_to_date() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -2566,6 +2580,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn merge_from_modal_squash_allows_clean_committed_changes() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -2620,6 +2635,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn preview_with_worktree_detects_conflicts_from_dirty_files() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -2695,6 +2711,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn preview_handles_remote_parent_branch_records_with_local_conflicts() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -2821,6 +2838,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn preview_allows_running_session() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -2852,6 +2870,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn preview_rejects_uncommitted_changes() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -2886,6 +2905,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn preview_rejects_missing_worktree() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -2919,6 +2939,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn squash_merge_updates_parent_branch() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -2967,6 +2988,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn squash_merge_preserves_parent_tree_files() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -3049,6 +3071,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn squash_merge_skips_rebase_when_parent_already_integrated() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -3146,6 +3169,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn reapply_merge_fast_forwards_parent() {
         let temp = TempDir::new().unwrap();
         let (manager, db, _initial_repo_path) = create_session_manager(&temp);
@@ -3354,6 +3378,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn merge_reapply_preserves_session_on_conflict() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -3509,6 +3534,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn merge_reapply_reports_already_applied_patch_as_conflict() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -3576,6 +3602,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn merge_reapply_handles_dirty_parent_branch_without_touching_worktree() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -3756,6 +3783,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn preview_ignores_schaltwerk_internal_conflicts() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);
@@ -3851,6 +3879,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[parallel]
     async fn preview_reports_real_conflicts_even_with_many_internal_entries() {
         let temp = TempDir::new().unwrap();
         let (manager, db, repo_path) = create_session_manager(&temp);

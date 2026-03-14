@@ -8,6 +8,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { buildTerminalTheme } from '../../common/themes/terminalTheme'
 import { logger } from '../../utils/logger'
 import { profileSwitchPhase } from '../profiling/switchProfiler'
+import { writeClipboard, readClipboard } from '../../utils/clipboard'
+import { writeTerminalBackend } from '../transport/backend'
 import { XtermAddonImporter } from './xtermAddonImporter'
 import { TauriCommands } from '../../common/tauriCommands'
 import { RegexLinkProvider } from './fileLinkProvider'
@@ -409,6 +411,51 @@ export class XtermTerminal {
       } catch (error) {
         logger.debug(`[XtermTerminal ${this.terminalId}] OSC handler registration failed for code ${code}`, error)
       }
+    }
+    this.registerOsc52Handler()
+  }
+
+  private registerOsc52Handler(): void {
+    this.raw.parser.registerOscHandler(52, (payload: string) => {
+      void this.handleOsc52(payload)
+      return true
+    })
+  }
+
+  private async handleOsc52(payload: string): Promise<void> {
+    const sep = payload.indexOf(';')
+    if (sep < 0) return
+
+    const selection = payload.substring(0, sep)
+    const data = payload.substring(sep + 1)
+
+    if (data === '?') {
+      await this.handleOsc52Read(selection)
+    } else {
+      await this.handleOsc52Write(data)
+    }
+  }
+
+  private async handleOsc52Write(base64Data: string): Promise<void> {
+    try {
+      const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+      const decoded = new TextDecoder().decode(bytes)
+      await writeClipboard(decoded)
+    } catch (error) {
+      logger.debug(`[XtermTerminal ${this.terminalId}] OSC 52 write failed`, error)
+    }
+  }
+
+  private async handleOsc52Read(selection: string): Promise<void> {
+    try {
+      const text = await readClipboard()
+      if (text === null) return
+      const bytes = new TextEncoder().encode(text)
+      const binary = Array.from(bytes, b => String.fromCharCode(b)).join('')
+      const response = `\x1b]52;${selection};${btoa(binary)}\x07`
+      await writeTerminalBackend(this.terminalId, response)
+    } catch (error) {
+      logger.debug(`[XtermTerminal ${this.terminalId}] OSC 52 read failed`, error)
     }
   }
 
