@@ -32,7 +32,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 portable-pty = "0.9.0"
 anyhow = "1.0.102"
-tokio = { version = "1.49.0", features = ["macros", "rt", "process", "sync", "io-util", "time", "net"] }
+tokio = { version = "1.50.0", features = ["macros", "rt", "process", "sync", "io-util", "time", "net"] }
 async-trait = "0.1"
 log = "0.4"
 env_logger = "0.11"
@@ -42,7 +42,7 @@ which = "8.0"
 nix = { version = "0.31", features = ["signal", "process"] }
 rusqlite = { version = "0.38", features = ["bundled", "chrono"] }
 r2d2 = "0.8"
-uuid = { version = "1.21", features = ["v4", "serde"] }
+uuid = { version = "1.22", features = ["v4", "serde"] }
 walkdir = "2.5"
 git2 = { version = "0.20", features = ["vendored-libgit2", "vendored-openssl"] }
 sha2 = "0.10"
@@ -69,6 +69,7 @@ vt100 = "0.16"
 arboard = "3.6"
 semver = "1"
 tempfile = "3.26"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"
