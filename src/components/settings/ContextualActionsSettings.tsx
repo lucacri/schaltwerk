@@ -203,7 +203,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                             value={action.name}
                                             onChange={e => handleUpdate(action.id, { name: e.target.value })}
                                             placeholder="e.g. Review this MR"
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                             style={{ fontSize: 'var(--font-body)' }}
                                         />
                                     </div>
@@ -212,7 +212,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                         <select
                                             value={action.context}
                                             onChange={e => handleUpdate(action.id, { context: e.target.value as ContextualActionContext })}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 focus:outline-none focus:border-[var(--color-border-focus)]"
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
                                             style={{ fontSize: 'var(--font-body)' }}
                                         >
                                             <option value="mr">MR only</option>
@@ -225,7 +225,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                         <select
                                             value={action.mode}
                                             onChange={e => handleUpdate(action.id, { mode: e.target.value as ContextualActionMode })}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 focus:outline-none focus:border-[var(--color-border-focus)]"
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
                                             style={{ fontSize: 'var(--font-body)' }}
                                         >
                                             <option value="session">Create Session</option>
@@ -239,7 +239,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                     <select
                                         value={getAgentSourceValue(action)}
                                         onChange={e => handleAgentSourceChange(action.id, e.target.value)}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 focus:outline-none focus:border-[var(--color-border-focus)]"
+                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
                                         style={{ fontSize: 'var(--font-body)' }}
                                     >
                                         {agentSourceOptions.map(opt => (
@@ -260,7 +260,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                         onChange={e => handleUpdate(action.id, { promptTemplate: e.target.value })}
                                         placeholder="Review the merge request:\n\nTitle: {{mr.title}}\nDescription: {{mr.description}}"
                                         rows={6}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
+                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                         style={{ fontSize: 'var(--font-body)', fontFamily: 'var(--font-family-mono)' }}
                                     />
                                 </div>

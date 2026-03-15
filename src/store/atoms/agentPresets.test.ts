@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createStore } from 'jotai'
 import { agentPresetsListAtom, agentPresetsLoadingAtom, agentPresetsErrorAtom, loadAgentPresetsAtom, saveAgentPresetsAtom } from './agentPresets'
+import { TauriCommands } from '../../common/tauriCommands'
 import type { AgentPreset } from '../../types/agentPreset'
 
 const mockInvoke = vi.fn()
@@ -55,7 +56,7 @@ describe('agentPresets atoms', () => {
 
         expect(result).toBe(true)
         expect(store.get(agentPresetsListAtom)).toEqual(presets)
-        expect(mockInvoke).toHaveBeenCalledWith('set_agent_presets', { presets })
+        expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SetAgentPresets, { presets })
     })
 
     it('handles load errors', async () => {

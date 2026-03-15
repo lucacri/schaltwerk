@@ -177,7 +177,7 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                             value={variant.name}
                                             onChange={e => handleUpdate(variant.id, { name: e.target.value })}
                                             placeholder={'e.g. Claude Opus High'}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                             style={{ fontSize: 'var(--font-body)' }}
                                         />
                                     </div>
@@ -208,7 +208,7 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                             value={variant.model ?? ''}
                                             onChange={e => handleUpdate(variant.id, { model: e.target.value || undefined })}
                                             placeholder={'e.g. opus, o3'}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                             style={{ fontSize: 'var(--font-body)' }}
                                         />
                                     </div>
@@ -221,7 +221,7 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                             value={variant.reasoningEffort ?? ''}
                                             onChange={e => handleUpdate(variant.id, { reasoningEffort: e.target.value || undefined })}
                                             placeholder={'e.g. high, medium, low'}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                             style={{ fontSize: 'var(--font-body)' }}
                                         />
                                     </div>
@@ -236,7 +236,7 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                         onChange={e => handleCliArgsChange(variant.id, e.target.value)}
                                         placeholder={'--dangerously-skip-permissions\n--model opus'}
                                         rows={3}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
+                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                         style={{ fontSize: 'var(--font-body)', fontFamily: 'var(--font-family-mono)' }}
                                     />
                                 </div>
@@ -261,7 +261,7 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                                 value={key}
                                                 onChange={e => handleEnvVarChange(variant.id, key, e.target.value, value)}
                                                 placeholder="KEY"
-                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
+                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                                 style={{ fontSize: 'var(--font-caption)', fontFamily: 'var(--font-family-mono)' }}
                                             />
                                             <input
@@ -269,7 +269,7 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                                 value={value}
                                                 onChange={e => handleEnvVarChange(variant.id, key, key, e.target.value)}
                                                 placeholder="value"
-                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
+                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                                 style={{ fontSize: 'var(--font-caption)', fontFamily: 'var(--font-family-mono)' }}
                                             />
                                             <button

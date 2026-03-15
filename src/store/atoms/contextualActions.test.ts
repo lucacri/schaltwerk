@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createStore } from 'jotai'
 import { contextualActionsListAtom, contextualActionsLoadingAtom, loadContextualActionsAtom, saveContextualActionsAtom, resetContextualActionsAtom } from './contextualActions'
+import { TauriCommands } from '../../common/tauriCommands'
 import type { ContextualAction } from '../../types/contextualAction'
 
 const mockInvoke = vi.fn()
@@ -46,7 +47,7 @@ describe('contextualActions atoms', () => {
         const result = await store.set(saveContextualActionsAtom, actions)
 
         expect(result).toBe(true)
-        expect(mockInvoke).toHaveBeenCalledWith('set_contextual_actions', { actions })
+        expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SetContextualActions, { actions })
     })
 
     it('resets to defaults', async () => {
