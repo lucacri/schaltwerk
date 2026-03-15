@@ -729,7 +729,12 @@ function syncSnapshotsFromAtom(get: Getter) {
 
     const projectPath = get(projectPathAtom)
     if (projectPath) {
-        projectSessionsSnapshotCache.set(projectPath, current)
+        const stripped = current.map(session =>
+            session.info.attention_required != null
+                ? { ...session, info: { ...session.info, attention_required: undefined } }
+                : session,
+        )
+        projectSessionsSnapshotCache.set(projectPath, stripped)
         projectSessionStatesCache.set(projectPath, new Map(stateMap))
     }
 }

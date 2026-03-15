@@ -212,20 +212,18 @@ pub(super) async fn cleanup_dead_terminal(id: String, deps: &LifecycleDeps) {
                 warn!("Failed to emit terminal-closed event: {e}");
             }
 
-            if is_top_terminal {
-                if let Some(session_id) = session_id.as_ref() {
-                    if let Err(e) = emit_event(
-                        handle,
-                        SchaltEvent::TerminalAttention,
-                        &serde_json::json!({
-                            "session_id": session_id,
-                            "terminal_id": id,
-                            "needs_attention": false
-                        }),
-                    ) {
-                        warn!("Failed to emit terminal-attention reset for {session_id}: {e}");
-                    }
-                }
+            if let Some(session_id) = session_id.as_ref().filter(|_| is_top_terminal)
+                && let Err(e) = emit_event(
+                    handle,
+                    SchaltEvent::TerminalAttention,
+                    &serde_json::json!({
+                        "session_id": session_id,
+                        "terminal_id": id,
+                        "needs_attention": false
+                    }),
+                )
+            {
+                warn!("Failed to emit terminal-attention reset for {session_id}: {e}");
             }
         }
         None => {
@@ -233,11 +231,9 @@ pub(super) async fn cleanup_dead_terminal(id: String, deps: &LifecycleDeps) {
         }
     }
 
-    if is_top_terminal {
-        if let Some(session_id) = session_id.clone() {
-            handle_terminal_attention(session_id.clone(), false);
-            update_session_attention_state(session_id, false);
-        }
+    if let Some(session_id) = session_id.filter(|_| is_top_terminal) {
+        handle_terminal_attention(session_id.clone(), false);
+        update_session_attention_state(session_id, false);
     }
 
     info!("Dead terminal cleanup completed");
