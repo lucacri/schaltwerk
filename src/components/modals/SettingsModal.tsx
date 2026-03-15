@@ -44,6 +44,7 @@ import { useModal } from '../../contexts/ModalContext'
 import { ResizableModal } from '../shared/ResizableModal'
 import { AgentVariantsSettings } from '../settings/AgentVariantsSettings'
 import { AgentPresetsSettings } from '../settings/AgentPresetsSettings'
+import { ContextualActionsSettings } from '../settings/ContextualActionsSettings'
 
 const shortcutArraysEqual = (a: string[] = [], b: string[] = []) => {
     if (a.length !== b.length) return false
@@ -2843,6 +2844,7 @@ fi`}
                     <div className="space-y-8">
                         <AgentVariantsSettings onNotification={showNotification} />
                         <AgentPresetsSettings onNotification={showNotification} />
+                        <ContextualActionsSettings onNotification={showNotification} />
                     </div>
                 )
             case 'terminal':
