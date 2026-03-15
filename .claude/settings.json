@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "mart-gitlab@claude-mart": false
+  }
+}
