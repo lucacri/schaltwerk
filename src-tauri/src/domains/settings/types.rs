@@ -313,6 +313,24 @@ pub struct AgentVariant {
     pub is_built_in: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct AgentPresetSlot {
+    pub agent_type: String,
+    #[serde(default)]
+    pub variant_id: Option<String>,
+    #[serde(default)]
+    pub skip_permissions: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct AgentPreset {
+    pub id: String,
+    pub name: String,
+    pub slots: Vec<AgentPresetSlot>,
+    #[serde(default)]
+    pub is_built_in: bool,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub agent_env_vars: AgentEnvVars,
@@ -352,6 +370,8 @@ pub struct Settings {
     pub restore_open_projects: bool,
     #[serde(default)]
     pub agent_variants: Vec<AgentVariant>,
+    #[serde(default)]
+    pub agent_presets: Vec<AgentPreset>,
 }
 
 impl Default for Settings {
@@ -379,6 +399,7 @@ impl Default for Settings {
             generation: GenerationSettings::default(),
             restore_open_projects: default_true(),
             agent_variants: Vec::new(),
+            agent_presets: Vec::new(),
         }
     }
 }

@@ -7,8 +7,8 @@ use lucode::schaltwerk_core::db_project_config::{
     RunScript, default_action_buttons,
 };
 use lucode::services::{
-    AgentPreference, AgentVariant, DiffViewPreferences, McpServerConfig, SessionPreferences,
-    TerminalSettings, TerminalUIPreferences,
+    AgentPreference, AgentPreset, AgentVariant, DiffViewPreferences, McpServerConfig,
+    SessionPreferences, TerminalSettings, TerminalUIPreferences,
 };
 use tauri::AppHandle;
 
@@ -744,6 +744,23 @@ pub async fn set_generation_settings(
     let settings_manager = get_settings_manager(&app).await?;
     let mut manager = settings_manager.lock().await;
     manager.set_generation_settings(settings)
+}
+
+#[tauri::command]
+pub async fn get_agent_presets(app: AppHandle) -> Result<Vec<AgentPreset>, String> {
+    let settings_manager = get_settings_manager(&app).await?;
+    let manager = settings_manager.lock().await;
+    Ok(manager.get_agent_presets())
+}
+
+#[tauri::command]
+pub async fn set_agent_presets(
+    app: AppHandle,
+    presets: Vec<AgentPreset>,
+) -> Result<(), String> {
+    let settings_manager = get_settings_manager(&app).await?;
+    let mut manager = settings_manager.lock().await;
+    manager.set_agent_presets(presets)
 }
 
 #[tauri::command]

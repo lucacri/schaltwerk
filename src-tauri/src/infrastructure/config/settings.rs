@@ -356,6 +356,19 @@ impl SettingsManager {
             .map_err(|e| e.to_string())
     }
 
+    pub fn get_agent_presets(&self) -> Vec<crate::domains::settings::AgentPreset> {
+        self.service.get_agent_presets()
+    }
+
+    pub fn set_agent_presets(
+        &mut self,
+        presets: Vec<crate::domains::settings::AgentPreset>,
+    ) -> Result<(), String> {
+        self.service
+            .set_agent_presets(presets)
+            .map_err(|e| e.to_string())
+    }
+
     pub fn get_agent_variants(&self) -> Vec<crate::domains::settings::AgentVariant> {
         self.service.get_agent_variants()
     }

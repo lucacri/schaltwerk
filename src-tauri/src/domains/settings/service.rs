@@ -556,6 +556,18 @@ impl SettingsService {
         self.save()
     }
 
+    pub fn get_agent_presets(&self) -> Vec<AgentPreset> {
+        self.settings.agent_presets.clone()
+    }
+
+    pub fn set_agent_presets(
+        &mut self,
+        presets: Vec<AgentPreset>,
+    ) -> Result<(), SettingsServiceError> {
+        self.settings.agent_presets = presets;
+        self.save()
+    }
+
     pub fn get_agent_variants(&self) -> Vec<AgentVariant> {
         self.settings.agent_variants.clone()
     }
@@ -1142,6 +1154,41 @@ mod tests {
         assert_eq!(loaded[0].name, "Claude Opus High");
         assert_eq!(loaded[0].model, Some("opus".to_string()));
         assert_eq!(repo_handle.snapshot().agent_variants, variants);
+    }
+
+    #[test]
+    fn agent_preset_roundtrip() {
+        let repo = InMemoryRepository::default();
+        let repo_handle = repo.clone();
+        let mut service = SettingsService::new(Box::new(repo));
+
+        let presets = vec![AgentPreset {
+            id: "preset-1".to_string(),
+            name: "The Trio".to_string(),
+            slots: vec![
+                AgentPresetSlot {
+                    agent_type: "claude".to_string(),
+                    variant_id: None,
+                    skip_permissions: Some(true),
+                },
+                AgentPresetSlot {
+                    agent_type: "codex".to_string(),
+                    variant_id: Some("variant-opus-high".to_string()),
+                    skip_permissions: None,
+                },
+            ],
+            is_built_in: false,
+        }];
+
+        service
+            .set_agent_presets(presets.clone())
+            .expect("should save agent presets");
+
+        let loaded = service.get_agent_presets();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].name, "The Trio");
+        assert_eq!(loaded[0].slots.len(), 2);
+        assert_eq!(repo_handle.snapshot().agent_presets, presets);
     }
 
     #[test]
