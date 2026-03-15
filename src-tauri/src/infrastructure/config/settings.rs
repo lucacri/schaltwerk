@@ -356,6 +356,27 @@ impl SettingsManager {
             .map_err(|e| e.to_string())
     }
 
+    pub fn get_contextual_actions(&self) -> Vec<crate::domains::settings::ContextualAction> {
+        self.service.get_contextual_actions()
+    }
+
+    pub fn set_contextual_actions(
+        &mut self,
+        actions: Vec<crate::domains::settings::ContextualAction>,
+    ) -> Result<(), String> {
+        self.service
+            .set_contextual_actions(actions)
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn reset_contextual_actions_to_defaults(
+        &mut self,
+    ) -> Result<Vec<crate::domains::settings::ContextualAction>, String> {
+        self.service
+            .reset_contextual_actions_to_defaults()
+            .map_err(|e| e.to_string())
+    }
+
     pub fn get_agent_presets(&self) -> Vec<crate::domains::settings::AgentPreset> {
         self.service.get_agent_presets()
     }

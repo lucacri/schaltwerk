@@ -556,6 +556,30 @@ impl SettingsService {
         self.save()
     }
 
+    pub fn get_contextual_actions(&self) -> Vec<ContextualAction> {
+        let actions = &self.settings.contextual_actions;
+        if actions.is_empty() {
+            return default_contextual_actions();
+        }
+        actions.clone()
+    }
+
+    pub fn set_contextual_actions(
+        &mut self,
+        actions: Vec<ContextualAction>,
+    ) -> Result<(), SettingsServiceError> {
+        self.settings.contextual_actions = actions;
+        self.save()
+    }
+
+    pub fn reset_contextual_actions_to_defaults(
+        &mut self,
+    ) -> Result<Vec<ContextualAction>, SettingsServiceError> {
+        self.settings.contextual_actions = Vec::new();
+        self.save()?;
+        Ok(default_contextual_actions())
+    }
+
     pub fn get_agent_presets(&self) -> Vec<AgentPreset> {
         self.settings.agent_presets.clone()
     }

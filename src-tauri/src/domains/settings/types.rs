@@ -331,6 +331,50 @@ pub struct AgentPreset {
     pub is_built_in: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct ContextualAction {
+    pub id: String,
+    pub name: String,
+    pub context: String,
+    pub prompt_template: String,
+    pub mode: String,
+    #[serde(default)]
+    pub agent_type: Option<String>,
+    #[serde(default)]
+    pub variant_id: Option<String>,
+    #[serde(default)]
+    pub preset_id: Option<String>,
+    #[serde(default)]
+    pub is_built_in: bool,
+}
+
+pub fn default_contextual_actions() -> Vec<ContextualAction> {
+    vec![
+        ContextualAction {
+            id: "builtin-review-mr".to_string(),
+            name: "Review this MR".to_string(),
+            context: "mr".to_string(),
+            prompt_template: "Review the following merge request:\n\nTitle: {{mr.title}}\nAuthor: {{mr.author}}\nSource: {{mr.sourceBranch}} -> {{mr.targetBranch}}\n\nDescription:\n{{mr.description}}\n\nDiff:\n{{mr.diff}}".to_string(),
+            mode: "session".to_string(),
+            agent_type: Some("claude".to_string()),
+            variant_id: None,
+            preset_id: None,
+            is_built_in: true,
+        },
+        ContextualAction {
+            id: "builtin-plan-issue".to_string(),
+            name: "Plan fix for this issue".to_string(),
+            context: "issue".to_string(),
+            prompt_template: "Create an implementation plan for the following issue:\n\nTitle: {{issue.title}}\n\nDescription:\n{{issue.description}}\n\nLabels: {{issue.labels}}".to_string(),
+            mode: "spec".to_string(),
+            agent_type: Some("claude".to_string()),
+            variant_id: None,
+            preset_id: None,
+            is_built_in: true,
+        },
+    ]
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub agent_env_vars: AgentEnvVars,
@@ -372,6 +416,8 @@ pub struct Settings {
     pub agent_variants: Vec<AgentVariant>,
     #[serde(default)]
     pub agent_presets: Vec<AgentPreset>,
+    #[serde(default)]
+    pub contextual_actions: Vec<ContextualAction>,
 }
 
 impl Default for Settings {
@@ -400,6 +446,7 @@ impl Default for Settings {
             restore_open_projects: default_true(),
             agent_variants: Vec::new(),
             agent_presets: Vec::new(),
+            contextual_actions: Vec::new(),
         }
     }
 }

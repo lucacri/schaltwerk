@@ -7,8 +7,8 @@ use lucode::schaltwerk_core::db_project_config::{
     RunScript, default_action_buttons,
 };
 use lucode::services::{
-    AgentPreference, AgentPreset, AgentVariant, DiffViewPreferences, McpServerConfig,
-    SessionPreferences, TerminalSettings, TerminalUIPreferences,
+    AgentPreference, AgentPreset, AgentVariant, ContextualAction, DiffViewPreferences,
+    McpServerConfig, SessionPreferences, TerminalSettings, TerminalUIPreferences,
 };
 use tauri::AppHandle;
 
@@ -744,6 +744,32 @@ pub async fn set_generation_settings(
     let settings_manager = get_settings_manager(&app).await?;
     let mut manager = settings_manager.lock().await;
     manager.set_generation_settings(settings)
+}
+
+#[tauri::command]
+pub async fn get_contextual_actions(app: AppHandle) -> Result<Vec<ContextualAction>, String> {
+    let settings_manager = get_settings_manager(&app).await?;
+    let manager = settings_manager.lock().await;
+    Ok(manager.get_contextual_actions())
+}
+
+#[tauri::command]
+pub async fn set_contextual_actions(
+    app: AppHandle,
+    actions: Vec<ContextualAction>,
+) -> Result<(), String> {
+    let settings_manager = get_settings_manager(&app).await?;
+    let mut manager = settings_manager.lock().await;
+    manager.set_contextual_actions(actions)
+}
+
+#[tauri::command]
+pub async fn reset_contextual_actions_to_defaults(
+    app: AppHandle,
+) -> Result<Vec<ContextualAction>, String> {
+    let settings_manager = get_settings_manager(&app).await?;
+    let mut manager = settings_manager.lock().await;
+    manager.reset_contextual_actions_to_defaults()
 }
 
 #[tauri::command]
