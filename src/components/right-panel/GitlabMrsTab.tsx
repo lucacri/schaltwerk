@@ -94,6 +94,18 @@ export function GitlabMrsTab() {
             <VscClose className="w-3.5 h-3.5" />
           </button>
         )}
+        {search.isRevalidating && (
+          <span
+            style={{
+              fontSize: theme.fontSize.caption,
+              color: 'var(--color-text-muted)',
+              opacity: 0.7,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {t.gitlabMrTab.refreshing}
+          </span>
+        )}
       </div>
 
       {search.error && (

@@ -631,4 +631,80 @@ mod tests {
             "Cannot distinguish between: 1) Agent analyzing files silently, 2) Agent waiting for user input, 3) Agent crashed/stuck"
         );
     }
+
+    #[test]
+    fn screen_prefed_by_reader_not_double_fed_by_tick() {
+        let threshold = 100u64;
+        let mut detector = IdleDetector::new(threshold, "prefed-terminal".to_string());
+        let mut screen = VisibleScreen::new(5, 40, "prefed-terminal".to_string());
+
+        let baseline = Instant::now();
+        let data = b"line1\nline2\nline3";
+
+        // Simulate handle_reader_data: feed bytes to screen BEFORE tick
+        screen.feed_bytes(data);
+        detector.observe_activity(baseline);
+
+        // Take a reference snapshot of the screen AFTER external feed
+        let snapshot_after_external = screen.take_snapshot();
+
+        // tick should NOT re-feed bytes to screen
+        assert_eq!(detector.tick(baseline, &mut screen), None);
+
+        // Screen content should be unchanged by tick (no double-feeding)
+        let snapshot_after_tick = screen.take_snapshot();
+        assert_eq!(
+            snapshot_after_external.full_hash, snapshot_after_tick.full_hash,
+            "tick() must not re-feed bytes to screen - screen was already updated by handle_reader_data"
+        );
+    }
+
+    #[test]
+    fn prefed_screen_idle_then_active_transition() {
+        let threshold = 100u64;
+        let mut detector = IdleDetector::new(threshold, "prefed-active-terminal".to_string());
+        let mut screen = VisibleScreen::new(5, 40, "prefed-active-terminal".to_string());
+
+        let baseline = Instant::now();
+
+        // Phase 1: Initial output (pre-fed by reader)
+        let data1 = b"initial content\n";
+        screen.feed_bytes(data1);
+        detector.observe_activity(baseline);
+        assert_eq!(detector.tick(baseline, &mut screen), None);
+
+        // Phase 2: Become idle
+        let idle_time = baseline + Duration::from_millis(threshold + 10);
+        assert_eq!(
+            detector.tick(idle_time, &mut screen),
+            Some(IdleTransition::BecameIdle)
+        );
+
+        // Phase 3: New output arrives (pre-fed by reader), should become active
+        let active_time = idle_time + Duration::from_millis(50);
+        let data2 = b"new output line\n";
+        screen.feed_bytes(data2);
+        detector.observe_activity(active_time);
+        assert_eq!(
+            detector.tick(active_time, &mut screen),
+            Some(IdleTransition::BecameActive),
+            "Should detect activity when screen was pre-fed with new content"
+        );
+    }
+
+    #[test]
+    fn needs_tick_returns_true_when_dirty() {
+        let mut detector = IdleDetector::new(100, "needs-tick-terminal".to_string());
+
+        assert!(
+            detector.needs_tick(),
+            "Fresh detector should need tick (idle not yet reported)"
+        );
+
+        detector.observe_activity(Instant::now());
+        assert!(
+            detector.needs_tick(),
+            "Should need tick after observe_activity sets dirty"
+        );
+    }
 }

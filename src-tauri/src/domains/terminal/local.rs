@@ -275,10 +275,11 @@ impl LocalPtyAdapter {
             last_output: SystemTime::now(),
             screen: VisibleScreen::new(rows, cols, id.clone()),
             idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
-            session_id,
+            session_id: session_id.clone(),
         };
 
         self.terminals.write().await.insert(id.clone(), state);
+        clear_attention_for_top_terminal(session_id.as_deref(), &id);
         self.creating.lock().await.remove(&id);
 
         if let Some(handle) = self.coalescing_state.app_handle.lock().await.as_ref() {
@@ -852,7 +853,7 @@ impl TerminalBackend for LocalPtyAdapter {
                 last_output: SystemTime::now(),
                 screen: VisibleScreen::new(rows, cols, id.clone()),
                 idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
-                session_id,
+                session_id: session_id.clone(),
             };
 
             let creating_clone = Arc::clone(&self.creating);
@@ -863,6 +864,9 @@ impl TerminalBackend for LocalPtyAdapter {
             tokio::spawn(async move {
                 terminals_clone.write().await.insert(id_clone.clone(), state);
                 creating_clone.lock().await.remove(&id_clone);
+
+                let session_id = session_id_from_terminal_id(&id_clone);
+                clear_attention_for_top_terminal(session_id.as_deref(), &id_clone);
 
                 if let Some(handle) = coalescing_state_clone.app_handle.lock().await.as_ref() {
                     let payload = serde_json::json!({ "terminal_id": id_clone, "cwd": cwd_clone });
@@ -922,10 +926,11 @@ impl TerminalBackend for LocalPtyAdapter {
             last_output: SystemTime::now(),
             screen: VisibleScreen::new(rows, cols, id.clone()),
             idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
-            session_id,
+            session_id: session_id.clone(),
         };
 
         self.terminals.write().await.insert(id.clone(), state);
+        clear_attention_for_top_terminal(session_id.as_deref(), &id);
 
         // Start reader agent and record the handle so we can abort on close
         self.spawn_reader_for(&id).await?;
@@ -1266,6 +1271,17 @@ fn session_id_from_terminal_id(id: &str) -> Option<String> {
     }
 
     Some(rest.to_string())
+}
+
+fn clear_attention_for_top_terminal(session_id: Option<&str>, terminal_id: &str) {
+    let Some(session_id) = session_id else { return };
+    if !is_session_top_terminal_id(terminal_id) {
+        return;
+    }
+
+    let session_id = session_id.to_string();
+    handle_terminal_attention(session_id.clone(), false);
+    update_session_attention_state(session_id, false);
 }
 
 #[cfg(test)]

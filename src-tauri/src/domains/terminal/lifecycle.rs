@@ -1,5 +1,8 @@
 use super::local::TerminalState;
+use crate::infrastructure::attention_bridge::update_session_attention_state;
 use crate::infrastructure::events::{SchaltEvent, emit_event};
+use crate::infrastructure::keep_awake_bridge::handle_terminal_attention;
+use crate::shared::terminal_id::is_session_top_terminal_id;
 use log::{debug, error, info, warn};
 use portable_pty::{Child, ExitStatus, MasterPty};
 use std::collections::HashMap;
@@ -190,7 +193,11 @@ pub(super) async fn cleanup_dead_terminal(id: String, deps: &LifecycleDeps) {
     deps.pty_children.lock().await.remove(&id);
     deps.pty_masters.lock().await.remove(&id);
     deps.pty_writers.lock().await.remove(&id);
-    deps.terminals.write().await.remove(&id);
+    let session_id = {
+        let mut guard = deps.terminals.write().await;
+        guard.remove(&id).and_then(|state| state.session_id)
+    };
+    let is_top_terminal = is_session_top_terminal_id(&id);
 
     let handle_guard = deps.app_handle.lock().await;
     match handle_guard.as_ref() {
@@ -204,10 +211,30 @@ pub(super) async fn cleanup_dead_terminal(id: String, deps: &LifecycleDeps) {
             ) {
                 warn!("Failed to emit terminal-closed event: {e}");
             }
+
+            if is_top_terminal
+                && let Some(session_id) = session_id.as_ref()
+                && let Err(e) = emit_event(
+                    handle,
+                    SchaltEvent::TerminalAttention,
+                    &serde_json::json!({
+                        "session_id": session_id,
+                        "terminal_id": id,
+                        "needs_attention": false
+                    }),
+                )
+            {
+                warn!("Failed to emit terminal-attention reset for {session_id}: {e}");
+            }
         }
         None => {
             debug!("Skipping terminal-closed event during app shutdown");
         }
+    }
+
+    if is_top_terminal && let Some(session_id) = session_id.clone() {
+        handle_terminal_attention(session_id.clone(), false);
+        update_session_attention_state(session_id, false);
     }
 
     info!("Dead terminal cleanup completed");

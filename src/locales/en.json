@@ -1269,7 +1269,8 @@
     "notes": "Notes",
     "noNotes": "No notes",
     "labels": "Labels",
-    "errorDetails": "Details"
+    "errorDetails": "Details",
+    "refreshing": "Refreshing\u2026"
   },
   "gitlabMrTab": {
     "searchPlaceholder": "Search merge requests...",
@@ -1315,7 +1316,8 @@
     "cancel": "Cancel",
     "merging": "Merging...",
     "approving": "Approving...",
-    "commenting": "Sending..."
+    "commenting": "Sending...",
+    "refreshing": "Refreshing\u2026"
   },
   "historySearch": {
     "placeholder": "Search commits...",

@@ -582,32 +582,6 @@ function attachMergeSnapshot(
     }
 }
 
-function attachRuntimeSnapshot(
-    session: EnrichedSession,
-    previousSessions: Map<string, EnrichedSession>,
-): EnrichedSession {
-    const previous = previousSessions.get(session.info.session_id)
-    if (!previous) {
-        return session
-    }
-
-    if (session.info.attention_required != null) {
-        return session
-    }
-
-    if (previous.info.attention_required == null) {
-        return session
-    }
-
-    return {
-        ...session,
-        info: {
-            ...session.info,
-            attention_required: previous.info.attention_required,
-        },
-    }
-}
-
 async function applySessionsSnapshot(
     get: Getter,
     set: Setter,
@@ -628,7 +602,7 @@ async function applySessionsSnapshot(
     const projectPath = snapshotProjectPath ?? activeProjectPath
     const previousMap = new Map(previousSessionsSnapshot.map(session => [session.info.session_id, session]))
     const withSnapshots = sessions.map(session =>
-        attachRuntimeSnapshot(attachMergeSnapshot(session, previousMap), previousMap),
+        attachMergeSnapshot(session, previousMap),
     )
     const deduped = dedupeSessions(withSnapshots)
 
@@ -1051,7 +1025,12 @@ export const refreshSessionsActionAtom = atom(
 
         try {
             if (cachedSnapshot && cachedSnapshot.length > 0) {
-                await applySessionsSnapshot(get, set, cachedSnapshot, projectPath, {
+                const stripped = cachedSnapshot.map(s =>
+                    s.info.attention_required != null
+                        ? { ...s, info: { ...s.info, attention_required: undefined } }
+                        : s,
+                )
+                await applySessionsSnapshot(get, set, stripped, projectPath, {
                     reason: 'cache-hydrate',
                     previousStates: cachedStates ? new Map(cachedStates) : new Map(previousSessionStates),
                 })
