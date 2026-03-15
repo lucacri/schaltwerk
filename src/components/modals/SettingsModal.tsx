@@ -151,8 +151,8 @@ const CATEGORIES: CategoryConfig[] = [
         )
     },
     {
-        id: 'agentVariants',
-        label: 'Agent Variants',
+        id: 'agentConfiguration',
+        label: 'Agent Configuration',
         scope: 'application',
         icon: (
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2839,7 +2839,7 @@ fi`}
                 return renderKeyboardShortcuts()
             case 'environment':
                 return renderEnvironmentSettings()
-            case 'agentVariants':
+            case 'agentConfiguration':
                 return (
                     <div className="space-y-8">
                         <AgentVariantsSettings onNotification={showNotification} />

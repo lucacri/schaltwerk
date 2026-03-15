@@ -171,7 +171,7 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                         value={preset.name}
                                         onChange={e => handleUpdate(preset.id, { name: e.target.value })}
                                         placeholder={'e.g. The Trio'}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
+                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                         style={{ fontSize: 'var(--font-body)' }}
                                     />
                                 </div>
@@ -211,7 +211,7 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                                         })
                                                     }
                                                 }}
-                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1.5 border border-white/10 focus:outline-none focus:border-[var(--color-border-focus)]"
+                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1.5 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
                                                 style={{ fontSize: 'var(--font-caption)' }}
                                             >
                                                 <optgroup label="Agents">
