@@ -63,11 +63,8 @@ pub struct SessionAttentionState {
 
 impl SessionAttentionState {
     pub fn update(&mut self, session_id: &str, needs_attention: bool) {
-        if needs_attention {
-            self.states.insert(session_id.to_string(), true);
-        } else {
-            self.states.remove(session_id);
-        }
+        self.states
+            .insert(session_id.to_string(), needs_attention);
     }
 
     pub fn get(&self, session_id: &str) -> Option<bool> {
@@ -131,6 +128,10 @@ mod tests {
         assert_eq!(state.get_all().len(), 2);
 
         state.update("session-1", false);
+        assert_eq!(state.get("session-1"), Some(false));
+        assert_eq!(state.get_all().len(), 2);
+
+        state.clear_session("session-1");
         assert_eq!(state.get("session-1"), None);
         assert_eq!(state.get_all().len(), 1);
 
