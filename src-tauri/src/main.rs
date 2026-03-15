@@ -1429,7 +1429,9 @@ fn main() {
             get_generation_settings,
             set_generation_settings,
             get_agent_variants,
-            set_agent_variants
+            set_agent_variants,
+            get_agent_presets,
+            set_agent_presets
         ])
         .setup(move |app| {
             if ATTENTION_REGISTRY.get().is_none() {
