@@ -7,10 +7,13 @@ import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
 import { GitlabLabelChip } from './GitlabLabelChip'
+import { ContextualActionButton } from './ContextualActionButton'
 
 interface GitlabIssueDetailProps {
   details: GitlabIssueDetails
   onBack: () => void
+  onCreateSession?: (prompt: string, agentType?: string, variantId?: string, presetId?: string) => void
+  onCreateSpec?: (prompt: string, name: string) => void
 }
 
 function StateBadge({ state }: { state: string }) {
@@ -40,7 +43,7 @@ function StateBadge({ state }: { state: string }) {
 }
 
 
-export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
+export function GitlabIssueDetail({ details, onBack, onCreateSession, onCreateSpec }: GitlabIssueDetailProps) {
   const { t } = useTranslation()
   const userNotes = details.notes.filter(n => n.body && n.body.trim().length > 0)
 
@@ -88,6 +91,19 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
           <VscLinkExternal className="w-3 h-3" />
           <span>{t.gitlabIssueTab.openInGitlab}</span>
         </button>
+
+        <ContextualActionButton
+          context="issue"
+          variables={{
+            'issue.title': details.title ?? '',
+            'issue.description': details.description ?? '',
+            'issue.author': '',
+            'issue.labels': (details.labels ?? []).join(', '),
+            'issue.url': details.url ?? '',
+          }}
+          onCreateSession={onCreateSession}
+          onCreateSpec={onCreateSpec}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
