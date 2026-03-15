@@ -3,6 +3,7 @@ pub mod power;
 pub mod projects;
 pub mod sessions;
 pub mod terminals;
+pub mod usage;
 
 use mcp::{McpService as McpServiceTrait, McpServiceImpl, ProcessMcpBackend};
 use projects::{

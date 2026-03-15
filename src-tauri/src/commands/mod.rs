@@ -17,6 +17,7 @@ pub mod sessions_refresh;
 pub mod settings;
 pub mod terminal;
 pub mod updater;
+pub mod usage;
 pub mod utility;
 
 #[cfg(test)]
@@ -77,4 +78,5 @@ pub use preview::*;
 pub use settings::*;
 pub use terminal::*;
 pub use updater::*;
+pub use usage::*;
 pub use utility::*;

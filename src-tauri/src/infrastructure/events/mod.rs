@@ -41,6 +41,7 @@ pub enum SchaltEvent {
     OpenMergeModal,
     OpenGitlabMrModal,
     SelectAllRequested,
+    UsageUpdated,
 }
 
 impl SchaltEvent {
@@ -86,6 +87,7 @@ impl SchaltEvent {
             SchaltEvent::OpenMergeModal => "schaltwerk:open-merge-modal",
             SchaltEvent::OpenGitlabMrModal => "schaltwerk:open-gitlab-mr-modal",
             SchaltEvent::SelectAllRequested => "schaltwerk:select-all-requested",
+            SchaltEvent::UsageUpdated => "schaltwerk:usage-updated",
         }
     }
 }
@@ -151,6 +153,10 @@ mod tests {
         assert_eq!(
             SchaltEvent::SelectAllRequested.as_str(),
             "schaltwerk:select-all-requested"
+        );
+        assert_eq!(
+            SchaltEvent::UsageUpdated.as_str(),
+            "schaltwerk:usage-updated"
         );
     }
 }
