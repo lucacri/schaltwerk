@@ -356,6 +356,19 @@ impl SettingsManager {
             .map_err(|e| e.to_string())
     }
 
+    pub fn get_agent_variants(&self) -> Vec<crate::domains::settings::AgentVariant> {
+        self.service.get_agent_variants()
+    }
+
+    pub fn set_agent_variants(
+        &mut self,
+        variants: Vec<crate::domains::settings::AgentVariant>,
+    ) -> Result<(), String> {
+        self.service
+            .set_agent_variants(variants)
+            .map_err(|e| e.to_string())
+    }
+
     pub fn get_restore_open_projects(&self) -> bool {
         self.service.get_restore_open_projects()
     }

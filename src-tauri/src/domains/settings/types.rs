@@ -296,6 +296,23 @@ pub struct AgentBinaryConfigs {
     pub kilocode: Option<AgentBinaryConfig>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct AgentVariant {
+    pub id: String,
+    pub name: String,
+    pub agent_type: String,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
+    #[serde(default)]
+    pub cli_args: Vec<String>,
+    #[serde(default)]
+    pub env_vars: HashMap<String, String>,
+    #[serde(default)]
+    pub is_built_in: bool,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub agent_env_vars: AgentEnvVars,
@@ -333,6 +350,8 @@ pub struct Settings {
     pub generation: GenerationSettings,
     #[serde(default = "default_true")]
     pub restore_open_projects: bool,
+    #[serde(default)]
+    pub agent_variants: Vec<AgentVariant>,
 }
 
 impl Default for Settings {
@@ -359,6 +378,7 @@ impl Default for Settings {
             agent_command_prefix: None,
             generation: GenerationSettings::default(),
             restore_open_projects: default_true(),
+            agent_variants: Vec::new(),
         }
     }
 }
