@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useAgentPresets } from '../../hooks/useAgentPresets'
 import { useAgentVariants } from '../../hooks/useAgentVariants'
 import { AGENT_TYPES, type AgentType } from '../../types/session'
@@ -36,7 +35,6 @@ interface AgentPresetsSettingsProps {
 }
 
 export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsProps) {
-    const { t } = useTranslation()
     const { presets, savePresets } = useAgentPresets()
     const { variants } = useAgentVariants()
     const [editingPresets, setEditingPresets] = useState<AgentPreset[] | null>(null)
@@ -86,17 +84,17 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
         if (!editingPresets) return
         const invalid = editingPresets.find(p => !p.name.trim())
         if (invalid) {
-            onNotification?.(t('settings.agentPresets.nameRequired', 'Each preset needs a name'), 'error')
+            onNotification?.('Each preset needs a name', 'error')
             return
         }
         const success = await savePresets(editingPresets)
         if (success) {
             setEditingPresets(null)
-            onNotification?.(t('settings.agentPresets.saved', 'Agent presets saved'), 'success')
+            onNotification?.('Agent presets saved', 'success')
         } else {
-            onNotification?.(t('settings.agentPresets.saveFailed', 'Failed to save agent presets'), 'error')
+            onNotification?.('Failed to save agent presets', 'error')
         }
-    }, [editingPresets, savePresets, onNotification, t])
+    }, [editingPresets, savePresets, onNotification])
 
     const handleDiscard = useCallback(() => {
         setEditingPresets(null)
@@ -107,20 +105,20 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <h3 className="text-text-primary" style={{ fontSize: 'var(--font-heading)' }}>
-                    {t('settings.agentPresets.title', 'Agent Presets')}
+                    {'Agent Presets'}
                 </h3>
                 <button onClick={handleAdd} className="settings-btn text-text-primary" style={{ fontSize: 'var(--font-body)' }}>
-                    {t('settings.agentPresets.add', '+ Add Preset')}
+                    {'+ Add Preset'}
                 </button>
             </div>
 
             <p className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
-                {t('settings.agentPresets.description', 'Define multi-agent launch configurations. Each preset specifies a set of agent slots that will be created together as a version group.')}
+                {'Define multi-agent launch configurations. Each preset specifies a set of agent slots that will be created together as a version group.'}
             </p>
 
             {currentPresets.length === 0 && (
                 <div className="text-text-muted text-center py-8" style={{ fontSize: 'var(--font-body)' }}>
-                    {t('settings.agentPresets.empty', 'No presets configured. Click "Add Preset" to create one.')}
+                    {'No presets configured. Click "Add Preset" to create one.'}
                 </div>
             )}
 
@@ -137,7 +135,7 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                         >
                             <div className="flex items-center gap-3">
                                 <span className="text-text-primary" style={{ fontSize: 'var(--font-body)' }}>
-                                    {preset.name || t('settings.agentPresets.unnamed', '(unnamed)')}
+                                    {preset.name || '(unnamed)'}
                                 </span>
                                 <span className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
                                     {slotSummary(preset.slots)}
@@ -150,7 +148,7 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                         className="settings-btn-danger px-2 py-1"
                                         style={{ fontSize: 'var(--font-caption)' }}
                                     >
-                                        {t('common.delete', 'Delete')}
+                                        {'Delete'}
                                     </button>
                                 )}
                                 <svg
@@ -166,13 +164,13 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                             <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'var(--color-border-subtle)' }}>
                                 <div className="pt-3">
                                     <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>
-                                        {t('settings.agentPresets.name', 'Name')}
+                                        {'Name'}
                                     </label>
                                     <input
                                         type="text"
                                         value={preset.name}
                                         onChange={e => handleUpdate(preset.id, { name: e.target.value })}
-                                        placeholder={t('settings.agentPresets.namePlaceholder', 'e.g. The Trio')}
+                                        placeholder={'e.g. The Trio'}
                                         className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                         style={{ fontSize: 'var(--font-body)' }}
                                     />
@@ -181,14 +179,14 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                 <div>
                                     <div className="flex items-center justify-between mb-2">
                                         <label className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
-                                            {t('settings.agentPresets.slots', 'Agent Slots')}
+                                            {'Agent Slots'}
                                         </label>
                                         <button
                                             onClick={() => handleSlotAdd(preset.id)}
                                             className="settings-btn px-2 py-0.5"
                                             style={{ fontSize: 'var(--font-caption)' }}
                                         >
-                                            {t('common.add', '+ Add')}
+                                            {'+ Add'}
                                         </button>
                                     </div>
                                     {preset.slots.map((slot, idx) => (
@@ -261,14 +259,14 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
             {hasUnsavedChanges && (
                 <div className="flex justify-end gap-2 pt-2">
                     <button onClick={handleDiscard} className="settings-btn text-text-muted" style={{ fontSize: 'var(--font-body)' }}>
-                        {t('common.discard', 'Discard')}
+                        {'Discard'}
                     </button>
                     <button
                         onClick={() => void handleSave()}
                         className="settings-btn text-text-primary bg-accent-blue/20 border-accent-blue/40"
                         style={{ fontSize: 'var(--font-body)' }}
                     >
-                        {t('common.save', 'Save')}
+                        {'Save'}
                     </button>
                 </div>
             )}

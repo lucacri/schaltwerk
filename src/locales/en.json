@@ -690,6 +690,10 @@
     "prSelectHint": "Select a pull request to pull its description and comments into the agent prompt. The session will start on the PR branch.",
     "enterSpecContent": "Enter spec content in markdown...",
     "describeAgent": "Describe the agent for the Claude session",
+    "variant": "Variant",
+    "noVariant": "No variant (use defaults)",
+    "preset": "Preset",
+    "noPreset": "No preset",
     "unifiedSearch": {
       "title": "Search",
       "branchesTab": "Branches",

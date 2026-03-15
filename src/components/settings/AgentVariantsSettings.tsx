@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useAgentVariants } from '../../hooks/useAgentVariants'
 import { AGENT_TYPES, type AgentType } from '../../types/session'
 import type { AgentVariant } from '../../types/agentVariant'
@@ -24,7 +23,6 @@ interface AgentVariantsSettingsProps {
 }
 
 export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsProps) {
-    const { t } = useTranslation()
     const { variants, saveVariants } = useAgentVariants()
     const [editingVariants, setEditingVariants] = useState<AgentVariant[] | null>(null)
     const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -83,17 +81,17 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
         if (!editingVariants) return
         const invalid = editingVariants.find(v => !v.name.trim())
         if (invalid) {
-            onNotification?.(t('settings.agentVariants.nameRequired', 'Each variant needs a name'), 'error')
+            onNotification?.('Each variant needs a name', 'error')
             return
         }
         const success = await saveVariants(editingVariants)
         if (success) {
             setEditingVariants(null)
-            onNotification?.(t('settings.agentVariants.saved', 'Agent variants saved'), 'success')
+            onNotification?.('Agent variants saved', 'success')
         } else {
-            onNotification?.(t('settings.agentVariants.saveFailed', 'Failed to save agent variants'), 'error')
+            onNotification?.('Failed to save agent variants', 'error')
         }
-    }, [editingVariants, saveVariants, onNotification, t])
+    }, [editingVariants, saveVariants, onNotification])
 
     const handleDiscard = useCallback(() => {
         setEditingVariants(null)
@@ -104,24 +102,24 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <h3 className="text-text-primary" style={{ fontSize: 'var(--font-heading)' }}>
-                    {t('settings.agentVariants.title', 'Agent Variants')}
+                    {'Agent Variants'}
                 </h3>
                 <button
                     onClick={handleAdd}
                     className="settings-btn text-text-primary"
                     style={{ fontSize: 'var(--font-body)' }}
                 >
-                    {t('settings.agentVariants.add', '+ Add Variant')}
+                    {'+ Add Variant'}
                 </button>
             </div>
 
             <p className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
-                {t('settings.agentVariants.description', 'Create named configurations with specific model, CLI args, and environment variables. Use variants in the new session modal to quickly apply saved configurations.')}
+                {'Create named configurations with specific model, CLI args, and environment variables. Use variants in the new session modal to quickly apply saved configurations.'}
             </p>
 
             {currentVariants.length === 0 && (
                 <div className="text-text-muted text-center py-8" style={{ fontSize: 'var(--font-body)' }}>
-                    {t('settings.agentVariants.empty', 'No variants configured. Click "Add Variant" to create one.')}
+                    {'No variants configured. Click "Add Variant" to create one.'}
                 </div>
             )}
 
@@ -141,7 +139,7 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                         >
                             <div className="flex items-center gap-3">
                                 <span className="text-text-primary" style={{ fontSize: 'var(--font-body)' }}>
-                                    {variant.name || t('settings.agentVariants.unnamed', '(unnamed)')}
+                                    {variant.name || '(unnamed)'}
                                 </span>
                                 <span className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
                                     {variant.agentType}
@@ -155,7 +153,7 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                         className="settings-btn-danger px-2 py-1"
                                         style={{ fontSize: 'var(--font-caption)' }}
                                     >
-                                        {t('common.delete', 'Delete')}
+                                        {'Delete'}
                                     </button>
                                 )}
                                 <svg
@@ -172,20 +170,20 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                 <div className="grid grid-cols-2 gap-3 pt-3">
                                     <div>
                                         <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>
-                                            {t('settings.agentVariants.name', 'Name')}
+                                            {'Name'}
                                         </label>
                                         <input
                                             type="text"
                                             value={variant.name}
                                             onChange={e => handleUpdate(variant.id, { name: e.target.value })}
-                                            placeholder={t('settings.agentVariants.namePlaceholder', 'e.g. Claude Opus High')}
+                                            placeholder={'e.g. Claude Opus High'}
                                             className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                             style={{ fontSize: 'var(--font-body)' }}
                                         />
                                     </div>
                                     <div>
                                         <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>
-                                            {t('settings.agentVariants.agentType', 'Agent Type')}
+                                            {'Agent Type'}
                                         </label>
                                         <select
                                             value={variant.agentType}
@@ -203,26 +201,26 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>
-                                            {t('settings.agentVariants.model', 'Model')}
+                                            {'Model'}
                                         </label>
                                         <input
                                             type="text"
                                             value={variant.model ?? ''}
                                             onChange={e => handleUpdate(variant.id, { model: e.target.value || undefined })}
-                                            placeholder={t('settings.agentVariants.modelPlaceholder', 'e.g. opus, o3')}
+                                            placeholder={'e.g. opus, o3'}
                                             className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                             style={{ fontSize: 'var(--font-body)' }}
                                         />
                                     </div>
                                     <div>
                                         <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>
-                                            {t('settings.agentVariants.reasoningEffort', 'Reasoning Effort')}
+                                            {'Reasoning Effort'}
                                         </label>
                                         <input
                                             type="text"
                                             value={variant.reasoningEffort ?? ''}
                                             onChange={e => handleUpdate(variant.id, { reasoningEffort: e.target.value || undefined })}
-                                            placeholder={t('settings.agentVariants.reasoningPlaceholder', 'e.g. high, medium, low')}
+                                            placeholder={'e.g. high, medium, low'}
                                             className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                             style={{ fontSize: 'var(--font-body)' }}
                                         />
@@ -231,12 +229,12 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
 
                                 <div>
                                     <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>
-                                        {t('settings.agentVariants.cliArgs', 'CLI Arguments (one per line)')}
+                                        {'CLI Arguments (one per line)'}
                                     </label>
                                     <textarea
                                         value={(variant.cliArgs ?? []).join('\n')}
                                         onChange={e => handleCliArgsChange(variant.id, e.target.value)}
-                                        placeholder={t('settings.agentVariants.cliArgsPlaceholder', '--dangerously-skip-permissions\n--model opus')}
+                                        placeholder={'--dangerously-skip-permissions\n--model opus'}
                                         rows={3}
                                         className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                         style={{ fontSize: 'var(--font-body)', fontFamily: 'var(--font-family-mono)' }}
@@ -246,14 +244,14 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                 <div>
                                     <div className="flex items-center justify-between mb-1">
                                         <label className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
-                                            {t('settings.agentVariants.envVars', 'Environment Variables')}
+                                            {'Environment Variables'}
                                         </label>
                                         <button
                                             onClick={() => handleEnvVarAdd(variant.id)}
                                             className="settings-btn px-2 py-0.5"
                                             style={{ fontSize: 'var(--font-caption)' }}
                                         >
-                                            {t('common.add', '+ Add')}
+                                            {'+ Add'}
                                         </button>
                                     </div>
                                     {variant.envVars && Object.entries(variant.envVars).map(([key, value], idx) => (
@@ -297,14 +295,14 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                         className="settings-btn text-text-muted"
                         style={{ fontSize: 'var(--font-body)' }}
                     >
-                        {t('common.discard', 'Discard')}
+                        {'Discard'}
                     </button>
                     <button
                         onClick={() => void handleSave()}
                         className="settings-btn text-text-primary bg-accent-blue/20 border-accent-blue/40"
                         style={{ fontSize: 'var(--font-body)' }}
                     >
-                        {t('common.save', 'Save')}
+                        {'Save'}
                     </button>
                 </div>
             )}
