@@ -43,6 +43,7 @@ import { MarkdownEditor } from '../specs/MarkdownEditor'
 import { useModal } from '../../contexts/ModalContext'
 import { ResizableModal } from '../shared/ResizableModal'
 import { AgentVariantsSettings } from '../settings/AgentVariantsSettings'
+import { AgentPresetsSettings } from '../settings/AgentPresetsSettings'
 
 const shortcutArraysEqual = (a: string[] = [], b: string[] = []) => {
     if (a.length !== b.length) return false
@@ -2838,7 +2839,12 @@ fi`}
             case 'environment':
                 return renderEnvironmentSettings()
             case 'agentVariants':
-                return <AgentVariantsSettings onNotification={showNotification} />
+                return (
+                    <div className="space-y-8">
+                        <AgentVariantsSettings onNotification={showNotification} />
+                        <AgentPresetsSettings onNotification={showNotification} />
+                    </div>
+                )
             case 'terminal':
                 return renderTerminalSettings()
             case 'generation':
