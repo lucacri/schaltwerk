@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useContextualActions } from '../../hooks/useContextualActions'
 import { useAgentVariants } from '../../hooks/useAgentVariants'
 import { useAgentPresets } from '../../hooks/useAgentPresets'
@@ -29,7 +28,6 @@ interface ContextualActionsSettingsProps {
 }
 
 export function ContextualActionsSettings({ onNotification }: ContextualActionsSettingsProps) {
-    const { t } = useTranslation()
     const { actions, saveActions, resetToDefaults } = useContextualActions()
     const { variants } = useAgentVariants()
     const { presets } = useAgentPresets()
@@ -61,25 +59,25 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
         if (!editingActions) return
         const invalid = editingActions.find(a => !a.name.trim())
         if (invalid) {
-            onNotification?.(t('settings.contextualActions.nameRequired', 'Each action needs a name'), 'error')
+            onNotification?.('Each action needs a name', 'error')
             return
         }
         const success = await saveActions(editingActions)
         if (success) {
             setEditingActions(null)
-            onNotification?.(t('settings.contextualActions.saved', 'Contextual actions saved'), 'success')
+            onNotification?.('Contextual actions saved', 'success')
         } else {
-            onNotification?.(t('settings.contextualActions.saveFailed', 'Failed to save contextual actions'), 'error')
+            onNotification?.('Failed to save contextual actions', 'error')
         }
-    }, [editingActions, saveActions, onNotification, t])
+    }, [editingActions, saveActions, onNotification])
 
     const handleReset = useCallback(async () => {
         const success = await resetToDefaults()
         if (success) {
             setEditingActions(null)
-            onNotification?.(t('settings.contextualActions.reset', 'Reset to defaults'), 'success')
+            onNotification?.('Reset to defaults', 'success')
         }
-    }, [resetToDefaults, onNotification, t])
+    }, [resetToDefaults, onNotification])
 
     const handleDiscard = useCallback(() => {
         setEditingActions(null)
@@ -95,7 +93,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
 
     const agentSourceOptions = useMemo(() => {
         const options: { value: string; label: string }[] = [
-            { value: '', label: t('settings.contextualActions.defaultAgent', 'Default (Claude)') },
+            { value: '', label: 'Default (Claude)' },
         ]
         NON_TERMINAL_AGENTS.forEach(agent => {
             options.push({ value: `agent:${agent}`, label: agent })
@@ -107,7 +105,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
             options.push({ value: `preset:${p.id}`, label: `${p.name} (preset)` })
         })
         return options
-    }, [variants, presets, t])
+    }, [variants, presets])
 
     const getAgentSourceValue = useCallback((action: ContextualAction): string => {
         if (action.presetId) return `preset:${action.presetId}`
@@ -132,25 +130,25 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <h3 className="text-text-primary" style={{ fontSize: 'var(--font-heading)' }}>
-                    {t('settings.contextualActions.title', 'Contextual Actions')}
+                    {'Contextual Actions'}
                 </h3>
                 <div className="flex gap-2">
                     <button onClick={() => void handleReset()} className="settings-btn text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
-                        {t('settings.contextualActions.resetDefaults', 'Reset to Defaults')}
+                        {'Reset to Defaults'}
                     </button>
                     <button onClick={handleAdd} className="settings-btn text-text-primary" style={{ fontSize: 'var(--font-body)' }}>
-                        {t('settings.contextualActions.add', '+ Add Action')}
+                        {'+ Add Action'}
                     </button>
                 </div>
             </div>
 
             <p className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
-                {t('settings.contextualActions.description', 'Define actions that appear on MR and Issue detail views. Use {{variable}} syntax in templates to inject context.')}
+                {'Define actions that appear on MR and Issue detail views. Use {{variable}} syntax in templates to inject context.'}
             </p>
 
             {currentActions.length === 0 && (
                 <div className="text-text-muted text-center py-8" style={{ fontSize: 'var(--font-body)' }}>
-                    {t('settings.contextualActions.empty', 'No actions configured.')}
+                    {'No actions configured.'}
                 </div>
             )}
 
@@ -183,7 +181,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                         className="settings-btn-danger px-2 py-1"
                                         style={{ fontSize: 'var(--font-caption)' }}
                                     >
-                                        {t('common.delete', 'Delete')}
+                                        {'Delete'}
                                     </button>
                                 )}
                                 <svg
@@ -275,14 +273,14 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
             {hasUnsavedChanges && (
                 <div className="flex justify-end gap-2 pt-2">
                     <button onClick={handleDiscard} className="settings-btn text-text-muted" style={{ fontSize: 'var(--font-body)' }}>
-                        {t('common.discard', 'Discard')}
+                        {'Discard'}
                     </button>
                     <button
                         onClick={() => void handleSave()}
                         className="settings-btn text-text-primary bg-accent-blue/20 border-accent-blue/40"
                         style={{ fontSize: 'var(--font-body)' }}
                     >
-                        {t('common.save', 'Save')}
+                        {'Save'}
                     </button>
                 </div>
             )}
