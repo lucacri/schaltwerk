@@ -326,6 +326,11 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN pr_url TEXT", []);
     // Epic grouping (optional)
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN epic_id TEXT", []);
+    // Consolidation session flag
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN is_consolidation INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
     Ok(())
 }
 

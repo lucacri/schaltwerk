@@ -272,6 +272,7 @@ mod service_unified_tests {
             amp_thread_id: None,
             pr_number: None,
             pr_url: None,
+            is_consolidation: false,
         }
     }
 
@@ -2394,6 +2395,7 @@ impl SessionManager {
             amp_thread_id: None,
             pr_number: None,
             pr_url: None,
+            is_consolidation: false,
         };
 
         let finalizer = SessionFinalizer::new(&self.db_manager, &self.cache_manager);
@@ -2754,6 +2756,7 @@ impl SessionManager {
                 session_state: SessionState::Spec,
                 pr_number: None,
                 pr_url: None,
+                is_consolidation: false,
             };
 
             enriched.push(EnrichedSession {
@@ -2819,6 +2822,7 @@ impl SessionManager {
                     session_state: session.session_state.clone(),
                     pr_number: session.pr_number,
                     pr_url: session.pr_url.clone(),
+                    is_consolidation: session.is_consolidation,
                 };
 
                 enriched.push(EnrichedSession {
@@ -2979,6 +2983,7 @@ impl SessionManager {
                 session_state,
                 pr_number: session.pr_number,
                 pr_url: session.pr_url.clone(),
+                is_consolidation: session.is_consolidation,
             };
 
             let terminals = vec![
@@ -4004,6 +4009,7 @@ impl SessionManager {
             pr_number: None,
             pr_url: None,
             amp_thread_id: None,
+            is_consolidation: false,
         }
     }
 
