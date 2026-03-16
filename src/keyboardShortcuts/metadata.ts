@@ -55,6 +55,7 @@ export const KEYBOARD_SHORTCUT_SECTIONS: ShortcutSection[] = [
       { action: KeyboardShortcutAction.FocusClaude, label: 'Focus Claude session' },
       { action: KeyboardShortcutAction.FocusTerminal, label: 'Focus terminal' },
       { action: KeyboardShortcutAction.ToggleLeftSidebar, label: 'Toggle left sidebar' },
+      { action: KeyboardShortcutAction.OpenSettings, label: 'Open settings' },
       { action: KeyboardShortcutAction.OpenInApp, label: 'Open in app' },
     ],
   },

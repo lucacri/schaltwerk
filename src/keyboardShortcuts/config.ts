@@ -68,6 +68,7 @@ export enum KeyboardShortcutAction {
   SwitchToProject9 = 'switchToProject9',
   CycleNextProject = 'cycleNextProject',
   CyclePrevProject = 'cyclePrevProject',
+  OpenSettings = 'openSettings',
 }
 
 export type KeyboardShortcutConfig = Record<KeyboardShortcutAction, string[]>
@@ -155,6 +156,7 @@ export const defaultShortcutConfig: KeyboardShortcutConfig = {
   [KeyboardShortcutAction.SwitchToProject9]: createNormalizedBindings(['Mod+Shift+9']),
   [KeyboardShortcutAction.CycleNextProject]: createNormalizedBindings(['Mod+`']),
   [KeyboardShortcutAction.CyclePrevProject]: createNormalizedBindings(['Mod+Shift+`']),
+  [KeyboardShortcutAction.OpenSettings]: createNormalizedBindings(['Mod+,']),
 }
 
 export const mergeShortcutConfig = (
