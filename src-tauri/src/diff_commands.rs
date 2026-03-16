@@ -550,6 +550,7 @@ mod tests {
                     agent_type: None,
                     skip_permissions: None,
                     pr_number: None,
+                    is_consolidation: false,
                 };
                 let session = session_manager.create_session_with_agent(params).unwrap();
                 (

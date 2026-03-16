@@ -911,6 +911,7 @@ mod tests {
             amp_thread_id: None,
             pr_number: None,
             pr_url: None,
+            is_consolidation: false,
         };
 
         db.create_session(&session).expect("failed to create session");
@@ -961,6 +962,7 @@ mod tests {
             amp_thread_id: None,
             pr_number: Some(142),
             pr_url: Some("https://github.com/owner/repo/pull/142".to_string()),
+            is_consolidation: false,
         };
 
         db.create_session(&session).expect("failed to create session");
@@ -1009,6 +1011,7 @@ mod tests {
             amp_thread_id: None,
             pr_number: None,
             pr_url: None,
+            is_consolidation: false,
         };
 
         db.create_session(&session).expect("failed to create session");
@@ -1133,6 +1136,7 @@ mod tests {
             amp_thread_id: None,
             pr_number: None,
             pr_url: None,
+            is_consolidation: false,
         };
 
         db.create_session(&session).expect("failed to create session");

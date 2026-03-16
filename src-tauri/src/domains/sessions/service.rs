@@ -1504,6 +1504,7 @@ mod service_unified_tests {
             agent_type: Some("claude"),
             skip_permissions: Some(true),
             pr_number: None,
+            is_consolidation: false,
         };
 
         let session = manager
@@ -1580,6 +1581,7 @@ mod service_unified_tests {
             agent_type: Some("opencode"),
             skip_permissions: Some(false),
             pr_number: None,
+            is_consolidation: false,
         };
 
         let session = manager
@@ -1642,6 +1644,7 @@ mod service_unified_tests {
             agent_type: None,
             skip_permissions: None,
             pr_number: None,
+            is_consolidation: false,
         };
 
         let session = manager
@@ -1708,6 +1711,7 @@ mod service_unified_tests {
             agent_type: None,
             skip_permissions: None,
             pr_number: None,
+            is_consolidation: false,
         };
 
         let session = manager
@@ -1763,6 +1767,7 @@ mod service_unified_tests {
             agent_type: Some("gemini"),
             skip_permissions: Some(true),
             pr_number: None,
+            is_consolidation: false,
         };
 
         let session = manager
