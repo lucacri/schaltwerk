@@ -584,28 +584,9 @@ function attachMergeSnapshot(
 
 function attachRuntimeSnapshot(
     session: EnrichedSession,
-    previousSessions: Map<string, EnrichedSession>,
+    _previousSessions: Map<string, EnrichedSession>,
 ): EnrichedSession {
-    const previous = previousSessions.get(session.info.session_id)
-    if (!previous) {
-        return session
-    }
-
-    if (session.info.attention_required != null) {
-        return session
-    }
-
-    if (previous.info.attention_required == null) {
-        return session
-    }
-
-    return {
-        ...session,
-        info: {
-            ...session.info,
-            attention_required: previous.info.attention_required,
-        },
-    }
+    return session
 }
 
 async function applySessionsSnapshot(
@@ -748,7 +729,12 @@ function syncSnapshotsFromAtom(get: Getter) {
 
     const projectPath = get(projectPathAtom)
     if (projectPath) {
-        projectSessionsSnapshotCache.set(projectPath, current)
+        const stripped = current.map(session =>
+            session.info.attention_required != null
+                ? { ...session, info: { ...session.info, attention_required: undefined } }
+                : session,
+        )
+        projectSessionsSnapshotCache.set(projectPath, stripped)
         projectSessionStatesCache.set(projectPath, new Map(stateMap))
     }
 }
