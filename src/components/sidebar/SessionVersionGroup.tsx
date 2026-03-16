@@ -41,6 +41,7 @@ interface SessionVersionGroupProps {
   isSessionBusy?: (sessionId: string) => boolean
   onRename?: (sessionId: string, newName: string) => Promise<void>
   onLinkPr?: (sessionId: string, prNumber: number, prUrl: string) => void
+  onConsolidate?: (group: SessionVersionGroupType) => void
 }
 
 export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
@@ -73,7 +74,8 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   isMarkReadyDisabled = false,
   isSessionBusy,
   onRename,
-  onLinkPr
+  onLinkPr,
+  onConsolidate
 }) => {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isPreviewingDeletion, setIsPreviewingDeletion] = useState(false)
@@ -176,7 +178,15 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
       )
     }
   ].filter(pill => pill.count > 0)
-  
+
+  const canConsolidate = (() => {
+    const runningOrReviewed = group.versions.filter(v => {
+      const state = v.session.info.session_state
+      return state === 'running' || state === 'reviewed'
+    })
+    const hasExistingConsolidation = group.versions.some(v => v.session.info.is_consolidation)
+    return runningOrReviewed.length >= 2 && !hasExistingConsolidation
+  })()
 
   return (
     <div className="mb-3 relative">
@@ -263,6 +273,23 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
             className="flex items-center gap-1 justify-end overflow-hidden flex-nowrap"
             data-testid="version-group-status"
           >
+            {canConsolidate && onConsolidate && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onConsolidate(group)
+                }}
+                className="p-1 rounded transition-colors"
+                style={{ color: 'var(--color-text-secondary)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-accent-purple-light)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
+                title="Consolidate versions"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M5 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm6.5 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 16a2 2 0 1 1 0-4 2 2 0 0 1 0 4zM3 5v3.5a.5.5 0 0 0 .5.5H8v3h0V9h4.5a.5.5 0 0 0 .5-.5V5h-1v3H8.5V5h-1v3H4V5H3z" />
+                </svg>
+              </button>
+            )}
             {statusPills.map(pill => (
               <span
                 key={pill.key}
