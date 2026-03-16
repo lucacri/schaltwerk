@@ -12,8 +12,6 @@ import { ContextualActionButton } from './ContextualActionButton'
 interface GitlabIssueDetailProps {
   details: GitlabIssueDetails
   onBack: () => void
-  onCreateSession?: (prompt: string, agentType?: string, variantId?: string, presetId?: string) => void
-  onCreateSpec?: (prompt: string, name: string) => void
 }
 
 function StateBadge({ state }: { state: string }) {
@@ -43,7 +41,7 @@ function StateBadge({ state }: { state: string }) {
 }
 
 
-export function GitlabIssueDetail({ details, onBack, onCreateSession, onCreateSpec }: GitlabIssueDetailProps) {
+export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
   const { t } = useTranslation()
   const userNotes = details.notes.filter(n => n.body && n.body.trim().length > 0)
 
@@ -101,8 +99,6 @@ export function GitlabIssueDetail({ details, onBack, onCreateSession, onCreateSp
             'issue.labels': (details.labels ?? []).join(', '),
             'issue.url': details.url ?? '',
           }}
-          onCreateSession={onCreateSession}
-          onCreateSpec={onCreateSpec}
         />
       </div>
 

@@ -1,17 +1,16 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useContextualActions } from '../../hooks/useContextualActions'
 import { renderTemplate } from '../../common/templateRenderer'
+import { emitUiEvent, UiEvent } from '../../common/uiEvents'
 import type { ContextualAction } from '../../types/contextualAction'
 import { logger } from '../../utils/logger'
 
 interface ContextualActionButtonProps {
     context: 'mr' | 'issue'
     variables: Record<string, string>
-    onCreateSession?: (prompt: string, agentType?: string, variantId?: string, presetId?: string) => void
-    onCreateSpec?: (prompt: string, name: string) => void
 }
 
-export function ContextualActionButton({ context, variables, onCreateSession, onCreateSpec }: ContextualActionButtonProps) {
+export function ContextualActionButton({ context, variables }: ContextualActionButtonProps) {
     const { actions } = useContextualActions()
     const [open, setOpen] = useState(false)
     const dropdownRef = useRef<HTMLDivElement>(null)
@@ -39,11 +38,20 @@ export function ContextualActionButton({ context, variables, onCreateSession, on
         logger.info(`[ContextualAction] Triggering "${action.name}" in ${action.mode} mode`)
 
         if (action.mode === 'spec') {
-            onCreateSpec?.(prompt, action.name)
+            emitUiEvent(UiEvent.ContextualActionCreateSpec, {
+                prompt,
+                name: action.name,
+            })
         } else {
-            onCreateSession?.(prompt, action.agentType, action.variantId, action.presetId)
+            emitUiEvent(UiEvent.ContextualActionCreateSession, {
+                prompt,
+                actionName: action.name,
+                agentType: action.agentType,
+                variantId: action.variantId,
+                presetId: action.presetId,
+            })
         }
-    }, [variables, onCreateSession, onCreateSpec])
+    }, [variables])
 
     if (matchingActions.length === 0) return null
 

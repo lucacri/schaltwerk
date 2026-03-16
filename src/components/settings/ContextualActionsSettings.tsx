@@ -192,7 +192,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
 
                         {expandedId === action.id && (
                             <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'var(--color-border-subtle)' }}>
-                                <div className="grid grid-cols-3 gap-3 pt-3">
+                                <div className="pt-3">
                                     <div>
                                         <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>Name</label>
                                         <input
@@ -204,30 +204,32 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                             style={{ fontSize: 'var(--font-body)' }}
                                         />
                                     </div>
-                                    <div>
-                                        <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>Context</label>
-                                        <select
-                                            value={action.context}
-                                            onChange={e => handleUpdate(action.id, { context: e.target.value as ContextualActionContext })}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
-                                            style={{ fontSize: 'var(--font-body)' }}
-                                        >
-                                            <option value="mr">MR only</option>
-                                            <option value="issue">Issue only</option>
-                                            <option value="both">Both</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>Mode</label>
-                                        <select
-                                            value={action.mode}
-                                            onChange={e => handleUpdate(action.id, { mode: e.target.value as ContextualActionMode })}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
-                                            style={{ fontSize: 'var(--font-body)' }}
-                                        >
-                                            <option value="session">Create Session</option>
-                                            <option value="spec">Create Spec</option>
-                                        </select>
+                                    <div className="grid grid-cols-2 gap-3 mt-3">
+                                        <div>
+                                            <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>Context</label>
+                                            <select
+                                                value={action.context}
+                                                onChange={e => handleUpdate(action.id, { context: e.target.value as ContextualActionContext })}
+                                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
+                                                style={{ fontSize: 'var(--font-body)' }}
+                                            >
+                                                <option value="mr">MR only</option>
+                                                <option value="issue">Issue only</option>
+                                                <option value="both">Both</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>Mode</label>
+                                            <select
+                                                value={action.mode}
+                                                onChange={e => handleUpdate(action.id, { mode: e.target.value as ContextualActionMode })}
+                                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
+                                                style={{ fontSize: 'var(--font-body)' }}
+                                            >
+                                                <option value="session">Create Session</option>
+                                                <option value="spec">Create Spec</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -246,17 +248,27 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                 </div>
 
                                 <div>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <label className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>Prompt Template</label>
-                                        <span className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
-                                            Variables: {getTemplateVars(action.context).map(v => `{{${v}}}`).join(', ')}
-                                        </span>
+                                    <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>Prompt Template</label>
+                                    <div className="flex flex-wrap gap-1 mb-2">
+                                        {getTemplateVars(action.context).map(v => (
+                                            <span
+                                                key={v}
+                                                className="text-text-muted px-1.5 py-0.5 rounded border border-border-subtle"
+                                                style={{
+                                                    fontSize: 'var(--font-caption)',
+                                                    backgroundColor: 'var(--color-bg-tertiary)',
+                                                    fontFamily: 'var(--font-family-mono)',
+                                                }}
+                                            >
+                                                {`{{${v}}}`}
+                                            </span>
+                                        ))}
                                     </div>
                                     <textarea
                                         value={action.promptTemplate}
                                         onChange={e => handleUpdate(action.id, { promptTemplate: e.target.value })}
                                         placeholder="Review the merge request:\n\nTitle: {{mr.title}}\nDescription: {{mr.description}}"
-                                        rows={6}
+                                        rows={8}
                                         className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
                                         style={{ fontSize: 'var(--font-body)', fontFamily: 'var(--font-family-mono)' }}
                                     />
@@ -268,16 +280,28 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
             </div>
 
             {hasUnsavedChanges && (
-                <div className="flex justify-end gap-2 pt-2">
-                    <button onClick={handleDiscard} className="settings-btn text-text-muted" style={{ fontSize: 'var(--font-body)' }}>
+                <div
+                    className="flex justify-end gap-3 pt-3 mt-2 border-t"
+                    style={{ borderColor: 'var(--color-border-subtle)' }}
+                >
+                    <button
+                        onClick={handleDiscard}
+                        className="settings-btn text-text-muted px-4 py-1.5"
+                        style={{ fontSize: 'var(--font-body)' }}
+                    >
                         {'Discard'}
                     </button>
                     <button
                         onClick={() => void handleSave()}
-                        className="settings-btn text-text-primary bg-accent-blue/20 border-accent-blue/40"
-                        style={{ fontSize: 'var(--font-body)' }}
+                        className="settings-btn text-text-primary px-5 py-1.5"
+                        style={{
+                            fontSize: 'var(--font-body)',
+                            backgroundColor: 'var(--color-accent-blue-bg)',
+                            borderColor: 'var(--color-accent-blue)',
+                            fontWeight: 600,
+                        }}
                     >
-                        {'Save'}
+                        {'Save Changes'}
                     </button>
                 </div>
             )}
