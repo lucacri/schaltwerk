@@ -582,13 +582,6 @@ function attachMergeSnapshot(
     }
 }
 
-function attachRuntimeSnapshot(
-    session: EnrichedSession,
-    _previousSessions: Map<string, EnrichedSession>,
-): EnrichedSession {
-    return session
-}
-
 
 async function applySessionsSnapshot(
     get: Getter,
