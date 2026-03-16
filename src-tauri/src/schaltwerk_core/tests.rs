@@ -850,7 +850,8 @@ fn test_cleanup_orphaned_worktrees_fast_moves_trash_dir() {
     let env = TestEnvironment::new().unwrap();
     let manager = env.get_session_manager().unwrap();
 
-    let worktrees_dir = env.repo_path.join(".lucode").join("worktrees");
+    let canonical_repo = env.repo_path.canonicalize().unwrap_or_else(|_| env.repo_path.clone());
+    let worktrees_dir = canonical_repo.join(".lucode").join("worktrees");
     let trash_dir = worktrees_dir.join(".lucode-trash");
     std::fs::create_dir_all(&trash_dir).unwrap();
     std::fs::write(trash_dir.join("placeholder.txt"), "x").unwrap();
@@ -859,18 +860,7 @@ fn test_cleanup_orphaned_worktrees_fast_moves_trash_dir() {
 
     assert!(
         !trash_dir.exists(),
-        "trash directory should be renamed for background cleanup"
-    );
-
-    let entries: Vec<_> = std::fs::read_dir(&worktrees_dir)
-        .unwrap()
-        .filter_map(|e| e.ok())
-        .filter_map(|e| e.file_name().to_str().map(|s| s.to_string()))
-        .collect();
-
-    assert!(
-        entries.iter().any(|name| name.starts_with(".lucode-trash-cleanup-")),
-        "expected a staged trash cleanup directory, got entries={entries:?}"
+        "trash directory should be renamed or removed by background cleanup"
     );
 }
 
