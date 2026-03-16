@@ -232,7 +232,9 @@ export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType }: Fo
                         {comment.author}
                       </span>
                     )}
-                    <span>{formatRelativeDate(comment.createdAt)}</span>
+                    {comment.createdAt && (
+                      <span>{formatRelativeDate(comment.createdAt)}</span>
+                    )}
                   </div>
                   <div
                     style={{
