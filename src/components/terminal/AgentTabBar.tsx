@@ -20,6 +20,7 @@ interface AgentTabBarProps {
     actionButtons?: HeaderActionConfig[]
     onAction?: (action: HeaderActionConfig) => void
     shortcutLabel?: string
+    lastResponseTime?: string
 }
 
 export const AgentTabBar: React.FC<AgentTabBarProps> = ({
@@ -33,6 +34,7 @@ export const AgentTabBar: React.FC<AgentTabBarProps> = ({
     actionButtons = [],
     onAction,
     shortcutLabel,
+    lastResponseTime,
 }) => {
     const { t } = useTranslation()
     const canAddTab = onTabAdd && tabs.length < MAX_AGENT_TABS
@@ -153,6 +155,20 @@ export const AgentTabBar: React.FC<AgentTabBarProps> = ({
                     >
                         <VscDiscard className="text-base" />
                     </button>
+                )}
+
+                {lastResponseTime && (
+                    <span
+                        style={{
+                            color: 'var(--color-text-muted)',
+                            fontFamily: theme.fontFamily.sans,
+                            fontSize: theme.fontSize.caption,
+                        }}
+                        className="whitespace-nowrap mr-1"
+                        title={t.session.lastAgentOutput}
+                    >
+                        {lastResponseTime}
+                    </span>
                 )}
 
                 {/* Shortcut Label */}

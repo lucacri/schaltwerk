@@ -411,6 +411,7 @@ export interface Translations {
     blocked: string
     spec: string
     complete: string
+    lastAgentOutput: string
   }
   shortcuts: {
     sections: {

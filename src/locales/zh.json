@@ -406,7 +406,8 @@
     "reviewed": "✓ 已审核",
     "blocked": "⚠ 已阻塞",
     "spec": "规格",
-    "complete": "% 完成"
+    "complete": "% 完成",
+    "lastAgentOutput": "最后代理输出"
   },
   "shortcuts": {
     "sections": {

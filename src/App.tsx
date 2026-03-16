@@ -72,6 +72,7 @@ import { useSessionPrefill } from './hooks/useSessionPrefill'
 import { useAttentionNotifications, isSessionActivelyRunning } from './hooks/useAttentionNotifications'
 import { useAgentBinarySnapshot } from './hooks/useAgentBinarySnapshot'
 import { useDiffPreloader } from './hooks/useDiffPreloader'
+import { useLastAgentResponseTracker } from './hooks/useLastAgentResponseTracker'
 import { theme } from './common/theme'
 import { useGithubIntegrationContext } from './contexts/GithubIntegrationContext'
 import { resolveOpenPathForOpenButton } from './utils/resolveOpenPath'
@@ -161,6 +162,7 @@ function AppContent() {
   const store = useStore()
   usePreviewPanelEvents()
   useDiffPreloader()
+  useLastAgentResponseTracker()
   const {
     loading: agentDetectLoading,
     allMissing: agentAllMissing,

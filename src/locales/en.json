@@ -408,7 +408,8 @@
     "reviewed": "✓ Reviewed",
     "blocked": "⚠ blocked",
     "spec": "Spec",
-    "complete": "% complete"
+    "complete": "% complete",
+    "lastAgentOutput": "Last agent output"
   },
   "shortcuts": {
     "sections": {

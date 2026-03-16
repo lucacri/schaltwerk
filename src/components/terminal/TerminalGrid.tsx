@@ -57,6 +57,7 @@ import { beginSplitDrag, endSplitDrag } from '../../utils/splitDragCoordinator'
 import { useToast } from '../../common/toast/ToastProvider'
 import { resolveWorkingDirectory } from './resolveWorkingDirectory'
 import type { HeaderActionConfig } from '../../types/actionButton'
+import { lastAgentResponseMapAtom, agentResponseTickAtom, formatAgentResponseTime } from '../../store/atoms/lastAgentResponse'
 import { mapRunScriptPreviewConfig, type AutoPreviewConfig } from '../../utils/runScriptPreviewConfig'
 import { SwitchOrchestratorModal } from '../modals/SwitchOrchestratorModal'
 import { CustomAgentModal } from '../modals/CustomAgentModal'
@@ -89,6 +90,11 @@ const TerminalGridComponent = () => {
     const { pushToast } = useToast()
     const { switchModel } = useSessionManagement()
     const projectPath = useAtomValue(projectPathAtom)
+    const agentResponseMap = useAtomValue(lastAgentResponseMapAtom)
+    useAtomValue(agentResponseTickAtom)
+    const lastResponseTime = selection.payload
+        ? formatAgentResponseTime(agentResponseMap, selection.payload)
+        : undefined
 
     const effectiveWorkingDirectory = useMemo(
         () => resolveWorkingDirectory(selection, terminals.workingDirectory, sessions),
@@ -1431,6 +1437,7 @@ const TerminalGridComponent = () => {
                             actionButtons={shouldShowActionButtons ? actionButtons : []}
                             onAction={handleActionButtonInvoke}
                             shortcutLabel={focusClaudeShortcut || '⌘T'}
+                            lastResponseTime={lastResponseTime}
                         />
                     ) : (
                     <div

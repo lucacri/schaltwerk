@@ -1,5 +1,6 @@
 import { memo, useCallback, type CSSProperties } from "react";
 import { clsx } from "clsx";
+import { useAtomValue } from "jotai";
 import { SessionActions } from "../session/SessionActions";
 import { SessionInfo, SessionMonitorStatus } from "../../types/session";
 import { UncommittedIndicator } from "../common/UncommittedIndicator";
@@ -8,6 +9,7 @@ import { InlineEditableText } from "../common/InlineEditableText";
 import { theme, getAgentColorScheme } from "../../common/theme";
 import { typography } from "../../common/typography";
 import type { MergeStatus } from "../../store/atoms/sessions";
+import { lastAgentResponseMapAtom, agentResponseTickAtom, formatAgentResponseTime } from "../../store/atoms/lastAgentResponse";
 import { getSessionDisplayName } from "../../utils/sessionDisplayName";
 import { mapSessionUiState } from "../../utils/sessionFilters";
 import { useMultipleShortcutDisplays } from "../../keyboardShortcuts/useShortcutDisplay";
@@ -250,6 +252,9 @@ export const SessionCard = memo<SessionCardProps>(
   }) => {
     const { t } = useTranslation();
     const { setItemEpic } = useEpics();
+    const agentResponseMap = useAtomValue(lastAgentResponseMapAtom);
+    useAtomValue(agentResponseTickAtom);
+    const agentResponseTime = formatAgentResponseTime(agentResponseMap, session.info.session_id);
     const shortcuts = useMultipleShortcutDisplays([
       KeyboardShortcutAction.OpenDiffViewer,
       KeyboardShortcutAction.CancelSession,
@@ -577,6 +582,14 @@ export const SessionCard = memo<SessionCardProps>(
               <span className="truncate max-w-[120px]" title={s.branch}>
                 {s.branch}
               </span>
+              {agentResponseTime && (
+                <span
+                  style={{ color: "var(--color-text-muted)" }}
+                  title={t.session.lastAgentOutput}
+                >
+                  {agentResponseTime}
+                </span>
+              )}
             </>
           )}
         </div>
