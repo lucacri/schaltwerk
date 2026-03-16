@@ -270,6 +270,29 @@ describe('XtermTerminal wrapper', () => {
     )
   })
 
+  it('sets explicit fontWeight normal and fontWeightBold bold', async () => {
+    const { XtermTerminal } = await import('./XtermTerminal')
+
+    new XtermTerminal({
+      terminalId: 'font-weight',
+      config: {
+        scrollback: 4000,
+        fontSize: 12,
+        fontFamily: 'Menlo',
+        readOnly: false,
+        minimumContrastRatio: 1.0,
+        smoothScrolling: false,
+      },
+    })
+
+    const { Terminal: MockTerminal } = await import('@xterm/xterm') as unknown as {
+      Terminal: { __instances: Array<{ options: Record<string, unknown> }> }
+    }
+    const instance = MockTerminal.__instances.at(-1)!
+    expect(instance.options.fontWeight).toBe('normal')
+    expect(instance.options.fontWeightBold).toBe('bold')
+  })
+
   it('saves and restores scroll position on detach/attach', async () => {
     const { XtermTerminal } = await import('./XtermTerminal')
 

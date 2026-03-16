@@ -10,6 +10,9 @@
 .schaltwerk-terminal-wrapper .xterm {
   position: absolute;
   inset: 0;
+  font-weight: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .schaltwerk-terminal-wrapper .xterm-viewport {
