@@ -963,6 +963,7 @@ function AppContent() {
     }
   }, [openProject])
 
+  const tabsRestoredRef = useRef(false)
   const openProjectInFlightRef = useRef(new Map<string, Promise<void>>())
   const openProjectOnce = useCallback(async (path: string, source: string) => {
     const trimmed = path.trim()
@@ -989,6 +990,56 @@ function AppContent() {
 
     await promise
   }, [handleOpenProject])
+
+  const tryRestoreOpenTabs = useCallback(async (): Promise<boolean> => {
+    if (tabsRestoredRef.current) {
+      return true
+    }
+    try {
+      const restoreEnabled = await invoke<boolean>(TauriCommands.GetRestoreOpenProjects)
+      if (!restoreEnabled) {
+        return false
+      }
+      const state = await invoke<OpenTabsState | null>(TauriCommands.GetOpenTabsState)
+      if (!state || state.tabs.length === 0) {
+        return false
+      }
+      logger.info('[App] Restoring open tabs:', state.tabs.length)
+      const restoredPaths = new Set<string>()
+      for (const tabPath of state.tabs) {
+        try {
+          const exists = await invoke<boolean>(TauriCommands.DirectoryExists, { path: tabPath })
+          const isGit = exists && await invoke<boolean>(TauriCommands.IsGitRepository, { path: tabPath })
+          if (isGit) {
+            await openProjectOnce(tabPath, 'restore-tabs')
+            restoredPaths.add(tabPath)
+          } else {
+            logger.info('[App] Skipping invalid tab during restore:', tabPath)
+          }
+        } catch (error) {
+          logger.warn('[App] Failed to validate tab during restore:', tabPath, error)
+        }
+      }
+      if (restoredPaths.size === 0) {
+        return false
+      }
+      tabsRestoredRef.current = true
+      const activePath = (state.active && restoredPaths.has(state.active))
+        ? state.active
+        : restoredPaths.values().next().value
+      if (activePath) {
+        try {
+          await selectProject({ path: activePath })
+        } catch (error) {
+          logger.warn('[App] Failed to restore active project', { path: activePath, error })
+        }
+      }
+      return true
+    } catch (error) {
+      logger.warn('[App] Failed to restore open tabs:', error)
+      return false
+    }
+  }, [openProjectOnce, selectProject])
 
   // Right panel global state (using atoms for persistence)
   const [rightSizes, setRightSizes] = useAtom(rightPanelSizesAtom)
@@ -1174,50 +1225,14 @@ function AppContent() {
 
     const unlistenHomePromise = listenEvent(SchaltEvent.OpenHome, async (directoryPath) => {
       logger.info('Received open-home event:', directoryPath)
-
-      try {
-        const restoreEnabled = await invoke<boolean>(TauriCommands.GetRestoreOpenProjects)
-        if (restoreEnabled) {
-          const state = await invoke<OpenTabsState | null>(TauriCommands.GetOpenTabsState)
-          if (state && state.tabs.length > 0) {
-            logger.info('[App] Restoring open tabs:', state.tabs.length)
-            const restoredPaths = new Set<string>()
-
-            for (const tabPath of state.tabs) {
-              try {
-                const exists = await invoke<boolean>(TauriCommands.DirectoryExists, { path: tabPath })
-                const isGit = exists && await invoke<boolean>(TauriCommands.IsGitRepository, { path: tabPath })
-                if (isGit) {
-                  await openProjectOnce(tabPath, 'restore-tabs')
-                  restoredPaths.add(tabPath)
-                } else {
-                  logger.info('[App] Skipping invalid tab during restore:', tabPath)
-                }
-              } catch (error) {
-                logger.warn('[App] Failed to validate tab during restore:', tabPath, error)
-              }
-            }
-
-            if (restoredPaths.size > 0) {
-              const activePath = (state.active && restoredPaths.has(state.active))
-                ? state.active
-                : restoredPaths.values().next().value
-              if (activePath) {
-                try {
-                  await selectProject({ path: activePath })
-                } catch (error) {
-                  logger.warn('[App] Failed to restore active project', { path: activePath, error })
-                }
-              }
-              return
-            }
-          }
-        }
-      } catch (error) {
-        logger.warn('[App] Failed to restore open tabs:', error)
+      if (tabsRestoredRef.current) {
+        logger.debug('[App] Tabs already restored, ignoring OpenHome event')
+        return
       }
-
-      setShowHome(true)
+      const restored = await tryRestoreOpenTabs()
+      if (!restored) {
+        setShowHome(true)
+      }
     })
 
     // Handle CLI project validation errors
@@ -1226,13 +1241,21 @@ function AppContent() {
       setCliValidationError(payload.error)
     })
 
-    // Deterministically pull active project on mount to avoid event race
+    // Deterministically pull active project on mount to avoid event race.
+    // The OpenHome event fires from a spawned backend task and can arrive
+    // before this listener is registered, so we also attempt tab restoration
+    // directly when no CLI project was provided.
     void (async () => {
       try {
         const active = await invoke<string | null>(TauriCommands.GetActiveProjectPath)
         if (active) {
           logger.info('Detected active project on startup:', active)
           await openProjectOnce(active, 'active-project-detection')
+        } else {
+          const restored = await tryRestoreOpenTabs()
+          if (!restored) {
+            setShowHome(true)
+          }
         }
       } catch (_e) {
         logger.warn('Failed to fetch active project on startup:', _e)
@@ -1262,7 +1285,7 @@ function AppContent() {
         }
       })
     }
-  }, [openProjectOnce])
+  }, [openProjectOnce, tryRestoreOpenTabs])
 
   // Install smart dash/quote normalization for all text inputs (except terminals)
   useEffect(() => {

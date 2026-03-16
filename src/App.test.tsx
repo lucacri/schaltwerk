@@ -366,26 +366,14 @@ describe('App.tsx', () => {
           return true
         case TauriCommands.IsGitRepository:
           return true
+        case TauriCommands.GetActiveProjectPath:
+          return null
         default:
           return defaultInvokeImpl(cmd, args)
       }
     })
 
     await renderApp()
-
-    await waitFor(() => {
-      const openHomeHandler = listenEventHandlers.find(
-        e => String(e.event) === String(SchaltEvent.OpenHome)
-      )
-      expect(openHomeHandler).toBeTruthy()
-    })
-
-    const openHomeHandler = listenEventHandlers.find(
-      e => String(e.event) === String(SchaltEvent.OpenHome)
-    )!
-    await act(async () => {
-      await openHomeHandler.handler('/Users/me/non-git-dir')
-    })
 
     await waitFor(() => {
       const latestTopBar = topBarPropsMock.mock.calls.at(-1)?.[0]
@@ -398,25 +386,17 @@ describe('App.tsx', () => {
   it('shows home screen when restore setting is disabled', async () => {
     const invokeMock = await getInvokeMock()
     invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
-      if (cmd === TauriCommands.GetRestoreOpenProjects) return false
-      return defaultInvokeImpl(cmd, args)
+      switch (cmd) {
+        case TauriCommands.GetRestoreOpenProjects:
+          return false
+        case TauriCommands.GetActiveProjectPath:
+          return null
+        default:
+          return defaultInvokeImpl(cmd, args)
+      }
     })
 
     await renderApp()
-
-    await waitFor(() => {
-      const openHomeHandler = listenEventHandlers.find(
-        e => String(e.event) === String(SchaltEvent.OpenHome)
-      )
-      expect(openHomeHandler).toBeTruthy()
-    })
-
-    const openHomeHandler = listenEventHandlers.find(
-      e => String(e.event) === String(SchaltEvent.OpenHome)
-    )!
-    await act(async () => {
-      await openHomeHandler.handler('/Users/me/non-git-dir')
-    })
 
     await waitFor(() => {
       expect(screen.getByTestId('home-screen')).toBeInTheDocument()
