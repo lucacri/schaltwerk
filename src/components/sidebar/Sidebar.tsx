@@ -1353,6 +1353,7 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
         onOpenMergeModal: () => { void handleMergeShortcut() },
         onUpdateSessionFromParent: () => { void updateSessionFromParent() },
         onCreatePullRequest: handleCreatePullRequestShortcut,
+        onOpenSettings: () => { emitUiEvent(UiEvent.OpenSettings) },
         isDiffViewerOpen,
         isModalOpen: isAnyModalOpen()
     })

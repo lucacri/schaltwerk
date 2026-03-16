@@ -36,6 +36,7 @@ interface KeyboardShortcutsProps {
   onUpdateSessionFromParent?: () => void
   onCreatePullRequest?: () => void
   onOpenInApp?: () => void
+  onOpenSettings?: () => void
   onSwitchToProject?: (index: number) => void
   onCycleNextProject?: () => void
   onCyclePrevProject?: () => void
@@ -74,6 +75,7 @@ export function useKeyboardShortcuts(
     onUpdateSessionFromParent,
     onCreatePullRequest,
     onOpenInApp,
+    onOpenSettings,
     onSwitchToProject,
     onCycleNextProject,
     onCyclePrevProject,
@@ -272,6 +274,12 @@ export function useKeyboardShortcuts(
         onOpenInApp()
         return
       }
+
+      if (onOpenSettings && isShortcutForAction(event, KeyboardShortcutAction.OpenSettings, shortcutConfig, { platform })) {
+        event.preventDefault()
+        onOpenSettings()
+        return
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -301,6 +309,7 @@ export function useKeyboardShortcuts(
     onUpdateSessionFromParent,
     onCreatePullRequest,
     onOpenInApp,
+    onOpenSettings,
     onSwitchToProject,
     onCycleNextProject,
     onCyclePrevProject,

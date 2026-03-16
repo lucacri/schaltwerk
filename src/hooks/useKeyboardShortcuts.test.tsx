@@ -1047,6 +1047,57 @@ describe('useKeyboardShortcuts', () => {
     })
   })
 
+  describe('Open settings shortcut', () => {
+    it('opens settings with Cmd+, on Mac', () => {
+      const onOpenSettings = vi.fn()
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onOpenSettings,
+        sessionCount: 1,
+      }))
+
+      const event = pressKey(',', { metaKey: true })
+      expect(onOpenSettings).toHaveBeenCalledTimes(1)
+      expect(event.defaultPrevented).toBe(true)
+    })
+
+    it('opens settings with Ctrl+, on Windows', () => {
+      mockWindowsPlatform()
+      const onOpenSettings = vi.fn()
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onOpenSettings,
+        sessionCount: 1,
+      }))
+
+      const event = pressKey(',', { ctrlKey: true })
+      expect(onOpenSettings).toHaveBeenCalledTimes(1)
+      expect(event.defaultPrevented).toBe(true)
+    })
+
+    it('does not open settings when callback is not provided', () => {
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        sessionCount: 1,
+      }))
+
+      const event = pressKey(',', { metaKey: true })
+      expect(event.defaultPrevented).toBe(false)
+    })
+  })
+
   describe('Edge cases and integration', () => {
     it('handles rapid key sequences', () => {
       const onSelectOrchestrator = vi.fn()
