@@ -1506,7 +1506,7 @@ function AppContent() {
 
   useEffect(() => {
     return listenUiEvent(UiEvent.ConsolidateVersionGroup, (detail: ConsolidateVersionGroupDetail) => {
-      const { baseName, baseBranch, sessions } = detail
+      const { baseName, baseBranch, epicId: groupEpicId, sessions } = detail
 
       const sessionList = sessions.map(s => {
         const stats = s.diffStats
@@ -1542,6 +1542,7 @@ Instructions:
           baseBranch,
           lockName: false,
           isConsolidation: true,
+          epicId: groupEpicId,
         })
       })
     })

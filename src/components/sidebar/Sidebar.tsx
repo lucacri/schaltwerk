@@ -1949,10 +1949,12 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                                         onConsolidate={(group) => {
                                             const firstSession = group.versions[0]?.session?.info
                                             if (!firstSession) return
+                                            const groupEpicId = group.versions.find(v => v.session.info.epic?.id)?.session.info.epic?.id ?? null
                                             emitUiEvent(UiEvent.ConsolidateVersionGroup, {
                                                 baseName: group.baseName,
                                                 baseBranch: firstSession.base_branch,
                                                 versionGroupId: firstSession.version_group_id ?? '',
+                                                epicId: groupEpicId,
                                                 sessions: group.versions.map(v => ({
                                                     name: v.session.info.session_id,
                                                     branch: v.session.info.branch,

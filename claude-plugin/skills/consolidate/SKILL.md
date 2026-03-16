@@ -15,7 +15,7 @@ description: Use when multiple Lucode sessions worked on the same spec and you n
 
 ### Step 1: Discover sessions
 
-Call `mcp__lucode__lucode_get_current_tasks` with `fields: ["name", "display_name", "status", "session_state", "branch"]` and `status_filter: "active"`.
+Call `mcp__lucode__lucode_get_current_tasks` with `fields: ["name", "display_name", "status", "session_state", "branch", "epic_id"]` and `status_filter: "active"`.
 
 Group sessions by `display_name`. Filter to groups with 2+ sessions (nothing to consolidate if only 1).
 
@@ -51,6 +51,7 @@ Call `mcp__lucode__lucode_create` with:
 - `name`: the resolved unique name (sanitized: lowercase, spaces replaced with hyphens, max 50 chars)
 - `skip_permissions`: true
 - `prompt`: the consolidation prompt (see template below)
+- `epic_id`: the `epic_id` from the selected group's sessions (use the first non-null `epic_id` found in the group). Omit if no sessions have an epic.
 
 If the call fails, report the error to the user and stop.
 

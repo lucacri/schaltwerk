@@ -212,6 +212,7 @@ export interface ConsolidateVersionGroupDetail {
   baseName: string
   baseBranch: string
   versionGroupId: string
+  epicId?: string | null
   sessions: Array<{
     name: string
     branch: string

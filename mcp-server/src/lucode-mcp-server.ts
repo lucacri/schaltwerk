@@ -1452,6 +1452,9 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
           if (includeAll || requestedFields.includes('skip_permissions')) {
             agent.skip_permissions = t.original_skip_permissions ?? null
           }
+          if (includeAll || requestedFields.includes('epic_id')) {
+            agent.epic_id = t.epic_id ?? null
+          }
 
           if (includeAll || requestedFields.includes('initial_prompt')) {
             let prompt = t.initial_prompt || null

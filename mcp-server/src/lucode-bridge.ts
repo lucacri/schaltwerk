@@ -25,6 +25,7 @@ export interface Session {
   ready_to_merge: boolean
   original_agent_type?: string
   original_skip_permissions?: boolean
+  epic_id?: string | null
   pending_name_generation: boolean
   was_auto_generated: boolean
 }
