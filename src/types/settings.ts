@@ -7,6 +7,7 @@ export type SettingsCategory =
   | 'generation'
   | 'keyboard'
   | 'environment'
+  | 'agentConfiguration'
   | 'terminal'
   | 'sessions'
   | 'version'

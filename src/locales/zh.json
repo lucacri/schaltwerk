@@ -688,6 +688,10 @@
     "prSelectHint": "选择一个拉取请求以将其描述和评论拉入代理提示词。会话将在 PR 分支上启动。",
     "enterSpecContent": "输入规格内容（Markdown 格式）...",
     "describeAgent": "描述 Claude 会话的代理任务",
+    "variant": "变体",
+    "noVariant": "无变体（使用默认值）",
+    "preset": "预设",
+    "noPreset": "无预设",
     "unifiedSearch": {
       "title": "搜索",
       "branchesTab": "分支",

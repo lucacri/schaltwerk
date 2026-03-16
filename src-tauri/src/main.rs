@@ -1427,7 +1427,14 @@ fn main() {
             set_agent_command_prefix,
             get_default_generation_prompts,
             get_generation_settings,
-            set_generation_settings
+            set_generation_settings,
+            get_agent_variants,
+            set_agent_variants,
+            get_agent_presets,
+            set_agent_presets,
+            get_contextual_actions,
+            set_contextual_actions,
+            reset_contextual_actions_to_defaults
         ])
         .setup(move |app| {
             if ATTENTION_REGISTRY.get().is_none() {

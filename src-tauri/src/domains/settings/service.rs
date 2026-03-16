@@ -556,6 +556,54 @@ impl SettingsService {
         self.save()
     }
 
+    pub fn get_contextual_actions(&self) -> Vec<ContextualAction> {
+        let actions = &self.settings.contextual_actions;
+        if actions.is_empty() {
+            return default_contextual_actions();
+        }
+        actions.clone()
+    }
+
+    pub fn set_contextual_actions(
+        &mut self,
+        actions: Vec<ContextualAction>,
+    ) -> Result<(), SettingsServiceError> {
+        self.settings.contextual_actions = actions;
+        self.save()
+    }
+
+    pub fn reset_contextual_actions_to_defaults(
+        &mut self,
+    ) -> Result<Vec<ContextualAction>, SettingsServiceError> {
+        self.settings.contextual_actions = Vec::new();
+        self.save()?;
+        Ok(default_contextual_actions())
+    }
+
+    pub fn get_agent_presets(&self) -> Vec<AgentPreset> {
+        self.settings.agent_presets.clone()
+    }
+
+    pub fn set_agent_presets(
+        &mut self,
+        presets: Vec<AgentPreset>,
+    ) -> Result<(), SettingsServiceError> {
+        self.settings.agent_presets = presets;
+        self.save()
+    }
+
+    pub fn get_agent_variants(&self) -> Vec<AgentVariant> {
+        self.settings.agent_variants.clone()
+    }
+
+    pub fn set_agent_variants(
+        &mut self,
+        variants: Vec<AgentVariant>,
+    ) -> Result<(), SettingsServiceError> {
+        self.settings.agent_variants = variants;
+        self.save()
+    }
+
     pub fn get_restore_open_projects(&self) -> bool {
         self.settings.restore_open_projects
     }
@@ -1101,6 +1149,87 @@ mod tests {
             Some("--model gemini-2.0-flash".to_string())
         );
         assert!(loaded.model.is_none());
+    }
+
+    #[test]
+    fn agent_variant_roundtrip() {
+        let repo = InMemoryRepository::default();
+        let repo_handle = repo.clone();
+        let mut service = SettingsService::new(Box::new(repo));
+
+        let variants = vec![AgentVariant {
+            id: "test-id".to_string(),
+            name: "Claude Opus High".to_string(),
+            agent_type: "claude".to_string(),
+            model: Some("opus".to_string()),
+            reasoning_effort: Some("high".to_string()),
+            cli_args: vec!["--dangerously-skip-permissions".to_string()],
+            env_vars: HashMap::new(),
+            is_built_in: false,
+        }];
+
+        service
+            .set_agent_variants(variants.clone())
+            .expect("should save agent variants");
+
+        let loaded = service.get_agent_variants();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].id, "test-id");
+        assert_eq!(loaded[0].name, "Claude Opus High");
+        assert_eq!(loaded[0].model, Some("opus".to_string()));
+        assert_eq!(repo_handle.snapshot().agent_variants, variants);
+    }
+
+    #[test]
+    fn agent_preset_roundtrip() {
+        let repo = InMemoryRepository::default();
+        let repo_handle = repo.clone();
+        let mut service = SettingsService::new(Box::new(repo));
+
+        let presets = vec![AgentPreset {
+            id: "preset-1".to_string(),
+            name: "The Trio".to_string(),
+            slots: vec![
+                AgentPresetSlot {
+                    agent_type: "claude".to_string(),
+                    variant_id: None,
+                    skip_permissions: Some(true),
+                },
+                AgentPresetSlot {
+                    agent_type: "codex".to_string(),
+                    variant_id: Some("variant-opus-high".to_string()),
+                    skip_permissions: None,
+                },
+            ],
+            is_built_in: false,
+        }];
+
+        service
+            .set_agent_presets(presets.clone())
+            .expect("should save agent presets");
+
+        let loaded = service.get_agent_presets();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].name, "The Trio");
+        assert_eq!(loaded[0].slots.len(), 2);
+        assert_eq!(repo_handle.snapshot().agent_presets, presets);
+    }
+
+    #[test]
+    fn agent_variant_serialization_roundtrip() {
+        let variant = AgentVariant {
+            id: "test-id".to_string(),
+            name: "Claude Opus High".to_string(),
+            agent_type: "claude".to_string(),
+            model: Some("opus".to_string()),
+            reasoning_effort: Some("high".to_string()),
+            cli_args: vec!["--dangerously-skip-permissions".to_string()],
+            env_vars: HashMap::new(),
+            is_built_in: false,
+        };
+        let json = serde_json::to_string(&variant).unwrap();
+        let deserialized: AgentVariant = serde_json::from_str(&json).unwrap();
+        assert_eq!(variant, deserialized);
     }
 
     #[test]

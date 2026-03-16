@@ -296,6 +296,104 @@ pub struct AgentBinaryConfigs {
     pub kilocode: Option<AgentBinaryConfig>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentVariant {
+    pub id: String,
+    pub name: String,
+    pub agent_type: String,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
+    #[serde(default)]
+    pub cli_args: Vec<String>,
+    #[serde(default)]
+    pub env_vars: HashMap<String, String>,
+    #[serde(default)]
+    pub is_built_in: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentPresetSlot {
+    pub agent_type: String,
+    #[serde(default)]
+    pub variant_id: Option<String>,
+    #[serde(default)]
+    pub skip_permissions: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentPreset {
+    pub id: String,
+    pub name: String,
+    pub slots: Vec<AgentPresetSlot>,
+    #[serde(default)]
+    pub is_built_in: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ContextualActionContext {
+    Mr,
+    Issue,
+    Both,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ContextualActionMode {
+    Spec,
+    Session,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextualAction {
+    pub id: String,
+    pub name: String,
+    pub context: ContextualActionContext,
+    pub prompt_template: String,
+    pub mode: ContextualActionMode,
+    #[serde(default)]
+    pub agent_type: Option<String>,
+    #[serde(default)]
+    pub variant_id: Option<String>,
+    #[serde(default)]
+    pub preset_id: Option<String>,
+    #[serde(default)]
+    pub is_built_in: bool,
+}
+
+pub fn default_contextual_actions() -> Vec<ContextualAction> {
+    vec![
+        ContextualAction {
+            id: "builtin-review-mr".to_string(),
+            name: "Review this MR".to_string(),
+            context: ContextualActionContext::Mr,
+            prompt_template: "Review the following merge request:\n\nTitle: {{mr.title}}\nAuthor: {{mr.author}}\nSource: {{mr.sourceBranch}} -> {{mr.targetBranch}}\n\nDescription:\n{{mr.description}}\n\nDiff:\n{{mr.diff}}".to_string(),
+            mode: ContextualActionMode::Session,
+            agent_type: Some("claude".to_string()),
+            variant_id: None,
+            preset_id: None,
+            is_built_in: true,
+        },
+        ContextualAction {
+            id: "builtin-plan-issue".to_string(),
+            name: "Plan fix for this issue".to_string(),
+            context: ContextualActionContext::Issue,
+            prompt_template: "Create an implementation plan for the following issue:\n\nTitle: {{issue.title}}\n\nDescription:\n{{issue.description}}\n\nLabels: {{issue.labels}}".to_string(),
+            mode: ContextualActionMode::Spec,
+            agent_type: Some("claude".to_string()),
+            variant_id: None,
+            preset_id: None,
+            is_built_in: true,
+        },
+    ]
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub agent_env_vars: AgentEnvVars,
@@ -333,6 +431,12 @@ pub struct Settings {
     pub generation: GenerationSettings,
     #[serde(default = "default_true")]
     pub restore_open_projects: bool,
+    #[serde(default)]
+    pub agent_variants: Vec<AgentVariant>,
+    #[serde(default)]
+    pub agent_presets: Vec<AgentPreset>,
+    #[serde(default)]
+    pub contextual_actions: Vec<ContextualAction>,
 }
 
 impl Default for Settings {
@@ -359,6 +463,9 @@ impl Default for Settings {
             agent_command_prefix: None,
             generation: GenerationSettings::default(),
             restore_open_projects: default_true(),
+            agent_variants: Vec::new(),
+            agent_presets: Vec::new(),
+            contextual_actions: Vec::new(),
         }
     }
 }

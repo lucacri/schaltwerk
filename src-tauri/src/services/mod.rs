@@ -46,8 +46,10 @@ pub use crate::domains::sessions::entity::{
 };
 pub use crate::shared::format_branch_name;
 pub use crate::domains::settings::{
-    AgentBinaryConfig, AgentPreference, DiffViewPreferences, McpServerConfig, SessionPreferences,
-    TerminalSettings, TerminalUIPreferences,
+    AgentBinaryConfig, AgentPreference, AgentPreset, AgentPresetSlot, AgentVariant,
+    ContextualAction, ContextualActionContext, ContextualActionMode, DiffViewPreferences,
+    McpServerConfig, SessionPreferences, TerminalSettings,
+    TerminalUIPreferences,
 };
 pub use crate::domains::terminal::TerminalSnapshot;
 pub use crate::domains::terminal::{
