@@ -1272,6 +1272,10 @@ export interface Translations {
     githubIssuesTitle: string
     githubPrs: string
     githubPrsTitle: string
+    forgeIssues: string
+    forgeIssuesTitle: string
+    forgePrs: string
+    forgePrsTitle: string
   }
   gitlabIssueTab: {
     searchPlaceholder: string
@@ -1369,6 +1373,57 @@ export interface Translations {
     statusChecks: string
     reviewDecision: string
     headBranch: string
+    labels: string
+  }
+  forgeIssueTab: {
+    searchPlaceholder: string
+    loading: string
+    noIssuesFound: string
+    adjustSearch: string
+    back: string
+    openInForge: string
+    opened: string
+    closed: string
+    updated: string
+    description: string
+    comments: string
+    noComments: string
+    labels: string
+    notes: string
+    noNotes: string
+    source: string
+  }
+  forgePrTab: {
+    searchPlaceholder: string
+    loading: string
+    noPrsFound: string
+    adjustSearch: string
+    back: string
+    openInForge: string
+    opened: string
+    closed: string
+    merged: string
+    updated: string
+    description: string
+    comments: string
+    noComments: string
+    labels: string
+    headBranch: string
+    sourceBranch: string
+    targetBranch: string
+    reviews: string
+    noReviews: string
+    reviewDecision: string
+    statusChecks: string
+    approve: string
+    merge: string
+    comment: string
+    squash: string
+    deleteSourceBranch: string
+    mergeStatus: string
+    reviewers: string
+    pipeline: string
+    refreshPipeline: string
   }
   historySearch: {
     placeholder: string
