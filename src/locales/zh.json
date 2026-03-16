@@ -1255,7 +1255,11 @@
     "gitlabIssues": "议题",
     "gitlabIssuesTitle": "GitLab 议题",
     "gitlabMrs": "合并请求",
-    "gitlabMrsTitle": "GitLab 合并请求"
+    "gitlabMrsTitle": "GitLab 合并请求",
+    "githubIssues": "议题",
+    "githubIssuesTitle": "GitHub 议题",
+    "githubPrs": "拉取请求",
+    "githubPrsTitle": "GitHub 拉取请求"
   },
   "gitlabIssueTab": {
     "searchPlaceholder": "搜索议题…",
@@ -1319,6 +1323,40 @@
     "merging": "正在合并...",
     "approving": "正在批准...",
     "commenting": "正在发送..."
+  },
+  "githubIssueTab": {
+    "searchPlaceholder": "搜索议题...",
+    "loading": "正在加载议题...",
+    "noIssuesFound": "未找到议题",
+    "adjustSearch": "尝试调整您的搜索",
+    "back": "返回列表",
+    "openInGithub": "在 GitHub 中打开",
+    "opened": "开放",
+    "closed": "已关闭",
+    "updated": "更新于 {time}",
+    "description": "描述",
+    "comments": "评论",
+    "noComments": "暂无评论"
+  },
+  "githubPrTab": {
+    "searchPlaceholder": "搜索拉取请求...",
+    "loading": "正在加载拉取请求...",
+    "noPrsFound": "未找到拉取请求",
+    "adjustSearch": "尝试调整您的搜索",
+    "back": "返回列表",
+    "openInGithub": "在 GitHub 中打开",
+    "opened": "开放",
+    "closed": "已关闭",
+    "merged": "已合并",
+    "updated": "更新于 {time}",
+    "description": "描述",
+    "comments": "评论",
+    "noComments": "暂无评论",
+    "reviews": "审查",
+    "noReviews": "暂无审查",
+    "statusChecks": "状态检查",
+    "reviewDecision": "审查决定",
+    "headBranch": "分支"
   },
   "historySearch": {
     "placeholder": "搜索提交…",

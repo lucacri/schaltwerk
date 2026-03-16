@@ -1257,7 +1257,11 @@
     "gitlabIssues": "Issues",
     "gitlabIssuesTitle": "GitLab Issues",
     "gitlabMrs": "MRs",
-    "gitlabMrsTitle": "GitLab Merge Requests"
+    "gitlabMrsTitle": "GitLab Merge Requests",
+    "githubIssues": "Issues",
+    "githubIssuesTitle": "GitHub Issues",
+    "githubPrs": "PRs",
+    "githubPrsTitle": "GitHub Pull Requests"
   },
   "gitlabIssueTab": {
     "searchPlaceholder": "Search issues...",
@@ -1321,6 +1325,40 @@
     "merging": "Merging...",
     "approving": "Approving...",
     "commenting": "Sending..."
+  },
+  "githubIssueTab": {
+    "searchPlaceholder": "Search issues...",
+    "loading": "Loading issues...",
+    "noIssuesFound": "No issues found",
+    "adjustSearch": "Try adjusting your search",
+    "back": "Back to list",
+    "openInGithub": "Open in GitHub",
+    "opened": "Open",
+    "closed": "Closed",
+    "updated": "Updated {time}",
+    "description": "Description",
+    "comments": "Comments",
+    "noComments": "No comments yet"
+  },
+  "githubPrTab": {
+    "searchPlaceholder": "Search pull requests...",
+    "loading": "Loading pull requests...",
+    "noPrsFound": "No pull requests found",
+    "adjustSearch": "Try adjusting your search",
+    "back": "Back to list",
+    "openInGithub": "Open in GitHub",
+    "opened": "Open",
+    "closed": "Closed",
+    "merged": "Merged",
+    "updated": "Updated {time}",
+    "description": "Description",
+    "comments": "Comments",
+    "noComments": "No comments yet",
+    "reviews": "Reviews",
+    "noReviews": "No reviews yet",
+    "statusChecks": "Status Checks",
+    "reviewDecision": "Review Decision",
+    "headBranch": "Branch"
   },
   "historySearch": {
     "placeholder": "Search commits...",

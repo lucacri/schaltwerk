@@ -125,6 +125,22 @@ vi.mock('../../contexts/GitlabIntegrationContext', () => ({
   })
 }))
 
+vi.mock('../../contexts/GithubIntegrationContext', () => ({
+  useGithubIntegrationContext: () => ({
+    status: null,
+    loading: false,
+    hasRepository: false,
+    isAuthenticating: false,
+    isConnecting: false,
+    isCreatingPr: false,
+    authenticate: vi.fn(),
+    connectProject: vi.fn(),
+    createReviewedPr: vi.fn(),
+    getCachedPrUrl: vi.fn(),
+    refreshStatus: vi.fn(),
+  })
+}))
+
 vi.mock('../../hooks/useForgeType', () => ({
   useForgeType: () => 'unknown',
 }))
@@ -141,6 +157,14 @@ vi.mock('./GitlabIssuesTab', () => ({
 
 vi.mock('./GitlabMrsTab', () => ({
   GitlabMrsTab: () => <div data-testid="gitlab-mrs-tab" />
+}))
+
+vi.mock('./GithubIssuesTab', () => ({
+  GithubIssuesTab: () => <div data-testid="github-issues-tab" />
+}))
+
+vi.mock('./GithubPrsTab', () => ({
+  GithubPrsTab: () => <div data-testid="github-prs-tab" />
 }))
 
 function renderWithProject(ui: ReactElement, projectPath: string | null = '/tmp/project') {

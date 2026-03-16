@@ -16,6 +16,8 @@ interface RightPanelTabsHeaderProps {
   showPreviewTab: boolean
   showGitlabIssuesTab: boolean
   showGitlabMrsTab: boolean
+  showGithubIssuesTab: boolean
+  showGithubPrsTab: boolean
   onSelectTab: (tab: TabKey) => void
 }
 
@@ -49,6 +51,8 @@ export const RightPanelTabsHeader = ({
   showPreviewTab,
   showGitlabIssuesTab,
   showGitlabMrsTab,
+  showGithubIssuesTab,
+  showGithubPrsTab,
   onSelectTab
 }: RightPanelTabsHeaderProps) => {
   const { t } = useTranslation()
@@ -116,6 +120,24 @@ export const RightPanelTabsHeader = ({
       key: 'gitlab-mrs',
       label: t.rightPanelTabs.gitlabMrs,
       title: t.rightPanelTabs.gitlabMrsTitle,
+      icon: <VscGitPullRequest className={baseTabIconClass} />
+    })
+  }
+
+  if (showGithubIssuesTab) {
+    descriptors.push({
+      key: 'github-issues',
+      label: t.rightPanelTabs.githubIssues,
+      title: t.rightPanelTabs.githubIssuesTitle,
+      icon: <VscIssues className={baseTabIconClass} />
+    })
+  }
+
+  if (showGithubPrsTab) {
+    descriptors.push({
+      key: 'github-prs',
+      label: t.rightPanelTabs.githubPrs,
+      title: t.rightPanelTabs.githubPrsTitle,
       icon: <VscGitPullRequest className={baseTabIconClass} />
     })
   }

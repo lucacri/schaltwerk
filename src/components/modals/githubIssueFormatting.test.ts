@@ -7,6 +7,7 @@ const baseDetails: GithubIssueDetails = {
   title: 'Improve prompt flow',
   url: 'https://github.com/example/repo/issues/42',
   body: 'Issue body',
+  state: 'OPEN',
   labels: [],
   comments: [],
 }
