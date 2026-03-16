@@ -210,6 +210,13 @@ export function useForgeSearch<TSummary, TDetails>(
       hasInitialFetchedRef.current = true
       void executeFullSearch('')
     }
+
+    return () => {
+      if (debounceHandle.current) {
+        window.clearTimeout(debounceHandle.current)
+        debounceHandle.current = null
+      }
+    }
   }, [enabled, executeFullSearch])
 
   const setQuery = useCallback(
