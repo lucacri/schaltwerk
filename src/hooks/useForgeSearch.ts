@@ -177,7 +177,7 @@ export function useForgeSearch<TSummary, TDetails>(
     }
 
     const localFiltered = filterLocally(cachedItemsRef.current, trimmed)
-    const merged = deduplicateAndSort([...localFiltered, ...allResults])
+    const merged = deduplicateAndSort([...allResults, ...localFiltered])
 
     setResults(merged)
     setLoading(false)
