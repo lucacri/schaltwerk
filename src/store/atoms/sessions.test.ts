@@ -111,6 +111,7 @@ import {
     __resetSessionsTestingState,
     cleanupProjectSessionsCacheActionAtom,
     expectSessionActionAtom,
+    crossProjectCountsAtom,
 } from './sessions'
 import { projectPathAtom } from './project'
 import { listenEvent as listenEventMock } from '../../common/eventSystem'
@@ -1414,5 +1415,46 @@ describe('sessions atoms', () => {
         await vi.waitFor(() => {
             expect(startSessionTop).toHaveBeenCalledWith(expect.objectContaining({ sessionName: 'reviewed-session' }))
         })
+    })
+
+    it('crossProjectCountsAtom starts empty', () => {
+        expect(store.get(crossProjectCountsAtom)).toEqual({})
+    })
+
+    it('updates crossProjectCountsAtom when TerminalAttention fires for a non-active project session', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                const activeProject = store.get(projectPathAtom)
+                if (activeProject === '/projects/alpha') {
+                    return [createSession({ session_id: 'alpha-session', worktree_path: '/tmp/alpha' })]
+                }
+                if (activeProject === '/projects/beta') {
+                    return [createSession({ session_id: 'beta-session', worktree_path: '/tmp/beta' })]
+                }
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'alpha-session',
+            terminal_id: stableSessionTerminalId('alpha-session', 'top'),
+            needs_attention: true,
+        })
+
+        const counts = store.get(crossProjectCountsAtom)
+        expect(counts['/projects/alpha']).toEqual({ attention: 1, running: 0 })
     })
 })
