@@ -52,6 +52,7 @@ export enum UiEvent {
   SessionStateChanged = 'schaltwerk:session-state-changed',
   AgentBinariesUpdated = 'schaltwerk:agent-binaries-updated',
   CloseRequested = 'schaltwerk:close-requested',
+  ConsolidateVersionGroup = 'schaltwerk:consolidate-version-group',
 }
 
 export interface PermissionErrorDetail {
@@ -106,6 +107,7 @@ export interface NewSessionPrefillDetail {
   fromDraft?: boolean
   originalSpecName?: string
   epicId?: string | null
+  isConsolidation?: boolean
 }
 
 export interface SessionCreatedDetail {
@@ -204,6 +206,19 @@ export interface InsertTerminalTextDetail {
   text: string
 }
 
+export interface ConsolidateVersionGroupDetail {
+  baseName: string
+  baseBranch: string
+  versionGroupId: string
+  sessions: Array<{
+    name: string
+    branch: string
+    worktreePath: string
+    agentType?: string
+    diffStats?: { files_changed: number; additions: number; deletions: number }
+  }>
+}
+
 export type UiEventPayloads = {
   [UiEvent.PermissionError]: PermissionErrorDetail
   [UiEvent.BackgroundStartMarked]: { terminalId: string }
@@ -254,6 +269,7 @@ export type UiEventPayloads = {
   [UiEvent.OpenSettings]: OpenSettingsDetail | undefined
   [UiEvent.AgentBinariesUpdated]: undefined
   [UiEvent.CloseRequested]: undefined
+  [UiEvent.ConsolidateVersionGroup]: ConsolidateVersionGroupDetail
 }
 
 type UiEventArgs<T extends UiEvent> = undefined extends UiEventPayloads[T]

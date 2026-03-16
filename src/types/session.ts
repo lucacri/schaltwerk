@@ -88,6 +88,7 @@ export interface SessionInfo {
     attention_required?: boolean
     pr_number?: number
     pr_url?: string
+    is_consolidation?: boolean
 }
 
 export interface DiffStats {
@@ -145,4 +146,5 @@ export interface RawSession {
     }
     pr_number?: number
     pr_url?: string
+    is_consolidation?: boolean
 }
