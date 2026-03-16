@@ -13,6 +13,7 @@ import { KeyboardShortcutsProvider } from './contexts/KeyboardShortcutsContext'
 import { ToastProvider } from './common/toast/ToastProvider'
 import { GithubIntegrationProvider } from './contexts/GithubIntegrationContext'
 import { GitlabIntegrationProvider } from './contexts/GitlabIntegrationContext'
+import { ForgeIntegrationProvider } from './contexts/ForgeIntegrationContext'
 
 // Loading wrapper component
 const AppLoader: React.FC = () => {
@@ -37,21 +38,23 @@ const AppLoader: React.FC = () => {
         <ToastProvider>
           <KeyboardShortcutsProvider>
             <JotaiProvider>
-              <GithubIntegrationProvider>
-                <GitlabIntegrationProvider>
-                  <ModalProvider>
-                    <FocusProvider>
-                      <ReviewProvider>
-                        <RunProvider>
-                          <div ref={rootRef} tabIndex={-1} className="h-screen w-screen outline-none">
-                            <App />
-                          </div>
-                        </RunProvider>
-                      </ReviewProvider>
-                    </FocusProvider>
-                  </ModalProvider>
-                </GitlabIntegrationProvider>
-              </GithubIntegrationProvider>
+              <ForgeIntegrationProvider>
+                <GithubIntegrationProvider>
+                  <GitlabIntegrationProvider>
+                    <ModalProvider>
+                      <FocusProvider>
+                        <ReviewProvider>
+                          <RunProvider>
+                            <div ref={rootRef} tabIndex={-1} className="h-screen w-screen outline-none">
+                              <App />
+                            </div>
+                          </RunProvider>
+                        </ReviewProvider>
+                      </FocusProvider>
+                    </ModalProvider>
+                  </GitlabIntegrationProvider>
+                </GithubIntegrationProvider>
+              </ForgeIntegrationProvider>
             </JotaiProvider>
           </KeyboardShortcutsProvider>
         </ToastProvider>

@@ -111,38 +111,23 @@ vi.mock('./CopyContextBar', () => ({
   CopyContextBar: () => <div data-testid="copy-bundle-bar">CopyContextBar</div>
 }))
 
-vi.mock('../../contexts/GitlabIntegrationContext', () => ({
-  useGitlabIntegrationContext: () => ({
+vi.mock('../../contexts/ForgeIntegrationContext', () => ({
+  useForgeIntegrationContext: () => ({
     status: null,
+    forgeType: 'unknown',
     sources: [],
-    loading: false,
-    sourcesLoaded: true,
-    isGlabMissing: false,
-    hasSources: false,
-    refreshStatus: vi.fn(),
-    loadSources: vi.fn(),
-    saveSources: vi.fn(),
-  })
-}))
-
-vi.mock('../../contexts/GithubIntegrationContext', () => ({
-  useGithubIntegrationContext: () => ({
-    status: null,
-    loading: false,
     hasRepository: false,
-    isAuthenticating: false,
-    isConnecting: false,
-    isCreatingPr: false,
-    authenticate: vi.fn(),
-    connectProject: vi.fn(),
-    createReviewedPr: vi.fn(),
-    getCachedPrUrl: vi.fn(),
+    hasSources: false,
+    loading: false,
+    searchIssues: vi.fn(),
+    getIssueDetails: vi.fn(),
+    searchPrs: vi.fn(),
+    getPrDetails: vi.fn(),
+    approvePr: vi.fn(),
+    mergePr: vi.fn(),
+    commentOnPr: vi.fn(),
     refreshStatus: vi.fn(),
   })
-}))
-
-vi.mock('../../hooks/useForgeType', () => ({
-  useForgeType: () => 'unknown',
 }))
 
 vi.mock('../specs/SpecWorkspacePanel', () => ({
@@ -151,20 +136,12 @@ vi.mock('../specs/SpecWorkspacePanel', () => ({
   )
 }))
 
-vi.mock('./GitlabIssuesTab', () => ({
-  GitlabIssuesTab: () => <div data-testid="gitlab-issues-tab" />
+vi.mock('../forge/ForgeIssuesTab', () => ({
+  ForgeIssuesTab: () => <div data-testid="forge-issues-tab" />
 }))
 
-vi.mock('./GitlabMrsTab', () => ({
-  GitlabMrsTab: () => <div data-testid="gitlab-mrs-tab" />
-}))
-
-vi.mock('./GithubIssuesTab', () => ({
-  GithubIssuesTab: () => <div data-testid="github-issues-tab" />
-}))
-
-vi.mock('./GithubPrsTab', () => ({
-  GithubPrsTab: () => <div data-testid="github-prs-tab" />
+vi.mock('../forge/ForgePrsTab', () => ({
+  ForgePrsTab: () => <div data-testid="forge-prs-tab" />
 }))
 
 function renderWithProject(ui: ReactElement, projectPath: string | null = '/tmp/project') {
