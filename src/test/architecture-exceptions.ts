@@ -15,6 +15,7 @@ export const THEME_EXCEPTIONS: ArchitectureException[] = [
   { file: 'src/common/toast/ToastCard.tsx', reason: 'boxShadow uses universal black rgba for shadow transparency' },
   { file: 'src/components/home/AsciiBuilderLogo.tsx', reason: 'Dynamic color interpolation for animation effects' },
   { file: 'src/components/settings/ThemeSettings.tsx', reason: 'Theme preview cards use hardcoded colors to show theme appearance' },
+  { file: 'src/components/forge/ForgeLabelChip.tsx', reason: 'Renders dynamic label colors from forge API with contrast text' },
 ];
 
 export const MODULE_BOUNDARY_EXCEPTIONS: ArchitectureException[] = [
