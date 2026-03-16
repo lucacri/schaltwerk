@@ -297,6 +297,7 @@ pub struct AgentBinaryConfigs {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentVariant {
     pub id: String,
     pub name: String,
@@ -314,6 +315,7 @@ pub struct AgentVariant {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentPresetSlot {
     pub agent_type: String,
     #[serde(default)]
@@ -323,6 +325,7 @@ pub struct AgentPresetSlot {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentPreset {
     pub id: String,
     pub name: String,
@@ -332,6 +335,7 @@ pub struct AgentPreset {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct ContextualAction {
     pub id: String,
     pub name: String,

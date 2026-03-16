@@ -76,6 +76,8 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
         if (success) {
             setEditingActions(null)
             onNotification?.('Reset to defaults', 'success')
+        } else {
+            onNotification?.('Failed to reset contextual actions', 'error')
         }
     }, [resetToDefaults, onNotification])
 

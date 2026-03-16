@@ -24,7 +24,7 @@ export const loadAgentPresetsAtom = atom(
             set(agentPresetsMapAtom, map)
         } catch (error) {
             logger.error('Failed to load agent presets:', error)
-            const message = error instanceof Error ? error.message : 'Failed to load agent presets'
+            const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to load agent presets'
             set(agentPresetsErrorAtom, message)
             set(agentPresetsMapAtom, new Map())
         } finally {
@@ -43,7 +43,7 @@ export const saveAgentPresetsAtom = atom(
             return true
         } catch (error) {
             logger.error('Failed to save agent presets:', error)
-            const message = error instanceof Error ? error.message : 'Failed to save agent presets'
+            const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to save agent presets'
             set(agentPresetsErrorAtom, message)
             return false
         }

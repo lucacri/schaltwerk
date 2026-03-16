@@ -51,7 +51,8 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
     const handleEnvVarAdd = useCallback((id: string) => {
         const variant = currentVariants.find(v => v.id === id)
         if (!variant) return
-        const envVars = { ...(variant.envVars ?? {}), '': '' }
+        const tempKey = `NEW_VAR_${Date.now()}`
+        const envVars = { ...(variant.envVars ?? {}), [tempKey]: '' }
         handleUpdate(id, { envVars })
     }, [currentVariants, handleUpdate])
 
@@ -188,7 +189,7 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                         <select
                                             value={variant.agentType}
                                             onChange={e => handleUpdate(variant.id, { agentType: e.target.value as AgentType })}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 focus:outline-none focus:border-[var(--color-border-focus)]"
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
                                             style={{ fontSize: 'var(--font-body)' }}
                                         >
                                             {NON_TERMINAL_AGENTS.map(agent => (

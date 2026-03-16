@@ -24,7 +24,7 @@ export const loadContextualActionsAtom = atom(
             set(contextualActionsMapAtom, map)
         } catch (error) {
             logger.error('Failed to load contextual actions:', error)
-            const message = error instanceof Error ? error.message : 'Failed to load contextual actions'
+            const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to load contextual actions'
             set(contextualActionsErrorAtom, message)
             set(contextualActionsMapAtom, new Map())
         } finally {
@@ -43,7 +43,7 @@ export const saveContextualActionsAtom = atom(
             return true
         } catch (error) {
             logger.error('Failed to save contextual actions:', error)
-            const message = error instanceof Error ? error.message : 'Failed to save contextual actions'
+            const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to save contextual actions'
             set(contextualActionsErrorAtom, message)
             return false
         }
@@ -60,7 +60,7 @@ export const resetContextualActionsAtom = atom(
             return true
         } catch (error) {
             logger.error('Failed to reset contextual actions:', error)
-            const message = error instanceof Error ? error.message : 'Failed to reset contextual actions'
+            const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to reset contextual actions'
             set(contextualActionsErrorAtom, message)
             return false
         }

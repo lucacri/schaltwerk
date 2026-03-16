@@ -24,7 +24,7 @@ export const loadAgentVariantsAtom = atom(
             set(agentVariantsMapAtom, map)
         } catch (error) {
             logger.error('Failed to load agent variants:', error)
-            const message = error instanceof Error ? error.message : 'Failed to load agent variants'
+            const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to load agent variants'
             set(agentVariantsErrorAtom, message)
             set(agentVariantsMapAtom, new Map())
         } finally {
@@ -43,7 +43,7 @@ export const saveAgentVariantsAtom = atom(
             return true
         } catch (error) {
             logger.error('Failed to save agent variants:', error)
-            const message = error instanceof Error ? error.message : 'Failed to save agent variants'
+            const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to save agent variants'
             set(agentVariantsErrorAtom, message)
             return false
         }
