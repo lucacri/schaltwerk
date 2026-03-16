@@ -1,3 +1,4 @@
+use crate::domains::attention::get_session_attention_state;
 use crate::domains::sessions::entity::EnrichedSession;
 use crate::project_manager::ProjectManager;
 use crate::schaltwerk_core::SchaltwerkCore;
@@ -33,6 +34,22 @@ impl<B: SessionsBackend> SessionsServiceImpl<B> {
             .list_enriched_sessions()
             .await
             .map_err(|err| format!("Failed to list sessions: {err}"))?;
+        let mut sessions = sessions;
+
+        if let Some(registry) = get_session_attention_state() {
+            match registry.try_lock() {
+                Ok(guard) => {
+                    for session in &mut sessions {
+                        session.attention_required = guard.get(&session.info.session_id);
+                    }
+                }
+                Err(_) => {
+                    log::debug!(
+                        "SessionsService list_enriched_sessions skipped attention hydration due to lock contention"
+                    );
+                }
+            }
+        }
 
         log::debug!(
             "SessionsService list_enriched_sessions done call_id={} count={} elapsed={}ms",
@@ -120,7 +137,12 @@ impl SessionsBackend for ProjectSessionsBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domains::attention::{
+        SessionAttentionState, get_session_attention_state, set_session_attention_state,
+    };
     use async_trait::async_trait;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
 
     struct SuccessBackend {
         sessions: Vec<EnrichedSession>,
@@ -181,6 +203,16 @@ mod tests {
         }
     }
 
+    fn init_attention_registry() -> Arc<Mutex<SessionAttentionState>> {
+        if let Some(registry) = get_session_attention_state() {
+            registry
+        } else {
+            let registry = Arc::new(Mutex::new(SessionAttentionState::default()));
+            set_session_attention_state(registry.clone());
+            registry
+        }
+    }
+
     #[tokio::test]
     async fn delegates_to_backend() {
         let backend = SuccessBackend {
@@ -218,5 +250,27 @@ mod tests {
             message.contains("list sessions"),
             "error should include context about listing sessions: {message}"
         );
+    }
+
+    #[tokio::test]
+    async fn hydrates_runtime_attention_from_registry() {
+        let registry = init_attention_registry();
+        registry.lock().await.update("one", true);
+        registry.lock().await.update("two", false);
+
+        let backend = SuccessBackend {
+            sessions: vec![sample_session("one"), sample_session("two")],
+        };
+        let service = SessionsServiceImpl::new(backend);
+
+        let result = service.list_enriched_sessions().await;
+        assert!(
+            result.is_ok(),
+            "expected successful session listing, got {result:?}"
+        );
+        let sessions = result.unwrap();
+
+        assert_eq!(sessions[0].attention_required, Some(true));
+        assert_eq!(sessions[1].attention_required, Some(false));
     }
 }

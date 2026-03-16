@@ -9,6 +9,7 @@ import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
 import { GitlabLabelChip } from './GitlabLabelChip'
+import { ContextualActionButton } from './ContextualActionButton'
 
 interface GitlabMrDetailProps {
   details: GitlabMrDetails
@@ -16,6 +17,8 @@ interface GitlabMrDetailProps {
   onRefreshPipeline: (sourceBranch: string, sourceProject: string, sourceHostname?: string) => Promise<GitlabPipelinePayload | null>
   sourceProject: string
   sourceHostname?: string
+  onCreateSession?: (prompt: string, agentType?: string, variantId?: string, presetId?: string) => void
+  onCreateSpec?: (prompt: string, name: string) => void
 }
 
 function MrStateBadge({ state }: { state: string }) {
@@ -167,7 +170,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProject, sourceHostname }: GitlabMrDetailProps) {
+export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProject, sourceHostname, onCreateSession, onCreateSpec }: GitlabMrDetailProps) {
   const { t } = useTranslation()
   const { pushToast } = useToast()
   const userNotes = details.notes.filter(n => n.body && n.body.trim().length > 0)
@@ -302,6 +305,22 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
           <VscLinkExternal className="w-3 h-3" />
           <span>{t.gitlabMrTab.openInGitlab}</span>
         </button>
+
+        <ContextualActionButton
+          context="mr"
+          variables={{
+            'mr.title': details.title ?? '',
+            'mr.description': details.description ?? '',
+            'mr.author': details.sourceLabel ?? '',
+            'mr.sourceBranch': details.sourceBranch ?? '',
+            'mr.targetBranch': details.targetBranch ?? '',
+            'mr.url': details.url ?? '',
+            'mr.labels': (details.labels ?? []).join(', '),
+            'mr.diff': '',
+          }}
+          onCreateSession={onCreateSession}
+          onCreateSpec={onCreateSpec}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">

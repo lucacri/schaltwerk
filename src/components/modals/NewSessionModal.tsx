@@ -32,6 +32,9 @@ import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationCon
 import { FALLBACK_CODEX_MODELS, getCodexModelMetadata } from '../../common/codexModels'
 import { loadCodexModelCatalog, CodexModelCatalog } from '../../services/codexModelCatalog'
 import { EpicSelect } from '../shared/EpicSelect'
+import { useAgentVariants } from '../../hooks/useAgentVariants'
+import { useAgentPresets } from '../../hooks/useAgentPresets'
+import type { AgentVariant } from '../../types/agentVariant'
 import { useEpics } from '../../hooks/useEpics'
 import {
     MAX_VERSION_COUNT,
@@ -92,6 +95,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const { registerModal, unregisterModal } = useModal()
     const { isAvailable } = useAgentAvailability({ autoLoad: open })
     const { epics, ensureLoaded: ensureEpicsLoaded } = useEpics()
+    const { variants: agentVariantsList } = useAgentVariants()
+    const { presets: agentPresetsList } = useAgentPresets()
     const githubIntegration = useGithubIntegrationContext()
     const [name, setName] = useState(() => generateDockerStyleName())
     const [, setWasEdited] = useState(false)
@@ -118,6 +123,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [agentCliArgs, setAgentCliArgs] = useState<AgentCliArgsState>(createEmptyCliArgsState)
     const [agentPreferences, setAgentPreferences] = useState<Record<AgentType, AgentPreferenceState>>(createEmptyPreferenceState)
     const [agentConfigLoading, setAgentConfigLoading] = useState(false)
+    const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null)
+    const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
     const [ignorePersistedAgentType, setIgnorePersistedAgentType] = useState(false)
     const [promptSource, setPromptSource] = useState<'custom' | 'github_issue' | 'github_pull_request'>('custom')
     const [manualPromptDraft, setManualPromptDraft] = useState(cachedPrompt)
@@ -169,6 +176,37 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const resetMultiAgentSelections = useCallback(() => {
         setMultiAgentMode(false)
         setMultiAgentAllocations({})
+    }, [])
+
+    const handleVariantSelect = useCallback((variant: AgentVariant | null) => {
+        if (!variant) {
+            setSelectedVariantId(null)
+            return
+        }
+        setSelectedVariantId(variant.id)
+        setAgentType(variant.agentType)
+        setIgnorePersistedAgentType(true)
+        if (variant.model || variant.reasoningEffort) {
+            setAgentPreferences(prev => ({
+                ...prev,
+                [variant.agentType]: {
+                    model: variant.model ?? prev[variant.agentType]?.model ?? '',
+                    reasoningEffort: variant.reasoningEffort ?? prev[variant.agentType]?.reasoningEffort ?? '',
+                },
+            }))
+        }
+        if (variant.cliArgs && variant.cliArgs.length > 0) {
+            setAgentCliArgs(prev => ({
+                ...prev,
+                [variant.agentType]: variant.cliArgs!.join(' '),
+            }))
+        }
+        if (variant.envVars && Object.keys(variant.envVars).length > 0) {
+            setAgentEnvVars(prev => ({
+                ...prev,
+                [variant.agentType]: Object.entries(variant.envVars!).map(([key, value]) => ({ key, value })),
+            }))
+        }
     }, [])
 
     const isBranchError = isBranchValidationError(validationError)
@@ -551,15 +589,27 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         try {
             setCreating(true)
 
-            const useMultiAgentTypes = !createAsDraft && multiAgentMode && normalizedAgentTypes.length > 0
-            const agentTypesPayload = useMultiAgentTypes ? normalizedAgentTypes : undefined
+            const selectedPreset = selectedPresetId
+                ? agentPresetsList.find(p => p.id === selectedPresetId)
+                : null
+            const presetAgentTypes = selectedPreset
+                ? selectedPreset.slots.map(s => s.agentType as AgentType)
+                : null
+            const useMultiAgentTypes = !createAsDraft && (multiAgentMode && normalizedAgentTypes.length > 0)
+            const usePreset = !createAsDraft && !!presetAgentTypes && presetAgentTypes.length > 0
+            const effectiveAgentTypes = usePreset
+                ? presetAgentTypes
+                : useMultiAgentTypes
+                    ? normalizedAgentTypes
+                    : null
+            const agentTypesPayload = effectiveAgentTypes ?? undefined
             const effectiveVersionCount = createAsDraft
                 ? 1
-                : useMultiAgentTypes
-                    ? normalizedAgentTypes.length
+                : effectiveAgentTypes
+                    ? effectiveAgentTypes.length
                     : versionCount
-            const primaryAgentType = useMultiAgentTypes
-                ? (normalizedAgentTypes[0] ?? agentType)
+            const primaryAgentType = effectiveAgentTypes
+                ? (effectiveAgentTypes[0] ?? agentType)
                 : agentType
 
             const isPrFromSameRepo = promptSource === 'github_pull_request'
@@ -1699,6 +1749,69 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                 agentControlsDisabled={multiAgentMode}
                                 branchError={branchError}
                             />
+                            {agentPresetsList.length > 0 && (
+                                <div className="mt-2">
+                                    <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                        {t.newSessionModal.preset ?? 'Preset'}
+                                    </label>
+                                    <select
+                                        value={selectedPresetId ?? ''}
+                                        onChange={(e) => {
+                                            const id = e.target.value || null
+                                            setSelectedPresetId(id)
+                                            if (id) {
+                                                setSelectedVariantId(null)
+                                                resetMultiAgentSelections()
+                                            }
+                                        }}
+                                        className="w-full rounded px-3 py-2 border text-sm"
+                                        style={{
+                                            backgroundColor: 'var(--color-bg-elevated)',
+                                            color: 'var(--color-text-primary)',
+                                            borderColor: 'var(--color-border-default)',
+                                        }}
+                                    >
+                                        <option value="">{t.newSessionModal.noPreset ?? 'No preset'}</option>
+                                        {agentPresetsList.map(p => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.name} ({p.slots.length} agents)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            {agentVariantsList.length > 0 && !selectedPresetId && (
+                                <div className="mt-2">
+                                    <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                        {t.newSessionModal.variant ?? 'Variant'}
+                                    </label>
+                                    <select
+                                        value={selectedVariantId ?? ''}
+                                        onChange={(e) => {
+                                            const id = e.target.value
+                                            if (!id) {
+                                                handleVariantSelect(null)
+                                            } else {
+                                                const variant = agentVariantsList.find(v => v.id === id)
+                                                if (variant) handleVariantSelect(variant)
+                                            }
+                                        }}
+                                        className="w-full rounded px-3 py-2 border text-sm"
+                                        style={{
+                                            backgroundColor: 'var(--color-bg-elevated)',
+                                            color: 'var(--color-text-primary)',
+                                            borderColor: 'var(--color-border-default)',
+                                        }}
+                                    >
+                                        <option value="">{t.newSessionModal.noVariant ?? 'No variant (use defaults)'}</option>
+                                        {agentVariantsList.map(v => (
+                                            <option key={v.id} value={v.id}>
+                                                {v.name} ({v.agentType}{v.model ? ` / ${v.model}` : ''})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <AgentDefaultsSection
                                 agentType={agentType}
                                 cliArgs={agentCliArgs[agentType] || ''}

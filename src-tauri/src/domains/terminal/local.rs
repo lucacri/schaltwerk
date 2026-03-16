@@ -1274,11 +1274,12 @@ fn session_id_from_terminal_id(id: &str) -> Option<String> {
 }
 
 fn clear_attention_for_top_terminal(session_id: Option<&str>, terminal_id: &str) {
-    if session_id.is_none() || !is_session_top_terminal_id(terminal_id) {
+    let Some(session_id) = session_id else { return };
+    if !is_session_top_terminal_id(terminal_id) {
         return;
     }
 
-    let session_id = session_id.unwrap().to_string();
+    let session_id = session_id.to_string();
     handle_terminal_attention(session_id.clone(), false);
     update_session_attention_state(session_id, false);
 }
