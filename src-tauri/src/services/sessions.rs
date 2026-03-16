@@ -196,6 +196,7 @@ mod tests {
                 session_state: SessionState::Running,
                 pr_number: None,
                 pr_url: None,
+                is_consolidation: false,
             },
             status: None,
             terminals: vec![],

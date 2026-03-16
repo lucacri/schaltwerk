@@ -556,6 +556,22 @@ export const SessionCard = memo<SessionCardProps>(
                   {agentLabel}
                 </span>
               )}
+              {s.is_consolidation && (
+                <span
+                  className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border"
+                  style={{
+                    ...sessionText.badge,
+                    backgroundColor: 'var(--color-accent-purple-bg)',
+                    color: 'var(--color-accent-purple-light)',
+                    borderColor: 'var(--color-accent-purple-border)',
+                  }}
+                >
+                  <svg className="w-2.5 h-2.5" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M5 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm6.5 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 16a2 2 0 1 1 0-4 2 2 0 0 1 0 4zM3 5v3.5a.5.5 0 0 0 .5.5H8v3h0V9h4.5a.5.5 0 0 0 .5-.5V5h-1v3H8.5V5h-1v3H4V5H3z" />
+                  </svg>
+                  MERGE
+                </span>
+              )}
               <span style={{ color: "var(--color-accent-green-light)" }}>+{additions}</span>
               <span style={{ color: "var(--color-accent-red-light)" }}>-{deletions}</span>
               <span className="truncate max-w-[120px]" title={s.branch}>

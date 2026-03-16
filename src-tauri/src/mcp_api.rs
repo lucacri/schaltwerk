@@ -1276,6 +1276,7 @@ async fn create_session(
         agent_type: agent_type.as_deref(),
         skip_permissions,
         pr_number: None,
+        is_consolidation: false,
     };
 
     match manager.create_session_with_agent(params) {

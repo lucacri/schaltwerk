@@ -85,6 +85,7 @@ interface Props {
         prNumber?: number
         prUrl?: string
         epicId?: string | null
+        isConsolidation?: boolean
     }) => void | Promise<void>
 }
 
@@ -115,6 +116,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [showVersionMenu, setShowVersionMenu] = useState<boolean>(false)
     const [nameLocked, setNameLocked] = useState(false)
     const [epicId, setEpicId] = useState<string | null>(null)
+    const [isConsolidation, setIsConsolidation] = useState(false)
     const [repositoryIsEmpty, setRepositoryIsEmpty] = useState(false)
     const [isPrefillPending, setIsPrefillPending] = useState(false)
     const [hasPrefillData, setHasPrefillData] = useState(false)
@@ -643,6 +645,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 skipPermissions: createAsDraft ? skipPermissions : undefined,
                 epicId,
                 ...prInfo,
+                ...(isConsolidation ? { isConsolidation: true } : {}),
             }
             if (agentTypesPayload) {
                 createData.agentTypes = agentTypesPayload
@@ -932,6 +935,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 setNameLocked(false)
                 setOriginalSpecName('')
                 setEpicId(null)
+                setIsConsolidation(false)
                 setShowVersionMenu(false)
                 setVersionCount(1)
                 const shouldIgnorePersisted = hasAgentOverrideRef.current
@@ -1027,6 +1031,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setSkipPermissions(false)
             setVersionCount(1)
             setShowVersionMenu(false)
+            setIsConsolidation(false)
             logger.info(`[NewSessionModal] Reapplying last agent type on close path ${JSON.stringify({
                 lastAgentType: lastAgentTypeRef.current,
                 hasOverride: hasAgentOverrideRef.current
@@ -1098,6 +1103,9 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                  logger.info('[NewSessionModal] Running from existing spec - forcing createAsDraft to false')
                  setCreateAsDraft(false)
              }
+            if (detail.isConsolidation) {
+                setIsConsolidation(true)
+            }
 
             setIsPrefillPending(false)
             setHasPrefillData(true)

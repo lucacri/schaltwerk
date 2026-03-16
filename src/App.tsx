@@ -85,6 +85,7 @@ import {
   StartAgentFromSpecDetail,
   AgentLifecycleDetail,
   type PermissionErrorDetail,
+  type ConsolidateVersionGroupDetail,
 } from './common/uiEvents'
 import { clearTerminalStartState } from './common/terminalStartState'
 import { logger } from './utils/logger'
@@ -1472,7 +1473,50 @@ function AppContent() {
     })
     return cleanup
   }, [shouldBlockSessionModal])
-  
+
+  useEffect(() => {
+    return listenUiEvent(UiEvent.ConsolidateVersionGroup, (detail: ConsolidateVersionGroupDetail) => {
+      const { baseName, baseBranch, sessions } = detail
+
+      const sessionList = sessions.map(s => {
+        const stats = s.diffStats
+        const statsStr = stats
+          ? `Files changed: ${stats.files_changed}, +${stats.additions} -${stats.deletions}`
+          : 'No diff stats available'
+        return `- ${s.name} (branch: ${s.branch}, worktree: ${s.worktreePath})\n  ${statsStr}`
+      }).join('\n')
+
+      const prompt = `You are consolidating the results of multiple parallel agent sessions.
+
+Review each branch's changes, compare approaches, and produce a single
+reconciled version that takes the best from each:
+
+Sessions to review:
+${sessionList}
+
+Instructions:
+1. Read the code in each worktree path listed above
+2. Compare the approaches taken by each agent
+3. Choose the best base implementation
+4. Incorporate any valuable improvements from the other versions
+5. Produce a clean, unified result in this worktree
+6. Run \`just test\` to verify everything passes`
+
+      emitUiEvent(UiEvent.NewSessionPrefillPending)
+      setNewSessionOpen(true)
+
+      requestAnimationFrame(() => {
+        emitUiEvent(UiEvent.NewSessionPrefill, {
+          name: `${baseName}-consolidation`,
+          taskContent: prompt,
+          baseBranch,
+          lockName: false,
+          isConsolidation: true,
+        })
+      })
+    })
+  }, [])
+
   
 
   // Open NewSessionModal for new agent when requested
@@ -1607,6 +1651,7 @@ function AppContent() {
     prNumber?: number
     prUrl?: string
     epicId?: string | null
+    isConsolidation?: boolean
   }) => {
     try {
       await preserveSelection(async () => {
@@ -1689,6 +1734,7 @@ function AppContent() {
               agentType: agentTypeForVersion,
               skipPermissions: versionSkipPermissions,
               prNumber: data.prNumber || null,
+              isConsolidation: data.isConsolidation || null,
             })
 
             const actualSessionName = createdSession?.name ?? versionName

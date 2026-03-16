@@ -1946,6 +1946,26 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                                         isSessionBusy={isSessionMutating}
                                         onRename={handleRenameSession}
                                         onLinkPr={(sessionId, prNumber, prUrl) => { void handleLinkPr(sessionId, prNumber, prUrl) }}
+                                        onConsolidate={(group) => {
+                                            const firstSession = group.versions[0]?.session?.info
+                                            if (!firstSession) return
+                                            emitUiEvent(UiEvent.ConsolidateVersionGroup, {
+                                                baseName: group.baseName,
+                                                baseBranch: firstSession.base_branch,
+                                                versionGroupId: firstSession.version_group_id ?? '',
+                                                sessions: group.versions.map(v => ({
+                                                    name: v.session.info.session_id,
+                                                    branch: v.session.info.branch,
+                                                    worktreePath: v.session.info.worktree_path,
+                                                    agentType: v.session.info.original_agent_type ?? undefined,
+                                                    diffStats: v.session.info.diff_stats ? {
+                                                        files_changed: v.session.info.diff_stats.files_changed,
+                                                        additions: v.session.info.diff_stats.additions,
+                                                        deletions: v.session.info.diff_stats.deletions,
+                                                    } : undefined,
+                                                })),
+                                            })
+                                        }}
                                     />
                                 )
                             }

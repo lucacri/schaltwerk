@@ -143,6 +143,7 @@ pub struct SessionCreationParams<'a> {
     /// When set, fetch the PR's changes and create the session from those changes.
     /// This is used for fork PRs where the branch doesn't exist locally.
     pub pr_number: Option<i64>,
+    pub is_consolidation: bool,
 }
 
 pub struct AgentLaunchParams<'a> {
@@ -272,6 +273,7 @@ mod service_unified_tests {
             amp_thread_id: None,
             pr_number: None,
             pr_url: None,
+            is_consolidation: false,
         }
     }
 
@@ -1502,6 +1504,7 @@ mod service_unified_tests {
             agent_type: Some("claude"),
             skip_permissions: Some(true),
             pr_number: None,
+            is_consolidation: false,
         };
 
         let session = manager
@@ -1578,6 +1581,7 @@ mod service_unified_tests {
             agent_type: Some("opencode"),
             skip_permissions: Some(false),
             pr_number: None,
+            is_consolidation: false,
         };
 
         let session = manager
@@ -1640,6 +1644,7 @@ mod service_unified_tests {
             agent_type: None,
             skip_permissions: None,
             pr_number: None,
+            is_consolidation: false,
         };
 
         let session = manager
@@ -1706,6 +1711,7 @@ mod service_unified_tests {
             agent_type: None,
             skip_permissions: None,
             pr_number: None,
+            is_consolidation: false,
         };
 
         let session = manager
@@ -1761,6 +1767,7 @@ mod service_unified_tests {
             agent_type: Some("gemini"),
             skip_permissions: Some(true),
             pr_number: None,
+            is_consolidation: false,
         };
 
         let session = manager
@@ -2211,6 +2218,7 @@ impl SessionManager {
             agent_type: None,
             skip_permissions: None,
             pr_number: None,
+            is_consolidation: false,
         };
         self.create_session_with_agent(params)
     }
@@ -2394,6 +2402,7 @@ impl SessionManager {
             amp_thread_id: None,
             pr_number: None,
             pr_url: None,
+            is_consolidation: params.is_consolidation,
         };
 
         let finalizer = SessionFinalizer::new(&self.db_manager, &self.cache_manager);
@@ -2754,6 +2763,7 @@ impl SessionManager {
                 session_state: SessionState::Spec,
                 pr_number: None,
                 pr_url: None,
+                is_consolidation: false,
             };
 
             enriched.push(EnrichedSession {
@@ -2819,6 +2829,7 @@ impl SessionManager {
                     session_state: session.session_state.clone(),
                     pr_number: session.pr_number,
                     pr_url: session.pr_url.clone(),
+                    is_consolidation: session.is_consolidation,
                 };
 
                 enriched.push(EnrichedSession {
@@ -2979,6 +2990,7 @@ impl SessionManager {
                 session_state,
                 pr_number: session.pr_number,
                 pr_url: session.pr_url.clone(),
+                is_consolidation: session.is_consolidation,
             };
 
             let terminals = vec![
@@ -4004,6 +4016,7 @@ impl SessionManager {
             pr_number: None,
             pr_url: None,
             amp_thread_id: None,
+            is_consolidation: false,
         }
     }
 

@@ -109,6 +109,7 @@ pub struct Session {
     pub pr_number: Option<i64>,
     // GitHub PR URL linked to this session
     pub pr_url: Option<String>,
+    pub is_consolidation: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -304,6 +305,8 @@ pub struct SessionInfo {
     pub pr_number: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pr_url: Option<String>,
+    #[serde(default)]
+    pub is_consolidation: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
