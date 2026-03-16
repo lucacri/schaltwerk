@@ -52,6 +52,7 @@ import {
   initializeSessionsSettingsActionAtom,
   refreshSessionsActionAtom,
   expectSessionActionAtom,
+  crossProjectCountsAtom,
 } from './store/atoms/sessions'
 import {
   leftPanelCollapsedAtom,
@@ -160,6 +161,7 @@ function AppContent() {
   const [devErrorToastsEnabled, setDevErrorToastsEnabled] = useState(false)
   const [attentionCounts, setAttentionCounts] = useState<Record<string, number>>({})
   const [runningCounts, setRunningCounts] = useState<Record<string, number>>({})
+  const crossProjectCounts = useAtomValue(crossProjectCountsAtom)
   const [showCliMissingModal, setShowCliMissingModal] = useState(false)
   const [cliModalEverShown, setCliModalEverShown] = useState(false)
   const store = useStore()
@@ -1999,11 +2001,21 @@ Instructions:
     void switchProject('prev')
   }, [switchProject])
 
-  const tabsWithAttention = useMemo(() => projectTabs.map(tab => ({
-    ...tab,
-    attentionCount: attentionCounts[tab.projectPath] ?? 0,
-    runningCount: runningCounts[tab.projectPath] ?? 0,
-  })), [projectTabs, attentionCounts, runningCounts])
+  const tabsWithAttention = useMemo(() => projectTabs.map(tab => {
+    if (tab.projectPath === projectPath) {
+      return {
+        ...tab,
+        attentionCount: attentionCounts[tab.projectPath] ?? 0,
+        runningCount: runningCounts[tab.projectPath] ?? 0,
+      }
+    }
+    const cross = crossProjectCounts[tab.projectPath]
+    return {
+      ...tab,
+      attentionCount: cross?.attention ?? attentionCounts[tab.projectPath] ?? 0,
+      runningCount: cross?.running ?? runningCounts[tab.projectPath] ?? 0,
+    }
+  }), [projectTabs, projectPath, attentionCounts, runningCounts, crossProjectCounts])
 
   const [windowWidth, setWindowWidth] = useState<number>(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1440,

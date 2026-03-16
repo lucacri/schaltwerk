@@ -111,6 +111,7 @@ import {
     __resetSessionsTestingState,
     cleanupProjectSessionsCacheActionAtom,
     expectSessionActionAtom,
+    crossProjectCountsAtom,
 } from './sessions'
 import { projectPathAtom } from './project'
 import { listenEvent as listenEventMock } from '../../common/eventSystem'
@@ -1414,5 +1415,214 @@ describe('sessions atoms', () => {
         await vi.waitFor(() => {
             expect(startSessionTop).toHaveBeenCalledWith(expect.objectContaining({ sessionName: 'reviewed-session' }))
         })
+    })
+
+    it('crossProjectCountsAtom starts empty', () => {
+        expect(store.get(crossProjectCountsAtom)).toEqual({})
+    })
+
+    it('updates crossProjectCountsAtom when TerminalAttention fires for a non-active project session', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                const activeProject = store.get(projectPathAtom)
+                if (activeProject === '/projects/alpha') {
+                    return [createSession({ session_id: 'alpha-session', worktree_path: '/tmp/alpha' })]
+                }
+                if (activeProject === '/projects/beta') {
+                    return [createSession({ session_id: 'beta-session', worktree_path: '/tmp/beta' })]
+                }
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'alpha-session',
+            terminal_id: stableSessionTerminalId('alpha-session', 'top'),
+            needs_attention: true,
+        })
+
+        const counts = store.get(crossProjectCountsAtom)
+        expect(counts['/projects/alpha']).toEqual({ attention: 1, running: 0 })
+    })
+
+    it('tracks running count for non-active project sessions', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                const activeProject = store.get(projectPathAtom)
+                if (activeProject === '/projects/alpha') {
+                    return [
+                        createSession({ session_id: 'alpha-s1', worktree_path: '/tmp/a1' }),
+                        createSession({ session_id: 'alpha-s2', worktree_path: '/tmp/a2' }),
+                    ]
+                }
+                if (activeProject === '/projects/beta') {
+                    return [createSession({ session_id: 'beta-session', worktree_path: '/tmp/beta' })]
+                }
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'alpha-s1',
+            terminal_id: stableSessionTerminalId('alpha-s1', 'top'),
+            needs_attention: true,
+        })
+
+        const counts = store.get(crossProjectCountsAtom)
+        expect(counts['/projects/alpha']).toEqual({ attention: 1, running: 1 })
+    })
+
+    it('clears cross-project attention when needs_attention becomes false', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                const activeProject = store.get(projectPathAtom)
+                if (activeProject === '/projects/alpha') {
+                    return [createSession({ session_id: 'alpha-session', worktree_path: '/tmp/alpha' })]
+                }
+                if (activeProject === '/projects/beta') {
+                    return [createSession({ session_id: 'beta-session', worktree_path: '/tmp/beta' })]
+                }
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'alpha-session',
+            terminal_id: stableSessionTerminalId('alpha-session', 'top'),
+            needs_attention: true,
+        })
+
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 1, running: 0 })
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'alpha-session',
+            terminal_id: stableSessionTerminalId('alpha-session', 'top'),
+            needs_attention: false,
+        })
+
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 0, running: 1 })
+    })
+
+    it('does not update crossProjectCountsAtom for unknown session IDs', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'unknown-session',
+            terminal_id: stableSessionTerminalId('unknown-session', 'top'),
+            needs_attention: true,
+        })
+
+        expect(store.get(crossProjectCountsAtom)).toEqual({})
+    })
+
+    it('initializes crossProjectCountsAtom from backend attention_required on SessionsRefreshed for non-active project', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                return [createSession({ session_id: 'active-session', worktree_path: '/tmp/active' })]
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(projectPathAtom, '/projects/active')
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:sessions-refreshed']?.({
+            projectPath: '/projects/other',
+            sessions: [
+                createSession({
+                    session_id: 'other-session',
+                    worktree_path: '/tmp/other',
+                    attention_required: true,
+                }),
+            ],
+        })
+
+        const counts = store.get(crossProjectCountsAtom)
+        expect(counts['/projects/other']).toEqual({ attention: 1, running: 0 })
+    })
+
+    it('cleans up cross-project tracking when closing a project', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                const activeProject = store.get(projectPathAtom)
+                if (activeProject === '/projects/alpha') {
+                    return [createSession({ session_id: 'alpha-session', worktree_path: '/tmp/alpha' })]
+                }
+                if (activeProject === '/projects/beta') {
+                    return [createSession({ session_id: 'beta-session', worktree_path: '/tmp/beta' })]
+                }
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'alpha-session',
+            terminal_id: stableSessionTerminalId('alpha-session', 'top'),
+            needs_attention: true,
+        })
+
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 1, running: 0 })
+
+        await store.set(cleanupProjectSessionsCacheActionAtom, '/projects/alpha')
+
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toBeUndefined()
     })
 })

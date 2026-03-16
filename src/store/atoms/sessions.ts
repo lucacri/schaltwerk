@@ -694,6 +694,7 @@ async function applySessionsSnapshot(
     if (projectPath) {
         projectSessionsSnapshotCache.set(projectPath, resolved)
         projectSessionStatesCache.set(projectPath, new Map(stateMap))
+        updateSessionProjectIndex(projectPath, resolved)
     }
 }
 
@@ -704,6 +705,39 @@ function cacheProjectSnapshot(projectPath: string, sessions: EnrichedSession[]) 
     const deduped = dedupeSessions(withSnapshots)
     projectSessionsSnapshotCache.set(projectPath, deduped)
     projectSessionStatesCache.set(projectPath, buildStateMap(deduped))
+    updateSessionProjectIndex(projectPath, deduped)
+}
+
+function updateSessionProjectIndex(projectPath: string, sessions: EnrichedSession[]) {
+    for (const session of sessions) {
+        sessionProjectIndex.set(session.info.session_id, projectPath)
+    }
+}
+
+function updateCrossProjectAttention(projectPath: string, sessionId: string, needsAttention: boolean) {
+    let projectMap = crossProjectAttention.get(projectPath)
+    if (!projectMap) {
+        projectMap = new Map()
+        crossProjectAttention.set(projectPath, projectMap)
+    }
+    projectMap.set(sessionId, needsAttention)
+}
+
+function recomputeCrossProjectCounts(projectPath: string): { attention: number; running: number } {
+    const sessions = projectSessionsSnapshotCache.get(projectPath) ?? []
+    const attentionMap = crossProjectAttention.get(projectPath) ?? new Map()
+
+    let attention = 0
+    let running = 0
+    for (const session of sessions) {
+        const isReviewed = session.info.ready_to_merge === true || session.info.session_state === 'reviewed'
+        const isRunning = session.info.session_state === 'running'
+        const needsAttention = attentionMap.get(session.info.session_id) === true
+
+        if (needsAttention && !isReviewed) attention++
+        if (isRunning && !needsAttention && !isReviewed) running++
+    }
+    return { attention, running }
 }
 
 function parseSessionsRefreshedPayload(payload: unknown): { projectPath: string | null; sessions: EnrichedSession[] } {
@@ -734,6 +768,7 @@ function syncSnapshotsFromAtom(get: Getter) {
         )
         projectSessionsSnapshotCache.set(projectPath, stripped)
         projectSessionStatesCache.set(projectPath, new Map(stateMap))
+        updateSessionProjectIndex(projectPath, current)
     }
 }
 
@@ -786,6 +821,7 @@ function deriveMergeStatusFromSession(session: EnrichedSession): MergeStatus | u
 }
 
 export const allSessionsAtom = atom<EnrichedSession[]>([])
+export const crossProjectCountsAtom = atom<Record<string, { attention: number; running: number }>>({})
 const filterModeStateAtom = atom<FilterMode>(getDefaultFilterMode())
 const searchQueryStateAtom = atom<string>('')
 const isSearchVisibleStateAtom = atom<boolean>(false)
@@ -817,6 +853,8 @@ const protectedReleaseUntil = new Map<string, number>()
 type ExpectedSession = { expiresAt: number; session?: EnrichedSession }
 type ProjectKey = string | null
 const expectedSessionsByProject = new Map<ProjectKey, Map<string, ExpectedSession>>()
+const sessionProjectIndex = new Map<string, string>()
+const crossProjectAttention = new Map<string, Map<string, boolean>>()
 
 function getExpectedSessionsForProject(projectPath: ProjectKey, create = false): Map<string, ExpectedSession> | undefined {
     let bucket = expectedSessionsByProject.get(projectPath)
@@ -1072,10 +1110,20 @@ export const cleanupProjectSessionsCacheActionAtom = atom(
         projectSessionsSnapshotCache.delete(projectPath)
         projectSessionStatesCache.delete(projectPath)
         expectedSessionsByProject.delete(projectPath)
+        crossProjectAttention.delete(projectPath)
+        for (const [sessionId, path] of sessionProjectIndex.entries()) {
+            if (path === projectPath) {
+                sessionProjectIndex.delete(sessionId)
+            }
+        }
+        set(crossProjectCountsAtom, (prev) => {
+            if (!(projectPath in prev)) return prev
+            const { [projectPath]: _, ...rest } = prev
+            return rest
+        })
         if (!snapshot || snapshot.length === 0) {
             return
         }
-        // We want to cleanup even if it matches active project path (e.g. closing project)
         await releaseRemovedSessions(get, set, snapshot, [])
     },
 )
@@ -1256,6 +1304,23 @@ export const initializeSessionsEventsActionAtom = atom(
 
             if (normalized.projectPath && normalized.projectPath !== activeProject) {
                 cacheProjectSnapshot(normalized.projectPath, normalized.sessions)
+                for (const session of normalized.sessions) {
+                    if (session.info.attention_required != null) {
+                        updateCrossProjectAttention(
+                            normalized.projectPath,
+                            session.info.session_id,
+                            session.info.attention_required === true,
+                        )
+                    }
+                }
+                const counts = recomputeCrossProjectCounts(normalized.projectPath)
+                set(crossProjectCountsAtom, (prev) => {
+                    const existing = prev[normalized.projectPath!]
+                    if (existing?.attention === counts.attention && existing?.running === counts.running) {
+                        return prev
+                    }
+                    return { ...prev, [normalized.projectPath!]: counts }
+                })
                 return
             }
 
@@ -1486,30 +1551,51 @@ export const initializeSessionsEventsActionAtom = atom(
                 logger.debug('[SessionsAtoms] Ignoring attention event from non-top terminal', event)
                 return
             }
-            if (!hasSessionInActiveProject(event.session_id)) {
+
+            const needsAttention = event.needs_attention ?? false
+
+            if (hasSessionInActiveProject(event.session_id)) {
+                const activeProject = get(projectPathAtom)
+                if (activeProject) {
+                    updateCrossProjectAttention(activeProject, event.session_id, needsAttention)
+                }
+                set(allSessionsAtom, (prev) => {
+                    const targetIndex = prev.findIndex(session => session.info.session_id === event.session_id)
+                    if (targetIndex === -1) {
+                        return prev
+                    }
+                    const target = prev[targetIndex]
+                    const nextAttention = needsAttention ? true : undefined
+                    if (target.info.attention_required === nextAttention) {
+                        return prev
+                    }
+                    const updated = [...prev]
+                    updated[targetIndex] = {
+                        ...target,
+                        info: {
+                            ...target.info,
+                            attention_required: nextAttention,
+                        },
+                    }
+                    return updated
+                })
+                syncSnapshotsFromAtom(get)
                 return
             }
-            set(allSessionsAtom, (prev) => {
-                const targetIndex = prev.findIndex(session => session.info.session_id === event.session_id)
-                if (targetIndex === -1) {
+
+            const ownerProject = sessionProjectIndex.get(event.session_id)
+            if (!ownerProject) return
+
+            updateCrossProjectAttention(ownerProject, event.session_id, needsAttention)
+
+            const counts = recomputeCrossProjectCounts(ownerProject)
+            set(crossProjectCountsAtom, (prev) => {
+                const existing = prev[ownerProject]
+                if (existing?.attention === counts.attention && existing?.running === counts.running) {
                     return prev
                 }
-                const target = prev[targetIndex]
-                const nextAttention = event.needs_attention ? true : undefined
-                if (target.info.attention_required === nextAttention) {
-                    return prev
-                }
-                const updated = [...prev]
-                updated[targetIndex] = {
-                    ...target,
-                    info: {
-                        ...target.info,
-                        attention_required: nextAttention,
-                    },
-                }
-                return updated
+                return { ...prev, [ownerProject]: counts }
             })
-            syncSnapshotsFromAtom(get)
         })
 
         await register(SchaltEvent.SessionGitStats, (payload) => {
@@ -1769,6 +1855,8 @@ export function __resetSessionsTestingState() {
     backgroundAgentStartQueued.clear()
     backgroundAgentStartInFlight = 0
     backgroundAgentStartDrainScheduled = false
+    sessionProjectIndex.clear()
+    crossProjectAttention.clear()
 }
 
 export const openMergeDialogActionAtom = atom(
