@@ -87,8 +87,11 @@ import {
   AgentLifecycleDetail,
   type PermissionErrorDetail,
   type ConsolidateVersionGroupDetail,
+  type ContextualActionCreateSessionDetail,
+  type ContextualActionCreateSpecDetail,
 } from './common/uiEvents'
 import { clearTerminalStartState } from './common/terminalStartState'
+import { sanitizeName } from './utils/sanitizeName'
 import { logger } from './utils/logger'
 import { installSmartDashGuards } from './utils/normalizeCliText'
 import { useKeyboardShortcutsConfig } from './contexts/KeyboardShortcutsContext'
@@ -1846,6 +1849,33 @@ Instructions:
     }
   }
 
+  useEffect(() => {
+    const sessionCleanup = listenUiEvent(UiEvent.ContextualActionCreateSession, (detail: ContextualActionCreateSessionDetail) => {
+      logger.info('[App] Contextual action create session:', detail)
+      const name = sanitizeName(detail.actionName) || 'contextual-action'
+      void handleCreateSession({
+        name,
+        prompt: detail.prompt,
+        baseBranch: '',
+        agentType: detail.agentType,
+      })
+    })
+    const specCleanup = listenUiEvent(UiEvent.ContextualActionCreateSpec, (detail: ContextualActionCreateSpecDetail) => {
+      logger.info('[App] Contextual action create spec:', detail)
+      const name = sanitizeName(detail.name) || 'contextual-action'
+      void handleCreateSession({
+        name,
+        prompt: detail.prompt,
+        baseBranch: '',
+        isSpec: true,
+        draftContent: detail.prompt,
+      })
+    })
+    return () => {
+      sessionCleanup()
+      specCleanup()
+    }
+  }, [handleCreateSession])
 
   const handleGoHome = useCallback(() => {
     setShowHome(true)

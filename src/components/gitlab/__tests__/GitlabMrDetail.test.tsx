@@ -1,7 +1,39 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { vi } from 'vitest'
+
+const emitUiEventMock = vi.fn()
+
+vi.mock('../../../common/uiEvents', async () => {
+  const actual = await vi.importActual<typeof import('../../../common/uiEvents')>('../../../common/uiEvents')
+  return {
+    ...actual,
+    emitUiEvent: (...args: unknown[]) => emitUiEventMock(...args),
+  }
+})
+
+vi.mock('../../../hooks/useContextualActions', () => ({
+  useContextualActions: () => ({
+    actions: [
+      {
+        id: 'test-review',
+        name: 'Test Review',
+        context: 'mr',
+        promptTemplate: 'Review: {{mr.title}}',
+        mode: 'session',
+        isBuiltIn: true,
+      },
+    ],
+    loading: false,
+    error: null,
+    saveActions: vi.fn(),
+    resetToDefaults: vi.fn(),
+    reloadActions: vi.fn(),
+  }),
+}))
+
 import { renderWithProviders } from '../../../tests/test-utils'
 import { GitlabMrDetail } from '../GitlabMrDetail'
+import { UiEvent } from '../../../common/uiEvents'
 import type { GitlabMrDetails } from '../../../types/gitlabTypes'
 
 const invokeMock = vi.fn()
@@ -31,6 +63,7 @@ describe('GitlabMrDetail', () => {
   beforeEach(() => {
     invokeMock.mockReset()
     invokeMock.mockResolvedValue(undefined)
+    emitUiEventMock.mockReset()
   })
 
   it('opens URL via Tauri command when clicking Open in GitLab', () => {
@@ -73,5 +106,27 @@ describe('GitlabMrDetail', () => {
     expect(invokeMock).toHaveBeenCalledWith('open_external_url', {
       url: 'https://gitlab.example.com/group/project/-/pipelines/123',
     })
+  })
+
+  it('emits ContextualActionCreateSession event when a session-mode action is triggered', () => {
+    renderWithProviders(
+      <GitlabMrDetail
+        details={mockDetails}
+        onBack={vi.fn()}
+        onRefreshPipeline={vi.fn()}
+        sourceProject="group/project"
+      />
+    )
+
+    fireEvent.click(screen.getByText('Actions'))
+    fireEvent.click(screen.getByText('Test Review'))
+
+    expect(emitUiEventMock).toHaveBeenCalledWith(
+      UiEvent.ContextualActionCreateSession,
+      expect.objectContaining({
+        prompt: 'Review: Test MR',
+        actionName: 'Test Review',
+      }),
+    )
   })
 })

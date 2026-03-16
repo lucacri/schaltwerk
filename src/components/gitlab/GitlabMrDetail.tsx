@@ -17,8 +17,6 @@ interface GitlabMrDetailProps {
   onRefreshPipeline: (sourceBranch: string, sourceProject: string, sourceHostname?: string) => Promise<GitlabPipelinePayload | null>
   sourceProject: string
   sourceHostname?: string
-  onCreateSession?: (prompt: string, agentType?: string, variantId?: string, presetId?: string) => void
-  onCreateSpec?: (prompt: string, name: string) => void
 }
 
 function MrStateBadge({ state }: { state: string }) {
@@ -170,7 +168,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProject, sourceHostname, onCreateSession, onCreateSpec }: GitlabMrDetailProps) {
+export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProject, sourceHostname }: GitlabMrDetailProps) {
   const { t } = useTranslation()
   const { pushToast } = useToast()
   const userNotes = details.notes.filter(n => n.body && n.body.trim().length > 0)
@@ -318,8 +316,6 @@ export function GitlabMrDetail({ details, onBack, onRefreshPipeline, sourceProje
             'mr.labels': (details.labels ?? []).join(', '),
             'mr.diff': '',
           }}
-          onCreateSession={onCreateSession}
-          onCreateSpec={onCreateSpec}
         />
       </div>
 

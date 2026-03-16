@@ -53,6 +53,8 @@ export enum UiEvent {
   AgentBinariesUpdated = 'schaltwerk:agent-binaries-updated',
   CloseRequested = 'schaltwerk:close-requested',
   ConsolidateVersionGroup = 'schaltwerk:consolidate-version-group',
+  ContextualActionCreateSession = 'schaltwerk:contextual-action-create-session',
+  ContextualActionCreateSpec = 'schaltwerk:contextual-action-create-spec',
 }
 
 export interface PermissionErrorDetail {
@@ -219,6 +221,19 @@ export interface ConsolidateVersionGroupDetail {
   }>
 }
 
+export interface ContextualActionCreateSessionDetail {
+  prompt: string
+  actionName: string
+  agentType?: string
+  variantId?: string
+  presetId?: string
+}
+
+export interface ContextualActionCreateSpecDetail {
+  prompt: string
+  name: string
+}
+
 export type UiEventPayloads = {
   [UiEvent.PermissionError]: PermissionErrorDetail
   [UiEvent.BackgroundStartMarked]: { terminalId: string }
@@ -270,6 +285,8 @@ export type UiEventPayloads = {
   [UiEvent.AgentBinariesUpdated]: undefined
   [UiEvent.CloseRequested]: undefined
   [UiEvent.ConsolidateVersionGroup]: ConsolidateVersionGroupDetail
+  [UiEvent.ContextualActionCreateSession]: ContextualActionCreateSessionDetail
+  [UiEvent.ContextualActionCreateSpec]: ContextualActionCreateSpecDetail
 }
 
 type UiEventArgs<T extends UiEvent> = undefined extends UiEventPayloads[T]
