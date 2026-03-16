@@ -1268,6 +1268,10 @@ export interface Translations {
     gitlabIssuesTitle: string
     gitlabMrs: string
     gitlabMrsTitle: string
+    githubIssues: string
+    githubIssuesTitle: string
+    githubPrs: string
+    githubPrsTitle: string
   }
   gitlabIssueTab: {
     searchPlaceholder: string
@@ -1331,6 +1335,40 @@ export interface Translations {
     merging: string
     approving: string
     commenting: string
+  }
+  githubIssueTab: {
+    searchPlaceholder: string
+    loading: string
+    noIssuesFound: string
+    adjustSearch: string
+    back: string
+    openInGithub: string
+    opened: string
+    closed: string
+    updated: string
+    description: string
+    comments: string
+    noComments: string
+  }
+  githubPrTab: {
+    searchPlaceholder: string
+    loading: string
+    noPrsFound: string
+    adjustSearch: string
+    back: string
+    openInGithub: string
+    opened: string
+    closed: string
+    merged: string
+    updated: string
+    description: string
+    comments: string
+    noComments: string
+    reviews: string
+    noReviews: string
+    statusChecks: string
+    reviewDecision: string
+    headBranch: string
   }
   historySearch: {
     placeholder: string

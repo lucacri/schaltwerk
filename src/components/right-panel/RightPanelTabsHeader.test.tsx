@@ -15,6 +15,8 @@ const renderHeader = (overrides: Partial<Parameters<typeof RightPanelTabsHeader>
     showPreviewTab: false,
     showGitlabIssuesTab: false,
     showGitlabMrsTab: false,
+    showGithubIssuesTab: false,
+    showGithubPrsTab: false,
     onSelectTab: vi.fn(),
     ...overrides
   }

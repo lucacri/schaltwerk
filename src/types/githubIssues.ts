@@ -24,6 +24,7 @@ export interface GithubIssueDetails {
   title: string
   url: string
   body: string
+  state: string
   labels: GithubIssueLabel[]
   comments: GithubIssueComment[]
 }
@@ -55,6 +56,7 @@ export interface GithubPrDetails {
   title: string
   url: string
   body: string
+  state: string
   labels: GithubIssueLabel[]
   comments: GithubIssueComment[]
   headRefName: string

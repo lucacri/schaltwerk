@@ -24,7 +24,10 @@ import { detectPlatformSafe, isShortcutForAction } from '../../keyboardShortcuts
 import { RightPanelTabsHeader } from './RightPanelTabsHeader'
 import { GitlabIssuesTab } from './GitlabIssuesTab'
 import { GitlabMrsTab } from './GitlabMrsTab'
+import { GithubIssuesTab } from './GithubIssuesTab'
+import { GithubPrsTab } from './GithubPrsTab'
 import { useGitlabIntegrationContext } from '../../contexts/GitlabIntegrationContext'
+import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationContext'
 import { useForgeType } from '../../hooks/useForgeType'
 import { useAtom, useAtomValue } from 'jotai'
 import { projectPathAtom } from '../../store/atoms/project'
@@ -50,6 +53,7 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const { allSessions } = useSessions()
   const [rightPanelTab, setRightPanelTab] = useAtom(rightPanelTabAtom)
   const gitlabIntegration = useGitlabIntegrationContext()
+  const githubIntegration = useGithubIntegrationContext()
   const forge = useForgeType()
   const [localFocus, setLocalFocus] = useState<boolean>(false)
   const [showSpecPicker, setShowSpecPicker] = useState(false)
@@ -400,7 +404,9 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const showPreviewTab = isCommander || isRunningSession
   const showGitlabIssuesTab = forge === 'gitlab' && (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.issuesEnabled)
   const showGitlabMrsTab = forge === 'gitlab' && (isCommander || isRunningSession) && gitlabIntegration.sources.some(s => s.mrsEnabled)
-  const tabsPresent = showChangesTab || showInfoTab || showSpecTab || showHistoryTab || showSpecsTab || showPreviewTab || showGitlabIssuesTab || showGitlabMrsTab
+  const showGithubIssuesTab = forge === 'github' && (isCommander || isRunningSession) && githubIntegration.hasRepository
+  const showGithubPrsTab = forge === 'github' && (isCommander || isRunningSession) && githubIntegration.hasRepository
+  const tabsPresent = showChangesTab || showInfoTab || showSpecTab || showHistoryTab || showSpecsTab || showPreviewTab || showGitlabIssuesTab || showGitlabMrsTab || showGithubIssuesTab || showGithubPrsTab
 
   useEffect(() => {
     if (!gitlabIntegration.sourcesLoaded) return
@@ -408,6 +414,13 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
       void setRightPanelTab('changes')
     }
   }, [activeTab, showGitlabIssuesTab, showGitlabMrsTab, setRightPanelTab, gitlabIntegration.sourcesLoaded])
+
+  useEffect(() => {
+    if (githubIntegration.loading) return
+    if ((activeTab === 'github-issues' && !showGithubIssuesTab) || (activeTab === 'github-prs' && !showGithubPrsTab)) {
+      void setRightPanelTab('changes')
+    }
+  }, [activeTab, showGithubIssuesTab, showGithubPrsTab, setRightPanelTab, githubIntegration.loading])
 
   // Enable split mode when viewing Changes for normal running sessions
   const useSplitMode = isRunningSession && activeTab === 'changes'
@@ -457,6 +470,8 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
           showPreviewTab={showPreviewTab}
           showGitlabIssuesTab={showGitlabIssuesTab}
           showGitlabMrsTab={showGitlabMrsTab}
+          showGithubIssuesTab={showGithubIssuesTab}
+          showGithubPrsTab={showGithubPrsTab}
           onSelectTab={tab => { void setRightPanelTab(tab) }}
         />
       )}
@@ -527,7 +542,7 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
             </Split>
           )
         ) : (
-          <div className="absolute inset-0" key={activeTab} style={{ display: activeTab === 'gitlab-issues' || activeTab === 'gitlab-mrs' ? 'none' : undefined }}>
+          <div className="absolute inset-0" key={activeTab} style={{ display: activeTab === 'gitlab-issues' || activeTab === 'gitlab-mrs' || activeTab === 'github-issues' || activeTab === 'github-prs' ? 'none' : undefined }}>
             {activeTab === 'preview' ? (
               previewKey ? (
                 <WebPreviewPanel previewKey={previewKey} isResizing={isDragging} />
@@ -619,6 +634,16 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
         {showGitlabMrsTab && (
           <div className="absolute inset-0" style={{ display: activeTab === 'gitlab-mrs' ? 'block' : 'none' }}>
             <GitlabMrsTab />
+          </div>
+        )}
+        {showGithubIssuesTab && (
+          <div className="absolute inset-0" style={{ display: activeTab === 'github-issues' ? 'block' : 'none' }}>
+            <GithubIssuesTab />
+          </div>
+        )}
+        {showGithubPrsTab && (
+          <div className="absolute inset-0" style={{ display: activeTab === 'github-prs' ? 'block' : 'none' }}>
+            <GithubPrsTab />
           </div>
         )}
       </div>
