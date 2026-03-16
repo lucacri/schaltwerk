@@ -306,7 +306,7 @@ describe('sessions atoms', () => {
         expect(releaseSessionTerminals).toHaveBeenCalledWith('alpha-session')
     })
 
-    it('preserves attention state across project switches when backend snapshots omit it', async () => {
+    it('drops stale attention state when backend snapshots omit it', async () => {
         const { invoke } = await import('@tauri-apps/api/core')
 
         vi.mocked(invoke).mockImplementation(async (cmd) => {
@@ -346,7 +346,7 @@ describe('sessions atoms', () => {
         await store.set(refreshSessionsActionAtom)
 
         alphaSession = store.get(allSessionsAtom).find(session => session.info.session_id === 'alpha-session')
-        expect(alphaSession?.info.attention_required).toBe(true)
+        expect(alphaSession?.info.attention_required).toBeUndefined()
     })
 
     it('preserves attention_required when TerminalAttention fires during applySessionsSnapshot', async () => {
