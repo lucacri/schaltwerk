@@ -1,18 +1,13 @@
 import { useState, useCallback } from 'react'
 import { useAgentPresets } from '../../hooks/useAgentPresets'
 import { useAgentVariants } from '../../hooks/useAgentVariants'
-import { AGENT_TYPES, type AgentType } from '../../types/session'
+import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
+import { generateId } from '../../common/generateId'
 import type { AgentPreset, AgentPresetSlot } from '../../types/agentPreset'
-
-const NON_TERMINAL_AGENTS = AGENT_TYPES.filter(a => a !== 'terminal')
-
-function generateId(): string {
-    return `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
 
 function createEmptyPreset(): AgentPreset {
     return {
-        id: generateId(),
+        id: generateId('preset'),
         name: '',
         slots: [{ agentType: 'claude' }],
         isBuiltIn: false,

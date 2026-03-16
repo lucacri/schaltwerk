@@ -12,6 +12,8 @@ export const AGENT_TYPES = [
 ] as const
 export type AgentType = (typeof AGENT_TYPES)[number]
 
+export const NON_TERMINAL_AGENTS = AGENT_TYPES.filter(a => a !== 'terminal')
+
 export const TUI_BASED_AGENTS: readonly AgentType[] = ['kilocode', 'claude', 'opencode'] as const
 
 export function isTuiAgent(agentType: string | null | undefined): boolean {

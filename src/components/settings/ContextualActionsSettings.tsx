@@ -2,19 +2,14 @@ import { useState, useCallback, useMemo } from 'react'
 import { useContextualActions } from '../../hooks/useContextualActions'
 import { useAgentVariants } from '../../hooks/useAgentVariants'
 import { useAgentPresets } from '../../hooks/useAgentPresets'
-import { AGENT_TYPES, type AgentType } from '../../types/session'
+import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
+import { generateId } from '../../common/generateId'
 import type { ContextualAction, ContextualActionContext, ContextualActionMode } from '../../types/contextualAction'
 import { MR_TEMPLATE_VARIABLES, ISSUE_TEMPLATE_VARIABLES } from '../../types/contextualAction'
 
-const NON_TERMINAL_AGENTS = AGENT_TYPES.filter(a => a !== 'terminal')
-
-function generateId(): string {
-    return `action-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
 function createEmptyAction(): ContextualAction {
     return {
-        id: generateId(),
+        id: generateId('action'),
         name: '',
         context: 'both',
         promptTemplate: '',

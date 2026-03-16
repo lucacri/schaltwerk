@@ -1,17 +1,12 @@
 import { useState, useCallback } from 'react'
 import { useAgentVariants } from '../../hooks/useAgentVariants'
-import { AGENT_TYPES, type AgentType } from '../../types/session'
+import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
+import { generateId } from '../../common/generateId'
 import type { AgentVariant } from '../../types/agentVariant'
-
-const NON_TERMINAL_AGENTS = AGENT_TYPES.filter(a => a !== 'terminal')
-
-function generateId(): string {
-    return `variant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
 
 function createEmptyVariant(): AgentVariant {
     return {
-        id: generateId(),
+        id: generateId('variant'),
         name: '',
         agentType: 'claude',
         isBuiltIn: false,

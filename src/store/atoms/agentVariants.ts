@@ -1,51 +1,16 @@
-import { atom } from 'jotai'
-import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../../common/tauriCommands'
 import type { AgentVariant } from '../../types/agentVariant'
-import { logger } from '../../utils/logger'
+import { createSettingsListAtoms } from './createSettingsListAtoms'
 
-const agentVariantsMapAtom = atom<Map<string, AgentVariant>>(new Map())
-
-export const agentVariantsListAtom = atom((get) => {
-    return Array.from(get(agentVariantsMapAtom).values())
+const atoms = createSettingsListAtoms<AgentVariant>({
+    loadCommand: TauriCommands.GetAgentVariants,
+    saveCommand: TauriCommands.SetAgentVariants,
+    saveParamName: 'variants',
+    label: 'agent variants',
 })
 
-export const agentVariantsLoadingAtom = atom(false)
-export const agentVariantsErrorAtom = atom<string | null>(null)
-
-export const loadAgentVariantsAtom = atom(
-    null,
-    async (_get, set) => {
-        try {
-            set(agentVariantsLoadingAtom, true)
-            set(agentVariantsErrorAtom, null)
-            const variants = await invoke<AgentVariant[]>(TauriCommands.GetAgentVariants)
-            const map = new Map(variants.map((v) => [v.id, v]))
-            set(agentVariantsMapAtom, map)
-        } catch (error) {
-            logger.error('Failed to load agent variants:', error)
-            const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to load agent variants'
-            set(agentVariantsErrorAtom, message)
-            set(agentVariantsMapAtom, new Map())
-        } finally {
-            set(agentVariantsLoadingAtom, false)
-        }
-    }
-)
-
-export const saveAgentVariantsAtom = atom(
-    null,
-    async (_get, set, variants: AgentVariant[]) => {
-        try {
-            await invoke(TauriCommands.SetAgentVariants, { variants })
-            const map = new Map(variants.map((v) => [v.id, v]))
-            set(agentVariantsMapAtom, map)
-            return true
-        } catch (error) {
-            logger.error('Failed to save agent variants:', error)
-            const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to save agent variants'
-            set(agentVariantsErrorAtom, message)
-            return false
-        }
-    }
-)
+export const agentVariantsListAtom = atoms.listAtom
+export const agentVariantsLoadingAtom = atoms.loadingAtom
+export const agentVariantsErrorAtom = atoms.errorAtom
+export const loadAgentVariantsAtom = atoms.loadAtom
+export const saveAgentVariantsAtom = atoms.saveAtom

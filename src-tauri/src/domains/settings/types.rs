@@ -334,14 +334,29 @@ pub struct AgentPreset {
     pub is_built_in: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ContextualActionContext {
+    Mr,
+    Issue,
+    Both,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ContextualActionMode {
+    Spec,
+    Session,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextualAction {
     pub id: String,
     pub name: String,
-    pub context: String,
+    pub context: ContextualActionContext,
     pub prompt_template: String,
-    pub mode: String,
+    pub mode: ContextualActionMode,
     #[serde(default)]
     pub agent_type: Option<String>,
     #[serde(default)]
@@ -357,9 +372,9 @@ pub fn default_contextual_actions() -> Vec<ContextualAction> {
         ContextualAction {
             id: "builtin-review-mr".to_string(),
             name: "Review this MR".to_string(),
-            context: "mr".to_string(),
+            context: ContextualActionContext::Mr,
             prompt_template: "Review the following merge request:\n\nTitle: {{mr.title}}\nAuthor: {{mr.author}}\nSource: {{mr.sourceBranch}} -> {{mr.targetBranch}}\n\nDescription:\n{{mr.description}}\n\nDiff:\n{{mr.diff}}".to_string(),
-            mode: "session".to_string(),
+            mode: ContextualActionMode::Session,
             agent_type: Some("claude".to_string()),
             variant_id: None,
             preset_id: None,
@@ -368,9 +383,9 @@ pub fn default_contextual_actions() -> Vec<ContextualAction> {
         ContextualAction {
             id: "builtin-plan-issue".to_string(),
             name: "Plan fix for this issue".to_string(),
-            context: "issue".to_string(),
+            context: ContextualActionContext::Issue,
             prompt_template: "Create an implementation plan for the following issue:\n\nTitle: {{issue.title}}\n\nDescription:\n{{issue.description}}\n\nLabels: {{issue.labels}}".to_string(),
-            mode: "spec".to_string(),
+            mode: ContextualActionMode::Spec,
             agent_type: Some("claude".to_string()),
             variant_id: None,
             preset_id: None,
