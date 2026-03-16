@@ -582,13 +582,6 @@ function attachMergeSnapshot(
     }
 }
 
-function attachRuntimeSnapshot(
-    session: EnrichedSession,
-    _previousSessions: Map<string, EnrichedSession>,
-): EnrichedSession {
-    return session
-}
-
 async function applySessionsSnapshot(
     get: Getter,
     set: Setter,
@@ -608,9 +601,13 @@ async function applySessionsSnapshot(
 
     const projectPath = snapshotProjectPath ?? activeProjectPath
     const previousMap = new Map(previousSessionsSnapshot.map(session => [session.info.session_id, session]))
-    const withSnapshots = sessions.map(session =>
-        attachRuntimeSnapshot(attachMergeSnapshot(session, previousMap), previousMap),
-    )
+    const withSnapshots = sessions.map(session => {
+        const merged = attachMergeSnapshot(session, previousMap)
+        if (merged.attention_required != null && merged.info.attention_required == null) {
+            return { ...merged, info: { ...merged.info, attention_required: merged.attention_required } }
+        }
+        return merged
+    })
     const deduped = dedupeSessions(withSnapshots)
 
     // Re-inject expected sessions that are temporarily missing (e.g. immediately after we create/promote one
@@ -729,12 +726,7 @@ function syncSnapshotsFromAtom(get: Getter) {
 
     const projectPath = get(projectPathAtom)
     if (projectPath) {
-        const stripped = current.map(session =>
-            session.info.attention_required != null
-                ? { ...session, info: { ...session.info, attention_required: undefined } }
-                : session,
-        )
-        projectSessionsSnapshotCache.set(projectPath, stripped)
+        projectSessionsSnapshotCache.set(projectPath, current)
         projectSessionStatesCache.set(projectPath, new Map(stateMap))
     }
 }
@@ -1037,7 +1029,12 @@ export const refreshSessionsActionAtom = atom(
 
         try {
             if (cachedSnapshot && cachedSnapshot.length > 0) {
-                await applySessionsSnapshot(get, set, cachedSnapshot, projectPath, {
+                const stripped = cachedSnapshot.map(s =>
+                    s.info.attention_required != null
+                        ? { ...s, info: { ...s.info, attention_required: undefined } }
+                        : s,
+                )
+                await applySessionsSnapshot(get, set, stripped, projectPath, {
                     reason: 'cache-hydrate',
                     previousStates: cachedStates ? new Map(cachedStates) : new Map(previousSessionStates),
                 })
