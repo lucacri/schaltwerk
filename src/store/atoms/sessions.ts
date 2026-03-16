@@ -1110,10 +1110,20 @@ export const cleanupProjectSessionsCacheActionAtom = atom(
         projectSessionsSnapshotCache.delete(projectPath)
         projectSessionStatesCache.delete(projectPath)
         expectedSessionsByProject.delete(projectPath)
+        crossProjectAttention.delete(projectPath)
+        for (const [sessionId, path] of sessionProjectIndex.entries()) {
+            if (path === projectPath) {
+                sessionProjectIndex.delete(sessionId)
+            }
+        }
+        set(crossProjectCountsAtom, (prev) => {
+            if (!(projectPath in prev)) return prev
+            const { [projectPath]: _, ...rest } = prev
+            return rest
+        })
         if (!snapshot || snapshot.length === 0) {
             return
         }
-        // We want to cleanup even if it matches active project path (e.g. closing project)
         await releaseRemovedSessions(get, set, snapshot, [])
     },
 )
@@ -1294,6 +1304,23 @@ export const initializeSessionsEventsActionAtom = atom(
 
             if (normalized.projectPath && normalized.projectPath !== activeProject) {
                 cacheProjectSnapshot(normalized.projectPath, normalized.sessions)
+                for (const session of normalized.sessions) {
+                    if (session.info.attention_required != null) {
+                        updateCrossProjectAttention(
+                            normalized.projectPath,
+                            session.info.session_id,
+                            session.info.attention_required === true,
+                        )
+                    }
+                }
+                const counts = recomputeCrossProjectCounts(normalized.projectPath)
+                set(crossProjectCountsAtom, (prev) => {
+                    const existing = prev[normalized.projectPath!]
+                    if (existing?.attention === counts.attention && existing?.running === counts.running) {
+                        return prev
+                    }
+                    return { ...prev, [normalized.projectPath!]: counts }
+                })
                 return
             }
 
