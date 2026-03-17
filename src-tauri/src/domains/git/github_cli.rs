@@ -165,6 +165,7 @@ pub struct GitHubPrReviewComment {
 pub enum GitHubCliError {
     NotInstalled,
     NoGitRemote,
+    NotAGitHubRepository,
     CommandFailed {
         program: String,
         args: Vec<String>,
@@ -185,6 +186,9 @@ impl std::fmt::Display for GitHubCliError {
             GitHubCliError::NotInstalled => write!(f, "GitHub CLI (gh) is not installed."),
             GitHubCliError::NoGitRemote => {
                 write!(f, "No Git remotes configured for this repository.")
+            }
+            GitHubCliError::NotAGitHubRepository => {
+                write!(f, "No GitHub remotes configured for this repository.")
             }
             GitHubCliError::CommandFailed {
                 program,
@@ -1523,6 +1527,12 @@ fn map_runner_error(err: io::Error) -> GitHubCliError {
 }
 
 fn command_failure(program: &str, args: &[String], output: CommandOutput) -> GitHubCliError {
+    if is_known_github_host_error(&output.stderr)
+        || is_known_github_host_error(&output.stdout)
+    {
+        return GitHubCliError::NotAGitHubRepository;
+    }
+
     GitHubCliError::CommandFailed {
         program: program.to_string(),
         args: args.to_vec(),
@@ -1538,13 +1548,46 @@ fn ensure_git_remote_exists(project_path: &Path) -> Result<(), GitHubCliError> {
     let remotes = repo
         .remotes()
         .map_err(|err| GitHubCliError::Git(AnyhowError::new(err)))?;
-    let has_remote = remotes.iter().flatten().any(|name| !name.trim().is_empty());
+    let mut saw_remote = false;
 
-    if has_remote {
-        Ok(())
+    for name in remotes.iter().flatten() {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        saw_remote = true;
+        if let Ok(remote) = repo.find_remote(trimmed)
+            && remote_points_to_github(&remote)
+        {
+            return Ok(());
+        }
+    }
+
+    if saw_remote {
+        Err(GitHubCliError::NotAGitHubRepository)
     } else {
         Err(GitHubCliError::NoGitRemote)
     }
+}
+
+fn remote_points_to_github(remote: &git2::Remote) -> bool {
+    remote
+        .url()
+        .map(url_is_github_host)
+        .unwrap_or(false)
+        || remote
+            .pushurl()
+            .map(url_is_github_host)
+            .unwrap_or(false)
+}
+
+fn url_is_github_host(url: &str) -> bool {
+    url.to_ascii_lowercase().contains("github.com")
+}
+
+fn is_known_github_host_error(output: &str) -> bool {
+    let lower = output.to_ascii_lowercase();
+    lower.contains("none of the git remotes") && lower.contains("known github host")
 }
 
 static GH_PROGRAM_CACHE: OnceLock<String> = OnceLock::new();
@@ -3257,5 +3300,81 @@ mod tests {
     fn build_inner_command_quotes_values_with_spaces() {
         let cmd = build_inner_command("gh", &["pr", "create"], &[("MSG", "hello world")]);
         assert!(cmd.contains("MSG='hello world'"));
+    }
+
+    #[test]
+    fn ensure_git_remote_exists_returns_error_for_non_github_remote() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path()).unwrap();
+        repo.remote("origin", "https://gitlab.com/user/repo.git")
+            .unwrap();
+
+        let err = ensure_git_remote_exists(temp.path()).unwrap_err();
+        assert!(matches!(err, GitHubCliError::NotAGitHubRepository));
+    }
+
+    #[test]
+    fn ensure_git_remote_exists_succeeds_for_github_remote() {
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path()).unwrap();
+        repo.remote("origin", "https://github.com/user/repo.git")
+            .unwrap();
+
+        assert!(ensure_git_remote_exists(temp.path()).is_ok());
+    }
+
+    #[test]
+    fn ensure_git_remote_exists_returns_no_remote_when_empty() {
+        let temp = TempDir::new().unwrap();
+        Repository::init(temp.path()).unwrap();
+
+        let err = ensure_git_remote_exists(temp.path()).unwrap_err();
+        assert!(matches!(err, GitHubCliError::NoGitRemote));
+    }
+
+    #[test]
+    fn command_failure_detects_known_github_host_message() {
+        let stderr = "none of the git remotes configured for this repository point to a known GitHub host. To tell gh about a new GitHub host, please use `gh auth login`";
+        let err = command_failure(
+            "gh",
+            &["repo".to_string(), "view".to_string()],
+            CommandOutput {
+                status: Some(1),
+                stdout: String::new(),
+                stderr: stderr.to_string(),
+            },
+        );
+
+        assert!(matches!(err, GitHubCliError::NotAGitHubRepository));
+    }
+
+    #[test]
+    fn command_failure_preserves_other_errors() {
+        let err = command_failure(
+            "gh",
+            &["repo".to_string(), "view".to_string()],
+            CommandOutput {
+                status: Some(1),
+                stdout: String::new(),
+                stderr: "some other error".to_string(),
+            },
+        );
+
+        assert!(matches!(err, GitHubCliError::CommandFailed { .. }));
+    }
+
+    #[test]
+    fn view_repository_returns_not_github_error_for_gitlab_remote() {
+        let runner = MockRunner::default();
+        let cli = GitHubCli::with_runner(runner.clone());
+
+        let temp = TempDir::new().unwrap();
+        let repo = Repository::init(temp.path()).unwrap();
+        repo.remote("origin", "git@gitlab.com:user/repo.git")
+            .unwrap();
+
+        let err = cli.view_repository(temp.path()).unwrap_err();
+        assert!(matches!(err, GitHubCliError::NotAGitHubRepository));
+        assert!(runner.calls().is_empty(), "gh should not run without GitHub remotes");
     }
 }

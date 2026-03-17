@@ -182,6 +182,7 @@ pub struct ForgeStatusCheck {
 pub enum ForgeError {
     NotInstalled,
     NoGitRemote,
+    NotAGitHubRepository,
     CommandFailed {
         program: String,
         args: Vec<String>,
@@ -202,6 +203,9 @@ impl std::fmt::Display for ForgeError {
             ForgeError::NotInstalled => write!(f, "Forge CLI tool is not installed."),
             ForgeError::NoGitRemote => {
                 write!(f, "No Git remotes configured for this repository.")
+            }
+            ForgeError::NotAGitHubRepository => {
+                write!(f, "No GitHub remotes configured for this repository.")
             }
             ForgeError::CommandFailed {
                 program,
@@ -238,6 +242,7 @@ impl From<super::github_cli::GitHubCliError> for ForgeError {
         match err {
             GitHubCliError::NotInstalled => ForgeError::NotInstalled,
             GitHubCliError::NoGitRemote => ForgeError::NoGitRemote,
+            GitHubCliError::NotAGitHubRepository => ForgeError::NotAGitHubRepository,
             GitHubCliError::CommandFailed {
                 program,
                 args,
@@ -436,6 +441,10 @@ mod tests {
             ForgeError::NoGitRemote.to_string(),
             "No Git remotes configured for this repository."
         );
+        assert_eq!(
+            ForgeError::NotAGitHubRepository.to_string(),
+            "No GitHub remotes configured for this repository."
+        );
         assert!(ForgeError::InvalidInput("bad".into())
             .to_string()
             .contains("bad"));
@@ -450,6 +459,9 @@ mod tests {
 
         let err: ForgeError = GitHubCliError::NoGitRemote.into();
         assert!(matches!(err, ForgeError::NoGitRemote));
+
+        let err: ForgeError = GitHubCliError::NotAGitHubRepository.into();
+        assert!(matches!(err, ForgeError::NotAGitHubRepository));
 
         let err: ForgeError = GitHubCliError::InvalidInput("test".into()).into();
         assert!(matches!(err, ForgeError::InvalidInput(msg) if msg == "test"));

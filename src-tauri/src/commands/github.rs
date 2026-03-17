@@ -1074,6 +1074,9 @@ fn format_cli_error(err: GitHubCliError) -> String {
         GitHubCliError::NoGitRemote => {
             "No Git remotes configured for this project. Add a remote (e.g. `git remote add origin ...`) and try again.".to_string()
         }
+        GitHubCliError::NotAGitHubRepository => {
+            "This project is not hosted on GitHub. GitHub features require a GitHub remote.".to_string()
+        }
     }
 }
 
