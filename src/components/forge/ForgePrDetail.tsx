@@ -7,7 +7,7 @@ import { TauriCommands } from '../../common/tauriCommands'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
 import { ForgeLabelChip } from './ForgeLabelChip'
-import { ContextualActionButton } from '../gitlab/ContextualActionButton'
+import { ContextualActionButton } from './ContextualActionButton'
 
 interface ForgePrDetailProps {
   details: ForgePrDetails

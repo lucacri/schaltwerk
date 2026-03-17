@@ -7,7 +7,7 @@ import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
 import { ForgeLabelChip } from './ForgeLabelChip'
-import { ContextualActionButton } from '../gitlab/ContextualActionButton'
+import { ContextualActionButton } from './ContextualActionButton'
 
 function isOpen(state: string): boolean {
   return state.toUpperCase() === 'OPEN' || state === 'opened'

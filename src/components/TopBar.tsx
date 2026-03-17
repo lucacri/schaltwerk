@@ -18,7 +18,7 @@ import { getPlatform } from '../utils/platform'
 import { detectPlatformSafe } from '../keyboardShortcuts/helpers'
 import { GlobalKeepAwakeButton } from './GlobalKeepAwakeButton'
 import { useTranslation } from '../common/i18n'
-import { useForgeType } from '../hooks/useForgeType'
+import { useForgeIntegrationContext } from '../contexts/ForgeIntegrationContext'
 
 type UiPlatform = 'mac' | 'linux' | 'windows'
 
@@ -61,7 +61,7 @@ export function TopBar({
   triggerOpenCounter
 }: TopBarProps) {
   const { t } = useTranslation()
-  const forge = useForgeType()
+  const { forgeType: forge } = useForgeIntegrationContext()
   const dragAreaRef = useRef<HTMLDivElement>(null)
   const topBarRef = useRef<HTMLDivElement>(null)
   const openButtonRef = useRef<{ triggerOpen: () => Promise<void> } | null>(null)

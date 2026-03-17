@@ -6,8 +6,8 @@ import { describe, it, expect, vi } from 'vitest'
 describe('GitlabErrorDetailsModal', () => {
   it('renders per-source errors', () => {
     const errors = [
-      { source: 'Backend', message: 'glab command failed: 403 Forbidden' },
-      { source: 'Frontend', message: 'glab command failed: network timeout' },
+      { sourceLabel: 'Backend', error: 'glab command failed: 403 Forbidden' },
+      { sourceLabel: 'Frontend', error: 'glab command failed: network timeout' },
     ]
     renderWithProviders(
       <GitlabErrorDetailsModal errors={errors} onClose={vi.fn()} />
@@ -23,7 +23,7 @@ describe('GitlabErrorDetailsModal', () => {
     const onClose = vi.fn()
     renderWithProviders(
       <GitlabErrorDetailsModal
-        errors={[{ source: 'Test', message: 'error' }]}
+        errors={[{ sourceLabel: 'Test', error: 'error' }]}
         onClose={onClose}
       />
     )
@@ -36,7 +36,7 @@ describe('GitlabErrorDetailsModal', () => {
     const onClose = vi.fn()
     renderWithProviders(
       <GitlabErrorDetailsModal
-        errors={[{ source: 'Test', message: 'error' }]}
+        errors={[{ sourceLabel: 'Test', error: 'error' }]}
         onClose={onClose}
       />
     )
