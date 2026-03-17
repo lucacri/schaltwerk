@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
-import { VscClose, VscSearch } from 'react-icons/vsc'
+import { VscClose, VscInfo, VscSearch } from 'react-icons/vsc'
+import { ForgeErrorDetailModal } from './ForgeErrorDetailModal'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
 import { useForgeSearch } from '../../hooks/useForgeSearch'
 import { ForgePrDetail } from './ForgePrDetail'
@@ -136,6 +137,7 @@ export function ForgePrsTab() {
     summaryFromDetails: (details) => details.summary,
   })
 
+  const [showErrorDetail, setShowErrorDetail] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [details, setDetails] = useState<ForgePrDetails | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
@@ -250,15 +252,31 @@ export function ForgePrsTab() {
             {search.error}
             {search.errorDetails.length > 1 && ` (${search.errorDetails.length} sources failed)`}
           </span>
-          <button
-            type="button"
-            onClick={search.clearError}
-            style={{ color: 'var(--color-accent-red)' }}
-          >
-            <VscClose className="w-3 h-3" />
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowErrorDetail(true)}
+              aria-label="error details"
+              style={{ color: 'var(--color-accent-red)' }}
+            >
+              <VscInfo className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              onClick={() => { search.clearError(); setShowErrorDetail(false) }}
+              style={{ color: 'var(--color-accent-red)' }}
+            >
+              <VscClose className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       )}
+
+      <ForgeErrorDetailModal
+        isOpen={showErrorDetail}
+        onClose={() => setShowErrorDetail(false)}
+        errorDetails={search.errorDetails}
+      />
 
       <div className="flex-1 overflow-y-auto">
         {search.loading && search.results.length === 0 ? (

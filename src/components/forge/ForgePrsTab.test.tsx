@@ -161,6 +161,31 @@ describe('ForgePrsTab', () => {
     expect(screen.getByText('Try adjusting your search')).toBeTruthy()
   })
 
+  it('shows error banner with info icon that opens error detail modal', async () => {
+    const searchPrs = vi.fn().mockRejectedValue(new Error('Network error'))
+
+    renderWithProviders(<ForgePrsTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchPrs,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to fetch from GitHub')).toBeTruthy()
+    })
+
+    const infoButton = screen.getByRole('button', { name: /error details/i })
+    expect(infoButton).toBeTruthy()
+
+    fireEvent.click(infoButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Error Details')).toBeTruthy()
+    })
+  })
+
   it('clicking PR fetches and shows detail view', async () => {
     const searchPrs = vi.fn().mockResolvedValue([makePrSummary()])
     const getPrDetails = vi.fn().mockResolvedValue(makePrDetails())

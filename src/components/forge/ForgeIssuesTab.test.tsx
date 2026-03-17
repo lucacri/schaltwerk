@@ -162,6 +162,31 @@ describe('ForgeIssuesTab', () => {
     })
   })
 
+  it('shows info icon in error banner that opens error detail modal', async () => {
+    const searchIssues = vi.fn().mockRejectedValue(new Error('Network error'))
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchIssues,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to fetch from GitHub')).toBeTruthy()
+    })
+
+    const infoButton = screen.getByRole('button', { name: /error details/i })
+    expect(infoButton).toBeTruthy()
+
+    fireEvent.click(infoButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('Error Details')).toBeTruthy()
+    })
+  })
+
   it('clicking issue fetches and shows detail view', async () => {
     const searchIssues = vi.fn().mockResolvedValue([makeSummary()])
     const getIssueDetails = vi.fn().mockResolvedValue(makeDetails())
