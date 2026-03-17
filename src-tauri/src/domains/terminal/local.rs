@@ -22,9 +22,9 @@ use tauri::AppHandle;
 use tokio::sync::{Mutex, RwLock, broadcast, mpsc};
 use tokio::time::{Instant as TokioInstant, sleep};
 
-const DEFAULT_MAX_BUFFER_SIZE: usize = 2 * 1024 * 1024;
-const AGENT_MAX_BUFFER_SIZE: usize = 64 * 1024 * 1024;
-const MAX_HYDRATION_SNAPSHOT_BYTES: usize = 1024 * 1024;
+const DEFAULT_MAX_BUFFER_SIZE: usize = 512 * 1024;
+const AGENT_MAX_BUFFER_SIZE: usize = 512 * 1024;
+const MAX_HYDRATION_SNAPSHOT_BYTES: usize = 512 * 1024;
 
 pub(crate) fn max_buffer_size_for_terminal(terminal_id: &str) -> usize {
     if lifecycle::is_agent_terminal(terminal_id) {
