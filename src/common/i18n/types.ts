@@ -1264,73 +1264,60 @@ export interface Translations {
     specsTitle: string
     preview: string
     previewTitle: string
-    gitlabIssues: string
-    gitlabIssuesTitle: string
-    gitlabMrs: string
-    gitlabMrsTitle: string
+    forgeIssues: string
+    forgeIssuesTitle: string
+    forgePrs: string
+    forgePrsTitle: string
   }
-  gitlabIssueTab: {
+  forgeIssueTab: {
     searchPlaceholder: string
     loading: string
     noIssuesFound: string
     adjustSearch: string
     back: string
-    openInGitlab: string
+    openInForge: string
     opened: string
     closed: string
-    source: string
     updated: string
     description: string
+    comments: string
+    noComments: string
+    labels: string
     notes: string
     noNotes: string
-    labels: string
-    errorDetails: string
+    source: string
   }
-  gitlabMrTab: {
+  forgePrTab: {
     searchPlaceholder: string
     loading: string
-    noMrsFound: string
+    noPrsFound: string
     adjustSearch: string
     back: string
-    openInGitlab: string
+    openInForge: string
     opened: string
-    merged: string
     closed: string
-    source: string
+    merged: string
     updated: string
     description: string
-    notes: string
-    noNotes: string
+    comments: string
+    noComments: string
     labels: string
-    errorDetails: string
+    headBranch: string
     sourceBranch: string
     targetBranch: string
-    pipeline: string
-    mergeStatus: string
-    reviewers: string
-    noReviewers: string
-    refreshPipeline: string
-    pipelineSuccess: string
-    pipelineFailed: string
-    pipelineRunning: string
-    pipelinePending: string
+    reviews: string
+    noReviews: string
+    reviewDecision: string
+    statusChecks: string
     approve: string
     merge: string
     comment: string
-    squashCommits: string
-    removeSourceBranch: string
-    approveSuccess: string
-    approveFailed: string
-    mergeSuccess: string
-    mergeFailed: string
-    commentSuccess: string
-    commentFailed: string
-    commentPlaceholder: string
-    send: string
-    cancel: string
-    merging: string
-    approving: string
-    commenting: string
+    squash: string
+    deleteSourceBranch: string
+    mergeStatus: string
+    reviewers: string
+    pipeline: string
+    refreshPipeline: string
   }
   historySearch: {
     placeholder: string

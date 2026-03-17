@@ -10,6 +10,7 @@ import { GithubIntegrationContext } from '../contexts/GithubIntegrationContext'
 import type { GithubIntegrationValue } from '../hooks/useGithubIntegration'
 import { GitlabIntegrationContext } from '../contexts/GitlabIntegrationContext'
 import type { GitlabIntegrationValue } from '../hooks/useGitlabIntegration'
+import { ForgeIntegrationContext, type ForgeIntegrationContextValue } from '../contexts/ForgeIntegrationContext'
 import type { ChangedFile } from '../common/events'
 import { Provider, createStore, useSetAtom } from 'jotai'
 import { projectPathAtom } from '../store/atoms/project'
@@ -78,6 +79,52 @@ function createGitlabIntegrationValue(overrides?: GitlabOverrides): GitlabIntegr
   return overrides ? { ...base, ...overrides } : base
 }
 
+type ForgeOverrides = Partial<ForgeIntegrationContextValue>
+
+function createForgeIntegrationValue(overrides?: ForgeOverrides): ForgeIntegrationContextValue {
+  const unimplemented = (method: string) => async () => {
+    throw new Error(
+      `ForgeIntegration mock "${method}" not configured. Provide forgeOverrides when using renderWithProviders/TestProviders.`
+    )
+  }
+
+  const base: ForgeIntegrationContextValue = {
+    status: null,
+    loading: false,
+    forgeType: 'unknown',
+    sources: [],
+    hasRepository: false,
+    hasSources: false,
+    refreshStatus: async () => {},
+    searchIssues: unimplemented('searchIssues') as ForgeIntegrationContextValue['searchIssues'],
+    getIssueDetails: unimplemented('getIssueDetails') as ForgeIntegrationContextValue['getIssueDetails'],
+    searchPrs: unimplemented('searchPrs') as ForgeIntegrationContextValue['searchPrs'],
+    getPrDetails: unimplemented('getPrDetails') as ForgeIntegrationContextValue['getPrDetails'],
+    createSessionPr: unimplemented('createSessionPr') as ForgeIntegrationContextValue['createSessionPr'],
+    getReviewComments: unimplemented('getReviewComments') as ForgeIntegrationContextValue['getReviewComments'],
+    approvePr: unimplemented('approvePr') as ForgeIntegrationContextValue['approvePr'],
+    mergePr: unimplemented('mergePr') as ForgeIntegrationContextValue['mergePr'],
+    commentOnPr: unimplemented('commentOnPr') as ForgeIntegrationContextValue['commentOnPr'],
+  }
+
+  return overrides ? { ...base, ...overrides } : base
+}
+
+function ForgeIntegrationTestProvider({
+  overrides,
+  children,
+}: {
+  overrides?: ForgeOverrides
+  children: React.ReactNode
+}) {
+  const value = useMemo(() => createForgeIntegrationValue(overrides), [overrides])
+  return (
+    <ForgeIntegrationContext.Provider value={value}>
+      {children}
+    </ForgeIntegrationContext.Provider>
+  )
+}
+
 function GitlabIntegrationTestProvider({
   overrides,
   children,
@@ -112,21 +159,24 @@ interface ProviderTreeProps {
   children: React.ReactNode
   githubOverrides?: GithubOverrides
   gitlabOverrides?: GitlabOverrides
+  forgeOverrides?: ForgeOverrides
   includeTestInitializer?: boolean
 }
 
-function ProviderTree({ children, githubOverrides, gitlabOverrides, includeTestInitializer = false }: ProviderTreeProps) {
+function ProviderTree({ children, githubOverrides, gitlabOverrides, forgeOverrides, includeTestInitializer = false }: ProviderTreeProps) {
   const store = useMemo(() => createStore(), [])
 
   const inner = (
     <FocusProvider>
       <ReviewProvider>
         <RunProvider>
-          <GithubIntegrationTestProvider overrides={githubOverrides}>
-            <GitlabIntegrationTestProvider overrides={gitlabOverrides}>
-              {children}
-            </GitlabIntegrationTestProvider>
-          </GithubIntegrationTestProvider>
+          <ForgeIntegrationTestProvider overrides={forgeOverrides}>
+            <GithubIntegrationTestProvider overrides={githubOverrides}>
+              <GitlabIntegrationTestProvider overrides={gitlabOverrides}>
+                {children}
+              </GitlabIntegrationTestProvider>
+            </GithubIntegrationTestProvider>
+          </ForgeIntegrationTestProvider>
         </RunProvider>
       </ReviewProvider>
     </FocusProvider>
@@ -154,15 +204,16 @@ function ProviderTree({ children, githubOverrides, gitlabOverrides, includeTestI
 interface RenderWithProvidersOptions extends RenderOptions {
   githubOverrides?: GithubOverrides
   gitlabOverrides?: GitlabOverrides
+  forgeOverrides?: ForgeOverrides
 }
 
 export function renderWithProviders(
   ui: React.ReactElement,
   options: RenderWithProvidersOptions = {}
 ) {
-  const { githubOverrides, gitlabOverrides, ...renderOptions } = options
+  const { githubOverrides, gitlabOverrides, forgeOverrides, ...renderOptions } = options
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
-    <ProviderTree githubOverrides={githubOverrides} gitlabOverrides={gitlabOverrides}>{children}</ProviderTree>
+    <ProviderTree githubOverrides={githubOverrides} gitlabOverrides={gitlabOverrides} forgeOverrides={forgeOverrides}>{children}</ProviderTree>
   )
   return render(ui, { wrapper: Wrapper, ...renderOptions })
 }
@@ -213,13 +264,15 @@ export function TestProviders({
   children,
   githubOverrides,
   gitlabOverrides,
+  forgeOverrides,
 }: {
   children: React.ReactNode
   githubOverrides?: GithubOverrides
   gitlabOverrides?: GitlabOverrides
+  forgeOverrides?: ForgeOverrides
 }) {
   return (
-    <ProviderTree githubOverrides={githubOverrides} gitlabOverrides={gitlabOverrides} includeTestInitializer>
+    <ProviderTree githubOverrides={githubOverrides} gitlabOverrides={gitlabOverrides} forgeOverrides={forgeOverrides} includeTestInitializer>
       {children}
     </ProviderTree>
   )

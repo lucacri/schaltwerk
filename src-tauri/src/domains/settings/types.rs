@@ -338,6 +338,7 @@ pub struct AgentPreset {
 #[serde(rename_all = "lowercase")]
 pub enum ContextualActionContext {
     Mr,
+    Pr,
     Issue,
     Both,
 }
@@ -374,6 +375,17 @@ pub fn default_contextual_actions() -> Vec<ContextualAction> {
             name: "Review this MR".to_string(),
             context: ContextualActionContext::Mr,
             prompt_template: "Review the following merge request:\n\nTitle: {{mr.title}}\nAuthor: {{mr.author}}\nSource: {{mr.sourceBranch}} -> {{mr.targetBranch}}\n\nDescription:\n{{mr.description}}\n\nDiff:\n{{mr.diff}}".to_string(),
+            mode: ContextualActionMode::Session,
+            agent_type: Some("claude".to_string()),
+            variant_id: None,
+            preset_id: None,
+            is_built_in: true,
+        },
+        ContextualAction {
+            id: "builtin-review-pr".to_string(),
+            name: "Review this PR".to_string(),
+            context: ContextualActionContext::Pr,
+            prompt_template: "Review the following pull request:\n\nTitle: {{pr.title}}\nBranch: {{pr.headRefName}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}".to_string(),
             mode: ContextualActionMode::Session,
             agent_type: Some("claude".to_string()),
             variant_id: None,

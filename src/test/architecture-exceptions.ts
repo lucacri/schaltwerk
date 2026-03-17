@@ -15,6 +15,7 @@ export const THEME_EXCEPTIONS: ArchitectureException[] = [
   { file: 'src/common/toast/ToastCard.tsx', reason: 'boxShadow uses universal black rgba for shadow transparency' },
   { file: 'src/components/home/AsciiBuilderLogo.tsx', reason: 'Dynamic color interpolation for animation effects' },
   { file: 'src/components/settings/ThemeSettings.tsx', reason: 'Theme preview cards use hardcoded colors to show theme appearance' },
+  { file: 'src/components/forge/ForgeLabelChip.tsx', reason: 'Renders dynamic label colors from forge API with contrast text' },
 ];
 
 export const MODULE_BOUNDARY_EXCEPTIONS: ArchitectureException[] = [
@@ -29,6 +30,7 @@ export const STATE_MANAGEMENT_EXCEPTIONS: ArchitectureException[] = [
   { file: 'src/contexts/ReviewContext.tsx', reason: 'UI coordination - review workflow state (acceptable use)' },
   { file: 'src/contexts/RunContext.tsx', reason: 'UI coordination - run workflow state (acceptable use)' },
   { file: 'src/contexts/SpecReviewContext.tsx', reason: 'UI coordination - spec review comments state (acceptable use)' },
+  { file: 'src/contexts/ForgeIntegrationContext.tsx', reason: 'Needs evaluation - unified forge integration wrapping GitHub/GitLab' },
   { file: 'src/contexts/GithubIntegrationContext.tsx', reason: 'Needs evaluation - might be dependency injection' },
   { file: 'src/contexts/GitlabIntegrationContext.tsx', reason: 'Needs evaluation - mirrors GithubIntegrationContext pattern' },
   { file: 'src/contexts/KeyboardShortcutsContext.tsx', reason: 'Needs evaluation - might not need reactive state' },

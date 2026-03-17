@@ -1,24 +1,30 @@
 import { invoke } from '@tauri-apps/api/core'
 import { VscArrowLeft, VscLinkExternal } from 'react-icons/vsc'
-import type { GitlabIssueDetails } from '../../types/gitlabTypes'
+import type { ForgeIssueDetails, ForgeType } from '../../types/forgeTypes'
 import { useTranslation } from '../../common/i18n'
 import { TauriCommands } from '../../common/tauriCommands'
 import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
-import { GitlabLabelChip } from './GitlabLabelChip'
+import { ForgeLabelChip } from './ForgeLabelChip'
 import { ContextualActionButton } from './ContextualActionButton'
 
-interface GitlabIssueDetailProps {
-  details: GitlabIssueDetails
+function isOpen(state: string): boolean {
+  return state.toUpperCase() === 'OPEN' || state === 'opened'
+}
+
+interface ForgeIssueDetailProps {
+  details: ForgeIssueDetails
   onBack: () => void
+  sourceLabel?: string
+  forgeType: ForgeType
 }
 
 function StateBadge({ state }: { state: string }) {
   const { t } = useTranslation()
-  const isOpen = state === 'opened'
-  const label = isOpen ? t.gitlabIssueTab.opened : t.gitlabIssueTab.closed
-  const color = isOpen ? 'var(--color-accent-green)' : 'var(--color-accent-red)'
+  const open = isOpen(state)
+  const label = open ? t.forgeIssueTab.opened : t.forgeIssueTab.closed
+  const color = open ? 'var(--color-accent-green)' : 'var(--color-accent-red)'
 
   return (
     <span
@@ -29,7 +35,7 @@ function StateBadge({ state }: { state: string }) {
         fontSize: theme.fontSize.caption,
         fontWeight: 600,
         color,
-        backgroundColor: isOpen ? 'var(--color-accent-green-bg)' : 'var(--color-accent-red-bg)',
+        backgroundColor: open ? 'var(--color-accent-green-bg)' : 'var(--color-accent-red-bg)',
         borderRadius: 9999,
         padding: '2px 8px',
         lineHeight: theme.lineHeight.badge,
@@ -40,15 +46,16 @@ function StateBadge({ state }: { state: string }) {
   )
 }
 
-
-export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
+export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType }: ForgeIssueDetailProps) {
   const { t } = useTranslation()
-  const userNotes = details.notes.filter(n => n.body && n.body.trim().length > 0)
+  const { summary, body, comments } = details
+  const validComments = comments.filter(c => c.body && c.body.trim().length > 0)
 
-  const handleOpenInGitlab = () => {
-    invoke<void>(TauriCommands.OpenExternalUrl, { url: details.url }).catch((err: unknown) => {
-      logger.warn('[GitlabIssueDetail] Failed to open URL via Tauri, falling back to window.open', err)
-      window.open(details.url, '_blank', 'noopener,noreferrer')
+  const handleOpenInBrowser = () => {
+    if (!summary.url) return
+    invoke<void>(TauriCommands.OpenExternalUrl, { url: summary.url }).catch((err: unknown) => {
+      logger.warn(`[ForgeIssueDetail] Failed to open URL via Tauri (${forgeType}), falling back to window.open`, err)
+      window.open(summary.url, '_blank', 'noopener,noreferrer')
     })
   }
 
@@ -67,56 +74,60 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
             color: 'var(--color-text-secondary)',
             backgroundColor: 'transparent',
           }}
-          title={t.gitlabIssueTab.back}
+          title={t.forgeIssueTab.back}
         >
           <VscArrowLeft className="w-3.5 h-3.5" />
-          <span>{t.gitlabIssueTab.back}</span>
+          <span>{t.forgeIssueTab.back}</span>
         </button>
 
         <div className="flex-1" />
 
-        <button
-          type="button"
-          onClick={handleOpenInGitlab}
-          className="flex items-center gap-1 px-2 py-1 rounded"
-          style={{
-            fontSize: theme.fontSize.caption,
-            color: 'var(--color-accent-blue)',
-            backgroundColor: 'transparent',
-          }}
-          title={t.gitlabIssueTab.openInGitlab}
-        >
-          <VscLinkExternal className="w-3 h-3" />
-          <span>{t.gitlabIssueTab.openInGitlab}</span>
-        </button>
+        {summary.url && (
+          <button
+            type="button"
+            onClick={handleOpenInBrowser}
+            className="flex items-center gap-1 px-2 py-1 rounded"
+            style={{
+              fontSize: theme.fontSize.caption,
+              color: 'var(--color-accent-blue)',
+              backgroundColor: 'transparent',
+            }}
+            title={t.forgeIssueTab.openInForge}
+          >
+            <VscLinkExternal className="w-3 h-3" />
+            <span>{t.forgeIssueTab.openInForge}</span>
+          </button>
+        )}
 
         <ContextualActionButton
           context="issue"
           variables={{
-            'issue.title': details.title ?? '',
-            'issue.description': details.description ?? '',
-            'issue.author': '',
-            'issue.labels': (details.labels ?? []).join(', '),
-            'issue.url': details.url ?? '',
+            'issue.title': summary.title ?? '',
+            'issue.description': body ?? '',
+            'issue.author': summary.author ?? '',
+            'issue.labels': summary.labels.map(l => l.name).join(', '),
+            'issue.url': summary.url ?? '',
           }}
         />
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
         <div className="flex items-start gap-2 mb-3">
-          <StateBadge state={details.state} />
-          <span
-            style={{
-              fontSize: theme.fontSize.caption,
-              color: 'var(--color-text-muted)',
-              backgroundColor: 'var(--color-bg-elevated)',
-              borderRadius: 9999,
-              padding: '2px 8px',
-              lineHeight: theme.lineHeight.badge,
-            }}
-          >
-            {details.sourceLabel}
-          </span>
+          <StateBadge state={summary.state} />
+          {sourceLabel && (
+            <span
+              style={{
+                fontSize: theme.fontSize.caption,
+                color: 'var(--color-text-muted)',
+                backgroundColor: 'var(--color-bg-elevated)',
+                borderRadius: 9999,
+                padding: '2px 8px',
+                lineHeight: theme.lineHeight.badge,
+              }}
+            >
+              {sourceLabel}
+            </span>
+          )}
         </div>
 
         <h3
@@ -129,18 +140,18 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
             lineHeight: theme.lineHeight.body,
           }}
         >
-          #{details.iid} {details.title}
+          #{summary.id} {summary.title}
         </h3>
 
-        {details.labels.length > 0 && (
+        {summary.labels.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
-            {details.labels.map(label => (
-              <GitlabLabelChip key={label} label={label} />
+            {summary.labels.map(label => (
+              <ForgeLabelChip key={label.name} label={label} />
             ))}
           </div>
         )}
 
-        {details.description && (
+        {body && (
           <div className="mb-4">
             <div
               style={{
@@ -152,7 +163,7 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
                 letterSpacing: '0.05em',
               }}
             >
-              {t.gitlabIssueTab.description}
+              {t.forgeIssueTab.description}
             </div>
             <div
               style={{
@@ -168,7 +179,7 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
                 border: '1px solid var(--color-border-default)',
               }}
             >
-              {details.description}
+              {body}
             </div>
           </div>
         )}
@@ -184,10 +195,10 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
               letterSpacing: '0.05em',
             }}
           >
-            {t.gitlabIssueTab.notes} ({userNotes.length})
+            {t.forgeIssueTab.comments} ({validComments.length})
           </div>
 
-          {userNotes.length === 0 ? (
+          {validComments.length === 0 ? (
             <div
               style={{
                 fontSize: theme.fontSize.caption,
@@ -195,11 +206,11 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
                 fontStyle: 'italic',
               }}
             >
-              {t.gitlabIssueTab.noNotes}
+              {t.forgeIssueTab.noComments}
             </div>
           ) : (
             <div className="space-y-2">
-              {userNotes.map((note, idx) => (
+              {validComments.map((comment, idx) => (
                 <div
                   key={idx}
                   style={{
@@ -216,12 +227,14 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
                       color: 'var(--color-text-muted)',
                     }}
                   >
-                    {note.author && (
+                    {comment.author && (
                       <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                        {note.author}
+                        {comment.author}
                       </span>
                     )}
-                    <span>{formatRelativeDate(note.createdAt)}</span>
+                    {comment.createdAt && (
+                      <span>{formatRelativeDate(comment.createdAt)}</span>
+                    )}
                   </div>
                   <div
                     style={{
@@ -233,7 +246,7 @@ export function GitlabIssueDetail({ details, onBack }: GitlabIssueDetailProps) {
                       fontFamily: theme.fontFamily.sans,
                     }}
                   >
-                    {note.body}
+                    {comment.body}
                   </div>
                 </div>
               ))}

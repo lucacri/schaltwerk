@@ -14,8 +14,8 @@ interface RightPanelTabsHeaderProps {
   showSpecTab: boolean
   showSpecsTab: boolean
   showPreviewTab: boolean
-  showGitlabIssuesTab: boolean
-  showGitlabMrsTab: boolean
+  showForgeIssuesTab: boolean
+  showForgePrsTab: boolean
   onSelectTab: (tab: TabKey) => void
 }
 
@@ -47,8 +47,8 @@ export const RightPanelTabsHeader = ({
   showSpecTab,
   showSpecsTab,
   showPreviewTab,
-  showGitlabIssuesTab,
-  showGitlabMrsTab,
+  showForgeIssuesTab,
+  showForgePrsTab,
   onSelectTab
 }: RightPanelTabsHeaderProps) => {
   const { t } = useTranslation()
@@ -102,20 +102,20 @@ export const RightPanelTabsHeader = ({
     })
   }
 
-  if (showGitlabIssuesTab) {
+  if (showForgeIssuesTab) {
     descriptors.push({
-      key: 'gitlab-issues',
-      label: t.rightPanelTabs.gitlabIssues,
-      title: t.rightPanelTabs.gitlabIssuesTitle,
+      key: 'forge-issues',
+      label: t.rightPanelTabs.forgeIssues,
+      title: t.rightPanelTabs.forgeIssuesTitle,
       icon: <VscIssues className={baseTabIconClass} />
     })
   }
 
-  if (showGitlabMrsTab) {
+  if (showForgePrsTab) {
     descriptors.push({
-      key: 'gitlab-mrs',
-      label: t.rightPanelTabs.gitlabMrs,
-      title: t.rightPanelTabs.gitlabMrsTitle,
+      key: 'forge-prs',
+      label: t.rightPanelTabs.forgePrs,
+      title: t.rightPanelTabs.forgePrsTitle,
       icon: <VscGitPullRequest className={baseTabIconClass} />
     })
   }

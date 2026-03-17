@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { VscClose } from 'react-icons/vsc'
 import { theme } from '../../common/theme'
-import type { SourceError } from '../../hooks/useGitlabIssueSearch'
+import type { SourceError } from '../../hooks/useForgeSearch'
 
 interface GitlabErrorDetailsModalProps {
   errors: SourceError[]
@@ -48,7 +48,7 @@ export function GitlabErrorDetailsModal({ errors, onClose }: GitlabErrorDetailsM
         <div className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: '55vh' }}>
           {errors.map((err) => (
             <div
-              key={err.source}
+              key={err.sourceLabel}
               className="flex flex-col gap-1 rounded"
               style={{
                 padding: '8px 10px',
@@ -57,7 +57,7 @@ export function GitlabErrorDetailsModal({ errors, onClose }: GitlabErrorDetailsM
               }}
             >
               <span style={{ fontSize: theme.fontSize.body, fontWeight: 600, color: 'var(--color-accent-red)' }}>
-                {err.source}
+                {err.sourceLabel}
               </span>
               <pre
                 style={{
@@ -69,7 +69,7 @@ export function GitlabErrorDetailsModal({ errors, onClose }: GitlabErrorDetailsM
                   margin: 0,
                 }}
               >
-                {err.message}
+                {err.error}
               </pre>
             </div>
           ))}

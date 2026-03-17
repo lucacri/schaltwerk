@@ -19,7 +19,7 @@ import { logger } from '../../utils/logger'
 import { FontPicker } from './FontPicker'
 import { GithubProjectIntegrationCard } from '../settings/GithubProjectIntegrationCard'
 import { GitlabProjectIntegrationCard } from '../settings/GitlabProjectIntegrationCard'
-import { useForgeType } from '../../hooks/useForgeType'
+import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
 import { AGENT_TYPES, createAgentRecord } from '../../types/session'
 import { DEFAULT_AGENT } from '../../constants/agents'
 import { displayNameForAgent } from '../shared/agentDefaults'
@@ -329,7 +329,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const [terminalFontSize, setTerminalFontSize] = useAtom(terminalFontSizeAtom)
     const [uiFontSize, setUiFontSize] = useAtom(uiFontSizeAtom)
     const { applyOverrides: applyShortcutOverrides } = useKeyboardShortcutsConfig()
-    const forge = useForgeType()
+    const { forgeType: forge } = useForgeIntegrationContext()
 
     useEffect(() => {
         if (!open) return

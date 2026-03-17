@@ -1,1 +1,1 @@
-export type TabKey = 'changes' | 'agent' | 'info' | 'history' | 'specs' | 'preview' | 'gitlab-issues' | 'gitlab-mrs'
+export type TabKey = 'changes' | 'agent' | 'info' | 'history' | 'specs' | 'preview' | 'forge-issues' | 'forge-prs'

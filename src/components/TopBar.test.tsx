@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { TopBar } from './TopBar'
-import { useForgeType } from '../hooks/useForgeType'
+import { useForgeIntegrationContext } from '../contexts/ForgeIntegrationContext'
+import type { ForgeIntegrationContextValue } from '../contexts/ForgeIntegrationContext'
 
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({
@@ -41,15 +42,31 @@ vi.mock('./WindowControls', () => ({
   WindowControls: () => <div data-testid="window-controls" />
 }))
 
-vi.mock('../hooks/useForgeType', () => ({
-  useForgeType: vi.fn(() => 'unknown')
+vi.mock('../contexts/ForgeIntegrationContext', () => ({
+  useForgeIntegrationContext: vi.fn(() => ({
+    forgeType: 'unknown',
+    sources: [],
+    hasRepository: false,
+    hasSources: false,
+    status: null,
+  }))
 }))
 
-const mockUseForgeType = useForgeType as ReturnType<typeof vi.fn>
+const mockUseForgeIntegrationContext = useForgeIntegrationContext as ReturnType<typeof vi.fn>
+
+function mockForgeType(forgeType: string) {
+  mockUseForgeIntegrationContext.mockReturnValue({
+    forgeType,
+    sources: [],
+    hasRepository: forgeType !== 'unknown',
+    hasSources: forgeType !== 'unknown',
+    status: null,
+  } as unknown as ForgeIntegrationContextValue)
+}
 
 describe('TopBar', () => {
   beforeEach(() => {
-    mockUseForgeType.mockReturnValue('unknown')
+    mockForgeType('unknown')
   })
 
   const baseProps = {
@@ -89,7 +106,7 @@ describe('TopBar', () => {
   })
 
   it('hides GitHub button when forge is gitlab', () => {
-    mockUseForgeType.mockReturnValue('gitlab')
+    mockForgeType('gitlab')
 
     render(<TopBar {...baseProps} />)
 
@@ -98,7 +115,7 @@ describe('TopBar', () => {
   })
 
   it('hides GitLab button when forge is github', () => {
-    mockUseForgeType.mockReturnValue('github')
+    mockForgeType('github')
 
     render(<TopBar {...baseProps} />)
 
@@ -107,7 +124,7 @@ describe('TopBar', () => {
   })
 
   it('shows both buttons when forge is unknown', () => {
-    mockUseForgeType.mockReturnValue('unknown')
+    mockForgeType('unknown')
 
     render(<TopBar {...baseProps} />)
 
