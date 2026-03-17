@@ -447,7 +447,7 @@ describe('Terminal', () => {
 
     const instance = terminalHarness.instances[0] as HarnessInstance
     expect(instance.applyConfig).not.toHaveBeenCalled()
-    expect(instance.config.scrollback).toBe(20000)
+    expect(instance.config.scrollback).toBe(500)
     expect(instance.config.fontSize).toBe(13)
     expect(instance.config.fontFamily).toBe('Menlo, Monaco, ui-monospace, SFMono-Regular, monospace')
     expect(instance.config.minimumContrastRatio).toBeCloseTo(ATLAS_CONTRAST_BASE)
@@ -566,7 +566,7 @@ describe('Terminal', () => {
 
     const instance = terminalHarness.instances[0] as HarnessInstance
     expect(instance.applyConfig).not.toHaveBeenCalled()
-    expect(instance.config.scrollback).toBe(20000)
+    expect(instance.config.scrollback).toBe(500)
     expect(instance.config.fontFamily).toBe('Menlo, Monaco, ui-monospace, SFMono-Regular, monospace')
     expect(instance.config.minimumContrastRatio).toBeCloseTo(ATLAS_CONTRAST_BASE)
   })
@@ -580,7 +580,7 @@ describe('Terminal', () => {
     })
 
     const instance = terminalHarness.instances[0] as HarnessInstance
-    expect(instance.config.scrollback).toBe(20000)
+    expect(instance.config.scrollback).toBe(500)
   })
 
   it('uses agent scrollback for TUI-based agents (claude)', async () => {
@@ -592,7 +592,7 @@ describe('Terminal', () => {
     })
 
     const instance = terminalHarness.instances[0] as HarnessInstance
-    expect(instance.config.scrollback).toBe(20000)
+    expect(instance.config.scrollback).toBe(500)
   })
 
   it('treats terminal-only top terminals as regular shells and skips agent startup', async () => {
@@ -604,7 +604,7 @@ describe('Terminal', () => {
     })
 
     const instance = terminalHarness.instances[0] as HarnessInstance
-    expect(instance.config.scrollback).toBe(20000)
+    expect(instance.config.scrollback).toBe(500)
 
     await waitFor(() => {
       expect(startSessionTop).not.toHaveBeenCalled()
