@@ -99,20 +99,20 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <h3 className="text-text-primary" style={{ fontSize: 'var(--font-heading)' }}>
+                <h3 className="text-body font-medium text-text-primary">
                     {'Agent Presets'}
                 </h3>
-                <button onClick={handleAdd} className="settings-btn text-text-primary" style={{ fontSize: 'var(--font-body)' }}>
+                <button onClick={handleAdd} className="settings-btn text-body px-3 py-1.5 rounded-lg">
                     {'+ Add Preset'}
                 </button>
             </div>
 
-            <p className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
+            <p className="text-caption text-text-tertiary">
                 {'Define multi-agent launch configurations. Each preset specifies a set of agent slots that will be created together as a version group.'}
             </p>
 
             {currentPresets.length === 0 && (
-                <div className="text-text-muted text-center py-8" style={{ fontSize: 'var(--font-body)' }}>
+                <div className="text-text-muted text-center py-8 text-body">
                     {'No presets configured. Click "Add Preset" to create one.'}
                 </div>
             )}
@@ -121,18 +121,17 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                 {currentPresets.map(preset => (
                     <div
                         key={preset.id}
-                        className="rounded-lg border"
-                        style={{ backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-border-subtle)' }}
+                        className="rounded-lg border bg-bg-elevated border-border-subtle"
                     >
                         <div
                             className="flex items-center justify-between px-4 py-3 cursor-pointer"
                             onClick={() => setExpandedId(expandedId === preset.id ? null : preset.id)}
                         >
                             <div className="flex items-center gap-3">
-                                <span className="text-text-primary" style={{ fontSize: 'var(--font-body)' }}>
+                                <span className="text-body text-text-primary">
                                     {preset.name || '(unnamed)'}
                                 </span>
-                                <span className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
+                                <span className="text-caption text-text-muted">
                                     {slotSummary(preset.slots)}
                                 </span>
                             </div>
@@ -140,8 +139,7 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                 {!preset.isBuiltIn && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleRemove(preset.id) }}
-                                        className="settings-btn-danger px-2 py-1"
-                                        style={{ fontSize: 'var(--font-caption)' }}
+                                        className="settings-btn-danger text-caption px-2 py-1 rounded"
                                     >
                                         {'Delete'}
                                     </button>
@@ -156,9 +154,9 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                         </div>
 
                         {expandedId === preset.id && (
-                            <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'var(--color-border-subtle)' }}>
+                            <div className="px-4 pb-4 space-y-3 border-t border-border-subtle">
                                 <div className="pt-3">
-                                    <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>
+                                    <label className="block text-caption text-text-secondary mb-1">
                                         {'Name'}
                                     </label>
                                     <input
@@ -166,20 +164,18 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                         value={preset.name}
                                         onChange={e => handleUpdate(preset.id, { name: e.target.value })}
                                         placeholder={'e.g. The Trio'}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
-                                        style={{ fontSize: 'var(--font-body)' }}
+                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body"
                                     />
                                 </div>
 
                                 <div>
                                     <div className="flex items-center justify-between mb-2">
-                                        <label className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
+                                        <label className="text-caption text-text-secondary">
                                             {'Agent Slots'}
                                         </label>
                                         <button
                                             onClick={() => handleSlotAdd(preset.id)}
-                                            className="settings-btn px-2 py-0.5"
-                                            style={{ fontSize: 'var(--font-caption)' }}
+                                            className="settings-btn text-caption px-2 py-0.5 rounded"
                                         >
                                             {'+ Add'}
                                         </button>
@@ -206,8 +202,7 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                                         })
                                                     }
                                                 }}
-                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1.5 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
-                                                style={{ fontSize: 'var(--font-caption)' }}
+                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1.5 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)] text-caption settings-select"
                                             >
                                                 <optgroup label="Agents">
                                                     {NON_TERMINAL_AGENTS.map(agent => (
@@ -224,7 +219,7 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                                     </optgroup>
                                                 )}
                                             </select>
-                                            <label className="flex items-center gap-1 text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
+                                            <label className="flex items-center gap-1 text-caption text-text-muted">
                                                 <input
                                                     type="checkbox"
                                                     checked={slot.skipPermissions ?? false}
@@ -236,8 +231,7 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                             {preset.slots.length > 1 && (
                                                 <button
                                                     onClick={() => handleSlotRemove(preset.id, idx)}
-                                                    className="settings-btn-danger px-2 py-1"
-                                                    style={{ fontSize: 'var(--font-caption)' }}
+                                                    className="settings-btn-danger text-caption px-2 py-1 rounded"
                                                 >
                                                     &times;
                                                 </button>
@@ -253,13 +247,12 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
 
             {hasUnsavedChanges && (
                 <div className="flex justify-end gap-2 pt-2">
-                    <button onClick={handleDiscard} className="settings-btn text-text-muted" style={{ fontSize: 'var(--font-body)' }}>
+                    <button onClick={handleDiscard} className="settings-btn text-body text-text-muted px-3 py-1.5 rounded-lg">
                         {'Discard'}
                     </button>
                     <button
                         onClick={() => void handleSave()}
-                        className="settings-btn text-text-primary bg-accent-blue/20 border-accent-blue/40"
-                        style={{ fontSize: 'var(--font-body)' }}
+                        className="settings-btn-primary text-body px-4 py-1.5 rounded-lg"
                     >
                         {'Save'}
                     </button>

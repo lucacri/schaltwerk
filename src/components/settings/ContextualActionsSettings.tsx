@@ -126,25 +126,25 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <h3 className="text-text-primary" style={{ fontSize: 'var(--font-heading)' }}>
+                <h3 className="text-body font-medium text-text-primary">
                     {'Contextual Actions'}
                 </h3>
                 <div className="flex gap-2">
-                    <button onClick={() => void handleReset()} className="settings-btn text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
+                    <button onClick={() => void handleReset()} className="settings-btn text-caption text-text-muted px-3 py-1.5 rounded-lg">
                         {'Reset to Defaults'}
                     </button>
-                    <button onClick={handleAdd} className="settings-btn text-text-primary" style={{ fontSize: 'var(--font-body)' }}>
+                    <button onClick={handleAdd} className="settings-btn text-body px-3 py-1.5 rounded-lg">
                         {'+ Add Action'}
                     </button>
                 </div>
             </div>
 
-            <p className="text-text-muted" style={{ fontSize: 'var(--font-caption)' }}>
+            <p className="text-caption text-text-tertiary">
                 {'Define actions that appear on MR and Issue detail views. Use {{variable}} syntax in templates to inject context.'}
             </p>
 
             {currentActions.length === 0 && (
-                <div className="text-text-muted text-center py-8" style={{ fontSize: 'var(--font-body)' }}>
+                <div className="text-text-muted text-center py-8 text-body">
                     {'No actions configured.'}
                 </div>
             )}
@@ -153,21 +153,20 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                 {currentActions.map(action => (
                     <div
                         key={action.id}
-                        className="rounded-lg border"
-                        style={{ backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-border-subtle)' }}
+                        className="rounded-lg border bg-bg-elevated border-border-subtle"
                     >
                         <div
                             className="flex items-center justify-between px-4 py-3 cursor-pointer"
                             onClick={() => setExpandedId(expandedId === action.id ? null : action.id)}
                         >
                             <div className="flex items-center gap-3">
-                                <span className="text-text-primary" style={{ fontSize: 'var(--font-body)' }}>
+                                <span className="text-body text-text-primary">
                                     {action.name || '(unnamed)'}
                                 </span>
-                                <span className="text-text-muted px-1.5 py-0.5 rounded" style={{ fontSize: 'var(--font-caption)', backgroundColor: 'var(--color-bg-tertiary)' }}>
+                                <span className="text-caption text-text-muted px-1.5 py-0.5 rounded bg-bg-tertiary">
                                     {action.context}
                                 </span>
-                                <span className="text-text-muted px-1.5 py-0.5 rounded" style={{ fontSize: 'var(--font-caption)', backgroundColor: 'var(--color-bg-tertiary)' }}>
+                                <span className="text-caption text-text-muted px-1.5 py-0.5 rounded bg-bg-tertiary">
                                     {action.mode}
                                 </span>
                             </div>
@@ -175,8 +174,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                 {!action.isBuiltIn && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleRemove(action.id) }}
-                                        className="settings-btn-danger px-2 py-1"
-                                        style={{ fontSize: 'var(--font-caption)' }}
+                                        className="settings-btn-danger text-caption px-2 py-1 rounded"
                                     >
                                         {'Delete'}
                                     </button>
@@ -191,27 +189,25 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                         </div>
 
                         {expandedId === action.id && (
-                            <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'var(--color-border-subtle)' }}>
+                            <div className="px-4 pb-4 space-y-3 border-t border-border-subtle">
                                 <div className="pt-3">
                                     <div>
-                                        <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>Name</label>
+                                        <label className="block text-caption text-text-secondary mb-1">Name</label>
                                         <input
                                             type="text"
                                             value={action.name}
                                             onChange={e => handleUpdate(action.id, { name: e.target.value })}
                                             placeholder="e.g. Review this MR"
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
-                                            style={{ fontSize: 'var(--font-body)' }}
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body"
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 mt-3">
                                         <div>
-                                            <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>Context</label>
+                                            <label className="block text-caption text-text-secondary mb-1">Context</label>
                                             <select
                                                 value={action.context}
                                                 onChange={e => handleUpdate(action.id, { context: e.target.value as ContextualActionContext })}
-                                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
-                                                style={{ fontSize: 'var(--font-body)' }}
+                                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)] text-body settings-select"
                                             >
                                                 <option value="mr">MR only</option>
                                                 <option value="issue">Issue only</option>
@@ -219,12 +215,11 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>Mode</label>
+                                            <label className="block text-caption text-text-secondary mb-1">Mode</label>
                                             <select
                                                 value={action.mode}
                                                 onChange={e => handleUpdate(action.id, { mode: e.target.value as ContextualActionMode })}
-                                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
-                                                style={{ fontSize: 'var(--font-body)' }}
+                                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)] text-body settings-select"
                                             >
                                                 <option value="session">Create Session</option>
                                                 <option value="spec">Create Spec</option>
@@ -234,12 +229,11 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                 </div>
 
                                 <div>
-                                    <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>Agent / Variant / Preset</label>
+                                    <label className="block text-caption text-text-secondary mb-1">Agent / Variant / Preset</label>
                                     <select
                                         value={getAgentSourceValue(action)}
                                         onChange={e => handleAgentSourceChange(action.id, e.target.value)}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)]"
-                                        style={{ fontSize: 'var(--font-body)' }}
+                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)] text-body settings-select"
                                     >
                                         {agentSourceOptions.map(opt => (
                                             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -248,17 +242,12 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                 </div>
 
                                 <div>
-                                    <label className="block text-text-muted mb-1" style={{ fontSize: 'var(--font-caption)' }}>Prompt Template</label>
+                                    <label className="block text-caption text-text-secondary mb-1">Prompt Template</label>
                                     <div className="flex flex-wrap gap-1 mb-2">
                                         {getTemplateVars(action.context).map(v => (
                                             <span
                                                 key={v}
-                                                className="text-text-muted px-1.5 py-0.5 rounded border border-border-subtle"
-                                                style={{
-                                                    fontSize: 'var(--font-caption)',
-                                                    backgroundColor: 'var(--color-bg-tertiary)',
-                                                    fontFamily: 'var(--font-family-mono)',
-                                                }}
+                                                className="text-caption text-text-muted px-1.5 py-0.5 rounded border border-border-subtle bg-bg-tertiary font-mono"
                                             >
                                                 {`{{${v}}}`}
                                             </span>
@@ -269,8 +258,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                         onChange={e => handleUpdate(action.id, { promptTemplate: e.target.value })}
                                         placeholder="Review the merge request:\n\nTitle: {{mr.title}}\nDescription: {{mr.description}}"
                                         rows={8}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)]"
-                                        style={{ fontSize: 'var(--font-body)', fontFamily: 'var(--font-family-mono)' }}
+                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body font-mono"
                                     />
                                 </div>
                             </div>
@@ -281,25 +269,17 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
 
             {hasUnsavedChanges && (
                 <div
-                    className="flex justify-end gap-3 pt-3 mt-2 border-t"
-                    style={{ borderColor: 'var(--color-border-subtle)' }}
+                    className="flex justify-end gap-3 pt-3 mt-2 border-t border-border-subtle"
                 >
                     <button
                         onClick={handleDiscard}
-                        className="settings-btn text-text-muted px-4 py-1.5"
-                        style={{ fontSize: 'var(--font-body)' }}
+                        className="settings-btn text-body text-text-muted px-4 py-1.5 rounded-lg"
                     >
                         {'Discard'}
                     </button>
                     <button
                         onClick={() => void handleSave()}
-                        className="settings-btn text-text-primary px-5 py-1.5"
-                        style={{
-                            fontSize: 'var(--font-body)',
-                            backgroundColor: 'var(--color-accent-blue-bg)',
-                            borderColor: 'var(--color-accent-blue)',
-                            fontWeight: 600,
-                        }}
+                        className="settings-btn-primary text-body px-5 py-1.5 rounded-lg font-semibold"
                     >
                         {'Save Changes'}
                     </button>

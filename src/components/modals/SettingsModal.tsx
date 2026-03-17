@@ -1222,7 +1222,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                                 setHasUnsavedChanges(true)
                             }}
                             placeholder=""
-                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted text-body focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted text-body focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                             spellCheck={false}
                         />
                     </div>
@@ -1240,7 +1240,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                                 setHasUnsavedChanges(true)
                             }}
                             placeholder=".schaltwerk/worktrees"
-                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted text-body focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted text-body focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                             spellCheck={false}
                         />
                     </div>
@@ -1342,7 +1342,7 @@ fi`}
                                     value={runScript.command}
                                     onChange={(e) => setRunScript(prev => ({ ...prev, command: e.target.value }))}
                                     placeholder={t.settings.projectRun.commandPlaceholder}
-                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                                 />
                             </div>
                             <div>
@@ -1352,7 +1352,7 @@ fi`}
                                     value={runScript.workingDirectory || ''}
                                     onChange={(e) => setRunScript(prev => ({ ...prev, workingDirectory: e.target.value }))}
                                     placeholder={t.settings.projectRun.workingDirectoryPlaceholder}
-                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                                 />
                             </div>
                             <div>
@@ -1365,14 +1365,14 @@ fi`}
                                                 value={k}
                                                 onChange={(e) => handleRunEnvVarChange(index, 'key', e.target.value)}
                                                 placeholder="KEY"
-                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                                             />
                                             <input
                                                 type="text"
                                                 value={v}
                                                 onChange={(e) => handleRunEnvVarChange(index, 'value', e.target.value)}
                                                 placeholder="value"
-                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                                             />
                                             <button
                                                 onClick={() => handleRemoveRunEnvVar(index)}
@@ -1431,14 +1431,14 @@ fi`}
                                         value={envVar.key}
                                         onChange={(e) => handleProjectEnvVarChange(index, 'key', e.target.value)}
                                         placeholder="KEY"
-                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                                     />
                                     <input
                                         type="text"
                                         value={envVar.value}
                                         onChange={(e) => handleProjectEnvVarChange(index, 'value', e.target.value)}
                                         placeholder="value"
-                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                                     />
                                     <button
                                         onClick={() => handleRemoveProjectEnvVar(index)}
@@ -1517,7 +1517,7 @@ fi`}
                                                 setEditableActionButtons(updated)
                                                 setHasUnsavedChanges(true)
                                             }}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 focus:border-white/20 focus:outline-none"
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:border-[var(--color-border-focus)] focus:outline-none"
                                             placeholder="Button Label"
                                         />
                                     </div>
@@ -1531,7 +1531,7 @@ fi`}
                                                 setEditableActionButtons(updated)
                                                 setHasUnsavedChanges(true)
                                             }}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 focus:border-white/20 focus:outline-none"
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:border-[var(--color-border-focus)] focus:outline-none settings-select"
                                         >
                                             <option value="slate">{t.settings.projectActions.colorOptions.slate}</option>
                                             <option value="green">{t.settings.projectActions.colorOptions.green}</option>
@@ -1550,7 +1550,7 @@ fi`}
                                             setEditableActionButtons(updated)
                                             setHasUnsavedChanges(true)
                                         }}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 focus:border-white/20 focus:outline-none font-mono text-body min-h-[80px] resize-y"
+                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:border-[var(--color-border-focus)] focus:outline-none font-mono text-body min-h-[80px] resize-y"
                                         placeholder={t.settings.projectActions.promptPlaceholder}
                                     />
                                 </div>
@@ -1785,7 +1785,7 @@ fi`}
                                     value={binaryConfigs[activeAgentTab].custom_path || ''}
                                     onChange={(e) => { void handleBinaryPathChange(activeAgentTab, e.target.value || null) }}
                                     placeholder={binaryConfigs[activeAgentTab].detected_binaries.find(b => b.is_recommended)?.path || `Path to ${displayNameForAgent(activeAgentTab)} binary`}
-                                    className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body"
+                                    className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                                 />
                                 <button
                                     onClick={() => { void openFilePicker(activeAgentTab) }}
@@ -1876,7 +1876,7 @@ fi`}
                                             onChange={(e) => handleAgentPreferenceChange(activeAgentTab, 'model', e.target.value)}
                                             placeholder={modelPlaceholder}
                                             list={modelListId}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body"
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                                             autoCorrect="off"
                                             autoCapitalize="off"
                                             spellCheck={false}
@@ -1897,7 +1897,7 @@ fi`}
                                             onChange={(e) => handleAgentPreferenceChange(activeAgentTab, 'reasoningEffort', e.target.value)}
                                             placeholder={reasoningPlaceholder}
                                             list={reasoningListId}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted text-body"
+                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted text-body"
                                             autoCorrect="off"
                                             autoCapitalize="off"
                                             spellCheck={false}
@@ -1929,7 +1929,7 @@ fi`}
                             value={cliArgs[activeAgentTab]}
                             onChange={(e) => setCliArgs(prev => ({ ...prev, [activeAgentTab]: e.target.value }))}
                             placeholder="e.g., --profile test or -p some 'quoted value'"
-                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body"
+                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                             autoCorrect="off"
                             autoCapitalize="off"
                             autoComplete="off"
@@ -1971,7 +1971,7 @@ fi`}
                                         value={item.key}
                                         onChange={(e) => handleEnvVarChange(activeAgentTab, index, 'key', e.target.value)}
                                         placeholder={t.settings.environment.varNamePlaceholder}
-                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted"
+                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted"
                                         autoCorrect="off"
                                         autoCapitalize="off"
                                         autoComplete="off"
@@ -1984,7 +1984,7 @@ fi`}
                                         value={item.value}
                                         onChange={(e) => handleEnvVarChange(activeAgentTab, index, 'value', e.target.value)}
                                         placeholder={t.settings.environment.valuePlaceholder}
-                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted"
+                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted"
                                         autoCorrect="off"
                                         autoCapitalize="off"
                                         autoComplete="off"
@@ -2179,7 +2179,7 @@ fi`}
                                 value={terminalSettings.fontFamily || ''}
                                 onChange={(e) => setTerminalSettings({ ...terminalSettings, fontFamily: e.target.value || null })}
                                 placeholder={t.settings.appearance.fontFamilyPlaceholder}
-                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body"
+                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                             />
                             <div className="mt-2">
                                 <button
@@ -2208,7 +2208,7 @@ fi`}
                                     type="checkbox"
                                     checked={terminalSettings.webglEnabled ?? true}
                                     onChange={(e) => setTerminalSettings({ ...terminalSettings, webglEnabled: e.target.checked })}
-                                    className="w-4 h-4 bg-bg-tertiary border border-white/10 rounded cursor-pointer"
+                                    className="w-4 h-4 bg-bg-tertiary border border-border-subtle rounded cursor-pointer"
                                 />
                                 <span className="text-body text-text-secondary">{t.settings.appearance.gpuAcceleration}</span>
                             </label>
@@ -2287,7 +2287,7 @@ fi`}
                                                 value={currentValue}
                                                 onChange={(e) => handleShortcutInputChange(item.action, e.target.value)}
                                                 placeholder="Type shortcut (e.g. Mod+Shift+S)"
-                                                className="w-48 bg-bg-tertiary text-text-primary border border-white/10 rounded px-2.5 py-1.5 text-caption focus:outline-none focus:border-white/20 disabled:opacity-60"
+                                                className="w-48 bg-bg-tertiary text-text-primary border border-border-subtle rounded px-2.5 py-1.5 text-caption focus:outline-none focus:border-[var(--color-border-focus)] disabled:opacity-60"
                                                 disabled={isRecording}
                                             />
                                             <button
@@ -2356,7 +2356,7 @@ fi`}
                                     value={terminalSettings.shell || ''}
                                     onChange={(e) => setTerminalSettings({ ...terminalSettings, shell: e.target.value || null })}
                                     placeholder={t.settings.terminal.shellPathPlaceholder}
-                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body"
+                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                                 />
                                 <div className="mt-2 text-caption text-text-muted">
                                     {t.settings.terminal.shellPathExamples} <code className="text-accent-blue">/usr/local/bin/nu</code>, <code className="text-accent-blue">/opt/homebrew/bin/fish</code>, <code className="text-accent-blue">/bin/zsh</code>
@@ -2374,7 +2374,7 @@ fi`}
                                         setTerminalSettings({ ...terminalSettings, shellArgs: args })
                                     }}
                                     placeholder={t.settings.terminal.shellArgsPlaceholder}
-                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body"
+                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                                 />
                                 <div className="mt-2 text-caption text-text-muted">
                                     {t.settings.terminal.shellArgsDesc}
@@ -2434,7 +2434,7 @@ fi`}
                                     value={agentCommandPrefix}
                                     onChange={(e) => setAgentCommandPrefix(e.target.value)}
                                     placeholder={t.settings.terminal.commandPrefixPlaceholder}
-                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body"
+                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                                 />
                                 <div className="mt-2 text-caption text-text-muted">
                                     {t.settings.terminal.commandPrefixDesc}
@@ -2488,7 +2488,7 @@ fi`}
                             {t.settings.generation.agentDesc}
                         </p>
                         <select
-                            className="w-full bg-bg-elevated text-text-primary border border-border-subtle rounded px-3 py-2 text-body"
+                            className="w-full bg-bg-tertiary text-text-primary border border-border-subtle rounded px-3 py-2 text-body settings-select focus:outline-none focus:border-[var(--color-border-focus)]"
                             value={generationAgent}
                             onChange={(e) => {
                                 setGenerationAgent(e.target.value)
@@ -2517,7 +2517,7 @@ fi`}
                             onChange={(e) => setGenerationCliArgs(e.target.value)}
                             onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationNamePrompt, generationCommitPrompt)}
                             placeholder={t.settings.generation.cliArgsPlaceholder}
-                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body"
+                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                         />
                     </div>
 
@@ -2574,7 +2574,7 @@ fi`}
                                         }}
                                         onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationNamePrompt, generationCommitPrompt)}
                                         placeholder={t.settings.generation.namePromptPlaceholder}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body min-h-[100px] resize-y"
+                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body min-h-[100px] resize-y"
                                         rows={6}
                                     />
                                 </div>
@@ -2613,7 +2613,7 @@ fi`}
                                         }}
                                         onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationNamePrompt, generationCommitPrompt)}
                                         placeholder={t.settings.generation.commitPromptPlaceholder}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-white/10 placeholder-text-muted font-mono text-body min-h-[100px] resize-y"
+                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body min-h-[100px] resize-y"
                                         rows={6}
                                     />
                                 </div>
@@ -2841,10 +2841,14 @@ fi`}
                 return renderEnvironmentSettings()
             case 'agentConfiguration':
                 return (
-                    <div className="space-y-8">
-                        <AgentVariantsSettings onNotification={showNotification} />
-                        <AgentPresetsSettings onNotification={showNotification} />
-                        <ContextualActionsSettings onNotification={showNotification} />
+                    <div className="flex flex-col h-full">
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="space-y-8">
+                                <AgentVariantsSettings onNotification={showNotification} />
+                                <AgentPresetsSettings onNotification={showNotification} />
+                                <ContextualActionsSettings onNotification={showNotification} />
+                            </div>
+                        </div>
                     </div>
                 )
             case 'terminal':
