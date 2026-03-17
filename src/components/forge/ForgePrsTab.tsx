@@ -3,6 +3,7 @@ import { VscClose, VscInfo, VscSearch } from 'react-icons/vsc'
 import { ForgeErrorDetailModal } from './ForgeErrorDetailModal'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
 import { useForgeSearch } from '../../hooks/useForgeSearch'
+import { ForgeDetailErrorView } from './ForgeDetailErrorView'
 import { ForgePrDetail } from './ForgePrDetail'
 import { ForgeLabelChip } from './ForgeLabelChip'
 import { useTranslation } from '../../common/i18n'
@@ -141,30 +142,47 @@ export function ForgePrsTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [details, setDetails] = useState<ForgePrDetails | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
+  const [detailError, setDetailError] = useState(false)
   const [selectedSource, setSelectedSource] = useState<ForgeSourceConfig | undefined>(undefined)
+
+  const loadDetails = useCallback((id: string) => {
+    setLoadingDetails(true)
+    setDetailError(false)
+
+    const source = forge.sources[0]
+    void search.fetchDetails(id, source).then((d) => {
+      if (!d) {
+        setDetailError(true)
+      } else {
+        setDetails(d)
+      }
+      setLoadingDetails(false)
+    }).catch((err) => {
+      logger.error('[ForgePrsTab] Failed to fetch PR details', err)
+      setDetailError(true)
+      setLoadingDetails(false)
+    })
+  }, [search, forge.sources])
 
   const handleSelect = useCallback(
     (pr: ForgePrSummary) => {
       setSelectedId(pr.id)
-      setLoadingDetails(true)
-
-      const source = forge.sources[0]
-      setSelectedSource(forge.sources.length > 1 ? source : undefined)
-
-      void search.fetchDetails(pr.id, source).then((d) => {
-        setDetails(d)
-        setLoadingDetails(false)
-      }).catch((err) => {
-        logger.error('[ForgePrsTab] Failed to fetch PR details', err)
-        setLoadingDetails(false)
-      })
+      setDetails(null)
+      setSelectedSource(forge.sources.length > 1 ? forge.sources[0] : undefined)
+      loadDetails(pr.id)
     },
-    [search, forge.sources]
+    [loadDetails, forge.sources]
   )
+
+  const handleRetry = useCallback(() => {
+    if (!selectedId) return
+    loadDetails(selectedId)
+  }, [selectedId, loadDetails])
 
   const handleBack = useCallback(() => {
     setSelectedId(null)
     setDetails(null)
+    setDetailError(false)
     setSelectedSource(undefined)
   }, [])
 
@@ -190,6 +208,18 @@ export function ForgePrsTab() {
           {t.forgePrTab.loading}
         </span>
       </div>
+    )
+  }
+
+  if (selectedId && detailError) {
+    return (
+      <ForgeDetailErrorView
+        message={t.forgePrTab.failedToLoadDetails}
+        retryLabel={t.forgePrTab.retry}
+        backLabel={t.forgePrTab.back}
+        onRetry={handleRetry}
+        onBack={handleBack}
+      />
     )
   }
 

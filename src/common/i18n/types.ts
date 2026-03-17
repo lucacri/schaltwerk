@@ -1286,6 +1286,8 @@ export interface Translations {
     notes: string
     noNotes: string
     source: string
+    failedToLoadDetails: string
+    retry: string
   }
   forgePrTab: {
     searchPlaceholder: string
@@ -1318,6 +1320,8 @@ export interface Translations {
     reviewers: string
     pipeline: string
     refreshPipeline: string
+    failedToLoadDetails: string
+    retry: string
   }
   historySearch: {
     placeholder: string

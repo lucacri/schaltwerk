@@ -53,7 +53,6 @@ export function ForgeIntegrationProvider({ children }: { children: ReactNode }) 
         })
         .catch((error) => {
           logger.error('[ForgeIntegrationContext] Failed to load GitLab sources', error)
-          setSources([])
         })
     } else {
       setSources([])

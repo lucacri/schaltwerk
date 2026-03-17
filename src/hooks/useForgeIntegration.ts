@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAtomValue } from 'jotai'
 import { invoke } from '@tauri-apps/api/core'
 import { listenEvent, SchaltEvent } from '../common/eventSystem'
@@ -141,7 +141,7 @@ export function useForgeIntegration(): ForgeIntegrationValue {
     []
   )
 
-  return {
+  return useMemo(() => ({
     status,
     loading,
     refreshStatus,
@@ -154,5 +154,5 @@ export function useForgeIntegration(): ForgeIntegrationValue {
     approvePr,
     mergePr,
     commentOnPr,
-  }
+  }), [status, loading, refreshStatus, searchIssues, getIssueDetails, searchPrs, getPrDetails, createSessionPr, getReviewComments, approvePr, mergePr, commentOnPr])
 }

@@ -1275,7 +1275,9 @@
     "labels": "Labels",
     "notes": "Notes",
     "noNotes": "No notes yet",
-    "source": "Source"
+    "source": "Source",
+    "failedToLoadDetails": "Failed to load details",
+    "retry": "Retry"
   },
   "forgePrTab": {
     "searchPlaceholder": "Search pull requests...",
@@ -1307,7 +1309,9 @@
     "mergeStatus": "Merge Status",
     "reviewers": "Reviewers",
     "pipeline": "Pipeline",
-    "refreshPipeline": "Refresh pipeline"
+    "refreshPipeline": "Refresh pipeline",
+    "failedToLoadDetails": "Failed to load details",
+    "retry": "Retry"
   },
   "historySearch": {
     "placeholder": "Search commits...",

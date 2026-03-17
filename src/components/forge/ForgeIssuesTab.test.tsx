@@ -210,4 +210,91 @@ describe('ForgeIssuesTab', () => {
       expect(screen.getByText('The login form crashes on submit.')).toBeTruthy()
     })
   })
+
+  it('shows error state when detail fetch returns null', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([makeSummary()])
+    const getIssueDetails = vi.fn().mockResolvedValue(null)
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchIssues,
+        getIssueDetails,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Fix login bug')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Fix login bug'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load details')).toBeTruthy()
+    })
+  })
+
+  it('can retry after detail fetch failure', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([makeSummary()])
+    const getIssueDetails = vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(makeDetails())
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchIssues,
+        getIssueDetails,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Fix login bug')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Fix login bug'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load details')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Retry'))
+
+    await waitFor(() => {
+      expect(screen.getByText('The login form crashes on submit.')).toBeTruthy()
+    })
+  })
+
+  it('can go back to list after detail fetch failure', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([makeSummary()])
+    const getIssueDetails = vi.fn().mockResolvedValue(null)
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchIssues,
+        getIssueDetails,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Fix login bug')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Fix login bug'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load details')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Back to list'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Fix login bug')).toBeTruthy()
+      expect(screen.queryByText('Failed to load details')).toBeNull()
+    })
+  })
 })

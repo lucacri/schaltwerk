@@ -1273,7 +1273,9 @@
     "labels": "标签",
     "notes": "备注",
     "noNotes": "暂无备注",
-    "source": "来源"
+    "source": "来源",
+    "failedToLoadDetails": "加载详情失败",
+    "retry": "重试"
   },
   "forgePrTab": {
     "searchPlaceholder": "搜索拉取请求...",
@@ -1305,7 +1307,9 @@
     "mergeStatus": "合并状态",
     "reviewers": "审阅者",
     "pipeline": "流水线",
-    "refreshPipeline": "刷新流水线"
+    "refreshPipeline": "刷新流水线",
+    "failedToLoadDetails": "加载详情失败",
+    "retry": "重试"
   },
   "historySearch": {
     "placeholder": "搜索提交…",

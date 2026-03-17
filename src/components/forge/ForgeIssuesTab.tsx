@@ -3,6 +3,7 @@ import { VscClose, VscInfo, VscSearch } from 'react-icons/vsc'
 import { ForgeErrorDetailModal } from './ForgeErrorDetailModal'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
 import { useForgeSearch } from '../../hooks/useForgeSearch'
+import { ForgeDetailErrorView } from './ForgeDetailErrorView'
 import { ForgeIssueDetail } from './ForgeIssueDetail'
 import { ForgeLabelChip } from './ForgeLabelChip'
 import { useTranslation } from '../../common/i18n'
@@ -116,29 +117,46 @@ export function ForgeIssuesTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [details, setDetails] = useState<ForgeIssueDetails | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
+  const [detailError, setDetailError] = useState(false)
   const [selectedSource, setSelectedSource] = useState<ForgeSourceConfig | undefined>(undefined)
+
+  const loadDetails = useCallback((id: string) => {
+    setLoadingDetails(true)
+    setDetailError(false)
+
+    void search.fetchDetails(id).then((d) => {
+      if (!d) {
+        setDetailError(true)
+      } else {
+        setDetails(d)
+      }
+      setLoadingDetails(false)
+    }).catch((err) => {
+      logger.error('[ForgeIssuesTab] Failed to fetch issue details', err)
+      setDetailError(true)
+      setLoadingDetails(false)
+    })
+  }, [search])
 
   const handleSelect = useCallback(
     (issue: ForgeIssueSummary) => {
       setSelectedId(issue.id)
-      setLoadingDetails(true)
-
-      void search.fetchDetails(issue.id).then((d) => {
-        setDetails(d)
-        setLoadingDetails(false)
-      }).catch((err) => {
-        logger.error('[ForgeIssuesTab] Failed to fetch issue details', err)
-        setLoadingDetails(false)
-      })
-
+      setDetails(null)
+      loadDetails(issue.id)
       setSelectedSource(forge.sources.length > 1 ? forge.sources[0] : undefined)
     },
-    [search, forge.sources]
+    [loadDetails, forge.sources]
   )
+
+  const handleRetry = useCallback(() => {
+    if (!selectedId) return
+    loadDetails(selectedId)
+  }, [selectedId, loadDetails])
 
   const handleBack = useCallback(() => {
     setSelectedId(null)
     setDetails(null)
+    setDetailError(false)
     setSelectedSource(undefined)
   }, [])
 
@@ -149,6 +167,18 @@ export function ForgeIssuesTab() {
           {t.forgeIssueTab.loading}
         </span>
       </div>
+    )
+  }
+
+  if (selectedId && detailError) {
+    return (
+      <ForgeDetailErrorView
+        message={t.forgeIssueTab.failedToLoadDetails}
+        retryLabel={t.forgeIssueTab.retry}
+        backLabel={t.forgeIssueTab.back}
+        onRetry={handleRetry}
+        onBack={handleBack}
+      />
     )
   }
 

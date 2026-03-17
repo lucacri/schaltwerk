@@ -209,4 +209,91 @@ describe('ForgePrsTab', () => {
       expect(screen.getByText('This PR adds feature X.')).toBeTruthy()
     })
   })
+
+  it('shows error state when detail fetch returns null', async () => {
+    const searchPrs = vi.fn().mockResolvedValue([makePrSummary()])
+    const getPrDetails = vi.fn().mockResolvedValue(null)
+
+    renderWithProviders(<ForgePrsTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchPrs,
+        getPrDetails,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Add feature X')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Add feature X'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load details')).toBeTruthy()
+    })
+  })
+
+  it('can retry after PR detail fetch failure', async () => {
+    const searchPrs = vi.fn().mockResolvedValue([makePrSummary()])
+    const getPrDetails = vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(makePrDetails())
+
+    renderWithProviders(<ForgePrsTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchPrs,
+        getPrDetails,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Add feature X')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Add feature X'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load details')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Retry'))
+
+    await waitFor(() => {
+      expect(screen.getByText('This PR adds feature X.')).toBeTruthy()
+    })
+  })
+
+  it('can go back to list after PR detail fetch failure', async () => {
+    const searchPrs = vi.fn().mockResolvedValue([makePrSummary()])
+    const getPrDetails = vi.fn().mockResolvedValue(null)
+
+    renderWithProviders(<ForgePrsTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchPrs,
+        getPrDetails,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Add feature X')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Add feature X'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load details')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Back to list'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Add feature X')).toBeTruthy()
+      expect(screen.queryByText('Failed to load details')).toBeNull()
+    })
+  })
 })
