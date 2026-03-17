@@ -877,20 +877,21 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_top_terminal_has_larger_buffer() {
+    fn test_terminal_buffer_sizes_are_compact() {
         let top_id = "session-longhistory~deadbeef-top";
         let bottom_id = "session-longhistory~deadbeef-bottom";
 
         let top_size = max_buffer_size_for_terminal(top_id);
         let bottom_size = max_buffer_size_for_terminal(bottom_id);
 
-        assert!(
-            top_size > bottom_size,
-            "Agent terminals should have a larger buffer. top={top_size} bottom={bottom_size}"
+        assert_eq!(
+            top_size, bottom_size,
+            "Agent and user terminals should use the same compact buffer. top={top_size} bottom={bottom_size}"
         );
-        assert!(
-            top_size > 2 * 1024 * 1024,
-            "Agent buffer should exceed 2MB, got {top_size} bytes"
+        assert_eq!(
+            top_size,
+            512 * 1024,
+            "Buffer should be 512KB, got {top_size} bytes"
         );
     }
 

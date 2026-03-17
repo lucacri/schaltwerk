@@ -12,7 +12,7 @@ import {
 import { terminalFontSizeAtom } from '../store/atoms/fontSize'
 import { buildTerminalFontFamily } from '../utils/terminalFonts'
 
-const SCROLLBACK_LINES = 20000
+const SCROLLBACK_LINES = 500
 const ATLAS_CONTRAST_BASE = 1.1
 const DEFAULT_FONT_FAMILY = buildTerminalFontFamily(null)
 
