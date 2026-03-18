@@ -1,5 +1,4 @@
 [build]
-jobs = 8
 # Keep incremental enabled for faster local edit/compile cycles.
 # CI can still disable it explicitly via CARGO_INCREMENTAL=0 when needed.
 
