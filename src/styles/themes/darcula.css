@@ -1,0 +1,493 @@
+/* ==========================================================================
+   Darcula Theme
+   Palette derived from JetBrains Darcula theme
+   The classic warm dark theme from IntelliJ IDEA, PHPStorm, WebStorm, etc.
+   ========================================================================== */
+[data-theme="darcula"] {
+  /* Color Scheme for native widgets */
+  --color-scheme: dark;
+
+  /* Background Colors */
+  --color-bg-primary: #2b2b2b;
+  --color-bg-primary-rgb: 43 43 43;
+  --color-bg-secondary: #242424;
+  --color-bg-secondary-rgb: 36 36 36;
+  --color-bg-tertiary: #313335;
+  --color-bg-tertiary-rgb: 49 51 53;
+  --color-bg-elevated: #3c3f41;
+  --color-bg-elevated-rgb: 60 63 65;
+  --color-bg-hover: #4b4e50;
+  --color-bg-hover-rgb: 75 78 80;
+  --color-bg-active: #515658;
+  --color-bg-active-rgb: 81 86 88;
+  --color-bg-selected: rgba(75, 110, 175, 0.25);
+  --color-bg-selected-rgb: 75 110 175;
+
+  /* Panel aliases */
+  --color-panel: var(--color-bg-secondary);
+  --color-panel-rgb: var(--color-bg-secondary-rgb);
+  --color-panel-alt: var(--color-bg-tertiary);
+  --color-panel-alt-rgb: var(--color-bg-tertiary-rgb);
+
+  /* Text Colors */
+  --color-text-primary: #a9b7c6;
+  --color-text-primary-rgb: 169 183 198;
+  --color-text-secondary: #9aa7b0;
+  --color-text-secondary-rgb: 154 167 176;
+  --color-text-tertiary: #808080;
+  --color-text-tertiary-rgb: 128 128 128;
+  --color-text-muted: #606366;
+  --color-text-muted-rgb: 96 99 102;
+  --color-text-inverse: #2b2b2b;
+  --color-text-inverse-rgb: 43 43 43;
+
+  /* Border Colors */
+  --color-border-default: #515151;
+  --color-border-default-rgb: 81 81 81;
+  --color-border-subtle: #3c3f41;
+  --color-border-subtle-rgb: 60 63 65;
+  --color-border-strong: #6b6b6b;
+  --color-border-strong-rgb: 107 107 107;
+  --color-border-focus: #4e94ce;
+  --color-border-focus-rgb: 78 148 206;
+
+  /* Accent Colors - Darcula blue primary accent */
+  --color-accent-blue: #4e94ce;
+  --color-accent-blue-rgb: 78 148 206;
+  --color-accent-blue-light: #6fb3e0;
+  --color-accent-blue-dark: #3574a5;
+  --color-accent-blue-bg: rgba(78, 148, 206, 0.12);
+  --color-accent-blue-border: rgba(78, 148, 206, 0.5);
+
+  --color-accent-green: #6a8759;
+  --color-accent-green-rgb: 106 135 89;
+  --color-accent-green-light: #8aad76;
+  --color-accent-green-dark: #4e6b42;
+  --color-accent-green-bg: rgba(106, 135, 89, 0.12);
+  --color-accent-green-border: rgba(106, 135, 89, 0.5);
+
+  --color-accent-amber: #cc7832;
+  --color-accent-amber-rgb: 204 120 50;
+  --color-accent-amber-light: #e09858;
+  --color-accent-amber-dark: #a66028;
+  --color-accent-amber-bg: rgba(204, 120, 50, 0.12);
+  --color-accent-amber-border: rgba(204, 120, 50, 0.5);
+
+  --color-accent-red: #bc3f3c;
+  --color-accent-red-rgb: 188 63 60;
+  --color-accent-red-light: #d66b68;
+  --color-accent-red-dark: #8f2e2c;
+  --color-accent-red-bg: rgba(188, 63, 60, 0.12);
+  --color-accent-red-border: rgba(188, 63, 60, 0.5);
+
+  --color-accent-violet: #9876aa;
+  --color-accent-violet-rgb: 152 118 170;
+  --color-accent-violet-light: #b39bc5;
+  --color-accent-violet-dark: #7a5d8a;
+  --color-accent-violet-bg: rgba(152, 118, 170, 0.12);
+  --color-accent-violet-border: rgba(152, 118, 170, 0.5);
+
+  --color-accent-purple: #9876aa;
+  --color-accent-purple-rgb: 152 118 170;
+  --color-accent-purple-light: #b39bc5;
+  --color-accent-purple-dark: #7a5d8a;
+  --color-accent-purple-bg: rgba(152, 118, 170, 0.12);
+  --color-accent-purple-border: rgba(152, 118, 170, 0.5);
+
+  --color-accent-magenta: #c586c0;
+  --color-accent-magenta-rgb: 197 134 192;
+  --color-accent-magenta-light: #d9a6d5;
+  --color-accent-magenta-dark: #a068a0;
+  --color-accent-magenta-bg: rgba(197, 134, 192, 0.12);
+  --color-accent-magenta-border: rgba(197, 134, 192, 0.5);
+
+  --color-accent-yellow: #bbb529;
+  --color-accent-yellow-rgb: 187 181 41;
+  --color-accent-yellow-light: #d4ce52;
+  --color-accent-yellow-dark: #959020;
+  --color-accent-yellow-bg: rgba(187, 181, 41, 0.12);
+  --color-accent-yellow-border: rgba(187, 181, 41, 0.5);
+
+  --color-accent-cyan: #299999;
+  --color-accent-cyan-rgb: 41 153 153;
+  --color-accent-cyan-light: #40bfbf;
+  --color-accent-cyan-dark: #1f7a7a;
+  --color-accent-cyan-bg: rgba(41, 153, 153, 0.12);
+  --color-accent-cyan-border: rgba(41, 153, 153, 0.5);
+
+  /* Button text colors on accent backgrounds */
+  --color-accent-blue-text: #ffffff;
+  --color-accent-amber-text: #ffffff;
+  --color-accent-cyan-text: #ffffff;
+  --color-accent-green-text: #ffffff;
+  --color-accent-red-text: #ffffff;
+
+  --color-accent-copilot: #9876aa;
+  --color-accent-copilot-rgb: 152 118 170;
+  --color-accent-copilot-light: #b39bc5;
+  --color-accent-copilot-dark: #7a5d8a;
+  --color-accent-copilot-bg: rgba(152, 118, 170, 0.12);
+  --color-accent-copilot-border: rgba(152, 118, 170, 0.5);
+
+  /* Extended Tailwind-Compatible Palettes - Darcula blue scale */
+  --color-blue-50: #e8f1f8;
+  --color-blue-50-rgb: 232 241 248;
+  --color-blue-100: #c8ddf0;
+  --color-blue-100-rgb: 200 221 240;
+  --color-blue-200: #a5c8e5;
+  --color-blue-200-rgb: 165 200 229;
+  --color-blue-300: #82b3da;
+  --color-blue-300-rgb: 130 179 218;
+  --color-blue-400: #6fb3e0;
+  --color-blue-400-rgb: 111 179 224;
+  --color-blue-500: #4e94ce;
+  --color-blue-500-rgb: 78 148 206;
+  --color-blue-600: #3d7ab5;
+  --color-blue-600-rgb: 61 122 181;
+  --color-blue-700: #2d6099;
+  --color-blue-700-rgb: 45 96 153;
+  --color-blue-800: #1e4a7d;
+  --color-blue-800-rgb: 30 74 125;
+  --color-blue-900: #103561;
+  --color-blue-900-rgb: 16 53 97;
+  --color-blue-950: #082244;
+  --color-blue-950-rgb: 8 34 68;
+
+  /* Green scale - Darcula string green */
+  --color-green-50: #eef3eb;
+  --color-green-50-rgb: 238 243 235;
+  --color-green-100: #d4e2cd;
+  --color-green-100-rgb: 212 226 205;
+  --color-green-200: #b9d0ae;
+  --color-green-200-rgb: 185 208 174;
+  --color-green-300: #9ebe90;
+  --color-green-300-rgb: 158 190 144;
+  --color-green-400: #8aad76;
+  --color-green-400-rgb: 138 173 118;
+  --color-green-500: #6a8759;
+  --color-green-500-rgb: 106 135 89;
+  --color-green-600: #567048;
+  --color-green-600-rgb: 86 112 72;
+  --color-green-700: #435838;
+  --color-green-700-rgb: 67 88 56;
+  --color-green-800: #314028;
+  --color-green-800-rgb: 49 64 40;
+  --color-green-900: #1f2919;
+  --color-green-900-rgb: 31 41 25;
+  --color-green-950: #12190e;
+  --color-green-950-rgb: 18 25 14;
+
+  /* Amber scale - Darcula keyword orange */
+  --color-amber-50: #faf1e8;
+  --color-amber-50-rgb: 250 241 232;
+  --color-amber-100: #f2dcc5;
+  --color-amber-100-rgb: 242 220 197;
+  --color-amber-200: #e8c5a0;
+  --color-amber-200-rgb: 232 197 160;
+  --color-amber-300: #dead79;
+  --color-amber-300-rgb: 222 173 121;
+  --color-amber-400: #e09858;
+  --color-amber-400-rgb: 224 152 88;
+  --color-amber-500: #cc7832;
+  --color-amber-500-rgb: 204 120 50;
+  --color-amber-600: #a66028;
+  --color-amber-600-rgb: 166 96 40;
+  --color-amber-700: #80491e;
+  --color-amber-700-rgb: 128 73 30;
+  --color-amber-800: #5a3315;
+  --color-amber-800-rgb: 90 51 21;
+  --color-amber-900: #351e0c;
+  --color-amber-900-rgb: 53 30 12;
+  --color-amber-950: #1e1107;
+  --color-amber-950-rgb: 30 17 7;
+
+  /* Red scale - Darcula error red */
+  --color-red-50: #f7eaea;
+  --color-red-50-rgb: 247 234 234;
+  --color-red-100: #ecd0cf;
+  --color-red-100-rgb: 236 208 207;
+  --color-red-200: #dfb2b1;
+  --color-red-200-rgb: 223 178 177;
+  --color-red-300: #d29393;
+  --color-red-300-rgb: 210 147 147;
+  --color-red-400: #d66b68;
+  --color-red-400-rgb: 214 107 104;
+  --color-red-500: #bc3f3c;
+  --color-red-500-rgb: 188 63 60;
+  --color-red-600: #9a3330;
+  --color-red-600-rgb: 154 51 48;
+  --color-red-700: #782725;
+  --color-red-700-rgb: 120 39 37;
+  --color-red-800: #561c1a;
+  --color-red-800-rgb: 86 28 26;
+  --color-red-900: #351110;
+  --color-red-900-rgb: 53 17 16;
+  --color-red-950: #1e0909;
+  --color-red-950-rgb: 30 9 9;
+
+  /* Yellow scale */
+  --color-yellow-50: #f5f4e4;
+  --color-yellow-50-rgb: 245 244 228;
+  --color-yellow-100: #e8e6be;
+  --color-yellow-100-rgb: 232 230 190;
+  --color-yellow-200: #dad896;
+  --color-yellow-200-rgb: 218 216 150;
+  --color-yellow-300: #ccc96e;
+  --color-yellow-300-rgb: 204 201 110;
+  --color-yellow-400: #d4ce52;
+  --color-yellow-400-rgb: 212 206 82;
+  --color-yellow-500: #bbb529;
+  --color-yellow-500-rgb: 187 181 41;
+  --color-yellow-600: #959020;
+  --color-yellow-600-rgb: 149 144 32;
+  --color-yellow-700: #706c18;
+  --color-yellow-700-rgb: 112 108 24;
+  --color-yellow-800: #4a4810;
+  --color-yellow-800-rgb: 74 72 16;
+  --color-yellow-900: #252409;
+  --color-yellow-900-rgb: 37 36 9;
+
+  /* Cyan scale */
+  --color-cyan-50: #e4f3f3;
+  --color-cyan-50-rgb: 228 243 243;
+  --color-cyan-100: #bfe2e2;
+  --color-cyan-100-rgb: 191 226 226;
+  --color-cyan-200: #96d0d0;
+  --color-cyan-200-rgb: 150 208 208;
+  --color-cyan-300: #6cbebe;
+  --color-cyan-300-rgb: 108 190 190;
+  --color-cyan-400: #40bfbf;
+  --color-cyan-400-rgb: 64 191 191;
+  --color-cyan-500: #299999;
+  --color-cyan-500-rgb: 41 153 153;
+  --color-cyan-600: #217a7a;
+  --color-cyan-600-rgb: 33 122 122;
+  --color-cyan-700: #195c5c;
+  --color-cyan-700-rgb: 25 92 92;
+  --color-cyan-800: #113e3e;
+  --color-cyan-800-rgb: 17 62 62;
+  --color-cyan-900: #092020;
+  --color-cyan-900-rgb: 9 32 32;
+  --color-cyan-950: #041111;
+  --color-cyan-950-rgb: 4 17 17;
+
+  /* Purple scale */
+  --color-purple-50: #f3eef7;
+  --color-purple-50-rgb: 243 238 247;
+  --color-purple-100: #e0d4eb;
+  --color-purple-100-rgb: 224 212 235;
+  --color-purple-200: #ccb9de;
+  --color-purple-200-rgb: 204 185 222;
+  --color-purple-300: #b39bc5;
+  --color-purple-300-rgb: 179 155 197;
+  --color-purple-400: #a98bba;
+  --color-purple-400-rgb: 169 139 186;
+  --color-purple-500: #9876aa;
+  --color-purple-500-rgb: 152 118 170;
+  --color-purple-600: #7c5f8c;
+  --color-purple-600-rgb: 124 95 140;
+  --color-purple-700: #604970;
+  --color-purple-700-rgb: 96 73 112;
+  --color-purple-800: #453453;
+  --color-purple-800-rgb: 69 52 83;
+  --color-purple-900: #2b1f36;
+  --color-purple-900-rgb: 43 31 54;
+  --color-purple-950: #1a1222;
+  --color-purple-950-rgb: 26 18 34;
+
+  /* Violet scale - same as purple for Darcula */
+  --color-violet-50: #f3eef7;
+  --color-violet-50-rgb: 243 238 247;
+  --color-violet-100: #e0d4eb;
+  --color-violet-100-rgb: 224 212 235;
+  --color-violet-200: #ccb9de;
+  --color-violet-200-rgb: 204 185 222;
+  --color-violet-300: #b39bc5;
+  --color-violet-300-rgb: 179 155 197;
+  --color-violet-400: #a98bba;
+  --color-violet-400-rgb: 169 139 186;
+  --color-violet-500: #9876aa;
+  --color-violet-500-rgb: 152 118 170;
+  --color-violet-600: #7c5f8c;
+  --color-violet-600-rgb: 124 95 140;
+  --color-violet-700: #604970;
+  --color-violet-700-rgb: 96 73 112;
+  --color-violet-800: #453453;
+  --color-violet-800-rgb: 69 52 83;
+  --color-violet-900: #2b1f36;
+  --color-violet-900-rgb: 43 31 54;
+  --color-violet-950: #1a1222;
+  --color-violet-950-rgb: 26 18 34;
+
+  /* Status Colors */
+  --color-status-info: var(--color-accent-blue);
+  --color-status-info-rgb: var(--color-accent-blue-rgb);
+  --color-status-success: var(--color-accent-green);
+  --color-status-success-rgb: var(--color-accent-green-rgb);
+  --color-status-warning: var(--color-accent-amber);
+  --color-status-warning-rgb: var(--color-accent-amber-rgb);
+  --color-status-error: var(--color-accent-red);
+  --color-status-error-rgb: var(--color-accent-red-rgb);
+
+  /* Diff Colors - Darcula style */
+  --color-diff-added-base: #385738;
+  --color-diff-removed-base: #6b3232;
+  --color-diff-modified-base: #4a4028;
+
+  --color-diff-added-bg: rgba(56, 87, 56, 0.25);
+  --color-diff-removed-bg: rgba(107, 50, 50, 0.25);
+  --color-diff-modified-bg: rgba(74, 64, 40, 0.25);
+
+  --color-diff-added-text-bg: rgba(56, 87, 56, 0.4);
+  --color-diff-removed-text-bg: rgba(107, 50, 50, 0.4);
+
+  --color-diff-added-gutter: rgba(56, 87, 56, 0.5);
+  --color-diff-removed-gutter: rgba(107, 50, 50, 0.5);
+
+  --color-diff-added-text: #6a8759;
+  --color-diff-removed-text: #bc3f3c;
+  --color-diff-modified-text: #cc7832;
+
+  /* Scrollbar Colors */
+  --color-scrollbar-track: rgba(60, 63, 65, 0.3);
+  --color-scrollbar-thumb: rgba(107, 107, 107, 0.6);
+  --color-scrollbar-thumb-hover: rgba(140, 140, 140, 0.8);
+
+  /* Selection Colors */
+  --color-selection-bg: rgba(33, 66, 131, 0.6);
+
+  /* Overlay Colors */
+  --color-overlay-backdrop: rgba(0, 0, 0, 0.6);
+  --color-overlay-strong: rgba(0, 0, 0, 0.8);
+  --color-overlay-light: rgba(255, 255, 255, 0.08);
+  --color-overlay-dark: rgba(0, 0, 0, 0.3);
+
+  /* Graph Colors */
+  --color-graph-reference-default: #6a8759;
+  --color-graph-reference-remote: #9876aa;
+  --color-graph-reference-base: #cc7832;
+  --color-graph-reference-tag: #bbb529;
+
+  /* Surface Colors */
+  --color-surface-modal: #3c3f41;
+  --color-surface-modal-rgb: 60 63 65;
+
+  /* Editor Colors */
+  --color-editor-background: #2b2b2b;
+  --color-editor-background-rgb: 43 43 43;
+  --color-editor-text: #a9b7c6;
+  --color-editor-caret: #bbbbbb;
+  --color-editor-gutter-text: #606366;
+  --color-editor-gutter-active-text: #a4a3a3;
+  --color-editor-active-line: rgba(255, 255, 255, 0.04);
+  --color-editor-inline-code-bg: rgba(60, 63, 65, 0.8);
+  --color-editor-code-block-bg: rgba(36, 36, 36, 0.5);
+  --color-editor-blockquote-border: #515151;
+  --color-editor-line-rule: #515151;
+  --color-editor-strikethrough: #808080;
+  --color-editor-selection: rgba(33, 66, 131, 0.5);
+  --color-editor-selection-focused: rgba(33, 66, 131, 0.6);
+  --color-editor-selection-alt: rgba(255, 255, 255, 0.04);
+  --color-editor-placeholder-border: #515151;
+
+  /* Syntax Colors - Darcula's iconic syntax highlighting */
+  --color-syntax-default: #a9b7c6;
+  --color-syntax-comment: #808080;
+  --color-syntax-variable: #9cdcfe;
+  --color-syntax-number: #6897bb;
+  --color-syntax-type: #cc7832;
+  --color-syntax-keyword: #cc7832;
+  --color-syntax-string: #6a8759;
+  --color-syntax-function: #ffc66d;
+  --color-syntax-operator: #a9b7c6;
+  --color-syntax-punctuation: #cc7832;
+  --color-syntax-tag: #e8bf6a;
+  --color-syntax-attribute: #bababa;
+  --color-syntax-selector: #e8bf6a;
+  --color-syntax-property: #9876aa;
+  --color-syntax-bracket: #a9b7c6;
+  --color-syntax-class: #a9b7c6;
+  --color-syntax-constant: #9876aa;
+  --color-syntax-decorator: #bbb529;
+  --color-syntax-regex: #6a8759;
+  --color-syntax-escape: #cc7832;
+  --color-syntax-emphasis: #c586c0;
+  --color-syntax-highlight: #a9b7c6;
+
+  /* Gray Scale */
+  --color-gray-50: #e8e8e8;
+  --color-gray-50-rgb: 232 232 232;
+  --color-gray-100: #d1d1d1;
+  --color-gray-100-rgb: 209 209 209;
+  --color-gray-200: #b8b8b8;
+  --color-gray-200-rgb: 184 184 184;
+  --color-gray-300: #a0a0a0;
+  --color-gray-300-rgb: 160 160 160;
+  --color-gray-400: #808080;
+  --color-gray-400-rgb: 128 128 128;
+  --color-gray-500: #606366;
+  --color-gray-500-rgb: 96 99 102;
+  --color-gray-500-alt: #6b6b6b;
+  --color-gray-500-alt-rgb: 107 107 107;
+  --color-gray-600: #515151;
+  --color-gray-600-rgb: 81 81 81;
+  --color-gray-700: #3c3f41;
+  --color-gray-700-rgb: 60 63 65;
+  --color-gray-800: #313335;
+  --color-gray-800-rgb: 49 51 53;
+  --color-gray-900: #2b2b2b;
+  --color-gray-900-rgb: 43 43 43;
+  --color-gray-950: #242424;
+  --color-gray-950-rgb: 36 36 36;
+
+  --color-white: #ffffff;
+  --color-white-rgb: 255 255 255;
+
+  /* Tab Colors */
+  --color-tab-inactive-bg: transparent;
+  --color-tab-inactive-text: #808080;
+  --color-tab-inactive-hover-bg: rgba(75, 78, 80, 0.5);
+  --color-tab-inactive-hover-text: #a9b7c6;
+  --color-tab-active-bg: rgba(60, 63, 65, 0.6);
+  --color-tab-active-text: #a9b7c6;
+  --color-tab-active-indicator: #4e94ce;
+  --color-tab-close-bg: transparent;
+  --color-tab-close-hover-bg: rgba(81, 86, 88, 0.6);
+  --color-tab-close-color: #606366;
+  --color-tab-close-hover-color: #a9b7c6;
+  --color-tab-badge-bg: #cc7832;
+  --color-tab-badge-text: #ffffff;
+  --color-tab-running-badge-bg: #3574a5;
+  --color-tab-running-badge-text: #e8f1f8;
+  --color-tab-running-indicator: #4e94ce;
+  --color-tab-running-glow: rgba(78, 148, 206, 0.3);
+
+  /* Tab Focus Colors */
+  --color-tab-focus-inactive-text: #6fb3e0;
+  --color-tab-focus-inactive-hover-bg: rgba(78, 148, 206, 0.15);
+  --color-tab-focus-inactive-hover-text: #a5c8e5;
+  --color-tab-focus-active-bg: rgba(78, 148, 206, 0.25);
+  --color-tab-focus-active-text: #a5c8e5;
+
+  /* Icon Button Colors */
+  --icon-button-default-bg: #3c3f41;
+  --icon-button-default-hover-bg: #4b4e50;
+  --icon-button-default-text: #a9b7c6;
+  --icon-button-default-border: transparent;
+  --icon-button-default-hover-border: transparent;
+  --icon-button-success-bg: #385738;
+  --icon-button-success-hover-bg: #4e6b42;
+  --icon-button-success-text: #8aad76;
+  --icon-button-success-border: transparent;
+  --icon-button-success-hover-border: transparent;
+  --icon-button-danger-bg: #5a2020;
+  --icon-button-danger-hover-bg: #6b3232;
+  --icon-button-danger-text: #d66b68;
+  --icon-button-danger-border: transparent;
+  --icon-button-danger-hover-border: transparent;
+  --icon-button-warning-bg: #4a3520;
+  --icon-button-warning-hover-bg: #5a4028;
+  --icon-button-warning-text: #e09858;
+  --icon-button-warning-border: transparent;
+  --icon-button-warning-hover-border: transparent;
+}

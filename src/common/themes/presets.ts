@@ -136,6 +136,19 @@ const ayuAccent = {
   copilot: buildAccent('#D2A6FF', '#E0BFFF', '#A87ACC'),
 }
 
+const darculaAccent = {
+  blue: buildAccent('#4e94ce', '#6fb3e0', '#3574a5'),
+  green: buildAccent('#6a8759', '#8aad76', '#4e6b42'),
+  amber: buildAccent('#cc7832', '#e09858', '#a66028'),
+  red: buildAccent('#bc3f3c', '#d66b68', '#8f2e2c'),
+  violet: buildAccent('#9876aa', '#b39bc5', '#7a5d8a'),
+  purple: buildAccent('#9876aa', '#b39bc5', '#7a5d8a'),
+  magenta: buildAccent('#c586c0', '#d9a6d5', '#a068a0'),
+  yellow: buildAccent('#bbb529', '#d4ce52', '#959020'),
+  cyan: buildAccent('#299999', '#40bfbf', '#1f7a7a'),
+  copilot: buildAccent('#9876aa', '#b39bc5', '#7a5d8a'),
+}
+
 const kanagawaAccent = {
   blue: buildAccent('#7E9CD8', '#7FB4CA', '#2D4F67'),
   green: buildAccent('#98BB6C', '#87A987', '#76946A'),
@@ -551,6 +564,64 @@ export const everforestTheme: ThemeDefinition = {
       brightMagenta: '#d699b6',
       brightCyan: '#83c092',
       brightWhite: '#d3c6aa',
+    },
+  },
+}
+
+export const darculaTheme: ThemeDefinition = {
+  id: 'darcula',
+  name: 'Darcula',
+  isDark: true,
+  colors: {
+    background: {
+      primary: '#2b2b2b',
+      secondary: '#242424',
+      tertiary: '#313335',
+      elevated: '#3c3f41',
+      hover: '#4b4e50',
+      active: '#515658',
+    },
+    text: {
+      primary: '#a9b7c6',
+      secondary: '#9aa7b0',
+      tertiary: '#808080',
+      muted: '#606366',
+      inverse: '#2b2b2b',
+    },
+    border: {
+      default: '#515151',
+      subtle: '#3c3f41',
+      strong: '#6b6b6b',
+      focus: darculaAccent.blue.DEFAULT,
+    },
+    accent: darculaAccent,
+    status: {
+      info: '#4e94ce',
+      success: '#6a8759',
+      warning: '#cc7832',
+      error: '#bc3f3c',
+    },
+    terminal: {
+      background: '#2b2b2b',
+      foreground: '#a9b7c6',
+      cursor: '#bbbbbb',
+      selection: withOpacity(darculaAccent.blue.DEFAULT, 0.35),
+      black: '#2b2b2b',
+      red: '#bc3f3c',
+      green: '#6a8759',
+      yellow: '#bbb529',
+      blue: '#4e94ce',
+      magenta: '#9876aa',
+      cyan: '#299999',
+      white: '#a9b7c6',
+      brightBlack: '#606366',
+      brightRed: '#d66b68',
+      brightGreen: '#8aad76',
+      brightYellow: '#d4ce52',
+      brightBlue: '#6fb3e0',
+      brightMagenta: '#b39bc5',
+      brightCyan: '#40bfbf',
+      brightWhite: '#d1d1d1',
     },
   },
 }

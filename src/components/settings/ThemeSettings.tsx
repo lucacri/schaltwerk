@@ -114,6 +114,18 @@ const themeOptions: ThemeOption[] = [
     },
   },
   {
+    id: 'darcula',
+    label: 'Darcula',
+    description: 'JetBrains classic dark theme',
+    experimental: true,
+    colors: {
+      bg: '#2b2b2b',
+      bgSecondary: '#3c3f41',
+      text: '#a9b7c6',
+      accent: '#cc7832',
+    },
+  },
+  {
     id: 'light',
     label: 'Light',
     description: 'Light theme for bright environments',

@@ -10,6 +10,7 @@ export type SchaltwerkThemeId =
   | 'everforest'
   | 'kanagawa'
   | 'ayu'
+  | 'darcula'
 
 const SCHALTWERK_TO_SHIKI_THEME: Record<SchaltwerkThemeId, DiffsThemeNames> = {
   dark: 'github-dark',
@@ -21,6 +22,7 @@ const SCHALTWERK_TO_SHIKI_THEME: Record<SchaltwerkThemeId, DiffsThemeNames> = {
   everforest: 'everforest-dark',
   kanagawa: 'slack-dark',
   ayu: 'ayu-dark',
+  darcula: 'github-dark',
 }
 
 const THEME_TYPE_MAP: Record<SchaltwerkThemeId, 'dark' | 'light'> = {
@@ -33,6 +35,7 @@ const THEME_TYPE_MAP: Record<SchaltwerkThemeId, 'dark' | 'light'> = {
   everforest: 'dark',
   kanagawa: 'dark',
   ayu: 'dark',
+  darcula: 'dark',
 }
 
 export function getShikiThemeForSchaltwerk(themeId: SchaltwerkThemeId): DiffsThemeNames {
