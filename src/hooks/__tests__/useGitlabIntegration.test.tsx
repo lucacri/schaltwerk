@@ -7,6 +7,7 @@ import { invoke } from '@tauri-apps/api/core'
 import type { SchaltEvent } from '../../common/eventSystem'
 import { Provider, createStore } from 'jotai'
 import { projectPathAtom } from '../../store/atoms/project'
+import { TauriCommands } from '../../common/tauriCommands'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn()
@@ -65,6 +66,10 @@ describe('useGitlabIntegration', () => {
     await waitFor(() => {
       expect(result.current.status).toEqual(status)
       expect(result.current.loading).toBe(false)
+    })
+
+    expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.GitLabGetSources, {
+      projectPath: '/tmp/project-a'
     })
 
     act(() => {

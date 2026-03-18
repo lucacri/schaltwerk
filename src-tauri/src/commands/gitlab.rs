@@ -314,12 +314,16 @@ pub async fn gitlab_get_mr_pipeline(
 }
 
 #[tauri::command]
-pub async fn gitlab_get_sources(_app: AppHandle) -> Result<Vec<GitlabSource>, String> {
+pub async fn gitlab_get_sources(
+    _app: AppHandle,
+    project_path: String,
+) -> Result<Vec<GitlabSource>, String> {
     let manager = get_project_manager().await;
+    let requested_path = std::path::PathBuf::from(project_path);
     let project = manager
-        .current_project()
+        .get_project_for_path(requested_path.as_path())
         .await
-        .map_err(|e| format!("No active project: {e}"))?;
+        .map_err(|e| format!("Failed to load project: {e}"))?;
 
     let core = project.schaltwerk_core.read().await;
     let db = core.database();

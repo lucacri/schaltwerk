@@ -297,6 +297,38 @@ impl ProjectManager {
         Err(anyhow!("No active project"))
     }
 
+    pub async fn get_project_for_path(&self, path: &Path) -> Result<Arc<Project>> {
+        let canonical_path = canonicalize_project_path(path)?;
+
+        let projects = self.projects.read().await;
+
+        if let Some(project) = projects.get(&canonical_path) {
+            return Ok(project.clone());
+        }
+
+        let mut matched: Option<Arc<Project>> = None;
+        let mut longest_prefix = 0usize;
+
+        for (project_path, project) in projects.iter() {
+            if canonical_path.starts_with(project_path) {
+                let depth = project_path.components().count();
+                if depth > longest_prefix {
+                    longest_prefix = depth;
+                    matched = Some(project.clone());
+                }
+            }
+        }
+
+        if let Some(project) = matched {
+            return Ok(project);
+        }
+
+        Err(anyhow!(
+            "Project not loaded for path: {}",
+            canonical_path.display()
+        ))
+    }
+
     /// Get the current active project path, if any
     pub async fn current_project_path(&self) -> Option<PathBuf> {
         let current_path = self.current_project.read().await;
@@ -768,5 +800,74 @@ mod tests {
         assert_ne!(first_ptr, second_ptr);
 
         let _ = p2.terminal_manager.cleanup_all().await;
+    }
+
+    #[tokio::test]
+    async fn test_get_project_for_path_prefers_exact_match_over_current() {
+        let mgr = ProjectManager::new();
+        let tmp1 = TempDir::new().unwrap();
+        let tmp2 = TempDir::new().unwrap();
+
+        let project_a = mgr
+            .switch_to_project_in_memory(tmp1.path().to_path_buf())
+            .await
+            .unwrap();
+        let _project_b = mgr
+            .switch_to_project_in_memory(tmp2.path().to_path_buf())
+            .await
+            .unwrap();
+
+        let resolved = mgr
+            .get_project_for_path(tmp1.path())
+            .await
+            .expect("project should resolve");
+
+        assert!(Arc::ptr_eq(&project_a, &resolved));
+    }
+
+    #[tokio::test]
+    async fn test_get_project_for_path_detects_nested_worktree_paths() {
+        let mgr = ProjectManager::new();
+        let root = TempDir::new().unwrap();
+        let other = TempDir::new().unwrap();
+
+        let project_root = root.path().to_path_buf();
+        let nested = project_root.join(".lucode/worktrees/session-a");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let project_a = mgr
+            .switch_to_project_in_memory(project_root.clone())
+            .await
+            .unwrap();
+        let _project_b = mgr
+            .switch_to_project_in_memory(other.path().to_path_buf())
+            .await
+            .unwrap();
+
+        let resolved = mgr
+            .get_project_for_path(nested.as_path())
+            .await
+            .expect("nested path should resolve");
+
+        assert!(Arc::ptr_eq(&project_a, &resolved));
+    }
+
+    #[tokio::test]
+    async fn test_get_project_for_path_errors_for_unknown_path() {
+        let mgr = ProjectManager::new();
+        let tmp = TempDir::new().unwrap();
+        let _project = mgr
+            .switch_to_project_in_memory(tmp.path().to_path_buf())
+            .await
+            .unwrap();
+
+        let missing_dir = TempDir::new().unwrap();
+        let missing_path = missing_dir.path().join("untracked");
+        std::fs::create_dir_all(&missing_path).unwrap();
+
+        match mgr.get_project_for_path(missing_path.as_path()).await {
+            Ok(_) => panic!("unknown project should not resolve"),
+            Err(err) => assert!(err.to_string().contains("Project")),
+        }
     }
 }

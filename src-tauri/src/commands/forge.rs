@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::get_project_manager;
 use log::{error, info, warn};
 use lucode::domains::git::service::{
@@ -16,6 +18,15 @@ fn format_forge_error(err: ForgeError) -> String {
     err.to_string()
 }
 
+async fn resolve_project(project_path: &str) -> Result<Arc<lucode::project_manager::Project>, String> {
+    let path = std::path::PathBuf::from(project_path);
+    let manager = get_project_manager().await;
+    manager
+        .get_project_for_path(&path)
+        .await
+        .map_err(|e| format!("Project not available: {e}"))
+}
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ForgeStatusPayload {
@@ -27,12 +38,11 @@ pub struct ForgeStatusPayload {
 }
 
 #[tauri::command]
-pub async fn forge_get_status(app: AppHandle) -> Result<ForgeStatusPayload, String> {
-    let manager = get_project_manager().await;
-    let project = manager
-        .current_project()
-        .await
-        .map_err(|e| format!("No active project: {e}"))?;
+pub async fn forge_get_status(
+    app: AppHandle,
+    project_path: String,
+) -> Result<ForgeStatusPayload, String> {
+    let project = resolve_project(&project_path).await?;
 
     let forge_type = detect_forge(&project.path);
 
@@ -77,15 +87,12 @@ pub async fn forge_get_status(app: AppHandle) -> Result<ForgeStatusPayload, Stri
 #[tauri::command]
 pub async fn forge_search_issues(
     _app: AppHandle,
+    project_path: String,
     source: ForgeSourceConfig,
     query: Option<String>,
     limit: Option<u32>,
 ) -> Result<Vec<ForgeIssueSummary>, String> {
-    let manager = get_project_manager().await;
-    let project = manager
-        .current_project()
-        .await
-        .map_err(|e| format!("No active project: {e}"))?;
+    let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
@@ -102,14 +109,11 @@ pub async fn forge_search_issues(
 #[tauri::command]
 pub async fn forge_get_issue_details(
     _app: AppHandle,
+    project_path: String,
     source: ForgeSourceConfig,
     id: String,
 ) -> Result<ForgeIssueDetails, String> {
-    let manager = get_project_manager().await;
-    let project = manager
-        .current_project()
-        .await
-        .map_err(|e| format!("No active project: {e}"))?;
+    let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
@@ -126,15 +130,12 @@ pub async fn forge_get_issue_details(
 #[tauri::command]
 pub async fn forge_search_prs(
     _app: AppHandle,
+    project_path: String,
     source: ForgeSourceConfig,
     query: Option<String>,
     limit: Option<u32>,
 ) -> Result<Vec<ForgePrSummary>, String> {
-    let manager = get_project_manager().await;
-    let project = manager
-        .current_project()
-        .await
-        .map_err(|e| format!("No active project: {e}"))?;
+    let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
@@ -151,14 +152,11 @@ pub async fn forge_search_prs(
 #[tauri::command]
 pub async fn forge_get_pr_details(
     _app: AppHandle,
+    project_path: String,
     source: ForgeSourceConfig,
     id: String,
 ) -> Result<ForgePrDetails, String> {
-    let manager = get_project_manager().await;
-    let project = manager
-        .current_project()
-        .await
-        .map_err(|e| format!("No active project: {e}"))?;
+    let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
@@ -182,6 +180,7 @@ pub struct CreateForgeSessionPrArgs {
     pub pr_branch_name: Option<String>,
     pub commit_message: Option<String>,
     pub source: ForgeSourceConfig,
+    pub project_path: Option<String>,
     pub mode: MergeMode,
     #[serde(default)]
     pub cancel_after_pr: bool,
@@ -197,11 +196,16 @@ pub async fn forge_create_session_pr(
     let provider = create_provider(args.source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
 
-    let project_manager = get_project_manager().await;
-    let project = project_manager
-        .current_project()
-        .await
-        .map_err(|e| format!("No active project: {e}"))?;
+    let project = match &args.project_path {
+        Some(pp) => resolve_project(pp).await?,
+        None => {
+            let manager = get_project_manager().await;
+            manager
+                .current_project()
+                .await
+                .map_err(|e| format!("No active project: {e}"))?
+        }
+    };
     let project_path = project.path.clone();
 
     let (session_worktree, session_branch, parent_branch, session_state) = {
@@ -330,14 +334,11 @@ pub async fn forge_create_session_pr(
 #[tauri::command]
 pub async fn forge_get_review_comments(
     _app: AppHandle,
+    project_path: String,
     source: ForgeSourceConfig,
     id: String,
 ) -> Result<Vec<ForgeReviewComment>, String> {
-    let manager = get_project_manager().await;
-    let project = manager
-        .current_project()
-        .await
-        .map_err(|e| format!("No active project: {e}"))?;
+    let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
@@ -354,14 +355,11 @@ pub async fn forge_get_review_comments(
 #[tauri::command]
 pub async fn forge_approve_pr(
     _app: AppHandle,
+    project_path: String,
     source: ForgeSourceConfig,
     id: String,
 ) -> Result<(), String> {
-    let manager = get_project_manager().await;
-    let project = manager
-        .current_project()
-        .await
-        .map_err(|e| format!("No active project: {e}"))?;
+    let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
@@ -378,16 +376,13 @@ pub async fn forge_approve_pr(
 #[tauri::command]
 pub async fn forge_merge_pr(
     _app: AppHandle,
+    project_path: String,
     source: ForgeSourceConfig,
     id: String,
     squash: bool,
     delete_branch: bool,
 ) -> Result<(), String> {
-    let manager = get_project_manager().await;
-    let project = manager
-        .current_project()
-        .await
-        .map_err(|e| format!("No active project: {e}"))?;
+    let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
@@ -404,15 +399,12 @@ pub async fn forge_merge_pr(
 #[tauri::command]
 pub async fn forge_comment_on_pr(
     _app: AppHandle,
+    project_path: String,
     source: ForgeSourceConfig,
     id: String,
     message: String,
 ) -> Result<(), String> {
-    let manager = get_project_manager().await;
-    let project = manager
-        .current_project()
-        .await
-        .map_err(|e| format!("No active project: {e}"))?;
+    let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;

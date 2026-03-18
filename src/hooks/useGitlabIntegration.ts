@@ -30,6 +30,11 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
   const unlistenRef = useRef<(() => void) | null>(null)
 
   const refreshStatus = useCallback(async () => {
+    if (!projectPath) {
+      setStatus(null)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const result = await invoke<GitLabStatusPayload>(TauriCommands.GitLabGetStatus)
@@ -39,18 +44,23 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [projectPath])
 
   const loadSources = useCallback(async () => {
+    if (!projectPath) {
+      setSources([])
+      setSourcesLoaded(false)
+      return
+    }
     try {
-      const result = await invoke<GitlabSource[]>(TauriCommands.GitLabGetSources)
+      const result = await invoke<GitlabSource[]>(TauriCommands.GitLabGetSources, { projectPath })
       setSources(result ?? [])
     } catch (error) {
       logger.error('[useGitlabIntegration] Failed to load GitLab sources', error)
     } finally {
       setSourcesLoaded(true)
     }
-  }, [])
+  }, [projectPath])
 
   const saveSources = useCallback(async (newSources: GitlabSource[]) => {
     try {
@@ -68,6 +78,20 @@ export function useGitlabIntegration(): GitlabIntegrationValue {
     setStatus(null)
     setSources([])
     setSourcesLoaded(false)
+
+    if (!projectPath) {
+      setLoading(false)
+      return () => {
+        mounted = false
+        if (unlistenRef.current) {
+          try {
+            unlistenRef.current()
+          } catch (error) {
+            logger.warn('[useGitlabIntegration] Failed to remove GitLab status listener', error)
+          }
+        }
+      }
+    }
 
     refreshStatus().catch((error) => {
       logger.error('[useGitlabIntegration] Initial status fetch failed', error)

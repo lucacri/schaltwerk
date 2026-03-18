@@ -41,6 +41,7 @@ export interface CreateForgeSessionPrArgs {
   source: ForgeSourceConfig
   mode: 'squash' | 'reapply'
   cancelAfterPr?: boolean
+  projectPath?: string
 }
 
 export function useForgeIntegration(): ForgeIntegrationValue {
@@ -49,20 +50,36 @@ export function useForgeIntegration(): ForgeIntegrationValue {
   const [loading, setLoading] = useState<boolean>(true)
   const unlistenRef = useRef<(() => void) | null>(null)
 
+  const ensureProjectPath = useCallback(() => {
+    if (!projectPath) {
+      throw new Error('Project path is not available')
+    }
+    return projectPath
+  }, [projectPath])
+
   const refreshStatus = useCallback(async () => {
+    if (!projectPath) {
+      setStatus(null)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
-      const result = await invoke<ForgeStatusPayload>(TauriCommands.ForgeGetStatus)
+      const result = await invoke<ForgeStatusPayload>(TauriCommands.ForgeGetStatus, { projectPath })
       setStatus(result)
     } catch (error) {
       logger.error('[useForgeIntegration] Failed to fetch forge status', error)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [projectPath])
 
   useEffect(() => {
-    if (!projectPath) return
+    if (!projectPath) {
+      setStatus(null)
+      setLoading(false)
+      return
+    }
 
     void refreshStatus()
 
@@ -80,65 +97,79 @@ export function useForgeIntegration(): ForgeIntegrationValue {
 
   const searchIssues = useCallback(
     async (source: ForgeSourceConfig, query?: string, limit?: number) => {
-      return invoke<ForgeIssueSummary[]>(TauriCommands.ForgeSearchIssues, { source, query, limit })
+      const path = ensureProjectPath()
+      return invoke<ForgeIssueSummary[]>(TauriCommands.ForgeSearchIssues, { projectPath: path, source, query, limit })
     },
-    []
+    [ensureProjectPath]
   )
 
   const getIssueDetails = useCallback(
     async (source: ForgeSourceConfig, id: string) => {
-      return invoke<ForgeIssueDetails>(TauriCommands.ForgeGetIssueDetails, { source, id })
+      const path = ensureProjectPath()
+      return invoke<ForgeIssueDetails>(TauriCommands.ForgeGetIssueDetails, { projectPath: path, source, id })
     },
-    []
+    [ensureProjectPath]
   )
 
   const searchPrs = useCallback(
     async (source: ForgeSourceConfig, query?: string, limit?: number) => {
-      return invoke<ForgePrSummary[]>(TauriCommands.ForgeSearchPrs, { source, query, limit })
+      const path = ensureProjectPath()
+      return invoke<ForgePrSummary[]>(TauriCommands.ForgeSearchPrs, { projectPath: path, source, query, limit })
     },
-    []
+    [ensureProjectPath]
   )
 
   const getPrDetails = useCallback(
     async (source: ForgeSourceConfig, id: string) => {
-      return invoke<ForgePrDetails>(TauriCommands.ForgeGetPrDetails, { source, id })
+      const path = ensureProjectPath()
+      return invoke<ForgePrDetails>(TauriCommands.ForgeGetPrDetails, { projectPath: path, source, id })
     },
-    []
+    [ensureProjectPath]
   )
 
   const createSessionPr = useCallback(
     async (args: CreateForgeSessionPrArgs) => {
-      return invoke<ForgePrResult>(TauriCommands.ForgeCreateSessionPr, { args })
+      const path = ensureProjectPath()
+      return invoke<ForgePrResult>(TauriCommands.ForgeCreateSessionPr, {
+        args: {
+          ...args,
+          projectPath: path,
+        },
+      })
     },
-    []
+    [ensureProjectPath]
   )
 
   const getReviewComments = useCallback(
     async (source: ForgeSourceConfig, id: string) => {
-      return invoke<ForgeReviewComment[]>(TauriCommands.ForgeGetReviewComments, { source, id })
+      const path = ensureProjectPath()
+      return invoke<ForgeReviewComment[]>(TauriCommands.ForgeGetReviewComments, { projectPath: path, source, id })
     },
-    []
+    [ensureProjectPath]
   )
 
   const approvePr = useCallback(
     async (source: ForgeSourceConfig, id: string) => {
-      await invoke<void>(TauriCommands.ForgeApprovePr, { source, id })
+      const path = ensureProjectPath()
+      await invoke<void>(TauriCommands.ForgeApprovePr, { projectPath: path, source, id })
     },
-    []
+    [ensureProjectPath]
   )
 
   const mergePr = useCallback(
     async (source: ForgeSourceConfig, id: string, squash: boolean, deleteBranch: boolean) => {
-      await invoke<void>(TauriCommands.ForgeMergePr, { source, id, squash, deleteBranch })
+      const path = ensureProjectPath()
+      await invoke<void>(TauriCommands.ForgeMergePr, { projectPath: path, source, id, squash, deleteBranch })
     },
-    []
+    [ensureProjectPath]
   )
 
   const commentOnPr = useCallback(
     async (source: ForgeSourceConfig, id: string, message: string) => {
-      await invoke<void>(TauriCommands.ForgeCommentOnPr, { source, id, message })
+      const path = ensureProjectPath()
+      await invoke<void>(TauriCommands.ForgeCommentOnPr, { projectPath: path, source, id, message })
     },
-    []
+    [ensureProjectPath]
   )
 
   return useMemo(() => ({

@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useAtomValue } from 'jotai'
 import { invoke } from '@tauri-apps/api/core'
 import { useForgeIntegration, type ForgeIntegrationValue } from '../hooks/useForgeIntegration'
 import { TauriCommands } from '../common/tauriCommands'
 import { logger } from '../utils/logger'
 import type { ForgeType, ForgeSourceConfig } from '../types/forgeTypes'
 import type { GitlabSource } from '../types/gitlabTypes'
+import { projectPathAtom } from '../store/atoms/project'
 
 export interface ForgeIntegrationContextValue extends ForgeIntegrationValue {
   forgeType: ForgeType
@@ -28,11 +30,12 @@ export function ForgeIntegrationProvider({ children }: { children: ReactNode }) 
   const forgeValue = useForgeIntegration()
   const { status } = forgeValue
   const [sources, setSources] = useState<ForgeSourceConfig[]>([])
+  const projectPath = useAtomValue(projectPathAtom)
 
   const forgeType: ForgeType = status?.forgeType ?? 'unknown'
 
   useEffect(() => {
-    if (!status) {
+    if (!status || !projectPath) {
       setSources([])
       return
     }
@@ -47,7 +50,7 @@ export function ForgeIntegrationProvider({ children }: { children: ReactNode }) 
         },
       ])
     } else if (status.forgeType === 'gitlab' && status.authenticated) {
-      invoke<GitlabSource[]>(TauriCommands.GitLabGetSources)
+      invoke<GitlabSource[]>(TauriCommands.GitLabGetSources, { projectPath })
         .then((result) => {
           setSources(mapGitlabSourcesToForgeConfigs(result ?? []))
         })
@@ -57,7 +60,7 @@ export function ForgeIntegrationProvider({ children }: { children: ReactNode }) 
     } else {
       setSources([])
     }
-  }, [status])
+  }, [status, projectPath])
 
   const value = useMemo<ForgeIntegrationContextValue>(
     () => ({
