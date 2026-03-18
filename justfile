@@ -11,6 +11,10 @@
 #   dev (opt-level=0) - Default profile for fastest compilation, used by 'just run' and 'just test'
 #   dev-opt (opt-level=3 for deps) - Production-like performance for testing
 #   release (opt-level=3) - Used for production builds with maximum optimization
+#
+# Install modes:
+#   just install       - Full release build (slow, maximum optimization) → /Applications
+#   just install-fast  - Fast release build (thin LTO, parallel codegen) → /Applications
 
 pm := "node scripts/package-manager.mjs"
 
@@ -214,6 +218,104 @@ install:
     sudo xattr -cr "$INSTALL_DIR/Lucode.app" 2>/dev/null || true
 
     echo "Lucode installed successfully!"
+    echo ""
+    echo "Launch Lucode:"
+    echo "  - From Spotlight: Press Cmd+Space and type 'Lucode'"
+    echo "  - From Terminal: open /Applications/Lucode.app"
+
+# Install with fast compilation (thin LTO + parallel codegen instead of full LTO)
+install-fast:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo "Building Lucode for macOS (fast mode: thin LTO)..."
+
+    # Check if node_modules exists, if not run setup first
+    if [ ! -d "node_modules" ]; then
+        echo "Dependencies not found. Running setup first..."
+        just setup
+    fi
+
+    # Build frontend
+    echo "Building frontend..."
+    {{pm}} run build
+    # Build MCP server if it exists
+    if [ -d "mcp-server" ]; then
+        echo "Building MCP server..."
+        cd mcp-server
+        # Ensure clean, reproducible deps before building (dev deps required for tsc)
+        echo "Installing MCP server dependencies (lockfile)..."
+        node ../scripts/package-manager.mjs install --frozen-lockfile
+        # Build TypeScript sources
+        node ../scripts/package-manager.mjs run build
+        # Re-install with production-only deps for embedding inside the app bundle
+        node ../scripts/package-manager.mjs install --production --frozen-lockfile
+        cd ..
+        echo "MCP server built"
+    fi
+
+    # Build Tauri application with relaxed release profile for faster compilation
+    echo "Building Tauri app (thin LTO, parallel codegen)..."
+    CARGO_PROFILE_RELEASE_LTO="thin" \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS="16" \
+    {{pm}} run tauri -- build --bundles app
+
+    # Find the built app bundle (handle different architectures)
+    APP_PATH=""
+    if [ -d "src-tauri/target/release/bundle/macos/Lucode.app" ]; then
+        APP_PATH="src-tauri/target/release/bundle/macos/Lucode.app"
+    elif [ -d "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Lucode.app" ]; then
+        APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Lucode.app"
+    elif [ -d "src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Lucode.app" ]; then
+        APP_PATH="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Lucode.app"
+    elif [ -d "src-tauri/target/universal-apple-darwin/release/bundle/macos/Lucode.app" ]; then
+        APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/Lucode.app"
+    fi
+
+    if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
+        echo "Build failed - Lucode.app not found"
+        echo "Searched in:"
+        echo "  - src-tauri/target/release/bundle/macos/"
+        echo "  - src-tauri/target/aarch64-apple-darwin/release/bundle/macos/"
+        echo "  - src-tauri/target/x86_64-apple-darwin/release/bundle/macos/"
+        echo "  - src-tauri/target/universal-apple-darwin/release/bundle/macos/"
+        exit 1
+    fi
+
+    echo "Found app bundle at: $APP_PATH"
+
+    # Embed MCP server if it was built
+    if [ -d "mcp-server/build" ]; then
+        MCP_DIR="$APP_PATH/Contents/Resources/mcp-server"
+        mkdir -p "$MCP_DIR"
+        cp -R mcp-server/build "$MCP_DIR/"
+        cp mcp-server/package.json "$MCP_DIR/"
+        cp -R mcp-server/node_modules "$MCP_DIR/"
+        echo "MCP server embedded in app bundle"
+    fi
+
+    # Always install to /Applications for simplicity
+    INSTALL_DIR="/Applications"
+
+    # Remove old installation if it exists
+    if [ -d "$INSTALL_DIR/Lucode.app" ]; then
+        echo "Removing existing Lucode installation..."
+        echo "Admin password required to remove old installation"
+        sudo rm -rf "$INSTALL_DIR/Lucode.app"
+    fi
+
+    # Copy the app to Applications
+    echo "Installing Lucode to $INSTALL_DIR..."
+    echo "Admin password required for installation"
+    sudo cp -R "$APP_PATH" "$INSTALL_DIR/"
+
+    # Set proper permissions
+    sudo chmod -R 755 "$INSTALL_DIR/Lucode.app"
+
+    # Clear quarantine attributes to avoid Gatekeeper issues
+    sudo xattr -cr "$INSTALL_DIR/Lucode.app" 2>/dev/null || true
+
+    echo "Lucode installed successfully! (fast mode)"
     echo ""
     echo "Launch Lucode:"
     echo "  - From Spotlight: Press Cmd+Space and type 'Lucode'"
