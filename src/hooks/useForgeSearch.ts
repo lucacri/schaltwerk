@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ForgeSourceConfig } from '../types/forgeTypes'
 import { logger } from '../utils/logger'
+import { buildForgeSourcesIdentity } from '../utils/forgeSourcesIdentity'
 import { resolveErrorMessage } from '../utils/resolveErrorMessage'
 
 export interface SourceError {
@@ -56,6 +57,7 @@ export function useForgeSearch<TSummary, TDetails>(
   const versionRef = useRef(0)
   const debounceHandle = useRef<number | null>(null)
   const hasInitialFetchedRef = useRef(false)
+  const queryRef = useRef('')
 
   const getIdRef = useRef(getId)
   const getTitleRef = useRef(getTitle)
@@ -64,6 +66,7 @@ export function useForgeSearch<TSummary, TDetails>(
   const searchFnRef = useRef(searchFn)
   const detailsFnRef = useRef(detailsFn)
   const sourcesRef = useRef(sources)
+  const sourcesIdentityRef = useRef<string | null>(null)
 
   getIdRef.current = getId
   getTitleRef.current = getTitle
@@ -72,6 +75,8 @@ export function useForgeSearch<TSummary, TDetails>(
   searchFnRef.current = searchFn
   detailsFnRef.current = detailsFn
   sourcesRef.current = sources
+
+  const sourcesIdentity = useMemo(() => buildForgeSourcesIdentity(sources), [sources])
 
   const filterLocally = useCallback((items: TSummary[], q: string): TSummary[] => {
     if (!q.trim()) return items
@@ -194,6 +199,10 @@ export function useForgeSearch<TSummary, TDetails>(
   }, [executeSearch, filterLocally, deduplicateAndSort, performNumericLookup])
 
   useEffect(() => {
+    const sourcesChanged =
+      sourcesIdentityRef.current !== null && sourcesIdentityRef.current !== sourcesIdentity
+    sourcesIdentityRef.current = sourcesIdentity
+
     if (!enabled) {
       if (debounceHandle.current) {
         window.clearTimeout(debounceHandle.current)
@@ -203,12 +212,18 @@ export function useForgeSearch<TSummary, TDetails>(
       setLoading(false)
       setResults([])
       cachedItemsRef.current = []
+      setError(null)
+      setErrorDetails([])
       return
     }
 
-    if (!hasInitialFetchedRef.current) {
+    if (!hasInitialFetchedRef.current || sourcesChanged) {
       hasInitialFetchedRef.current = true
-      void executeFullSearch('')
+      cachedItemsRef.current = []
+      setResults([])
+      setError(null)
+      setErrorDetails([])
+      void executeFullSearch(queryRef.current)
     }
 
     return () => {
@@ -217,11 +232,12 @@ export function useForgeSearch<TSummary, TDetails>(
         debounceHandle.current = null
       }
     }
-  }, [enabled, executeFullSearch])
+  }, [enabled, executeFullSearch, sourcesIdentity])
 
   const setQuery = useCallback(
     (q: string) => {
       setQueryState(q)
+      queryRef.current = q
 
       if (!enabled || !hasInitialFetchedRef.current) return
 

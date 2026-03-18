@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { VscClose, VscInfo, VscSearch } from 'react-icons/vsc'
 import { ForgeErrorDetailModal } from './ForgeErrorDetailModal'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
@@ -10,6 +10,7 @@ import { useTranslation } from '../../common/i18n'
 import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
+import { buildForgeSourcesIdentity } from '../../utils/forgeSourcesIdentity'
 import type { ForgeIssueSummary, ForgeIssueDetails, ForgeSourceConfig } from '../../types/forgeTypes'
 
 function isOpen(state: string): boolean {
@@ -119,6 +120,18 @@ export function ForgeIssuesTab() {
   const [loadingDetails, setLoadingDetails] = useState(false)
   const [detailError, setDetailError] = useState(false)
   const [selectedSource, setSelectedSource] = useState<ForgeSourceConfig | undefined>(undefined)
+  const sourcesIdentity = useMemo(
+    () => buildForgeSourcesIdentity(forge.sources),
+    [forge.sources]
+  )
+
+  useEffect(() => {
+    setSelectedId(null)
+    setDetails(null)
+    setDetailError(false)
+    setSelectedSource(undefined)
+    setLoadingDetails(false)
+  }, [sourcesIdentity])
 
   const loadDetails = useCallback((id: string) => {
     setLoadingDetails(true)

@@ -306,6 +306,49 @@ describe('useForgeSearch', () => {
     expect(result.current.results.some(r => r.title === 'First result (stale)')).toBe(false)
   })
 
+  it('re-fetches when sources change (project switch)', async () => {
+    const sourceA: ForgeSourceConfig = {
+      projectIdentifier: 'team/project-a',
+      hostname: 'gitlab.com',
+      label: 'project-a',
+      forgeType: 'gitlab',
+    }
+    const sourceB: ForgeSourceConfig = {
+      projectIdentifier: 'team/project-b',
+      hostname: 'gitlab.com',
+      label: 'project-b',
+      forgeType: 'gitlab',
+    }
+
+    const itemsA = [makeItem('a1', 'Issue from A')]
+    const itemsB = [makeItem('b1', 'Issue from B')]
+    const searchFn = vi.fn().mockImplementation((source: ForgeSourceConfig) => {
+      if (source.label === 'project-a') return Promise.resolve(itemsA)
+      if (source.label === 'project-b') return Promise.resolve(itemsB)
+      return Promise.resolve([])
+    })
+
+    const opts = defaultOptions({ searchFn, sources: [sourceA] })
+    const { result, rerender } = renderHook(
+      (props: UseForgeSearchOptions<TestSummary, TestDetails>) => useForgeSearch(props),
+      { initialProps: opts }
+    )
+
+    await vi.waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+    expect(result.current.results).toEqual(itemsA)
+    expect(searchFn).toHaveBeenCalledTimes(1)
+
+    rerender({ ...opts, sources: [sourceB] })
+
+    await vi.waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+    expect(result.current.results).toEqual(itemsB)
+    expect(searchFn).toHaveBeenCalledTimes(2)
+  })
+
   it('fetchDetails returns details for an id', async () => {
     const details = makeDetails('5', 'Detailed issue')
     const detailsFn = vi.fn().mockResolvedValue(details)
