@@ -1,27 +1,26 @@
 /* ==========================================================================
    Darcula Theme
-   Palette derived from JetBrains Darcula theme
-   The classic warm dark theme from IntelliJ IDEA, PHPStorm, WebStorm, etc.
+   Palette derived from PHPStorm "Luca Darker" (Monokai-based) color scheme
    ========================================================================== */
 [data-theme="darcula"] {
   /* Color Scheme for native widgets */
   --color-scheme: dark;
 
   /* Background Colors */
-  --color-bg-primary: #2b2b2b;
-  --color-bg-primary-rgb: 43 43 43;
-  --color-bg-secondary: #242424;
-  --color-bg-secondary-rgb: 36 36 36;
-  --color-bg-tertiary: #313335;
-  --color-bg-tertiary-rgb: 49 51 53;
-  --color-bg-elevated: #3c3f41;
-  --color-bg-elevated-rgb: 60 63 65;
-  --color-bg-hover: #4b4e50;
-  --color-bg-hover-rgb: 75 78 80;
-  --color-bg-active: #515658;
-  --color-bg-active-rgb: 81 86 88;
-  --color-bg-selected: rgba(75, 110, 175, 0.25);
-  --color-bg-selected-rgb: 75 110 175;
+  --color-bg-primary: #242328;
+  --color-bg-primary-rgb: 36 35 40;
+  --color-bg-secondary: #1e1d22;
+  --color-bg-secondary-rgb: 30 29 34;
+  --color-bg-tertiary: #2c2b30;
+  --color-bg-tertiary-rgb: 44 43 48;
+  --color-bg-elevated: #333338;
+  --color-bg-elevated-rgb: 51 51 56;
+  --color-bg-hover: #494848;
+  --color-bg-hover-rgb: 73 72 72;
+  --color-bg-active: #545458;
+  --color-bg-active-rgb: 84 84 88;
+  --color-bg-selected: rgba(39, 48, 84, 0.6);
+  --color-bg-selected-rgb: 39 48 84;
 
   /* Panel aliases */
   --color-panel: var(--color-bg-secondary);
@@ -30,294 +29,294 @@
   --color-panel-alt-rgb: var(--color-bg-tertiary-rgb);
 
   /* Text Colors */
-  --color-text-primary: #a9b7c6;
-  --color-text-primary-rgb: 169 183 198;
-  --color-text-secondary: #9aa7b0;
-  --color-text-secondary-rgb: 154 167 176;
+  --color-text-primary: #f8f8f2;
+  --color-text-primary-rgb: 248 248 242;
+  --color-text-secondary: #d2cfd2;
+  --color-text-secondary-rgb: 210 207 210;
   --color-text-tertiary: #808080;
   --color-text-tertiary-rgb: 128 128 128;
-  --color-text-muted: #606366;
-  --color-text-muted-rgb: 96 99 102;
-  --color-text-inverse: #2b2b2b;
-  --color-text-inverse-rgb: 43 43 43;
+  --color-text-muted: #6e6b68;
+  --color-text-muted-rgb: 110 107 104;
+  --color-text-inverse: #242328;
+  --color-text-inverse-rgb: 36 35 40;
 
   /* Border Colors */
-  --color-border-default: #515151;
-  --color-border-default-rgb: 81 81 81;
-  --color-border-subtle: #3c3f41;
-  --color-border-subtle-rgb: 60 63 65;
-  --color-border-strong: #6b6b6b;
-  --color-border-strong-rgb: 107 107 107;
-  --color-border-focus: #4e94ce;
-  --color-border-focus-rgb: 78 148 206;
+  --color-border-default: #494848;
+  --color-border-default-rgb: 73 72 72;
+  --color-border-subtle: #333338;
+  --color-border-subtle-rgb: 51 51 56;
+  --color-border-strong: #6e6b68;
+  --color-border-strong-rgb: 110 107 104;
+  --color-border-focus: #66d9ef;
+  --color-border-focus-rgb: 102 217 239;
 
-  /* Accent Colors - Darcula blue primary accent */
-  --color-accent-blue: #4e94ce;
-  --color-accent-blue-rgb: 78 148 206;
-  --color-accent-blue-light: #6fb3e0;
-  --color-accent-blue-dark: #3574a5;
-  --color-accent-blue-bg: rgba(78, 148, 206, 0.12);
-  --color-accent-blue-border: rgba(78, 148, 206, 0.5);
+  /* Accent Colors - Monokai palette */
+  --color-accent-blue: #66d9ef;
+  --color-accent-blue-rgb: 102 217 239;
+  --color-accent-blue-light: #88e3f4;
+  --color-accent-blue-dark: #4db5cc;
+  --color-accent-blue-bg: rgba(102, 217, 239, 0.12);
+  --color-accent-blue-border: rgba(102, 217, 239, 0.5);
 
-  --color-accent-green: #6a8759;
-  --color-accent-green-rgb: 106 135 89;
-  --color-accent-green-light: #8aad76;
-  --color-accent-green-dark: #4e6b42;
-  --color-accent-green-bg: rgba(106, 135, 89, 0.12);
-  --color-accent-green-border: rgba(106, 135, 89, 0.5);
+  --color-accent-green: #a6e22e;
+  --color-accent-green-rgb: 166 226 46;
+  --color-accent-green-light: #bae960;
+  --color-accent-green-dark: #88bd24;
+  --color-accent-green-bg: rgba(166, 226, 46, 0.12);
+  --color-accent-green-border: rgba(166, 226, 46, 0.5);
 
-  --color-accent-amber: #cc7832;
-  --color-accent-amber-rgb: 204 120 50;
-  --color-accent-amber-light: #e09858;
-  --color-accent-amber-dark: #a66028;
-  --color-accent-amber-bg: rgba(204, 120, 50, 0.12);
-  --color-accent-amber-border: rgba(204, 120, 50, 0.5);
+  --color-accent-amber: #fad03f;
+  --color-accent-amber-rgb: 250 208 63;
+  --color-accent-amber-light: #fbdd67;
+  --color-accent-amber-dark: #d4af33;
+  --color-accent-amber-bg: rgba(250, 208, 63, 0.12);
+  --color-accent-amber-border: rgba(250, 208, 63, 0.5);
 
-  --color-accent-red: #bc3f3c;
-  --color-accent-red-rgb: 188 63 60;
-  --color-accent-red-light: #d66b68;
-  --color-accent-red-dark: #8f2e2c;
-  --color-accent-red-bg: rgba(188, 63, 60, 0.12);
-  --color-accent-red-border: rgba(188, 63, 60, 0.5);
+  --color-accent-red: #f92672;
+  --color-accent-red-rgb: 249 38 114;
+  --color-accent-red-light: #fa5490;
+  --color-accent-red-dark: #d31f5f;
+  --color-accent-red-bg: rgba(249, 38, 114, 0.12);
+  --color-accent-red-border: rgba(249, 38, 114, 0.5);
 
-  --color-accent-violet: #9876aa;
-  --color-accent-violet-rgb: 152 118 170;
-  --color-accent-violet-light: #b39bc5;
-  --color-accent-violet-dark: #7a5d8a;
-  --color-accent-violet-bg: rgba(152, 118, 170, 0.12);
-  --color-accent-violet-border: rgba(152, 118, 170, 0.5);
+  --color-accent-violet: #ae81ff;
+  --color-accent-violet-rgb: 174 129 255;
+  --color-accent-violet-light: #c4a1ff;
+  --color-accent-violet-dark: #8e68d9;
+  --color-accent-violet-bg: rgba(174, 129, 255, 0.12);
+  --color-accent-violet-border: rgba(174, 129, 255, 0.5);
 
-  --color-accent-purple: #9876aa;
-  --color-accent-purple-rgb: 152 118 170;
-  --color-accent-purple-light: #b39bc5;
-  --color-accent-purple-dark: #7a5d8a;
-  --color-accent-purple-bg: rgba(152, 118, 170, 0.12);
-  --color-accent-purple-border: rgba(152, 118, 170, 0.5);
+  --color-accent-purple: #ae81ff;
+  --color-accent-purple-rgb: 174 129 255;
+  --color-accent-purple-light: #c4a1ff;
+  --color-accent-purple-dark: #8e68d9;
+  --color-accent-purple-bg: rgba(174, 129, 255, 0.12);
+  --color-accent-purple-border: rgba(174, 129, 255, 0.5);
 
-  --color-accent-magenta: #c586c0;
-  --color-accent-magenta-rgb: 197 134 192;
-  --color-accent-magenta-light: #d9a6d5;
-  --color-accent-magenta-dark: #a068a0;
-  --color-accent-magenta-bg: rgba(197, 134, 192, 0.12);
-  --color-accent-magenta-border: rgba(197, 134, 192, 0.5);
+  --color-accent-magenta: #f92672;
+  --color-accent-magenta-rgb: 249 38 114;
+  --color-accent-magenta-light: #fa5490;
+  --color-accent-magenta-dark: #d31f5f;
+  --color-accent-magenta-bg: rgba(249, 38, 114, 0.12);
+  --color-accent-magenta-border: rgba(249, 38, 114, 0.5);
 
-  --color-accent-yellow: #bbb529;
-  --color-accent-yellow-rgb: 187 181 41;
-  --color-accent-yellow-light: #d4ce52;
-  --color-accent-yellow-dark: #959020;
-  --color-accent-yellow-bg: rgba(187, 181, 41, 0.12);
-  --color-accent-yellow-border: rgba(187, 181, 41, 0.5);
+  --color-accent-yellow: #ffe792;
+  --color-accent-yellow-rgb: 255 231 146;
+  --color-accent-yellow-light: #ffefb5;
+  --color-accent-yellow-dark: #d9c47a;
+  --color-accent-yellow-bg: rgba(255, 231, 146, 0.12);
+  --color-accent-yellow-border: rgba(255, 231, 146, 0.5);
 
-  --color-accent-cyan: #299999;
-  --color-accent-cyan-rgb: 41 153 153;
-  --color-accent-cyan-light: #40bfbf;
-  --color-accent-cyan-dark: #1f7a7a;
-  --color-accent-cyan-bg: rgba(41, 153, 153, 0.12);
-  --color-accent-cyan-border: rgba(41, 153, 153, 0.5);
+  --color-accent-cyan: #56c7e4;
+  --color-accent-cyan-rgb: 86 199 228;
+  --color-accent-cyan-light: #7dd6ec;
+  --color-accent-cyan-dark: #46a7c2;
+  --color-accent-cyan-bg: rgba(86, 199, 228, 0.12);
+  --color-accent-cyan-border: rgba(86, 199, 228, 0.5);
 
   /* Button text colors on accent backgrounds */
-  --color-accent-blue-text: #ffffff;
-  --color-accent-amber-text: #ffffff;
-  --color-accent-cyan-text: #ffffff;
-  --color-accent-green-text: #ffffff;
+  --color-accent-blue-text: #000000;
+  --color-accent-amber-text: #000000;
+  --color-accent-cyan-text: #000000;
+  --color-accent-green-text: #000000;
   --color-accent-red-text: #ffffff;
 
-  --color-accent-copilot: #9876aa;
-  --color-accent-copilot-rgb: 152 118 170;
-  --color-accent-copilot-light: #b39bc5;
-  --color-accent-copilot-dark: #7a5d8a;
-  --color-accent-copilot-bg: rgba(152, 118, 170, 0.12);
-  --color-accent-copilot-border: rgba(152, 118, 170, 0.5);
+  --color-accent-copilot: #ae81ff;
+  --color-accent-copilot-rgb: 174 129 255;
+  --color-accent-copilot-light: #c4a1ff;
+  --color-accent-copilot-dark: #8e68d9;
+  --color-accent-copilot-bg: rgba(174, 129, 255, 0.12);
+  --color-accent-copilot-border: rgba(174, 129, 255, 0.5);
 
-  /* Extended Tailwind-Compatible Palettes - Darcula blue scale */
-  --color-blue-50: #e8f1f8;
-  --color-blue-50-rgb: 232 241 248;
-  --color-blue-100: #c8ddf0;
-  --color-blue-100-rgb: 200 221 240;
-  --color-blue-200: #a5c8e5;
-  --color-blue-200-rgb: 165 200 229;
-  --color-blue-300: #82b3da;
-  --color-blue-300-rgb: 130 179 218;
-  --color-blue-400: #6fb3e0;
-  --color-blue-400-rgb: 111 179 224;
-  --color-blue-500: #4e94ce;
-  --color-blue-500-rgb: 78 148 206;
-  --color-blue-600: #3d7ab5;
-  --color-blue-600-rgb: 61 122 181;
-  --color-blue-700: #2d6099;
-  --color-blue-700-rgb: 45 96 153;
-  --color-blue-800: #1e4a7d;
-  --color-blue-800-rgb: 30 74 125;
-  --color-blue-900: #103561;
-  --color-blue-900-rgb: 16 53 97;
-  --color-blue-950: #082244;
-  --color-blue-950-rgb: 8 34 68;
+  /* Extended Tailwind-Compatible Palettes - Monokai cyan-blue scale */
+  --color-blue-50: #e8f8fb;
+  --color-blue-50-rgb: 232 248 251;
+  --color-blue-100: #c5eef6;
+  --color-blue-100-rgb: 197 238 246;
+  --color-blue-200: #9ee3f1;
+  --color-blue-200-rgb: 158 227 241;
+  --color-blue-300: #88e3f4;
+  --color-blue-300-rgb: 136 227 244;
+  --color-blue-400: #66d9ef;
+  --color-blue-400-rgb: 102 217 239;
+  --color-blue-500: #66d9ef;
+  --color-blue-500-rgb: 102 217 239;
+  --color-blue-600: #4db5cc;
+  --color-blue-600-rgb: 77 181 204;
+  --color-blue-700: #3891a8;
+  --color-blue-700-rgb: 56 145 168;
+  --color-blue-800: #266d84;
+  --color-blue-800-rgb: 38 109 132;
+  --color-blue-900: #164a60;
+  --color-blue-900-rgb: 22 74 96;
+  --color-blue-950: #0c2f3e;
+  --color-blue-950-rgb: 12 47 62;
 
-  /* Green scale - Darcula string green */
-  --color-green-50: #eef3eb;
-  --color-green-50-rgb: 238 243 235;
-  --color-green-100: #d4e2cd;
-  --color-green-100-rgb: 212 226 205;
-  --color-green-200: #b9d0ae;
-  --color-green-200-rgb: 185 208 174;
-  --color-green-300: #9ebe90;
-  --color-green-300-rgb: 158 190 144;
-  --color-green-400: #8aad76;
-  --color-green-400-rgb: 138 173 118;
-  --color-green-500: #6a8759;
-  --color-green-500-rgb: 106 135 89;
-  --color-green-600: #567048;
-  --color-green-600-rgb: 86 112 72;
-  --color-green-700: #435838;
-  --color-green-700-rgb: 67 88 56;
-  --color-green-800: #314028;
-  --color-green-800-rgb: 49 64 40;
-  --color-green-900: #1f2919;
-  --color-green-900-rgb: 31 41 25;
-  --color-green-950: #12190e;
-  --color-green-950-rgb: 18 25 14;
+  /* Green scale - Monokai green */
+  --color-green-50: #f4fce4;
+  --color-green-50-rgb: 244 252 228;
+  --color-green-100: #e4f8bb;
+  --color-green-100-rgb: 228 248 187;
+  --color-green-200: #cdf08e;
+  --color-green-200-rgb: 205 240 142;
+  --color-green-300: #bae960;
+  --color-green-300-rgb: 186 233 96;
+  --color-green-400: #a6e22e;
+  --color-green-400-rgb: 166 226 46;
+  --color-green-500: #a6e22e;
+  --color-green-500-rgb: 166 226 46;
+  --color-green-600: #88bd24;
+  --color-green-600-rgb: 136 189 36;
+  --color-green-700: #6a981b;
+  --color-green-700-rgb: 106 152 27;
+  --color-green-800: #4d7313;
+  --color-green-800-rgb: 77 115 19;
+  --color-green-900: #314e0c;
+  --color-green-900-rgb: 49 78 12;
+  --color-green-950: #1e3207;
+  --color-green-950-rgb: 30 50 7;
 
-  /* Amber scale - Darcula keyword orange */
-  --color-amber-50: #faf1e8;
-  --color-amber-50-rgb: 250 241 232;
-  --color-amber-100: #f2dcc5;
-  --color-amber-100-rgb: 242 220 197;
-  --color-amber-200: #e8c5a0;
-  --color-amber-200-rgb: 232 197 160;
-  --color-amber-300: #dead79;
-  --color-amber-300-rgb: 222 173 121;
-  --color-amber-400: #e09858;
-  --color-amber-400-rgb: 224 152 88;
-  --color-amber-500: #cc7832;
-  --color-amber-500-rgb: 204 120 50;
-  --color-amber-600: #a66028;
-  --color-amber-600-rgb: 166 96 40;
-  --color-amber-700: #80491e;
-  --color-amber-700-rgb: 128 73 30;
-  --color-amber-800: #5a3315;
-  --color-amber-800-rgb: 90 51 21;
-  --color-amber-900: #351e0c;
-  --color-amber-900-rgb: 53 30 12;
-  --color-amber-950: #1e1107;
-  --color-amber-950-rgb: 30 17 7;
+  /* Amber scale - Monokai warm yellow */
+  --color-amber-50: #fef9e6;
+  --color-amber-50-rgb: 254 249 230;
+  --color-amber-100: #fdf0bd;
+  --color-amber-100-rgb: 253 240 189;
+  --color-amber-200: #fce792;
+  --color-amber-200-rgb: 252 231 146;
+  --color-amber-300: #fbdd67;
+  --color-amber-300-rgb: 251 221 103;
+  --color-amber-400: #fad03f;
+  --color-amber-400-rgb: 250 208 63;
+  --color-amber-500: #fad03f;
+  --color-amber-500-rgb: 250 208 63;
+  --color-amber-600: #d4af33;
+  --color-amber-600-rgb: 212 175 51;
+  --color-amber-700: #ae8e28;
+  --color-amber-700-rgb: 174 142 40;
+  --color-amber-800: #886e1e;
+  --color-amber-800-rgb: 136 110 30;
+  --color-amber-900: #624f15;
+  --color-amber-900-rgb: 98 79 21;
+  --color-amber-950: #3e320d;
+  --color-amber-950-rgb: 62 50 13;
 
-  /* Red scale - Darcula error red */
-  --color-red-50: #f7eaea;
-  --color-red-50-rgb: 247 234 234;
-  --color-red-100: #ecd0cf;
-  --color-red-100-rgb: 236 208 207;
-  --color-red-200: #dfb2b1;
-  --color-red-200-rgb: 223 178 177;
-  --color-red-300: #d29393;
-  --color-red-300-rgb: 210 147 147;
-  --color-red-400: #d66b68;
-  --color-red-400-rgb: 214 107 104;
-  --color-red-500: #bc3f3c;
-  --color-red-500-rgb: 188 63 60;
-  --color-red-600: #9a3330;
-  --color-red-600-rgb: 154 51 48;
-  --color-red-700: #782725;
-  --color-red-700-rgb: 120 39 37;
-  --color-red-800: #561c1a;
-  --color-red-800-rgb: 86 28 26;
-  --color-red-900: #351110;
-  --color-red-900-rgb: 53 17 16;
-  --color-red-950: #1e0909;
-  --color-red-950-rgb: 30 9 9;
+  /* Red scale - Monokai pink */
+  --color-red-50: #fee8f0;
+  --color-red-50-rgb: 254 232 240;
+  --color-red-100: #fcc6d7;
+  --color-red-100-rgb: 252 198 215;
+  --color-red-200: #fa9ebc;
+  --color-red-200-rgb: 250 158 188;
+  --color-red-300: #fa5490;
+  --color-red-300-rgb: 250 84 144;
+  --color-red-400: #f93d81;
+  --color-red-400-rgb: 249 61 129;
+  --color-red-500: #f92672;
+  --color-red-500-rgb: 249 38 114;
+  --color-red-600: #d31f5f;
+  --color-red-600-rgb: 211 31 95;
+  --color-red-700: #ad194d;
+  --color-red-700-rgb: 173 25 77;
+  --color-red-800: #87133b;
+  --color-red-800-rgb: 135 19 59;
+  --color-red-900: #610d2a;
+  --color-red-900-rgb: 97 13 42;
+  --color-red-950: #3d081a;
+  --color-red-950-rgb: 61 8 26;
 
-  /* Yellow scale */
-  --color-yellow-50: #f5f4e4;
-  --color-yellow-50-rgb: 245 244 228;
-  --color-yellow-100: #e8e6be;
-  --color-yellow-100-rgb: 232 230 190;
-  --color-yellow-200: #dad896;
-  --color-yellow-200-rgb: 218 216 150;
-  --color-yellow-300: #ccc96e;
-  --color-yellow-300-rgb: 204 201 110;
-  --color-yellow-400: #d4ce52;
-  --color-yellow-400-rgb: 212 206 82;
-  --color-yellow-500: #bbb529;
-  --color-yellow-500-rgb: 187 181 41;
-  --color-yellow-600: #959020;
-  --color-yellow-600-rgb: 149 144 32;
-  --color-yellow-700: #706c18;
-  --color-yellow-700-rgb: 112 108 24;
-  --color-yellow-800: #4a4810;
-  --color-yellow-800-rgb: 74 72 16;
-  --color-yellow-900: #252409;
-  --color-yellow-900-rgb: 37 36 9;
+  /* Yellow scale - Monokai string yellow */
+  --color-yellow-50: #fffce8;
+  --color-yellow-50-rgb: 255 252 232;
+  --color-yellow-100: #fff6c5;
+  --color-yellow-100-rgb: 255 246 197;
+  --color-yellow-200: #ffef9e;
+  --color-yellow-200-rgb: 255 239 158;
+  --color-yellow-300: #ffe792;
+  --color-yellow-300-rgb: 255 231 146;
+  --color-yellow-400: #ffe078;
+  --color-yellow-400-rgb: 255 224 120;
+  --color-yellow-500: #ffe792;
+  --color-yellow-500-rgb: 255 231 146;
+  --color-yellow-600: #d9c47a;
+  --color-yellow-600-rgb: 217 196 122;
+  --color-yellow-700: #b3a163;
+  --color-yellow-700-rgb: 179 161 99;
+  --color-yellow-800: #8d7e4d;
+  --color-yellow-800-rgb: 141 126 77;
+  --color-yellow-900: #675b37;
+  --color-yellow-900-rgb: 103 91 55;
 
   /* Cyan scale */
-  --color-cyan-50: #e4f3f3;
-  --color-cyan-50-rgb: 228 243 243;
-  --color-cyan-100: #bfe2e2;
-  --color-cyan-100-rgb: 191 226 226;
-  --color-cyan-200: #96d0d0;
-  --color-cyan-200-rgb: 150 208 208;
-  --color-cyan-300: #6cbebe;
-  --color-cyan-300-rgb: 108 190 190;
-  --color-cyan-400: #40bfbf;
-  --color-cyan-400-rgb: 64 191 191;
-  --color-cyan-500: #299999;
-  --color-cyan-500-rgb: 41 153 153;
-  --color-cyan-600: #217a7a;
-  --color-cyan-600-rgb: 33 122 122;
-  --color-cyan-700: #195c5c;
-  --color-cyan-700-rgb: 25 92 92;
-  --color-cyan-800: #113e3e;
-  --color-cyan-800-rgb: 17 62 62;
-  --color-cyan-900: #092020;
-  --color-cyan-900-rgb: 9 32 32;
-  --color-cyan-950: #041111;
-  --color-cyan-950-rgb: 4 17 17;
+  --color-cyan-50: #e7f7fb;
+  --color-cyan-50-rgb: 231 247 251;
+  --color-cyan-100: #c4ecf5;
+  --color-cyan-100-rgb: 196 236 245;
+  --color-cyan-200: #9ddfee;
+  --color-cyan-200-rgb: 157 223 238;
+  --color-cyan-300: #7dd6ec;
+  --color-cyan-300-rgb: 125 214 236;
+  --color-cyan-400: #56c7e4;
+  --color-cyan-400-rgb: 86 199 228;
+  --color-cyan-500: #56c7e4;
+  --color-cyan-500-rgb: 86 199 228;
+  --color-cyan-600: #46a7c2;
+  --color-cyan-600-rgb: 70 167 194;
+  --color-cyan-700: #3687a0;
+  --color-cyan-700-rgb: 54 135 160;
+  --color-cyan-800: #27677e;
+  --color-cyan-800-rgb: 39 103 126;
+  --color-cyan-900: #19475c;
+  --color-cyan-900-rgb: 25 71 92;
+  --color-cyan-950: #0e2d3b;
+  --color-cyan-950-rgb: 14 45 59;
 
-  /* Purple scale */
-  --color-purple-50: #f3eef7;
-  --color-purple-50-rgb: 243 238 247;
-  --color-purple-100: #e0d4eb;
-  --color-purple-100-rgb: 224 212 235;
-  --color-purple-200: #ccb9de;
-  --color-purple-200-rgb: 204 185 222;
-  --color-purple-300: #b39bc5;
-  --color-purple-300-rgb: 179 155 197;
-  --color-purple-400: #a98bba;
-  --color-purple-400-rgb: 169 139 186;
-  --color-purple-500: #9876aa;
-  --color-purple-500-rgb: 152 118 170;
-  --color-purple-600: #7c5f8c;
-  --color-purple-600-rgb: 124 95 140;
-  --color-purple-700: #604970;
-  --color-purple-700-rgb: 96 73 112;
-  --color-purple-800: #453453;
-  --color-purple-800-rgb: 69 52 83;
-  --color-purple-900: #2b1f36;
-  --color-purple-900-rgb: 43 31 54;
-  --color-purple-950: #1a1222;
-  --color-purple-950-rgb: 26 18 34;
+  /* Purple scale - Monokai purple */
+  --color-purple-50: #f5eeff;
+  --color-purple-50-rgb: 245 238 255;
+  --color-purple-100: #e5d5ff;
+  --color-purple-100-rgb: 229 213 255;
+  --color-purple-200: #d5bbff;
+  --color-purple-200-rgb: 213 187 255;
+  --color-purple-300: #c4a1ff;
+  --color-purple-300-rgb: 196 161 255;
+  --color-purple-400: #b991ff;
+  --color-purple-400-rgb: 185 145 255;
+  --color-purple-500: #ae81ff;
+  --color-purple-500-rgb: 174 129 255;
+  --color-purple-600: #8e68d9;
+  --color-purple-600-rgb: 142 104 217;
+  --color-purple-700: #6f50b3;
+  --color-purple-700-rgb: 111 80 179;
+  --color-purple-800: #51398d;
+  --color-purple-800-rgb: 81 57 141;
+  --color-purple-900: #342467;
+  --color-purple-900-rgb: 52 36 103;
+  --color-purple-950: #1f1542;
+  --color-purple-950-rgb: 31 21 66;
 
-  /* Violet scale - same as purple for Darcula */
-  --color-violet-50: #f3eef7;
-  --color-violet-50-rgb: 243 238 247;
-  --color-violet-100: #e0d4eb;
-  --color-violet-100-rgb: 224 212 235;
-  --color-violet-200: #ccb9de;
-  --color-violet-200-rgb: 204 185 222;
-  --color-violet-300: #b39bc5;
-  --color-violet-300-rgb: 179 155 197;
-  --color-violet-400: #a98bba;
-  --color-violet-400-rgb: 169 139 186;
-  --color-violet-500: #9876aa;
-  --color-violet-500-rgb: 152 118 170;
-  --color-violet-600: #7c5f8c;
-  --color-violet-600-rgb: 124 95 140;
-  --color-violet-700: #604970;
-  --color-violet-700-rgb: 96 73 112;
-  --color-violet-800: #453453;
-  --color-violet-800-rgb: 69 52 83;
-  --color-violet-900: #2b1f36;
-  --color-violet-900-rgb: 43 31 54;
-  --color-violet-950: #1a1222;
-  --color-violet-950-rgb: 26 18 34;
+  /* Violet scale - same as purple */
+  --color-violet-50: #f5eeff;
+  --color-violet-50-rgb: 245 238 255;
+  --color-violet-100: #e5d5ff;
+  --color-violet-100-rgb: 229 213 255;
+  --color-violet-200: #d5bbff;
+  --color-violet-200-rgb: 213 187 255;
+  --color-violet-300: #c4a1ff;
+  --color-violet-300-rgb: 196 161 255;
+  --color-violet-400: #b991ff;
+  --color-violet-400-rgb: 185 145 255;
+  --color-violet-500: #ae81ff;
+  --color-violet-500-rgb: 174 129 255;
+  --color-violet-600: #8e68d9;
+  --color-violet-600-rgb: 142 104 217;
+  --color-violet-700: #6f50b3;
+  --color-violet-700-rgb: 111 80 179;
+  --color-violet-800: #51398d;
+  --color-violet-800-rgb: 81 57 141;
+  --color-violet-900: #342467;
+  --color-violet-900-rgb: 52 36 103;
+  --color-violet-950: #1f1542;
+  --color-violet-950-rgb: 31 21 66;
 
   /* Status Colors */
   --color-status-info: var(--color-accent-blue);
@@ -329,32 +328,32 @@
   --color-status-error: var(--color-accent-red);
   --color-status-error-rgb: var(--color-accent-red-rgb);
 
-  /* Diff Colors - Darcula style */
-  --color-diff-added-base: #385738;
-  --color-diff-removed-base: #6b3232;
-  --color-diff-modified-base: #4a4028;
+  /* Diff Colors - from Luca Darker */
+  --color-diff-added-base: #253721;
+  --color-diff-removed-base: #80210f;
+  --color-diff-modified-base: #4b5265;
 
-  --color-diff-added-bg: rgba(56, 87, 56, 0.25);
-  --color-diff-removed-bg: rgba(107, 50, 50, 0.25);
-  --color-diff-modified-bg: rgba(74, 64, 40, 0.25);
+  --color-diff-added-bg: rgba(37, 55, 33, 0.35);
+  --color-diff-removed-bg: rgba(128, 33, 15, 0.35);
+  --color-diff-modified-bg: rgba(75, 82, 101, 0.35);
 
-  --color-diff-added-text-bg: rgba(56, 87, 56, 0.4);
-  --color-diff-removed-text-bg: rgba(107, 50, 50, 0.4);
+  --color-diff-added-text-bg: rgba(37, 55, 33, 0.5);
+  --color-diff-removed-text-bg: rgba(128, 33, 15, 0.5);
 
-  --color-diff-added-gutter: rgba(56, 87, 56, 0.5);
-  --color-diff-removed-gutter: rgba(107, 50, 50, 0.5);
+  --color-diff-added-gutter: rgba(37, 55, 33, 0.6);
+  --color-diff-removed-gutter: rgba(128, 33, 15, 0.6);
 
-  --color-diff-added-text: #6a8759;
-  --color-diff-removed-text: #bc3f3c;
-  --color-diff-modified-text: #cc7832;
+  --color-diff-added-text: #a6e22e;
+  --color-diff-removed-text: #f92672;
+  --color-diff-modified-text: #66d9ef;
 
   /* Scrollbar Colors */
-  --color-scrollbar-track: rgba(60, 63, 65, 0.3);
-  --color-scrollbar-thumb: rgba(107, 107, 107, 0.6);
+  --color-scrollbar-track: rgba(51, 51, 56, 0.3);
+  --color-scrollbar-thumb: rgba(110, 107, 104, 0.6);
   --color-scrollbar-thumb-hover: rgba(140, 140, 140, 0.8);
 
   /* Selection Colors */
-  --color-selection-bg: rgba(33, 66, 131, 0.6);
+  --color-selection-bg: rgba(39, 48, 84, 0.6);
 
   /* Overlay Colors */
   --color-overlay-backdrop: rgba(0, 0, 0, 0.6);
@@ -363,131 +362,153 @@
   --color-overlay-dark: rgba(0, 0, 0, 0.3);
 
   /* Graph Colors */
-  --color-graph-reference-default: #6a8759;
-  --color-graph-reference-remote: #9876aa;
-  --color-graph-reference-base: #cc7832;
-  --color-graph-reference-tag: #bbb529;
+  --color-graph-reference-default: #a6e22e;
+  --color-graph-reference-remote: #ae81ff;
+  --color-graph-reference-base: #fad03f;
+  --color-graph-reference-tag: #66d9ef;
 
   /* Surface Colors */
-  --color-surface-modal: #3c3f41;
-  --color-surface-modal-rgb: 60 63 65;
+  --color-surface-modal: #333338;
+  --color-surface-modal-rgb: 51 51 56;
 
   /* Editor Colors */
-  --color-editor-background: #2b2b2b;
-  --color-editor-background-rgb: 43 43 43;
-  --color-editor-text: #a9b7c6;
-  --color-editor-caret: #bbbbbb;
-  --color-editor-gutter-text: #606366;
-  --color-editor-gutter-active-text: #a4a3a3;
-  --color-editor-active-line: rgba(255, 255, 255, 0.04);
-  --color-editor-inline-code-bg: rgba(60, 63, 65, 0.8);
-  --color-editor-code-block-bg: rgba(36, 36, 36, 0.5);
-  --color-editor-blockquote-border: #515151;
-  --color-editor-line-rule: #515151;
+  --color-editor-background: #242328;
+  --color-editor-background-rgb: 36 35 40;
+  --color-editor-text: #f8f8f2;
+  --color-editor-caret: #f8f8f0;
+  --color-editor-gutter-text: #6e6b68;
+  --color-editor-gutter-active-text: #b2b3ba;
+  --color-editor-active-line: rgba(31, 31, 31, 0.6);
+  --color-editor-inline-code-bg: rgba(51, 51, 56, 0.8);
+  --color-editor-code-block-bg: rgba(30, 29, 34, 0.5);
+  --color-editor-blockquote-border: #494848;
+  --color-editor-line-rule: #494848;
   --color-editor-strikethrough: #808080;
-  --color-editor-selection: rgba(33, 66, 131, 0.5);
-  --color-editor-selection-focused: rgba(33, 66, 131, 0.6);
+  --color-editor-selection: rgba(39, 48, 84, 0.5);
+  --color-editor-selection-focused: rgba(39, 48, 84, 0.7);
   --color-editor-selection-alt: rgba(255, 255, 255, 0.04);
-  --color-editor-placeholder-border: #515151;
+  --color-editor-placeholder-border: #494848;
 
-  /* Syntax Colors - Darcula's iconic syntax highlighting */
-  --color-syntax-default: #a9b7c6;
-  --color-syntax-comment: #808080;
-  --color-syntax-variable: #9cdcfe;
-  --color-syntax-number: #6897bb;
-  --color-syntax-type: #cc7832;
-  --color-syntax-keyword: #cc7832;
-  --color-syntax-string: #6a8759;
-  --color-syntax-function: #ffc66d;
-  --color-syntax-operator: #a9b7c6;
-  --color-syntax-punctuation: #cc7832;
-  --color-syntax-tag: #e8bf6a;
-  --color-syntax-attribute: #bababa;
-  --color-syntax-selector: #e8bf6a;
-  --color-syntax-property: #9876aa;
-  --color-syntax-bracket: #a9b7c6;
-  --color-syntax-class: #a9b7c6;
-  --color-syntax-constant: #9876aa;
-  --color-syntax-decorator: #bbb529;
-  --color-syntax-regex: #6a8759;
-  --color-syntax-escape: #cc7832;
-  --color-syntax-emphasis: #c586c0;
-  --color-syntax-highlight: #a9b7c6;
+  /* Syntax Colors - Monokai */
+  --color-syntax-default: #f8f8f2;
+  --color-syntax-comment: #75715e;
+  --color-syntax-variable: #a6e22e;
+  --color-syntax-number: #ae81ff;
+  --color-syntax-type: #66d9ef;
+  --color-syntax-keyword: #f92672;
+  --color-syntax-string: #ffe792;
+  --color-syntax-function: #66d9ef;
+  --color-syntax-operator: #f72671;
+  --color-syntax-punctuation: #f72671;
+  --color-syntax-tag: #f92672;
+  --color-syntax-attribute: #a6e22e;
+  --color-syntax-selector: #f92672;
+  --color-syntax-property: #66d9ef;
+  --color-syntax-bracket: #f8f8f2;
+  --color-syntax-class: #66d9ef;
+  --color-syntax-constant: #ae81ff;
+  --color-syntax-decorator: #a6e22e;
+  --color-syntax-regex: #ffe792;
+  --color-syntax-escape: #66d9ef;
+  --color-syntax-emphasis: #f92672;
+  --color-syntax-highlight: #f8f8f2;
 
   /* Gray Scale */
   --color-gray-50: #e8e8e8;
   --color-gray-50-rgb: 232 232 232;
-  --color-gray-100: #d1d1d1;
-  --color-gray-100-rgb: 209 209 209;
-  --color-gray-200: #b8b8b8;
-  --color-gray-200-rgb: 184 184 184;
-  --color-gray-300: #a0a0a0;
-  --color-gray-300-rgb: 160 160 160;
-  --color-gray-400: #808080;
-  --color-gray-400-rgb: 128 128 128;
-  --color-gray-500: #606366;
-  --color-gray-500-rgb: 96 99 102;
-  --color-gray-500-alt: #6b6b6b;
-  --color-gray-500-alt-rgb: 107 107 107;
-  --color-gray-600: #515151;
-  --color-gray-600-rgb: 81 81 81;
-  --color-gray-700: #3c3f41;
-  --color-gray-700-rgb: 60 63 65;
-  --color-gray-800: #313335;
-  --color-gray-800-rgb: 49 51 53;
-  --color-gray-900: #2b2b2b;
-  --color-gray-900-rgb: 43 43 43;
-  --color-gray-950: #242424;
-  --color-gray-950-rgb: 36 36 36;
+  --color-gray-100: #d2cfd2;
+  --color-gray-100-rgb: 210 207 210;
+  --color-gray-200: #b2b3ba;
+  --color-gray-200-rgb: 178 179 186;
+  --color-gray-300: #808080;
+  --color-gray-300-rgb: 128 128 128;
+  --color-gray-400: #75715e;
+  --color-gray-400-rgb: 117 113 94;
+  --color-gray-500: #6e6b68;
+  --color-gray-500-rgb: 110 107 104;
+  --color-gray-500-alt: #6e6b68;
+  --color-gray-500-alt-rgb: 110 107 104;
+  --color-gray-600: #494848;
+  --color-gray-600-rgb: 73 72 72;
+  --color-gray-700: #333338;
+  --color-gray-700-rgb: 51 51 56;
+  --color-gray-800: #2c2b30;
+  --color-gray-800-rgb: 44 43 48;
+  --color-gray-900: #242328;
+  --color-gray-900-rgb: 36 35 40;
+  --color-gray-950: #1e1d22;
+  --color-gray-950-rgb: 30 29 34;
 
   --color-white: #ffffff;
   --color-white-rgb: 255 255 255;
 
   /* Tab Colors */
   --color-tab-inactive-bg: transparent;
-  --color-tab-inactive-text: #808080;
-  --color-tab-inactive-hover-bg: rgba(75, 78, 80, 0.5);
-  --color-tab-inactive-hover-text: #a9b7c6;
-  --color-tab-active-bg: rgba(60, 63, 65, 0.6);
-  --color-tab-active-text: #a9b7c6;
-  --color-tab-active-indicator: #4e94ce;
+  --color-tab-inactive-text: #75715e;
+  --color-tab-inactive-hover-bg: rgba(73, 72, 72, 0.5);
+  --color-tab-inactive-hover-text: #d2cfd2;
+  --color-tab-active-bg: rgba(51, 51, 56, 0.6);
+  --color-tab-active-text: #f8f8f2;
+  --color-tab-active-indicator: #66d9ef;
   --color-tab-close-bg: transparent;
-  --color-tab-close-hover-bg: rgba(81, 86, 88, 0.6);
-  --color-tab-close-color: #606366;
-  --color-tab-close-hover-color: #a9b7c6;
-  --color-tab-badge-bg: #cc7832;
+  --color-tab-close-hover-bg: rgba(84, 84, 88, 0.6);
+  --color-tab-close-color: #6e6b68;
+  --color-tab-close-hover-color: #f8f8f2;
+  --color-tab-badge-bg: #f92672;
   --color-tab-badge-text: #ffffff;
-  --color-tab-running-badge-bg: #3574a5;
-  --color-tab-running-badge-text: #e8f1f8;
-  --color-tab-running-indicator: #4e94ce;
-  --color-tab-running-glow: rgba(78, 148, 206, 0.3);
+  --color-tab-running-badge-bg: #4db5cc;
+  --color-tab-running-badge-text: #e8f8fb;
+  --color-tab-running-indicator: #66d9ef;
+  --color-tab-running-glow: rgba(102, 217, 239, 0.3);
 
   /* Tab Focus Colors */
-  --color-tab-focus-inactive-text: #6fb3e0;
-  --color-tab-focus-inactive-hover-bg: rgba(78, 148, 206, 0.15);
-  --color-tab-focus-inactive-hover-text: #a5c8e5;
-  --color-tab-focus-active-bg: rgba(78, 148, 206, 0.25);
-  --color-tab-focus-active-text: #a5c8e5;
+  --color-tab-focus-inactive-text: #88e3f4;
+  --color-tab-focus-inactive-hover-bg: rgba(102, 217, 239, 0.15);
+  --color-tab-focus-inactive-hover-text: #9ee3f1;
+  --color-tab-focus-active-bg: rgba(102, 217, 239, 0.25);
+  --color-tab-focus-active-text: #9ee3f1;
 
   /* Icon Button Colors */
-  --icon-button-default-bg: #3c3f41;
-  --icon-button-default-hover-bg: #4b4e50;
-  --icon-button-default-text: #a9b7c6;
+  --icon-button-default-bg: #333338;
+  --icon-button-default-hover-bg: #494848;
+  --icon-button-default-text: #f8f8f2;
   --icon-button-default-border: transparent;
   --icon-button-default-hover-border: transparent;
-  --icon-button-success-bg: #385738;
-  --icon-button-success-hover-bg: #4e6b42;
-  --icon-button-success-text: #8aad76;
+  --icon-button-success-bg: #253721;
+  --icon-button-success-hover-bg: #314e0c;
+  --icon-button-success-text: #a6e22e;
   --icon-button-success-border: transparent;
   --icon-button-success-hover-border: transparent;
-  --icon-button-danger-bg: #5a2020;
-  --icon-button-danger-hover-bg: #6b3232;
-  --icon-button-danger-text: #d66b68;
+  --icon-button-danger-bg: #3d081a;
+  --icon-button-danger-hover-bg: #610d2a;
+  --icon-button-danger-text: #fa5490;
   --icon-button-danger-border: transparent;
   --icon-button-danger-hover-border: transparent;
-  --icon-button-warning-bg: #4a3520;
-  --icon-button-warning-hover-bg: #5a4028;
-  --icon-button-warning-text: #e09858;
+  --icon-button-warning-bg: #3e320d;
+  --icon-button-warning-hover-bg: #624f15;
+  --icon-button-warning-text: #fad03f;
   --icon-button-warning-border: transparent;
   --icon-button-warning-hover-border: transparent;
+
+  /* Terminal Colors (from PHPStorm "Luca Darker" theme) */
+  --color-terminal-bg: #000000;
+  --color-terminal-fg: #ffffff;
+  --color-terminal-cursor: #f8f8f0;
+  --color-terminal-selection: #273054;
+  --color-terminal-black: #050000;
+  --color-terminal-red: #ff0a02;
+  --color-terminal-green: #7fb842;
+  --color-terminal-yellow: #fad03f;
+  --color-terminal-blue: #3e6cff;
+  --color-terminal-magenta: #c372fd;
+  --color-terminal-cyan: #7da7fc;
+  --color-terminal-white: #b2b3ba;
+  --color-terminal-bright-black: #4f4f4f;
+  --color-terminal-bright-red: #ff4a50;
+  --color-terminal-bright-green: #7ffa27;
+  --color-terminal-bright-yellow: #ffdf00;
+  --color-terminal-bright-blue: #3f73ff;
+  --color-terminal-bright-magenta: #ff00ff;
+  --color-terminal-bright-cyan: #7da7fc;
+  --color-terminal-bright-white: #ffffff;
 }

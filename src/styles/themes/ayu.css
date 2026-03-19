@@ -495,4 +495,26 @@
   --icon-button-warning-text: #E6B450;
   --icon-button-warning-border: transparent;
   --icon-button-warning-hover-border: transparent;
+
+  /* Terminal Colors */
+  --color-terminal-bg: #0B0E14;
+  --color-terminal-fg: #BFBDB6;
+  --color-terminal-cursor: #E6B450;
+  --color-terminal-selection: rgba(89, 194, 255, 0.3);
+  --color-terminal-black: #0B0E14;
+  --color-terminal-red: #D95757;
+  --color-terminal-green: #7FD962;
+  --color-terminal-yellow: #E6B450;
+  --color-terminal-blue: #59C2FF;
+  --color-terminal-magenta: #D2A6FF;
+  --color-terminal-cyan: #39BAE6;
+  --color-terminal-white: #BFBDB6;
+  --color-terminal-bright-black: #565B66;
+  --color-terminal-bright-red: #F26D78;
+  --color-terminal-bright-green: #AAD94C;
+  --color-terminal-bright-yellow: #FFB454;
+  --color-terminal-bright-blue: #73CEFF;
+  --color-terminal-bright-magenta: #E0BFFF;
+  --color-terminal-bright-cyan: #95E6CB;
+  --color-terminal-bright-white: #BFBDB6;
 }
