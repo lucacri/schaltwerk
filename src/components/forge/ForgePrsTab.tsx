@@ -158,11 +158,10 @@ export function ForgePrsTab() {
     setLoadingDetails(false)
   }, [sourcesIdentity])
 
-  const loadDetails = useCallback((id: string) => {
+  const loadDetails = useCallback((id: string, source?: ForgeSourceConfig) => {
     setLoadingDetails(true)
     setDetailError(false)
 
-    const source = forge.sources[0]
     void search.fetchDetails(id, source).then((d) => {
       if (!d) {
         setDetailError(true)
@@ -175,22 +174,23 @@ export function ForgePrsTab() {
       setDetailError(true)
       setLoadingDetails(false)
     })
-  }, [search, forge.sources])
+  }, [search])
 
   const handleSelect = useCallback(
     (pr: ForgePrSummary) => {
       setSelectedId(pr.id)
       setDetails(null)
-      setSelectedSource(forge.sources.length > 1 ? forge.sources[0] : undefined)
-      loadDetails(pr.id)
+      const source = search.getSourceForItem(pr) ?? forge.sources[0]
+      setSelectedSource(forge.sources.length > 1 ? source : undefined)
+      loadDetails(pr.id, source)
     },
-    [loadDetails, forge.sources]
+    [loadDetails, forge.sources, search]
   )
 
   const handleRetry = useCallback(() => {
     if (!selectedId) return
-    loadDetails(selectedId)
-  }, [selectedId, loadDetails])
+    loadDetails(selectedId, selectedSource ?? forge.sources[0])
+  }, [selectedId, selectedSource, loadDetails, forge.sources])
 
   const handleBack = useCallback(() => {
     setSelectedId(null)
@@ -200,19 +200,22 @@ export function ForgePrsTab() {
   }, [])
 
   const handleApprove = useCallback(async () => {
-    if (!selectedId || !forge.sources[0]) return
-    await forge.approvePr(forge.sources[0], selectedId)
-  }, [selectedId, forge])
+    const source = selectedSource ?? forge.sources[0]
+    if (!selectedId || !source) return
+    await forge.approvePr(source, selectedId)
+  }, [selectedId, selectedSource, forge])
 
   const handleMerge = useCallback(async (squash: boolean, deleteBranch: boolean) => {
-    if (!selectedId || !forge.sources[0]) return
-    await forge.mergePr(forge.sources[0], selectedId, squash, deleteBranch)
-  }, [selectedId, forge])
+    const source = selectedSource ?? forge.sources[0]
+    if (!selectedId || !source) return
+    await forge.mergePr(source, selectedId, squash, deleteBranch)
+  }, [selectedId, selectedSource, forge])
 
   const handleComment = useCallback(async (message: string) => {
-    if (!selectedId || !forge.sources[0]) return
-    await forge.commentOnPr(forge.sources[0], selectedId, message)
-  }, [selectedId, forge])
+    const source = selectedSource ?? forge.sources[0]
+    if (!selectedId || !source) return
+    await forge.commentOnPr(source, selectedId, message)
+  }, [selectedId, selectedSource, forge])
 
   if (selectedId && loadingDetails) {
     return (

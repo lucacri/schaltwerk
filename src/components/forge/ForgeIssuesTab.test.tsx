@@ -15,6 +15,13 @@ const testSource: ForgeSourceConfig = {
   forgeType: 'github',
 }
 
+const secondSource: ForgeSourceConfig = {
+  projectIdentifier: 'group/project-b',
+  hostname: 'gitlab.example.com',
+  label: 'Project B',
+  forgeType: 'gitlab',
+}
+
 function makeSummary(overrides: Partial<ForgeIssueSummary> = {}): ForgeIssueSummary {
   return {
     id: '42',
@@ -208,6 +215,42 @@ describe('ForgeIssuesTab', () => {
 
     await waitFor(() => {
       expect(screen.getByText('The login form crashes on submit.')).toBeTruthy()
+    })
+  })
+
+  it('fetches details from the matching source in multi-source mode', async () => {
+    const searchIssues = vi.fn().mockImplementation((source: ForgeSourceConfig) => {
+      if (source.label === 'GitHub') {
+        return Promise.resolve([])
+      }
+      if (source.label === 'Project B') {
+        return Promise.resolve([makeSummary({ id: '1541', title: 'Self-hosted issue' })])
+      }
+      return Promise.resolve([])
+    })
+    const getIssueDetails = vi.fn().mockResolvedValue(
+      makeDetails({
+        summary: makeSummary({ id: '1541', title: 'Self-hosted issue' }),
+      })
+    )
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource, secondSource],
+        searchIssues,
+        getIssueDetails,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Self-hosted issue')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Self-hosted issue'))
+
+    await waitFor(() => {
+      expect(getIssueDetails).toHaveBeenCalledWith(secondSource, '1541')
     })
   })
 

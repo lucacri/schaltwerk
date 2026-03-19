@@ -30,9 +30,31 @@ export interface UseForgeSearchResult<TSummary, TDetails> {
   errorDetails: SourceError[]
   clearError: () => void
   fetchDetails: (id: string, source?: ForgeSourceConfig) => Promise<TDetails | null>
+  getSourceForItem: (item: TSummary) => ForgeSourceConfig | undefined
 }
 
-export function useForgeSearch<TSummary, TDetails>(
+function buildSourceItemKey(source: ForgeSourceConfig | undefined, id: string): string {
+  if (!source) return id
+  return `${source.forgeType}::${source.hostname ?? 'default'}::${source.projectIdentifier}::${id}`
+}
+
+function buildSourceIndex<TSummary extends object>(
+  items: TSummary[],
+  getId: (item: TSummary) => string,
+  sourceByItem: WeakMap<TSummary, ForgeSourceConfig>
+): Map<string, ForgeSourceConfig> {
+  return new Map(
+    items
+      .map((item) => {
+        const source = sourceByItem.get(item)
+        if (!source) return null
+        return [buildSourceItemKey(source, getId(item)), source] as const
+      })
+      .filter((entry): entry is readonly [string, ForgeSourceConfig] => entry !== null)
+  )
+}
+
+export function useForgeSearch<TSummary extends object, TDetails>(
   options: UseForgeSearchOptions<TSummary, TDetails>
 ): UseForgeSearchResult<TSummary, TDetails> {
   const {
@@ -67,6 +89,8 @@ export function useForgeSearch<TSummary, TDetails>(
   const detailsFnRef = useRef(detailsFn)
   const sourcesRef = useRef(sources)
   const sourcesIdentityRef = useRef<string | null>(null)
+  const sourceByItemRef = useRef(new WeakMap<TSummary, ForgeSourceConfig>())
+  const sourceIndexRef = useRef(new Map<string, ForgeSourceConfig>())
 
   getIdRef.current = getId
   getTitleRef.current = getTitle
@@ -91,9 +115,12 @@ export function useForgeSearch<TSummary, TDetails>(
   const deduplicateAndSort = useCallback((items: TSummary[]): TSummary[] => {
     const seen = new Map<string, TSummary>()
     for (const item of items) {
-      const id = getIdRef.current(item)
-      if (!seen.has(id)) {
-        seen.set(id, item)
+      const key = buildSourceItemKey(
+        sourceByItemRef.current.get(item),
+        getIdRef.current(item)
+      )
+      if (!seen.has(key)) {
+        seen.set(key, item)
       }
     }
     const deduped = Array.from(seen.values())
@@ -108,6 +135,15 @@ export function useForgeSearch<TSummary, TDetails>(
     return deduped
   }, [])
 
+  const setResultsWithSources = useCallback((items: TSummary[]) => {
+    setResults(items)
+    sourceIndexRef.current = buildSourceIndex(
+      items,
+      getIdRef.current,
+      sourceByItemRef.current
+    )
+  }, [])
+
   const executeSearch = useCallback(async (term: string | undefined, version: number) => {
     const currentSources = sourcesRef.current
     const failedSources: SourceError[] = []
@@ -120,6 +156,9 @@ export function useForgeSearch<TSummary, TDetails>(
     for (let i = 0; i < settled.length; i++) {
       const result = settled[i]!
       if (result.status === 'fulfilled') {
+        for (const item of result.value) {
+          sourceByItemRef.current.set(item, currentSources[i]!)
+        }
         allResults.push(...result.value)
       } else {
         const sourceLabel = currentSources[i]!.label
@@ -150,14 +189,34 @@ export function useForgeSearch<TSummary, TDetails>(
 
     if (versionRef.current !== version) return
 
-    for (const result of settled) {
+    for (let sourceIndex = 0; sourceIndex < settled.length; sourceIndex++) {
+      const result = settled[sourceIndex]!
       if (result.status === 'fulfilled') {
         const summary = summaryFromDetailsRef.current!(result.value)
+        sourceByItemRef.current.set(summary, currentSources[sourceIndex]!)
         setResults((prev) => {
-          if (prev.some((item) => getIdRef.current(item) === getIdRef.current(summary))) {
+          const summaryKey = buildSourceItemKey(
+            currentSources[sourceIndex]!,
+            getIdRef.current(summary)
+          )
+          if (
+            prev.some(
+              (item) =>
+                buildSourceItemKey(
+                  sourceByItemRef.current.get(item),
+                  getIdRef.current(item)
+                ) === summaryKey
+            )
+          ) {
             return prev
           }
-          return [summary, ...prev]
+          const next = [summary, ...prev]
+          sourceIndexRef.current = buildSourceIndex(
+            next,
+            getIdRef.current,
+            sourceByItemRef.current
+          )
+          return next
         })
         return
       }
@@ -184,7 +243,7 @@ export function useForgeSearch<TSummary, TDetails>(
     const localFiltered = filterLocally(cachedItemsRef.current, trimmed)
     const merged = deduplicateAndSort([...allResults, ...localFiltered])
 
-    setResults(merged)
+    setResultsWithSources(merged)
     setLoading(false)
 
     if (failedSources.length > 0) {
@@ -196,7 +255,7 @@ export function useForgeSearch<TSummary, TDetails>(
     }
 
     void performNumericLookup(trimmed, merged, version)
-  }, [executeSearch, filterLocally, deduplicateAndSort, performNumericLookup])
+  }, [executeSearch, filterLocally, deduplicateAndSort, performNumericLookup, setResultsWithSources])
 
   useEffect(() => {
     const sourcesChanged =
@@ -210,8 +269,10 @@ export function useForgeSearch<TSummary, TDetails>(
       }
       hasInitialFetchedRef.current = false
       setLoading(false)
-      setResults([])
+      setResultsWithSources([])
       cachedItemsRef.current = []
+      sourceByItemRef.current = new WeakMap()
+      sourceIndexRef.current.clear()
       setError(null)
       setErrorDetails([])
       return
@@ -220,7 +281,9 @@ export function useForgeSearch<TSummary, TDetails>(
     if (!hasInitialFetchedRef.current || sourcesChanged) {
       hasInitialFetchedRef.current = true
       cachedItemsRef.current = []
-      setResults([])
+      sourceByItemRef.current = new WeakMap()
+      sourceIndexRef.current.clear()
+      setResultsWithSources([])
       setError(null)
       setErrorDetails([])
       void executeFullSearch(queryRef.current)
@@ -232,7 +295,7 @@ export function useForgeSearch<TSummary, TDetails>(
         debounceHandle.current = null
       }
     }
-  }, [enabled, executeFullSearch, sourcesIdentity])
+  }, [enabled, executeFullSearch, sourcesIdentity, setResultsWithSources])
 
   const setQuery = useCallback(
     (q: string) => {
@@ -242,7 +305,7 @@ export function useForgeSearch<TSummary, TDetails>(
       if (!enabled || !hasInitialFetchedRef.current) return
 
       const localFiltered = filterLocally(cachedItemsRef.current, q)
-      setResults(localFiltered)
+      setResultsWithSources(localFiltered)
 
       if (debounceHandle.current) {
         window.clearTimeout(debounceHandle.current)
@@ -257,12 +320,17 @@ export function useForgeSearch<TSummary, TDetails>(
         void executeFullSearch(q)
       }, debounceMs)
     },
-    [enabled, debounceMs, filterLocally, executeFullSearch]
+    [enabled, debounceMs, filterLocally, executeFullSearch, setResultsWithSources]
   )
 
   const fetchDetails = useCallback(
     async (id: string, source?: ForgeSourceConfig): Promise<TDetails | null> => {
-      const targetSource = source ?? sourcesRef.current[0]
+      const targetSource =
+        source ??
+        sourceIndexRef.current.get(buildSourceItemKey(undefined, id)) ??
+        Array.from(sourceIndexRef.current.entries())
+          .find(([key]) => key.endsWith(`::${id}`))?.[1] ??
+        sourcesRef.current[0]
       if (!targetSource) return null
       try {
         return await detailsFnRef.current(targetSource, id)
@@ -271,6 +339,12 @@ export function useForgeSearch<TSummary, TDetails>(
         return null
       }
     },
+    []
+  )
+
+  const getSourceForItem = useCallback(
+    (item: TSummary): ForgeSourceConfig | undefined =>
+      sourceByItemRef.current.get(item),
     []
   )
 
@@ -288,5 +362,6 @@ export function useForgeSearch<TSummary, TDetails>(
     errorDetails,
     clearError,
     fetchDetails,
+    getSourceForItem,
   }
 }

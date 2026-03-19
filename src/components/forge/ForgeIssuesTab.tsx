@@ -133,11 +133,11 @@ export function ForgeIssuesTab() {
     setLoadingDetails(false)
   }, [sourcesIdentity])
 
-  const loadDetails = useCallback((id: string) => {
+  const loadDetails = useCallback((id: string, source?: ForgeSourceConfig) => {
     setLoadingDetails(true)
     setDetailError(false)
 
-    void search.fetchDetails(id).then((d) => {
+    void search.fetchDetails(id, source).then((d) => {
       if (!d) {
         setDetailError(true)
       } else {
@@ -155,16 +155,17 @@ export function ForgeIssuesTab() {
     (issue: ForgeIssueSummary) => {
       setSelectedId(issue.id)
       setDetails(null)
-      loadDetails(issue.id)
-      setSelectedSource(forge.sources.length > 1 ? forge.sources[0] : undefined)
+      const source = search.getSourceForItem(issue) ?? forge.sources[0]
+      loadDetails(issue.id, source)
+      setSelectedSource(forge.sources.length > 1 ? source : undefined)
     },
-    [loadDetails, forge.sources]
+    [loadDetails, forge.sources, search]
   )
 
   const handleRetry = useCallback(() => {
     if (!selectedId) return
-    loadDetails(selectedId)
-  }, [selectedId, loadDetails])
+    loadDetails(selectedId, selectedSource ?? forge.sources[0])
+  }, [selectedId, selectedSource, loadDetails, forge.sources])
 
   const handleBack = useCallback(() => {
     setSelectedId(null)

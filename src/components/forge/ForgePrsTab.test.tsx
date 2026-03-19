@@ -15,6 +15,13 @@ const testSource: ForgeSourceConfig = {
   forgeType: 'github',
 }
 
+const secondSource: ForgeSourceConfig = {
+  projectIdentifier: 'group/project-b',
+  hostname: 'gitlab.example.com',
+  label: 'Project B',
+  forgeType: 'gitlab',
+}
+
 function makePrSummary(overrides: Partial<ForgePrSummary> = {}): ForgePrSummary {
   return {
     id: '99',
@@ -207,6 +214,42 @@ describe('ForgePrsTab', () => {
 
     await waitFor(() => {
       expect(screen.getByText('This PR adds feature X.')).toBeTruthy()
+    })
+  })
+
+  it('fetches PR details from the matching source in multi-source mode', async () => {
+    const searchPrs = vi.fn().mockImplementation((source: ForgeSourceConfig) => {
+      if (source.label === 'GitHub') {
+        return Promise.resolve([])
+      }
+      if (source.label === 'Project B') {
+        return Promise.resolve([makePrSummary({ id: '1541', title: 'Self-hosted PR' })])
+      }
+      return Promise.resolve([])
+    })
+    const getPrDetails = vi.fn().mockResolvedValue(
+      makePrDetails({
+        summary: makePrSummary({ id: '1541', title: 'Self-hosted PR' }),
+      })
+    )
+
+    renderWithProviders(<ForgePrsTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource, secondSource],
+        searchPrs,
+        getPrDetails,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Self-hosted PR')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Self-hosted PR'))
+
+    await waitFor(() => {
+      expect(getPrDetails).toHaveBeenCalledWith(secondSource, '1541')
     })
   })
 

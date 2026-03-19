@@ -235,6 +235,30 @@ describe('useForgeSearch', () => {
     expect(result.current.results[1]!.id).toBe('2')
   })
 
+  it('keeps same ids from different sources as separate results', async () => {
+    const items1 = [makeItem('1541', 'Repo 1 issue', '2024-01-02')]
+    const items2 = [makeItem('1541', 'Repo 2 issue', '2024-01-01')]
+    const searchFn = vi.fn()
+      .mockImplementation((source: ForgeSourceConfig) => {
+        if (source.label === 'repo1') return Promise.resolve(items1)
+        if (source.label === 'repo2') return Promise.resolve(items2)
+        return Promise.resolve([])
+      })
+    const opts = defaultOptions({ searchFn, sources: [source1, source2] })
+
+    const { result } = renderHook(() => useForgeSearch(opts))
+
+    await vi.waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    expect(result.current.results).toHaveLength(2)
+    expect(result.current.results.map((item) => item.title)).toEqual([
+      'Repo 1 issue',
+      'Repo 2 issue',
+    ])
+  })
+
   it('tracks per-source errors without blocking other sources', async () => {
     const items1 = [makeItem('1', 'Issue from repo1')]
     const searchFn = vi.fn()
@@ -366,6 +390,33 @@ describe('useForgeSearch', () => {
     })
 
     expect(detailsFn).toHaveBeenCalledWith(source1, '5')
+    expect(fetchedDetails).toEqual(details)
+  })
+
+  it('fetchDetails uses the source that produced the selected result', async () => {
+    const summary = makeItem('1541', 'Repo 2 issue')
+    const details = makeDetails('1541', 'Repo 2 issue')
+    const searchFn = vi.fn()
+      .mockImplementation((source: ForgeSourceConfig) => {
+        if (source.label === 'repo1') return Promise.resolve([])
+        if (source.label === 'repo2') return Promise.resolve([summary])
+        return Promise.resolve([])
+      })
+    const detailsFn = vi.fn().mockResolvedValue(details)
+    const opts = defaultOptions({ searchFn, detailsFn, sources: [source1, source2] })
+
+    const { result } = renderHook(() => useForgeSearch(opts))
+
+    await vi.waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    let fetchedDetails: TestDetails | null = null
+    await act(async () => {
+      fetchedDetails = await result.current.fetchDetails('1541')
+    })
+
+    expect(detailsFn).toHaveBeenCalledWith(source2, '1541')
     expect(fetchedDetails).toEqual(details)
   })
 })
