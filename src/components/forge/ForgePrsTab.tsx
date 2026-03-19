@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { VscClose, VscInfo, VscSearch } from 'react-icons/vsc'
 import { ForgeErrorDetailModal } from './ForgeErrorDetailModal'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
-import { useForgeSearch } from '../../hooks/useForgeSearch'
+import { useForgeSearch, buildSourceItemKey } from '../../hooks/useForgeSearch'
 import { ForgeDetailErrorView } from './ForgeDetailErrorView'
 import { ForgePrDetail } from './ForgePrDetail'
 import { ForgeLabelChip } from './ForgeLabelChip'
@@ -181,7 +181,7 @@ export function ForgePrsTab() {
       setSelectedId(pr.id)
       setDetails(null)
       const source = search.getSourceForItem(pr) ?? forge.sources[0]
-      setSelectedSource(forge.sources.length > 1 ? source : undefined)
+      setSelectedSource(source)
       loadDetails(pr.id, source)
     },
     [loadDetails, forge.sources, search]
@@ -189,8 +189,8 @@ export function ForgePrsTab() {
 
   const handleRetry = useCallback(() => {
     if (!selectedId) return
-    loadDetails(selectedId, selectedSource ?? forge.sources[0])
-  }, [selectedId, selectedSource, loadDetails, forge.sources])
+    loadDetails(selectedId, selectedSource)
+  }, [selectedId, selectedSource, loadDetails])
 
   const handleBack = useCallback(() => {
     setSelectedId(null)
@@ -200,21 +200,18 @@ export function ForgePrsTab() {
   }, [])
 
   const handleApprove = useCallback(async () => {
-    const source = selectedSource ?? forge.sources[0]
-    if (!selectedId || !source) return
-    await forge.approvePr(source, selectedId)
+    if (!selectedId || !selectedSource) return
+    await forge.approvePr(selectedSource, selectedId)
   }, [selectedId, selectedSource, forge])
 
   const handleMerge = useCallback(async (squash: boolean, deleteBranch: boolean) => {
-    const source = selectedSource ?? forge.sources[0]
-    if (!selectedId || !source) return
-    await forge.mergePr(source, selectedId, squash, deleteBranch)
+    if (!selectedId || !selectedSource) return
+    await forge.mergePr(selectedSource, selectedId, squash, deleteBranch)
   }, [selectedId, selectedSource, forge])
 
   const handleComment = useCallback(async (message: string) => {
-    const source = selectedSource ?? forge.sources[0]
-    if (!selectedId || !source) return
-    await forge.commentOnPr(source, selectedId, message)
+    if (!selectedId || !selectedSource) return
+    await forge.commentOnPr(selectedSource, selectedId, message)
   }, [selectedId, selectedSource, forge])
 
   if (selectedId && loadingDetails) {
@@ -343,7 +340,7 @@ export function ForgePrsTab() {
         ) : (
           search.results.map((pr) => (
             <PrRow
-              key={pr.id}
+              key={buildSourceItemKey(search.getSourceForItem(pr), pr.id)}
               pr={pr}
               onSelect={handleSelect}
               showSource={multiSource}

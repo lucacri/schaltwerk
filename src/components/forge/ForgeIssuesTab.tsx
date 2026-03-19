@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { VscClose, VscInfo, VscSearch } from 'react-icons/vsc'
 import { ForgeErrorDetailModal } from './ForgeErrorDetailModal'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
-import { useForgeSearch } from '../../hooks/useForgeSearch'
+import { useForgeSearch, buildSourceItemKey } from '../../hooks/useForgeSearch'
 import { ForgeDetailErrorView } from './ForgeDetailErrorView'
 import { ForgeIssueDetail } from './ForgeIssueDetail'
 import { ForgeLabelChip } from './ForgeLabelChip'
@@ -156,16 +156,16 @@ export function ForgeIssuesTab() {
       setSelectedId(issue.id)
       setDetails(null)
       const source = search.getSourceForItem(issue) ?? forge.sources[0]
+      setSelectedSource(source)
       loadDetails(issue.id, source)
-      setSelectedSource(forge.sources.length > 1 ? source : undefined)
     },
     [loadDetails, forge.sources, search]
   )
 
   const handleRetry = useCallback(() => {
     if (!selectedId) return
-    loadDetails(selectedId, selectedSource ?? forge.sources[0])
-  }, [selectedId, selectedSource, loadDetails, forge.sources])
+    loadDetails(selectedId, selectedSource)
+  }, [selectedId, selectedSource, loadDetails])
 
   const handleBack = useCallback(() => {
     setSelectedId(null)
@@ -297,7 +297,7 @@ export function ForgeIssuesTab() {
         ) : (
           search.results.map((issue) => (
             <IssueRow
-              key={issue.id}
+              key={buildSourceItemKey(search.getSourceForItem(issue), issue.id)}
               issue={issue}
               onSelect={handleSelect}
               showSource={multiSource}

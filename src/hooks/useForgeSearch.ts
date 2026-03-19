@@ -33,7 +33,7 @@ export interface UseForgeSearchResult<TSummary, TDetails> {
   getSourceForItem: (item: TSummary) => ForgeSourceConfig | undefined
 }
 
-function buildSourceItemKey(source: ForgeSourceConfig | undefined, id: string): string {
+export function buildSourceItemKey(source: ForgeSourceConfig | undefined, id: string): string {
   if (!source) return id
   return `${source.forgeType}::${source.hostname ?? 'default'}::${source.projectIdentifier}::${id}`
 }
@@ -327,7 +327,6 @@ export function useForgeSearch<TSummary extends object, TDetails>(
     async (id: string, source?: ForgeSourceConfig): Promise<TDetails | null> => {
       const targetSource =
         source ??
-        sourceIndexRef.current.get(buildSourceItemKey(undefined, id)) ??
         Array.from(sourceIndexRef.current.entries())
           .find(([key]) => key.endsWith(`::${id}`))?.[1] ??
         sourcesRef.current[0]
