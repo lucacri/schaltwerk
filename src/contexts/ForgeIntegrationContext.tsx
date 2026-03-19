@@ -23,6 +23,8 @@ function mapGitlabSourcesToForgeConfigs(sources: GitlabSource[]): ForgeSourceCon
     hostname: s.hostname,
     label: s.label || s.projectPath,
     forgeType: 'gitlab' as const,
+    issuesEnabled: s.issuesEnabled,
+    mrsEnabled: s.mrsEnabled,
   }))
 }
 

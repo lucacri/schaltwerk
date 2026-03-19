@@ -10,6 +10,7 @@ import { useTranslation } from '../../common/i18n'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
 import { buildForgeSourcesIdentity } from '../../utils/forgeSourcesIdentity'
+import { filterSourcesForMrs } from '../../utils/forgeSourceFilters'
 import type { ForgePrSummary, ForgePrDetails, ForgeSourceConfig } from '../../types/forgeTypes'
 
 function isOpen(state: string): boolean {
@@ -128,12 +129,13 @@ function PrRow({
 export function ForgePrsTab() {
   const { t } = useTranslation()
   const forge = useForgeIntegrationContext()
+  const mrSources = useMemo(() => filterSourcesForMrs(forge.sources), [forge.sources])
 
   const search = useForgeSearch<ForgePrSummary, ForgePrDetails>({
     searchFn: forge.searchPrs,
     detailsFn: forge.getPrDetails,
-    sources: forge.sources,
-    enabled: forge.hasSources,
+    sources: mrSources,
+    enabled: mrSources.length > 0,
     getId: (item) => item.id,
     getTitle: (item) => item.title,
     summaryFromDetails: (details) => details.summary,

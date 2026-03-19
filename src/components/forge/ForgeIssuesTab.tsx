@@ -11,6 +11,7 @@ import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
 import { buildForgeSourcesIdentity } from '../../utils/forgeSourcesIdentity'
+import { filterSourcesForIssues } from '../../utils/forgeSourceFilters'
 import type { ForgeIssueSummary, ForgeIssueDetails, ForgeSourceConfig } from '../../types/forgeTypes'
 
 function isOpen(state: string): boolean {
@@ -102,12 +103,13 @@ function IssueRow({
 export function ForgeIssuesTab() {
   const { t } = useTranslation()
   const forge = useForgeIntegrationContext()
+  const issueSources = useMemo(() => filterSourcesForIssues(forge.sources), [forge.sources])
 
   const search = useForgeSearch<ForgeIssueSummary, ForgeIssueDetails>({
     searchFn: forge.searchIssues,
     detailsFn: forge.getIssueDetails,
-    sources: forge.sources,
-    enabled: forge.hasSources,
+    sources: issueSources,
+    enabled: issueSources.length > 0,
     getId: (item) => item.id,
     getTitle: (item) => item.title,
     getUpdatedAt: (item) => item.updatedAt,

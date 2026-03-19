@@ -310,6 +310,62 @@ describe('ForgeIssuesTab', () => {
     })
   })
 
+  it('excludes sources with issuesEnabled=false from search', async () => {
+    const disabledSource: ForgeSourceConfig = {
+      projectIdentifier: 'group/no-issues',
+      hostname: 'gitlab.example.com',
+      label: 'No Issues',
+      forgeType: 'gitlab',
+      issuesEnabled: false,
+    }
+    const searchIssues = vi.fn().mockResolvedValue([
+      makeSummary({ id: '1', title: 'First issue' }),
+    ])
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource, disabledSource],
+        searchIssues,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('First issue')).toBeTruthy()
+    })
+
+    const calledLabels = searchIssues.mock.calls.map((c: [ForgeSourceConfig]) => c[0].label)
+    expect(calledLabels).not.toContain('No Issues')
+    expect(calledLabels).toContain('GitHub')
+  })
+
+  it('includes sources with issuesEnabled=true or undefined', async () => {
+    const enabledSource: ForgeSourceConfig = {
+      projectIdentifier: 'group/has-issues',
+      hostname: 'gitlab.example.com',
+      label: 'Has Issues',
+      forgeType: 'gitlab',
+      issuesEnabled: true,
+    }
+    const searchIssues = vi.fn().mockResolvedValue([])
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource, enabledSource],
+        searchIssues,
+      },
+    })
+
+    await waitFor(() => {
+      expect(searchIssues).toHaveBeenCalledTimes(2)
+    })
+
+    const calledLabels = searchIssues.mock.calls.map((c: [ForgeSourceConfig]) => c[0].label)
+    expect(calledLabels).toContain('GitHub')
+    expect(calledLabels).toContain('Has Issues')
+  })
+
   it('can go back to list after detail fetch failure', async () => {
     const searchIssues = vi.fn().mockResolvedValue([makeSummary()])
     const getIssueDetails = vi.fn().mockResolvedValue(null)

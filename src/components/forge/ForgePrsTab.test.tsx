@@ -309,6 +309,62 @@ describe('ForgePrsTab', () => {
     })
   })
 
+  it('excludes sources with mrsEnabled=false from search', async () => {
+    const disabledSource: ForgeSourceConfig = {
+      projectIdentifier: 'group/no-mrs',
+      hostname: 'gitlab.example.com',
+      label: 'No MRs',
+      forgeType: 'gitlab',
+      mrsEnabled: false,
+    }
+    const searchPrs = vi.fn().mockResolvedValue([
+      makePrSummary({ id: '1', title: 'First PR' }),
+    ])
+
+    renderWithProviders(<ForgePrsTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource, disabledSource],
+        searchPrs,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('First PR')).toBeTruthy()
+    })
+
+    const calledLabels = searchPrs.mock.calls.map((c: [ForgeSourceConfig]) => c[0].label)
+    expect(calledLabels).not.toContain('No MRs')
+    expect(calledLabels).toContain('GitHub')
+  })
+
+  it('includes sources with mrsEnabled=true or undefined', async () => {
+    const enabledSource: ForgeSourceConfig = {
+      projectIdentifier: 'group/has-mrs',
+      hostname: 'gitlab.example.com',
+      label: 'Has MRs',
+      forgeType: 'gitlab',
+      mrsEnabled: true,
+    }
+    const searchPrs = vi.fn().mockResolvedValue([])
+
+    renderWithProviders(<ForgePrsTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource, enabledSource],
+        searchPrs,
+      },
+    })
+
+    await waitFor(() => {
+      expect(searchPrs).toHaveBeenCalledTimes(2)
+    })
+
+    const calledLabels = searchPrs.mock.calls.map((c: [ForgeSourceConfig]) => c[0].label)
+    expect(calledLabels).toContain('GitHub')
+    expect(calledLabels).toContain('Has MRs')
+  })
+
   it('can go back to list after PR detail fetch failure', async () => {
     const searchPrs = vi.fn().mockResolvedValue([makePrSummary()])
     const getPrDetails = vi.fn().mockResolvedValue(null)

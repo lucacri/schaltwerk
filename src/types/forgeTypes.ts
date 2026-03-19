@@ -5,6 +5,8 @@ export interface ForgeSourceConfig {
   hostname?: string
   label: string
   forgeType: ForgeType
+  issuesEnabled?: boolean
+  mrsEnabled?: boolean
 }
 
 export interface ForgeAuthStatus {
