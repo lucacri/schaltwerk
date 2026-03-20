@@ -84,21 +84,6 @@ export interface ForgeCiStatus {
   checks: ForgeStatusCheck[]
 }
 
-export interface ForgePipelineStatus {
-  id: number
-  status: string
-  url?: string
-}
-
-export interface ForgePipelineJob {
-  id: number
-  name: string
-  stage?: string
-  status: string
-  url?: string
-  duration?: number
-}
-
 export type ForgeProviderData =
   | {
       type: 'GitHub'
@@ -127,6 +112,22 @@ export interface ForgePrDetails {
 export interface ForgePrResult {
   branch: string
   url: string
+}
+
+export interface ForgePipelineStatus {
+  id: number
+  status: string
+  url?: string
+  duration?: number
+}
+
+export interface ForgePipelineJob {
+  id: number
+  name: string
+  stage: string
+  status: string
+  url?: string
+  duration?: number
 }
 
 export type ForgeCommitMode = 'squash' | 'reapply'

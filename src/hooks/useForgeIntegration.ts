@@ -11,11 +11,11 @@ import type {
   ForgePrSummary,
   ForgePrDetails,
   ForgePrResult,
+  ForgePipelineStatus,
+  ForgePipelineJob,
   ForgeReviewComment,
   ForgeSourceConfig,
   ForgeStatusPayload,
-  ForgePipelineStatus,
-  ForgePipelineJob,
 } from '../types/forgeTypes'
 
 export interface ForgeIntegrationValue {
@@ -31,8 +31,8 @@ export interface ForgeIntegrationValue {
   approvePr: (source: ForgeSourceConfig, id: string) => Promise<void>
   mergePr: (source: ForgeSourceConfig, id: string, squash: boolean, deleteBranch: boolean) => Promise<void>
   commentOnPr: (source: ForgeSourceConfig, id: string, message: string) => Promise<void>
-  getPipelineStatus: (source: ForgeSourceConfig, branch: string) => Promise<ForgePipelineStatus | null>
-  getPipelineJobs: (source: ForgeSourceConfig, branch: string) => Promise<ForgePipelineJob[] | null>
+  getPipelineStatus: (source: ForgeSourceConfig, sourceBranch: string) => Promise<ForgePipelineStatus | null>
+  getPipelineJobs: (source: ForgeSourceConfig, sourceBranch: string) => Promise<ForgePipelineJob[]>
 }
 
 export interface CreateForgeSessionPrArgs {
@@ -177,45 +177,37 @@ export function useForgeIntegration(): ForgeIntegrationValue {
   )
 
   const getPipelineStatus = useCallback(
-    async (source: ForgeSourceConfig, branch: string) => {
-      if (!projectPath || status?.forgeType !== 'gitlab') {
-        return null
-      }
-      ensureProjectPath()
+    async (source: ForgeSourceConfig, sourceBranch: string): Promise<ForgePipelineStatus | null> => {
+      if (source.forgeType !== 'gitlab') return null
       try {
-        const payload = await invoke<ForgePipelineStatus | null>(TauriCommands.GitLabGetMrPipeline, {
-          sourceBranch: branch,
+        return await invoke<ForgePipelineStatus | null>(TauriCommands.GitLabGetMrPipeline, {
+          sourceBranch,
           sourceProject: source.projectIdentifier,
           sourceHostname: source.hostname,
         })
-        return payload ?? null
       } catch (error) {
         logger.warn('[useForgeIntegration] Failed to fetch pipeline status', error)
         return null
       }
     },
-    [ensureProjectPath, projectPath, status?.forgeType]
+    []
   )
 
   const getPipelineJobs = useCallback(
-    async (source: ForgeSourceConfig, branch: string) => {
-      if (!projectPath || status?.forgeType !== 'gitlab') {
-        return null
-      }
-      ensureProjectPath()
+    async (source: ForgeSourceConfig, sourceBranch: string): Promise<ForgePipelineJob[]> => {
+      if (source.forgeType !== 'gitlab') return []
       try {
-        const payload = await invoke<ForgePipelineJob[]>(TauriCommands.GitLabGetPipelineJobs, {
-          sourceBranch: branch,
+        return await invoke<ForgePipelineJob[]>(TauriCommands.GitLabGetPipelineJobs, {
+          sourceBranch,
           sourceProject: source.projectIdentifier,
           sourceHostname: source.hostname,
         })
-        return payload ?? []
       } catch (error) {
         logger.warn('[useForgeIntegration] Failed to fetch pipeline jobs', error)
-        return null
+        return []
       }
     },
-    [ensureProjectPath, projectPath, status?.forgeType]
+    []
   )
 
   return useMemo(() => ({

@@ -102,17 +102,6 @@ pub struct GitlabPipelinePayload {
     pub duration: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct GitlabPipelineJobPayload {
-    pub id: u64,
-    pub name: String,
-    pub stage: Option<String>,
-    pub status: String,
-    pub url: Option<String>,
-    pub duration: Option<f64>,
-}
-
 #[tauri::command]
 pub async fn gitlab_get_status(app: AppHandle) -> Result<GitlabStatusPayload, String> {
     let cli = GitlabCli::new();
@@ -322,6 +311,17 @@ pub async fn gitlab_get_mr_pipeline(
         })?;
 
     Ok(pipeline.map(map_pipeline_payload))
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitlabPipelineJobPayload {
+    pub id: u64,
+    pub name: String,
+    pub stage: String,
+    pub status: String,
+    pub url: Option<String>,
+    pub duration: Option<f64>,
 }
 
 #[tauri::command]

@@ -3,6 +3,7 @@ import { VscClose, VscInfo, VscSearch } from 'react-icons/vsc'
 import { ForgeErrorDetailModal } from './ForgeErrorDetailModal'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
 import { useForgeSearch, buildSourceItemKey } from '../../hooks/useForgeSearch'
+import { usePipelineStatuses } from '../../hooks/usePipelineStatuses'
 import { ForgeDetailErrorView } from './ForgeDetailErrorView'
 import { ForgePrDetail } from './ForgePrDetail'
 import { ForgeLabelChip } from './ForgeLabelChip'
@@ -12,8 +13,7 @@ import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
 import { buildForgeSourcesIdentity } from '../../utils/forgeSourcesIdentity'
 import { filterSourcesForMrs } from '../../utils/forgeSourceFilters'
-import type { ForgePrSummary, ForgePrDetails, ForgeSourceConfig, ForgePipelineStatus } from '../../types/forgeTypes'
-import { usePipelineStatuses } from '../../hooks/usePipelineStatuses'
+import type { ForgePrSummary, ForgePrDetails, ForgePipelineStatus, ForgeSourceConfig } from '../../types/forgeTypes'
 
 function isOpen(state: string): boolean {
   const upper = state.toUpperCase()
@@ -57,7 +57,7 @@ function PrRow({
   pr: ForgePrSummary
   onSelect: (pr: ForgePrSummary) => void
   showSource?: boolean
-  pipelineStatus?: ForgePipelineStatus | null
+  pipelineStatus?: ForgePipelineStatus
 }) {
   const displayLabels = pr.labels.slice(0, 3)
 
@@ -148,6 +148,14 @@ export function ForgePrsTab() {
     summaryFromDetails: (details) => details.summary,
   })
 
+  const pipelineStatuses = usePipelineStatuses({
+    prs: search.results,
+    forgeType: forge.forgeType,
+    sources: mrSources,
+    getPipelineStatus: forge.getPipelineStatus,
+    getSourceForItem: search.getSourceForItem,
+  })
+
   const [showErrorDetail, setShowErrorDetail] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [details, setDetails] = useState<ForgePrDetails | null>(null)
@@ -223,15 +231,6 @@ export function ForgePrsTab() {
     await forge.commentOnPr(selectedSource, selectedId, message)
   }, [selectedId, selectedSource, forge])
 
-  const multiSource = forge.sources.length > 1
-  const pipelineStatuses = usePipelineStatuses({
-    prs: forge.forgeType === 'gitlab' ? search.results : [],
-    forgeType: forge.forgeType,
-    sources: forge.sources,
-    getPipelineStatus: forge.getPipelineStatus,
-    getSourceForItem: search.getSourceForItem,
-  })
-
   if (selectedId && loadingDetails) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -261,13 +260,15 @@ export function ForgePrsTab() {
         onBack={handleBack}
         sourceLabel={selectedSource?.label}
         forgeType={forge.forgeType}
-        source={selectedSource}
         onApprove={handleApprove}
         onMerge={handleMerge}
         onComment={handleComment}
+        getPipelineJobs={selectedSource ? (branch: string) => forge.getPipelineJobs(selectedSource, branch) : undefined}
       />
     )
   }
+
+  const multiSource = forge.sources.length > 1
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

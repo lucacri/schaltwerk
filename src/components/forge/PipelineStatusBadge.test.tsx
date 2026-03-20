@@ -10,7 +10,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 describe('PipelineStatusBadge', () => {
   it('renders success status with green color', () => {
     renderWithProviders(<PipelineStatusBadge status="success" />)
-    const badge = screen.getByText('Success')
+    const badge = screen.getByText('Passed')
     expect(badge.style.color).toBe('var(--color-accent-green)')
   })
 
@@ -46,13 +46,13 @@ describe('PipelineStatusBadge', () => {
 
   it('wraps in link when url is provided', () => {
     renderWithProviders(<PipelineStatusBadge status="success" url="https://gitlab.example.com/pipeline/1" />)
-    const badge = screen.getByText('Success')
+    const badge = screen.getByText('Passed')
     expect(badge.closest('a')).toBeTruthy()
   })
 
   it('renders without link when url is not provided', () => {
     renderWithProviders(<PipelineStatusBadge status="success" />)
-    const badge = screen.getByText('Success')
+    const badge = screen.getByText('Passed')
     expect(badge.closest('a')).toBeNull()
   })
 })
