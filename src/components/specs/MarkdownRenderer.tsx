@@ -277,7 +277,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
 }: MarkdownRendererProps) {
   return (
     <div
-      className={`markdown-renderer ${className}`}
+      className={`markdown-renderer markdown-github-light ${className}`}
       style={{
         padding: '16px',
         overflowY: 'auto',
