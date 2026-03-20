@@ -25,6 +25,7 @@ export const TauriCommands = {
   GitLabSearchMrs: 'gitlab_search_mrs',
   GitLabGetMrDetails: 'gitlab_get_mr_details',
   GitLabGetMrPipeline: 'gitlab_get_mr_pipeline',
+  GitLabGetPipelineJobs: 'gitlab_get_pipeline_jobs',
   GitLabGetSources: 'gitlab_get_sources',
   GitLabSetSources: 'gitlab_set_sources',
   GitLabCreateMr: 'gitlab_create_mr',

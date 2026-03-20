@@ -1,20 +1,22 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { VscArrowLeft, VscLinkExternal, VscCheck, VscGitMerge, VscComment } from 'react-icons/vsc'
-import type { ForgePrDetails, ForgeType } from '../../types/forgeTypes'
+import { VscArrowLeft, VscLinkExternal, VscCheck, VscGitMerge, VscComment, VscChevronDown } from 'react-icons/vsc'
+import type { ForgePrDetails, ForgeType, ForgeSourceConfig, ForgePipelineJob } from '../../types/forgeTypes'
 import { useTranslation } from '../../common/i18n'
 import { TauriCommands } from '../../common/tauriCommands'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
 import { ForgeLabelChip } from './ForgeLabelChip'
 import { ContextualActionButton } from './ContextualActionButton'
+import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
+import { PipelineStatusBadge } from './PipelineStatusBadge'
 
 interface ForgePrDetailProps {
   details: ForgePrDetails
   onBack: () => void
   sourceLabel?: string
   forgeType: ForgeType
-  onRefreshPipeline?: () => Promise<void>
+  source?: ForgeSourceConfig
   onApprove?: () => Promise<void>
   onMerge?: (squash: boolean, deleteBranch: boolean) => Promise<void>
   onComment?: (message: string) => Promise<void>
@@ -27,6 +29,12 @@ function isOpen(state: string): boolean {
 
 function isMerged(state: string): boolean {
   return state.toUpperCase() === 'MERGED' || state === 'merged'
+}
+
+function pipelineIsActive(status?: string | null): boolean {
+  if (!status) return false
+  const normalized = status.toLowerCase()
+  return normalized === 'running' || normalized === 'pending'
 }
 
 function PrStateBadge({ state }: { state: string }) {
@@ -87,6 +95,21 @@ function BranchPill({ branch }: { branch: string }) {
       {branch}
     </span>
   )
+}
+
+function formatDuration(seconds?: number | null): string | null {
+  if (seconds === undefined || seconds === null || Number.isNaN(seconds)) return null
+  const totalSeconds = Math.round(seconds)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const secs = totalSeconds % 60
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${secs}s`
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${secs}s`
+  }
+  return `${secs}s`
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -209,11 +232,13 @@ export function ForgePrDetail({
   onBack,
   sourceLabel,
   forgeType,
+  source,
   onApprove,
   onMerge,
   onComment,
 }: ForgePrDetailProps) {
   const { t } = useTranslation()
+  const forgeIntegration = useForgeIntegrationContext()
   const { summary, providerData } = details
   const filteredComments = details.reviewComments.filter(c => c.body && c.body.trim().length > 0)
 
@@ -224,8 +249,57 @@ export function ForgePrDetail({
   const [approvePending, setApprovePending] = useState(false)
   const [mergePending, setMergePending] = useState(false)
   const [commentPending, setCommentPending] = useState(false)
+  const [pipelineJobs, setPipelineJobs] = useState<ForgePipelineJob[] | null>(null)
+  const [pipelineJobsLoading, setPipelineJobsLoading] = useState(false)
+  const [pipelineJobsError, setPipelineJobsError] = useState<string | null>(null)
+  const [pipelineExpanded, setPipelineExpanded] = useState(true)
 
   const prIsOpen = isOpen(summary.state)
+  const showPipelineSection =
+    forgeType === 'gitlab' && providerData.type === 'GitLab' && Boolean(providerData.pipelineStatus) && Boolean(source)
+  const pipelineActive = providerData.type === 'GitLab' && pipelineIsActive(providerData.pipelineStatus)
+
+  const refreshPipelineJobs = useCallback(async () => {
+    if (!showPipelineSection || !source) {
+      setPipelineJobs(null)
+      setPipelineJobsError(null)
+      setPipelineJobsLoading(false)
+      return
+    }
+    setPipelineJobsLoading(true)
+    try {
+      const result = await forgeIntegration.getPipelineJobs(source, summary.sourceBranch)
+      setPipelineJobs(result ?? [])
+      setPipelineJobsError(null)
+    } catch (error) {
+      logger.warn('[ForgePrDetail] Failed to load pipeline jobs', error)
+      setPipelineJobsError((error as Error)?.message ?? t.forgePrTab.failedToLoadDetails)
+    } finally {
+      setPipelineJobsLoading(false)
+    }
+  }, [forgeIntegration, showPipelineSection, source, summary.sourceBranch, t.forgePrTab.failedToLoadDetails])
+
+  useEffect(() => {
+    if (!showPipelineSection) {
+      setPipelineJobs(null)
+      setPipelineJobsError(null)
+      setPipelineJobsLoading(false)
+      return
+    }
+    void refreshPipelineJobs()
+  }, [refreshPipelineJobs, showPipelineSection])
+
+  useEffect(() => {
+    if (!showPipelineSection || !pipelineActive) {
+      return
+    }
+    const intervalId = window.setInterval(() => {
+      void refreshPipelineJobs()
+    }, 15000)
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [refreshPipelineJobs, showPipelineSection, pipelineActive])
 
   const handleOpenInBrowser = () => {
     if (!summary.url) return
@@ -280,6 +354,22 @@ export function ForgePrDetail({
     'pr.url': summary.url ?? '',
     'pr.labels': summary.labels.map(l => l.name).join(', '),
   }
+
+  const groupedPipelineJobs = useMemo(() => {
+    if (!pipelineJobs || pipelineJobs.length === 0) return []
+    const groups: Array<[string, ForgePipelineJob[]]> = []
+    const map = new Map<string, ForgePipelineJob[]>()
+    pipelineJobs.forEach((job) => {
+      const key = job.stage ?? ''
+      if (!map.has(key)) {
+        const bucket: ForgePipelineJob[] = []
+        map.set(key, bucket)
+        groups.push([key, bucket])
+      }
+      map.get(key)!.push(job)
+    })
+    return groups
+  }, [pipelineJobs])
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -400,12 +490,102 @@ export function ForgePrDetail({
           </div>
         )}
 
-        {providerData.type === 'GitLab' && providerData.pipelineStatus && (
-          <div className="flex items-center gap-2 mb-3">
-            <SectionLabel>{t.forgePrTab.pipeline}</SectionLabel>
-            <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-secondary)' }}>
-              {providerData.pipelineStatus}
-            </span>
+        {showPipelineSection && (
+          <div className="mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <SectionLabel>{t.forgePrTab.pipeline}</SectionLabel>
+              {providerData.pipelineStatus && (
+                <PipelineStatusBadge status={providerData.pipelineStatus} url={providerData.pipelineUrl} />
+              )}
+              <button
+                type="button"
+                onClick={() => setPipelineExpanded(prev => !prev)}
+                className="flex items-center gap-1 px-2 py-1 rounded"
+                style={{
+                  fontSize: theme.fontSize.caption,
+                  color: 'var(--color-text-secondary)',
+                  backgroundColor: 'transparent',
+                  border: '1px solid var(--color-border-default)',
+                }}
+              >
+                <VscChevronDown
+                  className="w-3 h-3"
+                  style={{
+                    transform: pipelineExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    transition: 'transform 0.15s ease',
+                  }}
+                />
+                <span>{t.forgePrTab.pipelineJobs}</span>
+              </button>
+            </div>
+            {pipelineExpanded && (
+              <div
+                className="mt-2"
+                style={{
+                  border: '1px solid var(--color-border-default)',
+                  borderRadius: 6,
+                  padding: '10px 12px',
+                  backgroundColor: 'var(--color-bg-tertiary)',
+                }}
+              >
+                {pipelineJobsLoading && (
+                  <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>
+                    {t.forgePrTab.loading}
+                  </span>
+                )}
+                {!pipelineJobsLoading && pipelineJobsError && (
+                  <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-accent-red)' }}>
+                    {pipelineJobsError}
+                  </span>
+                )}
+                {!pipelineJobsLoading && !pipelineJobsError && (!pipelineJobs || pipelineJobs.length === 0) && (
+                  <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>
+                    {t.forgePrTab.noJobs}
+                  </span>
+                )}
+                {!pipelineJobsLoading && !pipelineJobsError && pipelineJobs && pipelineJobs.length > 0 && (
+                  <div className="space-y-2">
+                    {groupedPipelineJobs.map(([stageName, jobs]) => (
+                      <div key={stageName || 'default-stage'} className="space-y-1">
+                        <div
+                          style={{
+                            fontSize: theme.fontSize.caption,
+                            color: 'var(--color-text-muted)',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {t.forgePrTab.stage}: {stageName || '—'}
+                        </div>
+                        <div className="space-y-1.5">
+                          {jobs.map((job) => {
+                            const durationLabel = formatDuration(job.duration)
+                            return (
+                              <div
+                                key={job.id}
+                                className="flex items-center justify-between gap-2 flex-wrap"
+                                style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-secondary)' }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                    {job.name}
+                                  </span>
+                                  <PipelineStatusBadge status={job.status} url={job.url} />
+                                </div>
+                                {durationLabel && (
+                                  <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>
+                                    {t.forgePrTab.duration}: {durationLabel}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

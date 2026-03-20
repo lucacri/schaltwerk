@@ -3,7 +3,7 @@ use log::{error, info, warn};
 use lucode::domains::git::service::{
     format_cli_error, rename_branch, CreateMrParams, CreateSessionMrOptions, GitlabCli,
     GitlabCliError, GitlabIssueDetails, GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary,
-    GitlabNote, GitlabPipelineDetails, MrCommitMode,
+    GitlabNote, GitlabPipelineDetails, GitlabPipelineJob, MrCommitMode,
 };
 use lucode::services::MergeMode;
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
@@ -97,6 +97,17 @@ pub struct GitlabMrDetailsPayload {
 #[serde(rename_all = "camelCase")]
 pub struct GitlabPipelinePayload {
     pub id: u64,
+    pub status: String,
+    pub url: Option<String>,
+    pub duration: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitlabPipelineJobPayload {
+    pub id: u64,
+    pub name: String,
+    pub stage: Option<String>,
     pub status: String,
     pub url: Option<String>,
     pub duration: Option<f64>,
@@ -311,6 +322,39 @@ pub async fn gitlab_get_mr_pipeline(
         })?;
 
     Ok(pipeline.map(map_pipeline_payload))
+}
+
+#[tauri::command]
+pub async fn gitlab_get_pipeline_jobs(
+    _app: AppHandle,
+    source_branch: String,
+    source_project: String,
+    source_hostname: Option<String>,
+) -> Result<Vec<GitlabPipelineJobPayload>, String> {
+    let manager = get_project_manager().await;
+    let project = manager
+        .current_project()
+        .await
+        .map_err(|e| format!("No active project: {e}"))?;
+
+    let cli = GitlabCli::new();
+    if let Err(err) = cli.ensure_installed() {
+        return Err(format_cli_error(err));
+    }
+
+    let jobs = cli
+        .get_pipeline_jobs(
+            &project.path,
+            &source_branch,
+            &source_project,
+            source_hostname.as_deref(),
+        )
+        .map_err(|err| {
+            error!("GitLab pipeline jobs fetch failed: {err}");
+            format_cli_error(err)
+        })?;
+
+    Ok(jobs.into_iter().map(map_pipeline_job_payload).collect())
 }
 
 #[tauri::command]
@@ -790,5 +834,16 @@ fn map_pipeline_payload(pipeline: GitlabPipelineDetails) -> GitlabPipelinePayloa
         status: pipeline.status,
         url: pipeline.web_url,
         duration: pipeline.duration,
+    }
+}
+
+fn map_pipeline_job_payload(job: GitlabPipelineJob) -> GitlabPipelineJobPayload {
+    GitlabPipelineJobPayload {
+        id: job.id,
+        name: job.name,
+        stage: job.stage,
+        status: job.status,
+        url: job.web_url,
+        duration: job.duration,
     }
 }

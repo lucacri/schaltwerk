@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { ForgePrDetail } from './ForgePrDetail'
 import { renderWithProviders } from '../../tests/test-utils'
 import { TauriCommands } from '../../common/tauriCommands'
-import type { ForgePrDetails, ForgeProviderData } from '../../types/forgeTypes'
+import type { ForgePrDetails, ForgeProviderData, ForgeSourceConfig } from '../../types/forgeTypes'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -48,6 +48,12 @@ function makeDetails(overrides: Partial<ForgePrDetails> = {}): ForgePrDetails {
 
 describe('ForgePrDetail', () => {
   const onBack = vi.fn()
+  const gitlabSource: ForgeSourceConfig = {
+    projectIdentifier: 'group/project',
+    hostname: 'gitlab.example.com',
+    label: 'Project',
+    forgeType: 'gitlab'
+  }
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -351,12 +357,12 @@ describe('ForgePrDetail', () => {
       })
 
       renderWithProviders(
-        <ForgePrDetail details={details} onBack={onBack} forgeType="gitlab" />,
-        { forgeOverrides: { hasRepository: true } }
+        <ForgePrDetail details={details} onBack={onBack} forgeType="gitlab" source={gitlabSource} />,
+        { forgeOverrides: { hasRepository: true, forgeType: 'gitlab', getPipelineJobs: vi.fn().mockResolvedValue([]) } }
       )
 
       expect(screen.getByText('Pipeline')).toBeTruthy()
-      expect(screen.getByText('success')).toBeTruthy()
+      expect(screen.getByText('Success')).toBeTruthy()
     })
 
     it('shows reviewers list when present', () => {
@@ -459,5 +465,77 @@ describe('ForgePrDetail', () => {
 
       expect(screen.getByText('No reviews yet')).toBeTruthy()
     })
+  })
+
+  it('fetches and displays gitlab pipeline jobs', async () => {
+    const details = makeDetails({
+      providerData: gitlabProvider({ pipelineStatus: 'running', pipelineUrl: 'https://gitlab/pipelines/10' }),
+      summary: {
+        ...makeDetails().summary,
+        state: 'OPEN',
+        sourceBranch: 'feature/dark-mode',
+        targetBranch: 'main',
+      },
+    })
+
+    const getPipelineJobs = vi.fn().mockResolvedValue([
+      { id: 1, name: 'build', stage: 'build', status: 'success', url: 'https://job/1', duration: 40 },
+      { id: 2, name: 'test', stage: 'test', status: 'running', url: 'https://job/2', duration: 12 },
+    ])
+
+    renderWithProviders(
+      <ForgePrDetail
+        details={details}
+        onBack={onBack}
+        forgeType="gitlab"
+        sourceLabel="Project"
+        source={gitlabSource}
+      />, {
+        forgeOverrides: {
+          hasRepository: true,
+          forgeType: 'gitlab',
+          getPipelineJobs,
+        },
+      }
+    )
+
+    await waitFor(() => {
+      expect(getPipelineJobs).toHaveBeenCalled()
+    })
+
+    expect(screen.getByText('Pipeline')).toBeTruthy()
+    expect(screen.getByText('Pipeline Jobs')).toBeTruthy()
+    expect(screen.getByText('build')).toBeTruthy()
+    expect(screen.getByText('test')).toBeTruthy()
+  })
+
+  it('shows no jobs message when pipeline returns empty list', async () => {
+    const details = makeDetails({
+      providerData: gitlabProvider({ pipelineStatus: 'success' }),
+    })
+
+    const getPipelineJobs = vi.fn().mockResolvedValue([])
+
+    renderWithProviders(
+      <ForgePrDetail
+        details={details}
+        onBack={onBack}
+        forgeType="gitlab"
+        sourceLabel="Project"
+        source={gitlabSource}
+      />, {
+        forgeOverrides: {
+          hasRepository: true,
+          forgeType: 'gitlab',
+          getPipelineJobs,
+        },
+      }
+    )
+
+    await waitFor(() => {
+      expect(getPipelineJobs).toHaveBeenCalled()
+    })
+
+    expect(screen.getByText('No jobs yet')).toBeTruthy()
   })
 })

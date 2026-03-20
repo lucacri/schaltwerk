@@ -84,6 +84,21 @@ export interface ForgeCiStatus {
   checks: ForgeStatusCheck[]
 }
 
+export interface ForgePipelineStatus {
+  id: number
+  status: string
+  url?: string
+}
+
+export interface ForgePipelineJob {
+  id: number
+  name: string
+  stage?: string
+  status: string
+  url?: string
+  duration?: number
+}
+
 export type ForgeProviderData =
   | {
       type: 'GitHub'

@@ -218,6 +218,16 @@ pub struct GitlabPipelineDetails {
     pub updated_at: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitlabPipelineJob {
+    pub id: u64,
+    pub name: String,
+    pub stage: Option<String>,
+    pub status: String,
+    pub web_url: Option<String>,
+    pub duration: Option<f64>,
+}
+
 pub struct GitlabCli<R: CommandRunner = SystemCommandRunner> {
     runner: R,
     program: String,
@@ -663,6 +673,66 @@ impl<R: CommandRunner> GitlabCli<R> {
             })?;
 
         Ok(Some(pipeline))
+    }
+
+    pub fn get_pipeline_jobs(
+        &self,
+        project_path: &Path,
+        branch: &str,
+        gitlab_project: &str,
+        hostname: Option<&str>,
+    ) -> Result<Vec<GitlabPipelineJob>, GitlabCliError> {
+        debug!(
+            "[GitlabCli] Fetching pipeline jobs: project={}, branch={}",
+            project_path.display(),
+            branch
+        );
+
+        let args_vec = vec![
+            "ci".to_string(),
+            "list".to_string(),
+            "--branch".to_string(),
+            branch.to_string(),
+            "--output".to_string(),
+            "json".to_string(),
+            "-R".to_string(),
+            gitlab_project.to_string(),
+        ];
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, Some(project_path), &env_vec)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        let clean_output = strip_ansi_codes(&output.stdout);
+        let trimmed = clean_output.trim();
+
+        if trimmed.is_empty() || trimmed == "null" {
+            return Ok(Vec::new());
+        }
+
+        let jobs: Vec<GitlabPipelineJob> = serde_json::from_str(trimmed).map_err(|err| {
+            log::error!(
+                "[GitlabCli] Failed to parse pipeline jobs response: {err}; raw={trimmed}"
+            );
+            GitlabCliError::InvalidOutput(
+                "GitLab CLI returned pipeline job data in an unexpected format.".to_string(),
+            )
+        })?;
+
+        Ok(jobs)
     }
 
     pub fn create_mr(&self, params: CreateMrParams<'_>) -> Result<GitlabMrResult, GitlabCliError> {
@@ -2319,6 +2389,79 @@ mod tests {
             .unwrap();
 
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn get_pipeline_jobs_returns_job_list() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: r#"[
+                {
+                    "id": 10,
+                    "name": "build",
+                    "stage": "build",
+                    "status": "success",
+                    "web_url": "https://gitlab.com/project/-/jobs/10",
+                    "duration": 45.0
+                },
+                {
+                    "id": 20,
+                    "name": "test",
+                    "stage": "test",
+                    "status": "running",
+                    "web_url": null,
+                    "duration": null
+                }
+            ]"#.to_string(),
+            stderr: String::new(),
+        }));
+
+        let cli = GitlabCli::with_runner(runner.clone());
+        let jobs = cli
+            .get_pipeline_jobs(
+                Path::new("/tmp/repo"),
+                "feature-branch",
+                "group/project",
+                None,
+            )
+            .expect("should parse jobs");
+
+        assert_eq!(jobs.len(), 2);
+        assert_eq!(jobs[0].name, "build");
+        assert_eq!(jobs[1].status, "running");
+
+        let calls = runner.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(
+            calls[0].args,
+            vec![
+                "ci", "list", "--branch", "feature-branch", "--output", "json", "-R",
+                "group/project"
+            ]
+        );
+    }
+
+    #[test]
+    fn get_pipeline_jobs_errors_on_failure() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(1),
+            stdout: String::new(),
+            stderr: "failed".to_string(),
+        }));
+
+        let cli = GitlabCli::with_runner(runner);
+        let err = cli
+            .get_pipeline_jobs(
+                Path::new("/tmp/repo"),
+                "main",
+                "group/project",
+                Some("gitlab.example.com"),
+            )
+            .unwrap_err();
+
+        assert!(matches!(err, GitlabCliError::CommandFailed { .. }));
     }
 
     #[test]

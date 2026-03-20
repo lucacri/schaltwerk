@@ -14,6 +14,8 @@ import type {
   ForgeReviewComment,
   ForgeSourceConfig,
   ForgeStatusPayload,
+  ForgePipelineStatus,
+  ForgePipelineJob,
 } from '../types/forgeTypes'
 
 export interface ForgeIntegrationValue {
@@ -29,6 +31,8 @@ export interface ForgeIntegrationValue {
   approvePr: (source: ForgeSourceConfig, id: string) => Promise<void>
   mergePr: (source: ForgeSourceConfig, id: string, squash: boolean, deleteBranch: boolean) => Promise<void>
   commentOnPr: (source: ForgeSourceConfig, id: string, message: string) => Promise<void>
+  getPipelineStatus: (source: ForgeSourceConfig, branch: string) => Promise<ForgePipelineStatus | null>
+  getPipelineJobs: (source: ForgeSourceConfig, branch: string) => Promise<ForgePipelineJob[] | null>
 }
 
 export interface CreateForgeSessionPrArgs {
@@ -172,6 +176,48 @@ export function useForgeIntegration(): ForgeIntegrationValue {
     [ensureProjectPath]
   )
 
+  const getPipelineStatus = useCallback(
+    async (source: ForgeSourceConfig, branch: string) => {
+      if (!projectPath || status?.forgeType !== 'gitlab') {
+        return null
+      }
+      ensureProjectPath()
+      try {
+        const payload = await invoke<ForgePipelineStatus | null>(TauriCommands.GitLabGetMrPipeline, {
+          sourceBranch: branch,
+          sourceProject: source.projectIdentifier,
+          sourceHostname: source.hostname,
+        })
+        return payload ?? null
+      } catch (error) {
+        logger.warn('[useForgeIntegration] Failed to fetch pipeline status', error)
+        return null
+      }
+    },
+    [ensureProjectPath, projectPath, status?.forgeType]
+  )
+
+  const getPipelineJobs = useCallback(
+    async (source: ForgeSourceConfig, branch: string) => {
+      if (!projectPath || status?.forgeType !== 'gitlab') {
+        return null
+      }
+      ensureProjectPath()
+      try {
+        const payload = await invoke<ForgePipelineJob[]>(TauriCommands.GitLabGetPipelineJobs, {
+          sourceBranch: branch,
+          sourceProject: source.projectIdentifier,
+          sourceHostname: source.hostname,
+        })
+        return payload ?? []
+      } catch (error) {
+        logger.warn('[useForgeIntegration] Failed to fetch pipeline jobs', error)
+        return null
+      }
+    },
+    [ensureProjectPath, projectPath, status?.forgeType]
+  )
+
   return useMemo(() => ({
     status,
     loading,
@@ -185,5 +231,7 @@ export function useForgeIntegration(): ForgeIntegrationValue {
     approvePr,
     mergePr,
     commentOnPr,
-  }), [status, loading, refreshStatus, searchIssues, getIssueDetails, searchPrs, getPrDetails, createSessionPr, getReviewComments, approvePr, mergePr, commentOnPr])
+    getPipelineStatus,
+    getPipelineJobs,
+  }), [status, loading, refreshStatus, searchIssues, getIssueDetails, searchPrs, getPrDetails, createSessionPr, getReviewComments, approvePr, mergePr, commentOnPr, getPipelineStatus, getPipelineJobs])
 }

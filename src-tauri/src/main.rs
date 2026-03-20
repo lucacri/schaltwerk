@@ -1185,6 +1185,7 @@ fn main() {
             gitlab_search_mrs,
             gitlab_get_mr_details,
             gitlab_get_mr_pipeline,
+            gitlab_get_pipeline_jobs,
             gitlab_get_sources,
             gitlab_set_sources,
             gitlab_create_mr,

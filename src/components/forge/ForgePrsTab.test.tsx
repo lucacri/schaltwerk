@@ -3,9 +3,14 @@ import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { ForgePrsTab } from './ForgePrsTab'
 import { renderWithProviders } from '../../tests/test-utils'
 import type { ForgePrSummary, ForgePrDetails, ForgeSourceConfig } from '../../types/forgeTypes'
+import { usePipelineStatuses } from '../../hooks/usePipelineStatuses'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
+}))
+
+vi.mock('../../hooks/usePipelineStatuses', () => ({
+  usePipelineStatuses: vi.fn(() => new Map())
 }))
 
 const testSource: ForgeSourceConfig = {
@@ -48,8 +53,11 @@ function makePrDetails(overrides: Partial<ForgePrDetails> = {}): ForgePrDetails 
 }
 
 describe('ForgePrsTab', () => {
+  const mockedPipelineStatuses = vi.mocked(usePipelineStatuses)
+
   beforeEach(() => {
     vi.clearAllMocks()
+    mockedPipelineStatuses.mockReturnValue(new Map())
   })
 
   it('renders PRs from search results', async () => {
@@ -128,6 +136,30 @@ describe('ForgePrsTab', () => {
     await waitFor(() => {
       expect(screen.getByText('feature/login')).toBeTruthy()
     })
+  })
+
+  it('renders pipeline status badges for gitlab PRs', async () => {
+    const searchPrs = vi.fn().mockResolvedValue([
+      makePrSummary({ id: '5', state: 'OPEN', title: 'Pipeline MR' })
+    ])
+    mockedPipelineStatuses.mockReturnValue(new Map([
+      ['5', { id: 123, status: 'success', url: 'https://gitlab/pipelines/123' }]
+    ]))
+
+    renderWithProviders(<ForgePrsTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        forgeType: 'gitlab',
+        sources: [secondSource],
+        searchPrs,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Pipeline MR')).toBeTruthy()
+    })
+
+    expect(screen.getByText('Success')).toBeTruthy()
   })
 
   it('search input retains focus after typing', async () => {

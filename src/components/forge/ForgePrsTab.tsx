@@ -6,12 +6,14 @@ import { useForgeSearch, buildSourceItemKey } from '../../hooks/useForgeSearch'
 import { ForgeDetailErrorView } from './ForgeDetailErrorView'
 import { ForgePrDetail } from './ForgePrDetail'
 import { ForgeLabelChip } from './ForgeLabelChip'
+import { PipelineStatusBadge } from './PipelineStatusBadge'
 import { useTranslation } from '../../common/i18n'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
 import { buildForgeSourcesIdentity } from '../../utils/forgeSourcesIdentity'
 import { filterSourcesForMrs } from '../../utils/forgeSourceFilters'
-import type { ForgePrSummary, ForgePrDetails, ForgeSourceConfig } from '../../types/forgeTypes'
+import type { ForgePrSummary, ForgePrDetails, ForgeSourceConfig, ForgePipelineStatus } from '../../types/forgeTypes'
+import { usePipelineStatuses } from '../../hooks/usePipelineStatuses'
 
 function isOpen(state: string): boolean {
   const upper = state.toUpperCase()
@@ -50,10 +52,12 @@ function PrRow({
   pr,
   onSelect,
   showSource,
+  pipelineStatus,
 }: {
   pr: ForgePrSummary
   onSelect: (pr: ForgePrSummary) => void
   showSource?: boolean
+  pipelineStatus?: ForgePipelineStatus | null
 }) {
   const displayLabels = pr.labels.slice(0, 3)
 
@@ -90,6 +94,9 @@ function PrRow({
           </span>
         )}
         <span className="flex-1" />
+        {pipelineStatus && (
+          <PipelineStatusBadge status={pipelineStatus.status} url={pipelineStatus.url} />
+        )}
       </div>
       <div
         className="truncate"
@@ -216,6 +223,15 @@ export function ForgePrsTab() {
     await forge.commentOnPr(selectedSource, selectedId, message)
   }, [selectedId, selectedSource, forge])
 
+  const multiSource = forge.sources.length > 1
+  const pipelineStatuses = usePipelineStatuses({
+    prs: forge.forgeType === 'gitlab' ? search.results : [],
+    forgeType: forge.forgeType,
+    sources: forge.sources,
+    getPipelineStatus: forge.getPipelineStatus,
+    getSourceForItem: search.getSourceForItem,
+  })
+
   if (selectedId && loadingDetails) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -245,14 +261,13 @@ export function ForgePrsTab() {
         onBack={handleBack}
         sourceLabel={selectedSource?.label}
         forgeType={forge.forgeType}
+        source={selectedSource}
         onApprove={handleApprove}
         onMerge={handleMerge}
         onComment={handleComment}
       />
     )
   }
-
-  const multiSource = forge.sources.length > 1
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -346,6 +361,7 @@ export function ForgePrsTab() {
               pr={pr}
               onSelect={handleSelect}
               showSource={multiSource}
+              pipelineStatus={pipelineStatuses.get(pr.id)}
             />
           ))
         )}

@@ -105,6 +105,8 @@ function createForgeIntegrationValue(overrides?: ForgeOverrides): ForgeIntegrati
     approvePr: unimplemented('approvePr') as ForgeIntegrationContextValue['approvePr'],
     mergePr: unimplemented('mergePr') as ForgeIntegrationContextValue['mergePr'],
     commentOnPr: unimplemented('commentOnPr') as ForgeIntegrationContextValue['commentOnPr'],
+    getPipelineStatus: async () => null,
+    getPipelineJobs: async () => null,
   }
 
   return overrides ? { ...base, ...overrides } : base

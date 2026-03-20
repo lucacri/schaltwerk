@@ -39,6 +39,7 @@ pub use super::forge::{
 pub use super::gitlab_cli::{
     CreateMrParams, CreateSessionMrOptions, GitlabCli, GitlabCliError, GitlabIssueDetails,
     GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary, GitlabNote, GitlabPipelineDetails,
+    GitlabPipelineJob,
     MrCommitMode, format_cli_error,
 };
 #[cfg(test)]

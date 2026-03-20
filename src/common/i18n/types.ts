@@ -1322,6 +1322,16 @@ export interface Translations {
     reviewers: string
     pipeline: string
     refreshPipeline: string
+    pipelineSuccess: string
+    pipelineFailed: string
+    pipelineRunning: string
+    pipelinePending: string
+    pipelineCanceled: string
+    pipelineManual: string
+    pipelineJobs: string
+    stage: string
+    duration: string
+    noJobs: string
     failedToLoadDetails: string
     retry: string
     squashCommits: string
