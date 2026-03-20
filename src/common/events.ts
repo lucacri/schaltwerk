@@ -28,6 +28,7 @@ export enum SchaltEvent {
   GitHubStatusChanged = 'schaltwerk:github-status-changed',
   GitLabStatusChanged = 'schaltwerk:gitlab-status-changed',
   ForgeStatusChanged = 'schaltwerk:forge-status-changed',
+  ForgeConnectionIssue = 'schaltwerk:forge-connection-issue',
   AppUpdateResult = 'schaltwerk:app-update-result',
   DevBackendError = 'schaltwerk:dev-backend-error',
   SetupScriptRequested = 'schaltwerk:setup-script-request',
@@ -132,6 +133,16 @@ export interface GitLabStatusPayload {
   authenticated: boolean
   userLogin?: string | null
   hostname?: string | null
+}
+
+export type ConnectionVerdict = 'APP_WIDE' | 'SUBPROCESS_ONLY' | 'TRANSIENT' | 'TAURI_PROCESS'
+
+export interface ForgeConnectionIssuePayload {
+  hostname: string
+  sessionName?: string
+  verdict: ConnectionVerdict
+  tauriProbeOk: boolean
+  subprocessProbeOk: boolean
 }
 
 export interface GitHubPrPayload {
@@ -271,6 +282,7 @@ export type EventPayloadMap = {
   [SchaltEvent.GitHubStatusChanged]: GitHubStatusPayload
   [SchaltEvent.GitLabStatusChanged]: GitLabStatusPayload
   [SchaltEvent.ForgeStatusChanged]: ForgeStatusPayload
+  [SchaltEvent.ForgeConnectionIssue]: ForgeConnectionIssuePayload
   [SchaltEvent.AppUpdateResult]: AppUpdateResultPayload
   [SchaltEvent.DevBackendError]: DevBackendErrorPayload
   [SchaltEvent.SetupScriptRequested]: SetupScriptRequestPayload

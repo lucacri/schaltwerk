@@ -248,4 +248,5 @@ export const TauriCommands = {
   ClipboardReadText: 'clipboard_read_text',
   CheckForUpdatesNow: 'check_for_updates_now',
   RestartApp: 'restart_app',
+  RestartSessionTerminals: 'restart_session_terminals',
 } as const

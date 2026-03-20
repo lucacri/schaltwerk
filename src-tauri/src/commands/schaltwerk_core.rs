@@ -799,6 +799,13 @@ pub async fn schaltwerk_core_update_session_from_parent(
 }
 
 #[tauri::command]
+pub async fn restart_session_terminals(session_name: String) -> Result<(), String> {
+    log::info!("Restarting terminals for session: {session_name}");
+    terminals::close_session_terminals_if_any(&session_name).await;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn schaltwerk_core_archive_spec_session(
     app: tauri::AppHandle,
     name: String,

@@ -1,3 +1,5 @@
+use dashmap::DashSet;
+use once_cell::sync::Lazy;
 use std::sync::Arc;
 
 use crate::get_project_manager;
@@ -8,11 +10,24 @@ use lucode::domains::git::service::{
     ForgePrDetails, ForgePrResult, ForgePrSummary, ForgeReviewComment, ForgeSourceConfig,
     ForgeType,
 };
+use lucode::services::{log_diagnostics, ConnectionVerdict};
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::services::MergeMode;
 use lucode::shared::session_metadata_gateway::SessionMetadataGateway;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
+
+static ACTIVE_CONNECTION_ISSUES: Lazy<DashSet<String>> = Lazy::new(DashSet::new);
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ForgeConnectionIssueEventPayload {
+    hostname: String,
+    session_name: Option<String>,
+    verdict: ConnectionVerdict,
+    tauri_probe_ok: bool,
+    subprocess_probe_ok: bool,
+}
 
 fn format_forge_error(err: ForgeError) -> String {
     err.to_string()
@@ -86,7 +101,7 @@ pub async fn forge_get_status(
 
 #[tauri::command]
 pub async fn forge_search_issues(
-    _app: AppHandle,
+    app: AppHandle,
     project_path: String,
     source: ForgeSourceConfig,
     query: Option<String>,
@@ -97,18 +112,26 @@ pub async fn forge_search_issues(
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
 
-    provider
+    let hostname_hint = source.hostname.as_deref();
+
+    match provider
         .search_issues(&project.path, query.as_deref(), limit, &source)
         .await
-        .map_err(|e| {
-            error!("Forge issue search failed: {e}");
-            format_forge_error(e)
-        })
+    {
+        Ok(result) => {
+            clear_connection_issue(hostname_hint);
+            Ok(result)
+        }
+        Err(err) => {
+            error!("Forge issue search failed: {err}");
+            Err(handle_connection_failure(&app, err, hostname_hint, None))
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn forge_get_issue_details(
-    _app: AppHandle,
+    app: AppHandle,
     project_path: String,
     source: ForgeSourceConfig,
     id: String,
@@ -118,18 +141,26 @@ pub async fn forge_get_issue_details(
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
 
-    provider
+    let hostname_hint = source.hostname.as_deref();
+
+    match provider
         .get_issue_details(&project.path, &id, &source)
         .await
-        .map_err(|e| {
-            error!("Forge issue detail fetch failed: {e}");
-            format_forge_error(e)
-        })
+    {
+        Ok(details) => {
+            clear_connection_issue(hostname_hint);
+            Ok(details)
+        }
+        Err(err) => {
+            error!("Forge issue detail fetch failed: {err}");
+            Err(handle_connection_failure(&app, err, hostname_hint, None))
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn forge_search_prs(
-    _app: AppHandle,
+    app: AppHandle,
     project_path: String,
     source: ForgeSourceConfig,
     query: Option<String>,
@@ -140,18 +171,26 @@ pub async fn forge_search_prs(
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
 
-    provider
+    let hostname_hint = source.hostname.as_deref();
+
+    match provider
         .search_prs(&project.path, query.as_deref(), limit, &source)
         .await
-        .map_err(|e| {
-            error!("Forge PR search failed: {e}");
-            format_forge_error(e)
-        })
+    {
+        Ok(result) => {
+            clear_connection_issue(hostname_hint);
+            Ok(result)
+        }
+        Err(err) => {
+            error!("Forge PR search failed: {err}");
+            Err(handle_connection_failure(&app, err, hostname_hint, None))
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn forge_get_pr_details(
-    _app: AppHandle,
+    app: AppHandle,
     project_path: String,
     source: ForgeSourceConfig,
     id: String,
@@ -161,13 +200,21 @@ pub async fn forge_get_pr_details(
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
 
-    provider
+    let hostname_hint = source.hostname.as_deref();
+
+    match provider
         .get_pr_details(&project.path, &id, &source)
         .await
-        .map_err(|e| {
-            error!("Forge PR detail fetch failed: {e}");
-            format_forge_error(e)
-        })
+    {
+        Ok(details) => {
+            clear_connection_issue(hostname_hint);
+            Ok(details)
+        }
+        Err(err) => {
+            error!("Forge PR detail fetch failed: {err}");
+            Err(handle_connection_failure(&app, err, hostname_hint, None))
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -276,13 +323,23 @@ pub async fn forge_create_session_pr(
         source: &args.source,
     };
 
-    let pr_result = provider
-        .create_session_pr(params)
-        .await
-        .map_err(|err| {
+    let hostname_hint = args.source.hostname.as_deref();
+
+    let pr_result = match provider.create_session_pr(params).await {
+        Ok(result) => {
+            clear_connection_issue(hostname_hint);
+            result
+        }
+        Err(err) => {
             error!("Forge PR/MR creation failed: {err}");
-            format_forge_error(err)
-        })?;
+            return Err(handle_connection_failure(
+                &app,
+                err,
+                hostname_hint,
+                Some(&args.session_name),
+            ));
+        }
+    };
 
     if pr_result.branch != session_branch {
         info!(
@@ -333,7 +390,7 @@ pub async fn forge_create_session_pr(
 
 #[tauri::command]
 pub async fn forge_get_review_comments(
-    _app: AppHandle,
+    app: AppHandle,
     project_path: String,
     source: ForgeSourceConfig,
     id: String,
@@ -343,18 +400,26 @@ pub async fn forge_get_review_comments(
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
 
-    provider
+    let hostname_hint = source.hostname.as_deref();
+
+    match provider
         .get_review_comments(&project.path, &id, &source)
         .await
-        .map_err(|e| {
-            error!("Forge review comments fetch failed: {e}");
-            format_forge_error(e)
-        })
+    {
+        Ok(result) => {
+            clear_connection_issue(hostname_hint);
+            Ok(result)
+        }
+        Err(err) => {
+            error!("Forge review comments fetch failed: {err}");
+            Err(handle_connection_failure(&app, err, hostname_hint, None))
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn forge_approve_pr(
-    _app: AppHandle,
+    app: AppHandle,
     project_path: String,
     source: ForgeSourceConfig,
     id: String,
@@ -364,18 +429,23 @@ pub async fn forge_approve_pr(
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
 
-    provider
-        .approve_pr(&project.path, &id, &source)
-        .await
-        .map_err(|e| {
-            error!("Forge PR approval failed: {e}");
-            format_forge_error(e)
-        })
+    let hostname_hint = source.hostname.as_deref();
+
+    match provider.approve_pr(&project.path, &id, &source).await {
+        Ok(_) => {
+            clear_connection_issue(hostname_hint);
+            Ok(())
+        }
+        Err(err) => {
+            error!("Forge PR approval failed: {err}");
+            Err(handle_connection_failure(&app, err, hostname_hint, None))
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn forge_merge_pr(
-    _app: AppHandle,
+    app: AppHandle,
     project_path: String,
     source: ForgeSourceConfig,
     id: String,
@@ -387,18 +457,26 @@ pub async fn forge_merge_pr(
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
 
-    provider
+    let hostname_hint = source.hostname.as_deref();
+
+    match provider
         .merge_pr(&project.path, &id, squash, delete_branch, &source)
         .await
-        .map_err(|e| {
-            error!("Forge PR merge failed: {e}");
-            format_forge_error(e)
-        })
+    {
+        Ok(_) => {
+            clear_connection_issue(hostname_hint);
+            Ok(())
+        }
+        Err(err) => {
+            error!("Forge PR merge failed: {err}");
+            Err(handle_connection_failure(&app, err, hostname_hint, None))
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn forge_comment_on_pr(
-    _app: AppHandle,
+    app: AppHandle,
     project_path: String,
     source: ForgeSourceConfig,
     id: String,
@@ -409,16 +487,78 @@ pub async fn forge_comment_on_pr(
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
     provider.ensure_installed().await.map_err(format_forge_error)?;
 
-    provider
+    let hostname_hint = source.hostname.as_deref();
+
+    match provider
         .comment_on_pr(&project.path, &id, &message, &source)
         .await
-        .map_err(|e| {
-            error!("Forge PR comment failed: {e}");
-            format_forge_error(e)
-        })
+    {
+        Ok(_) => {
+            clear_connection_issue(hostname_hint);
+            Ok(())
+        }
+        Err(err) => {
+            error!("Forge PR comment failed: {err}");
+            Err(handle_connection_failure(&app, err, hostname_hint, None))
+        }
+    }
 }
 
 fn emit_forge_status(app: &AppHandle, status: &ForgeStatusPayload) -> Result<(), String> {
     emit_event(app, SchaltEvent::ForgeStatusChanged, status)
         .map_err(|e| format!("Failed to emit forge status event: {e}"))
+}
+
+fn handle_connection_failure(
+    app: &AppHandle,
+    err: ForgeError,
+    hostname_hint: Option<&str>,
+    session_name: Option<&str>,
+) -> String {
+    let classified = err.classify_connection_error();
+    if let ForgeError::ConnectionFailed { hostname, .. } = &classified {
+        let final_host = if hostname != "unknown" {
+            hostname.clone()
+        } else if let Some(hint) = hostname_hint {
+            hint.to_string()
+        } else {
+            hostname.clone()
+        };
+        schedule_connection_diagnostics(app, final_host, session_name.map(|s| s.to_string()));
+    }
+    format_forge_error(classified)
+}
+
+fn schedule_connection_diagnostics(
+    app: &AppHandle,
+    hostname: String,
+    session_name: Option<String>,
+) {
+    if !ACTIVE_CONNECTION_ISSUES.insert(hostname.clone()) {
+        return;
+    }
+
+    let app_handle = app.clone();
+    tokio::spawn(async move {
+        let session_for_report = session_name
+            .clone()
+            .unwrap_or_else(|| "forge-ui".to_string());
+        let report = log_diagnostics(&hostname, &session_for_report);
+        let payload = ForgeConnectionIssueEventPayload {
+            hostname: hostname.clone(),
+            session_name,
+            verdict: report.verdict,
+            tauri_probe_ok: report.tauri_tcp_probe_ok,
+            subprocess_probe_ok: report.subprocess_probe_ok,
+        };
+        if let Err(err) = emit_event(&app_handle, SchaltEvent::ForgeConnectionIssue, &payload) {
+            warn!("Failed to emit forge connection issue event: {err}");
+        }
+    });
+}
+
+fn clear_connection_issue(hostname: Option<&str>) {
+    if let Some(host) = hostname {
+        ACTIVE_CONNECTION_ISSUES.remove(host);
+    }
 }

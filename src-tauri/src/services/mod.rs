@@ -56,6 +56,9 @@ pub use crate::domains::terminal::{
     build_login_shell_invocation_with_shell, get_effective_shell,
     manager::CreateTerminalWithAppAndSizeParams, sh_quote_string, shell_invocation_to_posix,
 };
+pub use crate::domains::network::diagnostics::{
+    ConnectionVerdict, log_diagnostics,
+};
 pub use crate::domains::workspace::get_project_files_with_status;
 
 pub type DynSessionsService = Arc<dyn SessionsServiceTrait>;

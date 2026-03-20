@@ -1,6 +1,7 @@
 pub mod branch;
 pub mod cli;
 pub mod merge_snapshot_gateway;
+pub mod network;
 pub mod permissions;
 pub mod platform;
 pub mod session_metadata_gateway;

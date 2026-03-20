@@ -1301,6 +1301,7 @@ fn main() {
             schaltwerk_core_start_fresh_orchestrator,
             schaltwerk_core_reset_orchestrator,
             schaltwerk_core_reset_session_worktree,
+            restart_session_terminals,
             schaltwerk_core_discard_file_in_session,
             schaltwerk_core_discard_file_in_orchestrator,
             schaltwerk_core_set_skip_permissions,

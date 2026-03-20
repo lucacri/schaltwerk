@@ -102,7 +102,7 @@ import { useSelectionPreserver } from './hooks/useSelectionPreserver'
 import { AGENT_START_TIMEOUT_MESSAGE } from './common/agentSpawn'
 import { beginSplitDrag, endSplitDrag } from './utils/splitDragCoordinator'
 import { useOptionalToast } from './common/toast/ToastProvider'
-import { AppUpdateResultPayload } from './common/events'
+import { AppUpdateResultPayload, ForgeConnectionIssuePayload } from './common/events'
 import { RawSession, AGENT_SUPPORTS_SKIP_PERMISSIONS, AgentType, SessionState } from './types/session'
 import {
   refreshKeepAwakeStateActionAtom,
@@ -713,6 +713,70 @@ function AppContent() {
         })
     }
   }, [clearPendingPath])
+
+  useEffect(() => {
+    if (!toast) {
+      return
+    }
+
+    const unlistenPromise = listenEvent(
+      SchaltEvent.ForgeConnectionIssue,
+      (payload: ForgeConnectionIssuePayload) => {
+        const { hostname, verdict } = payload
+        if (verdict === 'TRANSIENT') {
+          toast.pushToast({
+            tone: 'info',
+            title: `Connection to ${hostname} recovered`,
+            description: `Connections to ${hostname} appear healthy again.`,
+            durationMs: 8000,
+          })
+          return
+        }
+
+        const isAppWide = verdict === 'APP_WIDE' || verdict === 'TAURI_PROCESS'
+        const description = isAppWide
+          ? `Lucode's connection to ${hostname} is failing. Restarting the app will fix this.`
+          : `Terminal connections to ${hostname} are failing. Try restarting the affected session terminals.`
+
+        toast.pushToast({
+          tone: 'warning',
+          title: `Connection issue with ${hostname}`,
+          description,
+          durationMs: 15000,
+          action:
+            !isAppWide && payload.sessionName
+              ? {
+                  label: 'Restart Terminals',
+                  onClick: () => {
+                    void invoke(TauriCommands.RestartSessionTerminals, {
+                      sessionName: payload.sessionName,
+                    })
+                      .then(() => {
+                        emitUiEvent(UiEvent.TerminalReset, {
+                          kind: 'session',
+                          sessionId: payload.sessionName!,
+                        })
+                      })
+                      .catch(error => {
+                        logger.warn('[App] Failed to restart session terminals', error)
+                      })
+                  },
+                }
+              : undefined,
+        })
+      }
+    )
+
+    return () => {
+      void unlistenPromise
+        .then(unlisten => {
+          unlisten()
+        })
+        .catch(error => {
+          logger.warn('[App] Failed to detach forge connection issue listener', error)
+        })
+    }
+  }, [toast])
 
   useEffect(() => {
     const prev = prevLeftCollapsedRef.current

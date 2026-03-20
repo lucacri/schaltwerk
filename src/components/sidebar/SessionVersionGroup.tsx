@@ -26,6 +26,7 @@ interface SessionVersionGroupProps {
   onDeleteSpec?: (sessionId: string) => void
   onSelectBestVersion?: (groupBaseName: string, selectedSessionId: string) => void
   onReset?: (sessionId: string) => void
+  onRestartTerminals?: (sessionId: string) => void
   onSwitchModel?: (sessionId: string) => void
   onCreatePullRequest?: (sessionId: string) => void
   onCreateGitlabMr?: (sessionId: string) => void
@@ -60,6 +61,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   onDeleteSpec,
   onSelectBestVersion,
   onReset,
+  onRestartTerminals,
   onSwitchModel,
   onCreatePullRequest,
   onCreateGitlabMr,
@@ -109,6 +111,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
         onRefineSpec={onRefineSpec}
         onDeleteSpec={onDeleteSpec}
         onReset={onReset}
+        onRestartTerminals={onRestartTerminals}
         onSwitchModel={onSwitchModel}
         onCreatePullRequest={onCreatePullRequest}
         onCreateGitlabMr={onCreateGitlabMr}

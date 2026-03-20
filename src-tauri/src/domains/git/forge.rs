@@ -195,6 +195,27 @@ pub enum ForgeError {
     Git(anyhow::Error),
     InvalidInput(String),
     InvalidOutput(String),
+    ConnectionFailed {
+        hostname: String,
+        stderr: String,
+    },
+}
+
+impl ForgeError {
+    pub fn classify_connection_error(self) -> Self {
+        use crate::shared::network::{extract_hostname_from_stderr, is_connection_error};
+        match &self {
+            ForgeError::CommandFailed { stderr, .. } if is_connection_error(stderr) => {
+                let hostname =
+                    extract_hostname_from_stderr(stderr).unwrap_or_else(|| "unknown".into());
+                ForgeError::ConnectionFailed {
+                    hostname,
+                    stderr: stderr.clone(),
+                }
+            }
+            _ => self,
+        }
+    }
 }
 
 impl std::fmt::Display for ForgeError {
@@ -221,6 +242,9 @@ impl std::fmt::Display for ForgeError {
             ForgeError::Git(err) => write!(f, "Git error: {err}"),
             ForgeError::InvalidInput(msg) => write!(f, "Invalid input: {msg}"),
             ForgeError::InvalidOutput(msg) => write!(f, "Invalid CLI output: {msg}"),
+            ForgeError::ConnectionFailed { hostname, .. } => {
+                write!(f, "Connection to {hostname} failed")
+            }
         }
     }
 }
@@ -491,5 +515,45 @@ mod tests {
             serde_json::to_string(&ForgeCommitMode::Reapply).unwrap(),
             "\"reapply\""
         );
+    }
+
+    #[test]
+    fn command_failed_with_connection_error_converts_to_connection_failed() {
+        let err = ForgeError::CommandFailed {
+            program: "glab".into(),
+            args: vec!["api".into()],
+            status: Some(1),
+            stdout: String::new(),
+            stderr: "Get \"https://gitlab.critel.li/api/v4/projects\": dial tcp 10.17.0.127:443: connect: no route to host".into(),
+        };
+        assert!(matches!(
+            err.classify_connection_error(),
+            ForgeError::ConnectionFailed { .. }
+        ));
+    }
+
+    #[test]
+    fn command_failed_without_connection_error_stays_unchanged() {
+        let err = ForgeError::CommandFailed {
+            program: "glab".into(),
+            args: vec!["api".into()],
+            status: Some(1),
+            stdout: String::new(),
+            stderr: "401 Unauthorized".into(),
+        };
+        assert!(matches!(
+            err.classify_connection_error(),
+            ForgeError::CommandFailed { .. }
+        ));
+    }
+
+    #[test]
+    fn connection_failed_display_includes_hostname() {
+        let err = ForgeError::ConnectionFailed {
+            hostname: "gitlab.critel.li".into(),
+            stderr: "no route to host".into(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("gitlab.critel.li"));
     }
 }

@@ -44,6 +44,7 @@ interface SessionCardProps {
   onPromoteVersionHover?: () => void;
   onPromoteVersionHoverEnd?: () => void;
   onReset?: (sessionId: string) => void;
+  onRestartTerminals?: (sessionId: string) => void;
   onSwitchModel?: (sessionId: string) => void;
   onCreatePullRequest?: (sessionId: string) => void;
   onCreateGitlabMr?: (sessionId: string) => void;
@@ -250,6 +251,7 @@ export const SessionCard = memo<SessionCardProps>(
     onPromoteVersionHover,
     onPromoteVersionHoverEnd,
     onReset,
+    onRestartTerminals,
     onSwitchModel,
     onCreatePullRequest,
     onCreateGitlabMr,
@@ -688,6 +690,7 @@ export const SessionCard = memo<SessionCardProps>(
             onPromoteVersionHover={onPromoteVersionHover}
             onPromoteVersionHoverEnd={onPromoteVersionHoverEnd}
             onReset={onReset}
+            onRestartTerminals={onRestartTerminals}
             onSwitchModel={onSwitchModel}
             isResetting={isResetting}
             onMerge={onMerge}

@@ -859,6 +859,7 @@
     "fetching": "Fetching...",
     "prComments": "PR #{number} Comments",
     "openPrInBrowser": "Open PR #{number} in browser",
+    "restartTerminals": "Restart Terminals",
     "discardAllChanges": "Discard all changes and reset this session",
     "resetSession": "Reset Session",
     "markAsReviewed": "Mark as Reviewed",
@@ -1467,7 +1468,8 @@
     "createPrShortcut": "Create pull request (⌘⇧P)",
     "createGitlabMr": "Create GitLab merge request",
     "createGitlabMrShortcut": "Create GitLab merge request",
-    "noGitlabSources": "Configure GitLab sources first"
+    "noGitlabSources": "Configure GitLab sources first",
+    "restartTerminals": "Restart terminals"
   },
   "gitlabMrModal": {
     "title": "Create GitLab Merge Request",

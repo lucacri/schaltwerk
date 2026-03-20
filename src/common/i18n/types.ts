@@ -861,6 +861,7 @@ export interface Translations {
     fetching: string
     prComments: string
     openPrInBrowser: string
+    restartTerminals: string
     discardAllChanges: string
     resetSession: string
     markAsReviewed: string
@@ -1469,6 +1470,7 @@ export interface Translations {
     createGitlabMr: string
     createGitlabMrShortcut: string
     noGitlabSources: string
+    restartTerminals: string
   }
   gitlabMrModal: {
     title: string

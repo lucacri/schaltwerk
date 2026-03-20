@@ -859,6 +859,7 @@
     "fetching": "获取中...",
     "prComments": "PR #{number} 评论",
     "openPrInBrowser": "在浏览器中打开 PR #{number}",
+    "restartTerminals": "重启终端",
     "discardAllChanges": "放弃所有更改并重置此会话",
     "resetSession": "重置会话",
     "markAsReviewed": "标记为已审核",
@@ -1468,7 +1469,8 @@
     "createPrShortcut": "创建拉取请求 (⌘⇧P)",
     "createGitlabMr": "创建 GitLab 合并请求",
     "createGitlabMrShortcut": "创建 GitLab 合并请求",
-    "noGitlabSources": "请先配置 GitLab 源"
+    "noGitlabSources": "请先配置 GitLab 源",
+    "restartTerminals": "重启终端"
   },
   "gitlabMrModal": {
     "title": "创建 GitLab 合并请求",
