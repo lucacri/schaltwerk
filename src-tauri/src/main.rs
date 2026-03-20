@@ -632,7 +632,40 @@ fn calculate_project_port(project_path: &str) -> u16 {
 }
 
 async fn start_webhook_server(app: tauri::AppHandle) -> bool {
+    fn project_override_from_webhook_headers(
+        headers: &hyper::header::HeaderMap,
+    ) -> Option<PathBuf> {
+        headers
+            .get("X-Project-Path")
+            .and_then(|v| v.to_str().ok())
+            .map(PathBuf::from)
+    }
+
     async fn handle_webhook(
+        app: tauri::AppHandle,
+        req: Request<IncomingBody>,
+    ) -> Result<Response<String>, hyper::Error> {
+        let project_override = project_override_from_webhook_headers(req.headers());
+
+        if let Some(path) = project_override {
+            return REQUEST_PROJECT_OVERRIDE
+                .scope(
+                    std::cell::RefCell::new(Some(path)),
+                    handle_webhook_inner(app, req),
+                )
+                .await;
+        }
+
+        log::warn!(
+            "Webhook request missing X-Project-Path header: {} {} — falling back to active project",
+            req.method(),
+            req.uri().path()
+        );
+
+        handle_webhook_inner(app, req).await
+    }
+
+    async fn handle_webhook_inner(
         app: tauri::AppHandle,
         req: Request<IncomingBody>,
     ) -> Result<Response<String>, hyper::Error> {

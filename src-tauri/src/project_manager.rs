@@ -335,6 +335,10 @@ impl ProjectManager {
         current_path.clone()
     }
 
+    pub async fn get_project_count(&self) -> usize {
+        self.projects.read().await.len()
+    }
+
     /// Clean up all projects (called on app exit)
     pub async fn cleanup_all(&self) {
         info!("Cleaning up all projects");
