@@ -1956,6 +1956,7 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                                                 versionGroupId: firstSession.version_group_id ?? '',
                                                 epicId: groupEpicId,
                                                 sessions: group.versions.map(v => ({
+                                                    id: v.session.info.session_id,
                                                     name: v.session.info.session_id,
                                                     branch: v.session.info.branch,
                                                     worktreePath: v.session.info.worktree_path,

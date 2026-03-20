@@ -1535,6 +1535,8 @@ Instructions:
       emitUiEvent(UiEvent.NewSessionPrefillPending)
       setNewSessionOpen(true)
 
+      const sourceIds = sessions.map(s => s.id)
+
       requestAnimationFrame(() => {
         emitUiEvent(UiEvent.NewSessionPrefill, {
           name: `${baseName}-consolidation`,
@@ -1543,6 +1545,7 @@ Instructions:
           lockName: false,
           isConsolidation: true,
           epicId: groupEpicId,
+          consolidationSourceIds: sourceIds,
         })
       })
     })
@@ -1683,7 +1686,9 @@ Instructions:
     prUrl?: string
     epicId?: string | null
     isConsolidation?: boolean
-  }) => {
+    consolidationSourceIds?: string[]
+    }) => {
+
     try {
       await preserveSelection(async () => {
         if (data.isSpec) {
@@ -1766,6 +1771,7 @@ Instructions:
               skipPermissions: versionSkipPermissions,
               prNumber: data.prNumber || null,
               isConsolidation: data.isConsolidation || null,
+              consolidationSourceIds: data.consolidationSourceIds || null,
             })
 
             const actualSessionName = createdSession?.name ?? versionName

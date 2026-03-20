@@ -1288,6 +1288,7 @@ async fn create_session(
         skip_permissions,
         pr_number: None,
         is_consolidation: false,
+        consolidation_source_ids: None,
     };
 
     match manager.create_session_with_agent(params) {

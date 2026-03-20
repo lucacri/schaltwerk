@@ -1739,6 +1739,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -1812,6 +1813,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -1884,6 +1886,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -1929,6 +1932,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -1969,6 +1973,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2019,6 +2024,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2069,6 +2075,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2138,6 +2145,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2203,6 +2211,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2331,6 +2340,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2379,6 +2389,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2431,6 +2442,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2475,6 +2487,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2519,6 +2532,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let manager = SessionManager::new(db.clone(), repo_path.clone());
@@ -2559,6 +2573,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2600,6 +2615,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2672,6 +2688,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2783,6 +2800,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2858,6 +2876,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2890,6 +2909,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2925,6 +2945,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -2959,6 +2980,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3008,6 +3030,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3091,6 +3114,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3189,6 +3213,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3250,6 +3275,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3321,6 +3347,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3400,6 +3427,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3477,6 +3505,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3557,6 +3586,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3625,6 +3655,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3714,6 +3745,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3824,6 +3856,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -3923,6 +3956,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();
@@ -4051,6 +4085,7 @@ mod tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager.create_session_with_agent(params).unwrap();

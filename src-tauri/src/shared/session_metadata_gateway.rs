@@ -82,6 +82,7 @@ mod tests {
             pr_number: None,
             pr_url: None,
             is_consolidation: false,
+            consolidation_sources: None,
         }
     }
 

@@ -79,6 +79,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
 }) => {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isPreviewingDeletion, setIsPreviewingDeletion] = useState(false)
+  const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null)
 
    // If it's not a version group, render the single session normally
    if (!group.isVersionGroup) {
@@ -121,6 +122,9 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
         isBusy={isSessionBusy?.(session.session.info.session_id) ?? false}
         onRename={onRename}
         onLinkPr={onLinkPr}
+        siblings={group.versions.map(v => v.session.info)}
+        onHover={setHoveredSessionId}
+        isHighlighted={hoveredSessionId === session.session.info.session_id}
       />
     )
   }
@@ -326,16 +330,28 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                     const displayName = versionAgentType ? `(v${version.versionNumber} • ${versionAgentType})` : `(v${version.versionNumber})`
                     const willBeDeleted = isPreviewingDeletion && hasSelectedVersion && !isSelected
 
+                  const hoveredSession = group.versions.find(v => v.session.info.session_id === hoveredSessionId)?.session.info
+                  const isHighlighted = hoveredSession?.is_consolidation
+                    ? hoveredSession.consolidation_sources?.includes(version.session.info.session_id)
+                    : (version.session.info.is_consolidation && version.session.info.consolidation_sources?.includes(hoveredSessionId || '')) || hoveredSessionId === version.session.info.session_id
+
                   return (
                     <div key={version.session.info.session_id} className="relative">
                       {/* Horizontal connector from vertical line to session - aligned to button center */}
-                      <div className="absolute -left-4 top-7 w-4 h-px bg-[rgba(var(--color-border-strong-rgb),0.5)]" />
+                      <div className={clsx(
+                        "absolute -left-4 top-7 w-4 h-px",
+                        (hoveredSession?.is_consolidation && hoveredSession.consolidation_sources?.includes(version.session.info.session_id))
+                          ? "border-t border-dashed border-[rgba(var(--color-border-strong-rgb),0.8)]"
+                          : "bg-[rgba(var(--color-border-strong-rgb),0.5)]"
+                      )} />
                       {/* Dot on the vertical line */}
                       <div className={clsx(
                         "absolute top-7 w-2 h-2 rounded-full border",
                         isSelected
                           ? "bg-[var(--color-accent-cyan)] border-[var(--color-accent-cyan-border)]"
-                          : "bg-[var(--color-bg-hover)] border-[var(--color-border-strong)]"
+                          : (hoveredSession?.is_consolidation && hoveredSession.consolidation_sources?.includes(version.session.info.session_id))
+                            ? "bg-[var(--color-accent-purple)] border-[var(--color-accent-purple-border)]"
+                            : "bg-[var(--color-bg-hover)] border-[var(--color-border-strong)]"
                       )} style={{ left: '-14px', transform: 'translate(-50%, -50%)' }} />
                       
                   <SessionCard
@@ -384,6 +400,9 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                       isBusy={isSessionBusy?.(version.session.info.session_id) ?? false}
                       onRename={onRename}
                       onLinkPr={onLinkPr}
+                      siblings={group.versions.map(v => v.session.info)}
+                      onHover={setHoveredSessionId}
+                      isHighlighted={isHighlighted}
                       />
                     </div>
                   )

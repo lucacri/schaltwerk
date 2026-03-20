@@ -110,6 +110,7 @@ pub struct Session {
     // GitHub PR URL linked to this session
     pub pr_url: Option<String>,
     pub is_consolidation: bool,
+    pub consolidation_sources: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -307,6 +308,8 @@ pub struct SessionInfo {
     pub pr_url: Option<String>,
     #[serde(default)]
     pub is_consolidation: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consolidation_sources: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize)]

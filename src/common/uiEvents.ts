@@ -110,6 +110,7 @@ export interface NewSessionPrefillDetail {
   originalSpecName?: string
   epicId?: string | null
   isConsolidation?: boolean
+  consolidationSourceIds?: string[]
 }
 
 export interface SessionCreatedDetail {
@@ -214,6 +215,7 @@ export interface ConsolidateVersionGroupDetail {
   versionGroupId: string
   epicId?: string | null
   sessions: Array<{
+    id: string
     name: string
     branch: string
     worktreePath: string

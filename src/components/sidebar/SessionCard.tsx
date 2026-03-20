@@ -6,7 +6,7 @@ import { SessionInfo, SessionMonitorStatus } from "../../types/session";
 import { UncommittedIndicator } from "../common/UncommittedIndicator";
 import { ProgressIndicator } from "../common/ProgressIndicator";
 import { InlineEditableText } from "../common/InlineEditableText";
-import { theme, getAgentColorScheme } from "../../common/theme";
+import { theme, getAgentColorScheme, type AgentColor } from "../../common/theme";
 import { typography } from "../../common/typography";
 import type { MergeStatus } from "../../store/atoms/sessions";
 import { lastAgentResponseMapAtom, agentResponseTickAtom, formatAgentResponseTime } from "../../store/atoms/lastAgentResponse";
@@ -57,6 +57,9 @@ interface SessionCardProps {
   isBusy?: boolean;
   onRename?: (sessionId: string, newName: string) => Promise<void>;
   onLinkPr?: (sessionId: string, prNumber: number, prUrl: string) => void;
+  siblings?: SessionInfo[];
+  onHover?: (sessionId: string | null) => void;
+  isHighlighted?: boolean;
 }
 
 function getSessionStateColor(state?: string): "green" | "violet" | "gray" {
@@ -80,6 +83,7 @@ type SessionCardSurfaceOptions = {
   hasFollowUpMessage?: boolean
   willBeDeleted?: boolean
   isPromotionPreview?: boolean
+  isHighlighted?: boolean
 }
 
 type SessionCardSurface = {
@@ -101,6 +105,7 @@ export function getSessionCardSurfaceClasses({
   hasFollowUpMessage,
   willBeDeleted,
   isPromotionPreview,
+  isHighlighted,
 }: SessionCardSurfaceOptions): SessionCardSurface {
   const style: SessionCardSurfaceStyle = {
     '--session-card-bg': 'rgb(var(--color-bg-tertiary-rgb) / 0.4)',
@@ -109,6 +114,13 @@ export function getSessionCardSurfaceClasses({
   }
 
   let className = 'border-[var(--session-card-border)] bg-[var(--session-card-bg)] hover:bg-[var(--session-card-hover-bg)]'
+
+  if (isHighlighted) {
+    style['--session-card-border'] = 'var(--color-accent-purple-border)'
+    style['--session-card-bg'] = 'rgb(var(--color-accent-purple-rgb) / 0.15)'
+    style['--session-card-hover-bg'] = 'rgb(var(--color-accent-purple-rgb) / 0.2)'
+    className = clsx(className, "ring-2 ring-[var(--color-accent-purple-border)] z-10")
+  }
 
   if (sessionState === "running") {
     style['--session-card-border'] = 'var(--color-border-subtle)'
@@ -155,7 +167,7 @@ export function getSessionCardSurfaceClasses({
 
 export const getAgentColorKey = (
   agent: string,
-): "blue" | "green" | "orange" | "violet" | "red" | "yellow" => {
+): AgentColor => {
   switch (agent) {
     case "claude":
       return "blue";
@@ -170,6 +182,8 @@ export const getAgentColorKey = (
     case "amp":
       return "yellow";
     case "kilocode":
+      return "yellow";
+    case "terminal":
       return "yellow";
     default:
       return "red";
@@ -249,7 +263,11 @@ export const SessionCard = memo<SessionCardProps>(
     isBusy = false,
     onRename,
     onLinkPr,
-  }) => {
+    siblings = [],
+    onHover,
+    isHighlighted = false
+    }) => {
+
     const { t } = useTranslation();
     const { setItemEpic } = useEpics();
     const agentResponseMap = useAtomValue(lastAgentResponseMapAtom);
@@ -320,6 +338,7 @@ export const SessionCard = memo<SessionCardProps>(
       hasFollowUpMessage,
       willBeDeleted,
       isPromotionPreview,
+      isHighlighted,
     });
 
     const handleEpicChange = useCallback(
@@ -348,6 +367,8 @@ export const SessionCard = memo<SessionCardProps>(
             onSelect(session.info.session_id);
           }
         }}
+        onMouseEnter={() => onHover?.(session.info.session_id)}
+        onMouseLeave={() => onHover?.(null)}
         data-session-id={session.info.session_id}
         data-session-selected={isSelected ? "true" : "false"}
         className={clsx(
@@ -562,20 +583,48 @@ export const SessionCard = memo<SessionCardProps>(
                 </span>
               )}
               {s.is_consolidation && (
-                <span
-                  className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border"
-                  style={{
-                    ...sessionText.badge,
-                    backgroundColor: 'var(--color-accent-purple-bg)',
-                    color: 'var(--color-accent-purple-light)',
-                    borderColor: 'var(--color-accent-purple-border)',
-                  }}
-                >
-                  <svg className="w-2.5 h-2.5" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M5 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm6.5 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 16a2 2 0 1 1 0-4 2 2 0 0 1 0 4zM3 5v3.5a.5.5 0 0 0 .5.5H8v3h0V9h4.5a.5.5 0 0 0 .5-.5V5h-1v3H8.5V5h-1v3H4V5H3z" />
-                  </svg>
-                  MERGE
-                </span>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span
+                    className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border"
+                    style={{
+                      ...sessionText.badge,
+                      backgroundColor: 'var(--color-accent-purple-bg)',
+                      color: 'var(--color-accent-purple-light)',
+                      borderColor: 'var(--color-accent-purple-border)',
+                    }}
+                  >
+                    <svg className="w-2.5 h-2.5" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M5 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm6.5 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 16a2 2 0 1 1 0-4 2 2 0 0 1 0 4zM3 5v3.5a.5.5 0 0 0 .5.5H8v3h0V9h4.5a.5.5 0 0 0 .5-.5V5h-1v3H8.5V5h-1v3H4V5H3z" />
+                    </svg>
+                    MERGE
+                  </span>
+                  
+                  {s.consolidation_sources && s.consolidation_sources.length > 0 && (
+                    <div className="flex items-center">
+                      <span className="mr-1 text-muted text-caption">←</span>
+                      <div className="flex items-center -space-x-1">
+                        {s.consolidation_sources.map((sourceId, i) => {
+                          const source = siblings.find(sib => sib.session_id === sourceId)
+                          const agentType = source?.original_agent_type || 'terminal'
+                          const scheme = getAgentColorScheme(getAgentColorKey(agentType))
+                          const version = source?.version_number
+                          
+                          return (
+                            <div 
+                              key={sourceId}
+                              className="flex items-center justify-center w-4 h-4 rounded-full border border-[var(--color-bg-primary)]"
+                              style={{ 
+                                backgroundColor: scheme.DEFAULT,
+                                zIndex: 10 - i 
+                              }}
+                              title={source ? `${agentType}${version ? ` (v${version})` : ''}` : `Session ${sourceId}`}
+                            />
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
               <span style={{ color: "var(--color-accent-green-light)" }}>+{additions}</span>
               <span style={{ color: "var(--color-accent-red-light)" }}>-{deletions}</span>

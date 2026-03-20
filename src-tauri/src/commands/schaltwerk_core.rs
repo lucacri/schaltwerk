@@ -979,6 +979,7 @@ pub struct CreateSessionParams {
     skip_permissions: Option<bool>,
     pr_number: Option<i64>,
     is_consolidation: Option<bool>,
+    consolidation_source_ids: Option<Vec<String>>,
 }
 
 #[tauri::command]
@@ -999,6 +1000,7 @@ pub async fn schaltwerk_core_create_session(
     skip_permissions: Option<bool>,
     pr_number: Option<i64>,
     is_consolidation: Option<bool>,
+    consolidation_source_ids: Option<Vec<String>>,
 ) -> Result<Session, SchaltError> {
     let params = CreateSessionParams {
         name,
@@ -1015,6 +1017,7 @@ pub async fn schaltwerk_core_create_session(
         skip_permissions,
         pr_number,
         is_consolidation,
+        consolidation_source_ids,
     };
     let was_user_edited = params.user_edited_name.unwrap_or(false);
     let was_auto_generated = !was_user_edited;
@@ -1034,6 +1037,7 @@ pub async fn schaltwerk_core_create_session(
         skip_permissions: params.skip_permissions,
         pr_number: params.pr_number,
         is_consolidation: params.is_consolidation.unwrap_or(false),
+        consolidation_source_ids: params.consolidation_source_ids,
     };
     let (session, epic) = {
         let core = get_core_write()

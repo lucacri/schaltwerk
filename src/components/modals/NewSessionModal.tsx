@@ -86,6 +86,7 @@ interface Props {
         prUrl?: string
         epicId?: string | null
         isConsolidation?: boolean
+        consolidationSourceIds?: string[]
     }) => void | Promise<void>
 }
 
@@ -117,6 +118,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [nameLocked, setNameLocked] = useState(false)
     const [epicId, setEpicId] = useState<string | null>(null)
     const [isConsolidation, setIsConsolidation] = useState(false)
+    const [consolidationSourceIds, setConsolidationSourceIds] = useState<string[]>([])
     const [repositoryIsEmpty, setRepositoryIsEmpty] = useState(false)
     const [isPrefillPending, setIsPrefillPending] = useState(false)
     const [hasPrefillData, setHasPrefillData] = useState(false)
@@ -645,7 +647,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 skipPermissions: createAsDraft ? skipPermissions : undefined,
                 epicId,
                 ...prInfo,
-                ...(isConsolidation ? { isConsolidation: true } : {}),
+                ...(isConsolidation ? { isConsolidation: true, consolidationSourceIds } : {}),
             }
             if (agentTypesPayload) {
                 createData.agentTypes = agentTypesPayload
@@ -676,7 +678,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setValidationError(errorMessage)
             setCreating(false)
         }
-    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes])
+    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds])
 
     // Keep ref in sync immediately on render to avoid stale closures in tests
     createRef.current = () => { void handleCreate() }
@@ -936,6 +938,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 setOriginalSpecName('')
                 setEpicId(null)
                 setIsConsolidation(false)
+                setConsolidationSourceIds([])
                 setShowVersionMenu(false)
                 setVersionCount(1)
                 const shouldIgnorePersisted = hasAgentOverrideRef.current
@@ -1032,6 +1035,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setVersionCount(1)
             setShowVersionMenu(false)
             setIsConsolidation(false)
+            setConsolidationSourceIds([])
             logger.info(`[NewSessionModal] Reapplying last agent type on close path ${JSON.stringify({
                 lastAgentType: lastAgentTypeRef.current,
                 hasOverride: hasAgentOverrideRef.current
@@ -1106,6 +1110,9 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             if (detail.isConsolidation) {
                 setIsConsolidation(true)
             }
+            if (detail.consolidationSourceIds) {
+                setConsolidationSourceIds(detail.consolidationSourceIds)
+            }
 
             setIsPrefillPending(false)
             setHasPrefillData(true)
@@ -1116,6 +1123,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         const prefillPendingHandler = () => {
             logger.info('[NewSessionModal] Prefill pending notification received')
             setIsPrefillPending(true)
+            setIsConsolidation(false)
+            setConsolidationSourceIds([])
         }
         
         const cleanupPrefill = listenUiEvent(UiEvent.NewSessionPrefill, prefillHandler)

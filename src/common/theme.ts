@@ -413,7 +413,7 @@ export const theme = {
 }
 
 
-type AgentColor = 'blue' | 'green' | 'orange' | 'violet' | 'red' | 'yellow'
+export type AgentColor = 'blue' | 'green' | 'orange' | 'violet' | 'red' | 'yellow'
 
 export const getAgentColorScheme = (agentColor: AgentColor) => {
   const colorMap = {

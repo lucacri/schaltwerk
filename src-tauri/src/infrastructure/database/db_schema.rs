@@ -331,6 +331,11 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
         "ALTER TABLE sessions ADD COLUMN is_consolidation INTEGER NOT NULL DEFAULT 0",
         [],
     );
+    // Consolidation source session IDs
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN consolidation_sources TEXT DEFAULT NULL",
+        [],
+    );
     Ok(())
 }
 

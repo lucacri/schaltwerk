@@ -551,6 +551,7 @@ mod tests {
                     skip_permissions: None,
                     pr_number: None,
                     is_consolidation: false,
+                    consolidation_source_ids: None,
                 };
                 let session = session_manager.create_session_with_agent(params).unwrap();
                 (

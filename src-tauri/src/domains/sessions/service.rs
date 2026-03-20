@@ -144,6 +144,7 @@ pub struct SessionCreationParams<'a> {
     /// This is used for fork PRs where the branch doesn't exist locally.
     pub pr_number: Option<i64>,
     pub is_consolidation: bool,
+    pub consolidation_source_ids: Option<Vec<String>>,
 }
 
 pub struct AgentLaunchParams<'a> {
@@ -274,6 +275,7 @@ mod service_unified_tests {
             pr_number: None,
             pr_url: None,
             is_consolidation: false,
+            consolidation_sources: None,
         }
     }
 
@@ -1505,6 +1507,7 @@ mod service_unified_tests {
             skip_permissions: Some(true),
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager
@@ -1582,6 +1585,7 @@ mod service_unified_tests {
             skip_permissions: Some(false),
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager
@@ -1645,6 +1649,7 @@ mod service_unified_tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager
@@ -1712,6 +1717,7 @@ mod service_unified_tests {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager
@@ -1768,6 +1774,7 @@ mod service_unified_tests {
             skip_permissions: Some(true),
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
 
         let session = manager
@@ -2219,6 +2226,7 @@ impl SessionManager {
             skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
+            consolidation_source_ids: None,
         };
         self.create_session_with_agent(params)
     }
@@ -2403,6 +2411,7 @@ impl SessionManager {
             pr_number: None,
             pr_url: None,
             is_consolidation: params.is_consolidation,
+            consolidation_sources: params.consolidation_source_ids,
         };
 
         let finalizer = SessionFinalizer::new(&self.db_manager, &self.cache_manager);
@@ -2764,6 +2773,7 @@ impl SessionManager {
                 pr_number: None,
                 pr_url: None,
                 is_consolidation: false,
+                consolidation_sources: None,
             };
 
             enriched.push(EnrichedSession {
@@ -2830,6 +2840,7 @@ impl SessionManager {
                     pr_number: session.pr_number,
                     pr_url: session.pr_url.clone(),
                     is_consolidation: session.is_consolidation,
+                    consolidation_sources: session.consolidation_sources.clone(),
                 };
 
                 enriched.push(EnrichedSession {
@@ -2991,6 +3002,7 @@ impl SessionManager {
                 pr_number: session.pr_number,
                 pr_url: session.pr_url.clone(),
                 is_consolidation: session.is_consolidation,
+                consolidation_sources: session.consolidation_sources.clone(),
             };
 
             let terminals = vec![
@@ -4017,6 +4029,7 @@ impl SessionManager {
             pr_url: None,
             amp_thread_id: None,
             is_consolidation: false,
+            consolidation_sources: None,
         }
     }
 
