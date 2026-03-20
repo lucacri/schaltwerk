@@ -198,6 +198,8 @@
       "branchPrefixDesc": "配置创建新 Lucode 会话时使用的默认 Git 分支前缀。留空将直接使用会话名称作为分支名称。使用斜杠嵌套分组。空格将自动转换为连字符。",
       "mergeDefaults": "合并默认设置",
       "mergeDefaultsDesc": "控制从侧边栏成功合并后的行为。启用后，Lucode 将立即取消此项目中已合并的会话。",
+      "worktreeBaseDirectory": "工作树基础目录",
+      "worktreeBaseDirectoryDesc": "覆盖新会话工作树的创建位置。接受绝对路径或相对于仓库根目录的路径。留空将使用默认值（.schaltwerk/worktrees/）。",
       "autoCancelAfterMerge": "成功合并后自动取消会话",
       "mergeToggleNote": "您也可以从合并对话框的工具栏切换此选项。该偏好设置按项目存储。"
     },
@@ -1310,6 +1312,7 @@
     "mergeStatus": "合并状态",
     "reviewers": "审阅者",
     "pipeline": "流水线",
+    "pipelineJobs": "流水线任务",
     "refreshPipeline": "刷新流水线",
     "pipelineSuccess": "成功",
     "pipelineFailed": "失败",

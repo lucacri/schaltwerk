@@ -334,7 +334,7 @@ describe('ForgeIssuesTab', () => {
       expect(screen.getByText('First issue')).toBeTruthy()
     })
 
-    const calledLabels = searchIssues.mock.calls.map((c: [ForgeSourceConfig]) => c[0].label)
+    const calledLabels = searchIssues.mock.calls.map((c) => (c as [ForgeSourceConfig])[0].label)
     expect(calledLabels).not.toContain('No Issues')
     expect(calledLabels).toContain('GitHub')
   })
@@ -361,7 +361,7 @@ describe('ForgeIssuesTab', () => {
       expect(searchIssues).toHaveBeenCalledTimes(2)
     })
 
-    const calledLabels = searchIssues.mock.calls.map((c: [ForgeSourceConfig]) => c[0].label)
+    const calledLabels = searchIssues.mock.calls.map((c) => (c as [ForgeSourceConfig])[0].label)
     expect(calledLabels).toContain('GitHub')
     expect(calledLabels).toContain('Has Issues')
   })

@@ -333,7 +333,7 @@ describe('ForgePrsTab', () => {
       expect(screen.getByText('First PR')).toBeTruthy()
     })
 
-    const calledLabels = searchPrs.mock.calls.map((c: [ForgeSourceConfig]) => c[0].label)
+    const calledLabels = searchPrs.mock.calls.map((c) => (c as [ForgeSourceConfig])[0].label)
     expect(calledLabels).not.toContain('No MRs')
     expect(calledLabels).toContain('GitHub')
   })
@@ -360,7 +360,7 @@ describe('ForgePrsTab', () => {
       expect(searchPrs).toHaveBeenCalledTimes(2)
     })
 
-    const calledLabels = searchPrs.mock.calls.map((c: [ForgeSourceConfig]) => c[0].label)
+    const calledLabels = searchPrs.mock.calls.map((c) => (c as [ForgeSourceConfig])[0].label)
     expect(calledLabels).toContain('GitHub')
     expect(calledLabels).toContain('Has MRs')
   })

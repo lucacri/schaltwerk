@@ -1322,6 +1322,7 @@ export interface Translations {
     mergeStatus: string
     reviewers: string
     pipeline: string
+    pipelineJobs: string
     refreshPipeline: string
     failedToLoadDetails: string
     retry: string
