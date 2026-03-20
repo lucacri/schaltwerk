@@ -1,0 +1,42 @@
+.markdown-github-light {
+  /* GitHub Primer light palette — scoped override */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f6f8fa;
+  --color-bg-tertiary: #f0f2f4;
+  --color-bg-elevated: #f6f8fa;
+  --color-bg-hover: #eaeef2;
+
+  --color-text-primary: #1f2328;
+  --color-text-secondary: #656d76;
+
+  --color-border-default: #d0d7de;
+  --color-border-subtle: #d1d9e0;
+
+  --color-accent-blue: #0969da;
+  --color-accent-cyan: #1f6feb;
+
+  --color-editor-background: #f6f8fa;
+  --color-editor-text: #1f2328;
+  --color-editor-inline-code-bg: rgba(175, 184, 193, 0.2);
+  --color-editor-code-block-bg: #f6f8fa;
+  --color-editor-blockquote-border: #d0d7de;
+
+  color-scheme: light;
+}
+
+.markdown-github-light::-webkit-scrollbar {
+  width: 8px;
+}
+
+.markdown-github-light::-webkit-scrollbar-track {
+  background-color: #f6f8fa;
+}
+
+.markdown-github-light::-webkit-scrollbar-thumb {
+  background-color: #d0d7de;
+  border-radius: 4px;
+}
+
+.markdown-github-light::-webkit-scrollbar-thumb:hover {
+  background-color: #8b949e;
+}

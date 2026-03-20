@@ -21,6 +21,7 @@
 @import './themes/kanagawa.css';
 @import './themes/darcula.css';
 @import './themes/light.css';
+@import './markdown-github.css';
 
 /* ==========================================================================
    Shared Component Styles
