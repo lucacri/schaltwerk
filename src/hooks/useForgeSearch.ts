@@ -31,6 +31,7 @@ export interface UseForgeSearchResult<TSummary, TDetails> {
   clearError: () => void
   fetchDetails: (id: string, source?: ForgeSourceConfig) => Promise<TDetails | null>
   getSourceForItem: (item: TSummary) => ForgeSourceConfig | undefined
+  refresh: () => void
 }
 
 export function buildSourceItemKey(source: ForgeSourceConfig | undefined, id: string): string {
@@ -352,6 +353,11 @@ export function useForgeSearch<TSummary extends object, TDetails>(
     setErrorDetails([])
   }, [])
 
+  const refresh = useCallback(() => {
+    if (!enabled || !hasInitialFetchedRef.current) return
+    void executeFullSearch(queryRef.current)
+  }, [enabled, executeFullSearch])
+
   return {
     query,
     setQuery,
@@ -362,5 +368,6 @@ export function useForgeSearch<TSummary extends object, TDetails>(
     clearError,
     fetchDetails,
     getSourceForItem,
+    refresh,
   }
 }

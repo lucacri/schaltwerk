@@ -1277,7 +1277,8 @@
     "failedToLoadDetails": "加载详情失败",
     "retry": "重试",
     "errorDetails": "详情",
-    "refreshing": "正在刷新\u2026"
+    "refreshing": "正在刷新\u2026",
+    "refresh": "刷新"
   },
   "forgePrTab": {
     "searchPlaceholder": "搜索拉取请求...",
@@ -1336,7 +1337,8 @@
     "merging": "正在合并...",
     "approving": "正在批准...",
     "commenting": "正在发送...",
-    "refreshing": "正在刷新\u2026"
+    "refreshing": "正在刷新\u2026",
+    "refresh": "刷新"
   },
   "historySearch": {
     "placeholder": "搜索提交…",

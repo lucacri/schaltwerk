@@ -395,4 +395,27 @@ describe('ForgePrsTab', () => {
       expect(screen.queryByText('Failed to load details')).toBeNull()
     })
   })
+
+  it('refresh button re-triggers search', async () => {
+    const searchPrs = vi.fn().mockResolvedValue([makePrSummary()])
+
+    renderWithProviders(<ForgePrsTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchPrs,
+      },
+    })
+
+    await waitFor(() => {
+      expect(searchPrs).toHaveBeenCalledTimes(1)
+    })
+
+    const refreshButton = screen.getByRole('button', { name: /refresh/i })
+    fireEvent.click(refreshButton)
+
+    await waitFor(() => {
+      expect(searchPrs).toHaveBeenCalledTimes(2)
+    })
+  })
 })

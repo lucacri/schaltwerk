@@ -1290,6 +1290,7 @@ export interface Translations {
     retry: string
     errorDetails: string
     refreshing: string
+    refresh: string
   }
   forgePrTab: {
     searchPlaceholder: string
@@ -1339,6 +1340,7 @@ export interface Translations {
     approving: string
     commenting: string
     refreshing: string
+    refresh: string
   }
   historySearch: {
     placeholder: string

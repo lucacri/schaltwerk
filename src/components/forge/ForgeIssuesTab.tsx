@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
-import { VscClose, VscInfo, VscSearch } from 'react-icons/vsc'
+import { VscClose, VscInfo, VscSearch, VscRefresh } from 'react-icons/vsc'
 import { ForgeErrorDetailModal } from './ForgeErrorDetailModal'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
 import { useForgeSearch, buildSourceItemKey } from '../../hooks/useForgeSearch'
@@ -239,6 +239,18 @@ export function ForgeIssuesTab() {
             <VscClose className="w-3.5 h-3.5" />
           </button>
         )}
+        <button
+          type="button"
+          onClick={search.refresh}
+          disabled={search.loading}
+          aria-label="refresh"
+          title={t.forgeIssueTab.refresh}
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          <VscRefresh
+            className={`w-3.5 h-3.5 ${search.loading ? 'animate-spin' : ''}`}
+          />
+        </button>
       </div>
 
       {search.error && (

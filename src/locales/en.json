@@ -1279,7 +1279,8 @@
     "failedToLoadDetails": "Failed to load details",
     "retry": "Retry",
     "errorDetails": "Details",
-    "refreshing": "Refreshing\u2026"
+    "refreshing": "Refreshing\u2026",
+    "refresh": "Refresh"
   },
   "forgePrTab": {
     "searchPlaceholder": "Search pull requests...",
@@ -1338,7 +1339,8 @@
     "merging": "Merging...",
     "approving": "Approving...",
     "commenting": "Sending...",
-    "refreshing": "Refreshing\u2026"
+    "refreshing": "Refreshing\u2026",
+    "refresh": "Refresh"
   },
   "historySearch": {
     "placeholder": "Search commits...",

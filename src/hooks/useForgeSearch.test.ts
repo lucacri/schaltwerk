@@ -419,4 +419,25 @@ describe('useForgeSearch', () => {
     expect(detailsFn).toHaveBeenCalledWith(source2, '1541')
     expect(fetchedDetails).toEqual(details)
   })
+
+  it('refresh re-triggers searchFn', async () => {
+    const searchFn = vi.fn().mockResolvedValue([])
+    const opts = defaultOptions({ searchFn })
+
+    const { result } = renderHook(() => useForgeSearch(opts))
+
+    await vi.waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    expect(searchFn).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      result.current.refresh()
+    })
+
+    await vi.waitFor(() => {
+      expect(searchFn).toHaveBeenCalledTimes(2)
+    })
+  })
 })
