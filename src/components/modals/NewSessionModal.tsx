@@ -129,6 +129,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [agentConfigLoading, setAgentConfigLoading] = useState(false)
     const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null)
     const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
+    const [presetDropdownOpen, setPresetDropdownOpen] = useState(false)
+    const [variantDropdownOpen, setVariantDropdownOpen] = useState(false)
     const [ignorePersistedAgentType, setIgnorePersistedAgentType] = useState(false)
     const [promptSource, setPromptSource] = useState<'custom' | 'github_issue' | 'github_pull_request'>('custom')
     const [manualPromptDraft, setManualPromptDraft] = useState(cachedPrompt)
@@ -1735,6 +1737,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                         <>
                             <SessionConfigurationPanel
                                 variant="modal"
+                                hideAgentType={!!selectedPresetId}
                                 onBaseBranchChange={handleBranchChange}
                                 onAgentTypeChange={handleAgentTypeChange}
                                 onSkipPermissionsChange={handleSkipPermissionsChange}
@@ -1771,30 +1774,48 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                     <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
                                         {t.newSessionModal.preset ?? 'Preset'}
                                     </label>
-                                    <select
-                                        value={selectedPresetId ?? ''}
-                                        onChange={(e) => {
-                                            const id = e.target.value || null
+                                    <Dropdown
+                                        open={presetDropdownOpen}
+                                        onOpenChange={setPresetDropdownOpen}
+                                        items={[
+                                            { key: '', label: t.newSessionModal.noPreset ?? 'No preset' },
+                                            ...agentPresetsList.map(p => ({
+                                                key: p.id,
+                                                label: `${p.name} (${p.slots.length} agents)`,
+                                            })),
+                                        ]}
+                                        selectedKey={selectedPresetId ?? ''}
+                                        align="stretch"
+                                        onSelect={(key) => {
+                                            const id = key || null
                                             setSelectedPresetId(id)
                                             if (id) {
                                                 setSelectedVariantId(null)
                                                 resetMultiAgentSelections()
                                             }
                                         }}
-                                        className="w-full rounded px-3 py-2 border text-sm"
-                                        style={{
-                                            backgroundColor: 'var(--color-bg-elevated)',
-                                            color: 'var(--color-text-primary)',
-                                            borderColor: 'var(--color-border-default)',
-                                        }}
                                     >
-                                        <option value="">{t.newSessionModal.noPreset ?? 'No preset'}</option>
-                                        {agentPresetsList.map(p => (
-                                            <option key={p.id} value={p.id}>
-                                                {p.name} ({p.slots.length} agents)
-                                            </option>
-                                        ))}
-                                    </select>
+                                        {({ open, toggle }) => (
+                                            <button
+                                                type="button"
+                                                onClick={toggle}
+                                                className="w-full px-3 py-1.5 text-sm rounded border flex items-center justify-between cursor-pointer hover:opacity-80"
+                                                style={{
+                                                    backgroundColor: 'var(--color-bg-elevated)',
+                                                    borderColor: 'var(--color-border-default)',
+                                                    color: 'var(--color-text-primary)',
+                                                }}
+                                            >
+                                                <span>{selectedPresetId
+                                                    ? agentPresetsList.find(p => p.id === selectedPresetId)?.name ?? 'Preset'
+                                                    : (t.newSessionModal.noPreset ?? 'No preset')}</span>
+                                                <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"
+                                                     style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms ease' }}>
+                                                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </Dropdown>
                                 </div>
                             )}
                             {agentVariantsList.length > 0 && !selectedPresetId && (
@@ -1802,31 +1823,48 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                     <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
                                         {t.newSessionModal.variant ?? 'Variant'}
                                     </label>
-                                    <select
-                                        value={selectedVariantId ?? ''}
-                                        onChange={(e) => {
-                                            const id = e.target.value
-                                            if (!id) {
+                                    <Dropdown
+                                        open={variantDropdownOpen}
+                                        onOpenChange={setVariantDropdownOpen}
+                                        items={[
+                                            { key: '', label: t.newSessionModal.noVariant ?? 'No variant (use defaults)' },
+                                            ...agentVariantsList.map(v => ({
+                                                key: v.id,
+                                                label: `${v.name} (${v.agentType}${v.model ? ` / ${v.model}` : ''})`,
+                                            })),
+                                        ]}
+                                        selectedKey={selectedVariantId ?? ''}
+                                        align="stretch"
+                                        onSelect={(key) => {
+                                            if (!key) {
                                                 handleVariantSelect(null)
                                             } else {
-                                                const variant = agentVariantsList.find(v => v.id === id)
+                                                const variant = agentVariantsList.find(v => v.id === key)
                                                 if (variant) handleVariantSelect(variant)
                                             }
                                         }}
-                                        className="w-full rounded px-3 py-2 border text-sm"
-                                        style={{
-                                            backgroundColor: 'var(--color-bg-elevated)',
-                                            color: 'var(--color-text-primary)',
-                                            borderColor: 'var(--color-border-default)',
-                                        }}
                                     >
-                                        <option value="">{t.newSessionModal.noVariant ?? 'No variant (use defaults)'}</option>
-                                        {agentVariantsList.map(v => (
-                                            <option key={v.id} value={v.id}>
-                                                {v.name} ({v.agentType}{v.model ? ` / ${v.model}` : ''})
-                                            </option>
-                                        ))}
-                                    </select>
+                                        {({ open, toggle }) => (
+                                            <button
+                                                type="button"
+                                                onClick={toggle}
+                                                className="w-full px-3 py-1.5 text-sm rounded border flex items-center justify-between cursor-pointer hover:opacity-80"
+                                                style={{
+                                                    backgroundColor: 'var(--color-bg-elevated)',
+                                                    borderColor: 'var(--color-border-default)',
+                                                    color: 'var(--color-text-primary)',
+                                                }}
+                                            >
+                                                <span>{selectedVariantId
+                                                    ? agentVariantsList.find(v => v.id === selectedVariantId)?.name ?? 'Variant'
+                                                    : (t.newSessionModal.noVariant ?? 'No variant (use defaults)')}</span>
+                                                <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"
+                                                     style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms ease' }}>
+                                                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                    </Dropdown>
                                 </div>
                             )}
                             <AgentDefaultsSection

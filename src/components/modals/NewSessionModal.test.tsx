@@ -134,6 +134,30 @@ vi.mock('../../utils/dockerNames', () => ({
   generateDockerStyleName: () => 'eager_cosmos'
 }))
 
+const mockAgentPresets = vi.fn(() => ({
+  presets: [] as Array<{ id: string; name: string; slots: Array<{ agentType: string }>; isBuiltIn: boolean }>,
+  loading: false,
+  error: null,
+  savePresets: vi.fn().mockResolvedValue(true),
+  reloadPresets: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../../hooks/useAgentPresets', () => ({
+  useAgentPresets: () => mockAgentPresets(),
+}))
+
+const mockAgentVariants = vi.fn(() => ({
+  variants: [] as Array<{ id: string; name: string; agentType: string; model?: string }>,
+  loading: false,
+  error: null,
+  saveVariants: vi.fn().mockResolvedValue(true),
+  reloadVariants: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../../hooks/useAgentVariants', () => ({
+  useAgentVariants: () => mockAgentVariants(),
+}))
+
 const defaultInvokeImplementation = (cmd: string) => {
   switch (cmd) {
     case TauriCommands.ListProjectBranches:
@@ -1191,6 +1215,142 @@ describe('NewSessionModal', () => {
 
       await waitFor(() => {
         expect(btn).not.toBeDisabled()
+      })
+    })
+  })
+
+  describe('preset and variant dropdowns', () => {
+    const testPresets = [
+      { id: 'preset-1', name: 'Full Stack', slots: [{ agentType: 'claude' }, { agentType: 'codex' }], isBuiltIn: false },
+      { id: 'preset-2', name: 'Solo', slots: [{ agentType: 'claude' }], isBuiltIn: false },
+    ]
+    const testVariants = [
+      { id: 'variant-1', name: 'Fast Claude', agentType: 'claude', model: 'sonnet' },
+    ]
+
+    it('renders preset selector as Dropdown component, not native select', async () => {
+      mockAgentPresets.mockReturnValue({
+        presets: testPresets,
+        loading: false,
+        error: null,
+        savePresets: vi.fn().mockResolvedValue(true),
+        reloadPresets: vi.fn().mockResolvedValue(undefined),
+      })
+      openModal()
+
+      await waitFor(() => {
+        expect(screen.getByText('Preset')).toBeInTheDocument()
+      })
+
+      const presetLabel = screen.getByText('Preset')
+      const presetSection = presetLabel.closest('div')!
+      expect(presetSection.querySelector('select')).toBeNull()
+      expect(presetSection.querySelector('button')).not.toBeNull()
+    })
+
+    it('renders variant selector as Dropdown component, not native select', async () => {
+      mockAgentVariants.mockReturnValue({
+        variants: testVariants,
+        loading: false,
+        error: null,
+        saveVariants: vi.fn().mockResolvedValue(true),
+        reloadVariants: vi.fn().mockResolvedValue(undefined),
+      })
+      openModal()
+
+      await waitFor(() => {
+        expect(screen.getByText('Variant')).toBeInTheDocument()
+      })
+
+      const variantLabel = screen.getByText('Variant')
+      const variantSection = variantLabel.closest('div')!
+      expect(variantSection.querySelector('select')).toBeNull()
+      expect(variantSection.querySelector('button')).not.toBeNull()
+    })
+
+    it('hides agent selector when a preset is selected', async () => {
+      mockAgentPresets.mockReturnValue({
+        presets: testPresets,
+        loading: false,
+        error: null,
+        savePresets: vi.fn().mockResolvedValue(true),
+        reloadPresets: vi.fn().mockResolvedValue(undefined),
+      })
+      openModal()
+
+      await waitFor(() => {
+        expect(screen.getByText('Preset')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText('Agent')).toBeInTheDocument()
+
+      const presetButton = screen.getByText('Preset').closest('div')!.querySelector('button')!
+      fireEvent.click(presetButton)
+
+      await waitFor(() => {
+        expect(screen.getByText('Full Stack (2 agents)')).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByText('Full Stack (2 agents)'))
+
+      await waitFor(() => {
+        expect(screen.queryByText('Agent')).not.toBeInTheDocument()
+      })
+    })
+
+    it('shows agent selector when no preset is selected', async () => {
+      mockAgentPresets.mockReturnValue({
+        presets: testPresets,
+        loading: false,
+        error: null,
+        savePresets: vi.fn().mockResolvedValue(true),
+        reloadPresets: vi.fn().mockResolvedValue(undefined),
+      })
+      openModal()
+
+      await waitFor(() => {
+        expect(screen.getByText('Agent')).toBeInTheDocument()
+      })
+    })
+
+    it('restores agent selector with previous value when preset is deselected', async () => {
+      mockAgentPresets.mockReturnValue({
+        presets: testPresets,
+        loading: false,
+        error: null,
+        savePresets: vi.fn().mockResolvedValue(true),
+        reloadPresets: vi.fn().mockResolvedValue(undefined),
+      })
+      openModal()
+
+      await waitFor(() => {
+        expect(screen.getByText('Preset')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText('Agent')).toBeInTheDocument()
+
+      const presetButton = screen.getByText('Preset').closest('div')!.querySelector('button')!
+      fireEvent.click(presetButton)
+
+      await waitFor(() => {
+        expect(screen.getByText('Full Stack (2 agents)')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByText('Full Stack (2 agents)'))
+
+      await waitFor(() => {
+        expect(screen.queryByText('Agent')).not.toBeInTheDocument()
+      })
+
+      const presetButton2 = screen.getByText('Preset').closest('div')!.querySelector('button')!
+      fireEvent.click(presetButton2)
+
+      await waitFor(() => {
+        expect(screen.getByText('No preset')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByText('No preset'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Agent')).toBeInTheDocument()
       })
     })
   })
