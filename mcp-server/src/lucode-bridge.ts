@@ -106,6 +106,7 @@ export interface DiffSummaryOptions {
   session?: string
   cursor?: string
   pageSize?: number
+  projectPath?: string
 }
 
 export interface DiffChunkOptions {
@@ -113,6 +114,7 @@ export interface DiffChunkOptions {
   path: string
   cursor?: string
   lineLimit?: number
+  projectPath?: string
 }
 
 export type DiffSummaryPayload = {
@@ -269,7 +271,16 @@ export class LucodeBridge {
     console.error(`Project identifier: ${this.projectContext.identifier}`)
   }
 
-  private getProjectHeaders(): Record<string, string> {
+  private getProjectHeaders(projectPath?: string): Record<string, string> {
+    if (projectPath) {
+      const overrideContext = createProjectContext(projectPath)
+      return {
+        'X-Project-Path': overrideContext.canonicalPath,
+        'X-Project-Hash': overrideContext.hash,
+        'X-Project-Name': overrideContext.name,
+        'X-Project-Identifier': overrideContext.identifier
+      }
+    }
     return {
       'X-Project-Path': this.projectContext.canonicalPath,
       'X-Project-Hash': this.projectContext.hash,
@@ -410,13 +421,13 @@ export class LucodeBridge {
     return rawBody
   }
 
-  async listSessions(): Promise<Session[]> {
+  async listSessions(projectPath?: string): Promise<Session[]> {
     try {
       const response = await this.fetchWithAutoPort('/api/sessions', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Accept': 'application/json',
-          ...this.getProjectHeaders()
+          ...this.getProjectHeaders(projectPath)
         }
       })
       
@@ -479,13 +490,13 @@ export class LucodeBridge {
     }
   }
 
-  async getSession(name: string): Promise<Session | undefined> {
+  async getSession(name: string, projectPath?: string): Promise<Session | undefined> {
     try {
       const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(name)}`, {
         method: 'GET',
-        headers: { 
+        headers: {
           'Accept': 'application/json',
-          ...this.getProjectHeaders()
+          ...this.getProjectHeaders(projectPath)
         }
       })
       
@@ -504,12 +515,12 @@ export class LucodeBridge {
     }
   }
 
-  async listEpics(): Promise<Epic[]> {
+  async listEpics(projectPath?: string): Promise<Epic[]> {
     const response = await this.fetchWithAutoPort('/api/epics', {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(projectPath)
       }
     })
 
@@ -517,12 +528,12 @@ export class LucodeBridge {
     return epics ?? []
   }
 
-  async createEpic(name: string, color?: string): Promise<Epic> {
+  async createEpic(name: string, color?: string, projectPath?: string): Promise<Epic> {
     const response = await this.fetchWithAutoPort('/api/epics', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(projectPath)
       },
       body: JSON.stringify({ name, color })
     })
@@ -534,13 +545,13 @@ export class LucodeBridge {
     return epic
   }
 
-  async createSession(name: string, prompt?: string, baseBranch?: string, useExistingBranch?: boolean, agentType?: string, skipPermissions?: boolean, epicId?: string): Promise<Session> {
+  async createSession(name: string, prompt?: string, baseBranch?: string, useExistingBranch?: boolean, agentType?: string, skipPermissions?: boolean, epicId?: string, projectPath?: string): Promise<Session> {
     try {
       const response = await this.fetchWithAutoPort('/api/sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...this.getProjectHeaders()
+          ...this.getProjectHeaders(projectPath)
         },
         body: JSON.stringify({
           name,
@@ -561,8 +572,7 @@ export class LucodeBridge {
 
       const session = await response.json() as Session
 
-      // Notify Lucode UI about the new session
-      await this.notifySessionAdded(session)
+      await this.notifySessionAdded(session, projectPath)
 
       return session
     } catch (error) {
@@ -591,7 +601,7 @@ export class LucodeBridge {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(options.projectPath)
       }
     })
 
@@ -622,14 +632,14 @@ export class LucodeBridge {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(options.projectPath)
       }
     })
 
     return this.parseJsonResponse<DiffChunkPayload>(response, 'diff chunk')
   }
 
-  async getSessionSpec(session: string): Promise<SessionSpecPayload | null> {
+  async getSessionSpec(session: string, projectPath?: string): Promise<SessionSpecPayload | null> {
     if (!session || session.trim().length === 0) {
       throw new Error('session identifier is required to fetch a session spec')
     }
@@ -638,19 +648,19 @@ export class LucodeBridge {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(projectPath)
       }
     })
 
     return this.parseJsonResponse<SessionSpecPayload>(response, 'session spec')
   }
 
-  async getProjectSetupScript(): Promise<SetupScriptPayload> {
+  async getProjectSetupScript(projectPath?: string): Promise<SetupScriptPayload> {
     const response = await this.fetchWithAutoPort('/api/project/setup-script', {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(projectPath)
       }
     })
 
@@ -665,12 +675,12 @@ export class LucodeBridge {
     }
   }
 
-  async setProjectSetupScript(setupScript: string): Promise<SetupScriptPayload> {
+  async setProjectSetupScript(setupScript: string, projectPath?: string): Promise<SetupScriptPayload> {
     const response = await this.fetchWithAutoPort('/api/project/setup-script', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(projectPath)
       },
       body: JSON.stringify({ setup_script: setupScript })
     })
@@ -686,12 +696,12 @@ export class LucodeBridge {
     }
   }
 
-  async getWorktreeBaseDirectory(): Promise<WorktreeBaseDirectoryPayload> {
+  async getWorktreeBaseDirectory(projectPath?: string): Promise<WorktreeBaseDirectoryPayload> {
     const response = await this.fetchWithAutoPort('/api/project/worktree-base-directory', {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(projectPath)
       }
     })
 
@@ -706,12 +716,12 @@ export class LucodeBridge {
     }
   }
 
-  async setWorktreeBaseDirectory(baseDirectory: string): Promise<WorktreeBaseDirectoryPayload> {
+  async setWorktreeBaseDirectory(baseDirectory: string, projectPath?: string): Promise<WorktreeBaseDirectoryPayload> {
     const response = await this.fetchWithAutoPort('/api/project/worktree-base-directory', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(projectPath)
       },
       body: JSON.stringify({ worktree_base_directory: baseDirectory })
     })
@@ -727,12 +737,12 @@ export class LucodeBridge {
     }
   }
 
-  async getProjectRunScript(): Promise<RunScriptPayload> {
+  async getProjectRunScript(projectPath?: string): Promise<RunScriptPayload> {
     const response = await this.fetchWithAutoPort('/api/project/run-script', {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(projectPath)
       }
     })
 
@@ -744,12 +754,12 @@ export class LucodeBridge {
     return payload
   }
 
-  async executeProjectRunScript(): Promise<RunScriptExecutionResult> {
+  async executeProjectRunScript(projectPath?: string): Promise<RunScriptExecutionResult> {
     const response = await this.fetchWithAutoPort('/api/project/run-script/execute', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(projectPath)
       }
     })
 
@@ -761,18 +771,18 @@ export class LucodeBridge {
     return payload
   }
 
-  async sendFollowUpMessage(sessionName: string, message: string): Promise<void> {
-    const session = await this.getSession(sessionName)
+  async sendFollowUpMessage(sessionName: string, message: string, projectPath?: string): Promise<void> {
+    const session = await this.getSession(sessionName, projectPath)
     if (!session) {
       throw new Error(`Session '${sessionName}' not found`)
     }
-    
-    await this.notifyFollowUpMessage(sessionName, message)
+
+    await this.notifyFollowUpMessage(sessionName, message, projectPath)
   }
 
-  async cancelSession(name: string, force: boolean = false): Promise<void> {
-    
-    const session = await this.getSession(name)
+  async cancelSession(name: string, force: boolean = false, projectPath?: string): Promise<void> {
+
+    const session = await this.getSession(name, projectPath)
     if (!session) {
       throw new Error(`Session '${name}' not found`)
     }
@@ -833,16 +843,15 @@ export class LucodeBridge {
     try {
       const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(name)}`, {
         method: 'DELETE',
-        headers: this.getProjectHeaders()
+        headers: this.getProjectHeaders(projectPath)
       })
-      
+
       if (!response.ok) {
         throw new Error(`Failed to cancel session: ${response.statusText}`)
       }
     } catch (error) {
       console.error('Failed to cancel session via API, notifying manually:', error)
-      // If API fails, at least notify the UI
-      await this.notifySessionRemoved(name)
+      await this.notifySessionRemoved(name, projectPath)
     }
   }
 
@@ -961,7 +970,7 @@ export class LucodeBridge {
     return worktreePath
   }
 
-  private async notifySessionAdded(session: Session): Promise<void> {
+  private async notifySessionAdded(session: Session, projectPath?: string): Promise<void> {
     try {
       const payload = {
         session_name: session.name,
@@ -969,11 +978,12 @@ export class LucodeBridge {
         worktree_path: session.worktree_path,
         parent_branch: session.parent_branch
       }
-      
+
       await this.fetchWithAutoPort('/webhook/session-added', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...this.getProjectHeaders(projectPath)
         },
         body: JSON.stringify(payload)
       })
@@ -982,7 +992,7 @@ export class LucodeBridge {
     }
   }
 
-  private async notifyDraftCreated(session: Session): Promise<void> {
+  private async notifyDraftCreated(session: Session, projectPath?: string): Promise<void> {
     try {
       const payload = {
         session_name: session.name,
@@ -990,11 +1000,12 @@ export class LucodeBridge {
         parent_branch: session.parent_branch,
         status: 'spec'
       }
-      
+
       await this.fetchWithAutoPort('/webhook/spec-created', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...this.getProjectHeaders(projectPath)
         },
         body: JSON.stringify(payload)
       })
@@ -1003,16 +1014,17 @@ export class LucodeBridge {
     }
   }
 
-  private async notifySessionRemoved(sessionName: string): Promise<void> {
+  private async notifySessionRemoved(sessionName: string, projectPath?: string): Promise<void> {
     try {
       const payload = {
         session_name: sessionName
       }
-      
+
       await this.fetchWithAutoPort('/webhook/session-removed', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...this.getProjectHeaders(projectPath)
         },
         body: JSON.stringify(payload)
       })
@@ -1021,18 +1033,19 @@ export class LucodeBridge {
     }
   }
 
-  private async notifyFollowUpMessage(sessionName: string, message: string): Promise<void> {
+  private async notifyFollowUpMessage(sessionName: string, message: string, projectPath?: string): Promise<void> {
     try {
       const payload = {
         session_name: sessionName,
         message: message,
         timestamp: Date.now()
       }
-      
+
       await this.fetchWithAutoPort('/webhook/follow-up-message', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...this.getProjectHeaders(projectPath)
         },
         body: JSON.stringify(payload)
       })
@@ -1041,13 +1054,13 @@ export class LucodeBridge {
     }
   }
 
-  async createSpecSession(name: string, content?: string, baseBranch?: string, epicId?: string): Promise<Session> {
+  async createSpecSession(name: string, content?: string, baseBranch?: string, epicId?: string, projectPath?: string): Promise<Session> {
     try {
       const response = await this.fetchWithAutoPort('/api/specs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...this.getProjectHeaders()
+          ...this.getProjectHeaders(projectPath)
         },
         body: JSON.stringify({
           name,
@@ -1056,13 +1069,13 @@ export class LucodeBridge {
           epic_id: epicId
         })
       })
-      
+
       if (!response.ok) {
         throw new Error(`API error: ${response.statusText}`)
       }
-      
+
       const session = await response.json() as Session
-      await this.notifyDraftCreated(session)
+      await this.notifyDraftCreated(session, projectPath)
       return session
     } catch (error) {
       console.error('Failed to create spec via API:', error)
@@ -1070,11 +1083,14 @@ export class LucodeBridge {
     }
   }
 
-  async updateDraftContent(sessionName: string, content: string, append: boolean = false): Promise<void> {
+  async updateDraftContent(sessionName: string, content: string, append: boolean = false, projectPath?: string): Promise<void> {
     try {
       const response = await this.fetchWithAutoPort(`/api/specs/${encodeURIComponent(sessionName)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.getProjectHeaders(projectPath)
+        },
         body: JSON.stringify({
           content,
           append
@@ -1090,25 +1106,28 @@ export class LucodeBridge {
     }
   }
 
-  async startDraftSession(sessionName: string, agentType?: string, skipPermissions?: boolean, baseBranch?: string): Promise<void> {
+  async startDraftSession(sessionName: string, agentType?: string, skipPermissions?: boolean, baseBranch?: string, projectPath?: string): Promise<void> {
     try {
       const response = await this.fetchWithAutoPort(`/api/specs/${encodeURIComponent(sessionName)}/start`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.getProjectHeaders(projectPath)
+        },
         body: JSON.stringify({
           agent_type: agentType,
           skip_permissions: skipPermissions,
           base_branch: baseBranch
         })
       })
-      
+
       if (!response.ok) {
         throw new Error(`Failed to start spec session: ${response.statusText}`)
       }
-      
-      const updatedSession = await this.getSession(sessionName)
+
+      const updatedSession = await this.getSession(sessionName, projectPath)
       if (updatedSession) {
-        await this.notifySessionAdded(updatedSession)
+        await this.notifySessionAdded(updatedSession, projectPath)
       }
     } catch (error) {
       console.error('Failed to start spec session via API:', error)
@@ -1116,31 +1135,31 @@ export class LucodeBridge {
     }
   }
 
-  async deleteDraftSession(sessionName: string): Promise<void> {
+  async deleteDraftSession(sessionName: string, projectPath?: string): Promise<void> {
     try {
       const response = await this.fetchWithAutoPort(`/api/specs/${encodeURIComponent(sessionName)}`, {
         method: 'DELETE',
-        headers: this.getProjectHeaders()
+        headers: this.getProjectHeaders(projectPath)
       })
-      
+
       if (!response.ok) {
         throw new Error(`Failed to delete spec: ${response.statusText}`)
       }
-      
-      await this.notifySessionRemoved(sessionName)
+
+      await this.notifySessionRemoved(sessionName, projectPath)
     } catch (error) {
       console.error('Failed to delete spec session via API:', error)
       throw error
     }
   }
 
-  async listDraftSessions(): Promise<Session[]> {
+  async listDraftSessions(projectPath?: string): Promise<Session[]> {
     try {
       const response = await this.fetchWithAutoPort('/api/specs', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Accept': 'application/json',
-          ...this.getProjectHeaders()
+          ...this.getProjectHeaders(projectPath)
         }
       })
       
@@ -1155,13 +1174,13 @@ export class LucodeBridge {
     }
   }
 
-  async listSpecSummaries(): Promise<SpecSummary[]> {
+  async listSpecSummaries(projectPath?: string): Promise<SpecSummary[]> {
     try {
       const response = await this.fetchWithAutoPort('/api/specs/summary', {
         method: 'GET',
         headers: {
           Accept: 'application/json',
-          ...this.getProjectHeaders()
+          ...this.getProjectHeaders(projectPath)
         }
       })
 
@@ -1173,7 +1192,7 @@ export class LucodeBridge {
     }
   }
 
-  async getSpecDocument(sessionName: string): Promise<SpecContent | null> {
+  async getSpecDocument(sessionName: string, projectPath?: string): Promise<SpecContent | null> {
     if (!sessionName || sessionName.trim().length === 0) {
       throw new Error('sessionName is required to fetch a spec')
     }
@@ -1182,17 +1201,17 @@ export class LucodeBridge {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(projectPath)
       }
     })
 
     return this.parseJsonResponse<SpecContent>(response, 'spec content')
   }
 
-  async listSessionsByState(filter?: 'all' | 'active' | 'spec' | 'reviewed'): Promise<Session[]> {
+  async listSessionsByState(filter?: 'all' | 'active' | 'spec' | 'reviewed', projectPath?: string): Promise<Session[]> {
     try {
       if (filter === 'spec') {
-        return this.listDraftSessions()
+        return this.listDraftSessions(projectPath)
       }
       
       // Use query parameter for server-side filtering when possible
@@ -1205,9 +1224,9 @@ export class LucodeBridge {
       
       const response = await this.fetchWithAutoPort(pathSegment, {
         method: 'GET',
-        headers: { 
+        headers: {
           'Accept': 'application/json',
-          ...this.getProjectHeaders()
+          ...this.getProjectHeaders(projectPath)
         }
       })
       
@@ -1273,12 +1292,11 @@ export class LucodeBridge {
     }
   }
 
-  async getCurrentTasks(): Promise<Session[]> {
+  async getCurrentTasks(projectPath?: string): Promise<Session[]> {
     try {
-      // Get all sessions and specs
       const [activeSessions, draftSessions] = await Promise.all([
-        this.listSessions(),
-        this.listDraftSessions()
+        this.listSessions(projectPath),
+        this.listDraftSessions(projectPath)
       ])
 
       // Combine and return all current agents
@@ -1289,13 +1307,13 @@ export class LucodeBridge {
     }
   }
 
-  async markSessionReviewed(sessionName: string): Promise<void> {
+  async markSessionReviewed(sessionName: string, projectPath?: string): Promise<void> {
     try {
       const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(sessionName)}/mark-reviewed`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          ...this.getProjectHeaders()
+          ...this.getProjectHeaders(projectPath)
         }
       })
 
@@ -1310,7 +1328,7 @@ export class LucodeBridge {
 
   async mergeSession(
     sessionName: string,
-    options: { commitMessage?: string | null; mode?: MergeModeOption; cancelAfterMerge?: boolean }
+    options: { commitMessage?: string | null; mode?: MergeModeOption; cancelAfterMerge?: boolean; projectPath?: string }
   ): Promise<MergeSessionResult> {
     const mode: MergeModeOption = options.mode === 'reapply' ? 'reapply' : 'squash'
     const commitMessage = options.commitMessage?.trim()
@@ -1332,7 +1350,7 @@ export class LucodeBridge {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(options.projectPath)
       },
       body: JSON.stringify(requestBody)
     })
@@ -1368,6 +1386,7 @@ export class LucodeBridge {
       commitMessage?: string
       repository?: string
       cancelAfterPr?: boolean
+      projectPath?: string
     }
   ): Promise<PullRequestResult> {
     const prTitle = options.prTitle?.trim()
@@ -1379,7 +1398,7 @@ export class LucodeBridge {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(options.projectPath)
       },
       body: JSON.stringify({
         pr_title: prTitle,
@@ -1414,13 +1433,14 @@ export class LucodeBridge {
     options: {
       mode?: MergeModeOption
       commitMessage?: string
+      projectPath?: string
     }
   ): Promise<PrepareMergeResult> {
     const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(sessionName)}/prepare-merge`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...this.getProjectHeaders()
+        ...this.getProjectHeaders(options.projectPath)
       },
       body: JSON.stringify({
         mode: options.mode,
@@ -1442,13 +1462,13 @@ export class LucodeBridge {
     }
   }
 
-  async convertToSpec(sessionName: string): Promise<void> {
+  async convertToSpec(sessionName: string, projectPath?: string): Promise<void> {
     try {
       const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(sessionName)}/convert-to-spec`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          ...this.getProjectHeaders()
+          ...this.getProjectHeaders(projectPath)
         }
       })
 
@@ -1461,13 +1481,13 @@ export class LucodeBridge {
     }
   }
 
-  async getCurrentSpecModeSession(): Promise<string | null> {
+  async getCurrentSpecModeSession(projectPath?: string): Promise<string | null> {
     try {
       const response = await this.fetchWithAutoPort('/api/current-spec-mode-session', {
         method: 'GET',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          ...this.getProjectHeaders()
+          ...this.getProjectHeaders(projectPath)
         }
       })
 

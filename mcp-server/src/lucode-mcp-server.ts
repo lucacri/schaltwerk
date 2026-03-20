@@ -875,32 +875,48 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       }
   ]
 
+  const projectPathProperty = {
+    project_path: {
+      type: "string",
+      description: "Optional absolute path to the project root. Use this to target a specific project when multiple projects are open."
+    }
+  }
+
   // Emit a flat tool definition that works with legacy Codex and modern MCP,
   // keeping both camelCase and snake_case schema keys.
-  const normalizedTools = tools.map(tool => ({
-    type: "function" as const,
-    name: tool.name,
-    description: tool.description,
-    // camelCase (some clients expect these)
-    inputSchema: tool.inputSchema,
-    outputSchema: tool.outputSchema,
-    // snake_case (others expect these)
-    input_schema: tool.inputSchema,
-    output_schema: tool.outputSchema,
-  }))
+  // Auto-enrich every tool schema with project_path for multi-project routing.
+  const normalizedTools = tools.map(tool => {
+    const enrichedSchema = {
+      ...tool.inputSchema,
+      properties: {
+        ...(tool.inputSchema.properties ?? {}),
+        ...projectPathProperty
+      }
+    }
+    return {
+      type: "function" as const,
+      name: tool.name,
+      description: tool.description,
+      inputSchema: enrichedSchema,
+      outputSchema: tool.outputSchema,
+      input_schema: enrichedSchema,
+      output_schema: tool.outputSchema,
+    }
+  })
 
   return { tools: normalizedTools }
 })
 
 server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
   const { name, arguments: args } = request.params
+  const projectPath = (args as Record<string, unknown> | undefined)?.project_path as string | undefined
 
   try {
     let response: StructuredResponse
 
     switch (name) {
       case "lucode_spec_list": {
-        const payload = await bridge.listSpecSummaries()
+        const payload = await bridge.listSpecSummaries(projectPath)
         const structured = { specs: payload.map(sanitizeSpecSummary) }
         response = buildStructuredResponse(structured, {
           summaryText: `Spec summaries returned (${payload.length})`,
@@ -914,7 +930,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         if (!specArgs.session || specArgs.session.trim().length === 0) {
           throw new McpError(ErrorCode.InvalidParams, "'session' is required when invoking lucode_spec_read.")
         }
-        const specDoc = await bridge.getSpecDocument(specArgs.session)
+        const specDoc = await bridge.getSpecDocument(specArgs.session, projectPath)
         if (!specDoc) {
           throw new McpError(ErrorCode.InternalError, `Spec document not found for session '${specArgs.session}'.`)
         }
@@ -932,6 +948,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           session: diffArgs.session,
           cursor: diffArgs.cursor,
           pageSize: diffArgs.page_size,
+          projectPath,
         })
         if (!diffSummary) {
           throw new McpError(ErrorCode.InternalError, "Diff summary payload missing from bridge.")
@@ -959,6 +976,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           path: diffArgs.path,
           cursor: diffArgs.cursor,
           lineLimit: cappedLineLimit,
+          projectPath,
         })
         if (!diffChunk) {
           throw new McpError(ErrorCode.InternalError, "Diff chunk payload missing from bridge.")
@@ -976,7 +994,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         if (!specArgs.session || specArgs.session.trim().length === 0) {
           throw new McpError(ErrorCode.InvalidParams, "'session' is required when invoking lucode_session_spec.")
         }
-        const specPayload = await bridge.getSessionSpec(specArgs.session)
+        const specPayload = await bridge.getSessionSpec(specArgs.session, projectPath)
         if (!specPayload) {
           throw new McpError(ErrorCode.InternalError, `Session spec not found for '${specArgs.session}'.`)
         }
@@ -996,7 +1014,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
             createArgs.name || `draft_${Date.now()}`,
             createArgs.draft_content || createArgs.prompt,
             createArgs.base_branch,
-            createArgs.epic_id
+            createArgs.epic_id,
+            projectPath
           )
 
           const contentLength = session.draft_content?.length || session.spec_content?.length || 0
@@ -1028,7 +1047,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
             createArgs.use_existing_branch,
             createArgs.agent_type,
             createArgs.skip_permissions,
-            createArgs.epic_id
+            createArgs.epic_id,
+            projectPath
           )
 
           const structured = {
@@ -1058,7 +1078,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       }
 
       case "lucode_get_setup_script": {
-        const payload = await bridge.getProjectSetupScript()
+        const payload = await bridge.getProjectSetupScript(projectPath)
         const summary = payload.has_setup_script
           ? `Setup script present (${payload.setup_script.length} chars)`
           : 'No setup script configured'
@@ -1080,7 +1100,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
           )
         }
 
-        const payload = await bridge.setProjectSetupScript(script)
+        const payload = await bridge.setProjectSetupScript(script, projectPath)
         const summary = `Setup script updated (${payload.setup_script.length} chars)`
         response = buildStructuredResponse(payload, {
           summaryText: summary,
@@ -1090,7 +1110,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       }
 
       case "lucode_get_worktree_base_directory": {
-        const payload = await bridge.getWorktreeBaseDirectory()
+        const payload = await bridge.getWorktreeBaseDirectory(projectPath)
         const summary = payload.has_custom_directory
           ? `Custom worktree directory: ${payload.worktree_base_directory}`
           : 'Using default worktree directory (.lucode/worktrees/)'
@@ -1112,7 +1132,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
           )
         }
 
-        const payload = await bridge.setWorktreeBaseDirectory(dir)
+        const payload = await bridge.setWorktreeBaseDirectory(dir, projectPath)
         const summary = payload.has_custom_directory
           ? `Worktree base directory set to: ${payload.worktree_base_directory}`
           : 'Worktree base directory cleared (using default)'
@@ -1126,7 +1146,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       case "lucode_list": {
         const listArgs = args as LucodeListArgs
 
-        const sessions = await bridge.listSessionsByState(listArgs.filter)
+        const sessions = await bridge.listSessionsByState(listArgs.filter, projectPath)
 
         const structuredSessions = sessions.map(s => ({
           name: s.name,
@@ -1182,7 +1202,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
 
         await bridge.sendFollowUpMessage(
           sendMessageArgs.session_name,
-          sendMessageArgs.message
+          sendMessageArgs.message,
+          projectPath
         )
 
         const structured = {
@@ -1199,7 +1220,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       case "lucode_cancel": {
         const cancelArgs = args as unknown as LucodeCancelArgs
 
-        await bridge.cancelSession(cancelArgs.session_name, cancelArgs.force)
+        await bridge.cancelSession(cancelArgs.session_name, cancelArgs.force, projectPath)
 
         const structured = {
           session: cancelArgs.session_name,
@@ -1219,7 +1240,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
           specCreateArgs.name || `spec_${Date.now()}`,
           specCreateArgs.content,
           specCreateArgs.base_branch,
-          specCreateArgs.epic_id
+          specCreateArgs.epic_id,
+          projectPath
         )
 
         const contentLength = session.spec_content?.length || session.draft_content?.length || 0
@@ -1250,7 +1272,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         await bridge.updateDraftContent(
           draftUpdateArgs.session_name,
           draftUpdateArgs.content,
-          draftUpdateArgs.append
+          draftUpdateArgs.append,
+          projectPath
         )
 
         const contentPreview = draftUpdateArgs.content.length > 100
@@ -1275,7 +1298,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       case "lucode_current_spec_update": {
         const currentSpecUpdateArgs = args as unknown as LucodeCurrentSpecUpdateArgs
 
-        const currentSpec = await bridge.getCurrentSpecModeSession()
+        const currentSpec = await bridge.getCurrentSpecModeSession(projectPath)
         if (!currentSpec) {
           const structured = { status: "no_current_spec" }
           const summary = 'Spec mode session tracking not yet implemented. Please use lucode_draft_update with explicit session name instead.\n\nAlternatively, check available specs with lucode_draft_list first.'
@@ -1286,7 +1309,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         await bridge.updateDraftContent(
           currentSpec,
           currentSpecUpdateArgs.content,
-          currentSpecUpdateArgs.append
+          currentSpecUpdateArgs.append,
+          projectPath
         )
 
         const contentPreview = currentSpecUpdateArgs.content.length > 100
@@ -1316,7 +1340,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
           draftStartArgs.session_name,
           draftStartArgs.agent_type,
           draftStartArgs.skip_permissions,
-          draftStartArgs.base_branch
+          draftStartArgs.base_branch,
+          projectPath
         )
 
         const structured = {
@@ -1338,7 +1363,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       case "lucode_draft_list": {
         const draftListArgs = args as LucodeDraftListArgs
 
-        const specs = await bridge.listDraftSessions()
+        const specs = await bridge.listDraftSessions(projectPath)
 
         const essentialDrafts = specs.map(d => ({
           name: d.name,
@@ -1382,7 +1407,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       case "lucode_draft_delete": {
         const draftDeleteArgs = args as unknown as LucodeDraftDeleteArgs
 
-        await bridge.deleteDraftSession(draftDeleteArgs.session_name)
+        await bridge.deleteDraftSession(draftDeleteArgs.session_name, projectPath)
 
         const structured = { session: draftDeleteArgs.session_name, deleted: true }
         const summary = `Spec session '${draftDeleteArgs.session_name}' has been deleted permanently`
@@ -1400,7 +1425,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         const requestedFields = taskArgs.fields || ['name', 'status', 'session_state', 'branch']
         const includeAll = requestedFields.includes('all')
 
-        let agents = await bridge.getCurrentTasks()
+        let agents = await bridge.getCurrentTasks(projectPath)
 
         if (taskArgs.status_filter && taskArgs.status_filter !== 'all') {
           agents = agents.filter(t => {
@@ -1487,7 +1512,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       case "lucode_mark_session_reviewed": {
         const markReviewedArgs = args as unknown as LucodeMarkReviewedArgs
 
-        await bridge.markSessionReviewed(markReviewedArgs.session_name)
+        await bridge.markSessionReviewed(markReviewedArgs.session_name, projectPath)
 
         const structured = { session: markReviewedArgs.session_name, reviewed: true }
         const summary = `Session '${markReviewedArgs.session_name}' has been marked as reviewed and is ready for merge`
@@ -1498,7 +1523,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       case "lucode_convert_to_spec": {
         const convertToSpecArgs = args as unknown as LucodeConvertToSpecArgs
 
-        await bridge.convertToSpec(convertToSpecArgs.session_name)
+        await bridge.convertToSpec(convertToSpecArgs.session_name, projectPath)
 
         const structured = { session: convertToSpecArgs.session_name, converted: true }
         const summary = `Session '${convertToSpecArgs.session_name}' has been converted back to spec state for rework`
@@ -1523,7 +1548,8 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         const mergeResult = await bridge.mergeSession(mergeArgs.session_name, {
           commitMessage: trimmedCommit.length > 0 ? trimmedCommit : undefined,
           mode: requestedMode,
-          cancelAfterMerge: mergeArgs.cancel_after_merge
+          cancelAfterMerge: mergeArgs.cancel_after_merge,
+          projectPath
         })
 
         const structured = {
@@ -1574,6 +1600,7 @@ ${cancelLine}`
           commitMessage: prArgs.commit_message ?? undefined,
           repository: prArgs.repository ?? undefined,
           cancelAfterPr: Boolean(prArgs.cancel_after_pr),
+          projectPath,
         })
 
         const structured = {
@@ -1600,7 +1627,7 @@ ${cancelLine}`
           throw new McpError(ErrorCode.InvalidParams, "'name' is required when invoking lucode_create_epic.")
         }
 
-        const epic = await bridge.createEpic(epicArgs.name, epicArgs.color)
+        const epic = await bridge.createEpic(epicArgs.name, epicArgs.color, projectPath)
         const structured = { epic: { id: epic.id, name: epic.name, color: epic.color ?? null } }
         const summary = `Epic '${epic.name}' created (id: ${epic.id})`
         response = buildStructuredResponse(structured, { summaryText: summary })
@@ -1608,7 +1635,7 @@ ${cancelLine}`
       }
 
       case "lucode_list_epics": {
-        const epics = await bridge.listEpics()
+        const epics = await bridge.listEpics(projectPath)
         const structured = { epics: epics.map(e => ({ id: e.id, name: e.name, color: e.color ?? null })) }
         const summary = epics.length === 0
           ? 'No epics found'
@@ -1618,7 +1645,7 @@ ${cancelLine}`
       }
 
       case "lucode_run_script": {
-        const result = await bridge.executeProjectRunScript()
+        const result = await bridge.executeProjectRunScript(projectPath)
         const summary = result.success
           ? `Run script completed successfully (exit code ${result.exit_code}):\n${result.stdout}`
           : `Run script failed (exit code ${result.exit_code}):\n${result.stderr}`
@@ -1639,6 +1666,7 @@ ${cancelLine}`
         const mergeResult = await bridge.prepareMerge(mergeArgs.session_name, {
           mode: mergeArgs.mode,
           commitMessage: mergeArgs.commit_message ?? undefined,
+          projectPath,
         })
 
         const structured = {

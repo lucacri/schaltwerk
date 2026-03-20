@@ -44,12 +44,23 @@ pub async fn handle_mcp_request(
     let project_override = project_override_from_headers(req.headers());
 
     if let Some(path) = project_override {
-        // Scope the request so get_core_read/get_core_write use the override
         return REQUEST_PROJECT_OVERRIDE
             .scope(RefCell::new(Some(path)), async move {
                 handle_mcp_request_inner(req, app).await
             })
             .await;
+    }
+
+    let project_manager = get_project_manager().await;
+    let project_count = project_manager.get_project_count().await;
+    if project_count > 1 {
+        warn!(
+            "MCP API request missing X-Project-Path header while {project_count} projects are open — falling back to active project"
+        );
+    } else {
+        debug!(
+            "MCP API request missing X-Project-Path header — falling back to active project"
+        );
     }
 
     handle_mcp_request_inner(req, app).await
