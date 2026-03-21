@@ -1268,7 +1268,7 @@ describe('NewSessionModal', () => {
       expect(variantSection.querySelector('button')).not.toBeNull()
     })
 
-    it('hides agent selector when a preset is selected', async () => {
+    it('hides agent selector when Preset tab is active', async () => {
       mockAgentPresets.mockReturnValue({
         presets: testPresets,
         loading: false,
@@ -1279,26 +1279,35 @@ describe('NewSessionModal', () => {
       openModal()
 
       await waitFor(() => {
-        expect(screen.getByText('Preset')).toBeInTheDocument()
+        expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument()
+        expect(screen.getByRole('tab', { name: 'Preset' })).toBeInTheDocument()
       })
 
-      expect(screen.getByText('Agent')).toBeInTheDocument()
-
-      const presetButton = screen.getByText('Preset').closest('div')!.querySelector('button')!
-      fireEvent.click(presetButton)
+      fireEvent.click(screen.getByRole('tab', { name: 'Preset' }))
 
       await waitFor(() => {
-        expect(screen.getByText('Full Stack (2 agents)')).toBeInTheDocument()
+        expect(screen.getByRole('tab', { name: 'Preset' })).toHaveAttribute('aria-selected', 'true')
       })
 
-      fireEvent.click(screen.getByText('Full Stack (2 agents)'))
+      expect(screen.getByText('No preset')).toBeInTheDocument()
+    })
+
+    it('shows agent selector when Agent tab is active', async () => {
+      mockAgentPresets.mockReturnValue({
+        presets: testPresets,
+        loading: false,
+        error: null,
+        savePresets: vi.fn().mockResolvedValue(true),
+        reloadPresets: vi.fn().mockResolvedValue(undefined),
+      })
+      openModal()
 
       await waitFor(() => {
-        expect(screen.queryByText('Agent')).not.toBeInTheDocument()
+        expect(screen.getByRole('tab', { name: 'Agent' })).toHaveAttribute('aria-selected', 'true')
       })
     })
 
-    it('shows agent selector when no preset is selected', async () => {
+    it('restores agent selector when switching back from Preset to Agent tab', async () => {
       mockAgentPresets.mockReturnValue({
         presets: testPresets,
         loading: false,
@@ -1309,48 +1318,139 @@ describe('NewSessionModal', () => {
       openModal()
 
       await waitFor(() => {
-        expect(screen.getByText('Agent')).toBeInTheDocument()
-      })
-    })
-
-    it('restores agent selector with previous value when preset is deselected', async () => {
-      mockAgentPresets.mockReturnValue({
-        presets: testPresets,
-        loading: false,
-        error: null,
-        savePresets: vi.fn().mockResolvedValue(true),
-        reloadPresets: vi.fn().mockResolvedValue(undefined),
-      })
-      openModal()
-
-      await waitFor(() => {
-        expect(screen.getByText('Preset')).toBeInTheDocument()
+        expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument()
       })
 
-      expect(screen.getByText('Agent')).toBeInTheDocument()
-
-      const presetButton = screen.getByText('Preset').closest('div')!.querySelector('button')!
-      fireEvent.click(presetButton)
-
-      await waitFor(() => {
-        expect(screen.getByText('Full Stack (2 agents)')).toBeInTheDocument()
-      })
-      fireEvent.click(screen.getByText('Full Stack (2 agents)'))
-
-      await waitFor(() => {
-        expect(screen.queryByText('Agent')).not.toBeInTheDocument()
-      })
-
-      const presetButton2 = screen.getByText('Preset').closest('div')!.querySelector('button')!
-      fireEvent.click(presetButton2)
-
+      fireEvent.click(screen.getByRole('tab', { name: 'Preset' }))
       await waitFor(() => {
         expect(screen.getByText('No preset')).toBeInTheDocument()
       })
-      fireEvent.click(screen.getByText('No preset'))
+      const presetButton = screen.getByText('No preset').closest('button')!
+      fireEvent.click(presetButton)
+      await waitFor(() => {
+        expect(screen.getByText('Full Stack (2 agents)')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByText('Full Stack (2 agents)'))
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Agent' }))
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: 'Agent' })).toHaveAttribute('aria-selected', 'true')
+      })
+    })
+
+    it('resets preset state when switching to Agent tab so single agent is used on create', async () => {
+      mockAgentPresets.mockReturnValue({
+        presets: testPresets,
+        loading: false,
+        error: null,
+        savePresets: vi.fn().mockResolvedValue(true),
+        reloadPresets: vi.fn().mockResolvedValue(undefined),
+      })
+      const { onCreate } = openModal()
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: 'Preset' })).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Preset' }))
+      await waitFor(() => {
+        expect(screen.getByText('No preset')).toBeInTheDocument()
+      })
+      const presetButton = screen.getByText('No preset').closest('button')!
+      fireEvent.click(presetButton)
+      await waitFor(() => {
+        expect(screen.getByText('Full Stack (2 agents)')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByText('Full Stack (2 agents)'))
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Agent' }))
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: 'Agent' })).toHaveAttribute('aria-selected', 'true')
+      })
+
+      await waitFor(() => {
+        const btn = screen.queryByTitle('Start agent (Cmd+Enter)')
+        expect(btn).toBeTruthy()
+        expect((btn as HTMLButtonElement).disabled).toBe(false)
+      })
+
+      fireEvent.click(screen.getByTitle('Start agent (Cmd+Enter)'))
+
+      await waitFor(() => {
+        expect(onCreate).toHaveBeenCalled()
+      })
+
+      const callArgs = onCreate.mock.calls[0][0]
+      expect(callArgs.agentTypes).toBeUndefined()
+      expect(callArgs.agentType).toBe('claude')
+    })
+  })
+
+  describe('agent/preset toggle layout', () => {
+    const testPresets = [
+      { id: 'preset-1', name: 'Full Stack', slots: [{ agentType: 'claude' }, { agentType: 'codex' }], isBuiltIn: false },
+    ]
+
+    it('shows Agent and Preset tabs when presets exist', async () => {
+      mockAgentPresets.mockReturnValue({
+        presets: testPresets,
+        loading: false,
+        error: null,
+        savePresets: vi.fn().mockResolvedValue(true),
+        reloadPresets: vi.fn().mockResolvedValue(undefined),
+      })
+      openModal()
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument()
+        expect(screen.getByRole('tab', { name: 'Preset' })).toBeInTheDocument()
+      })
+    })
+
+    it('shows agent selector without tabs when no presets exist', async () => {
+      mockAgentPresets.mockReturnValue({
+        presets: [],
+        loading: false,
+        error: null,
+        savePresets: vi.fn().mockResolvedValue(true),
+        reloadPresets: vi.fn().mockResolvedValue(undefined),
+      })
+      openModal()
 
       await waitFor(() => {
         expect(screen.getByText('Agent')).toBeInTheDocument()
+      })
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+    })
+
+    it('switches between Agent and Preset views when tabs are clicked', async () => {
+      mockAgentPresets.mockReturnValue({
+        presets: testPresets,
+        loading: false,
+        error: null,
+        savePresets: vi.fn().mockResolvedValue(true),
+        reloadPresets: vi.fn().mockResolvedValue(undefined),
+      })
+      openModal()
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('tab', { name: 'Agent' })).toHaveAttribute('aria-selected', 'true')
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Preset' }))
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: 'Preset' })).toHaveAttribute('aria-selected', 'true')
+      })
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Agent' }))
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: 'Agent' })).toHaveAttribute('aria-selected', 'true')
       })
     })
   })

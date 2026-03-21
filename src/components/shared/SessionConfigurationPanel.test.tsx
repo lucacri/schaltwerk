@@ -563,6 +563,58 @@ describe('SessionConfigurationPanel with empty branch prefix', () => {
         expect(branchInput).toBeInTheDocument()
     })
 
+    test('renders branch-row layout with both branch controls side by side', async () => {
+        render(
+            <SessionConfigurationPanel
+                variant="modal"
+                layout="branch-row"
+                onBaseBranchChange={vi.fn()}
+                onAgentTypeChange={vi.fn()}
+                onSkipPermissionsChange={vi.fn()}
+            />
+        )
+
+        await waitFor(() => {
+            expect(screen.getByTestId('branch-autocomplete')).toBeInTheDocument()
+            expect(screen.getByTestId('model-selector')).toBeInTheDocument()
+        })
+    })
+
+    test('renders default layout when layout prop is omitted', async () => {
+        render(
+            <SessionConfigurationPanel
+                variant="modal"
+                onBaseBranchChange={vi.fn()}
+                onAgentTypeChange={vi.fn()}
+                onSkipPermissionsChange={vi.fn()}
+            />
+        )
+
+        await waitFor(() => {
+            expect(screen.getByTestId('branch-autocomplete')).toBeInTheDocument()
+            expect(screen.getByTestId('model-selector')).toBeInTheDocument()
+        })
+    })
+
+    test('hides agent section when hideAgentType is true in branch-row layout', async () => {
+        render(
+            <SessionConfigurationPanel
+                variant="modal"
+                layout="branch-row"
+                hideAgentType={true}
+                onBaseBranchChange={vi.fn()}
+                onAgentTypeChange={vi.fn()}
+                onSkipPermissionsChange={vi.fn()}
+            />
+        )
+
+        await waitFor(() => {
+            expect(screen.getByTestId('branch-autocomplete')).toBeInTheDocument()
+        })
+
+        expect(screen.queryByTestId('model-selector')).not.toBeInTheDocument()
+    })
+
     test('shows placeholder without leading slash when branch prefix is empty', async () => {
         render(
             <SessionConfigurationPanel

@@ -14,6 +14,7 @@ import { useTranslation } from '../../common/i18n'
 
 interface SessionConfigurationPanelProps {
     variant?: 'modal' | 'compact'
+    layout?: 'default' | 'branch-row'
     onBaseBranchChange?: (branch: string) => void
     onAgentTypeChange?: (agentType: AgentType) => void
     onSkipPermissionsChange?: (enabled: boolean) => void
@@ -48,6 +49,7 @@ export interface SessionConfiguration {
 
 export function SessionConfigurationPanel({
     variant = 'modal',
+    layout = 'default',
     onBaseBranchChange,
     onAgentTypeChange,
     onSkipPermissionsChange,
@@ -362,120 +364,138 @@ export function SessionConfigurationPanel({
         ? (normalizedSessionName ? `${branchPrefix}/${normalizedSessionName}` : `${branchPrefix}/your-session-name`)
         : (normalizedSessionName || 'your-session-name')
 
+    const baseBranchSection = (
+        <div data-onboarding="base-branch-selector">
+            <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                    {useExistingBranch ? t.sessionConfig.existingBranch : t.sessionConfig.baseBranch}
+                </label>
+                <label className={`flex items-center gap-1.5 text-xs cursor-pointer ${branchError ? 'text-red-400' : ''}`} style={branchError ? undefined : { color: 'var(--color-text-secondary)' }}>
+                    <input
+                        type="checkbox"
+                        checked={useExistingBranch}
+                        onChange={(e) => handleUseExistingBranchChange(e.target.checked)}
+                        disabled={disabled}
+                        className={`rounded ${branchError ? 'accent-red-500' : ''}`}
+                    />
+                    <span>{t.sessionConfig.useExistingBranch}</span>
+                </label>
+            </div>
+            {loadingBranches ? (
+                <div
+                    className="w-full rounded px-3 py-2 border flex items-center justify-center"
+                    style={{
+                        backgroundColor: 'var(--color-bg-elevated)',
+                        borderColor: 'var(--color-border-default)'
+                    }}
+                >
+                    <span className="text-slate-500 text-xs">{t.sessionConfig.loading}</span>
+                </div>
+            ) : (
+                <BranchAutocomplete
+                    value={baseBranch}
+                    onChange={(branch) => { void handleBaseBranchChange(branch) }}
+                    branches={branches}
+                    disabled={disabled || branches.length === 0}
+                    placeholder={branches.length === 0 ? t.sessionConfig.noBranches : t.sessionConfig.searchBranches}
+                    onValidationChange={setIsValidBranch}
+                    hasError={!!branchError}
+                />
+            )}
+            {branchError ? (
+                <div className="flex items-start gap-2 mt-1">
+                    <svg className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-xs text-red-400">{branchError}</p>
+                </div>
+            ) : (
+                <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                    {useExistingBranch
+                        ? t.sessionConfig.checkoutBranchHint
+                        : t.sessionConfig.existingBranchHint}
+                </p>
+            )}
+        </div>
+    )
+
+    const branchNameSection = useExistingBranch ? null : (
+        <div>
+            <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.sessionConfig.branchNameOptional}
+            </label>
+            <input
+                value={customBranch}
+                onChange={(e) => handleCustomBranchChange(e.target.value)}
+                className="w-full rounded px-3 py-2 border"
+                style={{
+                    backgroundColor: 'var(--color-bg-elevated)',
+                    color: 'var(--color-text-primary)',
+                    borderColor: 'var(--color-border-default)'
+                }}
+                placeholder={branchPlaceholder}
+                disabled={disabled}
+            />
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                {t.sessionConfig.branchNameHint.replace('{placeholder}', branchPlaceholder)}
+            </p>
+        </div>
+    )
+
+    const agentSection = hideAgentType ? null : (
+        <div>
+            <label className="block text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+                {t.sessionConfig.agent}
+            </label>
+            <div className="space-y-3">
+                <ModelSelector
+                    value={agentType}
+                    onChange={(type) => { void handleAgentTypeChange(type) }}
+                    disabled={disabled}
+                    agentSelectionDisabled={agentSelectionDisabled}
+                    skipPermissions={skipPermissions}
+                    onSkipPermissionsChange={(enabled) => { void handleSkipPermissionsChange(enabled) }}
+                    showShortcutHint={shouldShowShortcutHint}
+                />
+                {agentType === 'codex' && effectiveCodexModelOptions && onCodexModelChange && (
+                    <CodexModelSelector
+                        disabled={disabled || agentSelectionDisabled}
+                        options={effectiveCodexModelOptions}
+                        codexModels={effectiveCodexModels}
+                        value={codexModel}
+                        onChange={onCodexModelChange}
+                        showShortcutHint={shouldShowShortcutHint}
+                        reasoningValue={codexReasoningEffort}
+                        onReasoningChange={onCodexReasoningChange}
+                        selectedModelMetadata={selectedCodexMetadata}
+                    />
+                )}
+            </div>
+            <p className="text-xs mt-2" style={{ color: 'var(--color-text-muted)' }}>
+                {t.sessionConfig.agentHint}
+            </p>
+        </div>
+    )
+
+    if (layout === 'branch-row') {
+        return (
+            <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                    {baseBranchSection}
+                    {branchNameSection ?? <div />}
+                </div>
+                {agentSection}
+            </div>
+        )
+    }
+
     return (
         <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-3">
-                <div data-onboarding="base-branch-selector">
-                    <div className="flex items-center justify-between mb-1">
-                        <label className="block text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-                            {useExistingBranch ? t.sessionConfig.existingBranch : t.sessionConfig.baseBranch}
-                        </label>
-                        <label className={`flex items-center gap-1.5 text-xs cursor-pointer ${branchError ? 'text-red-400' : ''}`} style={branchError ? undefined : { color: 'var(--color-text-secondary)' }}>
-                            <input
-                                type="checkbox"
-                                checked={useExistingBranch}
-                                onChange={(e) => handleUseExistingBranchChange(e.target.checked)}
-                                disabled={disabled}
-                                className={`rounded ${branchError ? 'accent-red-500' : ''}`}
-                            />
-                            <span>{t.sessionConfig.useExistingBranch}</span>
-                        </label>
-                    </div>
-                    {loadingBranches ? (
-                        <div
-                            className="w-full rounded px-3 py-2 border flex items-center justify-center"
-                            style={{
-                                backgroundColor: 'var(--color-bg-elevated)',
-                                borderColor: 'var(--color-border-default)'
-                            }}
-                        >
-                            <span className="text-slate-500 text-xs">{t.sessionConfig.loading}</span>
-                        </div>
-                    ) : (
-                        <BranchAutocomplete
-                            value={baseBranch}
-                            onChange={(branch) => { void handleBaseBranchChange(branch) }}
-                            branches={branches}
-                            disabled={disabled || branches.length === 0}
-                            placeholder={branches.length === 0 ? t.sessionConfig.noBranches : t.sessionConfig.searchBranches}
-                            onValidationChange={setIsValidBranch}
-                            hasError={!!branchError}
-                        />
-                    )}
-                    {branchError ? (
-                        <div className="flex items-start gap-2 mt-1">
-                            <svg className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <p className="text-xs text-red-400">{branchError}</p>
-                        </div>
-                    ) : (
-                        <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                            {useExistingBranch
-                                ? t.sessionConfig.checkoutBranchHint
-                                : t.sessionConfig.existingBranchHint}
-                        </p>
-                    )}
-                </div>
-
-                {!useExistingBranch && (
-                    <div>
-                        <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-                            {t.sessionConfig.branchNameOptional}
-                        </label>
-                        <input
-                            value={customBranch}
-                            onChange={(e) => handleCustomBranchChange(e.target.value)}
-                            className="w-full rounded px-3 py-2 border"
-                            style={{
-                                backgroundColor: 'var(--color-bg-elevated)',
-                                color: 'var(--color-text-primary)',
-                                borderColor: 'var(--color-border-default)'
-                            }}
-                            placeholder={branchPlaceholder}
-                            disabled={disabled}
-                        />
-                        <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                            {t.sessionConfig.branchNameHint.replace('{placeholder}', branchPlaceholder)}
-                        </p>
-                    </div>
-                )}
+                {baseBranchSection}
+                {branchNameSection}
             </div>
-
-            {!hideAgentType && (
-                <div>
-                    <label className="block text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                        {t.sessionConfig.agent}
-                    </label>
-                    <div className="space-y-3">
-                        <ModelSelector
-                            value={agentType}
-                            onChange={(type) => { void handleAgentTypeChange(type) }}
-                            disabled={disabled}
-                            agentSelectionDisabled={agentSelectionDisabled}
-                            skipPermissions={skipPermissions}
-                            onSkipPermissionsChange={(enabled) => { void handleSkipPermissionsChange(enabled) }}
-                            showShortcutHint={shouldShowShortcutHint}
-                        />
-                        {agentType === 'codex' && effectiveCodexModelOptions && onCodexModelChange && (
-                            <CodexModelSelector
-                                disabled={disabled || agentSelectionDisabled}
-                                options={effectiveCodexModelOptions}
-                                codexModels={effectiveCodexModels}
-                                value={codexModel}
-                                onChange={onCodexModelChange}
-                                showShortcutHint={shouldShowShortcutHint}
-                                reasoningValue={codexReasoningEffort}
-                                onReasoningChange={onCodexReasoningChange}
-                                selectedModelMetadata={selectedCodexMetadata}
-                            />
-                        )}
-                    </div>
-                    <p className="text-xs mt-2" style={{ color: 'var(--color-text-muted)' }}>
-                        {t.sessionConfig.agentHint}
-                    </p>
-                </div>
-            )}
+            {agentSection}
         </div>
     )
 }

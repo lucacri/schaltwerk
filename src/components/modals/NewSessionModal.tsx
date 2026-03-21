@@ -129,6 +129,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [agentConfigLoading, setAgentConfigLoading] = useState(false)
     const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null)
     const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
+    const [presetTabActive, setPresetTabActive] = useState(false)
     const [presetDropdownOpen, setPresetDropdownOpen] = useState(false)
     const [variantDropdownOpen, setVariantDropdownOpen] = useState(false)
     const [ignorePersistedAgentType, setIgnorePersistedAgentType] = useState(false)
@@ -595,7 +596,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         try {
             setCreating(true)
 
-            const selectedPreset = selectedPresetId
+            const selectedPreset = presetTabActive && selectedPresetId
                 ? agentPresetsList.find(p => p.id === selectedPresetId)
                 : null
             const presetAgentTypes = selectedPreset
@@ -680,7 +681,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setValidationError(errorMessage)
             setCreating(false)
         }
-    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds])
+    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, selectedPresetId, agentPresetsList])
 
     // Keep ref in sync immediately on render to avoid stale closures in tests
     createRef.current = () => { void handleCreate() }
@@ -1737,7 +1738,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                         <>
                             <SessionConfigurationPanel
                                 variant="modal"
-                                hideAgentType={!!selectedPresetId}
+                                layout="branch-row"
+                                hideAgentType={presetTabActive}
                                 onBaseBranchChange={handleBranchChange}
                                 onAgentTypeChange={handleAgentTypeChange}
                                 onSkipPermissionsChange={handleSkipPermissionsChange}
@@ -1770,10 +1772,45 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                 branchError={branchError}
                             />
                             {agentPresetsList.length > 0 && (
-                                <div className="mt-2">
-                                    <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                <div className="flex rounded border overflow-hidden mt-2" style={{ borderColor: 'var(--color-border-default)' }} role="tablist">
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={!presetTabActive}
+                                        className="flex-1 px-3 py-1.5 text-sm cursor-pointer transition-colors"
+                                        style={{
+                                            backgroundColor: !presetTabActive ? 'var(--color-bg-elevated)' : 'transparent',
+                                            color: !presetTabActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                                            fontWeight: !presetTabActive ? 500 : 400,
+                                        }}
+                                        onClick={() => {
+                                            setPresetTabActive(false)
+                                            setSelectedPresetId(null)
+                                            resetMultiAgentSelections()
+                                        }}
+                                    >
+                                        {t.sessionConfig.agent}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={presetTabActive}
+                                        className="flex-1 px-3 py-1.5 text-sm cursor-pointer transition-colors"
+                                        style={{
+                                            backgroundColor: presetTabActive ? 'var(--color-bg-elevated)' : 'transparent',
+                                            color: presetTabActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                                            fontWeight: presetTabActive ? 500 : 400,
+                                        }}
+                                        onClick={() => {
+                                            setPresetTabActive(true)
+                                        }}
+                                    >
                                         {t.newSessionModal.preset ?? 'Preset'}
-                                    </label>
+                                    </button>
+                                </div>
+                            )}
+                            {presetTabActive && (
+                                <div className="mt-1">
                                     <Dropdown
                                         open={presetDropdownOpen}
                                         onOpenChange={setPresetDropdownOpen}
@@ -1818,7 +1855,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                     </Dropdown>
                                 </div>
                             )}
-                            {agentVariantsList.length > 0 && !selectedPresetId && (
+                            {agentVariantsList.length > 0 && !selectedPresetId && !presetTabActive && (
                                 <div className="mt-2">
                                     <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
                                         {t.newSessionModal.variant ?? 'Variant'}
