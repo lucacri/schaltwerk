@@ -112,6 +112,22 @@ describe('ForgeIssueDetail', () => {
     expect(screen.getByText('Description')).toBeTruthy()
   })
 
+  it('renders markdown in the description and comments', () => {
+    const details = makeDetails({
+      body: '## Steps\n\n- reproduce',
+      comments: [{ author: 'alice', createdAt: '2026-03-10T10:00:00Z', body: 'See `auth.ts` for context.' }],
+    })
+
+    renderWithProviders(
+      <ForgeIssueDetail details={details} onBack={onBack} forgeType="github" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    expect(screen.getByRole('heading', { name: 'Steps' })).toBeTruthy()
+    expect(screen.getByText('reproduce')).toBeTruthy()
+    expect(screen.getByText('auth.ts')).toBeTruthy()
+  })
+
   it('shows comments with author and date', () => {
     renderWithProviders(
       <ForgeIssueDetail details={makeDetails()} onBack={onBack} forgeType="github" />,

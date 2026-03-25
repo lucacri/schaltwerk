@@ -6,6 +6,7 @@ import { TauriCommands } from '../../common/tauriCommands'
 import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
+import { MarkdownRenderer } from '../specs/MarkdownRenderer'
 import { ForgeLabelChip } from './ForgeLabelChip'
 import { ContextualActionButton } from './ContextualActionButton'
 
@@ -44,6 +45,14 @@ function StateBadge({ state }: { state: string }) {
       {label}
     </span>
   )
+}
+
+const markdownContainerStyle = {
+  backgroundColor: 'var(--color-bg-tertiary)',
+  borderRadius: 6,
+  border: '1px solid var(--color-border-default)',
+  overflow: 'hidden',
+  wordBreak: 'break-word' as const,
 }
 
 export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType }: ForgeIssueDetailProps) {
@@ -165,21 +174,8 @@ export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType }: Fo
             >
               {t.forgeIssueTab.description}
             </div>
-            <div
-              style={{
-                fontSize: theme.fontSize.body,
-                color: 'var(--color-text-secondary)',
-                lineHeight: theme.lineHeight.body,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                fontFamily: theme.fontFamily.sans,
-                backgroundColor: 'var(--color-bg-tertiary)',
-                borderRadius: 6,
-                padding: '8px 10px',
-                border: '1px solid var(--color-border-default)',
-              }}
-            >
-              {body}
+            <div style={markdownContainerStyle}>
+              <MarkdownRenderer content={body} />
             </div>
           </div>
         )}
@@ -236,17 +232,8 @@ export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType }: Fo
                       <span>{formatRelativeDate(comment.createdAt)}</span>
                     )}
                   </div>
-                  <div
-                    style={{
-                      fontSize: theme.fontSize.body,
-                      color: 'var(--color-text-secondary)',
-                      lineHeight: theme.lineHeight.body,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      fontFamily: theme.fontFamily.sans,
-                    }}
-                  >
-                    {comment.body}
+                  <div style={{ overflow: 'hidden', wordBreak: 'break-word' }}>
+                    <MarkdownRenderer content={comment.body} />
                   </div>
                 </div>
               ))}

@@ -148,6 +148,22 @@ describe('ForgePrDetail', () => {
     expect(screen.getByText('Description')).toBeTruthy()
   })
 
+  it('renders markdown in the description and review comments', () => {
+    const details = makeDetails({
+      body: '## Rollout\n\n- enable theme',
+      reviewComments: [{ author: 'alice', body: 'Please check `src/app.ts`.' }],
+    })
+
+    renderWithProviders(
+      <ForgePrDetail details={details} onBack={onBack} forgeType="github" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    expect(screen.getByRole('heading', { name: 'Rollout' })).toBeTruthy()
+    expect(screen.getByText('enable theme')).toBeTruthy()
+    expect(screen.getByText('src/app.ts')).toBeTruthy()
+  })
+
   it('shows review comments with author', () => {
     renderWithProviders(
       <ForgePrDetail details={makeDetails()} onBack={onBack} forgeType="github" />,

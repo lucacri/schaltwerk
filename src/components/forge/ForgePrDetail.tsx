@@ -6,6 +6,7 @@ import { useTranslation } from '../../common/i18n'
 import { TauriCommands } from '../../common/tauriCommands'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
+import { MarkdownRenderer } from '../specs/MarkdownRenderer'
 import { ForgeLabelChip } from './ForgeLabelChip'
 import { PipelineStatusBadge } from './PipelineStatusBadge'
 import { ContextualActionButton } from './ContextualActionButton'
@@ -204,6 +205,14 @@ function ReviewStateBadge({ state }: { state: string }) {
       {state}
     </span>
   )
+}
+
+const markdownContainerStyle = {
+  backgroundColor: 'var(--color-bg-tertiary)',
+  borderRadius: 6,
+  border: '1px solid var(--color-border-default)',
+  overflow: 'hidden',
+  wordBreak: 'break-word' as const,
 }
 
 const PIPELINE_REFRESH_INTERVAL_MS = 15_000
@@ -609,21 +618,8 @@ export function ForgePrDetail({
         {details.body && (
           <div className="mb-4">
             <SectionLabel>{t.forgePrTab.description}</SectionLabel>
-            <div
-              style={{
-                fontSize: theme.fontSize.body,
-                color: 'var(--color-text-secondary)',
-                lineHeight: theme.lineHeight.body,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                fontFamily: theme.fontFamily.sans,
-                backgroundColor: 'var(--color-bg-tertiary)',
-                borderRadius: 6,
-                padding: '8px 10px',
-                border: '1px solid var(--color-border-default)',
-              }}
-            >
-              {details.body}
+            <div style={markdownContainerStyle}>
+              <MarkdownRenderer content={details.body} />
             </div>
           </div>
         )}
@@ -673,17 +669,8 @@ export function ForgePrDetail({
                       </span>
                     )}
                   </div>
-                  <div
-                    style={{
-                      fontSize: theme.fontSize.body,
-                      color: 'var(--color-text-secondary)',
-                      lineHeight: theme.lineHeight.body,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      fontFamily: theme.fontFamily.sans,
-                    }}
-                  >
-                    {comment.body}
+                  <div style={{ overflow: 'hidden', wordBreak: 'break-word' }}>
+                    <MarkdownRenderer content={comment.body} />
                   </div>
                 </div>
               ))}
