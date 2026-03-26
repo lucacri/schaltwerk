@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useLayoutEffect,
+  memo,
 } from "react";
 import { useAtomValue, useSetAtom } from "jotai";
 import { TauriCommands } from "../../common/tauriCommands";
@@ -117,7 +118,7 @@ const USER_SCROLL_RENDER_LIMIT = 100;
 // Higher values reduce flickering but use more memory.
 const SIDEBAR_RENDER_CAP = 100;
 
-export function UnifiedDiffView({
+export const UnifiedDiffView = memo(function UnifiedDiffView({
   filePath,
   isOpen,
   onClose,
@@ -3483,7 +3484,7 @@ export function UnifiedDiffView({
       }
     </DiffSessionActions>
   );
-}
+});
 
 export function shouldBypassHighlighting(
   fileDiff: FileDiffData | undefined,
