@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type MockedFunction } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import React from 'react'
 import { SpecContentView } from './SpecContentView'
 
@@ -12,6 +13,10 @@ vi.mock('../../utils/logger', () => ({
     error: vi.fn(),
     info: vi.fn(),
   }
+}))
+
+vi.mock('../../utils/clipboard', () => ({
+  writeClipboard: vi.fn()
 }))
 
 vi.mock('../common/AnimatedText', () => ({
@@ -149,5 +154,36 @@ describe('SpecContentView', () => {
       expect(screen.getByText('Beta live spec')).toBeInTheDocument()
       expect(screen.queryByText('Alpha late spec')).toBeNull()
     })
+  })
+
+  it('shows a copy raw action for read-only spec content and copies the markdown', async () => {
+    const user = userEvent.setup()
+    const { invoke } = await import('@tauri-apps/api/core')
+    const { writeClipboard } = await import('../../utils/clipboard')
+    const mockInvoke = invoke as MockedFunction<(cmd: string, args?: Record<string, unknown>) => Promise<[string | null, string | null]>>
+    const mockWriteClipboard = writeClipboard as MockedFunction<(text: string) => Promise<boolean>>
+
+    mockInvoke.mockResolvedValue(['# Raw spec\n\n- item one', null])
+    mockWriteClipboard.mockResolvedValue(true)
+
+    render(<SpecContentView sessionName="copy-target" editable={false} />)
+
+    await screen.findByText('Raw spec')
+    await user.click(screen.getByRole('button', { name: 'Copy raw' }))
+
+    expect(mockWriteClipboard).toHaveBeenCalledWith('# Raw spec\n\n- item one')
+  })
+
+  it('hides the copy raw action while editing a spec', async () => {
+    const { invoke } = await import('@tauri-apps/api/core')
+    const mockInvoke = invoke as MockedFunction<(cmd: string, args?: Record<string, unknown>) => Promise<[string | null, string | null]>>
+
+    mockInvoke.mockResolvedValue(['# Editable spec', null])
+
+    render(<SpecContentView sessionName="editable-spec" editable />)
+
+    await screen.findByTestId('markdown-editor')
+
+    expect(screen.queryByRole('button', { name: 'Copy raw' })).toBeNull()
   })
 })

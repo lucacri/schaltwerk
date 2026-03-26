@@ -1133,6 +1133,9 @@
     "editMarkdown": "Edit markdown",
     "preview": "Preview",
     "edit": "Edit",
+    "copyRaw": "Copy raw",
+    "copyRawTitle": "Copy raw markdown",
+    "copyRawSuccess": "Raw markdown copied",
     "enterAgentDescription": "Enter agent description in markdown…",
     "spec": "Spec"
   },

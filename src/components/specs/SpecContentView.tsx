@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
-import { VscEye, VscEdit } from 'react-icons/vsc'
+import { VscCopy, VscEye, VscEdit } from 'react-icons/vsc'
 import { AnimatedText } from '../common/AnimatedText'
 import { logger } from '../../utils/logger'
 import { MarkdownEditor, type MarkdownEditorRef } from './MarkdownEditor'
@@ -9,6 +9,8 @@ import { useSpecContentCache } from '../../hooks/useSpecContentCache'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { theme } from '../../common/theme'
 import { useTranslation } from '../../common/i18n'
+import { useOptionalToast } from '../../common/toast/ToastProvider'
+import { writeClipboard } from '../../utils/clipboard'
 
 interface Props {
   sessionName: string
@@ -19,6 +21,7 @@ interface Props {
 
 export function SpecContentView({ sessionName, editable = true, debounceMs = 1000, sessionState }: Props) {
   const { t } = useTranslation()
+  const toast = useOptionalToast()
   const { content, loading, error, updateContent } = useSpecContentCache(sessionName, sessionState)
   const [saving, setSaving] = useState(false)
   const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit')
@@ -46,17 +49,29 @@ export function SpecContentView({ sessionName, editable = true, debounceMs = 100
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
   }, [content, editable, debounceMs, sessionName])
 
-  // Local copy button removed
+  const handleCopyRaw = useCallback(async () => {
+    if (!content) {
+      toast?.pushToast({ tone: 'warning', title: t.toasts.nothingToCopy, description: t.toasts.nothingToCopyDesc })
+      return
+    }
 
-  // Handle Cmd+T to focus spec content
+    try {
+      const success = await writeClipboard(content)
+      if (!success) {
+        toast?.pushToast({ tone: 'error', title: t.toasts.clipboardBlocked, description: t.toasts.clipboardBlockedDesc })
+        return
+      }
+      toast?.pushToast({ tone: 'success', title: t.toasts.copiedToClipboard, description: t.specContentView.copyRawSuccess })
+    } catch (error) {
+      logger.error('[SpecContentView] Failed to copy raw spec', { sessionName, error })
+      toast?.pushToast({ tone: 'error', title: t.toasts.copyFailed, description: t.toasts.copyFailedDesc })
+    }
+  }, [content, sessionName, t, toast])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === 't' || e.key === 'T')) {
-        // Focus the spec editor
         e.preventDefault()
-        // Removed stopPropagation() to allow cmd+e to work
-        
-        // Focus the markdown editor
         if (markdownEditorRef.current) {
           markdownEditorRef.current.focus()
           logger.info('[SpecContentView] Focused spec content via Cmd+T')
@@ -122,6 +137,16 @@ export function SpecContentView({ sessionName, editable = true, debounceMs = 100
         <div className="flex items-center gap-2">
           <div style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>{t.specContentView.spec}</div>
         </div>
+        <button
+          type="button"
+          onClick={() => { void handleCopyRaw() }}
+          style={{ fontSize: theme.fontSize.caption, padding: '0.25rem 0.5rem', borderRadius: '0.25rem', backgroundColor: 'var(--color-bg-elevated)', color: 'var(--color-text-primary)' }}
+          className="flex items-center gap-1 transition-opacity hover:opacity-90"
+          title={t.specContentView.copyRawTitle}
+        >
+          <VscCopy />
+          {t.specContentView.copyRaw}
+        </button>
       </div>
       <div className="flex-1 overflow-auto">
         <MarkdownRenderer content={content} className="h-full" />

@@ -1133,6 +1133,9 @@
     "editMarkdown": "编辑 Markdown",
     "preview": "预览",
     "edit": "编辑",
+    "copyRaw": "复制原文",
+    "copyRawTitle": "复制原始 Markdown",
+    "copyRawSuccess": "已复制原始 Markdown",
     "enterAgentDescription": "输入代理描述（Markdown 格式）…",
     "spec": "规格"
   },

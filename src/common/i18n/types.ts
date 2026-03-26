@@ -1135,6 +1135,9 @@ export interface Translations {
     editMarkdown: string
     preview: string
     edit: string
+    copyRaw: string
+    copyRawTitle: string
+    copyRawSuccess: string
     enterAgentDescription: string
     spec: string
   }
