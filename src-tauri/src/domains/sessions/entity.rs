@@ -217,6 +217,8 @@ pub struct GitStats {
     // Timestamp (unix seconds) of the most recent meaningful diff change:
     // max(latest commit ahead of base, latest mtime among uncommitted changed files)
     pub last_diff_change_ts: Option<i64>,
+    #[serde(default)]
+    pub has_conflicts: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useEffectEvent, useMemo, type ReactNode } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useEffectEvent, useMemo, memo, type ReactNode } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import clsx from 'clsx'
 import { invoke } from '@tauri-apps/api/core'
@@ -138,7 +138,7 @@ const groupVersionGroupsByEpic = (sessionGroups: SessionVersionGroupType[]): Epi
     return { epicGroups, ungroupedGroups }
 }
 
-export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, onSelectNextProject, onSwitchToProject, onCycleNextProject, onCyclePrevProject, isCollapsed = false, onExpandRequest, onToggleSidebar }: SidebarProps) {
+export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, onSelectNextProject, onSwitchToProject, onCycleNextProject, onCyclePrevProject, isCollapsed = false, onExpandRequest, onToggleSidebar }: SidebarProps) {
     const { t } = useTranslation()
     const { selection, setSelection, terminals, clearTerminalTracking } = useSelection()
     const projectPath = useAtomValue(projectPathAtom)
@@ -2219,4 +2219,4 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
             />
         </div>
     )
-}
+});
