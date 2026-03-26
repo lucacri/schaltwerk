@@ -194,6 +194,8 @@ mod tests {
                 ready_to_merge: false,
                 spec_content: None,
                 session_state: SessionState::Running,
+                issue_number: None,
+                issue_url: None,
                 pr_number: None,
                 pr_url: None,
                 is_consolidation: false,

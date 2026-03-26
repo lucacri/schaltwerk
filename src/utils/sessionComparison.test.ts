@@ -27,6 +27,10 @@ const createBaseSessionInfo = (): SessionInfo => ({
     version_number: undefined,
     original_agent_type: 'claude',
     spec_content: undefined,
+    issue_number: undefined,
+    issue_url: undefined,
+    pr_number: undefined,
+    pr_url: undefined,
     diff_stats: {
         files_changed: 5,
         additions: 100,
@@ -128,6 +132,10 @@ describe('sessionComparison', () => {
                 version_number: 2,
                 original_agent_type: 'codex',
                 spec_content: 'spec',
+                issue_number: 42,
+                issue_url: 'https://github.com/example/repo/issues/42',
+                pr_number: 15,
+                pr_url: 'https://github.com/example/repo/pull/15',
                 diff_stats: { files_changed: 1, additions: 2, deletions: 3, insertions: 4 },
                 top_uncommitted_paths: ['a.ts', 'b.ts'],
                 merge_conflicting_paths: ['c.ts'],
@@ -166,6 +174,10 @@ describe('sessionComparison', () => {
                 ['version_number', 5],
                 ['original_agent_type', 'gemini'],
                 ['spec_content', 'some spec'],
+                ['issue_number', 42],
+                ['issue_url', 'https://github.com/example/repo/issues/42'],
+                ['pr_number', 15],
+                ['pr_url', 'https://github.com/example/repo/pull/15'],
             ]
 
             for (const [property, value] of propertyTests) {

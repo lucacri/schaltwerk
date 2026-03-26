@@ -105,6 +105,10 @@ pub struct Session {
     pub resume_allowed: bool,
     // Amp thread ID for resuming threads across Lucode sessions
     pub amp_thread_id: Option<String>,
+    // GitHub issue number linked to this session
+    pub issue_number: Option<i64>,
+    // GitHub issue URL linked to this session
+    pub issue_url: Option<String>,
     // GitHub PR number linked to this session
     pub pr_number: Option<i64>,
     // GitHub PR URL linked to this session
@@ -119,6 +123,10 @@ pub struct Spec {
     pub name: String,
     pub display_name: Option<String>,
     pub epic_id: Option<String>,
+    pub issue_number: Option<i64>,
+    pub issue_url: Option<String>,
+    pub pr_number: Option<i64>,
+    pub pr_url: Option<String>,
     pub repository_path: PathBuf,
     pub repository_name: String,
     pub content: String,
@@ -302,6 +310,10 @@ pub struct SessionInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_content: Option<String>,
     pub session_state: SessionState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub issue_number: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub issue_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pr_number: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]

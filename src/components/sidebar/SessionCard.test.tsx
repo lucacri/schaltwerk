@@ -1,8 +1,14 @@
-import { describe, it, expect } from 'vitest'
-import { screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../tests/test-utils'
 import { SessionCard } from './SessionCard'
 import type { EnrichedSession, SessionInfo } from '../../types/session'
+
+const invokeMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: invokeMock,
+}))
 
 const baseInfo: SessionInfo = {
   session_id: 's1',
@@ -148,6 +154,104 @@ describe('SessionCard running tag', () => {
     )
 
     expect(screen.getByText('Running')).toBeInTheDocument()
+  })
+})
+
+describe('SessionCard metadata badges', () => {
+  it('shows issue and PR badges for running sessions before diff stats', () => {
+    renderWithProviders(
+      <SessionCard
+        session={{
+          ...baseSession,
+          info: {
+            ...baseSession.info,
+            issue_number: 42,
+            issue_url: 'https://github.com/example/repo/issues/42',
+            pr_number: 15,
+            pr_url: 'https://github.com/example/repo/pull/15',
+          },
+        }}
+        index={0}
+        isSelected={false}
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+
+    const issueBadge = screen.getByRole('button', { name: 'Open issue #42' })
+    const prBadge = screen.getByRole('button', { name: 'Open PR #15' })
+    const additions = screen.getByText('+2')
+
+    expect(issueBadge).toBeInTheDocument()
+    expect(prBadge).toBeInTheDocument()
+    expect(issueBadge.compareDocumentPosition(additions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(prBadge.compareDocumentPosition(additions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('opens the linked URL when a metadata badge is clicked', async () => {
+    invokeMock.mockResolvedValue(undefined)
+
+    renderWithProviders(
+      <SessionCard
+        session={{
+          ...baseSession,
+          info: {
+            ...baseSession.info,
+            issue_number: 42,
+            issue_url: 'https://github.com/example/repo/issues/42',
+          },
+        }}
+        index={0}
+        isSelected={false}
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open issue #42' }))
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('open_external_url', { url: 'https://github.com/example/repo/issues/42' })
+    })
+  })
+
+  it('shows linked badges for spec sessions', () => {
+    renderWithProviders(
+      <SessionCard
+        session={{
+          ...baseSession,
+          info: {
+            ...baseSession.info,
+            session_state: 'spec',
+            status: 'spec',
+            issue_number: 9,
+            issue_url: 'https://github.com/example/repo/issues/9',
+            pr_number: 12,
+            pr_url: 'https://github.com/example/repo/pull/12',
+          },
+        }}
+        index={0}
+        isSelected={false}
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+
+    expect(screen.getByText('Spec')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open issue #9' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open PR #12' })).toBeInTheDocument()
   })
 })
 

@@ -4,6 +4,7 @@ use crate::{
     get_terminal_manager,
 };
 use lucode::infrastructure::attention_bridge::clear_session_attention_state;
+use lucode::infrastructure::database::db_specs::SpecMethods as _;
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::schaltwerk_core::{AgentLaunchParams, SessionManager};
 use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
@@ -984,6 +985,8 @@ pub struct CreateSessionParams {
     epic_id: Option<String>,
     agent_type: Option<String>,
     skip_permissions: Option<bool>,
+    issue_number: Option<i64>,
+    issue_url: Option<String>,
     pr_number: Option<i64>,
     is_consolidation: Option<bool>,
     consolidation_source_ids: Option<Vec<String>>,
@@ -1005,6 +1008,8 @@ pub async fn schaltwerk_core_create_session(
     epic_id: Option<String>,
     agent_type: Option<String>,
     skip_permissions: Option<bool>,
+    issue_number: Option<i64>,
+    issue_url: Option<String>,
     pr_number: Option<i64>,
     is_consolidation: Option<bool>,
     consolidation_source_ids: Option<Vec<String>>,
@@ -1022,6 +1027,8 @@ pub async fn schaltwerk_core_create_session(
         epic_id,
         agent_type,
         skip_permissions,
+        issue_number,
+        issue_url,
         pr_number,
         is_consolidation,
         consolidation_source_ids,
@@ -1069,6 +1076,17 @@ pub async fn schaltwerk_core_create_session(
             .epic_id
             .as_deref()
             .and_then(|epic_id| manager.get_epic_by_id(epic_id).ok());
+        if params.issue_number.is_some() || params.issue_url.is_some() {
+            core.db
+                .update_session_issue_info(
+                    &session.id,
+                    params.issue_number,
+                    params.issue_url.as_deref(),
+                )
+                .map_err(|e| SchaltError::DatabaseError {
+                    message: format!("Failed to persist session issue metadata: {e}"),
+                })?;
+        }
         (session, epic)
     };
 
@@ -2584,6 +2602,7 @@ pub async fn schaltwerk_core_unmark_session_ready(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn schaltwerk_core_create_spec_session(
     app: tauri::AppHandle,
     name: String,
@@ -2591,6 +2610,10 @@ pub async fn schaltwerk_core_create_spec_session(
     agent_type: Option<String>,
     skip_permissions: Option<bool>,
     epic_id: Option<String>,
+    issue_number: Option<i64>,
+    issue_url: Option<String>,
+    pr_number: Option<i64>,
+    pr_url: Option<String>,
 ) -> Result<Session, String> {
     log::info!("Creating spec: {name} with agent_type={agent_type:?}");
     let _ = skip_permissions;
@@ -2607,6 +2630,16 @@ pub async fn schaltwerk_core_create_spec_session(
             epic_id.as_deref(),
         )
         .map_err(|e| format!("Failed to create spec session: {e}"))?;
+    if issue_number.is_some() || issue_url.is_some() {
+        core.db
+            .update_spec_issue_info(&spec.id, issue_number, issue_url.as_deref())
+            .map_err(|e| format!("Failed to persist spec issue metadata: {e}"))?;
+    }
+    if pr_number.is_some() || pr_url.is_some() {
+        core.db
+            .update_spec_pr_info(&spec.id, pr_number, pr_url.as_deref())
+            .map_err(|e| format!("Failed to persist spec PR metadata: {e}"))?;
+    }
 
     let naming_agent = agent_type.clone().unwrap_or_else(|| {
         core.db
@@ -2772,6 +2805,31 @@ pub async fn schaltwerk_core_append_spec_content(
 }
 
 #[tauri::command]
+pub async fn schaltwerk_core_link_session_to_issue(
+    app: tauri::AppHandle,
+    name: String,
+    issue_number: i64,
+    issue_url: String,
+) -> Result<(), String> {
+    log::info!("Linking session '{name}' to issue #{issue_number}");
+
+    let core = get_core_write().await?;
+    let manager = core.session_manager();
+
+    let session = manager
+        .get_session(&name)
+        .map_err(|e| format!("Session not found: {e}"))?;
+
+    core.db
+        .update_session_issue_info(&session.id, Some(issue_number), Some(&issue_url))
+        .map_err(|e| format!("Failed to link session to issue: {e}"))?;
+
+    events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SpecSync);
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn schaltwerk_core_link_session_to_pr(
     app: tauri::AppHandle,
     name: String,
@@ -2790,6 +2848,29 @@ pub async fn schaltwerk_core_link_session_to_pr(
     core.db
         .update_session_pr_info(&session.id, Some(pr_number), Some(&pr_url))
         .map_err(|e| format!("Failed to link session to PR: {e}"))?;
+
+    events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SpecSync);
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_unlink_session_from_issue(
+    app: tauri::AppHandle,
+    name: String,
+) -> Result<(), String> {
+    log::info!("Unlinking issue from session '{name}'");
+
+    let core = get_core_write().await?;
+    let manager = core.session_manager();
+
+    let session = manager
+        .get_session(&name)
+        .map_err(|e| format!("Session not found: {e}"))?;
+
+    core.db
+        .update_session_issue_info(&session.id, None, None)
+        .map_err(|e| format!("Failed to unlink issue from session: {e}"))?;
 
     events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SpecSync);
 

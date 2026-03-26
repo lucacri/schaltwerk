@@ -1746,6 +1746,8 @@ Instructions:
     agentType?: string
     skipPermissions?: boolean
     agentTypes?: string[]
+    issueNumber?: number
+    issueUrl?: string
     prNumber?: number
     prUrl?: string
     epicId?: string | null
@@ -1766,6 +1768,10 @@ Instructions:
             agentType: data.agentType,
             skipPermissions: specSkipPermissions,
             epicId: data.epicId ?? null,
+            issueNumber: data.issueNumber ?? null,
+            issueUrl: data.issueUrl ?? null,
+            prNumber: data.prNumber ?? null,
+            prUrl: data.prUrl ?? null,
           })
           setNewSessionOpen(false)
           setCachedPrompt('')
@@ -1833,6 +1839,8 @@ Instructions:
               epicId: data.epicId ?? null,
               agentType: agentTypeForVersion,
               skipPermissions: versionSkipPermissions,
+              issueNumber: data.issueNumber || null,
+              issueUrl: data.issueUrl || null,
               prNumber: data.prNumber || null,
               isConsolidation: data.isConsolidation || null,
               consolidationSourceIds: data.consolidationSourceIds || null,

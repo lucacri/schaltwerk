@@ -52,6 +52,8 @@ mod session_sorting_tests {
             session_state: state,
             resume_allowed: true,
             amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
             pr_number: None,
             pr_url: None,
             is_consolidation: false,

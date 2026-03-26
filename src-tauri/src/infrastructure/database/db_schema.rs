@@ -145,6 +145,10 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             name TEXT NOT NULL,
             display_name TEXT,
             epic_id TEXT,
+            issue_number INTEGER,
+            issue_url TEXT,
+            pr_number INTEGER,
+            pr_url TEXT,
             repository_path TEXT NOT NULL,
             repository_name TEXT NOT NULL,
             content TEXT NOT NULL,
@@ -321,7 +325,9 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
         "UPDATE sessions SET original_parent_branch = parent_branch WHERE original_parent_branch IS NULL",
         [],
     );
-    // GitHub PR integration fields
+    // GitHub issue/PR integration fields
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN issue_number INTEGER", []);
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN issue_url TEXT", []);
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN pr_number INTEGER", []);
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN pr_url TEXT", []);
     // Epic grouping (optional)
@@ -343,12 +349,16 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
 fn apply_specs_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     // Idempotent - silently fails if column already exists
     let _ = conn.execute("ALTER TABLE specs ADD COLUMN epic_id TEXT", []);
+    let _ = conn.execute("ALTER TABLE specs ADD COLUMN issue_number INTEGER", []);
+    let _ = conn.execute("ALTER TABLE specs ADD COLUMN issue_url TEXT", []);
+    let _ = conn.execute("ALTER TABLE specs ADD COLUMN pr_number INTEGER", []);
+    let _ = conn.execute("ALTER TABLE specs ADD COLUMN pr_url TEXT", []);
 
     let tx = conn.unchecked_transaction()?;
 
     tx.execute(
-        "INSERT INTO specs (id, name, display_name, epic_id, repository_path, repository_name, content, created_at, updated_at)
-         SELECT s.id, s.name, s.display_name, s.epic_id,
+        "INSERT INTO specs (id, name, display_name, epic_id, issue_number, issue_url, pr_number, pr_url, repository_path, repository_name, content, created_at, updated_at)
+         SELECT s.id, s.name, s.display_name, s.epic_id, s.issue_number, s.issue_url, s.pr_number, s.pr_url,
                 s.repository_path, s.repository_name,
                 COALESCE(s.spec_content, s.initial_prompt, ''),
                 s.created_at, s.updated_at
@@ -463,6 +473,11 @@ mod tests {
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 display_name TEXT,
+                epic_id TEXT,
+                issue_number INTEGER,
+                issue_url TEXT,
+                pr_number INTEGER,
+                pr_url TEXT,
                 repository_path TEXT NOT NULL,
                 repository_name TEXT NOT NULL,
                 content TEXT NOT NULL,
@@ -476,8 +491,8 @@ mod tests {
 
         // Existing spec causes INSERT conflict on (repository_path, name)
         conn.execute(
-            "INSERT INTO specs (id, name, display_name, repository_path, repository_name, content, created_at, updated_at)
-             VALUES ('spec-existing', 'spec-session', NULL, '/repo', 'repo', 'existing', 0, 0)",
+            "INSERT INTO specs (id, name, display_name, epic_id, issue_number, issue_url, pr_number, pr_url, repository_path, repository_name, content, created_at, updated_at)
+             VALUES ('spec-existing', 'spec-session', NULL, NULL, NULL, NULL, NULL, NULL, '/repo', 'repo', 'existing', 0, 0)",
             [],
         )
         .unwrap();

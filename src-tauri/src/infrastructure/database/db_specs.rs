@@ -14,6 +14,18 @@ pub trait SpecMethods {
     fn update_spec_content(&self, id: &str, content: &str) -> Result<()>;
     fn update_spec_display_name(&self, id: &str, display_name: &str) -> Result<()>;
     fn update_spec_epic_id(&self, id: &str, epic_id: Option<&str>) -> Result<()>;
+    fn update_spec_issue_info(
+        &self,
+        id: &str,
+        issue_number: Option<i64>,
+        issue_url: Option<&str>,
+    ) -> Result<()>;
+    fn update_spec_pr_info(
+        &self,
+        id: &str,
+        pr_number: Option<i64>,
+        pr_url: Option<&str>,
+    ) -> Result<()>;
     fn delete_spec(&self, id: &str) -> Result<()>;
 }
 
@@ -23,15 +35,19 @@ impl SpecMethods for Database {
         conn.execute(
             "INSERT INTO specs (
                 id, name, display_name,
-                epic_id,
+                epic_id, issue_number, issue_url, pr_number, pr_url,
                 repository_path, repository_name, content,
                 created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 spec.id,
                 spec.name,
                 spec.display_name,
                 spec.epic_id,
+                spec.issue_number,
+                spec.issue_url,
+                spec.pr_number,
+                spec.pr_url,
                 spec.repository_path.to_string_lossy(),
                 spec.repository_name,
                 spec.content,
@@ -47,7 +63,7 @@ impl SpecMethods for Database {
         let repo_str = repo_path.to_string_lossy();
         let mut stmt = conn.prepare(
             "SELECT id, name, display_name,
-                    epic_id,
+                    epic_id, issue_number, issue_url, pr_number, pr_url,
                     repository_path, repository_name, content,
                     created_at, updated_at
              FROM specs
@@ -62,7 +78,7 @@ impl SpecMethods for Database {
         let conn = self.get_conn()?;
         let mut stmt = conn.prepare(
             "SELECT id, name, display_name,
-                    epic_id,
+                    epic_id, issue_number, issue_url, pr_number, pr_url,
                     repository_path, repository_name, content,
                     created_at, updated_at
              FROM specs
@@ -76,7 +92,7 @@ impl SpecMethods for Database {
         let conn = self.get_conn()?;
         let mut stmt = conn.prepare(
             "SELECT id, name, display_name,
-                    epic_id,
+                    epic_id, issue_number, issue_url, pr_number, pr_url,
                     repository_path, repository_name, content,
                     created_at, updated_at
              FROM specs
@@ -124,6 +140,38 @@ impl SpecMethods for Database {
         Ok(())
     }
 
+    fn update_spec_issue_info(
+        &self,
+        id: &str,
+        issue_number: Option<i64>,
+        issue_url: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE specs
+             SET issue_number = ?1, issue_url = ?2, updated_at = ?3
+             WHERE id = ?4",
+            params![issue_number, issue_url, Utc::now().timestamp(), id],
+        )?;
+        Ok(())
+    }
+
+    fn update_spec_pr_info(
+        &self,
+        id: &str,
+        pr_number: Option<i64>,
+        pr_url: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE specs
+             SET pr_number = ?1, pr_url = ?2, updated_at = ?3
+             WHERE id = ?4",
+            params![pr_number, pr_url, Utc::now().timestamp(), id],
+        )?;
+        Ok(())
+    }
+
     fn delete_spec(&self, id: &str) -> Result<()> {
         let conn = self.get_conn()?;
         conn.execute("DELETE FROM specs WHERE id = ?1", params![id])?;
@@ -137,15 +185,19 @@ fn row_to_spec(row: &Row<'_>) -> rusqlite::Result<Spec> {
         name: row.get(1)?,
         display_name: row.get(2)?,
         epic_id: row.get(3)?,
-        repository_path: PathBuf::from(row.get::<_, String>(4)?),
-        repository_name: row.get(5)?,
-        content: row.get(6)?,
+        issue_number: row.get(4)?,
+        issue_url: row.get(5)?,
+        pr_number: row.get(6)?,
+        pr_url: row.get(7)?,
+        repository_path: PathBuf::from(row.get::<_, String>(8)?),
+        repository_name: row.get(9)?,
+        content: row.get(10)?,
         created_at: {
-            let ts: i64 = row.get(7)?;
+            let ts: i64 = row.get(11)?;
             utc_from_epoch_seconds_lossy(ts)
         },
         updated_at: {
-            let ts: i64 = row.get(8)?;
+            let ts: i64 = row.get(12)?;
             utc_from_epoch_seconds_lossy(ts)
         },
     })

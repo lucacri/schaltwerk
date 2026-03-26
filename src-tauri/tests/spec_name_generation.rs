@@ -22,12 +22,16 @@ async fn spec_name_generation_updates_spec_display_name() {
         id: "spec-1".to_string(),
         name: "my-spec".to_string(),
         display_name: None,
+        epic_id: None,
+        issue_number: None,
+        issue_url: None,
+        pr_number: None,
+        pr_url: None,
         repository_path: repo_path.clone(),
         repository_name: "repo".to_string(),
         content: "Build the docs for the API".to_string(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
-        epic_id: None,
     };
 
     db.create_spec(&spec).unwrap();

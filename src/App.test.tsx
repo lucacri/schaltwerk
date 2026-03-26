@@ -149,12 +149,23 @@ type OnCreatePayload = {
   name: string
   prompt?: string
   baseBranch: string
+  customBranch?: string
+  useExistingBranch?: boolean
+  syncWithOrigin?: boolean
   versionCount?: number
   agentType?: string
   isSpec?: boolean
   userEditedName?: boolean
   skipPermissions?: boolean
   agentTypes?: string[]
+  draftContent?: string
+  issueNumber?: number
+  issueUrl?: string
+  prNumber?: number
+  prUrl?: string
+  epicId?: string | null
+  isConsolidation?: boolean
+  consolidationSourceIds?: string[]
 }
 
 type OnCreateFn = (data: OnCreatePayload) => Promise<void>
@@ -1304,6 +1315,99 @@ describe('validatePanelPercentage', () => {
     const callArgs = startSessionTopMock.mock.calls as Array<[StartSessionTopParams]>
 
     expect(callArgs[0]?.[0].sessionName).toBe('session-b')
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
+  it('forwards issue metadata to session creation', async () => {
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    const modalCall = newSessionModalMock.mock.calls.at(-1)
+    expect(modalCall).toBeTruthy()
+    const modalProps = modalCall![0] as { onCreate: OnCreateFn }
+
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        expect(args).toEqual(expect.objectContaining({
+          issueNumber: 42,
+          issueUrl: 'https://github.com/example/repo/issues/42',
+        }))
+
+        return buildRawSession('issue-session')
+      }
+
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await modalProps.onCreate({
+      name: 'issue-session',
+      prompt: 'Fix login flow',
+      baseBranch: 'main',
+      agentType: 'claude',
+      issueNumber: 42,
+      issueUrl: 'https://github.com/example/repo/issues/42',
+    })
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      TauriCommands.SchaltwerkCoreCreateSession,
+      expect.objectContaining({
+        issueNumber: 42,
+        issueUrl: 'https://github.com/example/repo/issues/42',
+      })
+    )
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
+  it('forwards issue metadata to spec creation', async () => {
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    const modalCall = newSessionModalMock.mock.calls.at(-1)
+    expect(modalCall).toBeTruthy()
+    const modalProps = modalCall![0] as { onCreate: OnCreateFn }
+
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSpecSession) {
+        expect(args).toEqual(expect.objectContaining({
+          issueNumber: 9,
+          issueUrl: 'https://github.com/example/repo/issues/9',
+        }))
+      }
+
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await modalProps.onCreate({
+      name: 'issue-spec',
+      baseBranch: 'main',
+      draftContent: '# Spec',
+      agentType: 'claude',
+      isSpec: true,
+      issueNumber: 9,
+      issueUrl: 'https://github.com/example/repo/issues/9',
+    })
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      TauriCommands.SchaltwerkCoreCreateSpecSession,
+      expect.objectContaining({
+        issueNumber: 9,
+        issueUrl: 'https://github.com/example/repo/issues/9',
+      })
+    )
 
     invokeMock.mockImplementation(defaultInvokeImpl)
   })

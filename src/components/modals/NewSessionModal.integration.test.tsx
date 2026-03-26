@@ -1210,6 +1210,8 @@ describe('NewSessionModal GitHub issue prompt source', () => {
         await waitFor(() => {
             expect(onCreate).toHaveBeenCalledWith(
                 expect.objectContaining({
+                    issueNumber: 42,
+                    issueUrl: 'https://github.com/example/repo/issues/42',
                     prompt: expect.stringContaining('GitHub Issue Context: Fix login flow (#42)'),
                 })
             )

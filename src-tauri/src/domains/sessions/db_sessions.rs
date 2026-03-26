@@ -63,6 +63,12 @@ pub trait SessionMethods {
         pr_number: Option<i64>,
         pr_url: Option<&str>,
     ) -> Result<()>;
+    fn update_session_issue_info(
+        &self,
+        id: &str,
+        issue_number: Option<i64>,
+        issue_url: Option<&str>,
+    ) -> Result<()>;
 }
 
 const SQLITE_MAX_VARIABLE_NUMBER: usize = 999;
@@ -93,6 +99,8 @@ struct SessionSummaryRow {
     session_state: SessionState,
     resume_allowed: bool,
     amp_thread_id: Option<String>,
+    issue_number: Option<i64>,
+    issue_url: Option<String>,
     pr_number: Option<i64>,
     pr_url: Option<String>,
     is_consolidation: bool,
@@ -147,6 +155,8 @@ impl Database {
                     session_state: summary.session_state,
                     resume_allowed: summary.resume_allowed,
                     amp_thread_id: summary.amp_thread_id,
+                    issue_number: summary.issue_number,
+                    issue_url: summary.issue_url,
                     pr_number: summary.pr_number,
                     pr_url: summary.pr_url,
                     is_consolidation: summary.is_consolidation,
@@ -202,8 +212,8 @@ impl SessionMethods for Database {
                 branch, parent_branch, original_parent_branch, worktree_path,
                 status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                 original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
-                spec_content, session_state, resume_allowed, amp_thread_id, pr_number, pr_url, is_consolidation, consolidation_sources
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30)",
+                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
             params![
                 session.id,
                 session.name,
@@ -231,6 +241,8 @@ impl SessionMethods for Database {
                 session.session_state.as_str(),
                 session.resume_allowed,
                 session.amp_thread_id,
+                session.issue_number,
+                session.issue_url,
                 session.pr_number,
                 session.pr_url,
                 session.is_consolidation,
@@ -252,7 +264,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, pr_number, pr_url, is_consolidation, consolidation_sources
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources
              FROM sessions
              WHERE repository_path = ?1 AND name = ?2"
         )?;
@@ -292,11 +304,13 @@ impl SessionMethods for Database {
                     .unwrap_or(SessionState::Running),
                 resume_allowed: row.get(24).unwrap_or(true),
                 amp_thread_id: row.get(25).ok(),
-                pr_number: row.get(26).ok(),
-                pr_url: row.get(27).ok(),
-                is_consolidation: row.get(28).unwrap_or(false),
+                issue_number: row.get(26).ok(),
+                issue_url: row.get(27).ok(),
+                pr_number: row.get(28).ok(),
+                pr_url: row.get(29).ok(),
+                is_consolidation: row.get(30).unwrap_or(false),
                 consolidation_sources: row
-                    .get::<_, Option<String>>(29)
+                    .get::<_, Option<String>>(31)
                     .ok()
                     .flatten()
                     .and_then(|s| serde_json::from_str(&s).ok()),
@@ -314,7 +328,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, pr_number, pr_url, is_consolidation, consolidation_sources
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources
              FROM sessions
              WHERE id = ?1"
         )?;
@@ -354,11 +368,13 @@ impl SessionMethods for Database {
                     .unwrap_or(SessionState::Running),
                 resume_allowed: row.get(24).unwrap_or(true),
                 amp_thread_id: row.get(25).ok(),
-                pr_number: row.get(26).ok(),
-                pr_url: row.get(27).ok(),
-                is_consolidation: row.get(28).unwrap_or(false),
+                issue_number: row.get(26).ok(),
+                issue_url: row.get(27).ok(),
+                pr_number: row.get(28).ok(),
+                pr_url: row.get(29).ok(),
+                is_consolidation: row.get(30).unwrap_or(false),
                 consolidation_sources: row
-                    .get::<_, Option<String>>(29)
+                    .get::<_, Option<String>>(31)
                     .ok()
                     .flatten()
                     .and_then(|s| serde_json::from_str(&s).ok()),
@@ -403,7 +419,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, pr_number, pr_url, is_consolidation, consolidation_sources
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources
                  FROM sessions
                  WHERE repository_path = ?1
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -442,10 +458,12 @@ impl SessionMethods for Database {
                         .unwrap_or(SessionState::Running),
                     resume_allowed: row.get(22).unwrap_or(true),
                     amp_thread_id: row.get(23).ok(),
-                    pr_number: row.get(24).ok(),
-                    pr_url: row.get(25).ok(),
-                    is_consolidation: row.get(26).unwrap_or(false),
-                    consolidation_sources: row.get(27).ok(),
+                    issue_number: row.get(24).ok(),
+                    issue_url: row.get(25).ok(),
+                    pr_number: row.get(26).ok(),
+                    pr_url: row.get(27).ok(),
+                    is_consolidation: row.get(28).unwrap_or(false),
+                    consolidation_sources: row.get(29).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -475,7 +493,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, pr_number, pr_url, is_consolidation, consolidation_sources
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources
                  FROM sessions
                  WHERE status = 'active'
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -514,10 +532,12 @@ impl SessionMethods for Database {
                         .unwrap_or(SessionState::Running),
                     resume_allowed: row.get(22).unwrap_or(true),
                     amp_thread_id: row.get(23).ok(),
-                    pr_number: row.get(24).ok(),
-                    pr_url: row.get(25).ok(),
-                    is_consolidation: row.get(26).unwrap_or(false),
-                    consolidation_sources: row.get(27).ok(),
+                    issue_number: row.get(24).ok(),
+                    issue_url: row.get(25).ok(),
+                    pr_number: row.get(26).ok(),
+                    pr_url: row.get(27).ok(),
+                    is_consolidation: row.get(28).unwrap_or(false),
+                    consolidation_sources: row.get(29).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -644,7 +664,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, pr_number, pr_url, is_consolidation, consolidation_sources
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources
                  FROM sessions
                  WHERE repository_path = ?1 AND session_state = ?2
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -687,10 +707,12 @@ impl SessionMethods for Database {
                             .unwrap_or(SessionState::Running),
                         resume_allowed: row.get(22).unwrap_or(true),
                         amp_thread_id: row.get(23).ok(),
-                        pr_number: row.get(24).ok(),
-                        pr_url: row.get(25).ok(),
-                        is_consolidation: row.get(26).unwrap_or(false),
-                        consolidation_sources: row.get(27).ok(),
+                        issue_number: row.get(24).ok(),
+                        issue_url: row.get(25).ok(),
+                        pr_number: row.get(26).ok(),
+                        pr_url: row.get(27).ok(),
+                        is_consolidation: row.get(28).unwrap_or(false),
+                        consolidation_sources: row.get(29).ok(),
                     })
                 },
             )?;
@@ -887,6 +909,20 @@ impl SessionMethods for Database {
         )?;
         Ok(())
     }
+
+    fn update_session_issue_info(
+        &self,
+        id: &str,
+        issue_number: Option<i64>,
+        issue_url: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE sessions SET issue_number = ?1, issue_url = ?2, updated_at = ?3 WHERE id = ?4",
+            params![issue_number, issue_url, Utc::now().timestamp(), id],
+        )?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -930,6 +966,8 @@ mod tests {
             session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
             pr_number: None,
             pr_url: None,
             is_consolidation: false,
@@ -982,6 +1020,8 @@ mod tests {
             session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
             pr_number: Some(142),
             pr_url: Some("https://github.com/owner/repo/pull/142".to_string()),
             is_consolidation: false,
@@ -1032,6 +1072,8 @@ mod tests {
             session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
             pr_number: None,
             pr_url: None,
             is_consolidation: false,
@@ -1158,6 +1200,8 @@ mod tests {
             session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
             pr_number: None,
             pr_url: None,
             is_consolidation: false,
@@ -1215,6 +1259,8 @@ mod tests {
             session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
             pr_number: None,
             pr_url: None,
             is_consolidation: true,

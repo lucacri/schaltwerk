@@ -82,6 +82,8 @@ interface Props {
         agentType?: AgentType
         agentTypes?: AgentType[]
         skipPermissions?: boolean
+        issueNumber?: number
+        issueUrl?: string
         prNumber?: number
         prUrl?: string
         epicId?: string | null
@@ -634,6 +636,9 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             const prInfo = promptSource === 'github_pull_request' && githubPrSelection
                 ? { prNumber: githubPrSelection.details.number, prUrl: githubPrSelection.details.url }
                 : {}
+            const issueInfo = promptSource === 'github_issue' && githubIssueSelection
+                ? { issueNumber: githubIssueSelection.details.number, issueUrl: githubIssueSelection.details.url }
+                : {}
 
             const createData: CreateSessionPayload = {
                 name: finalName,
@@ -649,6 +654,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 agentType: primaryAgentType,
                 skipPermissions: createAsDraft ? skipPermissions : undefined,
                 epicId,
+                ...issueInfo,
                 ...prInfo,
                 ...(isConsolidation ? { isConsolidation: true, consolidationSourceIds } : {}),
             }

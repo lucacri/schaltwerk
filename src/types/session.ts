@@ -88,6 +88,8 @@ export interface SessionInfo {
     diff_stats?: DiffStats
     top_uncommitted_paths?: string[]
     attention_required?: boolean
+    issue_number?: number
+    issue_url?: string
     pr_number?: number
     pr_url?: string
     is_consolidation?: boolean
@@ -147,6 +149,8 @@ export interface RawSession {
         deletions: number
         insertions: number
     }
+    issue_number?: number
+    issue_url?: string
     pr_number?: number
     pr_url?: string
     is_consolidation?: boolean

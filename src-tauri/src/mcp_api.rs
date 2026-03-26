@@ -12,6 +12,8 @@ use url::form_urlencoded;
 
 use lucode::domains::settings::setup_script::SetupScriptService;
 use lucode::domains::git::service::{ForgeType, detect_forge};
+use lucode::infrastructure::database::Database;
+use lucode::infrastructure::database::SpecMethods;
 use crate::commands::github::{CreateSessionPrArgs, github_create_session_pr_impl};
 use crate::commands::gitlab::{CreateGitlabSessionMrArgs, gitlab_create_session_mr};
 use crate::commands::schaltwerk_core::{
@@ -31,6 +33,7 @@ use lucode::domains::merge::MergeMode;
 use lucode::domains::sessions::entity::{Session, Spec};
 use lucode::infrastructure::events::{emit_event, SchaltEvent};
 use lucode::schaltwerk_core::{SessionManager, SessionState};
+use lucode::services::SessionMethods;
 
 mod diff_api;
 
@@ -219,28 +222,43 @@ fn not_found_response() -> Response<String> {
     response
 }
 
+struct CreateSpecParams<'a> {
+    name: &'a str,
+    content: &'a str,
+    agent_type: Option<&'a str>,
+    epic_id: Option<&'a str>,
+    issue_number: Option<i64>,
+    issue_url: Option<&'a str>,
+    pr_number: Option<i64>,
+    pr_url: Option<&'a str>,
+    db: Option<&'a Database>,
+}
+
 fn create_spec_session_with_notifications<F>(
     manager: &SessionManager,
-    name: &str,
-    content: &str,
-    agent_type: Option<&str>,
-    skip_permissions: Option<bool>,
-    epic_id: Option<&str>,
+    params: CreateSpecParams<'_>,
     emit_sessions: F,
 ) -> anyhow::Result<Spec>
 where
     F: Fn() -> Result<(), tauri::Error>,
 {
-    let _ = skip_permissions;
     let session = manager.create_spec_session_with_agent(
-        name,
-        content,
-        agent_type,
+        params.name,
+        params.content,
+        params.agent_type,
         None,
-        epic_id,
+        params.epic_id,
     )?;
+    if let Some(db) = params.db {
+        if params.issue_number.is_some() || params.issue_url.is_some() {
+            db.update_spec_issue_info(&session.id, params.issue_number, params.issue_url)?;
+        }
+        if params.pr_number.is_some() || params.pr_url.is_some() {
+            db.update_spec_pr_info(&session.id, params.pr_number, params.pr_url)?;
+        }
+    }
     if let Err(e) = emit_sessions() {
-        warn!("Failed to emit SessionsRefreshed after creating spec '{name}': {e}");
+        warn!("Failed to emit SessionsRefreshed after creating spec '{}': {e}", params.name);
     }
     Ok(session)
 }
@@ -588,6 +606,10 @@ mod tests {
             name: name.to_string(),
             display_name: Some(format!("Display {name}")),
             epic_id: None,
+            issue_number: None,
+            issue_url: None,
+            pr_number: None,
+            pr_url: None,
             repository_path: PathBuf::from("/tmp/mock"),
             repository_name: "mock".to_string(),
             content: content.unwrap_or_default().to_string(),
@@ -605,11 +627,17 @@ mod tests {
         let emitted_clone = emitted.clone();
         let result = create_spec_session_with_notifications(
             &manager,
-            "draft-one",
-            "Initial spec content",
-            None,
-            None,
-            None,
+            CreateSpecParams {
+                name: "draft-one",
+                content: "Initial spec content",
+                agent_type: None,
+                epic_id: None,
+                issue_number: None,
+                issue_url: None,
+                pr_number: None,
+                pr_url: None,
+                db: None,
+            },
             move || {
                 let mut flag = emitted_clone.lock().expect("lock");
                 *flag = true;
@@ -1172,11 +1200,15 @@ async fn create_draft(
     };
     let content = payload["content"].as_str().unwrap_or("");
     let agent_type = payload["agent_type"].as_str();
-    let skip_permissions = payload["skip_permissions"].as_bool();
+    let _skip_permissions = payload["skip_permissions"].as_bool();
     let epic_id = payload["epic_id"].as_str();
+    let issue_number = payload["issueNumber"].as_i64().or_else(|| payload["issue_number"].as_i64());
+    let issue_url = payload["issueUrl"].as_str().or_else(|| payload["issue_url"].as_str());
+    let pr_number = payload["prNumber"].as_i64().or_else(|| payload["pr_number"].as_i64());
+    let pr_url = payload["prUrl"].as_str().or_else(|| payload["pr_url"].as_str());
 
-    let manager = match get_core_write().await {
-        Ok(core) => core.session_manager(),
+    let core = match get_core_write().await {
+        Ok(core) => core,
         Err(e) => {
             error!("Failed to get para core: {e}");
             return Ok(error_response(
@@ -1185,13 +1217,20 @@ async fn create_draft(
             ));
         }
     };
+    let manager = core.session_manager();
     match create_spec_session_with_notifications(
         &manager,
-        name,
-        content,
-        agent_type,
-        skip_permissions,
-        epic_id,
+        CreateSpecParams {
+            name,
+            content,
+            agent_type,
+            epic_id,
+            issue_number,
+            issue_url,
+            pr_number,
+            pr_url,
+            db: Some(&core.db),
+        },
         move || {
             request_sessions_refresh(&app, SessionsRefreshReason::SpecSync);
             Ok(())
@@ -1566,9 +1605,13 @@ async fn create_session(
     let agent_type = payload["agent_type"].as_str().map(|s| s.to_string());
     let skip_permissions = payload["skip_permissions"].as_bool();
     let epic_id = payload["epic_id"].as_str().map(|s| s.to_string());
+    let issue_number = payload["issueNumber"].as_i64().or_else(|| payload["issue_number"].as_i64());
+    let issue_url = payload["issueUrl"].as_str().or_else(|| payload["issue_url"].as_str()).map(|s| s.to_string());
+    let pr_number = payload["prNumber"].as_i64().or_else(|| payload["pr_number"].as_i64());
+    let pr_url = payload["prUrl"].as_str().or_else(|| payload["pr_url"].as_str()).map(|s| s.to_string());
 
-    let manager = match get_core_write().await {
-        Ok(core) => core.session_manager(),
+    let core = match get_core_write().await {
+        Ok(core) => core,
         Err(e) => {
             error!("Failed to get para core: {e}");
             return Ok(error_response(
@@ -1577,6 +1620,7 @@ async fn create_session(
             ));
         }
     };
+    let manager = core.session_manager();
 
     let looks_docker_style = name.contains('_') && name.split('_').count() == 2;
     let was_user_edited = user_edited_name.unwrap_or(false);
@@ -1597,13 +1641,37 @@ async fn create_session(
         epic_id: epic_id.as_deref(),
         agent_type: agent_type.as_deref(),
         skip_permissions,
-        pr_number: None,
+        pr_number,
         is_consolidation: false,
         consolidation_source_ids: None,
     };
 
     match manager.create_session_with_agent(params) {
         Ok(session) => {
+            if (issue_number.is_some() || issue_url.is_some())
+                && let Err(e) = core.db.update_session_issue_info(
+                    &session.id,
+                    issue_number,
+                    issue_url.as_deref(),
+                )
+            {
+                error!("Failed to persist issue metadata for created session: {e}");
+                return Ok(error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to persist issue metadata: {e}"),
+                ));
+            }
+            if (pr_number.is_some() || pr_url.is_some())
+                && let Err(e) =
+                    core.db
+                        .update_session_pr_info(&session.id, pr_number, pr_url.as_deref())
+            {
+                error!("Failed to persist PR metadata for created session: {e}");
+                return Ok(error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to persist PR metadata: {e}"),
+                ));
+            }
             info!("Created session via API: {name}");
             request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
 

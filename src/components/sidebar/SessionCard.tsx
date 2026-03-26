@@ -1,6 +1,8 @@
-import { memo, useCallback, type CSSProperties } from "react";
+import { memo, useCallback, type CSSProperties, type ReactNode } from "react";
 import { clsx } from "clsx";
 import { useAtomValue } from "jotai";
+import { invoke } from "@tauri-apps/api/core";
+import { VscIssues, VscGitPullRequest } from "react-icons/vsc";
 import { SessionActions } from "../session/SessionActions";
 import { SessionInfo, SessionMonitorStatus } from "../../types/session";
 import { UncommittedIndicator } from "../common/UncommittedIndicator";
@@ -8,6 +10,7 @@ import { ProgressIndicator } from "../common/ProgressIndicator";
 import { InlineEditableText } from "../common/InlineEditableText";
 import { theme, getAgentColorScheme, type AgentColor } from "../../common/theme";
 import { typography } from "../../common/typography";
+import { TauriCommands } from "../../common/tauriCommands";
 import type { MergeStatus } from "../../store/atoms/sessions";
 import { lastAgentResponseMapAtom, agentResponseTickAtom, formatAgentResponseTime } from "../../store/atoms/lastAgentResponse";
 import { getSessionDisplayName } from "../../utils/sessionDisplayName";
@@ -17,6 +20,7 @@ import { KeyboardShortcutAction } from "../../keyboardShortcuts/config";
 import { detectPlatformSafe } from "../../keyboardShortcuts/helpers";
 import { useEpics } from "../../hooks/useEpics";
 import { useTranslation } from "../../common/i18n/useTranslation";
+import { logger } from "../../utils/logger";
 
 interface SessionCardProps {
   session: {
@@ -228,6 +232,57 @@ const sessionText = {
   },
 };
 
+type MetadataBadgeTone = 'issue' | 'pr'
+
+function MetadataLinkBadge({
+  label,
+  url,
+  tone,
+  title,
+  onOpen,
+  children,
+}: {
+  label: string
+  url: string
+  tone: MetadataBadgeTone
+  title: string
+  onOpen: (url: string) => void
+  children: ReactNode
+}) {
+  const palette = tone === 'issue'
+    ? {
+        backgroundColor: 'var(--color-accent-green-bg)',
+        color: 'var(--color-accent-green-light)',
+        borderColor: 'var(--color-accent-green-border)',
+      }
+    : {
+        backgroundColor: 'var(--color-accent-violet-bg)',
+        color: 'var(--color-accent-violet-light)',
+        borderColor: 'var(--color-accent-violet-border)',
+      }
+
+  return (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded border flex-shrink-0 hover:brightness-110 active:opacity-80"
+      style={{
+        ...sessionText.badge,
+        ...palette,
+      }}
+      title={title}
+      aria-label={title}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onOpen(url)
+      }}
+    >
+      {children}
+      <span>{label}</span>
+    </button>
+  )
+}
+
 export const SessionCard = memo<SessionCardProps>(
   ({
     session,
@@ -349,6 +404,41 @@ export const SessionCard = memo<SessionCardProps>(
       },
       [setItemEpic, s.session_id],
     );
+    const handleOpenBadgeUrl = useCallback((url: string) => {
+      void invoke(TauriCommands.OpenExternalUrl, { url }).catch((error) => {
+        logger.error(`[SessionCard] Failed to open linked URL for session ${s.session_id}`, {
+          url,
+          error,
+        })
+      })
+    }, [s.session_id])
+
+    const metadataBadges = (
+      <>
+        {s.issue_number && s.issue_url && (
+          <MetadataLinkBadge
+            label={`#${s.issue_number}`}
+            title={`Open issue #${s.issue_number}`}
+            tone="issue"
+            url={s.issue_url}
+            onOpen={handleOpenBadgeUrl}
+          >
+            <VscIssues className="w-3 h-3" />
+          </MetadataLinkBadge>
+        )}
+        {s.pr_number && s.pr_url && (
+          <MetadataLinkBadge
+            label={`PR #${s.pr_number}`}
+            title={`Open PR #${s.pr_number}`}
+            tone="pr"
+            url={s.pr_url}
+            onOpen={handleOpenBadgeUrl}
+          >
+            <VscGitPullRequest className="w-3 h-3" />
+          </MetadataLinkBadge>
+        )}
+      </>
+    )
 
     // State icon removed - no longer using emojis
 
@@ -551,17 +641,20 @@ export const SessionCard = memo<SessionCardProps>(
           style={sessionText.meta}
         >
           {sessionState === "spec" ? (
-            <span
-              className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded border"
-              style={{
-                ...sessionText.badge,
-                backgroundColor: "var(--color-accent-amber-bg)",
-                color: "var(--color-accent-amber-light)",
-                borderColor: "var(--color-accent-amber-border)",
-              }}
-            >
-              {t.session.spec}
-            </span>
+            <>
+              <span
+                className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded border"
+                style={{
+                  ...sessionText.badge,
+                  backgroundColor: "var(--color-accent-amber-bg)",
+                  color: "var(--color-accent-amber-light)",
+                  borderColor: "var(--color-accent-amber-border)",
+                }}
+              >
+                {t.session.spec}
+              </span>
+              {metadataBadges}
+            </>
           ) : (
             <>
               {agentType && !isWithinVersionGroup && (
@@ -628,6 +721,7 @@ export const SessionCard = memo<SessionCardProps>(
                   )}
                 </div>
               )}
+              {metadataBadges}
               <span style={{ color: "var(--color-accent-green-light)" }}>+{additions}</span>
               <span style={{ color: "var(--color-accent-red-light)" }}>-{deletions}</span>
               <span className="truncate max-w-[120px]" title={s.branch}>
