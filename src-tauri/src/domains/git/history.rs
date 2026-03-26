@@ -466,4 +466,123 @@ mod tests {
         assert_eq!(second_page.items.len(), 2);
         assert!(second_page.items[0].id != first_page.items[0].id);
     }
+
+    #[test]
+    fn default_limit_caps_at_100() {
+        let (_dir, repo, _commits) = seed_linear_history(3).expect("seed repo");
+
+        let snapshot =
+            get_git_history(repo.workdir().unwrap(), None, None).expect("history with default");
+        assert_eq!(snapshot.items.len(), 3);
+        assert_eq!(snapshot.has_more, Some(false));
+    }
+
+    #[test]
+    fn history_returns_current_ref() {
+        let (_dir, repo, _commits) = seed_linear_history(2).expect("seed repo");
+
+        let snapshot = get_git_history(repo.workdir().unwrap(), None, None).expect("snapshot");
+        assert!(snapshot.current_ref.is_some());
+        let current = snapshot.current_ref.unwrap();
+        assert_eq!(current.icon, Some("branch".to_string()));
+    }
+
+    #[test]
+    fn history_items_have_parent_ids() {
+        let (_dir, repo, _commits) = seed_linear_history(3).expect("seed repo");
+
+        let snapshot = get_git_history(repo.workdir().unwrap(), None, None).expect("snapshot");
+        let non_initial: Vec<_> = snapshot
+            .items
+            .iter()
+            .filter(|item| !item.parent_ids.is_empty())
+            .collect();
+        assert!(
+            non_initial.len() >= 2,
+            "expected at least 2 commits with parents"
+        );
+    }
+
+    #[test]
+    fn head_commit_populated() {
+        let (_dir, repo, commits) = seed_linear_history(2).expect("seed repo");
+
+        let snapshot = get_git_history(repo.workdir().unwrap(), None, None).expect("snapshot");
+        assert!(snapshot.head_commit.is_some());
+        let head = snapshot.head_commit.unwrap();
+        assert_eq!(head, *commits.last().unwrap());
+    }
+
+    #[test]
+    fn since_head_returns_unchanged_when_matching() {
+        let (_dir, repo, commits) = seed_linear_history(2).expect("seed repo");
+        let head = commits.last().unwrap();
+
+        let snapshot =
+            get_git_history_with_head(repo.workdir().unwrap(), None, None, Some(head))
+                .expect("snapshot");
+        assert_eq!(snapshot.unchanged, Some(true));
+        assert!(snapshot.items.is_empty());
+    }
+
+    #[test]
+    fn since_head_returns_changed_when_not_matching() {
+        let (_dir, repo, _commits) = seed_linear_history(2).expect("seed repo");
+
+        let snapshot = get_git_history_with_head(
+            repo.workdir().unwrap(),
+            None,
+            None,
+            Some("0000000000000000000000000000000000000000"),
+        )
+        .expect("snapshot");
+        assert_eq!(snapshot.unchanged, Some(false));
+        assert!(!snapshot.items.is_empty());
+    }
+
+    #[test]
+    fn get_commit_file_changes_initial_commit_shows_all_added() {
+        let (_dir, repo) = init_repo().expect("seed repo");
+
+        write_file(&repo, 0).expect("seed file");
+        let commit = create_commit(&repo, "first", None).expect("commit");
+
+        let workdir = repo.workdir().expect("workdir");
+        let files =
+            get_commit_file_changes(workdir, &commit.id().to_string()).expect("file changes");
+        assert!(files.iter().all(|f| f.change_type == "A"));
+    }
+
+    #[test]
+    fn get_commit_file_changes_deleted_file() {
+        let (_dir, repo) = init_repo().expect("seed repo");
+        write_file(&repo, 0).expect("seed file");
+        let first = create_commit(&repo, "add", None).expect("first commit");
+
+        let workdir = repo.workdir().expect("workdir");
+        std::fs::remove_file(workdir.join("file_0.txt")).expect("delete file");
+
+        let second = create_commit(&repo, "delete", Some(&first)).expect("second commit");
+        let files =
+            get_commit_file_changes(workdir, &second.id().to_string()).expect("file changes");
+
+        assert!(
+            files.iter().any(|f| f.path == "file_0.txt" && f.change_type == "D"),
+            "expected deleted file to be reported"
+        );
+    }
+
+    #[test]
+    fn invalid_cursor_falls_back_to_fresh_query() {
+        let (_dir, repo, _commits) = seed_linear_history(3).expect("seed repo");
+
+        let snapshot = get_git_history(
+            repo.workdir().unwrap(),
+            Some(10),
+            Some("0000000000000000000000000000000000000000"),
+        )
+        .expect("snapshot");
+
+        assert_eq!(snapshot.items.len(), 3);
+    }
 }

@@ -30,3 +30,51 @@ impl SetupScriptService {
             .map_err(|e| anyhow!("Failed to set project setup script: {e}"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn test_service() -> (SetupScriptService, TempDir) {
+        let db = Database::new_in_memory().expect("in-memory db");
+        let tmp = TempDir::new().unwrap();
+        let svc = SetupScriptService::new(db, tmp.path());
+        (svc, tmp)
+    }
+
+    #[test]
+    fn get_returns_none_when_not_set() {
+        let (svc, _tmp) = test_service();
+        let result = svc.get().unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn set_and_get_roundtrips() {
+        let (svc, _tmp) = test_service();
+        svc.set("echo hello").unwrap();
+
+        let result = svc.get().unwrap();
+        assert_eq!(result, Some("echo hello".to_string()));
+    }
+
+    #[test]
+    fn set_overwrites_previous_value() {
+        let (svc, _tmp) = test_service();
+        svc.set("first").unwrap();
+        svc.set("second").unwrap();
+
+        let result = svc.get().unwrap();
+        assert_eq!(result, Some("second".to_string()));
+    }
+
+    #[test]
+    fn set_empty_string_is_retrievable() {
+        let (svc, _tmp) = test_service();
+        svc.set("").unwrap();
+
+        let result = svc.get().unwrap();
+        assert_eq!(result, Some("".to_string()));
+    }
+}
