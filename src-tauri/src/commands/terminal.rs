@@ -1062,4 +1062,221 @@ mod tests {
         let calls = backend_calls.lock().unwrap();
         assert_eq!(calls[0].1, Some(u64::MAX));
     }
+
+    #[tokio::test]
+    async fn register_session_terminals_passes_all_args() {
+        let backend = MockTerminalsBackend::new();
+        let backend_calls = Arc::clone(&backend.register_calls);
+        let service = TerminalsServiceImpl::new(backend);
+
+        let result = service
+            .register_session_terminals(
+                "project-1".to_string(),
+                Some("session-1".to_string()),
+                vec!["term-a".to_string(), "term-b".to_string()],
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let calls = backend_calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "project-1");
+        assert_eq!(calls[0].1, Some("session-1".to_string()));
+        assert_eq!(calls[0].2, vec!["term-a", "term-b"]);
+    }
+
+    #[tokio::test]
+    async fn register_session_terminals_with_none_session_id() {
+        let backend = MockTerminalsBackend::new();
+        let backend_calls = Arc::clone(&backend.register_calls);
+        let service = TerminalsServiceImpl::new(backend);
+
+        let result = service
+            .register_session_terminals(
+                "project-1".to_string(),
+                None,
+                vec!["term-a".to_string()],
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let calls = backend_calls.lock().unwrap();
+        assert_eq!(calls[0].1, None);
+    }
+
+    #[tokio::test]
+    async fn register_session_terminals_error_handling() {
+        let service = error_service();
+
+        let result = service
+            .register_session_terminals(
+                "p".to_string(),
+                Some("s".to_string()),
+                vec!["t".to_string()],
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("register failed"));
+    }
+
+    #[tokio::test]
+    async fn suspend_session_terminals_passes_args() {
+        let backend = MockTerminalsBackend::new();
+        let backend_calls = Arc::clone(&backend.suspend_calls);
+        let service = TerminalsServiceImpl::new(backend);
+
+        let result = service
+            .suspend_session_terminals("project-2".to_string(), Some("session-2".to_string()))
+            .await;
+
+        assert!(result.is_ok());
+        let calls = backend_calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "project-2");
+        assert_eq!(calls[0].1, Some("session-2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn suspend_session_terminals_error_handling() {
+        let service = error_service();
+
+        let result = service
+            .suspend_session_terminals("p".to_string(), None)
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("suspend failed"));
+    }
+
+    #[tokio::test]
+    async fn resume_session_terminals_passes_args() {
+        let backend = MockTerminalsBackend::new();
+        let backend_calls = Arc::clone(&backend.resume_calls);
+        let service = TerminalsServiceImpl::new(backend);
+
+        let result = service
+            .resume_session_terminals("project-3".to_string(), Some("session-3".to_string()))
+            .await;
+
+        assert!(result.is_ok());
+        let calls = backend_calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "project-3");
+        assert_eq!(calls[0].1, Some("session-3".to_string()));
+    }
+
+    #[tokio::test]
+    async fn resume_session_terminals_error_handling() {
+        let service = error_service();
+
+        let result = service
+            .resume_session_terminals("p".to_string(), None)
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("resume failed"));
+    }
+
+    #[tokio::test]
+    async fn create_run_terminal_error_handling() {
+        let service = error_service();
+
+        let result = service
+            .create_run_terminal(CreateRunTerminalRequest {
+                id: "error-run".to_string(),
+                cwd: "/tmp".to_string(),
+                env: None,
+                cols: None,
+                rows: None,
+            })
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("create run failed"));
+    }
+
+    #[tokio::test]
+    async fn create_terminal_with_size_error_handling() {
+        let service = error_service();
+
+        let result = service
+            .create_terminal_with_size(CreateTerminalWithSizeRequest {
+                id: "error-sized".to_string(),
+                cwd: "/tmp".to_string(),
+                cols: 80,
+                rows: 24,
+            })
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("create sized failed"));
+    }
+
+    #[test]
+    fn terminal_buffer_response_serializes_all_fields() {
+        let response = TerminalBufferResponse {
+            seq: u64::MAX,
+            start_seq: u64::MAX - 1,
+            data: "".to_string(),
+        };
+
+        let json = serde_json::to_string(&response).expect("serialization");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("parse");
+        assert_eq!(parsed["seq"], u64::MAX);
+        assert_eq!(parsed["startSeq"], u64::MAX - 1);
+        assert_eq!(parsed["data"], "");
+    }
+
+    #[tokio::test]
+    async fn terminals_exist_bulk_with_single_id() {
+        let backend = MockTerminalsBackend::new();
+        let service = TerminalsServiceImpl::new(backend);
+
+        let result = service
+            .terminals_exist_bulk(vec!["single".to_string()])
+            .await;
+
+        assert!(result.is_ok());
+        let pairs = result.unwrap();
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].0, "single");
+    }
+
+    #[tokio::test]
+    async fn paste_and_submit_with_both_flags_true() {
+        let backend = MockTerminalsBackend::new();
+        let backend_calls = Arc::clone(&backend.paste_calls);
+        let service = TerminalsServiceImpl::new(backend);
+
+        let result = service
+            .paste_and_submit_terminal(
+                "term-both".to_string(),
+                b"payload".to_vec(),
+                true,
+                true,
+            )
+            .await;
+
+        assert!(result.is_ok());
+        let calls = backend_calls.lock().unwrap();
+        assert_eq!(calls[0].2, true);
+        assert_eq!(calls[0].3, true);
+    }
+
+    #[tokio::test]
+    async fn resize_terminal_with_minimum_dimensions() {
+        let backend = MockTerminalsBackend::new();
+        let backend_calls = Arc::clone(&backend.resize_calls);
+        let service = TerminalsServiceImpl::new(backend);
+
+        let result = service
+            .resize_terminal("term-min".to_string(), 1, 1)
+            .await;
+
+        assert!(result.is_ok());
+        let calls = backend_calls.lock().unwrap();
+        assert_eq!(calls[0].1, 1);
+        assert_eq!(calls[0].2, 1);
+    }
 }

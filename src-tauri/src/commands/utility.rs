@@ -320,4 +320,111 @@ mod tests {
             other => panic!("unexpected error variant: {other:?}"),
         }
     }
+
+    #[test]
+    fn build_launch_command_returns_url_as_argument() {
+        let url = "https://example.com/path?q=1";
+        let (_, args) = build_launch_command(url);
+        assert_eq!(args.len(), 1);
+        assert_eq!(args[0], url);
+    }
+
+    #[test]
+    fn build_launch_command_platform_specific_program() {
+        let (program, _) = build_launch_command("https://example.com");
+        if cfg!(target_os = "linux") {
+            assert_eq!(program, "xdg-open");
+        } else {
+            assert_eq!(program, "open");
+        }
+    }
+
+    #[test]
+    fn launch_error_display_spawn() {
+        let error = LaunchError::CommandSpawn {
+            program: "test-program",
+            source: io::Error::new(io::ErrorKind::NotFound, "not found"),
+        };
+        let display = format!("{error}");
+        assert!(display.contains("test-program"));
+        assert!(display.contains("not found"));
+    }
+
+    #[test]
+    fn launch_error_display_failed() {
+        let error = LaunchError::CommandFailed {
+            program: "test-program",
+            status: failure_status(),
+        };
+        let display = format!("{error}");
+        assert!(display.contains("test-program"));
+        assert!(display.contains("exited with status"));
+    }
+
+    #[test]
+    fn launch_error_implements_std_error() {
+        let error = LaunchError::CommandSpawn {
+            program: "test",
+            source: io::Error::new(io::ErrorKind::Other, "test"),
+        };
+        let _: &dyn std::error::Error = &error;
+    }
+}
+
+#[cfg(test)]
+mod utility_pure_tests {
+    use super::*;
+
+    #[test]
+    fn path_exists_returns_true_for_existing_path() {
+        let result = path_exists("/tmp".to_string()).unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn path_exists_returns_false_for_nonexistent_path() {
+        let result = path_exists("/nonexistent/path/12345".to_string()).unwrap();
+        assert!(!result);
+    }
+
+    #[test]
+    fn get_app_version_returns_nonempty_string() {
+        let version = get_app_version();
+        assert!(!version.is_empty());
+        assert!(version.contains('.'));
+    }
+
+    #[test]
+    fn log_frontend_message_accepts_all_levels() {
+        for level in &["error", "warn", "info", "debug", "unknown"] {
+            let result =
+                schaltwerk_core_log_frontend_message(level.to_string(), "test message".to_string());
+            assert!(result.is_ok());
+        }
+    }
+
+    #[test]
+    fn get_environment_variable_blocks_disallowed_vars() {
+        let result = get_environment_variable("HOME".to_string());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not accessible"));
+    }
+
+    #[test]
+    fn get_environment_variable_allows_terminal_transport() {
+        let result = get_environment_variable("LUCODE_TERMINAL_TRANSPORT".to_string());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn get_environment_variable_blocks_empty_string() {
+        let result = get_environment_variable("".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn get_environment_variable_blocks_path() {
+        let result = get_environment_variable("PATH".to_string());
+        assert!(result.is_err());
+    }
 }

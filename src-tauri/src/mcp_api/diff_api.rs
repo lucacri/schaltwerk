@@ -1081,4 +1081,317 @@ mod tests {
         let error = DiffApiError::new(StatusCode::BAD_REQUEST, "failure".into());
         assert_eq!(error.message, "failure");
     }
+
+    #[test]
+    fn encode_decode_cursor_roundtrip() {
+        let encoded = encode_cursor(42);
+        let decoded = decode_cursor(&encoded).expect("valid cursor");
+        assert_eq!(decoded, 42);
+    }
+
+    #[test]
+    fn encode_decode_cursor_zero() {
+        let encoded = encode_cursor(0);
+        let decoded = decode_cursor(&encoded).expect("valid cursor");
+        assert_eq!(decoded, 0);
+    }
+
+    #[test]
+    fn encode_decode_cursor_large_value() {
+        let encoded = encode_cursor(999999);
+        let decoded = decode_cursor(&encoded).expect("valid cursor");
+        assert_eq!(decoded, 999999);
+    }
+
+    #[test]
+    fn decode_cursor_rejects_invalid_base64() {
+        let err = decode_cursor("!!!not-valid!!!").expect_err("invalid cursor");
+        assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(err.message.contains("Invalid cursor"));
+    }
+
+    #[test]
+    fn decode_cursor_rejects_valid_base64_but_invalid_json() {
+        let encoded = URL_SAFE_NO_PAD.encode(b"not json");
+        let err = decode_cursor(&encoded).expect_err("invalid json");
+        assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn validate_rel_path_accepts_simple_path() {
+        let result = validate_rel_path("src/lib.rs").expect("valid path");
+        assert_eq!(result, PathBuf::from("src/lib.rs"));
+    }
+
+    #[test]
+    fn validate_rel_path_accepts_single_file() {
+        let result = validate_rel_path("file.txt").expect("valid path");
+        assert_eq!(result, PathBuf::from("file.txt"));
+    }
+
+    #[test]
+    fn validate_rel_path_rejects_absolute_path() {
+        let err = validate_rel_path("/etc/passwd").expect_err("absolute path should fail");
+        assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(err.message.contains("relative"));
+    }
+
+    #[test]
+    fn validate_rel_path_rejects_parent_traversal() {
+        let err = validate_rel_path("../secret/file").expect_err("traversal should fail");
+        assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(err.message.contains(".."));
+    }
+
+    #[test]
+    fn validate_rel_path_rejects_mid_path_traversal() {
+        let err = validate_rel_path("src/../etc/passwd").expect_err("traversal should fail");
+        assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn detect_change_type_added() {
+        assert_eq!(detect_change_type(&[], b"new content"), "added");
+    }
+
+    #[test]
+    fn detect_change_type_deleted() {
+        assert_eq!(detect_change_type(b"old content", &[]), "deleted");
+    }
+
+    #[test]
+    fn detect_change_type_modified() {
+        assert_eq!(detect_change_type(b"old", b"new"), "modified");
+    }
+
+    #[test]
+    fn detect_change_type_both_empty() {
+        assert_eq!(detect_change_type(&[], &[]), "modified");
+    }
+
+    #[test]
+    fn map_diff_line_added() {
+        let line = DiffLine {
+            content: "fn hello()".to_string(),
+            line_type: LineType::Added,
+            old_line_number: None,
+            new_line_number: Some(10),
+            is_collapsible: None,
+            collapsed_count: None,
+            collapsed_lines: None,
+        };
+        let entry = map_diff_line(&line);
+        assert_eq!(entry.line_type, "added");
+        assert_eq!(entry.content, "fn hello()");
+        assert_eq!(entry.old_line_number, None);
+        assert_eq!(entry.new_line_number, Some(10));
+        assert_eq!(entry.is_collapsible, None);
+        assert_eq!(entry.collapsed_count, None);
+    }
+
+    #[test]
+    fn map_diff_line_removed() {
+        let line = DiffLine {
+            content: "old code".to_string(),
+            line_type: LineType::Removed,
+            old_line_number: Some(5),
+            new_line_number: None,
+            is_collapsible: None,
+            collapsed_count: None,
+            collapsed_lines: None,
+        };
+        let entry = map_diff_line(&line);
+        assert_eq!(entry.line_type, "removed");
+        assert_eq!(entry.old_line_number, Some(5));
+        assert_eq!(entry.new_line_number, None);
+    }
+
+    #[test]
+    fn map_diff_line_unchanged_with_collapsible() {
+        let line = DiffLine {
+            content: "  context".to_string(),
+            line_type: LineType::Unchanged,
+            old_line_number: Some(3),
+            new_line_number: Some(3),
+            is_collapsible: Some(true),
+            collapsed_count: Some(15),
+            collapsed_lines: None,
+        };
+        let entry = map_diff_line(&line);
+        assert_eq!(entry.line_type, "unchanged");
+        assert_eq!(entry.is_collapsible, Some(true));
+        assert_eq!(entry.collapsed_count, Some(15));
+    }
+
+    #[test]
+    fn scope_kind_label_session() {
+        let scope = DiffScope {
+            kind: DiffScopeKind::Session,
+            worktree_path: PathBuf::from("/tmp"),
+            current_branch: "feature".to_string(),
+            parent_branch: "main".to_string(),
+            session_id: Some("s1".to_string()),
+            has_spec: false,
+        };
+        assert_eq!(scope_kind_label(&scope), "session");
+    }
+
+    #[test]
+    fn scope_kind_label_orchestrator() {
+        let scope = DiffScope {
+            kind: DiffScopeKind::Orchestrator,
+            worktree_path: PathBuf::from("/tmp"),
+            current_branch: "main".to_string(),
+            parent_branch: "main".to_string(),
+            session_id: None,
+            has_spec: false,
+        };
+        assert_eq!(scope_kind_label(&scope), "orchestrator");
+    }
+
+    #[test]
+    fn diff_scope_for_session_rejects_missing_worktree() {
+        let mut session = make_session(Path::new("/nonexistent/worktree"), "branch", "main");
+        session.worktree_path = PathBuf::from("/nonexistent/path/that/does/not/exist");
+        let err = DiffScope::for_session(&session).expect_err("missing worktree");
+        assert_eq!(err.status, StatusCode::CONFLICT);
+        assert!(err.message.contains("worktree is missing"));
+    }
+
+    #[test]
+    fn diff_scope_for_session_rejects_cancelled_session() {
+        let tmp = init_repo();
+        let repo_path = tmp.path();
+        let mut session = make_session(repo_path, "feature", "main");
+        session.status = SessionStatus::Cancelled;
+        let err = DiffScope::for_session(&session).expect_err("cancelled session");
+        assert_eq!(err.status, StatusCode::CONFLICT);
+        assert!(err.message.contains("cancellation"));
+    }
+
+    #[test]
+    fn diff_scope_for_session_sets_correct_fields() {
+        let tmp = init_repo();
+        let repo_path = tmp.path();
+        let mut session = make_session(repo_path, "lucode/test-branch", "main");
+        session.spec_content = Some("spec".to_string());
+        let scope = DiffScope::for_session(&session).expect("valid scope");
+        assert_eq!(scope.kind, DiffScopeKind::Session);
+        assert_eq!(scope.current_branch, "lucode/test-branch");
+        assert_eq!(scope.parent_branch, "main");
+        assert!(scope.session_id.is_some());
+        assert!(scope.has_spec);
+    }
+
+    #[test]
+    fn diff_api_error_preserves_status_and_message() {
+        let err = DiffApiError::new(StatusCode::FORBIDDEN, "not allowed".into());
+        assert_eq!(err.status, StatusCode::FORBIDDEN);
+        assert_eq!(err.message, "not allowed");
+    }
+
+    #[test]
+    fn diff_scope_kind_serializes_lowercase() {
+        let session_json = serde_json::to_string(&DiffScopeKind::Session).unwrap();
+        assert_eq!(session_json, r#""session""#);
+        let orch_json = serde_json::to_string(&DiffScopeKind::Orchestrator).unwrap();
+        assert_eq!(orch_json, r#""orchestrator""#);
+    }
+
+    #[test]
+    fn diff_scope_kind_deserializes_lowercase() {
+        let session: DiffScopeKind = serde_json::from_str(r#""session""#).unwrap();
+        assert_eq!(session, DiffScopeKind::Session);
+        let orch: DiffScopeKind = serde_json::from_str(r#""orchestrator""#).unwrap();
+        assert_eq!(orch, DiffScopeKind::Orchestrator);
+    }
+
+    #[test]
+    fn diff_line_entry_equality() {
+        let a = DiffLineEntry {
+            content: "hello".into(),
+            line_type: "added".into(),
+            old_line_number: None,
+            new_line_number: Some(1),
+            is_collapsible: None,
+            collapsed_count: None,
+        };
+        let b = a.clone();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn diff_summary_zero_page_size_rejected() {
+        let tmp = init_repo();
+        let repo_path = tmp.path();
+        let session = make_session(repo_path, "main", "main");
+        let scope = DiffScope::for_session(&session).expect("scope");
+        let err = compute_diff_summary(
+            &scope,
+            SummaryQuery {
+                cursor: None,
+                page_size: Some(0),
+            },
+        )
+        .expect_err("zero page_size should fail");
+        assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn diff_chunk_zero_line_limit_rejected() {
+        let tmp = init_repo();
+        let repo_path = tmp.path();
+        checkout_branch(repo_path, "lucode/zero-limit", "main");
+        write_file(repo_path.join("f.txt").as_path(), "data");
+        let session = make_session(repo_path, "lucode/zero-limit", "main");
+        let scope = DiffScope::for_session(&session).expect("scope");
+        let err = compute_diff_chunk(
+            &scope,
+            "f.txt",
+            DiffChunkRequest {
+                cursor: None,
+                line_limit: Some(0),
+            },
+        )
+        .expect_err("zero line_limit should fail");
+        assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn diff_chunk_exceeds_max_line_limit() {
+        let tmp = init_repo();
+        let repo_path = tmp.path();
+        checkout_branch(repo_path, "lucode/max-limit", "main");
+        write_file(repo_path.join("f.txt").as_path(), "data");
+        let session = make_session(repo_path, "lucode/max-limit", "main");
+        let scope = DiffScope::for_session(&session).expect("scope");
+        let err = compute_diff_chunk(
+            &scope,
+            "f.txt",
+            DiffChunkRequest {
+                cursor: None,
+                line_limit: Some(MAX_LINE_LIMIT + 1),
+            },
+        )
+        .expect_err("exceeding max line_limit should fail");
+        assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(err.message.contains(&MAX_LINE_LIMIT.to_string()));
+    }
+
+    #[test]
+    fn read_worktree_bytes_returns_empty_for_missing_file() {
+        let tmp = TempDir::new().expect("temp dir");
+        let result =
+            read_worktree_bytes(tmp.path(), Path::new("nonexistent.txt")).expect("should succeed");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn read_worktree_bytes_reads_existing_file() {
+        let tmp = TempDir::new().expect("temp dir");
+        std::fs::write(tmp.path().join("hello.txt"), "hello world").expect("write");
+        let result =
+            read_worktree_bytes(tmp.path(), Path::new("hello.txt")).expect("should succeed");
+        assert_eq!(result, b"hello world");
+    }
 }
