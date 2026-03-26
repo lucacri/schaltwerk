@@ -280,6 +280,13 @@ pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Re
         }
         true
     }) && !statuses.is_empty();
+    let has_conflicts_detected = statuses.iter().any(|entry| {
+        entry.status().contains(git2::Status::CONFLICTED)
+            && entry
+                .path()
+                .map(|p| !is_internal_tooling_path(p))
+                .unwrap_or(true)
+    });
     // Sample a few offending paths for diagnostics
     let mut sample: Vec<String> = Vec::new();
     for entry in statuses.iter() {
@@ -443,6 +450,7 @@ pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Re
             has_uncommitted: has_uncommitted_filtered,
             calculated_at: Utc::now(),
             last_diff_change_ts,
+            has_conflicts: has_conflicts_detected,
         });
     }
 
@@ -555,6 +563,7 @@ pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Re
         has_uncommitted: has_uncommitted_filtered,
         calculated_at: Utc::now(),
         last_diff_change_ts,
+        has_conflicts: has_conflicts_detected,
     };
 
     let map = STATS_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
