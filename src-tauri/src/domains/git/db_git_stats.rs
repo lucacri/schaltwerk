@@ -49,6 +49,7 @@ impl GitStatsMethods for Database {
                 has_uncommitted: row.get(4)?,
                 calculated_at: utc_from_epoch_seconds_lossy(row.get(5)?),
                 last_diff_change_ts: None,
+                has_conflicts: false,
             })
         });
         match result {
@@ -72,6 +73,7 @@ impl GitStatsMethods for Database {
                 has_uncommitted: row.get(4)?,
                 calculated_at: utc_from_epoch_seconds_lossy(row.get(5)?),
                 last_diff_change_ts: None,
+                has_conflicts: false,
             })
         })?;
 
@@ -118,6 +120,7 @@ impl GitStatsMethods for Database {
                 has_uncommitted: row.get(4)?,
                 calculated_at: utc_from_epoch_seconds_lossy(row.get(5)?),
                 last_diff_change_ts: None,
+                has_conflicts: false,
             })
         })?;
 

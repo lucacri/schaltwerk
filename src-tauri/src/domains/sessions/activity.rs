@@ -62,8 +62,22 @@ impl<E: EventEmitter> ActivityTracker<E> {
     async fn update_all_activities(&self) -> Result<()> {
         let active_sessions = self.db.list_all_active_sessions()?;
 
+        let mut sessions_by_repo: std::collections::HashMap<
+            std::path::PathBuf,
+            Vec<crate::domains::sessions::entity::Session>,
+        > = std::collections::HashMap::new();
         for session in active_sessions {
-            self.refresh_stats_and_activity_for_session(&session)?;
+            sessions_by_repo
+                .entry(session.repository_path.clone())
+                .or_default()
+                .push(session);
+        }
+
+        for (repo_path, sessions) in &sessions_by_repo {
+            let repo = Repository::open(repo_path).ok();
+            for session in sessions {
+                self.refresh_stats_and_activity_for_session(session, repo.as_ref())?;
+            }
         }
 
         Ok(())
@@ -72,8 +86,8 @@ impl<E: EventEmitter> ActivityTracker<E> {
     fn refresh_stats_and_activity_for_session(
         &self,
         session: &crate::domains::sessions::entity::Session,
+        shared_repo: Option<&Repository>,
     ) -> Result<bool> {
-        // Prefer diff-aware last change time via git stats; fall back to filesystem walk only if unavailable
         let mut emitted_activity = false;
 
         if session.worktree_path.exists() {
@@ -81,34 +95,23 @@ impl<E: EventEmitter> ActivityTracker<E> {
                 Ok(mut stats) => {
                     stats.session_id = session.id.clone();
 
-                    // Update DB stats periodically as before
                     if self.db.should_update_stats(&session.id)? {
-                        let has_conflicts = match git::has_conflicts(&session.worktree_path) {
-                            Ok(value) => value,
-                            Err(err) => {
-                                log::warn!(
-                                    "Failed to detect conflicts for {}: {err}",
-                                    session.name
-                                );
-                                false
-                            }
-                        };
+                        let has_conflicts = stats.has_conflicts;
 
-                        let merge_snapshot = Repository::open(&session.repository_path)
-                            .ok()
+                        let merge_snapshot = shared_repo
                             .and_then(|repo| {
                                 let session_oid = MergeSnapshotGateway::resolve_branch_oid(
-                                    &repo,
+                                    repo,
                                     &session.branch,
                                 )
                                 .ok()?;
                                 let parent_oid = MergeSnapshotGateway::resolve_branch_oid(
-                                    &repo,
+                                    repo,
                                     &session.parent_branch,
                                 )
                                 .ok()?;
                                 MergeSnapshotGateway::compute(
-                                    &repo,
+                                    repo,
                                     session_oid,
                                     parent_oid,
                                     &session.branch,
@@ -523,7 +526,7 @@ mod tests {
             .unwrap();
 
         let emitted = tracker
-            .refresh_stats_and_activity_for_session(&session)
+            .refresh_stats_and_activity_for_session(&session, None)
             .unwrap();
         assert!(emitted, "Should emit activity for changed files");
 
@@ -587,7 +590,7 @@ mod tests {
         db.create_session(&session).unwrap();
 
         let emitted = tracker
-            .refresh_stats_and_activity_for_session(&session)
+            .refresh_stats_and_activity_for_session(&session, None)
             .unwrap();
         // We removed filesystem fallback: should not emit anything when git stats are unavailable
         assert!(!emitted, "Should not emit when git stats unavailable");
