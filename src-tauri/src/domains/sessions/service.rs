@@ -2735,16 +2735,17 @@ impl SessionManager {
         let mut worktree_check_time = std::time::Duration::ZERO;
         let mut session_count = 0;
 
-        // Push specs (lightweight, no worktrees)
+        let default_base_branch = self
+            .resolve_parent_branch(None)
+            .unwrap_or_else(|_| "main".to_string());
+
         for spec in specs {
             let worktree_path = self
                 .repo_path
                 .join(".lucode")
                 .join("specs")
                 .join(&spec.name);
-            let base_branch = self
-                .resolve_parent_branch(None)
-                .unwrap_or_else(|_| "main".to_string());
+            let base_branch = default_base_branch.clone();
 
             let info = SessionInfo {
                 session_id: spec.name.clone(),
