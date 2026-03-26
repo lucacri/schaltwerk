@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { logger } from '../utils/logger'
 
 interface AsyncState<T> {
   data: T | null
@@ -35,7 +36,9 @@ export function useAsyncState<T>(
       })
       .catch((err: unknown) => {
         if (!mountedRef.current || controller.signal.aborted) return
-        setError(err instanceof Error ? err : new Error(String(err)))
+        const error = err instanceof Error ? err : new Error(String(err))
+        logger.error('[useAsyncState] async operation failed:', error)
+        setError(error)
         setLoading(false)
       })
   }, [])
