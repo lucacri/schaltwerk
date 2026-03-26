@@ -508,4 +508,316 @@ mod tests {
             "spec rows in sessions must not be deleted on failed insert"
         );
     }
+
+    #[test]
+    fn initialize_schema_creates_all_tables() {
+        use crate::infrastructure::database::connection::Database;
+        let db = Database::new_in_memory().unwrap();
+        let conn = db.get_conn().unwrap();
+
+        let tables = [
+            "sessions",
+            "git_stats",
+            "app_config",
+            "epics",
+            "specs",
+            "project_config",
+            "agent_binaries",
+            "archived_specs",
+        ];
+
+        for table in &tables {
+            let exists: bool = conn
+                .query_row(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name=?1",
+                    [table],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(exists, "Table '{table}' should exist after schema init");
+        }
+    }
+
+    #[test]
+    fn initialize_schema_is_idempotent() {
+        use super::initialize_schema;
+        use crate::infrastructure::database::connection::Database;
+        let db = Database::new_in_memory().unwrap();
+        initialize_schema(&db).unwrap();
+        initialize_schema(&db).unwrap();
+    }
+
+    #[test]
+    fn app_config_default_row_inserted() {
+        use crate::infrastructure::database::connection::Database;
+        let db = Database::new_in_memory().unwrap();
+        let conn = db.get_conn().unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM app_config", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+
+        let agent_type: String = conn
+            .query_row(
+                "SELECT agent_type FROM app_config WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(agent_type, "claude");
+    }
+
+    #[test]
+    fn app_config_migrations_add_expected_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE app_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                skip_permissions BOOLEAN DEFAULT FALSE
+            )",
+            [],
+        )
+        .unwrap();
+
+        super::apply_app_config_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO app_config (id, skip_permissions, agent_type, tutorial_completed, archive_max_entries)
+             VALUES (1, FALSE, 'claude', FALSE, 50)",
+            [],
+        )
+        .unwrap();
+
+        let agent: String = conn
+            .query_row(
+                "SELECT agent_type FROM app_config WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(agent, "claude");
+
+        let tutorial: bool = conn
+            .query_row(
+                "SELECT tutorial_completed FROM app_config WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(!tutorial);
+    }
+
+    #[test]
+    fn app_config_migrations_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE app_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                skip_permissions BOOLEAN DEFAULT FALSE
+            )",
+            [],
+        )
+        .unwrap();
+
+        super::apply_app_config_migrations(&conn).unwrap();
+        super::apply_app_config_migrations(&conn).unwrap();
+    }
+
+    #[test]
+    fn sessions_migrations_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE sessions (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                repository_path TEXT NOT NULL,
+                repository_name TEXT NOT NULL,
+                branch TEXT NOT NULL,
+                parent_branch TEXT NOT NULL,
+                worktree_path TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+
+        super::apply_sessions_migrations(&conn).unwrap();
+        super::apply_sessions_migrations(&conn).unwrap();
+    }
+
+    #[test]
+    fn sessions_migrations_add_expected_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE sessions (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                repository_path TEXT NOT NULL,
+                repository_name TEXT NOT NULL,
+                branch TEXT NOT NULL,
+                parent_branch TEXT NOT NULL,
+                worktree_path TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+
+        super::apply_sessions_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO sessions (id, name, repository_path, repository_name, branch, parent_branch, worktree_path, status, created_at, updated_at, ready_to_merge, epic_id, session_state)
+             VALUES ('s1', 'test', '/repo', 'repo', 'b', 'main', '/wt', 'active', 0, 0, FALSE, NULL, 'running')",
+            [],
+        )
+        .unwrap();
+
+        let rtm: bool = conn
+            .query_row(
+                "SELECT ready_to_merge FROM sessions WHERE id = 's1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(!rtm);
+    }
+
+    #[test]
+    fn project_config_migrations_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE project_config (
+                repository_path TEXT PRIMARY KEY,
+                setup_script TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+
+        super::apply_project_config_migrations(&conn).unwrap();
+        super::apply_project_config_migrations(&conn).unwrap();
+    }
+
+    #[test]
+    fn specs_migration_moves_spec_sessions_to_specs_table() {
+        let conn = Connection::open_in_memory().unwrap();
+
+        conn.execute(
+            "CREATE TABLE sessions (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                display_name TEXT,
+                epic_id TEXT,
+                repository_path TEXT NOT NULL,
+                repository_name TEXT NOT NULL,
+                branch TEXT NOT NULL,
+                parent_branch TEXT NOT NULL,
+                worktree_path TEXT NOT NULL,
+                status TEXT NOT NULL,
+                session_state TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                initial_prompt TEXT,
+                spec_content TEXT
+            )",
+            [],
+        )
+        .unwrap();
+
+        conn.execute(
+            "CREATE TABLE specs (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                display_name TEXT,
+                repository_path TEXT NOT NULL,
+                repository_name TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                UNIQUE(repository_path, name)
+            )",
+            [],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO sessions (id, name, display_name, repository_path, repository_name, branch, parent_branch, worktree_path, status, session_state, created_at, updated_at, spec_content)
+             VALUES ('s1', 'spec-sess', 'My Spec', '/repo', 'repo', 'b', 'main', '/wt', 'active', 'spec', 100, 200, 'spec body')",
+            [],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO sessions (id, name, repository_path, repository_name, branch, parent_branch, worktree_path, status, session_state, created_at, updated_at)
+             VALUES ('s2', 'running-sess', '/repo', 'repo', 'b2', 'main', '/wt2', 'active', 'running', 100, 200)",
+            [],
+        )
+        .unwrap();
+
+        apply_specs_migrations(&conn).unwrap();
+
+        let spec_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM specs", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(spec_count, 1);
+
+        let content: String = conn
+            .query_row("SELECT content FROM specs WHERE id = 's1'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(content, "spec body");
+
+        let remaining_sessions: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sessions WHERE session_state = 'spec'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining_sessions, 0);
+
+        let running: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sessions WHERE session_state = 'running'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(running, 1);
+    }
+
+    #[test]
+    fn schema_creates_expected_indexes() {
+        use crate::infrastructure::database::connection::Database;
+        let db = Database::new_in_memory().unwrap();
+        let conn = db.get_conn().unwrap();
+
+        let expected_indexes = [
+            "idx_sessions_repo",
+            "idx_sessions_status",
+            "idx_sessions_activity",
+            "idx_specs_repo",
+            "idx_epics_repo",
+            "idx_archived_specs_repo",
+        ];
+
+        for idx in &expected_indexes {
+            let exists: bool = conn
+                .query_row(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='index' AND name=?1",
+                    [idx],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(exists, "Index '{idx}' should exist after schema init");
+        }
+    }
 }
