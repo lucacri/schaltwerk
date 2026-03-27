@@ -43,6 +43,7 @@ interface SessionVersionGroupProps {
   onRename?: (sessionId: string, newName: string) => Promise<void>
   onLinkPr?: (sessionId: string, prNumber: number, prUrl: string) => void
   onConsolidate?: (group: SessionVersionGroupType) => void
+  onTerminateAll?: (group: SessionVersionGroupType) => void
 }
 
 export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
@@ -77,7 +78,8 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   isSessionBusy,
   onRename,
   onLinkPr,
-  onConsolidate
+  onConsolidate,
+  onTerminateAll
 }) => {
   const [isExpanded, setIsExpanded] = useState(true)
   const [isPreviewingDeletion, setIsPreviewingDeletion] = useState(false)
@@ -186,14 +188,13 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     }
   ].filter(pill => pill.count > 0)
 
-  const canConsolidate = (() => {
-    const runningOrReviewed = group.versions.filter(v => {
-      const state = v.session.info.session_state
-      return state === 'running' || state === 'reviewed'
-    })
-    const hasExistingConsolidation = group.versions.some(v => v.session.info.is_consolidation)
-    return runningOrReviewed.length >= 2 && !hasExistingConsolidation
-  })()
+  const hasMultipleVersions = group.versions.length >= 2
+  const runningOrReviewedCount = group.versions.filter(v => {
+    const state = v.session.info.session_state
+    return state === 'running' || state === 'reviewed'
+  }).length
+  const canConsolidate = runningOrReviewedCount >= 2
+  const hasRunning = group.versions.some(v => v.session.info.session_state === 'running')
 
   return (
     <div className="mb-3 relative">
@@ -280,20 +281,44 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
             className="flex items-center gap-1 justify-end overflow-hidden flex-nowrap"
             data-testid="version-group-status"
           >
-            {canConsolidate && onConsolidate && (
+            {hasMultipleVersions && onConsolidate && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
+                  if (!canConsolidate) return
                   onConsolidate(group)
                 }}
-                className="p-1 rounded transition-colors"
+                disabled={!canConsolidate}
+                className="p-1 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 style={{ color: 'var(--color-text-secondary)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-accent-purple-light)' }}
+                onMouseEnter={(e) => {
+                  if (!canConsolidate) return
+                  e.currentTarget.style.color = 'var(--color-accent-purple-light)'
+                }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
-                title="Consolidate versions"
+                title={canConsolidate ? 'Consolidate versions' : 'Needs at least 2 running/reviewed sessions to consolidate'}
+                data-testid="consolidate-versions-button"
               >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M5 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm6.5 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 16a2 2 0 1 1 0-4 2 2 0 0 1 0 4zM3 5v3.5a.5.5 0 0 0 .5.5H8v3h0V9h4.5a.5.5 0 0 0 .5-.5V5h-1v3H8.5V5h-1v3H4V5H3z" />
+                </svg>
+              </button>
+            )}
+            {hasRunning && onTerminateAll && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTerminateAll(group)
+                }}
+                className="p-1 rounded transition-colors"
+                style={{ color: 'var(--color-text-secondary)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-accent-red-light)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
+                title="Terminate all running sessions"
+                data-testid="terminate-group-button"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h5A1.5 1.5 0 0 1 12 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 4 13.5v-11z" />
                 </svg>
               </button>
             )}

@@ -57,6 +57,7 @@ vi.mock('./components/right-panel/RightPanelTabs', () => ({
 }))
 const newSessionModalMock = vi.fn((props: unknown) => props)
 const settingsModalMock = vi.fn((props: unknown) => props)
+const terminateVersionGroupModalMock = vi.fn((props: unknown) => props)
 
 vi.mock('./components/modals/NewSessionModal', () => ({
   NewSessionModal: (props: unknown) => {
@@ -72,6 +73,12 @@ vi.mock('./components/modals/SettingsModal', () => ({
 }))
 vi.mock('./components/modals/CancelConfirmation', () => ({
   CancelConfirmation: () => null,
+}))
+vi.mock('./components/modals/TerminateVersionGroupConfirmation', () => ({
+  TerminateVersionGroupConfirmation: (props: unknown) => {
+    terminateVersionGroupModalMock(props)
+    return null
+  },
 }))
 vi.mock('./components/OpenInSplitButton', () => ({
   OpenInSplitButton: () => <button data-testid="open-in-split" />,
@@ -330,6 +337,7 @@ describe('App.tsx', () => {
     invokeMock.mockImplementation(defaultInvokeImpl)
     newSessionModalMock.mockClear()
     settingsModalMock.mockClear()
+    terminateVersionGroupModalMock.mockClear()
     topBarPropsMock.mockClear()
     homeScreenPropsMock.mockClear()
     startSessionTopMock.mockClear()
@@ -840,6 +848,64 @@ describe('App.tsx', () => {
       expect(finalProps.open).toBe(false)
       expect(finalProps.initialTab).toBeUndefined()
     })
+  })
+
+  it('terminates all running sessions in a version group when confirmed', async () => {
+    await renderApp()
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.TerminateVersionGroup, {
+        baseName: 'feature-a',
+        sessions: [
+          {
+            id: 'feature-a',
+            name: 'feature-a',
+            displayName: 'Feature A',
+            branch: 'schaltwerk/feature-a',
+            hasUncommittedChanges: false,
+          },
+          {
+            id: 'feature-a_v2',
+            name: 'feature-a_v2',
+            displayName: 'Feature A v2',
+            branch: 'schaltwerk/feature-a_v2',
+            hasUncommittedChanges: true,
+          },
+        ],
+      })
+    })
+
+    await waitFor(() => {
+      expect(terminateVersionGroupModalMock).toHaveBeenCalled()
+      const props = terminateVersionGroupModalMock.mock.calls.at(-1)?.[0] as { open: boolean }
+      expect(props.open).toBe(true)
+    })
+
+    const modalProps = terminateVersionGroupModalMock.mock.calls.at(-1)?.[0] as { onConfirm: () => void }
+    await act(async () => {
+      modalProps.onConfirm()
+    })
+
+    const invokeMock = await getInvokeMock()
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreCancelSession, { name: 'feature-a' })
+      expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreCancelSession, { name: 'feature-a_v2' })
+    })
+
+    const firstCancelIndex = invokeMock.mock.calls.findIndex(
+      ([cmd, args]) => cmd === TauriCommands.SchaltwerkCoreCancelSession && (args as { name?: string })?.name === 'feature-a'
+    )
+    const secondCancelIndex = invokeMock.mock.calls.findIndex(
+      ([cmd, args]) => cmd === TauriCommands.SchaltwerkCoreCancelSession && (args as { name?: string })?.name === 'feature-a_v2'
+    )
+
+    expect(firstCancelIndex).toBeGreaterThanOrEqual(0)
+    expect(secondCancelIndex).toBeGreaterThan(firstCancelIndex)
   })
 
 })

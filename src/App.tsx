@@ -18,6 +18,10 @@ import { DeleteSpecConfirmation } from './components/modals/DeleteSpecConfirmati
 import { SettingsModal } from './components/modals/SettingsModal'
 import { SetupScriptApprovalModal } from './components/modals/SetupScriptApprovalModal'
 import { ProjectSelectorModal } from './components/modals/ProjectSelectorModal'
+import {
+  TerminateVersionGroupConfirmation,
+  type TerminateVersionGroupSession,
+} from './components/modals/TerminateVersionGroupConfirmation'
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useSelection } from './hooks/useSelection'
@@ -88,6 +92,7 @@ import {
   AgentLifecycleDetail,
   type PermissionErrorDetail,
   type ConsolidateVersionGroupDetail,
+  type TerminateVersionGroupDetail,
   type ContextualActionCreateSessionDetail,
   type ContextualActionCreateSpecDetail,
 } from './common/uiEvents'
@@ -582,6 +587,16 @@ function AppContent() {
   const [showPermissionPrompt, setShowPermissionPrompt] = useState(false)
   const [permissionDeniedPath, setPermissionDeniedPath] = useState<string | null>(null)
   const [permissionContext, setPermissionContext] = useState<'project' | 'session' | 'unknown'>('unknown')
+  const [terminateGroupModalState, setTerminateGroupModalState] = useState<{
+    open: boolean
+    baseName: string
+    sessions: TerminateVersionGroupSession[]
+  }>({
+    open: false,
+    baseName: '',
+    sessions: [],
+  })
+  const [isTerminatingGroup, setIsTerminatingGroup] = useState(false)
   const [openAsDraft, setOpenAsSpec] = useState(false)
   const [cachedPrompt, setCachedPrompt] = useState('')
   const [triggerOpenInApp, setTriggerOpenInApp] = useState<number>(0)
@@ -1265,26 +1280,58 @@ function AppContent() {
   // Start with home screen, user must explicitly choose a project
   // Remove automatic project detection to ensure home screen is shown first
 
-  // Helper function to handle session cancellation
+  const cancelSessionImmediate = useCallback(async (sessionName: string) => {
+    beginSessionMutation(sessionName, 'remove')
+    try {
+      await invoke(TauriCommands.SchaltwerkCoreCancelSession, {
+        name: sessionName,
+      })
+    } catch (error) {
+      logger.error(`[App] Failed to cancel session ${sessionName}:`, error)
+      throw error
+    } finally {
+      endSessionMutation(sessionName, 'remove')
+    }
+  }, [beginSessionMutation, endSessionMutation])
+
   const handleCancelSession = useCallback(async () => {
     if (!currentSession) return
 
-    const sessionName = currentSession.name
-    beginSessionMutation(sessionName, 'remove')
     try {
       setIsCancelling(true)
-      await invoke(TauriCommands.SchaltwerkCoreCancelSession, {
-        name: sessionName
-      })
+      await cancelSessionImmediate(currentSession.name)
       setCancelModalOpen(false)
     } catch (error) {
-      logger.error('Failed to cancel session:', error)
+      logger.error(`[App] Failed to cancel session ${currentSession.name}:`, error)
       alert(`Failed to cancel session: ${error}`)
     } finally {
-      endSessionMutation(sessionName, 'remove')
       setIsCancelling(false)
     }
-  }, [beginSessionMutation, currentSession, endSessionMutation])
+  }, [cancelSessionImmediate, currentSession])
+
+  const handleTerminateVersionGroup = useCallback(async () => {
+    if (!terminateGroupModalState.open || terminateGroupModalState.sessions.length === 0) return
+
+    setIsTerminatingGroup(true)
+    const failedSessions: string[] = []
+
+    for (const session of terminateGroupModalState.sessions) {
+      try {
+        await cancelSessionImmediate(session.name)
+      } catch {
+        failedSessions.push(session.displayName || session.name)
+      }
+    }
+
+    setIsTerminatingGroup(false)
+
+    if (failedSessions.length > 0) {
+      alert(`Failed to terminate: ${failedSessions.join(', ')}`)
+      return
+    }
+
+    setTerminateGroupModalState({ open: false, baseName: '', sessions: [] })
+  }, [cancelSessionImmediate, terminateGroupModalState])
 
   // Handle CLI directory argument
   useEffect(() => {
@@ -1615,7 +1662,19 @@ Instructions:
     })
   }, [])
 
-  
+  useEffect(() => {
+    return listenUiEvent(UiEvent.TerminateVersionGroup, (detail: TerminateVersionGroupDetail) => {
+      if (!detail.sessions.length) return
+
+      setTerminateGroupModalState({
+        open: true,
+        baseName: detail.baseName,
+        sessions: detail.sessions,
+      })
+    })
+  }, [])
+
+
 
   // Open NewSessionModal for new agent when requested
   useEffect(() => {
@@ -2448,6 +2507,18 @@ Instructions:
             runningCount={runningSessionCount}
             onConfirm={handleCloseConfirmed}
             onCancel={() => setCloseModalOpen(false)}
+          />
+
+          <TerminateVersionGroupConfirmation
+            open={terminateGroupModalState.open}
+            baseName={terminateGroupModalState.baseName}
+            sessions={terminateGroupModalState.sessions}
+            onConfirm={() => { void handleTerminateVersionGroup() }}
+            onCancel={() => {
+              if (isTerminatingGroup) return
+              setTerminateGroupModalState({ open: false, baseName: '', sessions: [] })
+            }}
+            loading={isTerminatingGroup}
           />
 
           {/* Diff Viewer Modal with Review - render only when open */}

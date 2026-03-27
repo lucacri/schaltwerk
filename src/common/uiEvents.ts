@@ -53,6 +53,7 @@ export enum UiEvent {
   AgentBinariesUpdated = 'schaltwerk:agent-binaries-updated',
   CloseRequested = 'schaltwerk:close-requested',
   ConsolidateVersionGroup = 'schaltwerk:consolidate-version-group',
+  TerminateVersionGroup = 'schaltwerk:terminate-version-group',
   ContextualActionCreateSession = 'schaltwerk:contextual-action-create-session',
   ContextualActionCreateSpec = 'schaltwerk:contextual-action-create-spec',
 }
@@ -224,6 +225,17 @@ export interface ConsolidateVersionGroupDetail {
   }>
 }
 
+export interface TerminateVersionGroupDetail {
+  baseName: string
+  sessions: Array<{
+    id: string
+    name: string
+    displayName: string
+    branch: string
+    hasUncommittedChanges: boolean
+  }>
+}
+
 export interface ContextualActionCreateSessionDetail {
   prompt: string
   actionName: string
@@ -288,6 +300,7 @@ export type UiEventPayloads = {
   [UiEvent.AgentBinariesUpdated]: undefined
   [UiEvent.CloseRequested]: undefined
   [UiEvent.ConsolidateVersionGroup]: ConsolidateVersionGroupDetail
+  [UiEvent.TerminateVersionGroup]: TerminateVersionGroupDetail
   [UiEvent.ContextualActionCreateSession]: ContextualActionCreateSessionDetail
   [UiEvent.ContextualActionCreateSpec]: ContextualActionCreateSpecDetail
 }

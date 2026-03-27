@@ -1991,6 +1991,24 @@ export function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, 
                                                 })),
                                             })
                                         }}
+                                        onTerminateAll={(group) => {
+                                            const runningSessions = group.versions
+                                                .filter(v => v.session.info.session_state === 'running')
+                                                .map(v => ({
+                                                    id: v.session.info.session_id,
+                                                    name: v.session.info.session_id,
+                                                    displayName: getSessionDisplayName(v.session.info),
+                                                    branch: v.session.info.branch,
+                                                    hasUncommittedChanges: Boolean(v.session.info.has_uncommitted_changes),
+                                                }))
+
+                                            if (runningSessions.length === 0) return
+
+                                            emitUiEvent(UiEvent.TerminateVersionGroup, {
+                                                baseName: group.baseName,
+                                                sessions: runningSessions,
+                                            })
+                                        }}
                                     />
                                 )
                             }
