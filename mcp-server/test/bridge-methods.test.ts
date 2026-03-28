@@ -425,7 +425,7 @@ describe('LucodeBridge untested methods', () => {
         .mockResolvedValueOnce(createResponse(session))
         .mockResolvedValueOnce(createResponse({}))
 
-      execSyncMock.mockReturnValue('')
+      execSyncMock.mockReturnValue(' M file.txt\n?? new.txt\n')
 
       const bridge = new LucodeBridge()
       await bridge.cancelSession('sess', true)

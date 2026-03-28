@@ -45,10 +45,10 @@ vi.mock('../../common/i18n', () => ({
   }),
 }))
 
-vi.mock('../../common/uiEvents', () => ({
-  emitUiEvent: vi.fn(),
-  UiEvent: { TerminalReset: 'terminal-reset' },
-}))
+vi.mock('../../common/uiEvents', async () => {
+  const actual = await vi.importActual<typeof import('../../common/uiEvents')>('../../common/uiEvents')
+  return { ...actual, emitUiEvent: vi.fn() }
+})
 
 vi.mock('../common/ConfirmResetDialog', () => ({
   ConfirmResetDialog: ({ open, onCancel, onConfirm }: { open: boolean; onCancel: () => void; onConfirm: () => void }) => {

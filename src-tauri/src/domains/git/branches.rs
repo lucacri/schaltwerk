@@ -471,6 +471,15 @@ mod tests {
             repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
                 .unwrap();
         }
+        {
+            let head = repo.head().unwrap();
+            if head.shorthand() != Some("master") {
+                let mut branch = repo
+                    .find_branch(head.shorthand().unwrap(), git2::BranchType::Local)
+                    .unwrap();
+                branch.rename("master", true).unwrap();
+            }
+        }
         repo
     }
 
