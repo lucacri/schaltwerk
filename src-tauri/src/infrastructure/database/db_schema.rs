@@ -77,6 +77,12 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
         [],
     )?;
 
+    // Migration: add has_conflicts column to git_stats
+    let _ = conn.execute(
+        "ALTER TABLE git_stats ADD COLUMN has_conflicts BOOLEAN NOT NULL DEFAULT FALSE",
+        [],
+    );
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS app_config (
             id INTEGER PRIMARY KEY CHECK (id = 1),
