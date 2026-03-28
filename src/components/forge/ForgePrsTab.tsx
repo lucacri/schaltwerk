@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { VscClose, VscInfo, VscSearch, VscRefresh } from 'react-icons/vsc'
+import { formatRelativeDate } from '../../utils/time'
 import { ForgeErrorDetailModal } from './ForgeErrorDetailModal'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
 import { useForgeSearch, buildSourceItemKey } from '../../hooks/useForgeSearch'
@@ -59,6 +60,7 @@ function PrRow({
   showSource?: boolean
   pipelineStatus?: ForgePipelineStatus
 }) {
+  const { t } = useTranslation()
   const displayLabels = pr.labels.slice(0, 3)
 
   return (
@@ -91,6 +93,14 @@ function PrRow({
             }}
           >
             {pr.sourceBranch}
+          </span>
+        )}
+        {pr.updatedAt && (
+          <span
+            style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}
+            title={new Date(pr.updatedAt).toLocaleString()}
+          >
+            {t.forgePrTab.updated.replace('{time}', formatRelativeDate(pr.updatedAt))}
           </span>
         )}
         <span className="flex-1" />

@@ -52,6 +52,7 @@ export interface ForgePrSummary {
   id: string
   title: string
   state: string
+  updatedAt?: string
   author?: string
   labels: ForgeLabel[]
   sourceBranch: string

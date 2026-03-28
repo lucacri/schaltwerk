@@ -2193,6 +2193,7 @@ impl<R: CommandRunner> ForgeProvider for GitHubCli<R> {
                 id: p.number.to_string(),
                 title: p.title,
                 state: p.state,
+                updated_at: Some(p.updated_at),
                 author: p.author_login,
                 labels: p
                     .labels
@@ -2243,6 +2244,7 @@ impl<R: CommandRunner> ForgeProvider for GitHubCli<R> {
                 id: details.number.to_string(),
                 title: details.title,
                 state: String::new(),
+                updated_at: None,
                 author: None,
                 labels: details
                     .labels

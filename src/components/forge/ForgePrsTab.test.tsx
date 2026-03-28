@@ -396,6 +396,47 @@ describe('ForgePrsTab', () => {
     })
   })
 
+  it('shows relative timestamp when updatedAt is present', async () => {
+    const searchPrs = vi.fn().mockResolvedValue([
+      makePrSummary({ id: '1', title: 'Updated PR', updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() }),
+    ])
+
+    renderWithProviders(<ForgePrsTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchPrs,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Updated PR')).toBeTruthy()
+    })
+
+    expect(screen.getByText(/Updated/)).toBeTruthy()
+  })
+
+  it('does not show timestamp when updatedAt is absent', async () => {
+    const searchPrs = vi.fn().mockResolvedValue([
+      makePrSummary({ id: '1', title: 'No Date PR' }),
+    ])
+
+    renderWithProviders(<ForgePrsTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchPrs,
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('No Date PR')).toBeTruthy()
+    })
+
+    const updatedElements = screen.queryAllByText(/Updated/)
+    expect(updatedElements.length).toBe(0)
+  })
+
   it('refresh button re-triggers search', async () => {
     const searchPrs = vi.fn().mockResolvedValue([makePrSummary()])
 

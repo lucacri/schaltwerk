@@ -1566,6 +1566,7 @@ impl<R: CommandRunner> ForgeProvider for GitlabCli<R> {
                 id: m.iid.to_string(),
                 title: m.title,
                 state: m.state,
+                updated_at: Some(m.updated_at),
                 author: m.author.map(|a| a.username),
                 labels: m
                     .labels
@@ -1611,6 +1612,7 @@ impl<R: CommandRunner> ForgeProvider for GitlabCli<R> {
                 id: details.iid.to_string(),
                 title: details.title,
                 state: details.state,
+                updated_at: None,
                 author: details.author.map(|a| a.username),
                 labels: details
                     .labels

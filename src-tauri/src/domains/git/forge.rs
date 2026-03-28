@@ -56,6 +56,7 @@ pub struct ForgePrSummary {
     pub id: String,
     pub title: String,
     pub state: String,
+    pub updated_at: Option<String>,
     pub author: Option<String>,
     pub labels: Vec<ForgeLabel>,
     pub source_branch: String,
@@ -545,6 +546,40 @@ mod tests {
             err.classify_connection_error(),
             ForgeError::CommandFailed { .. }
         ));
+    }
+
+    #[test]
+    fn forge_pr_summary_serializes_updated_at() {
+        let summary = ForgePrSummary {
+            id: "42".into(),
+            title: "Test PR".into(),
+            state: "open".into(),
+            updated_at: Some("2026-03-28T10:00:00Z".into()),
+            author: Some("alice".into()),
+            labels: vec![],
+            source_branch: "feature/test".into(),
+            target_branch: "main".into(),
+            url: Some("https://example.com/pr/42".into()),
+        };
+        let json = serde_json::to_value(&summary).unwrap();
+        assert_eq!(json["updatedAt"], "2026-03-28T10:00:00Z");
+    }
+
+    #[test]
+    fn forge_pr_summary_updated_at_none_serializes_as_null() {
+        let summary = ForgePrSummary {
+            id: "1".into(),
+            title: "No date".into(),
+            state: "open".into(),
+            updated_at: None,
+            author: None,
+            labels: vec![],
+            source_branch: "fix/x".into(),
+            target_branch: "main".into(),
+            url: None,
+        };
+        let json = serde_json::to_value(&summary).unwrap();
+        assert!(json["updatedAt"].is_null());
     }
 
     #[test]
