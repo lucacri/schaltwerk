@@ -65,7 +65,7 @@ describe('useSelection', () => {
     const next: Selection = { kind: 'session', payload: 'sess-1', worktreePath: '/tmp/sess-1' }
 
     act(() => {
-      result.current.setSelection(next, false, true)
+      void result.current.setSelection(next, false, true)
     })
 
     expect(mockSetSelectionAtom).toHaveBeenCalledWith({
@@ -80,7 +80,7 @@ describe('useSelection', () => {
     const next: Selection = { kind: 'session', payload: 'sess-2' }
 
     act(() => {
-      result.current.setSelection(next, true)
+      void result.current.setSelection(next, true)
     })
 
     expect(mockSetSelectionAtom).toHaveBeenCalledWith({
@@ -93,7 +93,7 @@ describe('useSelection', () => {
   it('exposes clearTerminalTracking', () => {
     const { result } = renderHook(() => useSelection())
     act(() => {
-      result.current.clearTerminalTracking()
+      void result.current.clearTerminalTracking()
     })
     expect(mockClearTerminalTracking).toHaveBeenCalledTimes(1)
   })
