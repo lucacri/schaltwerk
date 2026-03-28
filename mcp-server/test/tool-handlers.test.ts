@@ -1,0 +1,462 @@
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test'
+import fs from 'fs'
+
+const serverState: { instance: FakeServer | null } = { instance: null }
+
+class FakeServer {
+  handlers = new Map<unknown, (request?: any) => Promise<any>>()
+
+  constructor() {
+    serverState.instance = this
+  }
+
+  setRequestHandler(schema: unknown, handler: (request: any) => Promise<any>) {
+    this.handlers.set(schema, handler)
+  }
+
+  async connect() {}
+}
+
+mock.module('@modelcontextprotocol/sdk/server/index.js', () => ({
+  Server: FakeServer,
+  __serverState: serverState,
+}))
+
+mock.module('@modelcontextprotocol/sdk/server/stdio.js', () => ({
+  StdioServerTransport: class {},
+}))
+
+const listToolsSchema = Symbol('ListTools')
+const callToolSchema = Symbol('CallTool')
+const listResourcesSchema = Symbol('ListResources')
+const readResourceSchema = Symbol('ReadResource')
+
+class FakeMcpError extends Error {
+  code: string
+
+  constructor(code: string, message: string) {
+    super(message)
+    this.code = code
+  }
+}
+
+mock.module('@modelcontextprotocol/sdk/types.js', () => ({
+  ListToolsRequestSchema: listToolsSchema,
+  CallToolRequestSchema: callToolSchema,
+  ListResourcesRequestSchema: listResourcesSchema,
+  ReadResourceRequestSchema: readResourceSchema,
+  ErrorCode: {
+    InternalError: 'INTERNAL_ERROR',
+    MethodNotFound: 'METHOD_NOT_FOUND',
+    InvalidParams: 'INVALID_PARAMS',
+    InvalidRequest: 'INVALID_REQUEST',
+  },
+  McpError: FakeMcpError,
+}))
+
+const getServer = () => {
+  const server = serverState.instance
+  if (!server) {
+    throw new Error('Server not initialized')
+  }
+  return server
+}
+
+const callTool = async (name: string, args: Record<string, unknown> = {}) => {
+  const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
+  const server = getServer()
+  const handler = server.handlers.get(CallToolRequestSchema)
+  return handler({ params: { name, arguments: args } })
+}
+
+const mockProjectPath = '/tmp/mock-project-tool-handlers'
+
+const cancelSessionMock = mock(() => Promise.resolve())
+const convertToSpecMock = mock(() => Promise.resolve())
+const createEpicMock = mock(() => Promise.resolve({ id: 'epic-1', name: 'Test Epic', color: '#FF0000' }))
+const deleteDraftSessionMock = mock(() => Promise.resolve())
+const executeProjectRunScriptMock = mock(() =>
+  Promise.resolve({ success: true, command: 'npm test', exit_code: 0, stdout: 'ok', stderr: '' })
+)
+const getCurrentTasksMock = mock(() =>
+  Promise.resolve([
+    { name: 'task1', display_name: 'Task 1', status: 'active', session_state: 'Running', branch: 'lucode/task1', ready_to_merge: false, original_agent_type: 'claude' },
+    { name: 'task2', display_name: 'Task 2', status: 'spec', session_state: 'Spec', branch: 'lucode/task2', ready_to_merge: false, draft_content: 'plan content' }
+  ])
+)
+const getProjectRunScriptMock = mock(() =>
+  Promise.resolve({ has_run_script: true, command: 'npm test', working_directory: '/project' })
+)
+const getSessionMock = mock(() =>
+  Promise.resolve({ id: 'sess', name: 'sess', branch: 'lucode/sess', status: 'active' })
+)
+const getWorktreeBaseDirectoryMock = mock(() =>
+  Promise.resolve({ worktree_base_directory: '/custom/wt', has_custom_directory: true })
+)
+const listDraftSessionsMock = mock(() =>
+  Promise.resolve([
+    { name: 'draft1', display_name: 'Draft 1', draft_content: 'some content', created_at: Date.now(), updated_at: Date.now(), parent_branch: 'main' }
+  ])
+)
+const listEpicsMock = mock(() =>
+  Promise.resolve([{ id: 'e1', name: 'Epic A', color: '#00FF00' }])
+)
+const listSessionsByStateMock = mock(() => Promise.resolve([]))
+const markSessionReviewedMock = mock(() => Promise.resolve())
+const sendFollowUpMessageMock = mock(() => Promise.resolve())
+const setWorktreeBaseDirectoryMock = mock(() =>
+  Promise.resolve({ worktree_base_directory: '/new/path', has_custom_directory: true })
+)
+const getCurrentSpecModeSessionMock = mock(() => Promise.resolve(null))
+
+let bridgeModule: typeof import('../src/lucode-bridge')
+const originalMethods: Record<string, Function> = {}
+let createdProjectDir = false
+
+describe('MCP tool handler logic', () => {
+  beforeAll(async () => {
+    if (!fs.existsSync(mockProjectPath)) {
+      fs.mkdirSync(mockProjectPath, { recursive: true })
+      createdProjectDir = true
+    }
+    process.env.LUCODE_PROJECT_PATH = mockProjectPath
+    bridgeModule = await import('../src/lucode-bridge')
+
+    const proto = bridgeModule.LucodeBridge.prototype
+
+    const methodMocks: Record<string, Function> = {
+      cancelSession: cancelSessionMock,
+      convertToSpec: convertToSpecMock,
+      createEpic: createEpicMock,
+      deleteDraftSession: deleteDraftSessionMock,
+      executeProjectRunScript: executeProjectRunScriptMock,
+      getCurrentTasks: getCurrentTasksMock,
+      getProjectRunScript: getProjectRunScriptMock,
+      getSession: getSessionMock,
+      getWorktreeBaseDirectory: getWorktreeBaseDirectoryMock,
+      listDraftSessions: listDraftSessionsMock,
+      listEpics: listEpicsMock,
+      listSessionsByState: listSessionsByStateMock,
+      markSessionReviewed: markSessionReviewedMock,
+      sendFollowUpMessage: sendFollowUpMessageMock,
+      setWorktreeBaseDirectory: setWorktreeBaseDirectoryMock,
+      getCurrentSpecModeSession: getCurrentSpecModeSessionMock,
+    }
+
+    for (const [name, mockFn] of Object.entries(methodMocks)) {
+      originalMethods[name] = (proto as any)[name]
+      ;(proto as any)[name] = (...args: any[]) => (mockFn as Function)(...args)
+    }
+
+    await import(`../src/lucode-mcp-server?tool-handlers=${Date.now()}`)
+  })
+
+  beforeEach(() => {
+    cancelSessionMock.mockClear()
+    convertToSpecMock.mockClear()
+    createEpicMock.mockClear()
+    deleteDraftSessionMock.mockClear()
+    executeProjectRunScriptMock.mockClear()
+    getCurrentTasksMock.mockClear()
+    getProjectRunScriptMock.mockClear()
+    getSessionMock.mockClear()
+    getWorktreeBaseDirectoryMock.mockClear()
+    listDraftSessionsMock.mockClear()
+    listEpicsMock.mockClear()
+    listSessionsByStateMock.mockClear()
+    markSessionReviewedMock.mockClear()
+    sendFollowUpMessageMock.mockClear()
+    setWorktreeBaseDirectoryMock.mockClear()
+    getCurrentSpecModeSessionMock.mockClear()
+  })
+
+  afterAll(() => {
+    delete process.env.LUCODE_PROJECT_PATH
+    if (bridgeModule) {
+      const proto = bridgeModule.LucodeBridge.prototype
+      for (const [name, original] of Object.entries(originalMethods)) {
+        ;(proto as any)[name] = original
+      }
+    }
+    if (createdProjectDir && fs.existsSync(mockProjectPath)) {
+      fs.rmSync(mockProjectPath, { recursive: true, force: true })
+    }
+  })
+
+  describe('lucode_cancel', () => {
+    it('calls cancelSession with session_name and force', async () => {
+      const result = await callTool('lucode_cancel', { session_name: 'my-sess', force: true })
+
+      expect(cancelSessionMock).toHaveBeenCalledTimes(1)
+      expect(result.content).toBeDefined()
+      const text = result.content.find((c: any) => c.type === 'text' && !c.mimeType)
+      expect(text?.text).toContain('my-sess')
+      expect(text?.text).toContain('cancelled')
+    })
+
+    it('propagates error from bridge', async () => {
+      cancelSessionMock.mockRejectedValueOnce(new Error('SAFETY CHECK FAILED'))
+
+      await expect(callTool('lucode_cancel', { session_name: 'dirty' })).rejects.toThrow('SAFETY CHECK FAILED')
+    })
+  })
+
+  describe('lucode_convert_to_spec', () => {
+    it('calls convertToSpec and returns structured response', async () => {
+      const result = await callTool('lucode_convert_to_spec', { session_name: 'running-sess' })
+
+      expect(convertToSpecMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.session).toBe('running-sess')
+      expect(parsed.converted).toBe(true)
+    })
+  })
+
+  describe('lucode_create_epic', () => {
+    it('creates epic and returns structured response', async () => {
+      const result = await callTool('lucode_create_epic', { name: 'Test Epic', color: '#FF0000' })
+
+      expect(createEpicMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.epic.name).toBe('Test Epic')
+      expect(parsed.epic.id).toBe('epic-1')
+    })
+
+    it('rejects empty name', async () => {
+      await expect(callTool('lucode_create_epic', { name: '  ' })).rejects.toThrow("'name' is required")
+    })
+
+    it('rejects missing name', async () => {
+      await expect(callTool('lucode_create_epic', {})).rejects.toThrow("'name' is required")
+    })
+  })
+
+  describe('lucode_draft_delete', () => {
+    it('deletes draft and returns structured response', async () => {
+      const result = await callTool('lucode_draft_delete', { session_name: 'old-draft' })
+
+      expect(deleteDraftSessionMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.session).toBe('old-draft')
+      expect(parsed.deleted).toBe(true)
+    })
+  })
+
+  describe('lucode_run_script', () => {
+    it('executes run script and returns result', async () => {
+      const result = await callTool('lucode_run_script', {})
+
+      expect(executeProjectRunScriptMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.success).toBe(true)
+      expect(parsed.exit_code).toBe(0)
+    })
+
+    it('reports failure in summary', async () => {
+      executeProjectRunScriptMock.mockResolvedValueOnce({
+        success: false,
+        command: 'npm test',
+        exit_code: 1,
+        stdout: '',
+        stderr: 'Error occurred'
+      })
+
+      const result = await callTool('lucode_run_script', {})
+      const text = result.content.find((c: any) => c.type === 'text' && !c.mimeType)
+      expect(text?.text).toContain('failed')
+    })
+  })
+
+  describe('lucode_get_current_tasks', () => {
+    it('returns tasks with default fields', async () => {
+      const result = await callTool('lucode_get_current_tasks', {})
+
+      expect(getCurrentTasksMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.tasks).toBeDefined()
+      expect(parsed.tasks.length).toBe(2)
+    })
+
+    it('filters by status_filter=spec', async () => {
+      const result = await callTool('lucode_get_current_tasks', { status_filter: 'spec' })
+
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      const specTasks = parsed.tasks.filter((t: any) => t.status === 'spec')
+      expect(specTasks.length).toBe(1)
+    })
+
+    it('respects content_preview_length', async () => {
+      getCurrentTasksMock.mockResolvedValueOnce([
+        { name: 'long', status: 'spec', session_state: 'Spec', branch: 'b', ready_to_merge: false, initial_prompt: 'A'.repeat(200), draft_content: 'B'.repeat(200) }
+      ])
+
+      const result = await callTool('lucode_get_current_tasks', {
+        fields: ['all'],
+        content_preview_length: 10
+      })
+
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.tasks[0].initial_prompt.length).toBeLessThanOrEqual(14)
+      expect(parsed.tasks[0].draft_content.length).toBeLessThanOrEqual(14)
+    })
+  })
+
+  describe('lucode_list_epics', () => {
+    it('returns epic list', async () => {
+      const result = await callTool('lucode_list_epics', {})
+
+      expect(listEpicsMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.epics).toHaveLength(1)
+      expect(parsed.epics[0].name).toBe('Epic A')
+    })
+
+    it('returns summary for empty epics', async () => {
+      listEpicsMock.mockResolvedValueOnce([])
+
+      const result = await callTool('lucode_list_epics', {})
+      const text = result.content.find((c: any) => c.type === 'text' && !c.mimeType)
+      expect(text?.text).toContain('No epics found')
+    })
+  })
+
+  describe('lucode_draft_list', () => {
+    it('returns draft sessions', async () => {
+      const result = await callTool('lucode_draft_list', {})
+
+      expect(listDraftSessionsMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.specs).toHaveLength(1)
+      expect(parsed.specs[0].name).toBe('draft1')
+    })
+
+    it('returns no specs message when empty', async () => {
+      listDraftSessionsMock.mockResolvedValueOnce([])
+
+      const result = await callTool('lucode_draft_list', {})
+      const text = result.content.find((c: any) => c.type === 'text' && !c.mimeType)
+      expect(text?.text).toContain('No spec sessions found')
+    })
+  })
+
+  describe('lucode_list with filters', () => {
+    it('passes filter to listSessionsByState', async () => {
+      listSessionsByStateMock.mockResolvedValueOnce([])
+
+      await callTool('lucode_list', { filter: 'reviewed' })
+
+      expect(listSessionsByStateMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('shows no sessions message when empty', async () => {
+      listSessionsByStateMock.mockResolvedValueOnce([])
+
+      const result = await callTool('lucode_list', { filter: 'all' })
+      const text = result.content.find((c: any) => c.type === 'text' && !c.mimeType)
+      expect(text?.text).toContain('No sessions found')
+    })
+  })
+
+  describe('lucode_send_message', () => {
+    it('sends message and returns confirmation', async () => {
+      const result = await callTool('lucode_send_message', {
+        session_name: 'my-sess',
+        message: 'hello agent'
+      })
+
+      expect(sendFollowUpMessageMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.session).toBe('my-sess')
+      expect(parsed.status).toBe('sent')
+      expect(parsed.message).toBe('hello agent')
+    })
+  })
+
+  describe('lucode_mark_session_reviewed', () => {
+    it('marks session reviewed and returns structured response', async () => {
+      const result = await callTool('lucode_mark_session_reviewed', { session_name: 'my-sess' })
+
+      expect(markSessionReviewedMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.session).toBe('my-sess')
+      expect(parsed.reviewed).toBe(true)
+    })
+  })
+
+  describe('lucode_get_worktree_base_directory', () => {
+    it('returns worktree directory info', async () => {
+      const result = await callTool('lucode_get_worktree_base_directory', {})
+
+      expect(getWorktreeBaseDirectoryMock).toHaveBeenCalledTimes(1)
+      const text = result.content.find((c: any) => c.type === 'text' && !c.mimeType)
+      expect(text?.text).toContain('/custom/wt')
+    })
+  })
+
+  describe('lucode_set_worktree_base_directory', () => {
+    it('sets directory and returns response', async () => {
+      const result = await callTool('lucode_set_worktree_base_directory', {
+        worktree_base_directory: '/new/path'
+      })
+
+      expect(setWorktreeBaseDirectoryMock).toHaveBeenCalledTimes(1)
+      const text = result.content.find((c: any) => c.type === 'text' && !c.mimeType)
+      expect(text?.text).toContain('/new/path')
+    })
+
+    it('rejects null worktree_base_directory', async () => {
+      await expect(
+        callTool('lucode_set_worktree_base_directory', {})
+      ).rejects.toThrow("'worktree_base_directory' is required")
+    })
+  })
+
+  describe('lucode_merge_session parameter validation', () => {
+    it('rejects missing session_name', async () => {
+      await expect(callTool('lucode_merge_session', {})).rejects.toThrow('session_name is required')
+    })
+
+    it('rejects squash merge without commit_message', async () => {
+      await expect(
+        callTool('lucode_merge_session', { session_name: 'sess', mode: 'squash' })
+      ).rejects.toThrow('commit_message is required')
+    })
+  })
+
+  describe('lucode_create_pr parameter validation', () => {
+    it('rejects missing session_name', async () => {
+      await expect(
+        callTool('lucode_create_pr', { pr_title: 'title' })
+      ).rejects.toThrow('session_name is required')
+    })
+
+    it('rejects missing pr_title', async () => {
+      await expect(
+        callTool('lucode_create_pr', { session_name: 'sess' })
+      ).rejects.toThrow('pr_title is required')
+    })
+  })
+
+  describe('lucode_prepare_merge parameter validation', () => {
+    it('rejects missing session_name', async () => {
+      await expect(callTool('lucode_prepare_merge', {})).rejects.toThrow('session_name is required')
+    })
+  })
+
+  describe('unknown tool', () => {
+    it('throws MethodNotFound for unknown tool', async () => {
+      await expect(callTool('lucode_nonexistent', {})).rejects.toThrow('Unknown tool')
+    })
+  })
+})

@@ -254,6 +254,7 @@ mod tests {
         assert!(is_session_top_terminal_id("orchestrator-main-top"));
         assert!(!is_session_top_terminal_id("orchestrator-main-bottom"));
         assert!(!is_session_top_terminal_id("run-terminal-main"));
+        assert!(!is_session_top_terminal_id("run-terminal-top-0"));
     }
 
     #[test]
@@ -270,5 +271,159 @@ mod tests {
             .unwrap();
         assert!(!middle.is_empty());
         assert!(middle.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn sanitize_session_name_preserves_alphanumeric_and_allowed_chars() {
+        assert_eq!(sanitize_session_name("hello-world_123"), "hello-world_123");
+    }
+
+    #[test]
+    fn sanitize_session_name_replaces_spaces_and_dots() {
+        assert_eq!(sanitize_session_name("my.session name"), "my_session_name");
+    }
+
+    #[test]
+    fn sanitize_session_name_unicode() {
+        assert_eq!(sanitize_session_name("\u{00E9}t\u{00E9}"), "\u{00E9}t\u{00E9}");
+    }
+
+    #[test]
+    fn session_terminal_hash_is_deterministic() {
+        let h1 = session_terminal_hash("test");
+        let h2 = session_terminal_hash("test");
+        assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn session_terminal_hash_differs_for_different_inputs() {
+        assert_ne!(session_terminal_hash("alpha"), session_terminal_hash("beta"));
+    }
+
+    #[test]
+    fn session_terminal_hash_fragment_is_8_chars() {
+        let fragment = session_terminal_hash_fragment("anything");
+        assert_eq!(fragment.len(), 8);
+        assert!(fragment.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn session_terminal_hash_fragment_v1_is_6_chars() {
+        let fragment = session_terminal_hash_fragment_v1("anything");
+        assert_eq!(fragment.len(), 6);
+        assert!(fragment.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn terminal_id_top_and_bottom_differ_for_same_session() {
+        let top = terminal_id_for_session_top("test");
+        let bottom = terminal_id_for_session_bottom("test");
+        assert_ne!(top, bottom);
+        assert!(top.ends_with("-top"));
+        assert!(bottom.ends_with("-bottom"));
+    }
+
+    #[test]
+    fn session_terminal_base_legacy_no_hash_in_output() {
+        let base = session_terminal_base_legacy("my-session");
+        assert_eq!(base, "session-my-session");
+        assert!(!base.contains('~'));
+    }
+
+    #[test]
+    fn session_terminal_base_legacy_hashed_uses_dash_separator() {
+        let base = session_terminal_base_legacy_hashed("my-session");
+        assert!(base.starts_with("session-my-session-"));
+        assert!(!base.contains('~'));
+    }
+
+    #[test]
+    fn strip_numeric_suffix_removes_trailing_number() {
+        assert_eq!(strip_numeric_suffix("session-top-0"), "session-top");
+        assert_eq!(strip_numeric_suffix("session-top-123"), "session-top");
+    }
+
+    #[test]
+    fn strip_numeric_suffix_preserves_non_numeric_suffix() {
+        assert_eq!(strip_numeric_suffix("session-top"), "session-top");
+        assert_eq!(strip_numeric_suffix("session-top-abc"), "session-top-abc");
+    }
+
+    #[test]
+    fn strip_numeric_suffix_handles_single_segment() {
+        assert_eq!(strip_numeric_suffix("top"), "top");
+    }
+
+    #[test]
+    fn is_session_top_terminal_id_bare_top() {
+        assert!(is_session_top_terminal_id("something-top"));
+    }
+
+    #[test]
+    fn is_session_top_terminal_id_with_numeric_index() {
+        assert!(is_session_top_terminal_id("something-top-5"));
+    }
+
+    #[test]
+    fn is_session_top_terminal_id_bottom_variants() {
+        assert!(!is_session_top_terminal_id("something-bottom"));
+        assert!(!is_session_top_terminal_id("something-bottom-0"));
+    }
+
+    #[test]
+    fn orchestrator_terminal_id_deterministic() {
+        use std::path::Path;
+        let id1 = terminal_id_for_orchestrator_top(Path::new("/home/user/project"));
+        let id2 = terminal_id_for_orchestrator_top(Path::new("/home/user/project"));
+        assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn orchestrator_terminal_id_different_paths_produce_different_ids() {
+        use std::path::Path;
+        let id1 = terminal_id_for_orchestrator_top(Path::new("/home/user/project-a"));
+        let id2 = terminal_id_for_orchestrator_top(Path::new("/home/user/project-b"));
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn orchestrator_terminal_id_unknown_fallback() {
+        use std::path::Path;
+        let id = terminal_id_for_orchestrator_top(Path::new("/"));
+        assert!(id.contains("unknown") || id.starts_with("orchestrator-"));
+    }
+
+    #[test]
+    fn session_terminal_base_variants_always_has_at_least_one() {
+        let variants = session_terminal_base_variants("x");
+        assert!(!variants.is_empty());
+    }
+
+    #[test]
+    fn previous_tilde_hashed_ids_use_v1_hash() {
+        let top = previous_tilde_hashed_terminal_id_for_session_top("test");
+        let bottom = previous_tilde_hashed_terminal_id_for_session_bottom("test");
+        assert!(top.contains('~'));
+        assert!(bottom.contains('~'));
+        assert!(top.ends_with("-top"));
+        assert!(bottom.ends_with("-bottom"));
+    }
+
+    #[test]
+    fn previous_hashed_ids_use_dash_separator() {
+        let top = previous_hashed_terminal_id_for_session_top("test");
+        let bottom = previous_hashed_terminal_id_for_session_bottom("test");
+        assert!(!top.contains('~'));
+        assert!(!bottom.contains('~'));
+        assert!(top.ends_with("-top"));
+        assert!(bottom.ends_with("-bottom"));
+    }
+
+    #[test]
+    fn legacy_ids_contain_no_hash() {
+        let top = legacy_terminal_id_for_session_top("my-session");
+        let bottom = legacy_terminal_id_for_session_bottom("my-session");
+        assert_eq!(top, "session-my-session-top");
+        assert_eq!(bottom, "session-my-session-bottom");
     }
 }

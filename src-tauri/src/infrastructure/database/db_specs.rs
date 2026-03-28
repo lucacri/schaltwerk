@@ -150,3 +150,193 @@ fn row_to_spec(row: &Row<'_>) -> rusqlite::Result<Spec> {
         },
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::database::connection::Database;
+    use chrono::Utc;
+    use std::path::PathBuf;
+
+    fn create_test_database() -> Database {
+        Database::new_in_memory().expect("Failed to create in-memory database")
+    }
+
+    fn make_spec(id: &str, name: &str, repo_path: &str) -> Spec {
+        let now = Utc::now();
+        Spec {
+            id: id.to_string(),
+            name: name.to_string(),
+            display_name: None,
+            epic_id: None,
+            repository_path: PathBuf::from(repo_path),
+            repository_name: "test-repo".to_string(),
+            content: "spec content".to_string(),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn create_and_get_spec_by_id() {
+        let db = create_test_database();
+        let spec = make_spec("s1", "my-spec", "/repo");
+        db.create_spec(&spec).unwrap();
+
+        let fetched = db.get_spec_by_id("s1").unwrap();
+        assert_eq!(fetched.id, "s1");
+        assert_eq!(fetched.name, "my-spec");
+        assert_eq!(fetched.content, "spec content");
+        assert_eq!(fetched.repository_path, PathBuf::from("/repo"));
+    }
+
+    #[test]
+    fn get_spec_by_name() {
+        let db = create_test_database();
+        let spec = make_spec("s2", "named-spec", "/repo");
+        db.create_spec(&spec).unwrap();
+
+        let fetched = db
+            .get_spec_by_name(Path::new("/repo"), "named-spec")
+            .unwrap();
+        assert_eq!(fetched.id, "s2");
+    }
+
+    #[test]
+    fn get_spec_by_name_not_found() {
+        let db = create_test_database();
+        let result = db.get_spec_by_name(Path::new("/repo"), "nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn get_spec_by_id_not_found() {
+        let db = create_test_database();
+        let result = db.get_spec_by_id("nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn list_specs_empty() {
+        let db = create_test_database();
+        let specs = db.list_specs(Path::new("/repo")).unwrap();
+        assert!(specs.is_empty());
+    }
+
+    #[test]
+    fn list_specs_returns_only_matching_repo() {
+        let db = create_test_database();
+        db.create_spec(&make_spec("s1", "spec-a", "/repo-a"))
+            .unwrap();
+        db.create_spec(&make_spec("s2", "spec-b", "/repo-b"))
+            .unwrap();
+
+        let specs = db.list_specs(Path::new("/repo-a")).unwrap();
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].id, "s1");
+    }
+
+    #[test]
+    fn update_spec_content() {
+        let db = create_test_database();
+        db.create_spec(&make_spec("s1", "my-spec", "/repo"))
+            .unwrap();
+
+        db.update_spec_content("s1", "updated content").unwrap();
+
+        let fetched = db.get_spec_by_id("s1").unwrap();
+        assert_eq!(fetched.content, "updated content");
+        assert!(fetched.updated_at >= fetched.created_at);
+    }
+
+    #[test]
+    fn update_spec_display_name() {
+        let db = create_test_database();
+        db.create_spec(&make_spec("s1", "my-spec", "/repo"))
+            .unwrap();
+
+        db.update_spec_display_name("s1", "Pretty Name").unwrap();
+
+        let fetched = db.get_spec_by_id("s1").unwrap();
+        assert_eq!(fetched.display_name, Some("Pretty Name".to_string()));
+    }
+
+    #[test]
+    fn update_spec_epic_id() {
+        let db = create_test_database();
+        db.create_spec(&make_spec("s1", "my-spec", "/repo"))
+            .unwrap();
+
+        db.update_spec_epic_id("s1", Some("epic-1")).unwrap();
+        let fetched = db.get_spec_by_id("s1").unwrap();
+        assert_eq!(fetched.epic_id, Some("epic-1".to_string()));
+
+        db.update_spec_epic_id("s1", None).unwrap();
+        let fetched = db.get_spec_by_id("s1").unwrap();
+        assert_eq!(fetched.epic_id, None);
+    }
+
+    #[test]
+    fn delete_spec() {
+        let db = create_test_database();
+        db.create_spec(&make_spec("s1", "my-spec", "/repo"))
+            .unwrap();
+
+        db.delete_spec("s1").unwrap();
+
+        let result = db.get_spec_by_id("s1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn create_duplicate_name_same_repo_fails() {
+        let db = create_test_database();
+        db.create_spec(&make_spec("s1", "dup-name", "/repo"))
+            .unwrap();
+
+        let mut dup = make_spec("s2", "dup-name", "/repo");
+        dup.id = "s2".to_string();
+        let result = db.create_spec(&dup);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn create_same_name_different_repo_ok() {
+        let db = create_test_database();
+        db.create_spec(&make_spec("s1", "shared-name", "/repo-a"))
+            .unwrap();
+        db.create_spec(&make_spec("s2", "shared-name", "/repo-b"))
+            .unwrap();
+
+        let a = db
+            .get_spec_by_name(Path::new("/repo-a"), "shared-name")
+            .unwrap();
+        let b = db
+            .get_spec_by_name(Path::new("/repo-b"), "shared-name")
+            .unwrap();
+        assert_eq!(a.id, "s1");
+        assert_eq!(b.id, "s2");
+    }
+
+    #[test]
+    fn spec_with_display_name_and_epic() {
+        let db = create_test_database();
+        let now = Utc::now();
+        let spec = Spec {
+            id: "s1".to_string(),
+            name: "my-spec".to_string(),
+            display_name: Some("My Spec".to_string()),
+            epic_id: Some("epic-42".to_string()),
+            repository_path: PathBuf::from("/repo"),
+            repository_name: "test-repo".to_string(),
+            content: "content".to_string(),
+            created_at: now,
+            updated_at: now,
+        };
+        db.create_spec(&spec).unwrap();
+
+        let fetched = db.get_spec_by_id("s1").unwrap();
+        assert_eq!(fetched.display_name, Some("My Spec".to_string()));
+        assert_eq!(fetched.epic_id, Some("epic-42".to_string()));
+    }
+}

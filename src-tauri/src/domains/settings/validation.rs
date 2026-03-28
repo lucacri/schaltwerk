@@ -66,3 +66,108 @@ pub fn clean_invalid_binary_paths(settings: &mut Settings) {
     fix_config(&mut settings.agent_binaries.amp);
     fix_config(&mut settings.agent_binaries.kilocode);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn make_config(agent_name: &str, custom_path: Option<&str>) -> Option<AgentBinaryConfig> {
+        Some(AgentBinaryConfig {
+            agent_name: agent_name.to_string(),
+            custom_path: custom_path.map(|p| p.to_string()),
+            auto_detect: false,
+            detected_binaries: Vec::new(),
+        })
+    }
+
+    #[test]
+    fn leaves_non_js_paths_untouched() {
+        let mut settings = Settings::default();
+        settings.agent_binaries.claude = make_config("claude", Some("/usr/local/bin/claude"));
+
+        clean_invalid_binary_paths(&mut settings);
+
+        let cfg = settings.agent_binaries.claude.unwrap();
+        assert_eq!(cfg.custom_path, Some("/usr/local/bin/claude".to_string()));
+        assert!(!cfg.auto_detect);
+    }
+
+    #[test]
+    fn leaves_none_paths_untouched() {
+        let mut settings = Settings::default();
+        settings.agent_binaries.claude = make_config("claude", None);
+
+        clean_invalid_binary_paths(&mut settings);
+
+        let cfg = settings.agent_binaries.claude.unwrap();
+        assert!(cfg.custom_path.is_none());
+    }
+
+    #[test]
+    fn js_path_reverts_to_auto_detect_when_no_wrapper_found() {
+        let mut settings = Settings::default();
+        settings.agent_binaries.claude =
+            make_config("claude", Some("/some/node_modules/.bin/claude.js"));
+
+        clean_invalid_binary_paths(&mut settings);
+
+        let cfg = settings.agent_binaries.claude.unwrap();
+        assert!(cfg.custom_path.is_none());
+        assert!(cfg.auto_detect);
+    }
+
+    #[test]
+    fn mjs_path_reverts_to_auto_detect_when_no_wrapper_found() {
+        let mut settings = Settings::default();
+        settings.agent_binaries.codex =
+            make_config("codex", Some("/tmp/codex.mjs"));
+
+        clean_invalid_binary_paths(&mut settings);
+
+        let cfg = settings.agent_binaries.codex.unwrap();
+        assert!(cfg.custom_path.is_none());
+        assert!(cfg.auto_detect);
+    }
+
+    #[test]
+    fn skips_agents_with_no_config() {
+        let mut settings = Settings::default();
+        settings.agent_binaries.claude = None;
+
+        clean_invalid_binary_paths(&mut settings);
+
+        assert!(settings.agent_binaries.claude.is_none());
+    }
+
+    #[test]
+    fn processes_all_agent_fields() {
+        let mut settings = Settings::default();
+        settings.agent_binaries.claude = make_config("claude", Some("/x/claude.js"));
+        settings.agent_binaries.copilot = make_config("copilot", Some("/x/copilot.js"));
+        settings.agent_binaries.opencode = make_config("opencode", Some("/x/opencode.js"));
+        settings.agent_binaries.gemini = make_config("gemini", Some("/x/gemini.js"));
+        settings.agent_binaries.codex = make_config("codex", Some("/x/codex.js"));
+        settings.agent_binaries.droid = make_config("droid", Some("/x/droid.js"));
+        settings.agent_binaries.qwen = make_config("qwen", Some("/x/qwen.js"));
+        settings.agent_binaries.amp = make_config("amp", Some("/x/amp.js"));
+        settings.agent_binaries.kilocode = make_config("kilocode", Some("/x/kilocode.js"));
+
+        clean_invalid_binary_paths(&mut settings);
+
+        let check = |cfg: &Option<AgentBinaryConfig>, name: &str| {
+            let c = cfg.as_ref().unwrap();
+            assert!(
+                c.auto_detect,
+                "{name} should have reverted to auto_detect"
+            );
+        };
+        check(&settings.agent_binaries.claude, "claude");
+        check(&settings.agent_binaries.copilot, "copilot");
+        check(&settings.agent_binaries.opencode, "opencode");
+        check(&settings.agent_binaries.gemini, "gemini");
+        check(&settings.agent_binaries.codex, "codex");
+        check(&settings.agent_binaries.droid, "droid");
+        check(&settings.agent_binaries.qwen, "qwen");
+        check(&settings.agent_binaries.amp, "amp");
+        check(&settings.agent_binaries.kilocode, "kilocode");
+    }
+}

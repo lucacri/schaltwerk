@@ -893,6 +893,215 @@ mod discard_path_tests {
     }
 }
 
+#[cfg(test)]
+mod worktree_operation_tests {
+    use super::*;
+    use git2::Repository;
+    use tempfile::TempDir;
+
+    fn init_repo_with_commit(dir: &Path) -> Repository {
+        let repo = Repository::init(dir).unwrap();
+        {
+            let mut cfg = repo.config().unwrap();
+            cfg.set_str("user.name", "Test").unwrap();
+            cfg.set_str("user.email", "test@example.com").unwrap();
+        }
+        std::fs::write(dir.join("init.txt"), "init").unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index.add_path(Path::new("init.txt")).unwrap();
+            index.write().unwrap();
+            let tree_id = index.write_tree().unwrap();
+            let tree = repo.find_tree(tree_id).unwrap();
+            let sig = repo.signature().unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "initial commit", &tree, &[])
+                .unwrap();
+        }
+        {
+            let head = repo.head().unwrap();
+            if head.shorthand() != Some("master") {
+                let mut branch = repo
+                    .find_branch(head.shorthand().unwrap(), git2::BranchType::Local)
+                    .unwrap();
+                branch.rename("master", true).unwrap();
+            }
+        }
+        repo
+    }
+
+    #[test]
+    fn create_worktree_from_base_creates_valid_worktree() {
+        let tmp = TempDir::new().unwrap();
+        let repo_dir = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        let _repo = init_repo_with_commit(&repo_dir);
+
+        let wt_path = tmp.path().join("worktrees").join("test-session");
+        create_worktree_from_base(
+            &repo_dir,
+            "lucode/test-session",
+            &wt_path,
+            "master",
+        )
+        .unwrap();
+
+        assert!(wt_path.exists());
+        assert!(is_worktree_registered(&repo_dir, &wt_path).unwrap());
+    }
+
+    #[test]
+    fn list_worktrees_includes_main_and_created_worktrees() {
+        let tmp = TempDir::new().unwrap();
+        let repo_dir = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        let _repo = init_repo_with_commit(&repo_dir);
+
+        let initial = list_worktrees(&repo_dir).unwrap();
+        assert_eq!(initial.len(), 1);
+
+        let wt_path = tmp.path().join("worktrees").join("session-a");
+        create_worktree_from_base(&repo_dir, "lucode/session-a", &wt_path, "master").unwrap();
+
+        let after = list_worktrees(&repo_dir).unwrap();
+        assert_eq!(after.len(), 2);
+    }
+
+    #[test]
+    fn remove_worktree_cleans_up_directory_and_registration() {
+        let tmp = TempDir::new().unwrap();
+        let repo_dir = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        let _repo = init_repo_with_commit(&repo_dir);
+
+        let wt_path = tmp.path().join("worktrees").join("session-rm");
+        create_worktree_from_base(&repo_dir, "lucode/session-rm", &wt_path, "master").unwrap();
+        assert!(wt_path.exists());
+
+        remove_worktree(&repo_dir, &wt_path).unwrap();
+
+        assert!(!wt_path.exists());
+    }
+
+    #[test]
+    fn remove_worktree_nonexistent_returns_error() {
+        let tmp = TempDir::new().unwrap();
+        let repo_dir = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        let _repo = init_repo_with_commit(&repo_dir);
+
+        let bogus = tmp.path().join("worktrees").join("does-not-exist");
+        let result = remove_worktree(&repo_dir, &bogus);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn get_worktree_for_branch_finds_created_worktree() {
+        let tmp = TempDir::new().unwrap();
+        let repo_dir = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        let _repo = init_repo_with_commit(&repo_dir);
+
+        let wt_path = tmp.path().join("worktrees").join("branch-lookup");
+        create_worktree_from_base(&repo_dir, "lucode/branch-lookup", &wt_path, "master").unwrap();
+
+        let found = get_worktree_for_branch(&repo_dir, "lucode/branch-lookup").unwrap();
+        assert!(found.is_some());
+    }
+
+    #[test]
+    fn get_worktree_for_branch_returns_none_for_unknown() {
+        let tmp = TempDir::new().unwrap();
+        let repo_dir = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        let _repo = init_repo_with_commit(&repo_dir);
+
+        let found = get_worktree_for_branch(&repo_dir, "nonexistent-branch").unwrap();
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn prune_worktrees_removes_stale_entries() {
+        let tmp = TempDir::new().unwrap();
+        let repo_dir = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        let _repo = init_repo_with_commit(&repo_dir);
+
+        let wt_path = tmp.path().join("worktrees").join("prunable");
+        create_worktree_from_base(&repo_dir, "lucode/prunable", &wt_path, "master").unwrap();
+
+        std::fs::remove_dir_all(&wt_path).unwrap();
+
+        prune_worktrees(&repo_dir).unwrap();
+
+        let worktrees = list_worktrees(&repo_dir).unwrap();
+        assert_eq!(worktrees.len(), 1);
+    }
+
+    #[test]
+    fn create_worktree_for_existing_branch_succeeds() {
+        let tmp = TempDir::new().unwrap();
+        let repo_dir = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        let repo = init_repo_with_commit(&repo_dir);
+
+        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("feature/existing", &head_commit, false).unwrap();
+
+        let wt_path = tmp.path().join("worktrees").join("existing-session");
+        create_worktree_for_existing_branch(&repo_dir, "feature/existing", &wt_path).unwrap();
+
+        assert!(wt_path.exists());
+        assert!(is_worktree_registered(&repo_dir, &wt_path).unwrap());
+    }
+
+    #[test]
+    fn create_worktree_for_existing_branch_rejects_already_checked_out() {
+        let tmp = TempDir::new().unwrap();
+        let repo_dir = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        let repo = init_repo_with_commit(&repo_dir);
+
+        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("feature/dup", &head_commit, false).unwrap();
+
+        let wt1 = tmp.path().join("worktrees").join("dup-1");
+        create_worktree_for_existing_branch(&repo_dir, "feature/dup", &wt1).unwrap();
+
+        let wt2 = tmp.path().join("worktrees").join("dup-2");
+        let result = create_worktree_for_existing_branch(&repo_dir, "feature/dup", &wt2);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_branch_name_rejects_null_bytes() {
+        assert!(validate_branch_name("bad\0name").is_err());
+    }
+
+    #[test]
+    fn validate_branch_name_rejects_special_characters() {
+        assert!(validate_branch_name("bad name").is_err());
+        assert!(validate_branch_name("bad~name").is_err());
+        assert!(validate_branch_name("bad:name").is_err());
+    }
+
+    #[test]
+    fn validate_branch_name_accepts_nested_slashes() {
+        assert!(validate_branch_name("a/b/c/d").is_ok());
+    }
+
+    #[test]
+    fn extract_session_name_from_path_works() {
+        let p = PathBuf::from("/foo/bar/my-session");
+        assert_eq!(extract_session_name_from_path(&p).unwrap(), "my-session");
+    }
+
+    #[test]
+    fn extract_session_name_from_root_fails() {
+        let p = PathBuf::from("/");
+        assert!(extract_session_name_from_path(&p).is_err());
+    }
+}
+
 fn validate_branch_name(name: &str) -> Result<()> {
     if name.is_empty() {
         return Err(anyhow!("Branch name cannot be empty"));

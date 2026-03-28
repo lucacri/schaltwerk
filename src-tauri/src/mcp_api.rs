@@ -831,6 +831,317 @@ mod tests {
         assert_eq!(payload.agent_type.as_deref(), Some("opencode"));
         assert_eq!(payload.prompt.as_deref(), Some("go"));
     }
+
+    #[test]
+    fn extract_draft_name_decodes_url_encoding() {
+        assert_eq!(
+            extract_draft_name("/api/specs/my%20spec", "/api/specs/"),
+            "my spec"
+        );
+    }
+
+    #[test]
+    fn extract_draft_name_handles_plain_name() {
+        assert_eq!(
+            extract_draft_name("/api/specs/simple-name", "/api/specs/"),
+            "simple-name"
+        );
+    }
+
+    #[test]
+    fn extract_draft_name_handles_special_characters() {
+        assert_eq!(
+            extract_draft_name("/api/specs/hello%2Fworld", "/api/specs/"),
+            "hello/world"
+        );
+    }
+
+    #[test]
+    fn extract_draft_name_for_start_strips_suffix() {
+        assert_eq!(
+            extract_draft_name_for_start("/api/specs/my-draft/start"),
+            "my-draft"
+        );
+    }
+
+    #[test]
+    fn extract_draft_name_for_start_decodes_url_encoding() {
+        assert_eq!(
+            extract_draft_name_for_start("/api/specs/my%20draft/start"),
+            "my draft"
+        );
+    }
+
+    #[test]
+    fn extract_session_name_decodes_url_encoding() {
+        assert_eq!(
+            extract_session_name("/api/sessions/test%20session"),
+            "test session"
+        );
+    }
+
+    #[test]
+    fn extract_session_name_handles_plain_name() {
+        assert_eq!(
+            extract_session_name("/api/sessions/plain-session"),
+            "plain-session"
+        );
+    }
+
+    #[test]
+    fn extract_session_name_for_action_strips_action_suffix() {
+        assert_eq!(
+            extract_session_name_for_action("/api/sessions/my-session/merge", "/merge"),
+            "my-session"
+        );
+    }
+
+    #[test]
+    fn extract_session_name_for_action_decodes_and_strips() {
+        assert_eq!(
+            extract_session_name_for_action(
+                "/api/sessions/my%20session/mark-reviewed",
+                "/mark-reviewed"
+            ),
+            "my session"
+        );
+    }
+
+    #[test]
+    fn not_found_response_has_404_status() {
+        let resp = not_found_response();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        assert_eq!(resp.body(), "Not Found");
+    }
+
+    #[test]
+    fn error_response_sets_status_and_body() {
+        let resp = error_response(StatusCode::BAD_REQUEST, "oops".to_string());
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(resp.body(), "oops");
+    }
+
+    #[test]
+    fn json_response_sets_content_type_header() {
+        let resp = json_response(StatusCode::OK, r#"{"ok":true}"#.to_string());
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("content-type").unwrap(),
+            "application/json"
+        );
+        assert_eq!(resp.body(), r#"{"ok":true}"#);
+    }
+
+    #[test]
+    fn json_error_response_wraps_message_in_error_object() {
+        let resp = json_error_response(StatusCode::UNPROCESSABLE_ENTITY, "bad input".to_string());
+        assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let body: serde_json::Value = serde_json::from_str(resp.body()).unwrap();
+        assert_eq!(body["error"], "bad input");
+    }
+
+    #[test]
+    fn parse_optional_usize_none_input() {
+        let result = parse_optional_usize(None, "field").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn parse_optional_usize_empty_string() {
+        let result = parse_optional_usize(Some("".to_string()), "field").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn parse_optional_usize_whitespace_only() {
+        let result = parse_optional_usize(Some("   ".to_string()), "field").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn parse_optional_usize_valid_number() {
+        let result = parse_optional_usize(Some("42".to_string()), "field").unwrap();
+        assert_eq!(result, Some(42));
+    }
+
+    #[test]
+    fn parse_optional_usize_zero() {
+        let result = parse_optional_usize(Some("0".to_string()), "field").unwrap();
+        assert_eq!(result, Some(0));
+    }
+
+    #[test]
+    fn parse_optional_usize_invalid_string() {
+        let err = parse_optional_usize(Some("abc".to_string()), "page_size").unwrap_err();
+        assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(err.message.contains("page_size"));
+    }
+
+    #[test]
+    fn parse_optional_usize_negative_number() {
+        let err = parse_optional_usize(Some("-5".to_string()), "field").unwrap_err();
+        assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn setup_script_payload_empty_string() {
+        let payload = setup_script_payload("");
+        assert_eq!(payload["has_setup_script"], serde_json::json!(false));
+        assert_eq!(payload["setup_script"], serde_json::json!(""));
+    }
+
+    #[test]
+    fn parse_setup_script_request_rejects_invalid_json() {
+        let err = parse_setup_script_request(b"not json").unwrap_err();
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.contains("Invalid JSON"));
+    }
+
+    #[test]
+    fn parse_setup_script_request_rejects_non_string_value() {
+        let err = parse_setup_script_request(br#"{ "setup_script": 42 }"#).unwrap_err();
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn worktree_base_directory_payload_empty_string() {
+        let payload = worktree_base_directory_payload(Some(""));
+        assert_eq!(payload["has_custom_directory"], serde_json::json!(false));
+        assert_eq!(payload["worktree_base_directory"], serde_json::json!(""));
+    }
+
+    #[test]
+    fn merge_session_request_deserialization_defaults() {
+        let payload: MergeSessionRequest = serde_json::from_slice(b"{}").unwrap();
+        assert!(payload.mode.is_none());
+        assert!(payload.commit_message.is_none());
+        assert!(!payload.cancel_after_merge);
+    }
+
+    #[test]
+    fn merge_session_request_deserialization_with_values() {
+        let payload: MergeSessionRequest = serde_json::from_slice(
+            br#"{ "mode": "squash", "commit_message": "feat: done", "cancel_after_merge": true }"#,
+        )
+        .unwrap();
+        assert_eq!(payload.mode, Some(MergeMode::Squash));
+        assert_eq!(payload.commit_message.as_deref(), Some("feat: done"));
+        assert!(payload.cancel_after_merge);
+    }
+
+    #[test]
+    fn pull_request_request_deserialization() {
+        let payload: PullRequestRequest = serde_json::from_slice(
+            br#"{ "pr_title": "My PR", "cancel_after_pr": true }"#,
+        )
+        .unwrap();
+        assert_eq!(payload.pr_title, "My PR");
+        assert!(payload.pr_body.is_none());
+        assert!(payload.cancel_after_pr);
+    }
+
+    #[test]
+    fn pull_request_request_deserialization_all_fields() {
+        let payload: PullRequestRequest = serde_json::from_slice(
+            br#"{
+                "pr_title": "Title",
+                "pr_body": "Body",
+                "base_branch": "main",
+                "pr_branch_name": "feature",
+                "commit_message": "msg",
+                "repository": "org/repo",
+                "mode": "reapply",
+                "cancel_after_pr": false
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(payload.pr_title, "Title");
+        assert_eq!(payload.pr_body.as_deref(), Some("Body"));
+        assert_eq!(payload.base_branch.as_deref(), Some("main"));
+        assert_eq!(payload.pr_branch_name.as_deref(), Some("feature"));
+        assert_eq!(payload.commit_message.as_deref(), Some("msg"));
+        assert_eq!(payload.repository.as_deref(), Some("org/repo"));
+        assert_eq!(payload.mode, Some(MergeMode::Reapply));
+        assert!(!payload.cancel_after_pr);
+    }
+
+    #[test]
+    fn merge_session_response_serialization() {
+        let response = MergeSessionResponse {
+            session_name: "test".to_string(),
+            parent_branch: "main".to_string(),
+            session_branch: "feature".to_string(),
+            mode: MergeMode::Squash,
+            commit: "abc123".to_string(),
+            cancel_requested: true,
+            cancel_queued: true,
+            cancel_error: None,
+        };
+        let json: serde_json::Value = serde_json::to_value(&response).unwrap();
+        assert_eq!(json["session_name"], "test");
+        assert_eq!(json["cancel_requested"], true);
+        assert!(json["cancel_error"].is_null());
+    }
+
+    #[test]
+    fn parse_reset_selection_request_rejects_invalid_json() {
+        let err = parse_reset_selection_request(b"{invalid}").unwrap_err();
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn parse_reset_selection_request_with_session_selection() {
+        let payload = parse_reset_selection_request(
+            br#"{ "selection": "session", "session_name": "my-session", "skip_prompt": true }"#,
+        )
+        .unwrap();
+        assert_eq!(payload.selection.as_deref(), Some("session"));
+        assert_eq!(payload.session_name.as_deref(), Some("my-session"));
+        assert_eq!(payload.skip_prompt, Some(true));
+        assert!(payload.skip_permissions.is_none());
+    }
+
+    #[test]
+    fn spec_summary_from_spec_with_unicode_content() {
+        let content = "# \u{1F680} Unicode spec\n\nDetails with \u{00E9}";
+        let session = make_spec_session("unicode", Some(content));
+        let summary = SpecSummary::from_spec(&session);
+        assert_eq!(summary.content_length, content.chars().count());
+    }
+
+    #[test]
+    fn spec_content_response_preserves_full_content() {
+        let content = "line1\nline2\nline3";
+        let session = make_spec_session("multi", Some(content));
+        let response = SpecContentResponse::from_spec(&session);
+        assert_eq!(response.content, content);
+        assert_eq!(response.content_length, content.chars().count());
+    }
+
+    #[test]
+    fn project_override_header_with_non_utf8_value() {
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Project-Path", "/valid/path".parse().unwrap());
+        assert_eq!(
+            project_override_from_headers(&headers),
+            Some(PathBuf::from("/valid/path"))
+        );
+    }
+
+    #[test]
+    fn setup_script_request_payload_serialization() {
+        let payload = SetupScriptRequestPayload {
+            setup_script: "#!/bin/bash".to_string(),
+            has_setup_script: true,
+            pending_confirmation: false,
+            project_path: "/tmp/project".to_string(),
+        };
+        let json: serde_json::Value = serde_json::to_value(&payload).unwrap();
+        assert_eq!(json["setup_script"], "#!/bin/bash");
+        assert_eq!(json["has_setup_script"], true);
+        assert_eq!(json["pending_confirmation"], false);
+        assert_eq!(json["project_path"], "/tmp/project");
+    }
 }
 
 async fn create_draft(

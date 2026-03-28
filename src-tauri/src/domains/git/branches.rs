@@ -447,8 +447,41 @@ pub fn check_remote_branch_status(repo_path: &Path, branch_name: &str) -> Remote
 #[cfg(test)]
 mod tests {
     use super::*;
+    use git2::Signature;
     use std::process::Command;
     use tempfile::TempDir;
+
+    fn init_repo_with_commit(dir: &std::path::Path) -> Repository {
+        let repo = Repository::init(dir).unwrap();
+        {
+            let mut cfg = repo.config().unwrap();
+            cfg.set_str("user.name", "Test").unwrap();
+            cfg.set_str("user.email", "test@example.com").unwrap();
+        }
+        std::fs::write(dir.join("init.txt"), "init").unwrap();
+        {
+            let mut index = repo.index().unwrap();
+            index
+                .add_path(std::path::Path::new("init.txt"))
+                .unwrap();
+            index.write().unwrap();
+            let tree_id = index.write_tree().unwrap();
+            let tree = repo.find_tree(tree_id).unwrap();
+            let sig = Signature::now("Test", "test@example.com").unwrap();
+            repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
+                .unwrap();
+        }
+        {
+            let head = repo.head().unwrap();
+            if head.shorthand() != Some("master") {
+                let mut branch = repo
+                    .find_branch(head.shorthand().unwrap(), git2::BranchType::Local)
+                    .unwrap();
+                branch.rename("master", true).unwrap();
+            }
+        }
+        repo
+    }
 
     #[test]
     fn ensure_branch_at_head_renames_current_branch_when_missing() {
@@ -495,5 +528,169 @@ mod tests {
         let repo = Repository::open(repo_path).unwrap();
         let head = repo.head().unwrap();
         assert_eq!(head.shorthand(), Some("main"));
+    }
+
+    #[test]
+    fn list_branches_returns_local_branches() {
+        let tmp = TempDir::new().unwrap();
+        let repo = init_repo_with_commit(tmp.path());
+
+        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("feature/a", &head_commit, false).unwrap();
+        repo.branch("feature/b", &head_commit, false).unwrap();
+
+        let branches = list_branches(tmp.path()).unwrap();
+        assert!(branches.contains(&"feature/a".to_string()));
+        assert!(branches.contains(&"feature/b".to_string()));
+    }
+
+    #[test]
+    fn list_branches_sorted_and_deduped() {
+        let tmp = TempDir::new().unwrap();
+        let _repo = init_repo_with_commit(tmp.path());
+
+        let branches = list_branches(tmp.path()).unwrap();
+        let mut sorted = branches.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(branches, sorted);
+    }
+
+    #[test]
+    fn branch_exists_returns_true_for_existing_branch() {
+        let tmp = TempDir::new().unwrap();
+        let _repo = init_repo_with_commit(tmp.path());
+
+        assert!(branch_exists(tmp.path(), "master").unwrap());
+    }
+
+    #[test]
+    fn branch_exists_returns_false_for_missing_branch() {
+        let tmp = TempDir::new().unwrap();
+        let _repo = init_repo_with_commit(tmp.path());
+
+        assert!(!branch_exists(tmp.path(), "nonexistent").unwrap());
+    }
+
+    #[test]
+    fn delete_branch_removes_branch() {
+        let tmp = TempDir::new().unwrap();
+        let repo = init_repo_with_commit(tmp.path());
+
+        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("to-delete", &head_commit, false).unwrap();
+
+        assert!(branch_exists(tmp.path(), "to-delete").unwrap());
+        delete_branch(tmp.path(), "to-delete").unwrap();
+        assert!(!branch_exists(tmp.path(), "to-delete").unwrap());
+    }
+
+    #[test]
+    fn delete_branch_errors_for_nonexistent() {
+        let tmp = TempDir::new().unwrap();
+        let _repo = init_repo_with_commit(tmp.path());
+
+        let result = delete_branch(tmp.path(), "ghost");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rename_branch_succeeds() {
+        let tmp = TempDir::new().unwrap();
+        let repo = init_repo_with_commit(tmp.path());
+
+        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("old-name", &head_commit, false).unwrap();
+
+        rename_branch(tmp.path(), "old-name", "new-name").unwrap();
+
+        assert!(!branch_exists(tmp.path(), "old-name").unwrap());
+        assert!(branch_exists(tmp.path(), "new-name").unwrap());
+    }
+
+    #[test]
+    fn rename_branch_errors_when_source_missing() {
+        let tmp = TempDir::new().unwrap();
+        let _repo = init_repo_with_commit(tmp.path());
+
+        let result = rename_branch(tmp.path(), "missing", "target");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rename_branch_errors_when_target_exists() {
+        let tmp = TempDir::new().unwrap();
+        let repo = init_repo_with_commit(tmp.path());
+
+        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("src", &head_commit, false).unwrap();
+        repo.branch("dst", &head_commit, false).unwrap();
+
+        let result = rename_branch(tmp.path(), "src", "dst");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ensure_branch_at_head_checks_out_existing_branch() {
+        let tmp = TempDir::new().unwrap();
+        let repo = init_repo_with_commit(tmp.path());
+
+        let head_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("develop", &head_commit, false).unwrap();
+
+        ensure_branch_at_head(tmp.path(), "develop").unwrap();
+
+        let repo = Repository::open(tmp.path()).unwrap();
+        assert_eq!(repo.head().unwrap().shorthand(), Some("develop"));
+    }
+
+    #[test]
+    fn split_remote_spec_basic() {
+        assert_eq!(split_remote_spec("origin/main"), Some(("origin", "main")));
+        assert_eq!(split_remote_spec("main"), None);
+        assert_eq!(split_remote_spec("/main"), None);
+        assert_eq!(split_remote_spec("origin/"), None);
+    }
+
+    #[test]
+    fn branch_spec_strips_refs_heads_prefix() {
+        let remotes = HashSet::new();
+        let spec = BranchSpec::from_input("refs/heads/feature/x", &remotes);
+        assert_eq!(spec.local, "feature/x");
+        assert!(spec.remote.is_none());
+    }
+
+    #[test]
+    fn branch_spec_strips_refs_remotes_prefix() {
+        let remotes = HashSet::new();
+        let spec = BranchSpec::from_input("refs/remotes/origin/feature/y", &remotes);
+        assert_eq!(spec.local, "feature/y");
+        assert_eq!(spec.remote, Some("origin"));
+    }
+
+    #[test]
+    fn branch_spec_recognizes_known_remote() {
+        let mut remotes = HashSet::new();
+        remotes.insert("upstream".to_string());
+        let spec = BranchSpec::from_input("upstream/develop", &remotes);
+        assert_eq!(spec.local, "develop");
+        assert_eq!(spec.remote, Some("upstream"));
+    }
+
+    #[test]
+    fn branch_spec_plain_branch_no_remote() {
+        let remotes = HashSet::new();
+        let spec = BranchSpec::from_input("main", &remotes);
+        assert_eq!(spec.local, "main");
+        assert!(spec.remote.is_none());
+    }
+
+    #[test]
+    fn list_branches_empty_repo_returns_unborn_head() {
+        let tmp = TempDir::new().unwrap();
+        let _repo = Repository::init(tmp.path()).unwrap();
+
+        let branches = list_branches(tmp.path()).unwrap();
+        assert!(branches.len() <= 1);
     }
 }

@@ -118,3 +118,201 @@ fn row_to_epic(row: &Row<'_>) -> rusqlite::Result<Epic> {
         color: row.get(2)?,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::database::connection::Database;
+    use crate::infrastructure::database::db_specs::SpecMethods;
+    use std::path::{Path, PathBuf};
+
+    fn create_test_database() -> Database {
+        Database::new_in_memory().expect("Failed to create in-memory database")
+    }
+
+    fn make_epic(id: &str, name: &str, color: Option<&str>) -> Epic {
+        Epic {
+            id: id.to_string(),
+            name: name.to_string(),
+            color: color.map(|c| c.to_string()),
+        }
+    }
+
+    #[test]
+    fn create_and_list_epic() {
+        let db = create_test_database();
+        let repo = Path::new("/repo");
+        let epic = make_epic("e1", "Feature Work", Some("#ff0000"));
+
+        db.create_epic(repo, &epic).unwrap();
+
+        let epics = db.list_epics(repo).unwrap();
+        assert_eq!(epics.len(), 1);
+        assert_eq!(epics[0].id, "e1");
+        assert_eq!(epics[0].name, "Feature Work");
+        assert_eq!(epics[0].color, Some("#ff0000".to_string()));
+    }
+
+    #[test]
+    fn list_epics_empty() {
+        let db = create_test_database();
+        let epics = db.list_epics(Path::new("/repo")).unwrap();
+        assert!(epics.is_empty());
+    }
+
+    #[test]
+    fn list_epics_filters_by_repo() {
+        let db = create_test_database();
+        db.create_epic(Path::new("/repo-a"), &make_epic("e1", "Epic A", None))
+            .unwrap();
+        db.create_epic(Path::new("/repo-b"), &make_epic("e2", "Epic B", None))
+            .unwrap();
+
+        let epics = db.list_epics(Path::new("/repo-a")).unwrap();
+        assert_eq!(epics.len(), 1);
+        assert_eq!(epics[0].id, "e1");
+    }
+
+    #[test]
+    fn get_epic_by_id() {
+        let db = create_test_database();
+        let repo = Path::new("/repo");
+        db.create_epic(repo, &make_epic("e1", "My Epic", Some("#00ff00")))
+            .unwrap();
+
+        let epic = db.get_epic_by_id(repo, "e1").unwrap();
+        assert_eq!(epic.name, "My Epic");
+        assert_eq!(epic.color, Some("#00ff00".to_string()));
+    }
+
+    #[test]
+    fn get_epic_by_id_not_found() {
+        let db = create_test_database();
+        let result = db.get_epic_by_id(Path::new("/repo"), "nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn get_epic_by_name() {
+        let db = create_test_database();
+        let repo = Path::new("/repo");
+        db.create_epic(repo, &make_epic("e1", "Named Epic", None))
+            .unwrap();
+
+        let epic = db.get_epic_by_name(repo, "Named Epic").unwrap();
+        assert_eq!(epic.id, "e1");
+    }
+
+    #[test]
+    fn get_epic_by_name_not_found() {
+        let db = create_test_database();
+        let result = db.get_epic_by_name(Path::new("/repo"), "missing");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn update_epic() {
+        let db = create_test_database();
+        let repo = Path::new("/repo");
+        db.create_epic(repo, &make_epic("e1", "Old Name", None))
+            .unwrap();
+
+        db.update_epic(repo, "e1", "New Name", Some("#0000ff"))
+            .unwrap();
+
+        let epic = db.get_epic_by_id(repo, "e1").unwrap();
+        assert_eq!(epic.name, "New Name");
+        assert_eq!(epic.color, Some("#0000ff".to_string()));
+    }
+
+    #[test]
+    fn update_epic_remove_color() {
+        let db = create_test_database();
+        let repo = Path::new("/repo");
+        db.create_epic(repo, &make_epic("e1", "Colored", Some("#ff0000")))
+            .unwrap();
+
+        db.update_epic(repo, "e1", "Colored", None).unwrap();
+
+        let epic = db.get_epic_by_id(repo, "e1").unwrap();
+        assert_eq!(epic.color, None);
+    }
+
+    #[test]
+    fn delete_epic() {
+        let db = create_test_database();
+        let repo = Path::new("/repo");
+        db.create_epic(repo, &make_epic("e1", "To Delete", None))
+            .unwrap();
+
+        db.delete_epic(repo, "e1").unwrap();
+
+        let epics = db.list_epics(repo).unwrap();
+        assert!(epics.is_empty());
+    }
+
+    #[test]
+    fn clear_epic_assignments_clears_specs() {
+        let db = create_test_database();
+        let repo = Path::new("/repo");
+        db.create_epic(repo, &make_epic("e1", "Epic", None))
+            .unwrap();
+
+        let now = chrono::Utc::now();
+        let spec = crate::domains::sessions::entity::Spec {
+            id: "s1".to_string(),
+            name: "spec-1".to_string(),
+            display_name: None,
+            epic_id: Some("e1".to_string()),
+            repository_path: PathBuf::from("/repo"),
+            repository_name: "repo".to_string(),
+            content: "content".to_string(),
+            created_at: now,
+            updated_at: now,
+        };
+        db.create_spec(&spec).unwrap();
+
+        db.clear_epic_assignments(repo, "e1").unwrap();
+
+        let fetched = db.get_spec_by_id("s1").unwrap();
+        assert_eq!(fetched.epic_id, None);
+    }
+
+    #[test]
+    fn duplicate_name_same_repo_fails() {
+        let db = create_test_database();
+        let repo = Path::new("/repo");
+        db.create_epic(repo, &make_epic("e1", "Dup", None))
+            .unwrap();
+        let result = db.create_epic(repo, &make_epic("e2", "Dup", None));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn same_name_different_repo_ok() {
+        let db = create_test_database();
+        db.create_epic(Path::new("/repo-a"), &make_epic("e1", "Same", None))
+            .unwrap();
+        db.create_epic(Path::new("/repo-b"), &make_epic("e2", "Same", None))
+            .unwrap();
+
+        let a = db.get_epic_by_name(Path::new("/repo-a"), "Same").unwrap();
+        let b = db.get_epic_by_name(Path::new("/repo-b"), "Same").unwrap();
+        assert_eq!(a.id, "e1");
+        assert_eq!(b.id, "e2");
+    }
+
+    #[test]
+    fn list_epics_ordered_by_name() {
+        let db = create_test_database();
+        let repo = Path::new("/repo");
+        db.create_epic(repo, &make_epic("e2", "Zeta", None))
+            .unwrap();
+        db.create_epic(repo, &make_epic("e1", "Alpha", None))
+            .unwrap();
+
+        let epics = db.list_epics(repo).unwrap();
+        assert_eq!(epics[0].name, "Alpha");
+        assert_eq!(epics[1].name, "Zeta");
+    }
+}
