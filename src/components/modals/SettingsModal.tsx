@@ -45,6 +45,7 @@ import { ResizableModal } from '../shared/ResizableModal'
 import { AgentVariantsSettings } from '../settings/AgentVariantsSettings'
 import { AgentPresetsSettings } from '../settings/AgentPresetsSettings'
 import { ContextualActionsSettings } from '../settings/ContextualActionsSettings'
+import { EditorOverridesSettings } from '../settings/EditorOverridesSettings'
 
 const shortcutArraysEqual = (a: string[] = [], b: string[] = []) => {
     if (a.length !== b.length) return false
@@ -187,6 +188,16 @@ const CATEGORIES: CategoryConfig[] = [
         icon: (
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+            </svg>
+        )
+    },
+    {
+        id: 'fileEditors',
+        label: 'File Editors',
+        scope: 'application',
+        icon: (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
         )
     },
@@ -2848,6 +2859,14 @@ fi`}
                                 <AgentPresetsSettings onNotification={showNotification} />
                                 <ContextualActionsSettings onNotification={showNotification} />
                             </div>
+                        </div>
+                    </div>
+                )
+            case 'fileEditors':
+                return (
+                    <div className="flex flex-col h-full">
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <EditorOverridesSettings onNotification={showNotification} />
                         </div>
                     </div>
                 )

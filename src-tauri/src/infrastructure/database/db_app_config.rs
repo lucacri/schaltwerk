@@ -17,6 +17,11 @@ pub trait AppConfigMethods {
     fn set_default_base_branch(&self, branch: Option<&str>) -> Result<()>;
     fn get_default_open_app(&self) -> Result<String>;
     fn set_default_open_app(&self, app_id: &str) -> Result<()>;
+    fn get_editor_overrides(&self) -> Result<std::collections::HashMap<String, String>>;
+    fn set_editor_overrides(
+        &self,
+        overrides: &std::collections::HashMap<String, String>,
+    ) -> Result<()>;
     fn get_tutorial_completed(&self) -> Result<bool>;
     fn set_tutorial_completed(&self, completed: bool) -> Result<()>;
 }
@@ -233,6 +238,34 @@ impl AppConfigMethods for Database {
         Ok(())
     }
 
+    fn get_editor_overrides(&self) -> Result<std::collections::HashMap<String, String>> {
+        let conn = self.get_conn()?;
+        let result: rusqlite::Result<Option<String>> = conn.query_row(
+            "SELECT editor_overrides FROM app_config WHERE id = 1",
+            [],
+            |row| row.get(0),
+        );
+        match result {
+            Ok(Some(json)) => {
+                serde_json::from_str(&json).map_err(|e| anyhow::anyhow!("Invalid JSON: {e}"))
+            }
+            _ => Ok(std::collections::HashMap::new()),
+        }
+    }
+
+    fn set_editor_overrides(
+        &self,
+        overrides: &std::collections::HashMap<String, String>,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        let json = serde_json::to_string(overrides)?;
+        conn.execute(
+            "UPDATE app_config SET editor_overrides = ?1 WHERE id = 1",
+            params![json],
+        )?;
+        Ok(())
+    }
+
     fn get_tutorial_completed(&self) -> Result<bool> {
         let conn = self.get_conn()?;
 
@@ -286,6 +319,46 @@ mod tests {
         .expect("Failed to initialize app_config");
         drop(conn);
         db
+    }
+
+    #[test]
+    fn test_editor_overrides_returns_empty_by_default() {
+        let db = create_test_database();
+        let result = db
+            .get_editor_overrides()
+            .expect("Failed to get editor overrides");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_set_and_get_editor_overrides() {
+        let db = create_test_database();
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(".rs".to_string(), "cursor".to_string());
+        overrides.insert(".ts".to_string(), "code".to_string());
+        db.set_editor_overrides(&overrides)
+            .expect("Failed to set editor overrides");
+        let result = db
+            .get_editor_overrides()
+            .expect("Failed to get editor overrides");
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.get(".rs").unwrap(), "cursor");
+        assert_eq!(result.get(".ts").unwrap(), "code");
+    }
+
+    #[test]
+    fn test_clear_editor_overrides() {
+        let db = create_test_database();
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(".rs".to_string(), "cursor".to_string());
+        db.set_editor_overrides(&overrides)
+            .expect("Failed to set");
+        db.set_editor_overrides(&std::collections::HashMap::new())
+            .expect("Failed to clear");
+        let result = db
+            .get_editor_overrides()
+            .expect("Failed to get");
+        assert!(result.is_empty());
     }
 
     #[test]

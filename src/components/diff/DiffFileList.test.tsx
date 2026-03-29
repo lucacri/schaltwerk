@@ -1105,8 +1105,8 @@ describe('DiffFileList', () => {
         if (cmd === TauriCommands.SchaltwerkCoreGetSession) {
           return { worktree_path: '/tmp/worktree/demo' }
         }
-        if (cmd === TauriCommands.GetDefaultOpenApp) {
-          return 'vscode'
+        if (cmd === TauriCommands.GetEditorOverrides) {
+          return { '.ts': 'vscode' }
         }
         if (cmd === TauriCommands.OpenInApp) {
           return undefined
@@ -1145,8 +1145,8 @@ describe('DiffFileList', () => {
         if (cmd === TauriCommands.GetActiveProjectPath) {
           return '/test/project'
         }
-        if (cmd === TauriCommands.GetDefaultOpenApp) {
-          return 'cursor'
+        if (cmd === TauriCommands.GetEditorOverrides) {
+          return { '.ts': 'cursor' }
         }
         if (cmd === TauriCommands.OpenInApp) {
           return undefined

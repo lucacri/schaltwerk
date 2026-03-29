@@ -182,6 +182,7 @@ mod tests {
             lines_added: 100,
             lines_removed: 20,
             has_uncommitted: true,
+            has_conflicts: false,
             calculated_at: Utc::now(),
             last_diff_change_ts: None,
         }
@@ -294,6 +295,7 @@ mod tests {
             lines_added: 1,
             lines_removed: 0,
             has_uncommitted: false,
+            has_conflicts: false,
             calculated_at: Utc.timestamp_opt(Utc::now().timestamp() - 120, 0).unwrap(),
             last_diff_change_ts: None,
         };

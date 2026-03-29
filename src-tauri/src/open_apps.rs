@@ -117,6 +117,28 @@ mod tests {
             ]
         );
     }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_build_command_for_finder_with_file_target_opens_file_path() {
+        let req = resolve_request("/repo/root", Some("src/main.rs"), Some(7), None)
+            .expect("resolve should succeed");
+        let spec = build_command_macos("finder", &req).expect("build should succeed");
+        assert_eq!(spec.program, "/usr/bin/open");
+        assert_eq!(spec.args, vec!["/repo/root/src/main.rs".to_string()]);
+        assert_eq!(spec.working_dir, None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_build_command_for_system_open_with_file_target() {
+        let req = resolve_request("/repo/root", Some("src/main.rs"), Some(7), None)
+            .expect("resolve should succeed");
+        let spec = build_command_macos("system-open", &req).expect("build should succeed");
+        assert_eq!(spec.program, "/usr/bin/open");
+        assert_eq!(spec.args, vec!["/repo/root/src/main.rs".to_string()]);
+        assert_eq!(spec.working_dir, None);
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -436,11 +458,21 @@ fn build_command_macos(app_id: &str, req: &ResolvedRequest) -> Result<CommandSpe
         .as_ref()
         .map(|t| format_path_with_position(&t.absolute_path, t.line, t.column));
     let terminal_dir = req.terminal_workdir.to_string_lossy().to_string();
+    let target_or_root = req
+        .target
+        .as_ref()
+        .map(|t| t.absolute_path.to_string_lossy().to_string())
+        .unwrap_or_else(|| root.clone());
 
     match app_id {
         "finder" => Ok(CommandSpec {
             program: "/usr/bin/open".into(),
-            args: vec![root],
+            args: vec![target_or_root.clone()],
+            working_dir: None,
+        }),
+        "system-open" => Ok(CommandSpec {
+            program: "/usr/bin/open".into(),
+            args: vec![target_or_root],
             working_dir: None,
         }),
         "terminal" => Ok(CommandSpec {
@@ -541,6 +573,12 @@ fn build_command_linux(app_id: &str, req: &ResolvedRequest) -> Result<CommandSpe
         .unwrap_or_else(|| root.clone());
 
     match app_id {
+        "system-open" => Ok(CommandSpec {
+            program: "xdg-open".into(),
+            args: vec![target_or_root],
+            working_dir: None,
+        }),
+
         // File managers
         "dolphin" | "nautilus" | "nemo" | "pcmanfm" | "thunar" => Ok(CommandSpec {
             program: app_id.into(),
@@ -680,6 +718,12 @@ fn build_command_windows(app_id: &str, req: &ResolvedRequest) -> Result<CommandS
         .unwrap_or_else(|| root.clone());
 
     match app_id {
+        "system-open" => Ok(CommandSpec {
+            program: "cmd".into(),
+            args: vec!["/C".into(), "start".into(), String::new(), target_or_root.clone()],
+            working_dir: None,
+        }),
+
         "explorer" => Ok(CommandSpec {
             program: "explorer.exe".into(),
             args: vec![target_or_root],
@@ -963,6 +1007,19 @@ pub fn get_default_open_app_from_db(
     db: &crate::schaltwerk_core::Database,
 ) -> anyhow::Result<String> {
     db.get_default_open_app()
+}
+
+pub fn get_editor_overrides_from_db(
+    db: &crate::schaltwerk_core::Database,
+) -> anyhow::Result<std::collections::HashMap<String, String>> {
+    db.get_editor_overrides()
+}
+
+pub fn set_editor_overrides_in_db(
+    db: &crate::schaltwerk_core::Database,
+    overrides: &std::collections::HashMap<String, String>,
+) -> anyhow::Result<()> {
+    db.set_editor_overrides(overrides)
 }
 
 pub fn set_default_open_app_in_db(

@@ -284,6 +284,10 @@ fn apply_app_config_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()
         "ALTER TABLE app_config ADD COLUMN dev_error_toasts_enabled BOOLEAN DEFAULT FALSE",
         [],
     );
+    let _ = conn.execute(
+        "ALTER TABLE app_config ADD COLUMN editor_overrides TEXT DEFAULT NULL",
+        [],
+    );
     Ok(())
 }
 
@@ -751,7 +755,11 @@ mod tests {
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL,
                 initial_prompt TEXT,
-                spec_content TEXT
+                spec_content TEXT,
+                issue_number INTEGER,
+                issue_url TEXT,
+                pr_number INTEGER,
+                pr_url TEXT
             )",
             [],
         )

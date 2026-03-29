@@ -994,7 +994,7 @@ describe('Terminal', () => {
   it('opens absolute file links outside the active project root using the project root (not the worktree)', async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === TauriCommands.GetActiveProjectPath) return '/project'
-      if (cmd === TauriCommands.GetDefaultOpenApp) return 'vscode'
+      if (cmd === TauriCommands.GetEditorOverrides) return { '.log': 'vscode' }
       if (cmd === TauriCommands.OpenInApp) return undefined
       return { fontFamily: null }
     })
@@ -1033,7 +1033,7 @@ describe('Terminal', () => {
   it('opens absolute file links inside the active project root but outside the session root using the project root (not the worktree)', async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === TauriCommands.GetActiveProjectPath) return '/project'
-      if (cmd === TauriCommands.GetDefaultOpenApp) return 'vscode'
+      if (cmd === TauriCommands.GetEditorOverrides) return { '.ts': 'vscode' }
       if (cmd === TauriCommands.OpenInApp) return undefined
       return { fontFamily: null }
     })
@@ -1072,7 +1072,7 @@ describe('Terminal', () => {
   it('opens relative file links that resolve outside the session root using the project root (not the worktree)', async () => {
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === TauriCommands.GetActiveProjectPath) return '/project'
-      if (cmd === TauriCommands.GetDefaultOpenApp) return 'vscode'
+      if (cmd === TauriCommands.GetEditorOverrides) return { '.log': 'vscode' }
       if (cmd === TauriCommands.OpenInApp) return undefined
       return { fontFamily: null }
     })
@@ -1103,6 +1103,84 @@ describe('Terminal', () => {
           worktreePath: '/project',
           targetPath: '/project/.schaltwerk/worktrees/outside.log',
           line: 12,
+        }),
+      )
+    })
+  })
+
+  it('uses configured editor override for terminal file links by extension', async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === TauriCommands.GetActiveProjectPath) return '/project'
+      if (cmd === TauriCommands.GetEditorOverrides) return { '.ts': 'cursor' }
+      if (cmd === TauriCommands.OpenInApp) return undefined
+      return { fontFamily: null }
+    })
+
+    renderTerminal({
+      terminalId: 'session-file-links-editor-override-bottom',
+      workingDirectory: '/project/.schaltwerk/worktrees/session-a',
+    })
+
+    await waitFor(() => {
+      expect(terminalHarness.instances.length).toBeGreaterThan(0)
+      expect((terminalHarness.instances[0] as HarnessInstance).setFileLinkHandler).toHaveBeenCalled()
+    })
+
+    const instance = terminalHarness.instances[0] as HarnessInstance
+    const handler = instance.setFileLinkHandler.mock.calls.at(-1)?.[0] as ((text: string) => Promise<boolean>) | null | undefined
+    expect(typeof handler).toBe('function')
+
+    const handled = await handler!('/project/src/inside.ts:7')
+    expect(handled).toBe(true)
+
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        TauriCommands.OpenInApp,
+        expect.objectContaining({
+          appId: 'cursor',
+          worktreeRoot: '/project',
+          worktreePath: '/project',
+          targetPath: '/project/src/inside.ts',
+          line: 7,
+        }),
+      )
+    })
+  })
+
+  it('falls back to system-open for terminal file links when no override matches', async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === TauriCommands.GetActiveProjectPath) return '/project'
+      if (cmd === TauriCommands.GetEditorOverrides) return {}
+      if (cmd === TauriCommands.OpenInApp) return undefined
+      return { fontFamily: null }
+    })
+
+    renderTerminal({
+      terminalId: 'session-file-links-system-open-bottom',
+      workingDirectory: '/project/.schaltwerk/worktrees/session-a',
+    })
+
+    await waitFor(() => {
+      expect(terminalHarness.instances.length).toBeGreaterThan(0)
+      expect((terminalHarness.instances[0] as HarnessInstance).setFileLinkHandler).toHaveBeenCalled()
+    })
+
+    const instance = terminalHarness.instances[0] as HarnessInstance
+    const handler = instance.setFileLinkHandler.mock.calls.at(-1)?.[0] as ((text: string) => Promise<boolean>) | null | undefined
+    expect(typeof handler).toBe('function')
+
+    const handled = await handler!('/project/src/fallback.ts:3')
+    expect(handled).toBe(true)
+
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        TauriCommands.OpenInApp,
+        expect.objectContaining({
+          appId: 'system-open',
+          worktreeRoot: '/project',
+          worktreePath: '/project',
+          targetPath: '/project/src/fallback.ts',
+          line: 3,
         }),
       )
     })

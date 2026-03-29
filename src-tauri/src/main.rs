@@ -290,6 +290,27 @@ async fn set_default_open_app(app_id: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to store default open app: {e}"))
 }
 
+#[tauri::command]
+async fn get_editor_overrides() -> Result<std::collections::HashMap<String, String>, String> {
+    match open_global_app_config_db() {
+        Ok(db) => lucode::open_apps::get_editor_overrides_from_db(&db)
+            .map_err(|e| format!("Failed to load editor overrides: {e}")),
+        Err(e) => {
+            log::warn!("Failed to access app config database: {e}. Returning empty overrides");
+            Ok(std::collections::HashMap::new())
+        }
+    }
+}
+
+#[tauri::command]
+async fn set_editor_overrides(
+    overrides: std::collections::HashMap<String, String>,
+) -> Result<(), String> {
+    let db = open_global_app_config_db()?;
+    lucode::open_apps::set_editor_overrides_in_db(&db, &overrides)
+        .map_err(|e| format!("Failed to store editor overrides: {e}"))
+}
+
 pub static PROJECT_MANAGER: OnceCell<Arc<ProjectManager>> = OnceCell::const_new();
 pub static SETTINGS_MANAGER: OnceCell<Arc<Mutex<SettingsManager>>> = OnceCell::const_new();
 pub static ATTENTION_REGISTRY: OnceCell<Arc<Mutex<AttentionStateRegistry>>> = OnceCell::const_new();
@@ -1350,6 +1371,8 @@ fn main() {
             // Open apps commands
             get_default_open_app,
             set_default_open_app,
+            get_editor_overrides,
+            set_editor_overrides,
             lucode::open_apps::list_available_open_apps,
             lucode::open_apps::open_in_app,
             // Diff commands (from module)

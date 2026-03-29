@@ -9,11 +9,40 @@ interface UseOpenInEditorOptions {
   isCommander?: boolean
 }
 
+export const SYSTEM_OPEN_APP_ID = 'system-open'
+
+export type EditorOverrides = Record<string, string>
+
+export function resolveEditorForFile(filePath: string, overrides: EditorOverrides): string {
+  const ext = extractExtension(filePath)
+  if (ext && overrides[ext]) {
+    return overrides[ext]
+  }
+  return SYSTEM_OPEN_APP_ID
+}
+
+export function extractExtension(filePath: string): string | null {
+  const basename = filePath.split(/[/\\]/).pop() ?? filePath
+  const dotIndex = basename.lastIndexOf('.')
+  if (dotIndex <= 0) return null
+  return basename.slice(dotIndex)
+}
+
 export function useOpenInEditor(options: UseOpenInEditorOptions = {}) {
   const { sessionNameOverride, isCommander } = options
   const { selection } = useSelection()
 
   const sessionName = sessionNameOverride ?? (selection.kind === 'session' ? selection.payload : null)
+
+  const resolveEditorAppId = useCallback(async (filePath: string): Promise<string> => {
+    try {
+      const overrides = await invoke<EditorOverrides>(TauriCommands.GetEditorOverrides)
+      return resolveEditorForFile(filePath, overrides)
+    } catch (error) {
+      logger.error('Failed to load editor overrides', error)
+      return SYSTEM_OPEN_APP_ID
+    }
+  }, [])
 
   const openInEditor = useCallback(async (filePath: string) => {
     try {
@@ -29,9 +58,9 @@ export function useOpenInEditor(options: UseOpenInEditorOptions = {}) {
       }
 
       const fullPath = `${basePath}/${filePath}`
-      const defaultAppId = await invoke<string>(TauriCommands.GetDefaultOpenApp)
+      const appId = await resolveEditorAppId(filePath)
       await invoke(TauriCommands.OpenInApp, {
-        appId: defaultAppId,
+        appId,
         worktreeRoot: basePath,
         worktreePath: basePath,
         targetPath: fullPath
@@ -41,7 +70,7 @@ export function useOpenInEditor(options: UseOpenInEditorOptions = {}) {
       const errorMessage = typeof e === 'string' ? e : ((e as Error)?.message || String(e) || 'Unknown error')
       alert(errorMessage)
     }
-  }, [sessionName, isCommander])
+  }, [sessionName, isCommander, resolveEditorAppId])
 
-  return { openInEditor }
+  return { openInEditor, resolveEditorAppId }
 }

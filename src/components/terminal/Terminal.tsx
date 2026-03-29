@@ -24,6 +24,7 @@ import { LocalPreviewWatcher } from '../../features/preview/localPreview'
 import type { AutoPreviewConfig } from '../../utils/runScriptPreviewConfig'
 import { useCleanupRegistry } from '../../hooks/useCleanupRegistry';
 import { useTerminalConfig } from '../../hooks/useTerminalConfig';
+import { useOpenInEditor } from '../../hooks/useOpenInEditor'
 import { buildTerminalTheme } from '../../common/themes/terminalTheme'
 import type { ResolvedTheme } from '../../common/themes/types'
 import { isTuiAgent } from '../../types/session';
@@ -138,6 +139,7 @@ const isPathWithinBase = (basePath: string, candidatePath: string) => {
 
 const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalId, className = '', sessionName, isCommander = false, agentType, readOnly = false, onTerminalClick, onReady, inputFilter, workingDirectory, previewKey, autoPreviewConfig }, ref) => {
     const { addEventListener, addResizeObserver } = useCleanupRegistry();
+    const { resolveEditorAppId } = useOpenInEditor({ sessionNameOverride: sessionName ?? null, isCommander })
     const { isAnyModalOpen } = useModal();
     const containerRef = useRef<HTMLDivElement | null>(null);
     const searchContainerRef = useRef<HTMLDivElement | null>(null);
@@ -245,12 +247,19 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         const resolvedPath = resolveTerminalFileReference(parsed, workingDirectory);
         if (!resolvedPath) return false;
 
+        let appId: string
+        try {
+            appId = await resolveEditorAppId(resolvedPath)
+        } catch (error) {
+            logger.error(`[Terminal ${terminalId}] Failed to resolve editor app for file link ${text}`, error)
+            return false
+        }
+
         if (!isPathWithinBase(workingDirectory, resolvedPath)) {
             try {
                 const projectRoot = await invoke<string | null>(TauriCommands.GetActiveProjectPath);
                 const openRoot = projectRoot ?? workingDirectory;
 
-                const appId = await invoke<string>(TauriCommands.GetDefaultOpenApp);
                 await invoke(TauriCommands.OpenInApp, {
                     appId,
                     worktreeRoot: openRoot,
@@ -266,7 +275,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         }
 
         try {
-            const appId = await invoke<string>(TauriCommands.GetDefaultOpenApp);
             await invoke(TauriCommands.OpenInApp, { 
                 appId, 
                 worktreeRoot: workingDirectory,
@@ -279,7 +287,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             logger.error(`[Terminal ${terminalId}] Failed to open file link ${text}`, error);
             return false;
         }
-    }, [workingDirectory, terminalId]);
+    }, [workingDirectory, terminalId, resolveEditorAppId]);
 
     useEffect(() => {
         const handler = workingDirectory ? openFileFromTerminal : null;
