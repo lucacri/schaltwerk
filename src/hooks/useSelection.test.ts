@@ -93,7 +93,7 @@ describe('useSelection', () => {
   it('exposes clearTerminalTracking', () => {
     const { result } = renderHook(() => useSelection())
     act(() => {
-      void result.current.clearTerminalTracking()
+      void result.current.clearTerminalTracking([])
     })
     expect(mockClearTerminalTracking).toHaveBeenCalledTimes(1)
   })

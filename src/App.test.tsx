@@ -976,9 +976,9 @@ describe('validatePanelPercentage', () => {
     expect(typeof modalProps.onCreate).toBe('function')
 
     const createdResponses = [
-      { name: 'feature-unique', version_number: 1 },
-      { name: 'feature-unique_v2', version_number: 2 },
-      { name: 'feature-unique_v3', version_number: 3 },
+      { name: 'feature_v1', version_number: 1 },
+      { name: 'feature_v2', version_number: 2 },
+      { name: 'feature_v3', version_number: 3 },
     ]
 
     const invokeMock = await getInvokeMock()
@@ -1021,9 +1021,9 @@ describe('validatePanelPercentage', () => {
     expect(sessionsHandler).toBeDefined()
     await act(async () => {
       sessionsHandler?.([
-        { info: { session_id: 'feature-unique', status: 'active', session_state: 'running', original_agent_type: 'claude' } },
-        { info: { session_id: 'feature-unique_v2', status: 'active', session_state: 'running', original_agent_type: 'claude' } },
-        { info: { session_id: 'feature-unique_v3', status: 'active', session_state: 'running', original_agent_type: 'claude' } }
+        { info: { session_id: 'feature_v1', status: 'active', session_state: 'running', original_agent_type: 'claude' } },
+        { info: { session_id: 'feature_v2', status: 'active', session_state: 'running', original_agent_type: 'claude' } },
+        { info: { session_id: 'feature_v3', status: 'active', session_state: 'running', original_agent_type: 'claude' } }
       ])
     })
 
@@ -1031,9 +1031,9 @@ describe('validatePanelPercentage', () => {
     await act(async () => {
       sessionsRefreshedHandlers.forEach(({ handler }) => {
         handler([
-          { info: { session_id: 'feature-unique', status: 'active', session_state: 'running', original_agent_type: 'claude' } },
-          { info: { session_id: 'feature-unique_v2', status: 'active', session_state: 'running', original_agent_type: 'claude' } },
-          { info: { session_id: 'feature-unique_v3', status: 'active', session_state: 'running', original_agent_type: 'claude' } }
+          { info: { session_id: 'feature_v1', status: 'active', session_state: 'running', original_agent_type: 'claude' } },
+          { info: { session_id: 'feature_v2', status: 'active', session_state: 'running', original_agent_type: 'claude' } },
+          { info: { session_id: 'feature_v3', status: 'active', session_state: 'running', original_agent_type: 'claude' } }
         ])
       })
     })
@@ -1050,10 +1050,9 @@ describe('validatePanelPercentage', () => {
     expect(secondCall).toBeDefined()
     expect(thirdCall).toBeDefined()
 
-    expect(firstCall!.sessionName).toBe('feature-unique')
-    expect(secondCall!.sessionName).toBe('feature-unique_v2')
-    expect(thirdCall!.sessionName).toBe('feature-unique_v3')
-    expect([firstCall!.sessionName, secondCall!.sessionName, thirdCall!.sessionName]).not.toContain('feature')
+    expect(firstCall!.sessionName).toBe('feature_v1')
+    expect(secondCall!.sessionName).toBe('feature_v2')
+    expect(thirdCall!.sessionName).toBe('feature_v3')
 
     expect(firstCall!.agentType).toBe('claude')
     expect(secondCall!.agentType).toBe('claude')
@@ -1301,6 +1300,88 @@ describe('validatePanelPercentage', () => {
     }
   })
 
+  it('uses v1-vN suffixes when creating multiple versions from an existing spec', async () => {
+    const invokeMock = await getInvokeMock()
+    const isoNow = new Date().toISOString()
+    const specSession = {
+      info: {
+        session_id: 'draft-one',
+        display_name: 'Draft One',
+        branch: 'specs/draft-one',
+        worktree_path: '',
+        base_branch: 'main',
+        parent_branch: 'main',
+        status: 'spec',
+        session_state: 'spec' as const,
+        created_at: isoNow,
+        ready_to_merge: false,
+        has_uncommitted_changes: false,
+        has_conflicts: false,
+        is_current: false,
+        session_type: 'worktree' as const,
+      },
+      status: undefined,
+      terminals: [],
+    }
+
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+        return [specSession]
+      }
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        return buildRawSession(String(args?.name ?? 'draft-one_v1'))
+      }
+      if (cmd === TauriCommands.SchaltwerkCoreArchiveSpecSession) {
+        return null
+      }
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    try {
+      await renderApp()
+
+      await clickElement(screen.getByTestId('open-project'))
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+      })
+
+      await act(async () => {
+        emitUiEvent(UiEvent.StartAgentFromSpec, { name: 'draft-one' })
+      })
+
+      await waitFor(() => {
+        expect(fetchSessionForPrefillMock).toHaveBeenCalledWith('draft-one')
+      })
+
+      const modalCall = newSessionModalMock.mock.calls.at(-1)
+      expect(modalCall).toBeTruthy()
+      const modalProps = modalCall![0] as { onCreate: OnCreateFn }
+      expect(typeof modalProps.onCreate).toBe('function')
+
+      await modalProps.onCreate({
+        name: 'draft-one',
+        prompt: '# Spec draft',
+        baseBranch: 'main',
+        versionCount: 3,
+        agentType: 'claude',
+        isSpec: false,
+        userEditedName: true,
+      })
+
+      const createCalls = invokeMock.mock.calls.filter(
+        ([cmd]) => cmd === TauriCommands.SchaltwerkCoreCreateSession
+      )
+      expect(createCalls).toHaveLength(3)
+      expect(createCalls.map(([, args]) => (args as { name: string }).name)).toEqual([
+        'draft-one_v1',
+        'draft-one_v2',
+        'draft-one_v3',
+      ])
+    } finally {
+      invokeMock.mockImplementation(defaultInvokeImpl)
+    }
+  })
+
   it('should skip starting agents for sessions cancelled during version group creation', async () => {
     await renderApp()
 
@@ -1499,15 +1580,15 @@ describe('Multi-agent comparison logic', () => {
 
     for (let i = 1; i <= count; i++) {
       const baseName = data.name
-      const versionName = i === 1 ? baseName : `${baseName}_v${i}`
+      const versionName = count === 1 ? baseName : `${baseName}_v${i}`
       const agentTypeForVersion = useAgentTypes ? (data.agentTypes?.[i - 1] ?? null) : data.agentType
 
       assignments.push({ versionName, agentType: agentTypeForVersion })
     }
 
-    // Verify each version gets the correct agent type
+    // Verify each version gets the correct agent type — all versions get _v{N} suffix
     expect(assignments).toEqual([
-      { versionName: 'test-session', agentType: 'opencode' },
+      { versionName: 'test-session_v1', agentType: 'opencode' },
       { versionName: 'test-session_v2', agentType: 'gemini' },
       { versionName: 'test-session_v3', agentType: 'codex' }
     ])
@@ -1535,15 +1616,15 @@ describe('Multi-agent comparison logic', () => {
 
     for (let i = 1; i <= count; i++) {
       const baseName = data.name
-      const versionName = i === 1 ? baseName : `${baseName}_v${i}`
+      const versionName = count === 1 ? baseName : `${baseName}_v${i}`
       const agentTypeForVersion = useAgentTypes ? (data.agentTypes?.[i - 1] ?? null) : data.agentType
 
       assignments.push({ versionName, agentType: agentTypeForVersion })
     }
 
-    // Both versions should use the same agentType
+    // Both versions should use the same agentType — all versions get _v{N} suffix
     expect(assignments).toEqual([
-      { versionName: 'test-session', agentType: 'claude' },
+      { versionName: 'test-session_v1', agentType: 'claude' },
       { versionName: 'test-session_v2', agentType: 'claude' }
     ])
   })
