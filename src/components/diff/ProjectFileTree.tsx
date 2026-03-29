@@ -10,6 +10,7 @@ import { projectPathAtom } from '../../store/atoms/project'
 import { useOpenInEditor } from '../../hooks/useOpenInEditor'
 import { getFileCategoryFromPath } from '../../utils/fileTypes'
 import { buildFileTree, type SimpleFolderNode, type SimpleFileNode, type SimpleTreeNode } from '../../utils/fileTree'
+import { LoadingSkeleton } from '../shared/LoadingSkeleton'
 
 interface ProjectFileTreeProps {
   onFileSelect: (filePath: string) => void
@@ -186,13 +187,7 @@ export function ProjectFileTree({ onFileSelect, sessionNameOverride, isCommander
   }
 
   if (isLoading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center" style={{ color: 'var(--color-text-muted)' }}>
-          <div className="text-sm">Loading files...</div>
-        </div>
-      </div>
-    )
+    return <LoadingSkeleton lines={10} className="p-3" />
   }
 
   if (files.length === 0) {

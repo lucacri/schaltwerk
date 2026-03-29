@@ -60,6 +60,11 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
     )?;
 
     conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_repo_status ON sessions(repository_path, status)",
+        [],
+    )?;
+
+    conn.execute(
         "CREATE TABLE IF NOT EXISTS git_stats (
             session_id TEXT PRIMARY KEY,
             files_changed INTEGER NOT NULL,
@@ -71,6 +76,12 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
         )",
         [],
     )?;
+
+    // Migration: add has_conflicts column to git_stats
+    let _ = conn.execute(
+        "ALTER TABLE git_stats ADD COLUMN has_conflicts BOOLEAN NOT NULL DEFAULT FALSE",
+        [],
+    );
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS app_config (

@@ -19,8 +19,8 @@ impl GitStatsMethods for Database {
 
         conn.execute(
             "INSERT OR REPLACE INTO git_stats
-             (session_id, files_changed, lines_added, lines_removed, has_uncommitted, calculated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+             (session_id, files_changed, lines_added, lines_removed, has_uncommitted, calculated_at, has_conflicts)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 stats.session_id,
                 stats.files_changed,
@@ -28,6 +28,7 @@ impl GitStatsMethods for Database {
                 stats.lines_removed,
                 stats.has_uncommitted,
                 stats.calculated_at.timestamp(),
+                stats.has_conflicts,
             ],
         )?;
 
@@ -37,7 +38,7 @@ impl GitStatsMethods for Database {
     fn get_git_stats(&self, session_id: &str) -> Result<Option<GitStats>> {
         let conn = self.get_conn()?;
         let mut stmt = conn.prepare(
-            "SELECT session_id, files_changed, lines_added, lines_removed, has_uncommitted, calculated_at
+            "SELECT session_id, files_changed, lines_added, lines_removed, has_uncommitted, calculated_at, has_conflicts
              FROM git_stats WHERE session_id = ?1",
         )?;
         let result: rusqlite::Result<GitStats> = stmt.query_row(params![session_id], |row| {
@@ -49,6 +50,7 @@ impl GitStatsMethods for Database {
                 has_uncommitted: row.get(4)?,
                 calculated_at: utc_from_epoch_seconds_lossy(row.get(5)?),
                 last_diff_change_ts: None,
+                has_conflicts: row.get(6)?,
             })
         });
         match result {
@@ -60,7 +62,7 @@ impl GitStatsMethods for Database {
     fn get_all_git_stats(&self) -> Result<Vec<GitStats>> {
         let conn = self.get_conn()?;
         let mut stmt = conn.prepare(
-            "SELECT session_id, files_changed, lines_added, lines_removed, has_uncommitted, calculated_at
+            "SELECT session_id, files_changed, lines_added, lines_removed, has_uncommitted, calculated_at, has_conflicts
              FROM git_stats",
         )?;
         let stats_iter = stmt.query_map([], |row| {
@@ -72,6 +74,7 @@ impl GitStatsMethods for Database {
                 has_uncommitted: row.get(4)?,
                 calculated_at: utc_from_epoch_seconds_lossy(row.get(5)?),
                 last_diff_change_ts: None,
+                has_conflicts: row.get(6)?,
             })
         })?;
 
@@ -99,7 +102,7 @@ impl GitStatsMethods for Database {
             .collect::<Vec<_>>()
             .join(",");
         let query = format!(
-            "SELECT session_id, files_changed, lines_added, lines_removed, has_uncommitted, calculated_at
+            "SELECT session_id, files_changed, lines_added, lines_removed, has_uncommitted, calculated_at, has_conflicts
              FROM git_stats WHERE session_id IN ({placeholders})"
         );
 
@@ -118,6 +121,7 @@ impl GitStatsMethods for Database {
                 has_uncommitted: row.get(4)?,
                 calculated_at: utc_from_epoch_seconds_lossy(row.get(5)?),
                 last_diff_change_ts: None,
+                has_conflicts: row.get(6)?,
             })
         })?;
 

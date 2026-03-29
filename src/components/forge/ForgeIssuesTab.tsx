@@ -12,6 +12,7 @@ import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
 import { buildForgeSourcesIdentity } from '../../utils/forgeSourcesIdentity'
 import { filterSourcesForIssues } from '../../utils/forgeSourceFilters'
+import { LoadingSkeleton } from '../shared/LoadingSkeleton'
 import type { ForgeIssueSummary, ForgeIssueDetails, ForgeSourceConfig } from '../../types/forgeTypes'
 
 function isOpen(state: string): boolean {
@@ -177,13 +178,7 @@ export function ForgeIssuesTab() {
   }, [])
 
   if (selectedId && loadingDetails) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>
-          {t.forgeIssueTab.loading}
-        </span>
-      </div>
-    )
+    return <LoadingSkeleton lines={6} className="p-4" />
   }
 
   if (selectedId && detailError) {
@@ -294,11 +289,7 @@ export function ForgeIssuesTab() {
 
       <div className="flex-1 overflow-y-auto">
         {search.loading && search.results.length === 0 ? (
-          <div className="flex items-center justify-center py-8">
-            <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>
-              {t.forgeIssueTab.loading}
-            </span>
-          </div>
+          <LoadingSkeleton lines={5} className="py-4 px-3" />
         ) : search.results.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 gap-1">
             <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>

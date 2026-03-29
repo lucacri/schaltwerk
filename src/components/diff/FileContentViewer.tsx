@@ -1,15 +1,16 @@
-import { useState, useEffect, useCallback, memo, useMemo } from 'react'
+import { useState, useEffect, memo, useMemo } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
 import { VscChevronLeft, VscCode, VscPreview, VscFileBinary, VscWarning, VscGoToFile } from 'react-icons/vsc'
 import { theme } from '../../common/theme'
-import { logger } from '../../utils/logger'
 import { MarkdownRenderer } from '../specs/MarkdownRenderer'
 import { useSelection } from '../../hooks/useSelection'
 import { useHighlightWorker } from '../../hooks/useHighlightWorker'
 import { useOpenInEditor } from '../../hooks/useOpenInEditor'
+import { useAsyncState } from '../../hooks/useAsyncState'
 import { getLanguageFromPath, isMarkdownFile } from '../../utils/fileTypes'
 import { useTranslation } from '../../common/i18n'
+import { LoadingSkeleton } from '../shared/LoadingSkeleton'
 
 interface FileContentViewerProps {
   filePath: string | null
@@ -92,11 +93,6 @@ export function FileContentViewer({
 }: FileContentViewerProps) {
   const { t } = useTranslation()
   const { selection } = useSelection()
-  const [content, setContent] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [isBinary, setIsBinary] = useState(false)
-  const [fileSize, setFileSize] = useState<number>(0)
   const [viewMode, setViewMode] = useState<'preview' | 'raw'>('preview')
   const { requestBlockHighlight, readBlockLine } = useHighlightWorker()
   const { openInEditor } = useOpenInEditor({ sessionNameOverride })
@@ -107,42 +103,33 @@ export function FileContentViewer({
   const language = filePath ? getLanguageFromPath(filePath) : null
   const cacheKey = filePath ? `file-viewer::${filePath}` : ''
 
-  const loadContent = useCallback(async () => {
-    if (!filePath) return
-
-    setIsLoading(true)
-    setError(null)
-    setContent(null)
-    setIsBinary(false)
-
-    try {
-      const response = await invoke<FileContentResponse>(TauriCommands.ReadProjectFile, {
+  const { data: response, loading: isLoading, error: loadError } = useAsyncState(
+    (signal) => {
+      if (!filePath) return Promise.resolve(null)
+      return invoke<FileContentResponse>(TauriCommands.ReadProjectFile, {
         sessionName,
         filePath,
+      }).then((r) => {
+        if (signal.aborted) return null
+        return r
       })
+    },
+    [filePath, sessionName],
+  )
 
-      setFileSize(response.size_bytes)
+  const content = useMemo(() => {
+    if (!response || response.is_binary) return null
+    if (response.content === '' && response.size_bytes > 0) return null
+    return response.content
+  }, [response])
 
-      if (response.is_binary) {
-        setIsBinary(true)
-        setContent(null)
-      } else if (response.content === '' && response.size_bytes > 0) {
-        setError(`File too large to display (${formatBytes(response.size_bytes)})`)
-        setContent(null)
-      } else {
-        setContent(response.content)
-      }
-    } catch (err) {
-      logger.error('Failed to load file content:', err)
-      setError(typeof err === 'string' ? err : 'Failed to load file')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [filePath, sessionName])
-
-  useEffect(() => {
-    void loadContent()
-  }, [loadContent])
+  const isBinary = response?.is_binary ?? false
+  const fileSize = response?.size_bytes ?? 0
+  const error = loadError
+    ? (typeof loadError.message === 'string' ? loadError.message : 'Failed to load file')
+    : (response && !response.is_binary && response.content === '' && response.size_bytes > 0)
+      ? `File too large to display (${formatBytes(response.size_bytes)})`
+      : null
 
   useEffect(() => {
     if (filePath && isMarkdownFile(filePath)) {
@@ -182,13 +169,7 @@ export function FileContentViewer({
 
   const renderContent = () => {
     if (isLoading) {
-      return (
-        <div className="h-full flex items-center justify-center">
-          <div className="text-center" style={{ color: 'var(--color-text-muted)' }}>
-            <div className="text-sm">{t.fileContentViewer.loading}</div>
-          </div>
-        </div>
-      )
+      return <LoadingSkeleton lines={8} className="p-4" />
     }
 
     if (error) {

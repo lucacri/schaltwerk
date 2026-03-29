@@ -1856,6 +1856,7 @@ mod service_unified_tests {
             has_uncommitted: false,
             calculated_at: Utc::now(),
             last_diff_change_ts: None,
+            has_conflicts: false,
         };
 
         let mut save_called = false;
@@ -1917,6 +1918,7 @@ mod service_unified_tests {
             has_uncommitted: false,
             calculated_at: Utc::now() - chrono::Duration::seconds(120),
             last_diff_change_ts: None,
+            has_conflicts: false,
         };
 
         let mut save_called = false;
@@ -1945,6 +1947,7 @@ mod service_unified_tests {
             lines_removed: 0,
             has_uncommitted: false,
             last_diff_change_ts: None,
+            has_conflicts: false,
         };
 
         let result = get_or_compute_git_stats("s", &repo, "main", Some(&stale_stats), |_s| Ok(()));
@@ -2732,16 +2735,17 @@ impl SessionManager {
         let mut worktree_check_time = std::time::Duration::ZERO;
         let mut session_count = 0;
 
-        // Push specs (lightweight, no worktrees)
+        let default_base_branch = self
+            .resolve_parent_branch(None)
+            .unwrap_or_else(|_| "main".to_string());
+
         for spec in specs {
             let worktree_path = self
                 .repo_path
                 .join(".lucode")
                 .join("specs")
                 .join(&spec.name);
-            let base_branch = self
-                .resolve_parent_branch(None)
-                .unwrap_or_else(|_| "main".to_string());
+            let base_branch = default_base_branch.clone();
 
             let info = SessionInfo {
                 session_id: spec.name.clone(),
@@ -2892,13 +2896,11 @@ impl SessionManager {
                 let stale = cached_stats
                     .as_ref()
                     .map(|existing| {
-                        // consider stats stale after 60s
                         const STALE_SECS: i64 = 60;
                         (chrono::Utc::now().timestamp() - existing.calculated_at.timestamp())
                             > STALE_SECS
                     })
                     .unwrap_or(true);
-                // Serve cached stats immediately; queue stale ones for background refresh
                 if stale {
                     if cfg!(test) {
                         if let Ok(mut fresh) = git::calculate_git_stats_fast(
@@ -2918,16 +2920,7 @@ impl SessionManager {
                     }
                 }
 
-                let has_conflicts = match git::has_conflicts(&session.worktree_path) {
-                    Ok(value) => value,
-                    Err(err) => {
-                        log::warn!(
-                            "Conflict detection failed for session '{}': {err}",
-                            session.name
-                        );
-                        false
-                    }
-                };
+                let has_conflicts = cached_stats.as_ref().map(|s| s.has_conflicts).unwrap_or(false);
 
                 (cached_stats, Some(has_conflicts))
             } else {
