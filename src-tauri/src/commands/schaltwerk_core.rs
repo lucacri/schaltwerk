@@ -39,16 +39,6 @@ pub mod terminals;
 
 pub use codex_model_commands::schaltwerk_core_list_codex_models;
 
-// Helper functions for session name parsing
-fn is_version_suffix(s: &str) -> bool {
-    s.starts_with('v') && s.len() > 1 && s[1..].chars().all(|c| c.is_numeric())
-}
-
-fn is_versioned_session_name(name: &str) -> bool {
-    let parts: Vec<&str> = name.split('_').collect();
-    parts.len() == 3 && parts.last().is_some_and(|p| is_version_suffix(p))
-}
-
 fn matches_version_pattern(name: &str, base_name: &str) -> bool {
     if let Some(suffix) = name.strip_prefix(&format!("{base_name}_v")) {
         !suffix.is_empty() && suffix.chars().all(|c| c.is_numeric())
@@ -1124,20 +1114,20 @@ pub async fn schaltwerk_core_create_session(
         },
     );
 
-    // Only trigger auto-rename for non-versioned Docker-style names
-    // Versioned names (ending with _v1, _v2, etc.) will be handled by group rename
-    if was_auto_generated && !is_versioned_session_name(&params.name) {
+    // Only trigger auto-rename for standalone sessions (not part of a version group).
+    // Version group sessions are renamed together via schaltwerk_core_rename_version_group.
+    if was_auto_generated && params.version_group_id.is_none() {
         log::info!(
-            "Session '{}' was auto-generated (non-versioned), spawning name generation agent",
+            "Session '{}' was auto-generated (no version group), spawning name generation agent",
             params.name
         );
         spawn_session_name_generation(app_handle, session_name_clone);
     } else {
         log::info!(
-            "Session '{}' was_auto_generated={}, has_prompt={}, skipping name generation",
+            "Session '{}' was_auto_generated={}, version_group={}, skipping individual name generation",
             params.name,
             was_auto_generated,
-            params.prompt.is_some()
+            params.version_group_id.is_some()
         );
     }
 

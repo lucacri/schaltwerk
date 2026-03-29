@@ -80,6 +80,7 @@ function createSession(overrides: Partial<EnrichedSession['info']> = {}): Enrich
       ...overrides,
     },
     git_stats: null,
+    terminals: [],
   } as EnrichedSession
 }
 
