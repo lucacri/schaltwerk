@@ -53,6 +53,10 @@ vi.mock('../../terminal/registry/terminalRegistry', () => ({
   releaseSessionTerminals: vi.fn(),
 }))
 
+vi.mock('../../features/preview/previewIframeRegistry', () => ({
+    closePreview: vi.fn(),
+}))
+
 vi.mock('../../utils/singleflight', () => ({
     hasInflight: vi.fn(() => false),
     singleflight: vi.fn(async (_key: string, fn: () => Promise<unknown>) => await fn()),
@@ -120,6 +124,15 @@ import { startSessionTop } from '../../common/agentSpawn'
 import { singleflight as singleflightMock } from '../../utils/singleflight'
 import { stableSessionTerminalId } from '../../common/terminalIdentity'
 import { clearTerminalStartState } from '../../common/terminalStartState'
+import { closePreview } from '../../features/preview/previewIframeRegistry'
+import {
+    adjustPreviewZoomActionAtom,
+    buildPreviewKey,
+    isElementPickerActiveAtom,
+    previewStateAtom,
+    setElementPickerActiveActionAtom,
+    setPreviewUrlActionAtom,
+} from './preview'
 
 const createSession = (overrides: Partial<EnrichedSession['info']>): EnrichedSession => ({
     info: {
@@ -1389,6 +1402,55 @@ describe('sessions atoms', () => {
         const expectedTopId = stableSessionTerminalId('reusable-session', 'top')
         const expectedBottomId = stableSessionTerminalId('reusable-session', 'bottom')
         expect(clearTerminalStartState).toHaveBeenCalledWith([expectedTopId, expectedBottomId])
+    })
+
+    it('closes and clears session preview state when SessionRemoved fires', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                return [
+                    createSession({ session_id: 'preview-session', status: 'active', session_state: 'running' }),
+                ]
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        store.set(projectPathAtom, '/project')
+        await store.set(initializeSessionsEventsActionAtom)
+        await store.set(refreshSessionsActionAtom)
+
+        const previewKey = buildPreviewKey('/project', 'session', 'preview-session')
+        store.set(setPreviewUrlActionAtom, { key: previewKey, url: 'http://localhost:3000' })
+        store.set(setPreviewUrlActionAtom, { key: previewKey, url: 'http://localhost:4173' })
+        store.set(adjustPreviewZoomActionAtom, { key: previewKey, delta: 0.3 })
+        store.set(setElementPickerActiveActionAtom, { key: previewKey, active: true })
+
+        expect(store.get(previewStateAtom)(previewKey)).toEqual({
+            url: 'http://localhost:4173',
+            zoom: 1.3,
+            history: ['http://localhost:3000', 'http://localhost:4173'],
+            historyIndex: 1,
+        })
+        expect(store.get(isElementPickerActiveAtom)(previewKey)).toBe(true)
+
+        vi.mocked(closePreview).mockClear()
+
+        listeners['schaltwerk:session-removed']?.({
+            session_name: 'preview-session',
+        })
+
+        expect(vi.mocked(closePreview)).toHaveBeenCalledWith(previewKey)
+        expect(store.get(previewStateAtom)(previewKey)).toEqual({
+            url: null,
+            zoom: 1,
+            history: [],
+            historyIndex: -1,
+        })
+        expect(store.get(isElementPickerActiveAtom)(previewKey)).toBe(false)
     })
 
     it('auto-starts reviewed sessions just like running sessions', async () => {

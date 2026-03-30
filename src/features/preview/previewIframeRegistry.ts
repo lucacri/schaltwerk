@@ -309,6 +309,43 @@ export const refreshIframe = (key: string, hard = false) => {
   })
 }
 
+export const closePreview = (key: string) => {
+  if (isTestEnv) {
+    const iframe = iframeRegistry.get(key)
+    if (!iframe) return
+    iframe.remove()
+    iframeRegistry.delete(key)
+    if (cacheHost && iframeRegistry.size === 0) {
+      cacheHost.remove()
+      cacheHost = null
+    }
+    return
+  }
+
+  const entry = webviewRegistry.get(key)
+  if (!entry) return
+
+  entry.operation = entry.operation
+    .then(async () => {
+      try {
+        await entry.webview?.close()
+      } catch (error) {
+        logger.warn('[preview] Failed to close webview during session cleanup', { label: entry.label, error })
+      }
+
+      entry.webview = null
+      entry.desiredUrl = null
+      entry.loadedUrl = null
+      entry.visible = false
+      entry.bounds = null
+      entry.appliedZoom = null
+      webviewRegistry.delete(key)
+    })
+    .catch((error) => {
+      logger.error('[preview] webview close operation failed', { key, label: entry.label, error })
+    })
+}
+
 export const __resetRegistryForTests = () => {
   iframeRegistry.clear()
   if (cacheHost) {
