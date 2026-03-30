@@ -142,6 +142,49 @@ const sampleStructuredOutputs: Record<string, any> = {
     content: '# Spec',
     updated_at: '2024-05-01T12:34:56Z',
   },
+  lucode_get_pr_feedback: {
+    state: 'OPEN',
+    is_draft: false,
+    review_decision: 'CHANGES_REQUESTED',
+    latest_reviews: [
+      {
+        author: 'reviewer-1',
+        state: 'CHANGES_REQUESTED',
+        submitted_at: '2026-03-30T10:00:00Z',
+      },
+    ],
+    status_checks: [
+      {
+        name: 'ci / unit',
+        status: 'COMPLETED',
+        conclusion: 'FAILURE',
+        url: 'https://example.com/check/1',
+      },
+      {
+        name: 'buildkite',
+        status: 'PENDING',
+        conclusion: null,
+        url: null,
+      },
+    ],
+    unresolved_threads: [
+      {
+        id: 'thread-1',
+        path: 'src/lib.rs',
+        line: 42,
+        comments: [
+          {
+            id: 'comment-1',
+            body: 'Please rename this.',
+            author: 'reviewer-1',
+            created_at: '2026-03-30T10:05:00Z',
+            url: 'https://example.com/comment/1',
+          },
+        ],
+      },
+    ],
+    resolved_thread_count: 2,
+  },
   lucode_draft_start: {
     session: 'alpha_spec',
     started: true,

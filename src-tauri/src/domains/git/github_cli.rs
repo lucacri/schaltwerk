@@ -150,6 +150,42 @@ pub struct GitHubStatusCheck {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitHubPrFeedback {
+    pub state: String,
+    pub is_draft: bool,
+    pub review_decision: Option<String>,
+    pub latest_reviews: Vec<GitHubPrReview>,
+    pub status_checks: Vec<GitHubPrFeedbackStatusCheck>,
+    pub unresolved_threads: Vec<GitHubPrFeedbackThread>,
+    pub resolved_thread_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitHubPrFeedbackStatusCheck {
+    pub name: String,
+    pub status: String,
+    pub conclusion: Option<String>,
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitHubPrFeedbackThread {
+    pub id: String,
+    pub path: String,
+    pub line: Option<u64>,
+    pub comments: Vec<GitHubPrFeedbackComment>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitHubPrFeedbackComment {
+    pub id: String,
+    pub body: String,
+    pub author_login: Option<String>,
+    pub created_at: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitHubPrReviewComment {
     pub id: u64,
     pub path: String,
@@ -241,9 +277,7 @@ impl CommandRunner for SystemCommandRunner {
         let inner_command = build_inner_command(program, args, env);
         let (shell_program, shell_args) = build_login_shell_invocation(&inner_command);
 
-        debug!(
-            "Running command through login shell: {shell_program} {shell_args:?}"
-        );
+        debug!("Running command through login shell: {shell_program} {shell_args:?}");
 
         let mut cmd = StdCommand::new(&shell_program);
         for arg in &shell_args {
@@ -293,24 +327,16 @@ fn build_login_shell_invocation(command: &str) -> (String, Vec<String>) {
     let args = match shell_name.as_str() {
         "tcsh" | "csh" => vec!["-lc".to_string(), command.to_string()],
         "fish" => vec!["-l".to_string(), "-c".to_string(), command.to_string()],
-        "nu" | "nushell" => vec![
-            "--login".to_string(),
-            "-c".to_string(),
-            command.to_string(),
-        ],
+        "nu" | "nushell" => vec!["--login".to_string(), "-c".to_string(), command.to_string()],
         "pwsh" | "powershell" => {
-            vec!["-Login".to_string(), "-Command".to_string(), command.to_string()]
+            vec![
+                "-Login".to_string(),
+                "-Command".to_string(),
+                command.to_string(),
+            ]
         }
-        "xonsh" => vec![
-            "-l".to_string(),
-            "-c".to_string(),
-            command.to_string(),
-        ],
-        _ => vec![
-            "-l".to_string(),
-            "-c".to_string(),
-            command.to_string(),
-        ],
+        "xonsh" => vec!["-l".to_string(), "-c".to_string(), command.to_string()],
+        _ => vec!["-l".to_string(), "-c".to_string(), command.to_string()],
     };
 
     (shell, args)
@@ -943,10 +969,7 @@ impl<R: CommandRunner> GitHubCli<R> {
         let api_path = format!("repos/{repo_name}/pulls/{pr_number}/comments");
 
         let env = [("GH_PROMPT_DISABLED", "1"), ("NO_COLOR", "1")];
-        let args_vec = vec![
-            "api".to_string(),
-            api_path.clone(),
-        ];
+        let args_vec = vec!["api".to_string(), api_path.clone()];
 
         let arg_refs: Vec<&str> = args_vec.iter().map(|entry| entry.as_str()).collect();
         let output = self
@@ -986,6 +1009,162 @@ impl<R: CommandRunner> GitHubCli<R> {
             .collect();
 
         Ok(comments)
+    }
+
+    pub fn get_pr_feedback(
+        &self,
+        project_path: &Path,
+        number: u64,
+        repository: Option<&str>,
+    ) -> Result<GitHubPrFeedback, GitHubCliError> {
+        debug!(
+            "[GitHubCli] Fetching PR feedback for project={}, number={}",
+            project_path.display(),
+            number
+        );
+        ensure_git_remote_exists(project_path)?;
+
+        let repo_name_with_owner = match repository {
+            Some(repo) => repo.to_string(),
+            None => self.view_repository(project_path)?.name_with_owner,
+        };
+        let (owner, name) = split_repository_owner_and_name(&repo_name_with_owner)?;
+
+        let env = [("GH_PROMPT_DISABLED", "1"), ("NO_COLOR", "1")];
+        let mut threads_cursor: Option<String> = None;
+        let mut state: Option<String> = None;
+        let mut is_draft: Option<bool> = None;
+        let mut review_decision: Option<Option<String>> = None;
+        let mut latest_reviews: Option<Vec<GitHubPrReview>> = None;
+        let mut status_checks: Option<Vec<GitHubPrFeedbackStatusCheck>> = None;
+        let mut unresolved_threads = Vec::new();
+        let mut resolved_thread_count = 0usize;
+
+        loop {
+            let mut args_vec = vec![
+                "api".to_string(),
+                "graphql".to_string(),
+                "-F".to_string(),
+                format!("query={GITHUB_PR_FEEDBACK_QUERY}"),
+                "-F".to_string(),
+                format!("owner={owner}"),
+                "-F".to_string(),
+                format!("name={name}"),
+                "-F".to_string(),
+                format!("number={number}"),
+            ];
+
+            if let Some(cursor) = threads_cursor.as_deref() {
+                args_vec.push("-F".to_string());
+                args_vec.push(format!("threadsCursor={cursor}"));
+            }
+
+            let arg_refs: Vec<&str> = args_vec.iter().map(|entry| entry.as_str()).collect();
+            let output = self
+                .runner
+                .run(&self.program, &arg_refs, Some(project_path), &env)
+                .map_err(map_runner_error)?;
+
+            if !output.success() {
+                return Err(command_failure(&self.program, &args_vec, output));
+            }
+
+            let clean_output = strip_ansi_codes(&output.stdout);
+            let parsed: PrFeedbackQueryResponse =
+                serde_json::from_str(clean_output.trim()).map_err(|err| {
+                    log::error!(
+                        "[GitHubCli] Failed to parse PR feedback response: {err}; raw={}, cleaned={}",
+                        output.stdout.trim(),
+                        clean_output.trim()
+                    );
+                    GitHubCliError::InvalidOutput(
+                        "GitHub CLI returned PR feedback data in an unexpected format.".to_string(),
+                    )
+                })?;
+
+            let pr = parsed
+                .data
+                .and_then(|data| data.repository)
+                .and_then(|repo| repo.pull_request)
+                .ok_or_else(|| {
+                    GitHubCliError::InvalidOutput(
+                        "GitHub CLI did not return a pull request for the requested feedback query."
+                            .to_string(),
+                    )
+                })?;
+
+            if state.is_none() {
+                state = Some(pr.state.clone());
+                is_draft = Some(pr.is_draft);
+                review_decision = Some(pr.review_decision.clone());
+                latest_reviews = Some(
+                    pr.latest_reviews
+                        .nodes
+                        .into_iter()
+                        .map(|review| GitHubPrReview {
+                            author_login: review.author.and_then(|a| a.login),
+                            state: review.state,
+                            submitted_at: review.submitted_at.unwrap_or_default(),
+                        })
+                        .collect(),
+                );
+                status_checks = Some(extract_feedback_status_checks(&pr.commits));
+            }
+
+            for thread in pr.review_threads.nodes {
+                if thread.is_outdated {
+                    continue;
+                }
+
+                if thread.is_resolved {
+                    resolved_thread_count += 1;
+                    continue;
+                }
+
+                unresolved_threads.push(GitHubPrFeedbackThread {
+                    id: thread.id,
+                    path: thread.path,
+                    line: thread.line,
+                    comments: thread
+                        .comments
+                        .nodes
+                        .into_iter()
+                        .map(|comment| GitHubPrFeedbackComment {
+                            id: comment.id,
+                            author_login: comment.author.and_then(|a| a.login),
+                            created_at: comment.created_at.unwrap_or_default(),
+                            body: comment.body,
+                            url: comment.url,
+                        })
+                        .collect(),
+                });
+            }
+
+            if pr.review_threads.page_info.has_next_page {
+                threads_cursor = pr.review_threads.page_info.end_cursor;
+                continue;
+            }
+
+            break;
+        }
+
+        Ok(GitHubPrFeedback {
+            state: state.ok_or_else(|| {
+                GitHubCliError::InvalidOutput(
+                    "GitHub CLI returned PR feedback without a state.".to_string(),
+                )
+            })?,
+            is_draft: is_draft.ok_or_else(|| {
+                GitHubCliError::InvalidOutput(
+                    "GitHub CLI returned PR feedback without draft state.".to_string(),
+                )
+            })?,
+            review_decision: review_decision.unwrap_or(None),
+            latest_reviews: latest_reviews.unwrap_or_default(),
+            status_checks: status_checks.unwrap_or_default(),
+            unresolved_threads,
+            resolved_thread_count,
+        })
     }
 
     pub fn create_pr_from_worktree(
@@ -1116,11 +1295,7 @@ impl<R: CommandRunner> GitHubCli<R> {
                 let merge_base =
                     resolve_merge_base(self, opts.session_worktree_path, opts.base_branch)?;
 
-                let reset_args = vec![
-                    "reset".to_string(),
-                    "--soft".to_string(),
-                    merge_base,
-                ];
+                let reset_args = vec!["reset".to_string(), "--soft".to_string(), merge_base];
                 run_git(self, opts.session_worktree_path, &reset_args, &[])?;
 
                 let add_args = vec!["add".to_string(), "-A".to_string()];
@@ -1136,8 +1311,8 @@ impl<R: CommandRunner> GitHubCli<R> {
             }
             PrCommitMode::Reapply => {
                 // Reapply: only commit uncommitted changes if any, keep existing commits
-                let has_uncommitted =
-                    has_uncommitted_changes(opts.session_worktree_path).map_err(GitHubCliError::Git)?;
+                let has_uncommitted = has_uncommitted_changes(opts.session_worktree_path)
+                    .map_err(GitHubCliError::Git)?;
 
                 if has_uncommitted {
                     if commit_msg.is_empty() {
@@ -1189,10 +1364,12 @@ impl<R: CommandRunner> GitHubCli<R> {
         }
 
         // Set up upstream tracking so git pull/push work without arguments
-        if let Err(e) =
-            set_upstream_tracking(self, opts.session_worktree_path, opts.pr_branch_name)
+        if let Err(e) = set_upstream_tracking(self, opts.session_worktree_path, opts.pr_branch_name)
         {
-            warn!("Failed to set upstream tracking for '{}': {e}", opts.pr_branch_name);
+            warn!(
+                "Failed to set upstream tracking for '{}': {e}",
+                opts.pr_branch_name
+            );
         }
 
         // Create the PR
@@ -1518,6 +1695,21 @@ fn set_upstream_tracking<R: CommandRunner>(
     Ok(())
 }
 
+fn split_repository_owner_and_name(repository: &str) -> Result<(String, String), GitHubCliError> {
+    let trimmed = repository.trim();
+    let mut parts = trimmed.splitn(2, '/');
+    let owner = parts.next().unwrap_or_default().trim();
+    let name = parts.next().unwrap_or_default().trim();
+
+    if owner.is_empty() || name.is_empty() {
+        return Err(GitHubCliError::InvalidInput(format!(
+            "Invalid GitHub repository identifier '{repository}'. Expected 'owner/repo'."
+        )));
+    }
+
+    Ok((owner.to_string(), name.to_string()))
+}
+
 fn map_runner_error(err: io::Error) -> GitHubCliError {
     if err.kind() == io::ErrorKind::NotFound {
         GitHubCliError::NotInstalled
@@ -1527,9 +1719,7 @@ fn map_runner_error(err: io::Error) -> GitHubCliError {
 }
 
 fn command_failure(program: &str, args: &[String], output: CommandOutput) -> GitHubCliError {
-    if is_known_github_host_error(&output.stderr)
-        || is_known_github_host_error(&output.stdout)
-    {
+    if is_known_github_host_error(&output.stderr) || is_known_github_host_error(&output.stdout) {
         return GitHubCliError::NotAGitHubRepository;
     }
 
@@ -1571,14 +1761,8 @@ fn ensure_git_remote_exists(project_path: &Path) -> Result<(), GitHubCliError> {
 }
 
 fn remote_points_to_github(remote: &git2::Remote) -> bool {
-    remote
-        .url()
-        .map(url_is_github_host)
-        .unwrap_or(false)
-        || remote
-            .pushurl()
-            .map(url_is_github_host)
-            .unwrap_or(false)
+    remote.url().map(url_is_github_host).unwrap_or(false)
+        || remote.pushurl().map(url_is_github_host).unwrap_or(false)
 }
 
 fn url_is_github_host(url: &str) -> bool {
@@ -1653,7 +1837,9 @@ fn resolve_github_cli_program_uncached() -> String {
     #[cfg(windows)]
     {
         if let Ok(program_files) = env::var("ProgramFiles") {
-            let gh_path = PathBuf::from(&program_files).join("GitHub CLI").join("gh.exe");
+            let gh_path = PathBuf::from(&program_files)
+                .join("GitHub CLI")
+                .join("gh.exe");
             if gh_path.exists() {
                 let resolved = gh_path.to_string_lossy().to_string();
                 log::info!("[GitHubCli] Found gh in Program Files: {resolved}");
@@ -2043,6 +2229,252 @@ struct PrReviewCommentResponse {
     in_reply_to_id: Option<u64>,
 }
 
+#[derive(Debug, Deserialize)]
+struct PrFeedbackQueryResponse {
+    data: Option<PrFeedbackQueryData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrFeedbackQueryData {
+    repository: Option<PrFeedbackQueryRepository>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrFeedbackQueryRepository {
+    #[serde(rename = "pullRequest")]
+    pull_request: Option<PrFeedbackQueryPullRequest>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrFeedbackQueryPullRequest {
+    state: String,
+    #[serde(rename = "isDraft", default)]
+    is_draft: bool,
+    #[serde(rename = "reviewDecision")]
+    review_decision: Option<String>,
+    #[serde(rename = "latestReviews")]
+    latest_reviews: PrFeedbackLatestReviewsConnection,
+    commits: PrFeedbackCommitsConnection,
+    #[serde(rename = "reviewThreads")]
+    review_threads: PrFeedbackThreadsConnection,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct PrFeedbackLatestReviewsConnection {
+    #[serde(default)]
+    nodes: Vec<LatestReviewsNode>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct PrFeedbackCommitsConnection {
+    #[serde(default)]
+    nodes: Vec<PrFeedbackCommitNode>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrFeedbackCommitNode {
+    commit: PrFeedbackCommit,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrFeedbackCommit {
+    #[serde(rename = "statusCheckRollup")]
+    status_check_rollup: Option<PrFeedbackStatusCheckRollup>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrFeedbackStatusCheckRollup {
+    contexts: PrFeedbackStatusCheckContexts,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct PrFeedbackStatusCheckContexts {
+    #[serde(default)]
+    nodes: Vec<PrFeedbackStatusCheckNode>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "__typename")]
+enum PrFeedbackStatusCheckNode {
+    CheckRun {
+        name: String,
+        status: String,
+        conclusion: Option<String>,
+        #[serde(rename = "detailsUrl")]
+        details_url: Option<String>,
+    },
+    StatusContext {
+        #[serde(rename = "context")]
+        context: String,
+        #[serde(rename = "state")]
+        state: String,
+        #[serde(rename = "targetUrl")]
+        target_url: Option<String>,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+struct PrFeedbackThreadsConnection {
+    #[serde(default)]
+    nodes: Vec<PrFeedbackThreadNode>,
+    #[serde(rename = "pageInfo")]
+    page_info: PrFeedbackPageInfo,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrFeedbackPageInfo {
+    #[serde(rename = "hasNextPage")]
+    has_next_page: bool,
+    #[serde(rename = "endCursor")]
+    end_cursor: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrFeedbackThreadNode {
+    id: String,
+    #[serde(rename = "isResolved", default)]
+    is_resolved: bool,
+    #[serde(rename = "isOutdated", default)]
+    is_outdated: bool,
+    path: String,
+    line: Option<u64>,
+    comments: PrFeedbackThreadCommentsConnection,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct PrFeedbackThreadCommentsConnection {
+    #[serde(default)]
+    nodes: Vec<PrFeedbackThreadCommentNode>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrFeedbackThreadCommentNode {
+    id: String,
+    body: String,
+    author: Option<IssueActor>,
+    #[serde(rename = "createdAt")]
+    created_at: Option<String>,
+    url: String,
+}
+
+const GITHUB_PR_FEEDBACK_QUERY: &str = r#"
+query($owner: String!, $name: String!, $number: Int!, $threadsCursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      state
+      isDraft
+      reviewDecision
+      latestReviews(first: 20) {
+        nodes {
+          author { login }
+          state
+          submittedAt
+        }
+      }
+      commits(last: 1) {
+        nodes {
+          commit {
+            statusCheckRollup {
+              contexts(first: 100) {
+                nodes {
+                  __typename
+                  ... on CheckRun {
+                    name
+                    status
+                    conclusion
+                    detailsUrl
+                  }
+                  ... on StatusContext {
+                    context
+                    state
+                    targetUrl
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      reviewThreads(first: 100, after: $threadsCursor) {
+        nodes {
+          id
+          isResolved
+          isOutdated
+          path
+          line
+          comments(first: 100) {
+            nodes {
+              id
+              body
+              author { login }
+              createdAt
+              url
+            }
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+}
+"#;
+
+fn extract_feedback_status_checks(
+    commits: &PrFeedbackCommitsConnection,
+) -> Vec<GitHubPrFeedbackStatusCheck> {
+    commits
+        .nodes
+        .iter()
+        .flat_map(|commit| {
+            commit
+                .commit
+                .status_check_rollup
+                .as_ref()
+                .into_iter()
+                .flat_map(|rollup| rollup.contexts.nodes.iter())
+        })
+        .map(map_feedback_status_check)
+        .collect()
+}
+
+fn map_feedback_status_check(
+    node: &PrFeedbackStatusCheckNode,
+) -> GitHubPrFeedbackStatusCheck {
+    match node {
+        PrFeedbackStatusCheckNode::CheckRun {
+            name,
+            status,
+            conclusion,
+            details_url,
+        } => GitHubPrFeedbackStatusCheck {
+            name: name.clone(),
+            status: status.clone(),
+            conclusion: conclusion.clone(),
+            url: details_url.clone(),
+        },
+        PrFeedbackStatusCheckNode::StatusContext {
+            context,
+            state,
+            target_url,
+        } => {
+            let pending = matches!(state.as_str(), "PENDING" | "EXPECTED" | "IN_PROGRESS");
+            GitHubPrFeedbackStatusCheck {
+                name: context.clone(),
+                status: if pending {
+                    "IN_PROGRESS".to_string()
+                } else {
+                    "COMPLETED".to_string()
+                },
+                conclusion: if pending { None } else { Some(state.clone()) },
+                url: target_url.clone(),
+            }
+        }
+    }
+}
+
 use super::forge::{
     ForgeAuthStatus, ForgeCiStatus, ForgeComment, ForgeCommitMode, ForgeCreatePrParams,
     ForgeCreateSessionPrParams, ForgeError, ForgeIssueDetails, ForgeIssueSummary, ForgeLabel,
@@ -2061,10 +2493,7 @@ impl<R: CommandRunner> ForgeProvider for GitHubCli<R> {
         self.ensure_installed().map_err(ForgeError::from)
     }
 
-    async fn check_auth(
-        &self,
-        _hostname: Option<&str>,
-    ) -> Result<ForgeAuthStatus, ForgeError> {
+    async fn check_auth(&self, _hostname: Option<&str>) -> Result<ForgeAuthStatus, ForgeError> {
         let status = self.check_auth().map_err(ForgeError::from)?;
         Ok(ForgeAuthStatus {
             authenticated: status.authenticated,
@@ -2073,10 +2502,7 @@ impl<R: CommandRunner> ForgeProvider for GitHubCli<R> {
         })
     }
 
-    async fn view_repository(
-        &self,
-        repo_path: &Path,
-    ) -> Result<ForgeRepositoryInfo, ForgeError> {
+    async fn view_repository(&self, repo_path: &Path) -> Result<ForgeRepositoryInfo, ForgeError> {
         let info = self.view_repository(repo_path).map_err(ForgeError::from)?;
         Ok(ForgeRepositoryInfo {
             name: info.name_with_owner.clone(),
@@ -2863,6 +3289,264 @@ mod tests {
     }
 
     #[test]
+    fn get_pr_feedback_parses_actionable_data_and_filters_threads() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: json!({
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "state": "OPEN",
+                            "isDraft": false,
+                            "reviewDecision": "CHANGES_REQUESTED",
+                            "latestReviews": {
+                                "nodes": [
+                                    {
+                                        "author": { "login": "maintainer-a" },
+                                        "state": "CHANGES_REQUESTED",
+                                        "submittedAt": "2026-03-29T10:00:00Z"
+                                    },
+                                    {
+                                        "author": { "login": "maintainer-b" },
+                                        "state": "COMMENTED",
+                                        "submittedAt": "2026-03-29T11:00:00Z"
+                                    }
+                                ]
+                            },
+                            "commits": {
+                                "nodes": [
+                                    {
+                                        "commit": {
+                                            "statusCheckRollup": {
+                                                "contexts": {
+                                                    "nodes": [
+                                                        {
+                                                            "__typename": "CheckRun",
+                                                            "name": "ci / unit",
+                                                            "status": "COMPLETED",
+                                                            "conclusion": "FAILURE",
+                                                            "detailsUrl": "https://example.com/check/1"
+                                                        },
+                                                        {
+                                                            "__typename": "StatusContext",
+                                                            "context": "buildkite",
+                                                            "state": "PENDING",
+                                                            "targetUrl": "https://example.com/status/2"
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    }
+                                ]
+                            },
+                            "reviewThreads": {
+                                "nodes": [
+                                    {
+                                        "id": "thread-unresolved",
+                                        "isResolved": false,
+                                        "isOutdated": false,
+                                        "path": "src/lib.rs",
+                                        "line": 27,
+                                        "comments": {
+                                            "nodes": [
+                                                {
+                                                    "id": "comment-1",
+                                                    "body": "Please rename this variable.",
+                                                    "author": { "login": "reviewer-1" },
+                                                    "createdAt": "2026-03-29T12:00:00Z",
+                                                    "url": "https://example.com/comment/1"
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "id": "thread-resolved",
+                                        "isResolved": true,
+                                        "isOutdated": false,
+                                        "path": "src/lib.rs",
+                                        "line": 44,
+                                        "comments": { "nodes": [] }
+                                    },
+                                    {
+                                        "id": "thread-outdated",
+                                        "isResolved": false,
+                                        "isOutdated": true,
+                                        "path": "src/old.rs",
+                                        "line": 9,
+                                        "comments": { "nodes": [] }
+                                    }
+                                ],
+                                "pageInfo": {
+                                    "hasNextPage": false,
+                                    "endCursor": null
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitHubCli::with_runner(runner.clone());
+
+        let temp = TempDir::new().unwrap();
+        let repo_path = temp.path();
+        let repo = git2::Repository::init(repo_path).unwrap();
+        repo.remote("origin", "https://github.com/example/repo")
+            .unwrap();
+
+        let feedback = cli
+            .get_pr_feedback(repo_path, 77, Some("example/repo"))
+            .expect("PR feedback");
+
+        assert_eq!(feedback.state, "OPEN");
+        assert!(!feedback.is_draft);
+        assert_eq!(
+            feedback.review_decision.as_deref(),
+            Some("CHANGES_REQUESTED")
+        );
+        assert_eq!(feedback.latest_reviews.len(), 2);
+
+        assert_eq!(feedback.status_checks.len(), 2);
+        assert_eq!(feedback.status_checks[0].name, "ci / unit");
+        assert_eq!(feedback.status_checks[0].status, "COMPLETED");
+        assert_eq!(
+            feedback.status_checks[0].conclusion.as_deref(),
+            Some("FAILURE")
+        );
+        assert_eq!(feedback.status_checks[1].name, "buildkite");
+        assert_eq!(feedback.status_checks[1].status, "IN_PROGRESS");
+        assert_eq!(feedback.status_checks[1].conclusion, None);
+
+        assert_eq!(feedback.unresolved_threads.len(), 1);
+        assert_eq!(feedback.unresolved_threads[0].id, "thread-unresolved");
+        assert_eq!(feedback.unresolved_threads[0].path, "src/lib.rs");
+        assert_eq!(feedback.unresolved_threads[0].line, Some(27));
+        assert_eq!(feedback.unresolved_threads[0].comments.len(), 1);
+        assert_eq!(
+            feedback.unresolved_threads[0].comments[0]
+                .author_login
+                .as_deref(),
+            Some("reviewer-1")
+        );
+        assert_eq!(feedback.resolved_thread_count, 1);
+    }
+
+    #[test]
+    fn get_pr_feedback_fetches_all_thread_pages() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: json!({
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "state": "OPEN",
+                            "isDraft": false,
+                            "reviewDecision": null,
+                            "latestReviews": { "nodes": [] },
+                            "commits": { "nodes": [] },
+                            "reviewThreads": {
+                                "nodes": [
+                                    {
+                                        "id": "thread-1",
+                                        "isResolved": false,
+                                        "isOutdated": false,
+                                        "path": "src/one.ts",
+                                        "line": 1,
+                                        "comments": { "nodes": [] }
+                                    }
+                                ],
+                                "pageInfo": {
+                                    "hasNextPage": true,
+                                    "endCursor": "cursor-1"
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .to_string(),
+            stderr: String::new(),
+        }));
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: json!({
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "state": "OPEN",
+                            "isDraft": false,
+                            "reviewDecision": null,
+                            "latestReviews": { "nodes": [] },
+                            "commits": { "nodes": [] },
+                            "reviewThreads": {
+                                "nodes": [
+                                    {
+                                        "id": "thread-2",
+                                        "isResolved": false,
+                                        "isOutdated": false,
+                                        "path": "src/two.ts",
+                                        "line": 2,
+                                        "comments": { "nodes": [] }
+                                    }
+                                ],
+                                "pageInfo": {
+                                    "hasNextPage": false,
+                                    "endCursor": null
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .to_string(),
+            stderr: String::new(),
+        }));
+
+        let cli = GitHubCli::with_runner(runner.clone());
+        let temp = TempDir::new().unwrap();
+        let repo_path = temp.path();
+        let repo = git2::Repository::init(repo_path).unwrap();
+        repo.remote("origin", "https://github.com/example/repo")
+            .unwrap();
+
+        let feedback = cli
+            .get_pr_feedback(repo_path, 77, Some("example/repo"))
+            .expect("PR feedback");
+
+        assert_eq!(feedback.unresolved_threads.len(), 2);
+        assert_eq!(runner.calls().len(), 2);
+        assert!(
+            runner.calls()[1]
+                .args
+                .contains(&"threadsCursor=cursor-1".to_string())
+        );
+    }
+
+    #[test]
+    fn get_pr_feedback_rejects_invalid_repository_identifier() {
+        let runner = MockRunner::default();
+        let cli = GitHubCli::with_runner(runner.clone());
+
+        let temp = TempDir::new().unwrap();
+        let repo_path = temp.path();
+        let repo = git2::Repository::init(repo_path).unwrap();
+        repo.remote("origin", "https://github.com/example/repo")
+            .unwrap();
+
+        let err = cli
+            .get_pr_feedback(repo_path, 77, Some("invalid-repo"))
+            .expect_err("invalid repository should fail");
+
+        assert!(matches!(err, GitHubCliError::InvalidInput(_)));
+        assert!(runner.calls().is_empty());
+    }
+
+    #[test]
     fn create_pr_creates_branch_and_returns_url() {
         let runner = MockRunner::default();
         runner.push_response(Ok(CommandOutput {
@@ -3377,6 +4061,9 @@ mod tests {
 
         let err = cli.view_repository(temp.path()).unwrap_err();
         assert!(matches!(err, GitHubCliError::NotAGitHubRepository));
-        assert!(runner.calls().is_empty(), "gh should not run without GitHub remotes");
+        assert!(
+            runner.calls().is_empty(),
+            "gh should not run without GitHub remotes"
+        );
     }
 }

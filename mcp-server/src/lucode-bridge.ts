@@ -161,6 +161,44 @@ export type SessionSpecPayload = {
   updated_at: string
 }
 
+export type PrFeedbackReviewPayload = {
+  author?: string | null
+  state: string
+  submittedAt: string
+}
+
+export type PrFeedbackStatusCheckPayload = {
+  name: string
+  status: string
+  conclusion?: string | null
+  url?: string | null
+}
+
+export type PrFeedbackCommentPayload = {
+  id: string
+  body: string
+  author?: string | null
+  createdAt: string
+  url: string
+}
+
+export type PrFeedbackThreadPayload = {
+  id: string
+  path: string
+  line?: number | null
+  comments: PrFeedbackCommentPayload[]
+}
+
+export type PrFeedbackPayload = {
+  state: string
+  isDraft: boolean
+  reviewDecision?: string | null
+  latestReviews: PrFeedbackReviewPayload[]
+  statusChecks: PrFeedbackStatusCheckPayload[]
+  unresolvedThreads: PrFeedbackThreadPayload[]
+  resolvedThreadCount: number
+}
+
 type SetupScriptPayload = {
   setup_script: string
   has_setup_script?: boolean
@@ -653,6 +691,27 @@ export class LucodeBridge {
     })
 
     return this.parseJsonResponse<SessionSpecPayload>(response, 'session spec')
+  }
+
+  async getPrFeedback(sessionName: string, projectPath?: string): Promise<PrFeedbackPayload> {
+    if (!sessionName || sessionName.trim().length === 0) {
+      throw new Error('sessionName is required to fetch PR feedback')
+    }
+
+    const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(sessionName)}/pr-feedback`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        ...this.getProjectHeaders(projectPath)
+      }
+    })
+
+    const payload = await this.parseJsonResponse<PrFeedbackPayload>(response, 'PR feedback')
+    if (!payload) {
+      throw new Error('PR feedback payload missing')
+    }
+
+    return payload
   }
 
   async getProjectSetupScript(projectPath?: string): Promise<SetupScriptPayload> {

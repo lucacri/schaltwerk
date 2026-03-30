@@ -108,6 +108,37 @@ const setWorktreeBaseDirectoryMock = mock(() =>
   Promise.resolve({ worktree_base_directory: '/new/path', has_custom_directory: true })
 )
 const getCurrentSpecModeSessionMock = mock(() => Promise.resolve(null))
+const getPrFeedbackMock = mock(() =>
+  Promise.resolve({
+    state: 'OPEN',
+    isDraft: false,
+    reviewDecision: 'CHANGES_REQUESTED',
+    latestReviews: [
+      { author: 'reviewer', state: 'CHANGES_REQUESTED', submittedAt: '2026-03-30T10:00:00Z' }
+    ],
+    statusChecks: [
+      { name: 'ci / unit', status: 'COMPLETED', conclusion: 'FAILURE', url: 'https://example.com/check/1' },
+      { name: 'buildkite', status: 'PENDING', conclusion: null, url: 'https://example.com/check/2' }
+    ],
+    unresolvedThreads: [
+      {
+        id: 'thread-1',
+        path: 'src/lib.rs',
+        line: 42,
+        comments: [
+          {
+            id: 'comment-1',
+            body: 'Please rename this.',
+            authorLogin: 'reviewer',
+            createdAt: '2026-03-30T10:00:00Z',
+            url: 'https://example.com/comment/1'
+          }
+        ]
+      }
+    ],
+    resolvedThreadCount: 3,
+  })
+)
 
 let bridgeModule: typeof import('../src/lucode-bridge')
 const originalMethods: Record<string, Function> = {}
@@ -141,6 +172,7 @@ describe('MCP tool handler logic', () => {
       sendFollowUpMessage: sendFollowUpMessageMock,
       setWorktreeBaseDirectory: setWorktreeBaseDirectoryMock,
       getCurrentSpecModeSession: getCurrentSpecModeSessionMock,
+      getPrFeedback: getPrFeedbackMock,
     }
 
     for (const [name, mockFn] of Object.entries(methodMocks)) {
@@ -168,6 +200,7 @@ describe('MCP tool handler logic', () => {
     sendFollowUpMessageMock.mockClear()
     setWorktreeBaseDirectoryMock.mockClear()
     getCurrentSpecModeSessionMock.mockClear()
+    getPrFeedbackMock.mockClear()
   })
 
   afterAll(() => {
@@ -451,6 +484,24 @@ describe('MCP tool handler logic', () => {
   describe('lucode_prepare_merge parameter validation', () => {
     it('rejects missing session_name', async () => {
       await expect(callTool('lucode_prepare_merge', {})).rejects.toThrow('session_name is required')
+    })
+  })
+
+  describe('lucode_get_pr_feedback', () => {
+    it('returns structured PR feedback', async () => {
+      const result = await callTool('lucode_get_pr_feedback', { session_name: 'my-sess' })
+
+      expect(getPrFeedbackMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.state).toBe('OPEN')
+      expect(parsed.unresolved_threads).toHaveLength(1)
+      expect(parsed.status_checks).toHaveLength(2)
+      expect(parsed.resolved_thread_count).toBe(3)
+    })
+
+    it('rejects missing session_name', async () => {
+      await expect(callTool('lucode_get_pr_feedback', {})).rejects.toThrow("'session_name' is required")
     })
   })
 

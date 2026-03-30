@@ -119,6 +119,59 @@ const diffLineSchema = {
   additionalProperties: false,
 } as const
 
+const prFeedbackReviewSchema = {
+  type: 'object',
+  properties: {
+    author: nullableString,
+    state: { type: 'string' },
+    submitted_at: isoDateTime,
+  },
+  required: ['author', 'state', 'submitted_at'],
+  additionalProperties: false,
+} as const
+
+const prFeedbackStatusCheckSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    status: { type: 'string' },
+    conclusion: nullableString,
+    url: nullableString,
+  },
+  required: ['name', 'status', 'conclusion', 'url'],
+  additionalProperties: false,
+} as const
+
+const prFeedbackCommentSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    body: { type: 'string' },
+    author: nullableString,
+    created_at: isoDateTime,
+    url: { type: 'string' },
+  },
+  required: ['id', 'body', 'author', 'created_at', 'url'],
+  additionalProperties: false,
+} as const
+
+const prFeedbackThreadSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    path: { type: 'string' },
+    line: {
+      anyOf: [{ type: 'number' }, { type: 'null' }],
+    },
+    comments: {
+      type: 'array',
+      items: prFeedbackCommentSchema,
+    },
+  },
+  required: ['id', 'path', 'line', 'comments'],
+  additionalProperties: false,
+} as const
+
 export const toolOutputSchemas = {
   lucode_create: {
     $schema: draft2020,
@@ -366,6 +419,39 @@ export const toolOutputSchemas = {
       updated_at: isoDateTime,
     },
     required: ['session_id', 'content', 'updated_at'],
+    additionalProperties: false,
+  },
+
+  lucode_get_pr_feedback: {
+    $schema: draft2020,
+    type: 'object',
+    properties: {
+      state: { type: 'string' },
+      is_draft: { type: 'boolean' },
+      review_decision: nullableString,
+      latest_reviews: {
+        type: 'array',
+        items: prFeedbackReviewSchema,
+      },
+      status_checks: {
+        type: 'array',
+        items: prFeedbackStatusCheckSchema,
+      },
+      unresolved_threads: {
+        type: 'array',
+        items: prFeedbackThreadSchema,
+      },
+      resolved_thread_count: { type: 'number' },
+    },
+    required: [
+      'state',
+      'is_draft',
+      'review_decision',
+      'latest_reviews',
+      'status_checks',
+      'unresolved_threads',
+      'resolved_thread_count',
+    ],
     additionalProperties: false,
   },
 

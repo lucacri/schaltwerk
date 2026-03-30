@@ -11,7 +11,7 @@ import {
   McpError,
   CallToolRequest,
 } from "@modelcontextprotocol/sdk/types.js"
-import { LucodeBridge, Session, MergeModeOption } from "./lucode-bridge.js"
+import { LucodeBridge, Session, MergeModeOption, PrFeedbackPayload } from "./lucode-bridge.js"
 import { toolOutputSchemas } from "./schemas.js"
 
 const DEFAULT_AGENT = 'claude'
@@ -120,6 +120,10 @@ interface LucodeSetSetupScriptArgs {
 
 interface LucodeSetWorktreeBaseDirectoryArgs {
   worktree_base_directory: string
+}
+
+interface LucodeGetPrFeedbackArgs {
+  session_name: string
 }
 
 const bridge = new LucodeBridge()
@@ -291,6 +295,56 @@ const sanitizeDiffChunk = (payload: DiffChunkPayload) => ({
   lines: payload.lines,
   paging: payload.paging
 })
+
+const sanitizePrFeedback = (payload: PrFeedbackPayload) => ({
+  state: payload.state,
+  is_draft: payload.isDraft,
+  review_decision: payload.reviewDecision ?? null,
+  latest_reviews: payload.latestReviews.map(review => ({
+    author: review.author ?? null,
+    state: review.state,
+    submitted_at: review.submittedAt,
+  })),
+  status_checks: payload.statusChecks.map(check => ({
+    name: check.name,
+    status: check.status,
+    conclusion: check.conclusion ?? null,
+    url: check.url ?? null,
+  })),
+  unresolved_threads: payload.unresolvedThreads.map(thread => ({
+    id: thread.id,
+    path: thread.path,
+    line: thread.line ?? null,
+    comments: thread.comments.map(comment => ({
+      id: comment.id,
+      body: comment.body,
+      author: comment.author ?? null,
+      created_at: comment.createdAt,
+      url: comment.url,
+    })),
+  })),
+  resolved_thread_count: payload.resolvedThreadCount,
+})
+
+const isFailingConclusion = (conclusion: string | null) => {
+  if (!conclusion) {
+    return false
+  }
+  const value = conclusion.toUpperCase()
+  return value === 'FAILURE' || value === 'TIMED_OUT' || value === 'ACTION_REQUIRED' || value === 'CANCELLED' || value === 'ERROR'
+}
+
+const isPendingCheck = (status: string | null, conclusion: string | null) => {
+  if (conclusion) {
+    return false
+  }
+  if (!status) {
+    return true
+  }
+
+  const normalized = status.toUpperCase()
+  return normalized !== 'COMPLETED' && normalized !== 'SUCCESS'
+}
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   const tools = [
@@ -611,6 +665,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false
         },
         outputSchema: toolOutputSchemas.lucode_session_spec
+      },
+      {
+        name: "lucode_get_pr_feedback",
+        description: `Fetch actionable pull request feedback for a session linked to a GitHub PR. Returns: PR state and draft status, review decision (APPROVED, CHANGES_REQUESTED, etc.), latest reviewer verdicts, CI/CD status checks with pass/fail/pending status, and full comment threads that are still unresolved (outdated and resolved threads are excluded to save context). Use this to understand what reviewers are asking for before addressing PR feedback.`,
+        inputSchema: {
+          type: "object",
+          properties: {
+            session_name: {
+              type: "string",
+              description: "Session name with a linked pull request."
+            }
+          },
+          required: ["session_name"],
+          additionalProperties: false
+        },
+        outputSchema: toolOutputSchemas.lucode_get_pr_feedback
       },
       {
         name: "lucode_draft_start",
@@ -1001,6 +1071,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const payload = sanitizeSessionSpec(specPayload)
         response = buildStructuredResponse(payload, {
           summaryText: `Session spec '${specArgs.session}' fetched`,
+          jsonFirst: true
+        })
+        break
+      }
+
+      case "lucode_get_pr_feedback": {
+        const feedbackArgs = args as LucodeGetPrFeedbackArgs
+        if (!feedbackArgs.session_name || feedbackArgs.session_name.trim().length === 0) {
+          throw new McpError(ErrorCode.InvalidParams, "'session_name' is required when invoking lucode_get_pr_feedback.")
+        }
+
+        const feedback = await bridge.getPrFeedback(feedbackArgs.session_name, projectPath)
+        const payload = sanitizePrFeedback(feedback)
+        const failingChecks = payload.status_checks.filter(check => isFailingConclusion(check.conclusion)).length
+        const pendingChecks = payload.status_checks.filter(check => isPendingCheck(check.status, check.conclusion)).length
+        const draftLabel = payload.is_draft ? ' (draft)' : ''
+        const decision = payload.review_decision
+          ? payload.review_decision.toLowerCase().replace(/_/g, ' ')
+          : 'none'
+        const summaryLines = [
+          `PR state: ${payload.state}${draftLabel}`,
+          `Review decision: ${decision}`,
+          `Unresolved threads: ${payload.unresolved_threads.length}`,
+          `Resolved threads: ${payload.resolved_thread_count}`,
+          `Failing checks: ${failingChecks}`,
+          `Pending checks: ${pendingChecks}`,
+        ]
+        const summary = summaryLines.join('\n')
+
+        response = buildStructuredResponse(payload, {
+          summaryText: summary,
           jsonFirst: true
         })
         break
