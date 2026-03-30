@@ -1560,6 +1560,54 @@ describe('sessions atoms', () => {
         expect(counts['/projects/alpha']).toEqual({ attention: 1, running: 1 })
     })
 
+    it('counts a running multi-version group as one running unit for non-active projects', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                const activeProject = store.get(projectPathAtom)
+                if (activeProject === '/projects/alpha') {
+                    return [
+                        createSession({
+                            session_id: 'feature_v1',
+                            worktree_path: '/tmp/feature-v1',
+                            version_number: 1,
+                        }),
+                        createSession({
+                            session_id: 'feature_v2',
+                            worktree_path: '/tmp/feature-v2',
+                            version_number: 2,
+                        }),
+                    ]
+                }
+                if (activeProject === '/projects/beta') {
+                    return [createSession({ session_id: 'beta-session', worktree_path: '/tmp/beta' })]
+                }
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'feature_v1',
+            terminal_id: stableSessionTerminalId('feature_v1', 'top'),
+            needs_attention: false,
+        })
+
+        const counts = store.get(crossProjectCountsAtom)
+        expect(counts['/projects/alpha']).toEqual({ attention: 0, running: 1 })
+    })
+
     it('clears cross-project attention when needs_attention becomes false', async () => {
         const { invoke } = await import('@tauri-apps/api/core')
 

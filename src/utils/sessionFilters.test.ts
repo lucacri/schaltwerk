@@ -125,6 +125,51 @@ describe('calculateFilterCounts', () => {
         expect(counts.reviewedCount).toBe(1)
         expect(counts.runningCount).toBe(0)
     })
+
+    it('counts a version group once using its aggregate state', () => {
+        const groupedRunning = createMockSession({
+            session_id: 'feature',
+            version_group_id: 'group-1',
+            version_number: 1,
+            session_state: 'running',
+        })
+        const groupedReviewed = createMockSession({
+            session_id: 'feature_v2',
+            version_group_id: 'group-1',
+            version_number: 2,
+            session_state: 'reviewed',
+            ready_to_merge: true,
+        })
+
+        const counts = calculateFilterCounts([groupedRunning, groupedReviewed])
+
+        expect(counts.specsCount).toBe(0)
+        expect(counts.runningCount).toBe(1)
+        expect(counts.reviewedCount).toBe(0)
+    })
+
+    it('counts a finished mixed reviewed/spec group as reviewed', () => {
+        const groupedReviewed = createMockSession({
+            session_id: 'feature',
+            version_group_id: 'group-1',
+            version_number: 1,
+            session_state: 'reviewed',
+            ready_to_merge: true,
+        })
+        const groupedSpec = createMockSession({
+            session_id: 'feature_v2',
+            version_group_id: 'group-1',
+            version_number: 2,
+            session_state: 'spec',
+            status: 'spec',
+        })
+
+        const counts = calculateFilterCounts([groupedReviewed, groupedSpec])
+
+        expect(counts.specsCount).toBe(0)
+        expect(counts.runningCount).toBe(0)
+        expect(counts.reviewedCount).toBe(1)
+    })
 })
 
 describe('searchSessions', () => {

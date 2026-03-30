@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { TauriCommands } from '../common/tauriCommands'
-import { 
-  groupSessionsByVersion, 
-  parseVersionFromSessionName, 
+import {
+  groupSessionsByVersion,
+  getSessionVersionGroupAggregate,
+  parseVersionFromSessionName,
   getBaseSessionName,
+  countLogicalRunningSessions,
   selectBestVersionAndCleanup,
-  type EnrichedSession 
+  type EnrichedSession
 } from './sessionVersions'
 
 // Mock session data helper
-const createMockSession = (sessionId: string, displayName?: string): EnrichedSession => ({
+const createMockSession = (sessionId: string, displayName?: string, overrides: Partial<EnrichedSession['info']> = {}): EnrichedSession => ({
   info: {
     session_id: sessionId,
     display_name: displayName,
@@ -22,7 +24,9 @@ const createMockSession = (sessionId: string, displayName?: string): EnrichedSes
     has_uncommitted_changes: false,
     is_current: false,
     session_type: 'worktree',
-    session_state: 'running'
+    session_state: 'running',
+    ready_to_merge: false,
+    ...overrides,
   },
   terminals: []
 })
@@ -234,6 +238,43 @@ describe('sessionVersions', () => {
     it('should handle empty session list', () => {
       const groups = groupSessionsByVersion([])
       expect(groups).toHaveLength(0)
+    })
+
+    it('returns running aggregate state when any version is still running', () => {
+      const groups = groupSessionsByVersion([
+        createMockSession('feature', undefined, { version_group_id: 'group-1', version_number: 1, session_state: 'reviewed', ready_to_merge: true }),
+        createMockSession('feature_v2', undefined, { version_group_id: 'group-1', version_number: 2, session_state: 'running' }),
+      ])
+
+      expect(getSessionVersionGroupAggregate(groups[0]!).state).toBe('running')
+    })
+
+    it('returns reviewed aggregate state when no version is running and at least one is reviewed', () => {
+      const groups = groupSessionsByVersion([
+        createMockSession('feature', undefined, { version_group_id: 'group-1', version_number: 1, session_state: 'reviewed', ready_to_merge: true }),
+        createMockSession('feature_v2', undefined, { version_group_id: 'group-1', version_number: 2, session_state: 'spec', status: 'spec' }),
+      ])
+
+      expect(getSessionVersionGroupAggregate(groups[0]!).state).toBe('reviewed')
+    })
+
+    it('returns spec aggregate state when every version is a spec', () => {
+      const groups = groupSessionsByVersion([
+        createMockSession('feature', undefined, { version_group_id: 'group-1', version_number: 1, session_state: 'spec', status: 'spec' }),
+        createMockSession('feature_v2', undefined, { version_group_id: 'group-1', version_number: 2, session_state: 'spec', status: 'spec' }),
+      ])
+
+      expect(getSessionVersionGroupAggregate(groups[0]!).state).toBe('spec')
+    })
+
+    it('counts a version group as one logical running unit', () => {
+      const sessions = [
+        createMockSession('feature', undefined, { version_group_id: 'group-1', version_number: 1, session_state: 'running' }),
+        createMockSession('feature_v2', undefined, { version_group_id: 'group-1', version_number: 2, session_state: 'reviewed', ready_to_merge: true }),
+        createMockSession('standalone', undefined, { session_state: 'running' }),
+      ]
+
+      expect(countLogicalRunningSessions(sessions)).toBe(2)
     })
   })
 

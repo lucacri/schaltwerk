@@ -2,8 +2,8 @@ import { memo, useState } from 'react'
 import { clsx } from 'clsx'
 import { SessionCard } from './SessionCard'
 import { CompactVersionRow } from './CompactVersionRow'
-import { SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
-import { isSpec, mapSessionUiState } from '../../utils/sessionFilters'
+import { getSessionVersionGroupAggregate, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
+import { isSpec } from '../../utils/sessionFilters'
 import { SessionSelection } from '../../hooks/useSessionManagement'
 import { ProgressIndicator } from '../common/ProgressIndicator'
 import type { MergeStatus } from '../../store/atoms/sessions'
@@ -142,53 +142,40 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   )
   const hasSelectedVersion = !!selectedVersionInGroup
 
-  const versionStatusSummary = group.versions.reduce<{ active: number; idle: number }>((acc, version) => {
-    const info = version.session.info
-    const uiState = mapSessionUiState(info)
-    if (info.attention_required) {
-      acc.idle += 1
-    } else if (uiState === 'running') {
-      acc.active += 1
-    }
-    return acc
-  }, { active: 0, idle: 0 })
-
-  const statusPills = [
-    {
-      key: 'active',
-      label: 'Active',
-      count: versionStatusSummary.active,
-      color: {
+  const aggregate = getSessionVersionGroupAggregate(group)
+  const primaryStatus = (() => {
+    if (aggregate.state === 'running') {
+      return {
+        label: 'Running',
         bg: 'var(--color-accent-blue-bg)',
         light: 'var(--color-accent-blue-light)',
-        border: 'var(--color-accent-blue-border)'
-      },
-      icon: (
-        <span className="flex items-center" aria-hidden="true">
-          <ProgressIndicator size="sm" />
-        </span>
-      )
-    },
-    {
-      key: 'idle',
-      label: 'Idle',
-      count: versionStatusSummary.idle,
-      color: {
-        bg: 'var(--color-accent-amber-bg)',
-        light: 'var(--color-accent-amber-light)',
-        border: 'var(--color-accent-amber-border)'
-      },
-      icon: (
-        <span
-          aria-hidden="true"
-          className="text-xs font-semibold"
-          style={{ color: 'var(--color-accent-amber-light)' }}
-        >
-          ⏸
-        </span>
-      )
+        border: 'var(--color-accent-blue-border)',
+        icon: (
+          <span className="flex items-center" aria-hidden="true">
+            <ProgressIndicator size="sm" />
+          </span>
+        )
+      }
     }
-  ].filter(pill => pill.count > 0)
+
+    if (aggregate.state === 'reviewed') {
+      return {
+        label: 'Reviewed',
+        bg: 'var(--color-accent-green-bg)',
+        light: 'var(--color-accent-green-light)',
+        border: 'var(--color-accent-green-border)',
+        icon: <span aria-hidden="true">✓</span>
+      }
+    }
+
+    return {
+      label: 'Spec',
+      bg: 'var(--color-accent-amber-bg)',
+      light: 'var(--color-accent-amber-light)',
+      border: 'var(--color-accent-amber-border)',
+      icon: <span aria-hidden="true">Draft</span>
+    }
+  })()
 
   const hasMultipleVersions = group.versions.length >= 2
   const runningOrReviewedCount = group.versions.filter(v => {
@@ -331,22 +318,18 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                 </svg>
               </button>
             )}
-            {statusPills.map(pill => (
-              <span
-                key={pill.key}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold tracking-tight whitespace-nowrap flex-shrink-0"
-                aria-label={`${pill.count} ${pill.label} ${pill.count === 1 ? 'session' : 'sessions'}`}
-                style={{
-                  backgroundColor: pill.color.bg,
-                  color: pill.color.light,
-                  borderColor: pill.color.border
-                }}
-              >
-                {pill.icon}
-                <span aria-hidden="true">({pill.count})</span>
-                <span className="sr-only">{pill.label}</span>
-              </span>
-            ))}
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold tracking-tight whitespace-nowrap flex-shrink-0"
+              aria-label={`Group status: ${primaryStatus.label}`}
+              style={{
+                backgroundColor: primaryStatus.bg,
+                color: primaryStatus.light,
+                borderColor: primaryStatus.border,
+              }}
+            >
+              {primaryStatus.icon}
+              <span>{primaryStatus.label}</span>
+            </span>
           </div>
         </div>
         </button>

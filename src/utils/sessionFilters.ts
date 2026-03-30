@@ -1,6 +1,7 @@
 import { EnrichedSession } from '../types/session'
 import { isReviewed, isRunning, isSpec, mapSessionUiState } from './sessionState'
 import { getSessionDisplayName } from './sessionDisplayName'
+import { getSessionVersionGroupAggregate, groupSessionsByVersion } from './sessionVersions'
 
 export { mapSessionUiState, isSpec, isReviewed, isRunning }
 
@@ -8,11 +9,23 @@ export { mapSessionUiState, isSpec, isReviewed, isRunning }
  * Calculate filter counts for sessions
  */
 export function calculateFilterCounts(sessions: EnrichedSession[]) {
-    const specsCount = sessions.filter(s => isSpec(s.info)).length
-    const runningCount = sessions.filter(s => isRunning(s.info)).length
-    const reviewedCount = sessions.filter(s => isReviewed(s.info)).length
+    return groupSessionsByVersion(sessions).reduce((counts, group) => {
+        const aggregate = getSessionVersionGroupAggregate(group)
 
-    return { specsCount, runningCount, reviewedCount }
+        if (aggregate.state === 'spec') {
+            counts.specsCount += 1
+        } else if (aggregate.state === 'running') {
+            counts.runningCount += 1
+        } else if (aggregate.state === 'reviewed') {
+            counts.reviewedCount += 1
+        }
+
+        return counts
+    }, {
+        specsCount: 0,
+        runningCount: 0,
+        reviewedCount: 0,
+    })
 }
 
 /**

@@ -20,6 +20,7 @@ import { logger } from '../../utils/logger'
 import { getErrorMessage } from '../../types/errors'
 import { closePreview } from '../../features/preview/previewIframeRegistry'
 import { buildPreviewKey, clearPreviewStateActionAtom } from './preview'
+import { groupSessionsByVersion, getSessionVersionGroupAggregate } from '../../utils/sessionVersions'
 
 type MergeModeOption = 'squash' | 'reapply'
 
@@ -730,15 +731,33 @@ function recomputeCrossProjectCounts(projectPath: string): { attention: number; 
     const attentionMap = crossProjectAttention.get(projectPath) ?? new Map()
 
     let attention = 0
-    let running = 0
     for (const session of sessions) {
         const isReviewed = session.info.ready_to_merge === true || session.info.session_state === 'reviewed'
-        const isRunning = session.info.session_state === 'running'
         const needsAttention = attentionMap.get(session.info.session_id) === true
 
         if (needsAttention && !isReviewed) attention++
-        if (isRunning && !needsAttention && !isReviewed) running++
     }
+
+    let running = 0
+    const groups = groupSessionsByVersion(sessions)
+    for (const group of groups) {
+        const aggregate = getSessionVersionGroupAggregate(group)
+        if (aggregate.state !== 'running') continue
+
+        if (group.isVersionGroup) {
+            running++
+            continue
+        }
+
+        const standalone = group.versions[0]?.session
+        if (!standalone) continue
+        const needsAttention = attentionMap.get(standalone.info.session_id) === true
+        const isReviewed = standalone.info.ready_to_merge === true || standalone.info.session_state === 'reviewed'
+        if (!needsAttention && !isReviewed) {
+            running++
+        }
+    }
+
     return { attention, running }
 }
 

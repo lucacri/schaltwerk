@@ -74,7 +74,7 @@ import { OnboardingModal } from './components/onboarding/OnboardingModal'
 import { useOnboarding } from './hooks/useOnboarding'
 import { useSessionPrefill } from './hooks/useSessionPrefill'
 // useRightPanelPersistence removed
-import { useAttentionNotifications, isSessionActivelyRunning } from './hooks/useAttentionNotifications'
+import { useAttentionNotifications } from './hooks/useAttentionNotifications'
 import { useAgentBinarySnapshot } from './hooks/useAgentBinarySnapshot'
 import { useDiffPreloader } from './hooks/useDiffPreloader'
 import { useLastAgentResponseTracker } from './hooks/useLastAgentResponseTracker'
@@ -83,6 +83,7 @@ import { useGithubIntegrationContext } from './contexts/GithubIntegrationContext
 import { resolveOpenPathForOpenButton } from './utils/resolveOpenPath'
 import { TauriCommands } from './common/tauriCommands'
 import { validatePanelPercentage } from './utils/panel'
+import { countLogicalRunningSessions } from './utils/sessionVersions'
 import {
   UiEvent,
   listenUiEvent,
@@ -864,7 +865,7 @@ function AppContent() {
 
   useEffect(() => {
     if (!projectPath) return
-    const count = allSessions.filter(isSessionActivelyRunning).length
+    const count = countLogicalRunningSessions(allSessions)
     setRunningCounts(prev => {
       if (prev[projectPath] === count) return prev
       return { ...prev, [projectPath]: count }

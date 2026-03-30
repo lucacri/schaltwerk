@@ -1,4 +1,4 @@
-import { render, fireEvent, within } from '@testing-library/react'
+import { render, fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { SessionVersionGroup } from './SessionVersionGroup'
 import type { SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
@@ -76,7 +76,42 @@ const requiredCallbacks = {
 }
 
 describe('SessionVersionGroup status summary', () => {
-  it('surfaces active and idle counts on the group header and keeps them visible when collapsed', () => {
+  it('shows Running as the primary group status when any version is still running', () => {
+    const { getByLabelText } = render(
+      <SessionVersionGroup
+        group={baseGroup}
+        selection={{ kind: 'session', payload: 'unrelated' }}
+        startIndex={0}
+        {...requiredCallbacks}
+      />
+    )
+
+    expect(getByLabelText('Group status: Running')).toBeInTheDocument()
+  })
+
+  it('shows Reviewed as the primary group status only after all versions finish', () => {
+    const reviewedGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'reviewed' }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'reviewed' }),
+      ]
+    }
+
+    const { getByLabelText, queryByLabelText } = render(
+      <SessionVersionGroup
+        group={reviewedGroup}
+        selection={{ kind: 'session', payload: 'unrelated' }}
+        startIndex={0}
+        {...requiredCallbacks}
+      />
+    )
+
+    expect(getByLabelText('Group status: Reviewed')).toBeInTheDocument()
+    expect(queryByLabelText('Group status: Running')).toBeNull()
+  })
+
+  it('keeps primary status visible when collapsed', () => {
     const { getByLabelText, getByRole, getByTestId } = render(
       <SessionVersionGroup
         group={baseGroup}
@@ -86,20 +121,15 @@ describe('SessionVersionGroup status summary', () => {
       />
     )
 
-    expect(getByLabelText('1 Active session')).toBeInTheDocument()
-    expect(getByLabelText('1 Idle session')).toBeInTheDocument()
+    expect(getByLabelText('Group status: Running')).toBeInTheDocument()
 
     const statusRow = getByTestId('version-group-status')
     expect(statusRow.className).not.toContain('flex-wrap')
-    const scoped = within(statusRow)
-    expect(scoped.getByLabelText('1 Active session')).toBeInTheDocument()
-    expect(scoped.getByLabelText('1 Idle session')).toBeInTheDocument()
 
     const toggle = getByRole('button', { name: /feature-A/i })
     fireEvent.click(toggle)
 
-    expect(getByLabelText('1 Active session')).toBeVisible()
-    expect(getByLabelText('1 Idle session')).toBeVisible()
+    expect(getByLabelText('Group status: Running')).toBeVisible()
   })
 
   it('shows consolidate button disabled when fewer than two running/reviewed sessions exist', () => {
