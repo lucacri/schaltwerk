@@ -242,6 +242,51 @@ mod service_unified_tests {
     }
 
     #[test]
+    fn link_session_to_pr_updates_existing_session() {
+        let (manager, temp_dir) = create_test_session_manager();
+        let session = create_test_session(&temp_dir, "claude", "link-pr");
+        manager
+            .db_manager
+            .create_session(&session)
+            .expect("create session");
+
+        manager
+            .link_session_to_pr(
+                &session.name,
+                42,
+                "https://github.com/owner/repo/pull/42",
+            )
+            .expect("link session to pr");
+
+        let linked = manager.get_session(&session.name).expect("reload session");
+        assert_eq!(linked.pr_number, Some(42));
+        assert_eq!(
+            linked.pr_url.as_deref(),
+            Some("https://github.com/owner/repo/pull/42")
+        );
+    }
+
+    #[test]
+    fn unlink_session_from_pr_clears_existing_pr_metadata() {
+        let (manager, temp_dir) = create_test_session_manager();
+        let mut session = create_test_session(&temp_dir, "claude", "unlink-pr");
+        session.pr_number = Some(42);
+        session.pr_url = Some("https://github.com/owner/repo/pull/42".to_string());
+        manager
+            .db_manager
+            .create_session(&session)
+            .expect("create session");
+
+        manager
+            .unlink_session_from_pr(&session.name)
+            .expect("unlink session from pr");
+
+        let unlinked = manager.get_session(&session.name).expect("reload session");
+        assert_eq!(unlinked.pr_number, None);
+        assert_eq!(unlinked.pr_url, None);
+    }
+
+    #[test]
     #[serial_test::serial]
     fn test_resume_gating_after_spec_then_first_start_is_fresh() {
         let (manager, temp_dir) = create_test_session_manager();
@@ -2423,6 +2468,18 @@ impl SessionManager {
 
     pub fn get_session_by_id(&self, id: &str) -> Result<Session> {
         self.db_manager.get_session_by_id(id)
+    }
+
+    pub fn link_session_to_pr(&self, name: &str, pr_number: i64, pr_url: &str) -> Result<()> {
+        let session = self.db_manager.get_session_by_name(name)?;
+        self.db_manager
+            .update_session_pr_info(&session.id, Some(pr_number), Some(pr_url))
+    }
+
+    pub fn unlink_session_from_pr(&self, name: &str) -> Result<()> {
+        let session = self.db_manager.get_session_by_name(name)?;
+        self.db_manager
+            .update_session_pr_info(&session.id, None, None)
     }
 
     pub fn get_spec(&self, name: &str) -> Result<Spec> {

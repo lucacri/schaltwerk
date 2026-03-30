@@ -137,6 +137,18 @@ async fn handle_mcp_request_inner(
             let name = extract_session_name_for_action(path, "/prepare-merge");
             prepare_merge(req, &name, app).await
         }
+        (&Method::POST, path)
+            if path.starts_with("/api/sessions/") && path.ends_with("/link-pr") =>
+        {
+            let name = extract_session_name_for_action(path, "/link-pr");
+            link_session_pr(req, &name, app).await
+        }
+        (&Method::DELETE, path)
+            if path.starts_with("/api/sessions/") && path.ends_with("/link-pr") =>
+        {
+            let name = extract_session_name_for_action(path, "/link-pr");
+            unlink_session_pr(&name, app).await
+        }
         (&Method::DELETE, path) if path.starts_with("/api/sessions/") => {
             let name = extract_session_name(path);
             delete_session(&name, app).await
@@ -553,6 +565,40 @@ fn parse_worktree_base_directory_request(
     Ok(dir)
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct LinkPrRequest {
+    pr_number: i64,
+    pr_url: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct LinkPrResponse {
+    session: String,
+    pr_number: Option<i64>,
+    pr_url: Option<String>,
+    linked: bool,
+}
+
+impl LinkPrResponse {
+    fn linked(session: &str, pr_number: i64, pr_url: String) -> Self {
+        Self {
+            session: session.to_string(),
+            pr_number: Some(pr_number),
+            pr_url: Some(pr_url),
+            linked: true,
+        }
+    }
+
+    fn unlinked(session: &str) -> Self {
+        Self {
+            session: session.to_string(),
+            pr_number: None,
+            pr_url: None,
+            linked: false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -815,6 +861,40 @@ mod tests {
         let err =
             parse_worktree_base_directory_request(b"not json").expect_err("invalid json");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn extract_session_name_for_link_pr_action() {
+        assert_eq!(
+            extract_session_name_for_action("/api/sessions/my-session/link-pr", "/link-pr"),
+            "my-session"
+        );
+    }
+
+    #[test]
+    fn link_pr_response_serializes_linked_payload() {
+        let json = serde_json::to_value(LinkPrResponse::linked(
+            "alpha",
+            42,
+            "https://github.com/owner/repo/pull/42".to_string(),
+        ))
+        .expect("serialize response");
+
+        assert_eq!(json["session"], "alpha");
+        assert_eq!(json["pr_number"], 42);
+        assert_eq!(json["pr_url"], "https://github.com/owner/repo/pull/42");
+        assert_eq!(json["linked"], true);
+    }
+
+    #[test]
+    fn link_pr_response_serializes_unlinked_payload() {
+        let json =
+            serde_json::to_value(LinkPrResponse::unlinked("alpha")).expect("serialize response");
+
+        assert_eq!(json["session"], "alpha");
+        assert!(json["pr_number"].is_null());
+        assert!(json["pr_url"].is_null());
+        assert_eq!(json["linked"], false);
     }
 
     #[test]
@@ -2448,6 +2528,87 @@ async fn mark_session_reviewed(
                 format!("Failed to mark session as reviewed: {e}"),
             ))
         }
+    }
+}
+
+async fn link_session_pr(
+    req: Request<Incoming>,
+    name: &str,
+    app: tauri::AppHandle,
+) -> Result<Response<String>, hyper::Error> {
+    let body_bytes = req.into_body().collect().await?.to_bytes();
+    let payload: LinkPrRequest = match serde_json::from_slice(&body_bytes) {
+        Ok(p) => p,
+        Err(e) => {
+            return Ok(json_error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Invalid JSON payload: {e}"),
+            ));
+        }
+    };
+
+    let manager = match get_core_write().await {
+        Ok(core) => core.session_manager(),
+        Err(e) => {
+            error!("Failed to get core for PR link: {e}");
+            return Ok(error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Internal error: {e}"),
+            ));
+        }
+    };
+
+    match manager.link_session_to_pr(name, payload.pr_number, &payload.pr_url) {
+        Ok(()) => {
+            request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
+            let json = serde_json::to_string(&LinkPrResponse::linked(
+                name,
+                payload.pr_number,
+                payload.pr_url,
+            ))
+            .unwrap_or_else(|e| {
+                error!("Failed to serialize PR link response for '{name}': {e}");
+                "{}".to_string()
+            });
+            Ok(json_response(StatusCode::OK, json))
+        }
+        Err(e) => Ok(error_response(
+            StatusCode::NOT_FOUND,
+            format!("Failed to link PR for session '{name}': {e}"),
+        )),
+    }
+}
+
+async fn unlink_session_pr(
+    name: &str,
+    app: tauri::AppHandle,
+) -> Result<Response<String>, hyper::Error> {
+    let manager = match get_core_write().await {
+        Ok(core) => core.session_manager(),
+        Err(e) => {
+            error!("Failed to get core for PR unlink: {e}");
+            return Ok(error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Internal error: {e}"),
+            ));
+        }
+    };
+
+    match manager.unlink_session_from_pr(name) {
+        Ok(()) => {
+            request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
+            let json = serde_json::to_string(&LinkPrResponse::unlinked(name)).unwrap_or_else(
+                |e| {
+                    error!("Failed to serialize PR unlink response for '{name}': {e}");
+                    "{}".to_string()
+                },
+            );
+            Ok(json_response(StatusCode::OK, json))
+        }
+        Err(e) => Ok(error_response(
+            StatusCode::NOT_FOUND,
+            format!("Failed to unlink PR for session '{name}': {e}"),
+        )),
     }
 }
 

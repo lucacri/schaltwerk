@@ -618,6 +618,59 @@ describe('LucodeBridge untested methods', () => {
     })
   })
 
+  describe('linkSessionToPr', () => {
+    it('posts PR metadata to the link-pr endpoint', async () => {
+      const payload = {
+        session: 'my-session',
+        pr_number: 42,
+        pr_url: 'https://github.com/owner/repo/pull/42',
+        linked: true
+      }
+      fetchMock.mockResolvedValue(createResponse(payload))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.linkSessionToPr('my-session', 42, 'https://github.com/owner/repo/pull/42')
+
+      expect(result).toEqual(payload)
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/sessions/my-session/link-pr')
+      expect(init?.method).toBe('POST')
+      expect(JSON.parse(String(init?.body))).toEqual({
+        pr_number: 42,
+        pr_url: 'https://github.com/owner/repo/pull/42'
+      })
+    })
+
+    it('throws on API error', async () => {
+      fetchMock.mockResolvedValue(createErrorResponse(500, 'Internal Server Error'))
+
+      const bridge = new LucodeBridge()
+      await expect(
+        bridge.linkSessionToPr('bad-session', 1, 'https://github.com/owner/repo/pull/1')
+      ).rejects.toThrow("Failed to link PR for session 'bad-session'")
+    })
+  })
+
+  describe('unlinkSessionFromPr', () => {
+    it('deletes PR metadata via the link-pr endpoint', async () => {
+      const payload = {
+        session: 'my-session',
+        pr_number: null,
+        pr_url: null,
+        linked: false
+      }
+      fetchMock.mockResolvedValue(createResponse(payload))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.unlinkSessionFromPr('my-session')
+
+      expect(result).toEqual(payload)
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/sessions/my-session/link-pr')
+      expect(init?.method).toBe('DELETE')
+    })
+  })
+
   describe('getCurrentTasks', () => {
     it('combines active and draft sessions', async () => {
       const activeSessions = [

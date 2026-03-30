@@ -103,6 +103,12 @@ const listEpicsMock = mock(() =>
 )
 const listSessionsByStateMock = mock(() => Promise.resolve([]))
 const markSessionReviewedMock = mock(() => Promise.resolve())
+const linkSessionToPrMock = mock(() =>
+  Promise.resolve({ session: 'my-sess', pr_number: 42, pr_url: 'https://github.com/owner/repo/pull/42', linked: true })
+)
+const unlinkSessionFromPrMock = mock(() =>
+  Promise.resolve({ session: 'my-sess', pr_number: null, pr_url: null, linked: false })
+)
 const sendFollowUpMessageMock = mock(() => Promise.resolve())
 const setWorktreeBaseDirectoryMock = mock(() =>
   Promise.resolve({ worktree_base_directory: '/new/path', has_custom_directory: true })
@@ -134,12 +140,14 @@ describe('MCP tool handler logic', () => {
       getProjectRunScript: getProjectRunScriptMock,
       getSession: getSessionMock,
       getWorktreeBaseDirectory: getWorktreeBaseDirectoryMock,
+      linkSessionToPr: linkSessionToPrMock,
       listDraftSessions: listDraftSessionsMock,
       listEpics: listEpicsMock,
       listSessionsByState: listSessionsByStateMock,
       markSessionReviewed: markSessionReviewedMock,
       sendFollowUpMessage: sendFollowUpMessageMock,
       setWorktreeBaseDirectory: setWorktreeBaseDirectoryMock,
+      unlinkSessionFromPr: unlinkSessionFromPrMock,
       getCurrentSpecModeSession: getCurrentSpecModeSessionMock,
     }
 
@@ -161,12 +169,14 @@ describe('MCP tool handler logic', () => {
     getProjectRunScriptMock.mockClear()
     getSessionMock.mockClear()
     getWorktreeBaseDirectoryMock.mockClear()
+    linkSessionToPrMock.mockClear()
     listDraftSessionsMock.mockClear()
     listEpicsMock.mockClear()
     listSessionsByStateMock.mockClear()
     markSessionReviewedMock.mockClear()
     sendFollowUpMessageMock.mockClear()
     setWorktreeBaseDirectoryMock.mockClear()
+    unlinkSessionFromPrMock.mockClear()
     getCurrentSpecModeSessionMock.mockClear()
   })
 
@@ -391,6 +401,40 @@ describe('MCP tool handler logic', () => {
       const parsed = JSON.parse(json.text)
       expect(parsed.session).toBe('my-sess')
       expect(parsed.reviewed).toBe(true)
+    })
+  })
+
+  describe('lucode_link_pr', () => {
+    it('links a PR when both PR fields are provided', async () => {
+      const result = await callTool('lucode_link_pr', {
+        session_name: 'my-sess',
+        pr_number: 42,
+        pr_url: 'https://github.com/owner/repo/pull/42'
+      })
+
+      expect(linkSessionToPrMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.session).toBe('my-sess')
+      expect(parsed.pr_number).toBe(42)
+      expect(parsed.linked).toBe(true)
+    })
+
+    it('unlinks a PR when both PR fields are omitted', async () => {
+      const result = await callTool('lucode_link_pr', { session_name: 'my-sess' })
+
+      expect(unlinkSessionFromPrMock).toHaveBeenCalledTimes(1)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.session).toBe('my-sess')
+      expect(parsed.pr_number).toBeNull()
+      expect(parsed.linked).toBe(false)
+    })
+
+    it('rejects partial PR payloads', async () => {
+      await expect(
+        callTool('lucode_link_pr', { session_name: 'my-sess', pr_number: 42 })
+      ).rejects.toThrow('Provide both pr_number and pr_url to link a PR, or omit both to unlink.')
     })
   })
 

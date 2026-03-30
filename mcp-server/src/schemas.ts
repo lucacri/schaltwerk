@@ -497,6 +497,18 @@ export const toolOutputSchemas = {
     required: ['session', 'branch', 'cancel_requested', 'cancel_queued'],
     additionalProperties: false,
   },
+  lucode_link_pr: {
+    $schema: draft2020,
+    type: 'object',
+    properties: {
+      session: { type: 'string' },
+      pr_number: nullableNumber,
+      pr_url: nullableString,
+      linked: { type: 'boolean' },
+    },
+    required: ['session', 'pr_number', 'pr_url', 'linked'],
+    additionalProperties: false,
+  },
   lucode_run_script: {
     $schema: draft2020,
     type: 'object',

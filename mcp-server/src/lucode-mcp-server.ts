@@ -108,6 +108,12 @@ interface LucodeCreatePrArgs {
   cancel_after_pr?: boolean
 }
 
+interface LucodeLinkPrArgs {
+  session_name: string
+  pr_number?: number
+  pr_url?: string
+}
+
 interface LucodePrepareMergeArgs {
   session_name: string
   commit_message?: string | null
@@ -777,6 +783,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["session_name", "pr_title"]
         },
         outputSchema: toolOutputSchemas.lucode_create_pr
+      },
+      {
+        name: "lucode_link_pr",
+        description: "Link an existing GitHub pull request to a running or reviewed session",
+        inputSchema: {
+          type: "object",
+          properties: {
+            session_name: {
+              type: "string",
+              description: "Running or reviewed session whose PR metadata should be updated."
+            },
+            pr_number: {
+              type: "number",
+              description: "GitHub pull request number. Provide together with pr_url to link a PR."
+            },
+            pr_url: {
+              type: "string",
+              description: "GitHub pull request URL. Provide together with pr_number to link a PR. Omit both fields to unlink."
+            }
+          },
+          required: ["session_name"],
+          additionalProperties: false
+        },
+        outputSchema: toolOutputSchemas.lucode_link_pr
       },
       {
         name: "lucode_create_epic",
@@ -1616,6 +1646,37 @@ ${cancelLine}`
         const summary = prResult.modalTriggered
           ? `Pull request modal opened for '${prArgs.session_name}'. The user will review and confirm the PR details in the Lucode UI.`
           : `Failed to open pull request modal for '${prArgs.session_name}'.`
+
+        response = buildStructuredResponse(structured, { summaryText: summary })
+        break
+      }
+
+      case "lucode_link_pr": {
+        const linkArgs = args as unknown as LucodeLinkPrArgs
+
+        if (!linkArgs.session_name || typeof linkArgs.session_name !== 'string') {
+          throw new Error('session_name is required when invoking lucode_link_pr.')
+        }
+
+        const hasPrNumber = typeof linkArgs.pr_number === 'number'
+        const hasPrUrl = typeof linkArgs.pr_url === 'string' && linkArgs.pr_url.trim().length > 0
+
+        if (hasPrNumber !== hasPrUrl) {
+          throw new Error('Provide both pr_number and pr_url to link a PR, or omit both to unlink.')
+        }
+
+        const structured = hasPrNumber && hasPrUrl
+          ? await bridge.linkSessionToPr(
+              linkArgs.session_name,
+              linkArgs.pr_number as number,
+              linkArgs.pr_url as string,
+              projectPath
+            )
+          : await bridge.unlinkSessionFromPr(linkArgs.session_name, projectPath)
+
+        const summary = structured.linked
+          ? `Linked PR #${structured.pr_number} to '${linkArgs.session_name}'.`
+          : `Removed linked PR from '${linkArgs.session_name}'.`
 
         response = buildStructuredResponse(structured, { summaryText: summary })
         break

@@ -270,6 +270,17 @@ impl SessionDbManager {
             .map_err(|e| anyhow!("Failed to update session ready_to_merge: {e}"))
     }
 
+    pub fn update_session_pr_info(
+        &self,
+        session_id: &str,
+        pr_number: Option<i64>,
+        pr_url: Option<&str>,
+    ) -> Result<()> {
+        self.db
+            .update_session_pr_info(session_id, pr_number, pr_url)
+            .map_err(|e| anyhow!("Failed to update session PR info: {e}"))
+    }
+
     pub fn update_session_epic_id(&self, session_id: &str, epic_id: Option<&str>) -> Result<()> {
         self.db
             .update_session_epic_id(session_id, epic_id)

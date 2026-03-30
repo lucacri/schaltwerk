@@ -102,6 +102,13 @@ export interface PrepareMergeResult {
   modalTriggered: boolean
 }
 
+export interface LinkSessionPrResult {
+  session: string
+  pr_number: number | null
+  pr_url: string | null
+  linked: boolean
+}
+
 export interface DiffSummaryOptions {
   session?: string
   cursor?: string
@@ -1460,6 +1467,50 @@ export class LucodeBridge {
       sessionName: payload.session_name,
       modalTriggered: payload.modal_triggered,
     }
+  }
+
+  async linkSessionToPr(
+    sessionName: string,
+    prNumber: number,
+    prUrl: string,
+    projectPath?: string
+  ): Promise<LinkSessionPrResult> {
+    const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(sessionName)}/link-pr`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getProjectHeaders(projectPath)
+      },
+      body: JSON.stringify({
+        pr_number: prNumber,
+        pr_url: prUrl
+      })
+    })
+
+    const responseBody = await response.text()
+    if (!response.ok) {
+      const reason = responseBody ? ` - ${responseBody}` : ''
+      throw new Error(`Failed to link PR for session '${sessionName}': ${response.status} ${response.statusText}${reason}`)
+    }
+
+    return JSON.parse(responseBody) as LinkSessionPrResult
+  }
+
+  async unlinkSessionFromPr(sessionName: string, projectPath?: string): Promise<LinkSessionPrResult> {
+    const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(sessionName)}/link-pr`, {
+      method: 'DELETE',
+      headers: {
+        ...this.getProjectHeaders(projectPath)
+      }
+    })
+
+    const responseBody = await response.text()
+    if (!response.ok) {
+      const reason = responseBody ? ` - ${responseBody}` : ''
+      throw new Error(`Failed to unlink PR for session '${sessionName}': ${response.status} ${response.statusText}${reason}`)
+    }
+
+    return JSON.parse(responseBody) as LinkSessionPrResult
   }
 
   async convertToSpec(sessionName: string, projectPath?: string): Promise<void> {

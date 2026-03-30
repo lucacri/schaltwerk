@@ -208,6 +208,12 @@ const sampleStructuredOutputs: Record<string, any> = {
     cancel_queued: false,
     cancel_error: null,
   },
+  lucode_link_pr: {
+    session: 'alpha',
+    pr_number: 42,
+    pr_url: 'https://example.com/pr/42',
+    linked: true,
+  },
   lucode_create_epic: {
     epic: {
       id: 'abc-123',
