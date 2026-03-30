@@ -44,7 +44,6 @@ const COMMIT_LIST_LIMIT: usize = 50;
 
 #[derive(Clone)]
 struct SessionMergeContext {
-    session_id: String,
     session_name: String,
     repo_path: PathBuf,
     worktree_path: PathBuf,
@@ -463,7 +462,7 @@ impl MergeService {
         }
         manager.update_session_state(&context.session_name, SessionState::Reviewed)?;
 
-        if let Err(err) = manager.update_git_stats(&context.session_id) {
+        if let Err(err) = git::calculate_git_stats_fast(&context.worktree_path, &context.parent_branch) {
             warn!(
                 "{OPERATION_LABEL}: failed to refresh git stats for '{session_name}': {err}",
                 session_name = context.session_name
@@ -565,7 +564,6 @@ impl MergeService {
             .ok_or_else(|| anyhow!("Session branch '{branch}' has no target"))?;
 
         Ok(SessionMergeContext {
-            session_id: session.id,
             session_name: session.name,
             repo_path: session.repository_path,
             worktree_path: session.worktree_path,
@@ -3159,7 +3157,6 @@ mod tests {
         let session_after = manager.get_session(&session.name).unwrap();
         let repo = Repository::open(&session_after.repository_path).unwrap();
         let context = SessionMergeContext {
-            session_id: session_after.id.clone(),
             session_name: session_after.name.clone(),
             repo_path: session_after.repository_path.clone(),
             worktree_path: session_after.worktree_path.clone(),
