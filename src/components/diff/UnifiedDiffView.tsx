@@ -902,7 +902,8 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
     }
 
     try {
-      const preloadedFiles = sessionName ? diffPreloader.getChangedFiles(sessionName) : null;
+      const target = isCommanderView() ? ORCHESTRATOR_SESSION_NAME : sessionName;
+      const preloadedFiles = target ? diffPreloader.getChangedFiles(target) : null;
       const changedFiles = preloadedFiles ?? (isCommanderView()
         ? await fetchOrchestratorChangedFiles()
         : await fetchSessionChangedFiles());
@@ -954,7 +955,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         const targetFile = changedFiles[nextSelectedIndex];
         if (targetFile) {
           try {
-            const preloadedDiff = sessionName ? diffPreloader.getFileDiff(sessionName, targetFile.path) : null;
+            const preloadedDiff = target ? diffPreloader.getFileDiff(target, targetFile.path) : null;
             const primary = preloadedDiff ?? await loadDiffForFile(
               sessionName,
               targetFile,
@@ -1034,6 +1035,13 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         } else {
           return;
         }
+
+        const target =
+          selection.kind === "orchestrator"
+            ? ORCHESTRATOR_SESSION_NAME
+            : sessionName;
+        if (target) diffPreloader.invalidate(target);
+
         await loadChangedFiles();
       } catch (err) {
         logger.error("Failed to discard file changes", err);
@@ -2163,6 +2171,8 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         headCommit: branchPayload.head_commit,
       });
       setFiles(event.changed_files);
+      if (event.session_name) diffPreloader.invalidate(event.session_name);
+      setAllFileDiffs(new Map());
 
       void loadChangedFilesGuarded();
     })

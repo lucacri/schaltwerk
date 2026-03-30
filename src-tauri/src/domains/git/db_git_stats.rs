@@ -185,7 +185,6 @@ mod tests {
             has_conflicts: false,
             calculated_at: Utc::now(),
             last_diff_change_ts: None,
-            has_conflicts: false,
         }
     }
 
@@ -299,7 +298,6 @@ mod tests {
             has_conflicts: false,
             calculated_at: Utc.timestamp_opt(Utc::now().timestamp() - 120, 0).unwrap(),
             last_diff_change_ts: None,
-            has_conflicts: false,
         };
         db.save_git_stats(&stats).unwrap();
 
