@@ -1543,7 +1543,7 @@ async fn delete_draft(name: &str, app: tauri::AppHandle) -> Result<Response<Stri
         }
     };
 
-    match manager.cancel_session(name) {
+    match manager.fast_cancel_session(name).await {
         Ok(()) => {
             info!("Deleted spec session via API: {name}");
 
@@ -2391,7 +2391,7 @@ async fn delete_session(
         }
     };
 
-    match manager.cancel_session(name) {
+    match manager.fast_cancel_session(name).await {
         Ok(()) => {
             info!("Deleted session via API: {name}");
 

@@ -182,31 +182,24 @@ pub async fn github_get_status() -> Result<GitHubStatusPayload, String> {
 
 #[tauri::command]
 pub async fn github_authenticate(_app: AppHandle) -> Result<GitHubStatusPayload, String> {
-    let cli = GitHubCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
-
-    info!("GitHub CLI authentication requires manual setup");
-    match cli.authenticate() {
-        Err(err) => {
+    tokio::task::spawn_blocking(move || {
+        let cli = GitHubCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
+        info!("GitHub CLI authentication requires manual setup");
+        cli.authenticate().map_err(|err| {
             error!("GitHub authentication requires user action: {err}");
-            Err(format_cli_error(err))
-        }
-        Ok(()) => {
-            info!("GitHub CLI reported successful authentication");
-            build_status().await
-        }
-    }
+            format_cli_error(err)
+        })
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
+
+    info!("GitHub CLI reported successful authentication");
+    build_status().await
 }
 
 #[tauri::command]
 pub async fn github_connect_project(app: AppHandle) -> Result<GitHubRepositoryPayload, String> {
-    let cli = GitHubCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
-
     let project_manager = get_project_manager().await;
     let project = project_manager
         .current_project()
@@ -214,14 +207,20 @@ pub async fn github_connect_project(app: AppHandle) -> Result<GitHubRepositoryPa
         .map_err(|e| format!("No active project: {e}"))?;
     let project_path = project.path.clone();
 
-    info!(
-        "Fetching repository metadata for project {}",
-        project_path.display()
-    );
-    let repo_info = cli.view_repository(&project_path).map_err(|err| {
-        error!("Failed to read repository via GitHub CLI: {err}");
-        format_cli_error(err)
-    })?;
+    let repo_info = tokio::task::spawn_blocking(move || {
+        let cli = GitHubCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
+        info!(
+            "Fetching repository metadata for project {}",
+            project_path.display()
+        );
+        cli.view_repository(&project_path).map_err(|err| {
+            error!("Failed to read repository via GitHub CLI: {err}");
+            format_cli_error(err)
+        })
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
 
     {
         let core = project.schaltwerk_core.write().await;
@@ -230,7 +229,7 @@ pub async fn github_connect_project(app: AppHandle) -> Result<GitHubRepositoryPa
             repository: repo_info.name_with_owner.clone(),
             default_branch: repo_info.default_branch.clone(),
         };
-        db.set_project_github_config(&project_path, &config)
+        db.set_project_github_config(&project.path, &config)
             .map_err(|e| format!("Failed to store GitHub repository config: {e}"))?;
     }
 
@@ -249,11 +248,6 @@ pub async fn github_create_reviewed_pr(
     _app: AppHandle,
     args: CreateReviewedPrArgs,
 ) -> Result<GitHubPrPayload, String> {
-    let cli = GitHubCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
-
     let project_manager = get_project_manager().await;
     let project = project_manager
         .current_project()
@@ -303,39 +297,46 @@ pub async fn github_create_reviewed_pr(
                 .map(|cfg| cfg.name_with_owner.clone())
         });
 
-    info!(
-        "Creating GitHub PR for session '{}' on branch '{}'",
-        args.session_slug, default_branch
-    );
-    let content = match args.pr_title.as_deref().filter(|t| !t.trim().is_empty()) {
-        Some(title) => PrContent::Explicit {
-            title,
-            body: args.pr_body.as_deref().unwrap_or(""),
-        },
-        None => PrContent::Fill,
-    };
+    tokio::task::spawn_blocking(move || {
+        let cli = GitHubCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let pr_result = cli
-        .create_pr_from_worktree(CreatePrOptions {
-            repo_path: &project_path,
-            worktree_path: &worktree_path,
-            session_slug: &args.session_slug,
-            default_branch: &default_branch,
-            commit_message: args.commit_message.as_deref(),
-            repository: repository.as_deref(),
-            content,
-            target_branch: args.target_branch.as_deref(),
-            custom_branch_name: args.custom_branch_name.as_deref(),
+        info!(
+            "Creating GitHub PR for session '{}' on branch '{}'",
+            args.session_slug, default_branch
+        );
+        let content = match args.pr_title.as_deref().filter(|t| !t.trim().is_empty()) {
+            Some(title) => PrContent::Explicit {
+                title,
+                body: args.pr_body.as_deref().unwrap_or(""),
+            },
+            None => PrContent::Fill,
+        };
+
+        let pr_result = cli
+            .create_pr_from_worktree(CreatePrOptions {
+                repo_path: &project_path,
+                worktree_path: &worktree_path,
+                session_slug: &args.session_slug,
+                default_branch: &default_branch,
+                commit_message: args.commit_message.as_deref(),
+                repository: repository.as_deref(),
+                content,
+                target_branch: args.target_branch.as_deref(),
+                custom_branch_name: args.custom_branch_name.as_deref(),
+            })
+            .map_err(|err| {
+                error!("GitHub PR creation failed: {err}");
+                format_cli_error(err)
+            })?;
+
+        Ok(GitHubPrPayload {
+            branch: pr_result.branch,
+            url: pr_result.url,
         })
-        .map_err(|err| {
-            error!("GitHub PR creation failed: {err}");
-            format_cli_error(err)
-        })?;
-
-    Ok(GitHubPrPayload {
-        branch: pr_result.branch,
-        url: pr_result.url,
     })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[tauri::command]
@@ -351,11 +352,6 @@ pub async fn github_create_session_pr_impl(
     args: CreateSessionPrArgs,
 ) -> Result<GitHubPrPayload, String> {
     use crate::commands::schaltwerk_core::schaltwerk_core_cancel_session;
-
-    let cli = GitHubCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
 
     let project_manager = get_project_manager().await;
     let project = project_manager
@@ -423,45 +419,55 @@ pub async fn github_create_session_pr_impl(
         .map(sanitize_branch_name)
         .unwrap_or_else(|| session_branch.clone());
 
-    info!(
-        "Creating PR for session '{}' (branch='{}', base='{}', head='{}')",
-        args.session_name, session_branch, base_branch, pr_branch_name
-    );
-
     let pr_mode = match args.mode {
         MergeMode::Squash => PrCommitMode::Squash,
         MergeMode::Reapply => PrCommitMode::Reapply,
     };
 
-    let pr_result = cli
-        .create_session_pr(CreateSessionPrOptions {
+    let session_name = args.session_name.clone();
+    let pr_title = args.pr_title.clone();
+    let pr_body = args.pr_body.clone();
+    let commit_message = args.commit_message.clone();
+    let session_worktree_clone = session_worktree.clone();
+    let session_branch_clone = session_branch.clone();
+
+    let pr_result = tokio::task::spawn_blocking(move || {
+        let cli = GitHubCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
+
+        info!(
+            "Creating PR for session '{session_name}' (branch='{session_branch_clone}', base='{base_branch}', head='{pr_branch_name}')"
+        );
+
+        cli.create_session_pr(CreateSessionPrOptions {
             repo_path: &project_path,
-            session_worktree_path: &session_worktree,
-            session_slug: &args.session_name,
-            session_branch: &session_branch,
+            session_worktree_path: &session_worktree_clone,
+            session_slug: &session_name,
+            session_branch: &session_branch_clone,
             base_branch: &base_branch,
             pr_branch_name: &pr_branch_name,
             content: PrContent::Explicit {
-                title: &args.pr_title,
-                body: args.pr_body.as_deref().unwrap_or(""),
+                title: &pr_title,
+                body: pr_body.as_deref().unwrap_or(""),
             },
-            commit_message: args.commit_message.as_deref(),
+            commit_message: commit_message.as_deref(),
             repository: repository.as_deref(),
             mode: pr_mode,
         })
         .map_err(|err| {
             error!("GitHub PR creation failed: {err}");
             format_cli_error(err)
-        })?;
+        })
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
 
-    // If a custom branch name was used, rename the local branch and update the database
     if pr_result.branch != session_branch {
         info!(
             "PR branch '{}' differs from session branch '{}', updating session",
             pr_result.branch, session_branch
         );
 
-        // Rename the local git branch to match the PR branch
         if let Err(e) = rename_branch(&session_worktree, &session_branch, &pr_result.branch) {
             warn!(
                 "Failed to rename local branch from '{}' to '{}': {e}",
@@ -469,7 +475,6 @@ pub async fn github_create_session_pr_impl(
             );
         }
 
-        // Update the session's branch in the database
         {
             let core = project.schaltwerk_core.read().await;
             let session = core
@@ -487,8 +492,7 @@ pub async fn github_create_session_pr_impl(
             }
         }
 
-        // Emit refresh event so UI updates
-        emit_event(&app, SchaltEvent::SessionsRefreshed, &project_path)
+        emit_event(&app, SchaltEvent::SessionsRefreshed, &project.path)
             .map_err(|e| format!("Failed to emit sessions refresh: {e}"))?;
     }
 
@@ -517,7 +521,7 @@ pub async fn github_search_issues(
     let cli = GitHubCli::new();
     github_search_issues_impl(
         Arc::clone(&manager),
-        &cli,
+        cli,
         query,
         ISSUE_SEARCH_DEFAULT_LIMIT,
     )
@@ -531,7 +535,7 @@ pub async fn github_get_issue_details(
 ) -> Result<GitHubIssueDetailsPayload, String> {
     let manager = get_project_manager().await;
     let cli = GitHubCli::new();
-    github_get_issue_details_impl(Arc::clone(&manager), &cli, number).await
+    github_get_issue_details_impl(Arc::clone(&manager), cli, number).await
 }
 
 #[tauri::command]
@@ -541,7 +545,7 @@ pub async fn github_search_prs(
 ) -> Result<Vec<GitHubPrSummaryPayload>, String> {
     let manager = get_project_manager().await;
     let cli = GitHubCli::new();
-    github_search_prs_impl(Arc::clone(&manager), &cli, query, 50).await
+    github_search_prs_impl(Arc::clone(&manager), cli, query, 50).await
 }
 
 #[tauri::command]
@@ -551,7 +555,7 @@ pub async fn github_get_pr_details(
 ) -> Result<GitHubPrDetailsPayload, String> {
     let manager = get_project_manager().await;
     let cli = GitHubCli::new();
-    github_get_pr_details_impl(Arc::clone(&manager), &cli, number).await
+    github_get_pr_details_impl(Arc::clone(&manager), cli, number).await
 }
 
 #[tauri::command]
@@ -589,47 +593,60 @@ pub async fn github_preview_pr(
         .map(|cfg| cfg.default_branch.clone())
         .unwrap_or_else(|| "main".to_string());
 
-    let (commit_count, commit_summaries) =
-        get_commit_info(&worktree_path, &parent_branch).unwrap_or((0, vec![]));
+    let initial_prompt = session.initial_prompt.clone().unwrap_or_default();
+    let repo_path = project.path.clone();
+    let worktree_path_clone = worktree_path.clone();
+    let parent_branch_clone = parent_branch.clone();
+    let session_branch_clone = session_branch.clone();
+    let session_name_clone = session_name.clone();
 
-    let has_uncommitted =
-        lucode::domains::git::has_uncommitted_changes(&worktree_path).unwrap_or(false);
+    let preview = tokio::task::spawn_blocking(move || {
+        let (commit_count, commit_summaries) =
+            get_commit_info(&worktree_path_clone, &parent_branch_clone).unwrap_or((0, vec![]));
 
-    let default_title = if commit_count == 1 && !commit_summaries.is_empty() {
-        commit_summaries[0].clone()
-    } else {
-        format_session_title(&session_name)
-    };
+        let has_uncommitted =
+            lucode::domains::git::has_uncommitted_changes(&worktree_path_clone).unwrap_or(false);
 
-    let default_body = if commit_summaries.is_empty() {
-        session.initial_prompt.clone().unwrap_or_default()
-    } else {
-        commit_summaries
-            .iter()
-            .map(|s| format!("- {s}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
+        let default_title = if commit_count == 1 && !commit_summaries.is_empty() {
+            commit_summaries[0].clone()
+        } else {
+            format_session_title(&session_name_clone)
+        };
 
-    let remote_status = lucode::domains::git::branches::check_remote_branch_status(
-        &project.path,
-        &session_branch,
-    );
+        let default_body = if commit_summaries.is_empty() {
+            initial_prompt
+        } else {
+            commit_summaries
+                .iter()
+                .map(|s| format!("- {s}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
 
-    Ok(PrPreviewPayload {
-        session_name,
-        session_branch,
-        parent_branch,
-        default_title,
-        default_body,
-        commit_count,
-        commit_summaries,
-        default_branch,
-        worktree_path: worktree_path.to_string_lossy().to_string(),
-        has_uncommitted_changes: has_uncommitted,
-        branch_pushed: remote_status.exists_on_remote,
-        branch_conflict_warning: remote_status.conflict_warning,
+        let remote_status = lucode::domains::git::branches::check_remote_branch_status(
+            &repo_path,
+            &session_branch_clone,
+        );
+
+        PrPreviewPayload {
+            session_name: session_name_clone,
+            session_branch: session_branch_clone,
+            parent_branch: parent_branch_clone,
+            default_title,
+            default_body,
+            commit_count,
+            commit_summaries,
+            default_branch,
+            worktree_path: worktree_path_clone.to_string_lossy().to_string(),
+            has_uncommitted_changes: has_uncommitted,
+            branch_pushed: remote_status.exists_on_remote,
+            branch_conflict_warning: remote_status.conflict_warning,
+        }
     })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?;
+
+    Ok(preview)
 }
 
 #[tauri::command]
@@ -639,28 +656,32 @@ pub async fn github_get_pr_review_comments(
 ) -> Result<Vec<GitHubPrReviewCommentPayload>, String> {
     let manager = get_project_manager().await;
     let cli = GitHubCli::new();
-    github_get_pr_review_comments_impl(Arc::clone(&manager), &cli, pr_number).await
+    github_get_pr_review_comments_impl(Arc::clone(&manager), cli, pr_number).await
 }
 
-async fn github_get_pr_review_comments_impl<R: CommandRunner>(
+async fn github_get_pr_review_comments_impl<R: CommandRunner + 'static>(
     project_manager: Arc<ProjectManager>,
-    cli: &GitHubCli<R>,
+    cli: GitHubCli<R>,
     pr_number: u64,
 ) -> Result<Vec<GitHubPrReviewCommentPayload>, String> {
     let project = resolve_project(project_manager).await?;
+    let project_path = project.path;
+    let repository = project.repository;
 
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let comments = cli
-        .get_pr_review_comments(&project.path, pr_number, project.repository.as_deref())
-        .map_err(|err| {
-            error!("GitHub PR review comments fetch failed: {err}");
-            format_cli_error(err)
-        })?;
+        let comments = cli
+            .get_pr_review_comments(&project_path, pr_number, repository.as_deref())
+            .map_err(|err| {
+                error!("GitHub PR review comments fetch failed: {err}");
+                format_cli_error(err)
+            })?;
 
-    Ok(comments.into_iter().map(map_pr_review_comment_payload).collect())
+        Ok(comments.into_iter().map(map_pr_review_comment_payload).collect())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 fn get_commit_info(worktree_path: &std::path::Path, base_branch: &str) -> Option<(usize, Vec<String>)> {
@@ -714,92 +735,108 @@ fn format_session_title(session_name: &str) -> String {
         .join(" ")
 }
 
-async fn github_search_issues_impl<R: CommandRunner>(
+async fn github_search_issues_impl<R: CommandRunner + 'static>(
     project_manager: Arc<ProjectManager>,
-    cli: &GitHubCli<R>,
+    cli: GitHubCli<R>,
     query: Option<String>,
     limit: usize,
 ) -> Result<Vec<GitHubIssueSummaryPayload>, String> {
     let project = resolve_project(project_manager).await?;
+    let project_path = project.path;
+    let repository = project.repository;
 
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let search_query = query.unwrap_or_default();
-    let issues = cli
-        .search_issues(&project.path, search_query.trim(), limit, project.repository.as_deref())
-        .map_err(|err| {
-            error!("GitHub issue search failed: {err}");
-            format_cli_error(err)
-        })?;
+        let search_query = query.unwrap_or_default();
+        let issues = cli
+            .search_issues(&project_path, search_query.trim(), limit, repository.as_deref())
+            .map_err(|err| {
+                error!("GitHub issue search failed: {err}");
+                format_cli_error(err)
+            })?;
 
-    Ok(issues.into_iter().map(map_issue_summary_payload).collect())
+        Ok(issues.into_iter().map(map_issue_summary_payload).collect())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
-async fn github_get_issue_details_impl<R: CommandRunner>(
+async fn github_get_issue_details_impl<R: CommandRunner + 'static>(
     project_manager: Arc<ProjectManager>,
-    cli: &GitHubCli<R>,
+    cli: GitHubCli<R>,
     number: u64,
 ) -> Result<GitHubIssueDetailsPayload, String> {
     let project = resolve_project(project_manager).await?;
+    let project_path = project.path;
+    let repository = project.repository;
 
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let details = cli
-        .get_issue_with_comments(&project.path, number, project.repository.as_deref())
-        .map_err(|err| {
-            error!("GitHub issue detail fetch failed: {err}");
-            format_cli_error(err)
-        })?;
+        let details = cli
+            .get_issue_with_comments(&project_path, number, repository.as_deref())
+            .map_err(|err| {
+                error!("GitHub issue detail fetch failed: {err}");
+                format_cli_error(err)
+            })?;
 
-    Ok(map_issue_details_payload(details))
+        Ok(map_issue_details_payload(details))
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
-async fn github_search_prs_impl<R: CommandRunner>(
+async fn github_search_prs_impl<R: CommandRunner + 'static>(
     project_manager: Arc<ProjectManager>,
-    cli: &GitHubCli<R>,
+    cli: GitHubCli<R>,
     query: Option<String>,
     limit: usize,
 ) -> Result<Vec<GitHubPrSummaryPayload>, String> {
     let project = resolve_project(project_manager).await?;
+    let project_path = project.path;
+    let repository = project.repository;
 
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let search_query = query.unwrap_or_default();
-    let prs = cli
-        .search_prs(&project.path, search_query.trim(), limit, project.repository.as_deref())
-        .map_err(|err| {
-            error!("GitHub PR search failed: {err}");
-            format_cli_error(err)
-        })?;
+        let search_query = query.unwrap_or_default();
+        let prs = cli
+            .search_prs(&project_path, search_query.trim(), limit, repository.as_deref())
+            .map_err(|err| {
+                error!("GitHub PR search failed: {err}");
+                format_cli_error(err)
+            })?;
 
-    Ok(prs.into_iter().map(map_pr_summary_payload).collect())
+        Ok(prs.into_iter().map(map_pr_summary_payload).collect())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
-async fn github_get_pr_details_impl<R: CommandRunner>(
+async fn github_get_pr_details_impl<R: CommandRunner + 'static>(
     project_manager: Arc<ProjectManager>,
-    cli: &GitHubCli<R>,
+    cli: GitHubCli<R>,
     number: u64,
 ) -> Result<GitHubPrDetailsPayload, String> {
     let project = resolve_project(project_manager).await?;
+    let project_path = project.path;
+    let repository = project.repository;
 
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let details = cli
-        .get_pr_with_comments(&project.path, number, project.repository.as_deref())
-        .map_err(|err| {
-            error!("GitHub PR detail fetch failed: {err}");
-            format_cli_error(err)
-        })?;
+        let details = cli
+            .get_pr_with_comments(&project_path, number, repository.as_deref())
+            .map_err(|err| {
+                error!("GitHub PR detail fetch failed: {err}");
+                format_cli_error(err)
+            })?;
 
-    Ok(map_pr_details_payload(details))
+        Ok(map_pr_details_payload(details))
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 struct ResolvedProject {
@@ -996,29 +1033,33 @@ async fn build_status() -> Result<GitHubStatusPayload, String> {
         Err(_) => None,
     };
 
-    let cli = GitHubCli::new();
-    let installed = match cli.ensure_installed() {
-        Ok(()) => true,
-        Err(GitHubCliError::NotInstalled) => false,
-        Err(err) => return Err(format_cli_error(err)),
-    };
-
-    let (authenticated, user_login) = if installed {
-        match cli.check_auth() {
-            Ok(status) => (status.authenticated, status.user_login),
-            Err(GitHubCliError::NotInstalled) => (false, None),
+    tokio::task::spawn_blocking(move || {
+        let cli = GitHubCli::new();
+        let installed = match cli.ensure_installed() {
+            Ok(()) => true,
+            Err(GitHubCliError::NotInstalled) => false,
             Err(err) => return Err(format_cli_error(err)),
-        }
-    } else {
-        (false, None)
-    };
+        };
 
-    Ok(GitHubStatusPayload {
-        installed,
-        authenticated,
-        user_login,
-        repository: repository_payload,
+        let (authenticated, user_login) = if installed {
+            match cli.check_auth() {
+                Ok(status) => (status.authenticated, status.user_login),
+                Err(GitHubCliError::NotInstalled) => (false, None),
+                Err(err) => return Err(format_cli_error(err)),
+            }
+        } else {
+            (false, None)
+        };
+
+        Ok(GitHubStatusPayload {
+            installed,
+            authenticated,
+            user_login,
+            repository: repository_payload,
+        })
     })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 fn emit_status(app: &AppHandle, status: &GitHubStatusPayload) -> Result<(), String> {
@@ -1215,7 +1256,7 @@ mod tests {
         let _home_guard = configure_repo(&manager, temp.path()).await;
 
         let results =
-            github_search_issues_impl(Arc::clone(&manager), &cli, Some(" bug ".to_string()), 20)
+            github_search_issues_impl(Arc::clone(&manager), cli, Some(" bug ".to_string()), 20)
                 .await
                 .expect("search results");
 
@@ -1240,7 +1281,7 @@ mod tests {
             .await
             .unwrap();
 
-        let err = github_get_issue_details_impl(Arc::clone(&manager), &cli, 11)
+        let err = github_get_issue_details_impl(Arc::clone(&manager), cli, 11)
             .await
             .expect_err("should require repo connection");
 
@@ -1262,7 +1303,7 @@ mod tests {
             .await
             .unwrap();
 
-        let err = github_search_issues_impl(Arc::clone(&manager), &cli, None, 20)
+        let err = github_search_issues_impl(Arc::clone(&manager), cli, None, 20)
             .await
             .expect_err("should require repo connection");
 
@@ -1290,7 +1331,7 @@ mod tests {
         init_repo(temp.path());
         let _home_guard = configure_repo(&manager, temp.path()).await;
 
-        let payload = github_get_issue_details_impl(Arc::clone(&manager), &cli, 5)
+        let payload = github_get_issue_details_impl(Arc::clone(&manager), cli, 5)
             .await
             .expect("issue details");
 
@@ -1321,7 +1362,7 @@ mod tests {
         init_repo(temp.path());
         let _home_guard = configure_repo(&manager, temp.path()).await;
 
-        let err = github_get_issue_details_impl(Arc::clone(&manager), &cli, 9)
+        let err = github_get_issue_details_impl(Arc::clone(&manager), cli, 9)
             .await
             .expect_err("should propagate CLI error");
 
