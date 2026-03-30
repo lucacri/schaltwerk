@@ -330,7 +330,7 @@ impl FileWatcher {
             worktree_path,
         );
 
-        // Also emit fresh git stats immediately so the session list updates without waiting for polling
+        crate::domains::git::stats::invalidate_stats_cache_for(worktree_path, base_branch);
         match git::calculate_git_stats_fast(worktree_path, base_branch) {
             Ok(stats) => {
                 let has_conflicts = match git::has_conflicts(worktree_path) {
