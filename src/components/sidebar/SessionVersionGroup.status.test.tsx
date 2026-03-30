@@ -10,14 +10,24 @@ vi.mock('./SessionCard', () => ({
   )
 }))
 
+vi.mock('./CompactVersionRow', () => ({
+  CompactVersionRow: ({ session }: { session: EnrichedSession }) => (
+    <div data-testid="compact-version-row">{session.info.session_id}</div>
+  )
+}))
+
 function createVersion({
   id,
   attentionRequired = false,
   sessionState = 'running',
+  currentTask = 'Shared task summary',
+  specContent,
 }: {
   id: string
   attentionRequired?: boolean
   sessionState?: 'spec' | 'running' | 'reviewed'
+  currentTask?: string
+  specContent?: string
 }): SessionVersionGroupType['versions'][number] {
   const info: EnrichedSession['info'] = {
     session_id: id,
@@ -32,7 +42,9 @@ function createVersion({
     session_type: 'worktree',
     ready_to_merge: false,
     attention_required: attentionRequired,
-    original_agent_type: 'claude'
+    original_agent_type: 'claude',
+    current_task: currentTask,
+    spec_content: specContent
   }
 
   return {
@@ -174,5 +186,63 @@ describe('SessionVersionGroup status summary', () => {
     )
 
     expect(queryByTestId('terminate-group-button')).toBeNull()
+  })
+
+  it('renders shared group task description once above compact version rows', () => {
+    const { getByText, getAllByTestId, queryAllByTestId } = render(
+      <SessionVersionGroup
+        group={baseGroup}
+        selection={{ kind: 'session', payload: 'unrelated' }}
+        startIndex={0}
+        {...requiredCallbacks}
+      />
+    )
+
+    expect(getByText('Shared task summary')).toBeInTheDocument()
+    expect(getAllByTestId('compact-version-row')).toHaveLength(2)
+    expect(queryAllByTestId('session-card')).toHaveLength(0)
+  })
+
+  it('does not render shared task summary when version descriptions differ', () => {
+    const mixedTasksGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', currentTask: 'Task one' }),
+        createVersion({ id: 'feature-A_v2', currentTask: 'Task two' }),
+      ],
+    }
+
+    const { queryByText } = render(
+      <SessionVersionGroup
+        group={mixedTasksGroup}
+        selection={{ kind: 'session', payload: 'unrelated' }}
+        startIndex={0}
+        {...requiredCallbacks}
+      />
+    )
+
+    expect(queryByText('Task one')).toBeNull()
+    expect(queryByText('Task two')).toBeNull()
+  })
+
+  it('does not render shared task summary when some versions have no description', () => {
+    const mixedCompletenessGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', currentTask: 'Task one' }),
+        createVersion({ id: 'feature-A_v2', currentTask: '' }),
+      ],
+    }
+
+    const { queryByText } = render(
+      <SessionVersionGroup
+        group={mixedCompletenessGroup}
+        selection={{ kind: 'session', payload: 'unrelated' }}
+        startIndex={0}
+        {...requiredCallbacks}
+      />
+    )
+
+    expect(queryByText('Task one')).toBeNull()
   })
 })

@@ -1,16 +1,13 @@
-import { memo, useCallback, type CSSProperties, type ReactNode } from "react";
+import { memo, useCallback, type CSSProperties } from "react";
 import { clsx } from "clsx";
 import { useAtomValue } from "jotai";
-import { invoke } from "@tauri-apps/api/core";
 import { VscIssues, VscGitPullRequest } from "react-icons/vsc";
 import { SessionActions } from "../session/SessionActions";
 import { SessionInfo, SessionMonitorStatus } from "../../types/session";
 import { UncommittedIndicator } from "../common/UncommittedIndicator";
 import { ProgressIndicator } from "../common/ProgressIndicator";
 import { InlineEditableText } from "../common/InlineEditableText";
-import { theme, getAgentColorScheme, type AgentColor } from "../../common/theme";
-import { typography } from "../../common/typography";
-import { TauriCommands } from "../../common/tauriCommands";
+import { theme, getAgentColorScheme } from "../../common/theme";
 import type { MergeStatus } from "../../store/atoms/sessions";
 import { lastAgentResponseMapAtom, agentResponseTickAtom, formatAgentResponseTime } from "../../store/atoms/lastAgentResponse";
 import { getSessionDisplayName } from "../../utils/sessionDisplayName";
@@ -20,7 +17,7 @@ import { KeyboardShortcutAction } from "../../keyboardShortcuts/config";
 import { detectPlatformSafe } from "../../keyboardShortcuts/helpers";
 import { useEpics } from "../../hooks/useEpics";
 import { useTranslation } from "../../common/i18n/useTranslation";
-import { logger } from "../../utils/logger";
+import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, sessionText } from './sessionCardStyles'
 
 interface SessionCardProps {
   session: {
@@ -170,119 +167,6 @@ export function getSessionCardSurfaceClasses({
   return { className, style }
 }
 
-export const getAgentColorKey = (
-  agent: string,
-): AgentColor => {
-  switch (agent) {
-    case "claude":
-      return "blue";
-    case "opencode":
-      return "green";
-    case "gemini":
-      return "orange";
-    case "droid":
-      return "violet";
-    case "codex":
-      return "red";
-    case "amp":
-      return "yellow";
-    case "kilocode":
-      return "yellow";
-    case "terminal":
-      return "yellow";
-    default:
-      return "red";
-  }
-};
-
-const sessionText = {
-  title: {
-    ...typography.heading,
-    fontWeight: 600,
-    color: "var(--color-text-primary)",
-  },
-  badge: {
-    ...typography.caption,
-    fontWeight: 600,
-    lineHeight: theme.lineHeight.compact,
-  },
-  meta: {
-    ...typography.caption,
-    color: "var(--color-text-tertiary)",
-  },
-  metaEmphasis: {
-    ...typography.caption,
-    color: "var(--color-text-secondary)",
-  },
-  agent: {
-    ...typography.body,
-    color: "var(--color-text-secondary)",
-  },
-  agentMuted: {
-    ...typography.caption,
-    color: "var(--color-text-secondary)",
-  },
-  statsLabel: {
-    ...typography.caption,
-    color: "var(--color-text-tertiary)",
-  },
-  statsNumber: {
-    ...typography.caption,
-    fontWeight: 600,
-  },
-};
-
-type MetadataBadgeTone = 'issue' | 'pr'
-
-function MetadataLinkBadge({
-  label,
-  url,
-  tone,
-  title,
-  onOpen,
-  children,
-}: {
-  label: string
-  url: string
-  tone: MetadataBadgeTone
-  title: string
-  onOpen: (url: string) => void
-  children: ReactNode
-}) {
-  const palette = tone === 'issue'
-    ? {
-        backgroundColor: 'var(--color-accent-green-bg)',
-        color: 'var(--color-accent-green-light)',
-        borderColor: 'var(--color-accent-green-border)',
-      }
-    : {
-        backgroundColor: 'var(--color-accent-violet-bg)',
-        color: 'var(--color-accent-violet-light)',
-        borderColor: 'var(--color-accent-violet-border)',
-      }
-
-  return (
-    <button
-      type="button"
-      className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded border flex-shrink-0 hover:brightness-110 active:opacity-80"
-      style={{
-        ...sessionText.badge,
-        ...palette,
-      }}
-      title={title}
-      aria-label={title}
-      onClick={(event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        onOpen(url)
-      }}
-    >
-      {children}
-      <span>{label}</span>
-    </button>
-  )
-}
-
 export const SessionCard = memo<SessionCardProps>(
   ({
     session,
@@ -405,12 +289,7 @@ export const SessionCard = memo<SessionCardProps>(
       [setItemEpic, s.session_id],
     );
     const handleOpenBadgeUrl = useCallback((url: string) => {
-      void invoke(TauriCommands.OpenExternalUrl, { url }).catch((error) => {
-        logger.error(`[SessionCard] Failed to open linked URL for session ${s.session_id}`, {
-          url,
-          error,
-        })
-      })
+      openMetadataLink(url, s.session_id, 'SessionCard')
     }, [s.session_id])
 
     const metadataBadges = (

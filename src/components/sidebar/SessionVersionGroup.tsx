@@ -1,11 +1,13 @@
 import { memo, useState } from 'react'
 import { clsx } from 'clsx'
 import { SessionCard } from './SessionCard'
+import { CompactVersionRow } from './CompactVersionRow'
 import { SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
 import { isSpec, mapSessionUiState } from '../../utils/sessionFilters'
 import { SessionSelection } from '../../hooks/useSessionManagement'
 import { ProgressIndicator } from '../common/ProgressIndicator'
 import type { MergeStatus } from '../../store/atoms/sessions'
+import { sessionText } from './sessionCardStyles'
 
 interface SessionVersionGroupProps {
   group: SessionVersionGroupType
@@ -195,6 +197,13 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   }).length
   const canConsolidate = runningOrReviewedCount >= 2
   const hasRunning = group.versions.some(v => v.session.info.session_state === 'running')
+  const versionDescriptions = group.versions
+    .map(version => (version.session.info.current_task || version.session.info.spec_content || '').trim())
+  const allDescriptionsPresent = versionDescriptions.every(Boolean)
+  const uniqueDescriptions = [...new Set(versionDescriptions)]
+  const sharedTaskDescription = allDescriptionsPresent && uniqueDescriptions.length === 1
+    ? uniqueDescriptions[0]
+    : undefined
 
   return (
     <div className="mb-3 relative">
@@ -342,59 +351,45 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
         </div>
         </button>
 
-        {/* Version list (expanded) with connecting lines */}
+        {sharedTaskDescription && (
+          <div className="px-3 pb-2">
+            <div
+              className="truncate"
+              style={{
+                ...sessionText.agent,
+                color: 'var(--color-text-primary)',
+              }}
+              title={sharedTaskDescription}
+            >
+              {sharedTaskDescription}
+            </div>
+          </div>
+        )}
+
         {isExpanded && (
           <div className="p-2 pt-0">
             <div className="relative pl-6">
-              {/* Vertical connector line */}
               <div className="absolute left-2 top-2 bottom-2 w-px bg-[rgba(var(--color-border-strong-rgb),0.5)]" />
-              
-              <div className="space-y-1">
-                 {group.versions.map((version, versionIndex) => {
-                   // Check if this version is selected either as a normal session or as a spec in spec mode
-                    const isSelected = (selection.kind === 'session' && selection.payload === version.session.info.session_id) ||
-                                     (isInSpecMode === true && isSpec(version.session.info) && currentSpecId === version.session.info.session_id)
-                    const versionAgentType = version.session.info.original_agent_type
-                    const displayName = versionAgentType ? `(v${version.versionNumber} • ${versionAgentType})` : `(v${version.versionNumber})`
-                    const willBeDeleted = isPreviewingDeletion && hasSelectedVersion && !isSelected
 
+              <div className="space-y-1">
+                {group.versions.map((version, versionIndex) => {
+                  const isSelected = (selection.kind === 'session' && selection.payload === version.session.info.session_id) ||
+                    (isInSpecMode === true && isSpec(version.session.info) && currentSpecId === version.session.info.session_id)
+                  const willBeDeleted = isPreviewingDeletion && hasSelectedVersion && !isSelected
                   const hoveredSession = group.versions.find(v => v.session.info.session_id === hoveredSessionId)?.session.info
-                  const isHighlighted = hoveredSession?.is_consolidation
+                  const isConsolidationSourceHighlighted = hoveredSession?.is_consolidation
                     ? hoveredSession.consolidation_sources?.includes(version.session.info.session_id)
-                    : (version.session.info.is_consolidation && version.session.info.consolidation_sources?.includes(hoveredSessionId || '')) || hoveredSessionId === version.session.info.session_id
+                    : false
+                  const isHighlighted = (version.session.info.is_consolidation && version.session.info.consolidation_sources?.includes(hoveredSessionId || ''))
+                    || hoveredSessionId === version.session.info.session_id
 
                   return (
-                    <div key={version.session.info.session_id} className="relative">
-                      {/* Horizontal connector from vertical line to session - aligned to button center */}
-                      <div className={clsx(
-                        "absolute -left-4 top-7 w-4 h-px",
-                        (hoveredSession?.is_consolidation && hoveredSession.consolidation_sources?.includes(version.session.info.session_id))
-                          ? "border-t border-dashed border-[rgba(var(--color-border-strong-rgb),0.8)]"
-                          : "bg-[rgba(var(--color-border-strong-rgb),0.5)]"
-                      )} />
-                      {/* Dot on the vertical line */}
-                      <div className={clsx(
-                        "absolute top-7 w-2 h-2 rounded-full border",
-                        isSelected
-                          ? "bg-[var(--color-accent-cyan)] border-[var(--color-accent-cyan-border)]"
-                          : (hoveredSession?.is_consolidation && hoveredSession.consolidation_sources?.includes(version.session.info.session_id))
-                            ? "bg-[var(--color-accent-purple)] border-[var(--color-accent-purple-border)]"
-                            : "bg-[var(--color-bg-hover)] border-[var(--color-border-strong)]"
-                      )} style={{ left: '-14px', transform: 'translate(-50%, -50%)' }} />
-                      
-                  <SessionCard
-              session={{
-                ...version.session,
-                info: {
-                  ...version.session.info,
-                  display_name: displayName
-                }
-              }}
-              index={startIndex + versionIndex}
-              isSelected={isSelected}
-
+                    <CompactVersionRow
+                      key={version.session.info.session_id}
+                      session={version.session}
+                      index={startIndex + versionIndex}
+                      isSelected={isSelected}
                       hasFollowUpMessage={hasFollowUpMessage(version.session.info.session_id)}
-                      isWithinVersionGroup={true}
                       showPromoteIcon={isSelected}
                       willBeDeleted={willBeDeleted}
                       isPromotionPreview={isPreviewingDeletion && isSelected}
@@ -414,9 +409,10 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                       onPromoteVersionHover={() => setIsPreviewingDeletion(true)}
                       onPromoteVersionHoverEnd={() => setIsPreviewingDeletion(false)}
                       onReset={onReset}
+                      onRestartTerminals={onRestartTerminals}
                       onSwitchModel={onSwitchModel}
                       onCreatePullRequest={onCreatePullRequest}
-        onCreateGitlabMr={onCreateGitlabMr}
+                      onCreateGitlabMr={onCreateGitlabMr}
                       isResetting={resettingSelection?.kind === 'session'
                         && resettingSelection.payload === version.session.info.session_id}
                       isRunning={isSessionRunning?.(version.session.info.session_id) || false}
@@ -426,13 +422,11 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                       mergeStatus={getMergeStatus?.(version.session.info.session_id) ?? 'idle'}
                       isMarkReadyDisabled={isMarkReadyDisabled}
                       isBusy={isSessionBusy?.(version.session.info.session_id) ?? false}
-                      onRename={onRename}
                       onLinkPr={onLinkPr}
-                      siblings={group.versions.map(v => v.session.info)}
                       onHover={setHoveredSessionId}
                       isHighlighted={isHighlighted}
-                      />
-                    </div>
+                      isConsolidationSourceHighlighted={Boolean(isConsolidationSourceHighlighted)}
+                    />
                   )
                 })}
               </div>
