@@ -3,8 +3,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { UnifiedDiffModal } from './UnifiedDiffModal'
 import { TestProviders, createChangedFile } from '../../tests/test-utils'
 import { TauriCommands } from '../../common/tauriCommands'
-import type { FileDiffData } from './loadDiffs'
+import type { FileDiffData, ViewMode } from './loadDiffs'
+import type { ChangedFile } from '../../common/events'
 import { SchaltEvent } from '../../common/eventSystem'
+import { diffPreloader } from '../../domains/diff/preloader'
 
 const invokeMock = vi.fn<(cmd: string, args?: unknown) => Promise<unknown>>()
 
@@ -22,7 +24,9 @@ const sampleDiff: FileDiffData = {
   fileInfo: { sizeBytes: 12, language: 'typescript' }
 }
 
-const loadFileDiffMock = vi.fn(async () => sampleDiff)
+const loadFileDiffMock = vi.fn<
+  (sessionName: string, file: ChangedFile, diffLayout: ViewMode) => Promise<FileDiffData>
+>(async () => sampleDiff)
 
 vi.mock('./loadDiffs', async () => {
   const actual = await vi.importActual<typeof import('./loadDiffs')>('./loadDiffs')
@@ -63,10 +67,31 @@ vi.mock('../../common/eventSystem', async () => {
   }
 })
 
+vi.mock('../../domains/diff/preloader', () => ({
+  diffPreloader: {
+    preload: vi.fn(),
+    invalidate: vi.fn(),
+    getChangedFiles: vi.fn(),
+    getFileDiff: vi.fn(),
+  },
+}))
+
 const changedFiles = [
   createChangedFile({ path: 'src/a.ts', change_type: 'modified', additions: 2, deletions: 0 }),
   createChangedFile({ path: 'src/b.ts', change_type: 'modified', additions: 3, deletions: 1 }),
 ]
+
+const staleDiff: FileDiffData = {
+  file: createChangedFile({ path: 'src/a.ts', change_type: 'modified', additions: 1 }),
+  diffResult: [
+    { type: 'unchanged', oldLineNumber: 1, newLineNumber: 1, content: 'const a = 1' },
+    { type: 'added', newLineNumber: 2, content: 'const stale = true' },
+  ],
+  changedLinesCount: 1,
+  fileInfo: { sizeBytes: 22, language: 'typescript' }
+}
+
+let staleCacheActive = false
 
 function setupInvokeMock() {
   invokeMock.mockImplementation(async (cmd: string, args?: unknown) => {
@@ -99,6 +124,29 @@ beforeEach(() => {
   invokeMock.mockReset()
   loadFileDiffMock.mockClear()
   fileChangeHandler = null
+  vi.mocked(diffPreloader.preload).mockReset()
+  vi.mocked(diffPreloader.invalidate).mockReset()
+  vi.mocked(diffPreloader.getChangedFiles).mockReset()
+  vi.mocked(diffPreloader.getFileDiff).mockReset()
+
+  staleCacheActive = false
+  vi.mocked(diffPreloader.invalidate).mockImplementation((sessionName: string) => {
+    if (sessionName === 'demo') {
+      staleCacheActive = false
+    }
+  })
+  vi.mocked(diffPreloader.getChangedFiles).mockImplementation((sessionName: string) => {
+    if (staleCacheActive && sessionName === 'demo') {
+      return changedFiles
+    }
+    return null
+  })
+  vi.mocked(diffPreloader.getFileDiff).mockImplementation((sessionName: string, filePath: string) => {
+    if (staleCacheActive && sessionName === 'demo' && filePath === 'src/a.ts') {
+      return staleDiff
+    }
+    return null
+  })
 })
 
 describe('UnifiedDiffModal sidebar stability', () => {
@@ -143,6 +191,55 @@ describe('UnifiedDiffModal sidebar stability', () => {
     await waitFor(() => {
       const modal = screen.getByTestId('diff-modal')
       expect(modal.dataset.selectedFile).toBe('src/b.ts')
+    })
+  })
+
+  it('invalidates stale preloader cache when file changes arrive', async () => {
+    setupInvokeMock()
+    staleCacheActive = true
+
+    render(
+      <TestProviders>
+        <UnifiedDiffModal filePath="src/a.ts" isOpen={true} onClose={() => {}} />
+      </TestProviders>
+    )
+
+    await waitFor(() => {
+      expect(typeof fileChangeHandler).toBe('function')
+    })
+
+    await waitFor(() => {
+      expect(vi.mocked(diffPreloader.getChangedFiles)).toHaveBeenCalledWith('demo')
+    })
+
+    const initialCallsForA = loadFileDiffMock.mock.calls.filter(
+      ([sessionName, file]) =>
+        sessionName === 'demo' && file.path === 'src/a.ts',
+    ).length
+
+    await act(async () => {
+      await fileChangeHandler?.({
+        session_name: 'demo',
+        changed_files: changedFiles,
+        branch_info: {
+          current_branch: 'feature/demo',
+          base_branch: 'main',
+          base_commit: 'abc123',
+          head_commit: 'def456',
+        },
+      })
+    })
+
+    await waitFor(() => {
+      expect(vi.mocked(diffPreloader.invalidate)).toHaveBeenCalledWith('demo')
+    })
+
+    await waitFor(() => {
+      const callsForAAfterEvent = loadFileDiffMock.mock.calls.filter(
+        ([sessionName, file]) =>
+          sessionName === 'demo' && file.path === 'src/a.ts',
+      ).length
+      expect(callsForAAfterEvent).toBeGreaterThan(initialCallsForA)
     })
   })
 })
