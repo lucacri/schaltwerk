@@ -1,6 +1,5 @@
 pub mod branches;
 pub mod clone;
-pub mod db_git_stats;
 pub mod forge;
 pub mod github_cli;
 pub mod gitlab_cli;
@@ -14,7 +13,6 @@ pub mod worktrees;
 #[cfg(test)]
 mod tests;
 
-pub use db_git_stats::*;
 pub use service::*;
 
 pub fn strip_ansi_codes(text: &str) -> String {

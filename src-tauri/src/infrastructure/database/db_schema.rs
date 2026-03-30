@@ -65,25 +65,6 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
     )?;
 
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS git_stats (
-            session_id TEXT PRIMARY KEY,
-            files_changed INTEGER NOT NULL,
-            lines_added INTEGER NOT NULL,
-            lines_removed INTEGER NOT NULL,
-            has_uncommitted BOOLEAN NOT NULL,
-            calculated_at INTEGER NOT NULL,
-            FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
-        )",
-        [],
-    )?;
-
-    // Migration: add has_conflicts column to git_stats
-    let _ = conn.execute(
-        "ALTER TABLE git_stats ADD COLUMN has_conflicts BOOLEAN NOT NULL DEFAULT FALSE",
-        [],
-    );
-
-    conn.execute(
         "CREATE TABLE IF NOT EXISTS app_config (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             skip_permissions BOOLEAN DEFAULT FALSE,
@@ -547,7 +528,6 @@ mod tests {
 
         let tables = [
             "sessions",
-            "git_stats",
             "app_config",
             "epics",
             "specs",
