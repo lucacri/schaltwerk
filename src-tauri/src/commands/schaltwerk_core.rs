@@ -1650,9 +1650,16 @@ pub async fn schaltwerk_core_update_git_stats(session_id: String) -> Result<(), 
     let core = get_core_write().await?;
     let manager = core.session_manager();
 
-    manager
-        .update_git_stats(&session_id)
-        .map_err(|e| format!("Failed to update git stats: {e}"))
+    let session = manager
+        .get_session_by_id(&session_id)
+        .map_err(|e| format!("Failed to get session for stats update: {e}"))?;
+
+    lucode::domains::git::service::calculate_git_stats_fast(
+        &session.worktree_path,
+        &session.parent_branch,
+    )
+    .map(|_| ())
+    .map_err(|e| format!("Failed to update git stats: {e}"))
 }
 
 #[tauri::command]
