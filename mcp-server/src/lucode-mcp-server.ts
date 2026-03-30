@@ -128,10 +128,6 @@ interface LucodeSetWorktreeBaseDirectoryArgs {
   worktree_base_directory: string
 }
 
-interface LucodeGetPrFeedbackArgs {
-  session_name: string
-}
-
 const bridge = new LucodeBridge()
 
  const server = new Server({
@@ -1107,7 +1103,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       }
 
       case "lucode_get_pr_feedback": {
-        const feedbackArgs = args as LucodeGetPrFeedbackArgs
+        const feedbackArgs = args as { session_name?: string }
         if (!feedbackArgs.session_name || feedbackArgs.session_name.trim().length === 0) {
           throw new McpError(ErrorCode.InvalidParams, "'session_name' is required when invoking lucode_get_pr_feedback.")
         }

@@ -209,6 +209,7 @@ impl AgentAdapter for OpenCodeAdapter {
     }
 
     fn build_launch_spec(&self, ctx: AgentLaunchContext) -> AgentLaunchSpec {
+        let initial_command = ctx.initial_prompt.map(|prompt| prompt.to_string());
         let session_info = ctx
             .session_id
             .map(|id| super::opencode::OpenCodeSessionInfo {
@@ -226,11 +227,12 @@ impl AgentAdapter for OpenCodeAdapter {
         let command = super::opencode::build_opencode_command_with_config(
             ctx.worktree_path,
             session_info.as_ref(),
-            ctx.initial_prompt,
+            None,
             ctx.skip_permissions,
             Some(&config),
         );
         AgentLaunchSpec::new(command, ctx.worktree_path.to_path_buf())
+            .with_initial_command(initial_command)
     }
 }
 
@@ -525,6 +527,11 @@ mod tests {
 
             let spec = adapter.build_launch_spec(ctx);
             assert!(spec.shell_command.contains("opencode"));
+            assert!(
+                !spec.shell_command.contains("--prompt"),
+                "prompt should be sent via initial_command, not embedded in shell command"
+            );
+            assert_eq!(spec.initial_command.as_deref(), Some("test prompt"));
         }
     }
 
