@@ -91,8 +91,8 @@ export const KEYBOARD_SHORTCUT_SECTIONS: ShortcutSection[] = [
       },
       {
         action: KeyboardShortcutAction.UpdateSessionFromParent,
-        label: 'Update from parent',
-        description: 'Pulls latest changes from parent branch and merges into current session.',
+        label: 'Update all from parent',
+        description: 'Pulls latest changes from parent branch and merges into all running sessions.',
       },
       { action: KeyboardShortcutAction.CreatePullRequest, label: 'Create pull request' },
     ],

@@ -259,7 +259,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const { handleMergeShortcut, isSessionMerging } = useSessionMergeShortcut({
         getCommitDraftForSession,
     })
-    const { updateSessionFromParent } = useUpdateSessionFromParent()
+    const { updateAllSessionsFromParent } = useUpdateSessionFromParent()
     const openMergeDialogWithPrefill = useSetAtom(openMergeDialogActionAtom)
 
     const [prDialogState, setPrDialogState] = useState<{
@@ -1372,7 +1372,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         onResetSelection: handleResetSelectionShortcut,
         onOpenSwitchModel: handleOpenSwitchModelShortcut,
         onOpenMergeModal: () => { void handleMergeShortcut() },
-        onUpdateSessionFromParent: () => { void updateSessionFromParent() },
+        onUpdateSessionFromParent: () => { void updateAllSessionsFromParent() },
         onCreatePullRequest: handleCreatePullRequestShortcut,
         onOpenSettings: () => { emitUiEvent(UiEvent.OpenSettings) },
         isDiffViewerOpen,

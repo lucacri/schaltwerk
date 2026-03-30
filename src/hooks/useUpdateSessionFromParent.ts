@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { useSelection } from './useSelection'
 import { useSessions } from './useSessions'
 import { useToast } from '../common/toast/ToastProvider'
 import { TauriCommands } from '../common/tauriCommands'
@@ -22,23 +21,14 @@ interface UpdateSessionFromParentResult {
   conflictingPaths: string[]
 }
 
+type SessionUpdateOutcome = 'updated' | 'up_to_date' | 'failed'
+
 export function useUpdateSessionFromParent() {
   const { pushToast } = useToast()
-  const { selection } = useSelection()
   const { sessions } = useSessions()
   const [isUpdating, setIsUpdating] = useState(false)
 
-  const updateSessionFromParent = useCallback(async () => {
-    if (selection.kind !== 'session' || !selection.payload) {
-      pushToast({
-        tone: 'warning',
-        title: 'No active session',
-        description: 'Select a running session to update from parent branch.',
-      })
-      return
-    }
-
-    const sessionName = selection.payload
+  const updateSessionFromParent = useCallback(async (sessionName: string) => {
     const session = sessions.find(s => s.info.session_id === sessionName)
     if (!session) {
       pushToast({
@@ -138,10 +128,105 @@ export function useUpdateSessionFromParent() {
     } finally {
       setIsUpdating(false)
     }
-  }, [selection, sessions, pushToast])
+  }, [sessions, pushToast])
+
+  const updateAllSessionsFromParent = useCallback(async () => {
+    const runningSessions = sessions.filter(session => !isSpec(session.info))
+
+    if (runningSessions.length === 0) {
+      pushToast({
+        tone: 'warning',
+        title: 'No running sessions',
+        description: 'There are no running sessions to update.',
+      })
+      return
+    }
+
+    setIsUpdating(true)
+    try {
+      const results = await Promise.allSettled(
+        runningSessions.map(async session => {
+          const result = await invoke<UpdateSessionFromParentResult>(
+            TauriCommands.SchaltwerkCoreUpdateSessionFromParent,
+            { name: session.info.session_id },
+          )
+
+          if (result.status === 'success') return 'updated' satisfies SessionUpdateOutcome
+          if (result.status === 'already_up_to_date') return 'up_to_date' satisfies SessionUpdateOutcome
+          return 'failed' satisfies SessionUpdateOutcome
+        }),
+      )
+
+      let updatedCount = 0
+      let upToDateCount = 0
+      let failedCount = 0
+      const failedNames: string[] = []
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          if (result.value === 'updated') {
+            updatedCount += 1
+            return
+          }
+
+          if (result.value === 'up_to_date') {
+            upToDateCount += 1
+            return
+          }
+        }
+
+        failedCount += 1
+        failedNames.push(getSessionDisplayName(runningSessions[index].info))
+      })
+
+      if (failedCount === 0 && updatedCount > 0) {
+        pushToast({
+          tone: 'success',
+          title: 'All sessions updated',
+          description: `${updatedCount} session${updatedCount === 1 ? '' : 's'} updated from parent${upToDateCount > 0 ? `, ${upToDateCount} already up to date` : ''}`,
+        })
+        return
+      }
+
+      if (failedCount === 0) {
+        pushToast({
+          tone: 'info',
+          title: 'All sessions up to date',
+          description: `${upToDateCount} session${upToDateCount === 1 ? ' is' : 's are'} already up to date`,
+        })
+        return
+      }
+
+      if (failedCount < runningSessions.length) {
+        pushToast({
+          tone: 'warning',
+          title: 'Some sessions had issues',
+          description: `${failedCount} failed: ${failedNames.join(', ')}`,
+        })
+        return
+      }
+
+      pushToast({
+        tone: 'error',
+        title: 'Update failed',
+        description: `All ${failedCount} session${failedCount === 1 ? '' : 's'} failed to update`,
+      })
+    } catch (error) {
+      logger.error('Failed to update sessions from parent', error)
+      const message = error instanceof Error ? error.message : String(error)
+      pushToast({
+        tone: 'error',
+        title: 'Update failed',
+        description: message,
+      })
+    } finally {
+      setIsUpdating(false)
+    }
+  }, [sessions, pushToast])
 
   return {
     updateSessionFromParent,
+    updateAllSessionsFromParent,
     isUpdating,
   }
 }
