@@ -11,7 +11,16 @@ description: Use when multiple Lucode sessions worked on the same spec and you n
 /lucode:consolidate session-name # target a specific spec group by name
 ```
 
-## Flow
+## Mode Detection
+
+This skill has two modes. Detect which one applies:
+
+- **Creation mode**: You are NOT in a consolidation session. The user invoked `/lucode:consolidate` to create one. Follow the "Creation Flow" below.
+- **Execution mode**: You ARE in a consolidation session (your branch/session name contains "consolidat" or you were dispatched with a consolidation prompt listing branches to review). Follow the "Execution Flow" below.
+
+---
+
+## Creation Flow
 
 ### Step 1: Discover sessions
 
@@ -50,7 +59,7 @@ Before creating, check if a session named `consolidate-{display_name}` already e
 Call `mcp__lucode__lucode_create` with:
 - `name`: the resolved unique name (sanitized: lowercase, spaces replaced with hyphens, max 50 chars)
 - `skip_permissions`: true
-- `prompt`: the consolidation prompt (see template below)
+- `prompt`: the consolidation prompt (see Prompt Template below)
 - `epic_id`: the `epic_id` from the selected group's sessions (use the first non-null `epic_id` found in the group). Omit if no sessions have an epic.
 
 If the call fails, report the error to the user and stop.
@@ -59,41 +68,69 @@ If the call fails, report the error to the user and stop.
 
 Output the created session name and branch. Tell the user to select the session in the Lucode app and start an agent to begin the consolidation work. Do NOT reference any slash commands like `/lucode list` or `/lucode status` — they do not exist.
 
-## Consolidation Prompt Template
+### Prompt Template
 
 The prompt passed to `lucode_create` should be:
 
 ```
-## Task: Consolidate {N} parallel implementations into one final version
-
 You are consolidating work from {N} parallel agent sessions that all worked on the same spec: {display_name}.
+
+Use the /lucode:consolidate skill to execute the consolidation.
 
 ### Branches to review
 
-{table of session name and branch}
+{table of session name, branch, and worktree path}
 
-### Instructions
+### Source sessions to cancel after consolidation
 
-1. **Review all {N} branches** - run `git diff main...{branch}` for each branch to understand what each agent implemented. Take notes on the approach, architecture, and completeness of each.
+{comma-separated list of session names, e.g.: session_v1, session_v2, session_v3}
 
-2. **Compare and rank** - identify which version has:
-   - Best architecture and code organization
-   - Cleanest code (following CLAUDE.md guidelines)
-   - Most complete implementation
-   - Best test coverage
-   - Note unique strengths from each version
-
-3. **Pick the best base** - cherry-pick or manually apply the best version's changes to your branch, then improve it by incorporating the strongest ideas/fixes from the other versions.
-
-4. **Validate** - run `just test` and ensure everything passes before considering the work done.
-
-If the user provided custom criteria in Step 3, include this section (omit entirely otherwise):
-
+{If custom criteria were provided in Step 3, include:}
 ### Additional criteria
 - {user's custom criteria, one bullet per item}
-
-### Important
-- Follow all CLAUDE.md guidelines
-- The final version should be the best possible synthesis of all {N} attempts
-- Do NOT just pick one version blindly - actively look for improvements from the others
 ```
+
+---
+
+## Execution Flow
+
+### Step 1: Review all branches
+
+For each branch listed in the prompt, run `git diff main...{branch}` to understand what each agent implemented. Use parallel subagents for efficiency. Take notes on each approach's architecture, completeness, and code quality.
+
+### Step 2: Compare and rank
+
+Identify which version has:
+- Best architecture and code organization
+- Cleanest code (following CLAUDE.md guidelines)
+- Most complete implementation
+- Best test coverage
+- Note unique strengths from each version
+
+### Step 3: Pick the best base and synthesize
+
+Cherry-pick or manually apply the best version's changes to your branch, then incorporate the strongest ideas/fixes from the other versions.
+
+**Important:**
+- Follow all CLAUDE.md guidelines
+- The final version should be the best possible synthesis of all attempts
+- Do NOT just pick one version blindly — actively look for improvements from the others
+
+### Step 4: Verify
+
+**REQUIRED:** Use the superpowers:verification-before-completion skill. Run `just test` (or the project's test command) and ensure everything passes. Do NOT proceed until tests are green. Pre-existing failures unrelated to your changes are acceptable — document them explicitly.
+
+### Step 5: Create squashed commit
+
+Stage all changes and create a single commit:
+- Use a conventional commit message (e.g., `feat:`, `fix:`, `refactor:`)
+- The message should describe WHAT the consolidated result achieves, not the consolidation process
+- Include `Co-Authored-By` trailer
+
+### Step 6: Cancel source sessions
+
+Cancel all source sessions listed in the prompt using `mcp__lucode__lucode_cancel` with `force: true` for each one.
+
+### Step 7: Finish
+
+**REQUIRED:** Use the superpowers:finishing-a-development-branch skill to present merge/PR options to the user.
