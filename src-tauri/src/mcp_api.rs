@@ -10,30 +10,34 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use url::form_urlencoded;
 
-use lucode::domains::settings::setup_script::SetupScriptService;
-use lucode::domains::git::service::{ForgeType, detect_forge};
-use lucode::infrastructure::database::Database;
-use lucode::infrastructure::database::SpecMethods;
-use crate::commands::github::{CreateSessionPrArgs, github_create_session_pr_impl};
+use crate::commands::github::{
+    CreateSessionPrArgs, GitHubPrFeedbackPayload, github_create_session_pr_impl,
+    github_get_pr_feedback_impl,
+};
 use crate::commands::gitlab::{CreateGitlabSessionMrArgs, gitlab_create_session_mr};
+use crate::commands::schaltwerk_core::agent_launcher;
 use crate::commands::schaltwerk_core::{
-    MergeCommandError, merge_session_with_events, schaltwerk_core_cancel_session,
+    MergeCommandError, StartAgentParams, merge_session_with_events, schaltwerk_core_cancel_session,
     schaltwerk_core_start_claude_orchestrator, schaltwerk_core_start_session_agent_with_restart,
-    StartAgentParams,
 };
 use crate::commands::sessions_refresh::{SessionsRefreshReason, request_sessions_refresh};
 use crate::mcp_api::diff_api::{DiffApiError, DiffChunkRequest, DiffScope, SummaryQuery};
-use crate::{REQUEST_PROJECT_OVERRIDE, get_core_read, get_core_write, get_project_manager, SETTINGS_MANAGER};
-use lucode::infrastructure::database::db_project_config::ProjectConfigMethods;
-use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
-use lucode::shared::terminal_id::terminal_id_for_orchestrator_top;
-use crate::commands::schaltwerk_core::agent_launcher;
+use crate::{
+    REQUEST_PROJECT_OVERRIDE, SETTINGS_MANAGER, get_core_read, get_core_write, get_project_manager,
+};
 use lucode::domains::attention::get_session_attention_state;
+use lucode::domains::git::service::{ForgeType, detect_forge};
 use lucode::domains::merge::MergeMode;
 use lucode::domains::sessions::entity::{Session, Spec};
-use lucode::infrastructure::events::{emit_event, SchaltEvent};
+use lucode::domains::settings::setup_script::SetupScriptService;
+use lucode::infrastructure::database::Database;
+use lucode::infrastructure::database::SpecMethods;
+use lucode::infrastructure::database::db_project_config::ProjectConfigMethods;
+use lucode::infrastructure::events::{SchaltEvent, emit_event};
+use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
 use lucode::schaltwerk_core::{SessionManager, SessionState};
 use lucode::services::SessionMethods;
+use lucode::shared::terminal_id::terminal_id_for_orchestrator_top;
 
 mod diff_api;
 
@@ -61,9 +65,7 @@ pub async fn handle_mcp_request(
             "MCP API request missing X-Project-Path header while {project_count} projects are open — falling back to active project"
         );
     } else {
-        debug!(
-            "MCP API request missing X-Project-Path header — falling back to active project"
-        );
+        debug!("MCP API request missing X-Project-Path header — falling back to active project");
     }
 
     handle_mcp_request_inner(req, app).await
@@ -103,6 +105,12 @@ async fn handle_mcp_request_inner(
         (&Method::GET, path) if path.starts_with("/api/sessions/") && path.ends_with("/spec") => {
             let name = extract_session_name_for_action(path, "/spec");
             get_session_spec(&name).await
+        }
+        (&Method::GET, path)
+            if path.starts_with("/api/sessions/") && path.ends_with("/pr-feedback") =>
+        {
+            let name = extract_session_name_for_action(path, "/pr-feedback");
+            get_session_pr_feedback(&name).await
         }
         (&Method::GET, "/api/sessions") => list_sessions(req).await,
         (&Method::GET, path) if path.starts_with("/api/sessions/") => {
@@ -270,7 +278,10 @@ where
         }
     }
     if let Err(e) = emit_sessions() {
-        warn!("Failed to emit SessionsRefreshed after creating spec '{}': {e}", params.name);
+        warn!(
+            "Failed to emit SessionsRefreshed after creating spec '{}': {e}",
+            params.name
+        );
     }
     Ok(session)
 }
@@ -814,8 +825,14 @@ mod tests {
         );
 
         let none_payload = worktree_base_directory_payload(None);
-        assert_eq!(none_payload["has_custom_directory"], serde_json::json!(false));
-        assert_eq!(none_payload["worktree_base_directory"], serde_json::json!(""));
+        assert_eq!(
+            none_payload["has_custom_directory"],
+            serde_json::json!(false)
+        );
+        assert_eq!(
+            none_payload["worktree_base_directory"],
+            serde_json::json!("")
+        );
 
         let empty = worktree_base_directory_payload(Some("   "));
         assert_eq!(empty["has_custom_directory"], serde_json::json!(false));
@@ -824,26 +841,22 @@ mod tests {
 
     #[test]
     fn parse_worktree_base_directory_request_returns_none_for_missing_field() {
-        let result =
-            parse_worktree_base_directory_request(b"{}").expect("empty body is valid");
+        let result = parse_worktree_base_directory_request(b"{}").expect("empty body is valid");
         assert!(result.is_none());
     }
 
     #[test]
     fn parse_worktree_base_directory_request_returns_none_for_empty_string() {
-        let result = parse_worktree_base_directory_request(
-            br#"{ "worktree_base_directory": "" }"#,
-        )
-        .expect("empty string is valid");
+        let result = parse_worktree_base_directory_request(br#"{ "worktree_base_directory": "" }"#)
+            .expect("empty string is valid");
         assert!(result.is_none());
     }
 
     #[test]
     fn parse_worktree_base_directory_request_returns_none_for_whitespace() {
-        let result = parse_worktree_base_directory_request(
-            br#"{ "worktree_base_directory": "   " }"#,
-        )
-        .expect("whitespace is valid");
+        let result =
+            parse_worktree_base_directory_request(br#"{ "worktree_base_directory": "   " }"#)
+                .expect("whitespace is valid");
         assert!(result.is_none());
     }
 
@@ -858,8 +871,7 @@ mod tests {
 
     #[test]
     fn parse_worktree_base_directory_request_rejects_invalid_json() {
-        let err =
-            parse_worktree_base_directory_request(b"not json").expect_err("invalid json");
+        let err = parse_worktree_base_directory_request(b"not json").expect_err("invalid json");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
@@ -1139,10 +1151,8 @@ mod tests {
 
     #[test]
     fn pull_request_request_deserialization() {
-        let payload: PullRequestRequest = serde_json::from_slice(
-            br#"{ "pr_title": "My PR", "cancel_after_pr": true }"#,
-        )
-        .unwrap();
+        let payload: PullRequestRequest =
+            serde_json::from_slice(br#"{ "pr_title": "My PR", "cancel_after_pr": true }"#).unwrap();
         assert_eq!(payload.pr_title, "My PR");
         assert!(payload.pr_body.is_none());
         assert!(payload.cancel_after_pr);
@@ -1250,6 +1260,86 @@ mod tests {
         assert_eq!(json["pending_confirmation"], false);
         assert_eq!(json["project_path"], "/tmp/project");
     }
+
+    #[test]
+    fn parse_pr_number_from_url_handles_standard_url() {
+        assert_eq!(
+            parse_pr_number_from_url("https://github.com/owner/repo/pull/123"),
+            Some(123)
+        );
+    }
+
+    #[test]
+    fn parse_pr_number_from_url_handles_query_string() {
+        assert_eq!(
+            parse_pr_number_from_url("https://github.com/owner/repo/pull/45?diff=unified"),
+            Some(45)
+        );
+    }
+
+    #[test]
+    fn parse_pr_number_from_url_handles_fragment() {
+        assert_eq!(
+            parse_pr_number_from_url("https://github.com/owner/repo/pull/7#discussion"),
+            Some(7)
+        );
+    }
+
+    #[test]
+    fn parse_pr_number_from_url_handles_trailing_slash() {
+        assert_eq!(
+            parse_pr_number_from_url("https://github.com/owner/repo/pull/10/"),
+            Some(10)
+        );
+    }
+
+    #[test]
+    fn parse_pr_number_from_url_returns_none_for_invalid() {
+        assert_eq!(parse_pr_number_from_url("not-a-url"), None);
+        assert_eq!(parse_pr_number_from_url("https://github.com/owner/repo/issues/5"), None);
+    }
+
+    #[test]
+    fn pr_feedback_response_success_path_returns_structured_json() {
+        let payload = crate::commands::github::GitHubPrFeedbackPayload {
+            state: "OPEN".to_string(),
+            is_draft: false,
+            review_decision: Some("APPROVED".to_string()),
+            latest_reviews: vec![crate::commands::github::GitHubPrReviewPayload {
+                author: Some("reviewer".to_string()),
+                state: "APPROVED".to_string(),
+                submitted_at: "2026-03-30T10:00:00Z".to_string(),
+            }],
+            status_checks: vec![
+                crate::commands::github::GitHubPrFeedbackStatusCheckPayload {
+                    name: "ci / unit".to_string(),
+                    status: "COMPLETED".to_string(),
+                    conclusion: Some("SUCCESS".to_string()),
+                    url: Some("https://example.com/check/1".to_string()),
+                },
+            ],
+            unresolved_threads: vec![],
+            resolved_thread_count: 2,
+        };
+
+        let response = pr_feedback_result_to_response(Ok(payload));
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let parsed: serde_json::Value = serde_json::from_str(response.body()).expect("valid JSON");
+        assert_eq!(parsed["state"], "OPEN");
+        assert_eq!(parsed["isDraft"], false);
+        assert_eq!(parsed["resolvedThreadCount"], 2);
+    }
+
+    #[test]
+    fn pr_feedback_response_error_path_returns_bad_request() {
+        let response =
+            pr_feedback_result_to_response(Err("GitHub CLI (gh) is not installed".to_string()));
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let parsed: serde_json::Value = serde_json::from_str(response.body()).expect("valid JSON");
+        assert_eq!(parsed["error"], "GitHub CLI (gh) is not installed");
+    }
 }
 
 async fn create_draft(
@@ -1282,10 +1372,18 @@ async fn create_draft(
     let agent_type = payload["agent_type"].as_str();
     let _skip_permissions = payload["skip_permissions"].as_bool();
     let epic_id = payload["epic_id"].as_str();
-    let issue_number = payload["issueNumber"].as_i64().or_else(|| payload["issue_number"].as_i64());
-    let issue_url = payload["issueUrl"].as_str().or_else(|| payload["issue_url"].as_str());
-    let pr_number = payload["prNumber"].as_i64().or_else(|| payload["pr_number"].as_i64());
-    let pr_url = payload["prUrl"].as_str().or_else(|| payload["pr_url"].as_str());
+    let issue_number = payload["issueNumber"]
+        .as_i64()
+        .or_else(|| payload["issue_number"].as_i64());
+    let issue_url = payload["issueUrl"]
+        .as_str()
+        .or_else(|| payload["issue_url"].as_str());
+    let pr_number = payload["prNumber"]
+        .as_i64()
+        .or_else(|| payload["pr_number"].as_i64());
+    let pr_url = payload["prUrl"]
+        .as_str()
+        .or_else(|| payload["pr_url"].as_str());
 
     let core = match get_core_write().await {
         Ok(core) => core,
@@ -1685,10 +1783,20 @@ async fn create_session(
     let agent_type = payload["agent_type"].as_str().map(|s| s.to_string());
     let skip_permissions = payload["skip_permissions"].as_bool();
     let epic_id = payload["epic_id"].as_str().map(|s| s.to_string());
-    let issue_number = payload["issueNumber"].as_i64().or_else(|| payload["issue_number"].as_i64());
-    let issue_url = payload["issueUrl"].as_str().or_else(|| payload["issue_url"].as_str()).map(|s| s.to_string());
-    let pr_number = payload["prNumber"].as_i64().or_else(|| payload["pr_number"].as_i64());
-    let pr_url = payload["prUrl"].as_str().or_else(|| payload["pr_url"].as_str()).map(|s| s.to_string());
+    let issue_number = payload["issueNumber"]
+        .as_i64()
+        .or_else(|| payload["issue_number"].as_i64());
+    let issue_url = payload["issueUrl"]
+        .as_str()
+        .or_else(|| payload["issue_url"].as_str())
+        .map(|s| s.to_string());
+    let pr_number = payload["prNumber"]
+        .as_i64()
+        .or_else(|| payload["pr_number"].as_i64());
+    let pr_url = payload["prUrl"]
+        .as_str()
+        .or_else(|| payload["pr_url"].as_str())
+        .map(|s| s.to_string());
 
     let core = match get_core_write().await {
         Ok(core) => core,
@@ -1873,6 +1981,78 @@ async fn get_session(name: &str) -> Result<Response<String>, hyper::Error> {
             ))
         }
     }
+}
+
+fn linked_pr_number(session: &Session) -> Option<u64> {
+    session
+        .pr_number
+        .and_then(|n| u64::try_from(n).ok())
+        .or_else(|| session.pr_url.as_deref().and_then(parse_pr_number_from_url))
+}
+
+fn parse_pr_number_from_url(url: &str) -> Option<u64> {
+    let trimmed = url.trim_end_matches('/');
+    let (_, tail) = trimmed.rsplit_once("/pull/")?;
+    let number_str = tail.split(['?', '#']).next()?.trim();
+    number_str.parse().ok()
+}
+
+fn pr_feedback_result_to_response(
+    result: Result<GitHubPrFeedbackPayload, String>,
+) -> Response<String> {
+    match result {
+        Ok(payload) => match serde_json::to_string(&payload) {
+            Ok(json) => json_response(StatusCode::OK, json),
+            Err(e) => json_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to serialize PR feedback response: {e}"),
+            ),
+        },
+        Err(message) => json_error_response(StatusCode::BAD_REQUEST, message),
+    }
+}
+
+async fn get_session_pr_feedback(name: &str) -> Result<Response<String>, hyper::Error> {
+    let core = match get_core_read().await {
+        Ok(core) => core,
+        Err(e) => {
+            error!("Failed to get core for PR feedback: {e}");
+            return Ok(json_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Internal error: {e}"),
+            ));
+        }
+    };
+
+    let session = match core.session_manager().get_session(name) {
+        Ok(session) => session,
+        Err(e) => {
+            return Ok(json_error_response(
+                StatusCode::NOT_FOUND,
+                format!("Session not found: {e}"),
+            ));
+        }
+    };
+
+    let pr_number = match linked_pr_number(&session) {
+        Some(n) => n,
+        None => {
+            return Ok(json_error_response(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                format!(
+                    "Session '{}' has no linked pull request. Link or create a PR first, then retry.",
+                    session.name
+                ),
+            ));
+        }
+    };
+    drop(core);
+
+    let project_manager = get_project_manager().await;
+    let cli = lucode::services::GitHubCli::new();
+
+    let result = github_get_pr_feedback_impl(project_manager, cli, pr_number).await;
+    Ok(pr_feedback_result_to_response(result))
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -2388,9 +2568,7 @@ async fn prepare_merge(
                     if session.session_state == SessionState::Spec {
                         return Ok(error_response(
                             StatusCode::BAD_REQUEST,
-                            format!(
-                                "Session '{name}' is a spec. Start the spec before merging."
-                            ),
+                            format!("Session '{name}' is a spec. Start the spec before merging."),
                         ));
                     }
                 }
@@ -2718,7 +2896,10 @@ async fn set_project_setup_script(
     }
 
     let response_payload = setup_script_payload(&setup_script);
-    Ok(json_response(StatusCode::ACCEPTED, response_payload.to_string()))
+    Ok(json_response(
+        StatusCode::ACCEPTED,
+        response_payload.to_string(),
+    ))
 }
 
 async fn get_project_worktree_base_directory(
@@ -3045,7 +3226,9 @@ struct ResetSelectionRequest {
     skip_permissions: Option<bool>,
 }
 
-fn parse_reset_selection_request(body_bytes: &[u8]) -> Result<ResetSelectionRequest, (StatusCode, String)> {
+fn parse_reset_selection_request(
+    body_bytes: &[u8],
+) -> Result<ResetSelectionRequest, (StatusCode, String)> {
     if body_bytes.is_empty() {
         return Ok(ResetSelectionRequest {
             selection: None,
@@ -3056,8 +3239,12 @@ fn parse_reset_selection_request(body_bytes: &[u8]) -> Result<ResetSelectionRequ
             skip_permissions: None,
         });
     }
-    serde_json::from_slice::<ResetSelectionRequest>(body_bytes)
-        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid JSON payload: {e}")))
+    serde_json::from_slice::<ResetSelectionRequest>(body_bytes).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!("Invalid JSON payload: {e}"),
+        )
+    })
 }
 
 async fn reset_selection(
@@ -3163,7 +3350,8 @@ async fn start_orchestrator_with_prompt(
     skip_prompt: bool,
 ) -> Result<String, String> {
     let Some(prompt) = prompt.filter(|p| !p.trim().is_empty()) else {
-        return schaltwerk_core_start_claude_orchestrator(app, terminal_id, None, None, agent_type).await;
+        return schaltwerk_core_start_claude_orchestrator(app, terminal_id, None, None, agent_type)
+            .await;
     };
     if skip_prompt {
         return schaltwerk_core_start_claude_orchestrator(app, terminal_id, None, None, agent_type)
@@ -3178,8 +3366,7 @@ async fn start_orchestrator_with_prompt(
         let settings = settings_manager.lock().await;
         let mut paths = std::collections::HashMap::new();
         for agent in [
-            "claude", "copilot", "codex", "opencode", "gemini", "droid", "qwen", "amp",
-            "kilocode",
+            "claude", "copilot", "codex", "opencode", "gemini", "droid", "qwen", "amp", "kilocode",
         ] {
             if let Ok(path) = settings.get_effective_binary_path(agent) {
                 paths.insert(agent.to_string(), path);
@@ -3190,12 +3377,9 @@ async fn start_orchestrator_with_prompt(
         std::collections::HashMap::new()
     };
 
-    let command_spec = manager.start_agent_in_orchestrator(
-        &binary_paths,
-        agent_type.as_deref(),
-        Some(prompt),
-    )
-    .map_err(|e| e.to_string())?;
+    let command_spec = manager
+        .start_agent_in_orchestrator(&binary_paths, agent_type.as_deref(), Some(prompt))
+        .map_err(|e| e.to_string())?;
     drop(core);
 
     let launch_result = agent_launcher::launch_in_terminal(
@@ -3229,10 +3413,7 @@ async fn reset_session_with_payload(
         } else if let Some(skip) = payload.skip_permissions
             && let Ok(session) = manager.get_session(name)
         {
-            let agent = session
-                .original_agent_type
-                .as_deref()
-                .unwrap_or("claude");
+            let agent = session.original_agent_type.as_deref().unwrap_or("claude");
             if let Err(e) = manager.set_session_original_settings(name, agent, skip) {
                 warn!("Failed to update session skip permissions for '{name}': {e}");
             } else {

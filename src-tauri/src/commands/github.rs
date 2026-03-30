@@ -4,13 +4,14 @@ use lucode::domains::git::service::rename_branch;
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::project_manager::ProjectManager;
 use lucode::schaltwerk_core::db_project_config::{ProjectConfigMethods, ProjectGithubConfig};
-use lucode::shared::session_metadata_gateway::SessionMetadataGateway;
 use lucode::services::{
     CommandRunner, CreatePrOptions, CreateSessionPrOptions, GitHubCli, GitHubCliError,
-    GitHubIssueComment, GitHubIssueDetails, GitHubIssueLabel, GitHubIssueSummary,
-    GitHubPrDetails, GitHubPrReview, GitHubPrReviewComment, GitHubPrSummary, GitHubStatusCheck,
-    MergeMode, PrCommitMode, PrContent, sanitize_branch_name,
+    GitHubIssueComment, GitHubIssueDetails, GitHubIssueLabel, GitHubIssueSummary, GitHubPrDetails,
+    GitHubPrFeedback, GitHubPrFeedbackComment, GitHubPrFeedbackStatusCheck, GitHubPrFeedbackThread,
+    GitHubPrReview, GitHubPrReviewComment, GitHubPrSummary, GitHubStatusCheck, MergeMode,
+    PrCommitMode, PrContent, sanitize_branch_name,
 };
+use lucode::shared::session_metadata_gateway::SessionMetadataGateway;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -127,6 +128,46 @@ pub struct GitHubPrReviewCommentPayload {
     pub created_at: String,
     pub html_url: String,
     pub in_reply_to_id: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPrFeedbackStatusCheckPayload {
+    pub name: String,
+    pub status: String,
+    pub conclusion: Option<String>,
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPrFeedbackCommentPayload {
+    pub id: String,
+    pub body: String,
+    pub author: Option<String>,
+    pub created_at: String,
+    pub url: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPrFeedbackThreadPayload {
+    pub id: String,
+    pub path: String,
+    pub line: Option<u64>,
+    pub comments: Vec<GitHubPrFeedbackCommentPayload>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitHubPrFeedbackPayload {
+    pub state: String,
+    pub is_draft: bool,
+    pub review_decision: Option<String>,
+    pub latest_reviews: Vec<GitHubPrReviewPayload>,
+    pub status_checks: Vec<GitHubPrFeedbackStatusCheckPayload>,
+    pub unresolved_threads: Vec<GitHubPrFeedbackThreadPayload>,
+    pub resolved_thread_count: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -402,7 +443,11 @@ pub async fn github_create_session_pr_impl(
                 Some(trimmed.to_string())
             }
         })
-        .or_else(|| repository_config.as_ref().map(|cfg| cfg.default_branch.clone()))
+        .or_else(|| {
+            repository_config
+                .as_ref()
+                .map(|cfg| cfg.default_branch.clone())
+        })
         .unwrap_or_else(|| "main".to_string());
 
     let repository = args
@@ -410,7 +455,11 @@ pub async fn github_create_session_pr_impl(
         .as_deref()
         .filter(|s| !s.trim().is_empty())
         .map(|s| s.to_string())
-        .or_else(|| repository_config.as_ref().map(|cfg| cfg.name_with_owner.clone()));
+        .or_else(|| {
+            repository_config
+                .as_ref()
+                .map(|cfg| cfg.name_with_owner.clone())
+        });
 
     let pr_branch_name = args
         .pr_branch_name
@@ -482,8 +531,8 @@ pub async fn github_create_session_pr_impl(
                 .get_session(&args.session_name)
                 .map_err(|e| format!("Failed to get session for branch update: {e}"))?;
 
-            if let Err(e) =
-                SessionMetadataGateway::new(core.database()).update_session_branch(&session.id, &pr_result.branch)
+            if let Err(e) = SessionMetadataGateway::new(core.database())
+                .update_session_branch(&session.id, &pr_result.branch)
             {
                 warn!(
                     "Failed to update session branch in database to '{}': {e}",
@@ -519,13 +568,7 @@ pub async fn github_search_issues(
 ) -> Result<Vec<GitHubIssueSummaryPayload>, String> {
     let manager = get_project_manager().await;
     let cli = GitHubCli::new();
-    github_search_issues_impl(
-        Arc::clone(&manager),
-        cli,
-        query,
-        ISSUE_SEARCH_DEFAULT_LIMIT,
-    )
-    .await
+    github_search_issues_impl(Arc::clone(&manager), cli, query, ISSUE_SEARCH_DEFAULT_LIMIT).await
 }
 
 #[tauri::command]
@@ -556,6 +599,16 @@ pub async fn github_get_pr_details(
     let manager = get_project_manager().await;
     let cli = GitHubCli::new();
     github_get_pr_details_impl(Arc::clone(&manager), cli, number).await
+}
+
+#[tauri::command]
+pub async fn github_get_pr_feedback(
+    _app: AppHandle,
+    number: u64,
+) -> Result<GitHubPrFeedbackPayload, String> {
+    let manager = get_project_manager().await;
+    let cli = GitHubCli::new();
+    github_get_pr_feedback_impl(Arc::clone(&manager), cli, number).await
 }
 
 #[tauri::command]
@@ -678,13 +731,19 @@ async fn github_get_pr_review_comments_impl<R: CommandRunner + 'static>(
                 format_cli_error(err)
             })?;
 
-        Ok(comments.into_iter().map(map_pr_review_comment_payload).collect())
+        Ok(comments
+            .into_iter()
+            .map(map_pr_review_comment_payload)
+            .collect())
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?
 }
 
-fn get_commit_info(worktree_path: &std::path::Path, base_branch: &str) -> Option<(usize, Vec<String>)> {
+fn get_commit_info(
+    worktree_path: &std::path::Path,
+    base_branch: &str,
+) -> Option<(usize, Vec<String>)> {
     use git2::Repository;
 
     let repo = Repository::open(worktree_path).ok()?;
@@ -709,10 +768,7 @@ fn get_commit_info(worktree_path: &std::path::Path, base_branch: &str) -> Option
     let mut summaries = Vec::new();
     for oid in revwalk.flatten() {
         if let Ok(commit) = repo.find_commit(oid) {
-            let summary = commit
-                .summary()
-                .unwrap_or("(no message)")
-                .to_string();
+            let summary = commit.summary().unwrap_or("(no message)").to_string();
             summaries.push(summary);
         }
     }
@@ -750,7 +806,12 @@ async fn github_search_issues_impl<R: CommandRunner + 'static>(
 
         let search_query = query.unwrap_or_default();
         let issues = cli
-            .search_issues(&project_path, search_query.trim(), limit, repository.as_deref())
+            .search_issues(
+                &project_path,
+                search_query.trim(),
+                limit,
+                repository.as_deref(),
+            )
             .map_err(|err| {
                 error!("GitHub issue search failed: {err}");
                 format_cli_error(err)
@@ -802,7 +863,12 @@ async fn github_search_prs_impl<R: CommandRunner + 'static>(
 
         let search_query = query.unwrap_or_default();
         let prs = cli
-            .search_prs(&project_path, search_query.trim(), limit, repository.as_deref())
+            .search_prs(
+                &project_path,
+                search_query.trim(),
+                limit,
+                repository.as_deref(),
+            )
             .map_err(|err| {
                 error!("GitHub PR search failed: {err}");
                 format_cli_error(err)
@@ -834,6 +900,31 @@ async fn github_get_pr_details_impl<R: CommandRunner + 'static>(
             })?;
 
         Ok(map_pr_details_payload(details))
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
+}
+
+pub async fn github_get_pr_feedback_impl<R: CommandRunner + 'static>(
+    project_manager: Arc<ProjectManager>,
+    cli: GitHubCli<R>,
+    number: u64,
+) -> Result<GitHubPrFeedbackPayload, String> {
+    let project = resolve_project(project_manager).await?;
+    let project_path = project.path;
+    let repository = project.repository;
+
+    tokio::task::spawn_blocking(move || {
+        cli.ensure_installed().map_err(format_cli_error)?;
+
+        let feedback = cli
+            .get_pr_feedback(&project_path, number, repository.as_deref())
+            .map_err(|err| {
+                error!("GitHub PR feedback fetch failed: {err}");
+                format_cli_error(err)
+            })?;
+
+        Ok(map_pr_feedback_payload(feedback))
     })
     .await
     .map_err(|e| format!("Task join error: {e}"))?
@@ -936,6 +1027,66 @@ fn map_pr_review_payload(review: GitHubPrReview) -> GitHubPrReviewPayload {
         author: review.author_login,
         state: review.state,
         submitted_at: review.submitted_at,
+    }
+}
+
+fn map_pr_feedback_status_check_payload(
+    check: GitHubPrFeedbackStatusCheck,
+) -> GitHubPrFeedbackStatusCheckPayload {
+    GitHubPrFeedbackStatusCheckPayload {
+        name: check.name,
+        status: check.status,
+        conclusion: check.conclusion,
+        url: check.url,
+    }
+}
+
+fn map_pr_feedback_comment_payload(
+    comment: GitHubPrFeedbackComment,
+) -> GitHubPrFeedbackCommentPayload {
+    GitHubPrFeedbackCommentPayload {
+        id: comment.id,
+        body: comment.body,
+        author: comment.author_login,
+        created_at: comment.created_at,
+        url: comment.url,
+    }
+}
+
+fn map_pr_feedback_thread_payload(thread: GitHubPrFeedbackThread) -> GitHubPrFeedbackThreadPayload {
+    GitHubPrFeedbackThreadPayload {
+        id: thread.id,
+        path: thread.path,
+        line: thread.line,
+        comments: thread
+            .comments
+            .into_iter()
+            .map(map_pr_feedback_comment_payload)
+            .collect(),
+    }
+}
+
+fn map_pr_feedback_payload(feedback: GitHubPrFeedback) -> GitHubPrFeedbackPayload {
+    GitHubPrFeedbackPayload {
+        state: feedback.state,
+        is_draft: feedback.is_draft,
+        review_decision: feedback.review_decision,
+        latest_reviews: feedback
+            .latest_reviews
+            .into_iter()
+            .map(map_pr_review_payload)
+            .collect(),
+        status_checks: feedback
+            .status_checks
+            .into_iter()
+            .map(map_pr_feedback_status_check_payload)
+            .collect(),
+        unresolved_threads: feedback
+            .unresolved_threads
+            .into_iter()
+            .map(map_pr_feedback_thread_payload)
+            .collect(),
+        resolved_thread_count: feedback.resolved_thread_count,
     }
 }
 

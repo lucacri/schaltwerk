@@ -118,6 +118,48 @@ describe('LucodeBridge untested methods', () => {
     })
   })
 
+  describe('getPrFeedback', () => {
+    it('fetches PR feedback for a session', async () => {
+      const payload = {
+        state: 'OPEN',
+        isDraft: false,
+        reviewDecision: 'CHANGES_REQUESTED',
+        latestReviews: [],
+        statusChecks: [
+          { name: 'ci / unit', status: 'COMPLETED', conclusion: 'FAILURE', url: 'https://example.com/check/1' }
+        ],
+        unresolvedThreads: [
+          {
+            id: 'thread-1',
+            path: 'src/lib.rs',
+            line: 10,
+            comments: [{ id: 'comment-1', body: 'Fix this', authorLogin: 'reviewer', createdAt: '2026-03-30T10:00:00Z', url: 'https://example.com/comment/1' }]
+          }
+        ],
+        resolvedThreadCount: 1
+      }
+      fetchMock.mockResolvedValue(createResponse(payload))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.getPrFeedback('my-session')
+
+      expect(result.state).toBe('OPEN')
+      expect(result.unresolvedThreads).toHaveLength(1)
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/sessions/my-session/pr-feedback')
+      expect(init?.method).toBe('GET')
+    })
+
+    it('propagates backend errors', async () => {
+      fetchMock.mockResolvedValue(
+        createErrorResponse(400, 'Bad Request', JSON.stringify({ error: 'Session has no linked pull request' }))
+      )
+
+      const bridge = new LucodeBridge()
+      await expect(bridge.getPrFeedback('missing-pr')).rejects.toThrow('Session has no linked pull request')
+    })
+  })
+
   describe('listEpics', () => {
     it('returns list of epics', async () => {
       const epics = [

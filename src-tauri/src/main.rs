@@ -17,8 +17,8 @@ mod cli;
 mod commands;
 mod diff_commands;
 pub mod errors;
-mod file_commands;
 mod events;
+mod file_commands;
 mod macos_prefs;
 mod mcp_api;
 mod permissions;
@@ -29,10 +29,10 @@ mod updater;
 use crate::commands::sessions_refresh::{SessionsRefreshReason, request_sessions_refresh};
 use crate::errors::SchaltError;
 use clap::Parser;
-use once_cell::sync::Lazy;
 use lucode::domains::power::global_service::{
     GlobalInhibitorService, set_global_keep_awake_service,
 };
+use lucode::domains::terminal::submission::submission_options_for_agent;
 use lucode::domains::{attention::AttentionStateRegistry, git::repository};
 use lucode::infrastructure::config::SettingsManager;
 use lucode::project_manager::ProjectManager;
@@ -42,8 +42,8 @@ use lucode::shared::terminal_id::{
     legacy_terminal_id_for_session_top, previous_hashed_terminal_id_for_session_top,
     previous_tilde_hashed_terminal_id_for_session_top, terminal_id_for_session_top,
 };
-use lucode::domains::terminal::submission::submission_options_for_agent;
 use lucode::utils::env_adapter::EnvAdapter;
+use once_cell::sync::Lazy;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::sync::{Mutex, OnceCell, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
@@ -1125,7 +1125,10 @@ fn build_app_menu<R: tauri::Runtime>(
         ],
     )?;
 
-    Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
+    Menu::with_items(
+        app,
+        &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu],
+    )
 }
 
 fn main() {
@@ -1188,15 +1191,15 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_os::init())
-        .plugin(tauri_plugin_updater::Builder::new()
-            .pubkey(UPDATER_PUBLIC_KEY.trim())
-        .build());
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .pubkey(UPDATER_PUBLIC_KEY.trim())
+                .build(),
+        );
 
     #[cfg(target_os = "macos")]
     let builder = builder
-        .menu(|app| {
-            build_app_menu(app)
-        })
+        .menu(|app| build_app_menu(app))
         .on_menu_event(|app, event| {
             if event.id() != MACOS_SELECT_ALL_MENU_ID {
                 return;
@@ -1218,6 +1221,7 @@ fn main() {
             github_get_issue_details,
             github_search_prs,
             github_get_pr_details,
+            github_get_pr_feedback,
             github_create_session_pr,
             github_preview_pr,
             github_get_pr_review_comments,

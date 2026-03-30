@@ -29,7 +29,8 @@ pub use crate::domains::git::{
     github_cli::{
         CommandOutput, CommandRunner, CreatePrOptions, CreateSessionPrOptions, GitHubCli,
         GitHubCliError, GitHubIssueComment, GitHubIssueDetails, GitHubIssueLabel,
-        GitHubIssueSummary, GitHubPrDetails, GitHubPrReview, GitHubPrReviewComment,
+        GitHubIssueSummary, GitHubPrDetails, GitHubPrFeedback, GitHubPrFeedbackComment,
+        GitHubPrFeedbackStatusCheck, GitHubPrFeedbackThread, GitHubPrReview, GitHubPrReviewComment,
         GitHubPrSummary, GitHubStatusCheck, PrCommitMode, PrContent, sanitize_branch_name,
     },
 };
@@ -38,28 +39,25 @@ pub use crate::domains::merge::{
     MergeMode, MergeOutcome, MergePreview, MergeService, UpdateFromParentStatus,
     UpdateSessionFromParentResult, types::MergeStateSnapshot, update_session_from_parent,
 };
+pub use crate::domains::network::diagnostics::{ConnectionVerdict, log_diagnostics};
 pub use crate::domains::power::types::GlobalState;
 pub use crate::domains::sessions::db_sessions::SessionMethods;
 pub use crate::domains::sessions::entity::EnrichedSession;
 pub use crate::domains::sessions::entity::{
     EnrichedSession as EnrichedSessionEntity, FilterMode, Session, SessionState, SortMode,
 };
-pub use crate::shared::format_branch_name;
 pub use crate::domains::settings::{
     AgentBinaryConfig, AgentPreference, AgentPreset, AgentPresetSlot, AgentVariant,
     ContextualAction, ContextualActionContext, ContextualActionMode, DiffViewPreferences,
-    McpServerConfig, SessionPreferences, TerminalSettings,
-    TerminalUIPreferences,
+    McpServerConfig, SessionPreferences, TerminalSettings, TerminalUIPreferences,
 };
 pub use crate::domains::terminal::TerminalSnapshot;
 pub use crate::domains::terminal::{
     build_login_shell_invocation_with_shell, get_effective_shell,
     manager::CreateTerminalWithAppAndSizeParams, sh_quote_string, shell_invocation_to_posix,
 };
-pub use crate::domains::network::diagnostics::{
-    ConnectionVerdict, log_diagnostics,
-};
 pub use crate::domains::workspace::get_project_files_with_status;
+pub use crate::shared::format_branch_name;
 
 pub type DynSessionsService = Arc<dyn SessionsServiceTrait>;
 pub type DynTerminalsService = Arc<dyn TerminalsServiceTrait>;
