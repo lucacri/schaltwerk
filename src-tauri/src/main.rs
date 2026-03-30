@@ -1199,7 +1199,7 @@ fn main() {
 
     #[cfg(target_os = "macos")]
     let builder = builder
-        .menu(|app| build_app_menu(app))
+        .menu(build_app_menu)
         .on_menu_event(|app, event| {
             if event.id() != MACOS_SELECT_ALL_MENU_ID {
                 return;

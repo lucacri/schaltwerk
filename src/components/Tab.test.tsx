@@ -62,13 +62,11 @@ describe('Tab', () => {
     expect(nameSpan.className).toContain('flex-1')
   })
 
-  it('shows running badge when runningCount > 0', () => {
+  it('shows running indicator when runningCount > 0', () => {
     render(<Tab {...mockProps} runningCount={3} />)
-    const badge = screen.getByTestId('running-badge')
-    expect(badge).toBeInTheDocument()
-    expect(badge.textContent).toBe('3')
-    expect(badge.style.backgroundColor).toBe('var(--color-tab-running-badge-bg)')
-    expect(badge.style.color).toBe('var(--color-tab-running-badge-text)')
+    const indicator = screen.getByTestId('running-indicator')
+    expect(indicator).toBeInTheDocument()
+    expect(screen.queryByTestId('running-badge')).toBeNull()
   })
 
   it('shows attention badge when attentionCount > 0', () => {
@@ -80,21 +78,20 @@ describe('Tab', () => {
     expect(badge.style.color).toBe('var(--color-tab-badge-text)')
   })
 
-  it('shows both badges when both counts > 0', () => {
+  it('shows both running indicator and attention badge when both counts > 0', () => {
     render(<Tab {...mockProps} runningCount={3} attentionCount={1} />)
-    expect(screen.getByTestId('running-badge')).toBeInTheDocument()
+    expect(screen.getByTestId('running-indicator')).toBeInTheDocument()
     expect(screen.getByTestId('attention-badge')).toBeInTheDocument()
   })
 
-  it('shows no badges when both counts are 0', () => {
+  it('shows no indicators when both counts are 0', () => {
     render(<Tab {...mockProps} runningCount={0} attentionCount={0} />)
-    expect(screen.queryByTestId('running-badge')).toBeNull()
+    expect(screen.queryByTestId('running-indicator')).toBeNull()
     expect(screen.queryByTestId('attention-badge')).toBeNull()
   })
 
-  it('caps badge display at 9+', () => {
-    render(<Tab {...mockProps} runningCount={15} attentionCount={12} />)
-    expect(screen.getByTestId('running-badge').textContent).toBe('9+')
+  it('caps attention badge display at 9+', () => {
+    render(<Tab {...mockProps} attentionCount={12} />)
     expect(screen.getByTestId('attention-badge').textContent).toBe('9+')
   })
 })

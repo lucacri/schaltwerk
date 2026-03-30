@@ -15,50 +15,52 @@ function formatBadgeLabel(count: number): string {
   return count > 9 ? '9+' : String(count)
 }
 
-function SessionBadges({ runningCount, attentionCount }: { runningCount?: number; attentionCount?: number }) {
-  const hasRunning = runningCount !== undefined && runningCount > 0
+function RunningIndicator() {
+  return (
+    <span
+      className="inline-flex items-center justify-center w-3 h-3 shrink-0"
+      data-testid="running-indicator"
+      aria-label="Running sessions active"
+      title="Running sessions active"
+    >
+      <span
+        className="w-2 h-2 rounded-full animate-pulse"
+        style={{
+          backgroundColor: 'var(--color-tab-running-indicator)',
+          boxShadow: '0 0 0 1px var(--color-tab-running-glow)',
+        }}
+      />
+    </span>
+  )
+}
+
+function SessionBadges({ attentionCount }: { attentionCount?: number }) {
   const hasAttention = attentionCount !== undefined && attentionCount > 0
 
-  if (!hasRunning && !hasAttention) return null
+  if (!hasAttention) return null
 
   return (
     <span className="inline-flex items-center gap-1 shrink-0">
-      {hasRunning && (
-        <span
-          className="inline-flex items-center justify-center px-1.5 rounded-full font-medium"
-          style={{
-            fontSize: theme.fontSize.caption,
-            height: '16px',
-            minWidth: '16px',
-            backgroundColor: 'var(--color-tab-running-badge-bg)',
-            color: 'var(--color-tab-running-badge-text)',
-          }}
-          data-testid="running-badge"
-        >
-          {formatBadgeLabel(runningCount!)}
-        </span>
-      )}
-      {hasAttention && (
-        <span
-          className="inline-flex items-center justify-center px-1.5 rounded-full font-medium"
-          style={{
-            fontSize: theme.fontSize.caption,
-            height: '16px',
-            minWidth: '16px',
-            backgroundColor: 'var(--color-tab-badge-bg)',
-            color: 'var(--color-tab-badge-text)',
-          }}
-          data-testid="attention-badge"
-        >
-          {formatBadgeLabel(attentionCount!)}
-        </span>
-      )}
+      <span
+        className="inline-flex items-center justify-center px-1.5 rounded-full font-medium"
+        style={{
+          fontSize: theme.fontSize.caption,
+          height: '16px',
+          minWidth: '16px',
+          backgroundColor: 'var(--color-tab-badge-bg)',
+          color: 'var(--color-tab-badge-text)',
+        }}
+        data-testid="attention-badge"
+      >
+        {formatBadgeLabel(attentionCount!)}
+      </span>
     </span>
   )
 }
 
 export function Tab({ projectPath, projectName, attentionCount, runningCount, isActive, onSelect, onClose }: TabProps) {
-  const hasAnyBadge = (runningCount ?? 0) > 0 || (attentionCount ?? 0) > 0
+  const hasRunning = (runningCount ?? 0) > 0
+  const hasAttention = (attentionCount ?? 0) > 0
 
   return (
     <UnifiedTab
@@ -72,7 +74,8 @@ export function Tab({ projectPath, projectName, attentionCount, runningCount, is
       style={{
         minWidth: '100px'
       }}
-      badgeContent={hasAnyBadge ? <SessionBadges runningCount={runningCount} attentionCount={attentionCount} /> : undefined}
+      statusIndicator={hasRunning ? <RunningIndicator /> : undefined}
+      badgeContent={hasAttention ? <SessionBadges attentionCount={attentionCount} /> : undefined}
     />
   )
 }
