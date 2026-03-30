@@ -18,6 +18,8 @@ import { startSessionTop, computeProjectOrchestratorId } from '../../common/agen
 import { releaseSessionTerminals } from '../../terminal/registry/terminalRegistry'
 import { logger } from '../../utils/logger'
 import { getErrorMessage } from '../../types/errors'
+import { closePreview } from '../../features/preview/previewIframeRegistry'
+import { buildPreviewKey, clearPreviewStateActionAtom } from './preview'
 
 type MergeModeOption = 'squash' | 'reapply'
 
@@ -1787,6 +1789,12 @@ export const initializeSessionsEventsActionAtom = atom(
                 const topId = stableSessionTerminalId(event.session_name, 'top')
                 const bottomId = stableSessionTerminalId(event.session_name, 'bottom')
                 clearTerminalStartState([topId, bottomId])
+                const projectPath = get(projectPathAtom)
+                if (projectPath) {
+                    const previewKey = buildPreviewKey(projectPath, 'session', event.session_name)
+                    closePreview(previewKey)
+                    set(clearPreviewStateActionAtom, previewKey)
+                }
                 const pending = new Map(get(pendingStartupsAtom))
                 if (pending.delete(event.session_name)) {
                     set(pendingStartupsAtom, pending)

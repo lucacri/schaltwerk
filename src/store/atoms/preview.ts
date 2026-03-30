@@ -120,3 +120,22 @@ export const setElementPickerActiveActionAtom = atom(
     set(elementPickerActiveKeysAtom, updated)
   }
 )
+
+export const clearPreviewStateActionAtom = atom(
+  null,
+  (get, set, key: string) => {
+    const previewStates = get(previewStatesAtom)
+    if (previewStates.has(key)) {
+      const updatedPreviewStates = new Map(previewStates)
+      updatedPreviewStates.delete(key)
+      set(previewStatesAtom, updatedPreviewStates)
+    }
+
+    const activePickerKeys = get(elementPickerActiveKeysAtom)
+    if (activePickerKeys.has(key)) {
+      const updatedPickerKeys = new Set(activePickerKeys)
+      updatedPickerKeys.delete(key)
+      set(elementPickerActiveKeysAtom, updatedPickerKeys)
+    }
+  }
+)
