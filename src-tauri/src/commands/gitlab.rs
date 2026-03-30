@@ -104,30 +104,34 @@ pub struct GitlabPipelinePayload {
 
 #[tauri::command]
 pub async fn gitlab_get_status(app: AppHandle) -> Result<GitlabStatusPayload, String> {
-    let cli = GitlabCli::new();
+    let payload = tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
 
-    let installed = match cli.ensure_installed() {
-        Ok(()) => true,
-        Err(GitlabCliError::NotInstalled) => false,
-        Err(err) => return Err(format_cli_error(err)),
-    };
-
-    let (authenticated, user_login, hostname) = if installed {
-        match cli.check_auth(None) {
-            Ok(status) => (status.authenticated, status.user_login, status.hostname),
-            Err(GitlabCliError::NotInstalled) => (false, None, None),
+        let installed = match cli.ensure_installed() {
+            Ok(()) => true,
+            Err(GitlabCliError::NotInstalled) => false,
             Err(err) => return Err(format_cli_error(err)),
-        }
-    } else {
-        (false, None, None)
-    };
+        };
 
-    let payload = GitlabStatusPayload {
-        installed,
-        authenticated,
-        user_login,
-        hostname,
-    };
+        let (authenticated, user_login, hostname) = if installed {
+            match cli.check_auth(None) {
+                Ok(status) => (status.authenticated, status.user_login, status.hostname),
+                Err(GitlabCliError::NotInstalled) => (false, None, None),
+                Err(err) => return Err(format_cli_error(err)),
+            }
+        } else {
+            (false, None, None)
+        };
+
+        Ok(GitlabStatusPayload {
+            installed,
+            authenticated,
+            user_login,
+            hostname,
+        })
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
 
     emit_gitlab_status(&app, &payload)?;
 
@@ -147,30 +151,33 @@ pub async fn gitlab_search_issues(
         .current_project()
         .await
         .map_err(|e| format!("No active project: {e}"))?;
+    let project_path = project.path.clone();
 
-    let cli = GitlabCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let search_query = query.unwrap_or_default();
-    let issues = cli
-        .search_issues(
-            &project.path,
-            search_query.trim(),
-            SEARCH_DEFAULT_LIMIT,
-            &source_project,
-            source_hostname.as_deref(),
-        )
-        .map_err(|err| {
-            error!("GitLab issue search failed: {err}");
-            format_cli_error(err)
-        })?;
+        let search_query = query.unwrap_or_default();
+        let issues = cli
+            .search_issues(
+                &project_path,
+                search_query.trim(),
+                SEARCH_DEFAULT_LIMIT,
+                &source_project,
+                source_hostname.as_deref(),
+            )
+            .map_err(|err| {
+                error!("GitLab issue search failed: {err}");
+                format_cli_error(err)
+            })?;
 
-    Ok(issues
-        .into_iter()
-        .map(|issue| map_issue_summary_payload(issue, &source_label))
-        .collect())
+        Ok(issues
+            .into_iter()
+            .map(|issue| map_issue_summary_payload(issue, &source_label))
+            .collect())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[tauri::command]
@@ -186,25 +193,28 @@ pub async fn gitlab_get_issue_details(
         .current_project()
         .await
         .map_err(|e| format!("No active project: {e}"))?;
+    let project_path = project.path.clone();
 
-    let cli = GitlabCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let details = cli
-        .get_issue_details(
-            &project.path,
-            iid,
-            &source_project,
-            source_hostname.as_deref(),
-        )
-        .map_err(|err| {
-            error!("GitLab issue detail fetch failed: {err}");
-            format_cli_error(err)
-        })?;
+        let details = cli
+            .get_issue_details(
+                &project_path,
+                iid,
+                &source_project,
+                source_hostname.as_deref(),
+            )
+            .map_err(|err| {
+                error!("GitLab issue detail fetch failed: {err}");
+                format_cli_error(err)
+            })?;
 
-    Ok(map_issue_details_payload(details, &source_label))
+        Ok(map_issue_details_payload(details, &source_label))
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[tauri::command]
@@ -220,30 +230,33 @@ pub async fn gitlab_search_mrs(
         .current_project()
         .await
         .map_err(|e| format!("No active project: {e}"))?;
+    let project_path = project.path.clone();
 
-    let cli = GitlabCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let search_query = query.unwrap_or_default();
-    let mrs = cli
-        .search_mrs(
-            &project.path,
-            search_query.trim(),
-            SEARCH_DEFAULT_LIMIT,
-            &source_project,
-            source_hostname.as_deref(),
-        )
-        .map_err(|err| {
-            error!("GitLab MR search failed: {err}");
-            format_cli_error(err)
-        })?;
+        let search_query = query.unwrap_or_default();
+        let mrs = cli
+            .search_mrs(
+                &project_path,
+                search_query.trim(),
+                SEARCH_DEFAULT_LIMIT,
+                &source_project,
+                source_hostname.as_deref(),
+            )
+            .map_err(|err| {
+                error!("GitLab MR search failed: {err}");
+                format_cli_error(err)
+            })?;
 
-    Ok(mrs
-        .into_iter()
-        .map(|mr| map_mr_summary_payload(mr, &source_label))
-        .collect())
+        Ok(mrs
+            .into_iter()
+            .map(|mr| map_mr_summary_payload(mr, &source_label))
+            .collect())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[tauri::command]
@@ -259,25 +272,28 @@ pub async fn gitlab_get_mr_details(
         .current_project()
         .await
         .map_err(|e| format!("No active project: {e}"))?;
+    let project_path = project.path.clone();
 
-    let cli = GitlabCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let details = cli
-        .get_mr_details(
-            &project.path,
-            iid,
-            &source_project,
-            source_hostname.as_deref(),
-        )
-        .map_err(|err| {
-            error!("GitLab MR detail fetch failed: {err}");
-            format_cli_error(err)
-        })?;
+        let details = cli
+            .get_mr_details(
+                &project_path,
+                iid,
+                &source_project,
+                source_hostname.as_deref(),
+            )
+            .map_err(|err| {
+                error!("GitLab MR detail fetch failed: {err}");
+                format_cli_error(err)
+            })?;
 
-    Ok(map_mr_details_payload(details, &source_label))
+        Ok(map_mr_details_payload(details, &source_label))
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[tauri::command]
@@ -292,25 +308,28 @@ pub async fn gitlab_get_mr_pipeline(
         .current_project()
         .await
         .map_err(|e| format!("No active project: {e}"))?;
+    let project_path = project.path.clone();
 
-    let cli = GitlabCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let pipeline = cli
-        .get_mr_pipeline_status(
-            &project.path,
-            &source_branch,
-            &source_project,
-            source_hostname.as_deref(),
-        )
-        .map_err(|err| {
-            error!("GitLab pipeline status fetch failed: {err}");
-            format_cli_error(err)
-        })?;
+        let pipeline = cli
+            .get_mr_pipeline_status(
+                &project_path,
+                &source_branch,
+                &source_project,
+                source_hostname.as_deref(),
+            )
+            .map_err(|err| {
+                error!("GitLab pipeline status fetch failed: {err}");
+                format_cli_error(err)
+            })?;
 
-    Ok(pipeline.map(map_pipeline_payload))
+        Ok(pipeline.map(map_pipeline_payload))
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -336,25 +355,28 @@ pub async fn gitlab_get_pipeline_jobs(
         .current_project()
         .await
         .map_err(|e| format!("No active project: {e}"))?;
+    let project_path = project.path.clone();
 
-    let cli = GitlabCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let jobs = cli
-        .get_pipeline_jobs(
-            &project.path,
-            &source_branch,
-            &source_project,
-            source_hostname.as_deref(),
-        )
-        .map_err(|err| {
-            error!("GitLab pipeline jobs fetch failed: {err}");
-            format_cli_error(err)
-        })?;
+        let jobs = cli
+            .get_pipeline_jobs(
+                &project_path,
+                &source_branch,
+                &source_project,
+                source_hostname.as_deref(),
+            )
+            .map_err(|err| {
+                error!("GitLab pipeline jobs fetch failed: {err}");
+                format_cli_error(err)
+            })?;
 
-    Ok(jobs.into_iter().map(map_pipeline_job_payload).collect())
+        Ok(jobs.into_iter().map(map_pipeline_job_payload).collect())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[tauri::command]
@@ -441,31 +463,34 @@ pub async fn gitlab_create_mr(
         .current_project()
         .await
         .map_err(|e| format!("No active project: {e}"))?;
+    let project_path = project.path.clone();
 
-    let cli = GitlabCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    let result = cli
-        .create_mr(CreateMrParams {
-            project_path: &project.path,
-            gitlab_project: &args.source_project,
-            title: &args.title,
-            description: args.description.as_deref(),
-            source_branch: &args.source_branch,
-            target_branch: &args.target_branch,
-            hostname: args.source_hostname.as_deref(),
+        let result = cli
+            .create_mr(CreateMrParams {
+                project_path: &project_path,
+                gitlab_project: &args.source_project,
+                title: &args.title,
+                description: args.description.as_deref(),
+                source_branch: &args.source_branch,
+                target_branch: &args.target_branch,
+                hostname: args.source_hostname.as_deref(),
+            })
+            .map_err(|err| {
+                error!("GitLab MR creation failed: {err}");
+                format_cli_error(err)
+            })?;
+
+        Ok(GitlabMrResultPayload {
+            source_branch: result.source_branch,
+            url: result.url,
         })
-        .map_err(|err| {
-            error!("GitLab MR creation failed: {err}");
-            format_cli_error(err)
-        })?;
-
-    Ok(GitlabMrResultPayload {
-        source_branch: result.source_branch,
-        url: result.url,
     })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[tauri::command]
@@ -480,22 +505,25 @@ pub async fn gitlab_approve_mr(
         .current_project()
         .await
         .map_err(|e| format!("No active project: {e}"))?;
+    let project_path = project.path.clone();
 
-    let cli = GitlabCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    cli.approve_mr(
-        &project.path,
-        iid,
-        &source_project,
-        source_hostname.as_deref(),
-    )
-    .map_err(|err| {
-        error!("GitLab MR approval failed: {err}");
-        format_cli_error(err)
+        cli.approve_mr(
+            &project_path,
+            iid,
+            &source_project,
+            source_hostname.as_deref(),
+        )
+        .map_err(|err| {
+            error!("GitLab MR approval failed: {err}");
+            format_cli_error(err)
+        })
     })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[tauri::command]
@@ -512,24 +540,27 @@ pub async fn gitlab_merge_mr(
         .current_project()
         .await
         .map_err(|e| format!("No active project: {e}"))?;
+    let project_path = project.path.clone();
 
-    let cli = GitlabCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    cli.merge_mr(
-        &project.path,
-        iid,
-        &source_project,
-        squash,
-        remove_source_branch,
-        source_hostname.as_deref(),
-    )
-    .map_err(|err| {
-        error!("GitLab MR merge failed: {err}");
-        format_cli_error(err)
+        cli.merge_mr(
+            &project_path,
+            iid,
+            &source_project,
+            squash,
+            remove_source_branch,
+            source_hostname.as_deref(),
+        )
+        .map_err(|err| {
+            error!("GitLab MR merge failed: {err}");
+            format_cli_error(err)
+        })
     })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[tauri::command]
@@ -545,23 +576,26 @@ pub async fn gitlab_comment_on_mr(
         .current_project()
         .await
         .map_err(|e| format!("No active project: {e}"))?;
+    let project_path = project.path.clone();
 
-    let cli = GitlabCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
+    tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
 
-    cli.comment_on_mr(
-        &project.path,
-        iid,
-        &source_project,
-        &message,
-        source_hostname.as_deref(),
-    )
-    .map_err(|err| {
-        error!("GitLab MR comment failed: {err}");
-        format_cli_error(err)
+        cli.comment_on_mr(
+            &project_path,
+            iid,
+            &source_project,
+            &message,
+            source_hostname.as_deref(),
+        )
+        .map_err(|err| {
+            error!("GitLab MR comment failed: {err}");
+            format_cli_error(err)
+        })
     })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))?
 }
 
 #[derive(Debug, Deserialize)]
@@ -594,11 +628,6 @@ pub async fn gitlab_create_session_mr(
     args: CreateGitlabSessionMrArgs,
 ) -> Result<GitlabSessionMrResultPayload, String> {
     use crate::commands::schaltwerk_core::schaltwerk_core_cancel_session;
-
-    let cli = GitlabCli::new();
-    if let Err(err) = cli.ensure_installed() {
-        return Err(format_cli_error(err));
-    }
 
     let project_manager = get_project_manager().await;
     let project = project_manager
@@ -652,31 +681,46 @@ pub async fn gitlab_create_session_mr(
         MergeMode::Reapply => MrCommitMode::Reapply,
     };
 
-    info!(
-        "Creating GitLab MR for session '{}' (branch='{}', base='{}', head='{}')",
-        args.session_name, session_branch, base_branch, mr_branch_name
-    );
+    let session_name = args.session_name.clone();
+    let mr_title = args.mr_title.clone();
+    let mr_body = args.mr_body.clone();
+    let commit_message = args.commit_message.clone();
+    let source_project = args.source_project.clone();
+    let source_hostname = args.source_hostname.clone();
+    let squash = args.squash;
+    let session_worktree_clone = session_worktree.clone();
+    let session_branch_clone = session_branch.clone();
 
-    let mr_result = cli
-        .create_session_mr(CreateSessionMrOptions {
+    let mr_result = tokio::task::spawn_blocking(move || {
+        let cli = GitlabCli::new();
+        cli.ensure_installed().map_err(format_cli_error)?;
+
+        info!(
+            "Creating GitLab MR for session '{session_name}' (branch='{session_branch_clone}', base='{base_branch}', head='{mr_branch_name}')"
+        );
+
+        cli.create_session_mr(CreateSessionMrOptions {
             repo_path: &project_path,
-            session_worktree_path: &session_worktree,
-            session_slug: &args.session_name,
-            session_branch: &session_branch,
+            session_worktree_path: &session_worktree_clone,
+            session_slug: &session_name,
+            session_branch: &session_branch_clone,
             base_branch: &base_branch,
             mr_branch_name: &mr_branch_name,
-            title: &args.mr_title,
-            description: args.mr_body.as_deref(),
-            gitlab_project: &args.source_project,
-            hostname: args.source_hostname.as_deref(),
-            squash: args.squash,
+            title: &mr_title,
+            description: mr_body.as_deref(),
+            gitlab_project: &source_project,
+            hostname: source_hostname.as_deref(),
+            squash,
             mode: mr_mode,
-            commit_message: args.commit_message.as_deref(),
+            commit_message: commit_message.as_deref(),
         })
         .map_err(|err| {
             error!("GitLab MR creation failed: {err}");
             format_cli_error(err)
-        })?;
+        })
+    })
+    .await
+    .map_err(|e| format!("Task join error: {e}"))??;
 
     if mr_result.source_branch != session_branch {
         info!(
@@ -709,7 +753,7 @@ pub async fn gitlab_create_session_mr(
             }
         }
 
-        emit_event(&app, SchaltEvent::SessionsRefreshed, &project_path)
+        emit_event(&app, SchaltEvent::SessionsRefreshed, &project.path)
             .map_err(|e| format!("Failed to emit sessions refresh: {e}"))?;
     }
 
