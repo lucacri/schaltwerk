@@ -31,6 +31,8 @@ const createSession = (id: string, createdAt: string, readyToMerge = false): Enr
   terminals: [],
 })
 
+const sessionRows = () => screen.getAllByRole('button').filter(button => button.hasAttribute('data-session-id'))
+
 describe('Sidebar session ordering and persistence', () => {
   let savedFilterMode: string = FilterMode.Running
   let lastPersistedSettings: Record<string, unknown> | null = null
@@ -87,21 +89,16 @@ describe('Sidebar session ordering and persistence', () => {
     )
 
     await waitFor(() => {
-      const sessionButtons = screen.getAllByRole('button').filter(btn => {
-        const text = btn.textContent || ''
-        return text.includes('para/') && !text.includes('main (orchestrator)')
-      })
-      expect(sessionButtons).toHaveLength(3)
+      expect(sessionRows()).toHaveLength(3)
     })
 
-    const orderedButtons = screen.getAllByRole('button').filter(btn => {
-      const text = btn.textContent || ''
-      return text.includes('para/') && !text.includes('main (orchestrator)')
-    })
+    const orderedButtons = sessionRows()
 
-    expect(orderedButtons[0]).toHaveTextContent('test_session_b') // newest
-    expect(orderedButtons[1]).toHaveTextContent('test_session_a')
-    expect(orderedButtons[2]).toHaveTextContent('test_session_c') // oldest
+    expect(orderedButtons.map(button => button.getAttribute('data-session-id'))).toEqual([
+      'test_session_b',
+      'test_session_a',
+      'test_session_c',
+    ])
   })
 
   it('shows reviewed sessions separately in reviewed filter', async () => {
@@ -118,12 +115,7 @@ describe('Sidebar session ordering and persistence', () => {
     fireEvent.click(screen.getByTitle('Show reviewed agents'))
 
     await waitFor(() => {
-      const sessionButtons = screen.getAllByRole('button').filter(btn => {
-        const text = btn.textContent || ''
-        return text.includes('para/') && !text.includes('main (orchestrator)')
-      })
-      expect(sessionButtons).toHaveLength(1)
-      expect(sessionButtons[0]).toHaveTextContent('reviewed_session')
+      expect(sessionRows().map(button => button.getAttribute('data-session-id'))).toEqual(['reviewed_session'])
     })
   })
 

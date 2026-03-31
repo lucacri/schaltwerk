@@ -340,31 +340,33 @@ impl FileWatcher {
                         false
                     }
                 };
-                let merge_snapshot = Repository::open(worktree_path)
+                let (merge_snapshot, commits_ahead_count) = Repository::open(worktree_path)
                     .ok()
                     .and_then(|repo| {
-                        let session_oid = repo.head().ok().and_then(|h| h.target());
+                        let session_oid = repo.head().ok().and_then(|h| h.target())?;
                         let parent_obj = repo.revparse_single(base_branch).ok()?;
                         let parent_oid = parent_obj.peel_to_commit().ok()?.id();
                         let branch_name = session_branch_name.clone();
-
-                        session_oid.and_then(|oid| {
-                            MergeSnapshotGateway::compute(
-                                &repo,
-                                oid,
-                                parent_oid,
-                                &branch_name,
-                                base_branch,
-                            )
-                            .map_err(|err| {
-                                log::debug!(
-                                    "Watcher merge assessment failed for {session_name}: {err}"
-                                );
-                            })
-                            .ok()
+                        let merge_snapshot = MergeSnapshotGateway::compute(
+                            &repo,
+                            session_oid,
+                            parent_oid,
+                            &branch_name,
+                            base_branch,
+                        )
+                        .map_err(|err| {
+                            log::debug!("Watcher merge assessment failed for {session_name}: {err}");
                         })
+                        .ok()?;
+                        let commits_ahead_count = crate::domains::merge::service::count_commits_ahead(
+                            &repo,
+                            session_oid,
+                            parent_oid,
+                        )
+                        .ok();
+                        Some((merge_snapshot, commits_ahead_count))
                     })
-                    .unwrap_or_default();
+                    .unwrap_or((Default::default(), None));
                 // Collect a small sample of uncommitted paths to help frontend tooltips
                 let sample = match crate::domains::git::operations::uncommitted_sample_paths(
                     worktree_path,
@@ -380,6 +382,8 @@ impl FileWatcher {
                     lines_added: stats.lines_added,
                     lines_removed: stats.lines_removed,
                     has_uncommitted: stats.has_uncommitted,
+                    dirty_files_count: Some(stats.dirty_files_count),
+                    commits_ahead_count,
                     has_conflicts,
                     top_uncommitted_paths: sample,
                     merge_has_conflicts: merge_snapshot.merge_has_conflicts,
