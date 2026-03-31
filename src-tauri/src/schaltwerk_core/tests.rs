@@ -905,7 +905,18 @@ fn test_list_enriched_sessions_computes_fresh_git_stats() {
     let s1 = manager.create_session("stats-a", None, None).unwrap();
     let _s2 = manager.create_session("stats-b", None, None).unwrap();
 
-    std::fs::write(s1.worktree_path.join("new_file.txt"), "hello\n").unwrap();
+    std::fs::write(s1.worktree_path.join("committed.txt"), "hello from commit\n").unwrap();
+    std::process::Command::new("git")
+        .args(["add", "."])
+        .current_dir(&s1.worktree_path)
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["commit", "-m", "session commit"])
+        .current_dir(&s1.worktree_path)
+        .output()
+        .unwrap();
+    std::fs::write(s1.worktree_path.join("dirty.txt"), "hello from dirty file\n").unwrap();
 
     let enriched = manager.list_enriched_sessions().unwrap();
     let session_a = enriched
@@ -921,6 +932,14 @@ fn test_list_enriched_sessions_computes_fresh_git_stats() {
     assert!(
         diff.additions > 0,
         "should report additions for new file"
+    );
+    assert!(
+        session_a.info.commits_ahead_count.unwrap_or_default() >= 1,
+        "should report commits ahead count for session branch"
+    );
+    assert!(
+        session_a.info.dirty_files_count.unwrap_or_default() >= 1,
+        "should report dirty file count for uncommitted files"
     );
 }
 

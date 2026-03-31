@@ -59,6 +59,8 @@ export interface SessionGitStatsUpdated {
   lines_added: number
   lines_removed: number
   has_uncommitted: boolean
+  dirty_files_count?: number
+  commits_ahead_count?: number
   has_conflicts?: boolean
   top_uncommitted_paths?: string[]
   merge_has_conflicts?: boolean

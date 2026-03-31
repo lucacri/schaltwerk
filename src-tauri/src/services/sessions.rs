@@ -184,6 +184,8 @@ mod tests {
                 created_at: Some(chrono::Utc::now()),
                 last_modified: None,
                 has_uncommitted_changes: Some(false),
+                dirty_files_count: None,
+                commits_ahead_count: None,
                 has_conflicts: Some(false),
                 is_current: false,
                 session_type: SessionType::Worktree,

@@ -22,6 +22,8 @@ vi.mock('../../utils/logger', () => ({
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
+const sessionRows = () => screen.getAllByRole('button').filter(button => button.hasAttribute('data-session-id'))
+
 
 async function press(key: string, opts: KeyboardEventInit = {}) {
   await act(async () => {
@@ -93,7 +95,7 @@ describe('Sidebar keyboard navigation basic', () => {
     await waitFor(() => {
       const items = screen.getAllByRole('button')
       expect(items.some(b => (b.textContent || '').includes('orchestrator'))).toBe(true)
-      expect(items.filter(b => (b.textContent || '').includes('para/'))).toHaveLength(3)
+      expect(sessionRows()).toHaveLength(3)
     })
 
     // Orchestrator selected by default (has blue ring class)

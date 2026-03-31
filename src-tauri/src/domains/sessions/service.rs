@@ -78,6 +78,19 @@ fn resolve_launch_agent(
     ))
 }
 
+fn compute_commits_ahead_count(
+    worktree_path: &Path,
+    session_branch: &str,
+    parent_branch: &str,
+) -> Option<u32> {
+    let repo = git2::Repository::open(worktree_path).ok()?;
+    let session_oid =
+        crate::domains::merge::service::resolve_branch_oid(&repo, session_branch).ok()?;
+    let parent_oid =
+        crate::domains::merge::service::resolve_branch_oid(&repo, parent_branch).ok()?;
+    crate::domains::merge::service::count_commits_ahead(&repo, session_oid, parent_oid).ok()
+}
+
 /// Info needed for session cancellation (extracted with brief lock, then released)
 pub struct SessionCancellationInfo {
     pub session: Session,
@@ -685,7 +698,7 @@ mod service_unified_tests {
             "resume should be gated off on first start"
         );
         assert!(
-            first_shell.contains("--prompt \"test prompt\""),
+            cmd_first.initial_command.as_deref() == Some("test prompt"),
             "first start should use initial prompt when resume is gated"
         );
 
@@ -716,8 +729,8 @@ mod service_unified_tests {
             "second start should resume once gate is lifted"
         );
         assert!(
-            !second_shell.contains("--prompt"),
-            "resume path should not include prompt"
+            cmd_second.initial_command.is_none(),
+            "resume path should not include an initial command"
         );
 
         if let Some(prev) = prev_home {
@@ -2593,6 +2606,8 @@ impl SessionManager {
                 created_at: Some(spec.created_at),
                 last_modified: Some(spec.updated_at),
                 has_uncommitted_changes: Some(false),
+                dirty_files_count: None,
+                commits_ahead_count: None,
                 has_conflicts: Some(false),
                 is_current: false,
                 session_type: SessionType::Worktree,
@@ -2657,6 +2672,8 @@ impl SessionManager {
                     created_at: Some(session.created_at),
                     last_modified: session.last_activity,
                     has_uncommitted_changes: Some(false),
+                    dirty_files_count: None,
+                    commits_ahead_count: None,
                     has_conflicts: Some(false),
                     is_current: false,
                     session_type: SessionType::Worktree,
@@ -2755,6 +2772,16 @@ impl SessionManager {
                 .as_ref()
                 .map(|s| s.has_uncommitted)
                 .unwrap_or(false);
+            let dirty_files_count = git_stats.as_ref().map(|s| s.dirty_files_count);
+            let commits_ahead_count = if worktree_exists {
+                compute_commits_ahead_count(
+                    &session.worktree_path,
+                    &session.branch,
+                    &session.parent_branch,
+                )
+            } else {
+                None
+            };
 
             let diff_stats = git_stats.as_ref().map(|stats| DiffStats {
                 files_changed: stats.files_changed as usize,
@@ -2806,6 +2833,8 @@ impl SessionManager {
                 created_at: Some(session.created_at),
                 last_modified: session.last_activity,
                 has_uncommitted_changes: Some(has_uncommitted),
+                dirty_files_count,
+                commits_ahead_count,
                 has_conflicts,
                 is_current: false,
                 session_type: SessionType::Worktree,
