@@ -966,7 +966,7 @@ fn run_git(current_dir: &Path, args: Vec<OsString>) -> Result<()> {
     Err(anyhow!(combined))
 }
 
-fn count_commits_ahead(repo: &Repository, session_oid: Oid, parent_oid: Oid) -> Result<u32> {
+pub(crate) fn count_commits_ahead(repo: &Repository, session_oid: Oid, parent_oid: Oid) -> Result<u32> {
     if session_oid == parent_oid {
         return Ok(0);
     }

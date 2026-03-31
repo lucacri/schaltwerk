@@ -200,6 +200,8 @@ mod tests {
                 pr_url: None,
                 is_consolidation: false,
                 consolidation_sources: None,
+                uncommitted_files_count: None,
+                commits_ahead_count: None,
             },
             status: None,
             terminals: vec![],

@@ -96,6 +96,11 @@ describe('CompactVersionRow', () => {
     expect(screen.getByRole('button', { name: 'Open PR #11' })).toBeInTheDocument()
     expect(screen.getByText('just now')).toBeInTheDocument()
     expect(screen.getByTestId('compact-row-status-running')).toBeInTheDocument()
+    expect(screen.queryByTestId('session-actions')).toBeNull()
+  })
+
+  it('shows session actions when selected (expanded)', () => {
+    renderRow({ isSelected: true })
     expect(screen.getByTestId('session-actions')).toBeInTheDocument()
   })
 

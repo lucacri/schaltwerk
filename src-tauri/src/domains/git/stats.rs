@@ -287,6 +287,15 @@ pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Re
         }
         true
     }) && !statuses.is_empty();
+    let uncommitted_files_count: u32 = statuses
+        .iter()
+        .filter(|entry| {
+            entry
+                .path()
+                .map(|p| !is_internal_tooling_path(p))
+                .unwrap_or(true)
+        })
+        .count() as u32;
     let has_conflicts_detected = statuses.iter().any(|entry| {
         entry.status().contains(git2::Status::CONFLICTED)
             && entry
@@ -455,6 +464,7 @@ pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Re
             lines_added: v.lines_added,
             lines_removed: v.lines_removed,
             has_uncommitted: has_uncommitted_filtered,
+            uncommitted_files_count,
             calculated_at: Utc::now(),
             last_diff_change_ts,
             has_conflicts: has_conflicts_detected,
@@ -574,6 +584,7 @@ pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Re
         lines_added: insertions,
         lines_removed: deletions,
         has_uncommitted: has_uncommitted_filtered,
+        uncommitted_files_count,
         calculated_at: Utc::now(),
         last_diff_change_ts,
         has_conflicts: has_conflicts_detected,

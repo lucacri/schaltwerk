@@ -504,6 +504,70 @@ fn test_list_enriched_sessions() {
     assert!(session1.terminals.contains(&expected_bottom));
 }
 
+#[cfg(test)]
+fn commit_all(repo_path: &std::path::Path, message: &str) {
+    let repo = git2::Repository::open(repo_path).unwrap();
+    let mut index = repo.index().unwrap();
+    index
+        .add_all(["*"], git2::IndexAddOption::DEFAULT, None)
+        .unwrap();
+    index.write().unwrap();
+
+    let tree_id = index.write_tree().unwrap();
+    let tree = repo.find_tree(tree_id).unwrap();
+    let parent = repo.head().unwrap().peel_to_commit().unwrap();
+    let signature = git2::Signature::now("Test User", "test@example.com").unwrap();
+
+    repo.commit(
+        Some("HEAD"),
+        &signature,
+        &signature,
+        message,
+        &tree,
+        &[&parent],
+    )
+    .unwrap();
+}
+
+#[test]
+fn test_list_enriched_sessions_includes_uncommitted_files_count() {
+    let env = TestEnvironment::new().unwrap();
+    let manager = env.get_session_manager().unwrap();
+
+    let session = manager.create_session("dirty-session", None, None).unwrap();
+    std::fs::write(session.worktree_path.join("notes.md"), "dirty\n").unwrap();
+
+    let enriched = manager.list_enriched_sessions().unwrap();
+    let dirty = enriched
+        .iter()
+        .find(|entry| entry.info.session_id == "dirty-session")
+        .unwrap();
+
+    assert_eq!(dirty.info.has_uncommitted_changes, Some(true));
+    assert!(
+        dirty.info.uncommitted_files_count.unwrap_or(0) > 0,
+        "should report uncommitted files count"
+    );
+}
+
+#[test]
+fn test_list_enriched_sessions_includes_commits_ahead_count() {
+    let env = TestEnvironment::new().unwrap();
+    let manager = env.get_session_manager().unwrap();
+
+    let session = manager.create_session("ahead-session", None, None).unwrap();
+    std::fs::write(session.worktree_path.join("ahead.txt"), "ahead\n").unwrap();
+    commit_all(&session.worktree_path, "ahead commit");
+
+    let enriched = manager.list_enriched_sessions().unwrap();
+    let ahead = enriched
+        .iter()
+        .find(|entry| entry.info.session_id == "ahead-session")
+        .unwrap();
+
+    assert_eq!(ahead.info.commits_ahead_count, Some(1));
+}
+
 #[test]
 fn test_epic_assignment_round_trip() {
     let env = TestEnvironment::new().unwrap();

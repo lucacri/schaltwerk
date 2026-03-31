@@ -53,6 +53,24 @@ fn agent_binary_available(agent: &str, binary_paths: &HashMap<String, String>) -
         .unwrap_or(false)
 }
 
+fn compute_commits_ahead_count(
+    worktree_path: &Path,
+    branch: &str,
+    parent_branch: &str,
+) -> Result<u32> {
+    if parent_branch.trim().is_empty() {
+        return Ok(0);
+    }
+
+    let repo = git2::Repository::open(worktree_path)?;
+    let session_ref = repo.find_branch(branch, git2::BranchType::Local)?;
+    let parent_ref = repo.find_branch(parent_branch, git2::BranchType::Local)?;
+    let session_oid = session_ref.get().peel_to_commit()?.id();
+    let parent_oid = parent_ref.get().peel_to_commit()?.id();
+
+    crate::domains::merge::service::count_commits_ahead(&repo, session_oid, parent_oid)
+}
+
 fn resolve_launch_agent(
     preferred: &str,
     binary_paths: &HashMap<String, String>,
@@ -2609,6 +2627,8 @@ impl SessionManager {
                 pr_url: spec.pr_url.clone(),
                 is_consolidation: false,
                 consolidation_sources: None,
+                uncommitted_files_count: Some(0),
+                commits_ahead_count: Some(0),
             };
 
             enriched.push(EnrichedSession {
@@ -2676,6 +2696,8 @@ impl SessionManager {
                     pr_url: session.pr_url.clone(),
                     is_consolidation: session.is_consolidation,
                     consolidation_sources: session.consolidation_sources.clone(),
+                    uncommitted_files_count: Some(0),
+                    commits_ahead_count: Some(0),
                 };
 
                 enriched.push(EnrichedSession {
@@ -2822,6 +2844,27 @@ impl SessionManager {
                 pr_url: session.pr_url.clone(),
                 is_consolidation: session.is_consolidation,
                 consolidation_sources: session.consolidation_sources.clone(),
+                uncommitted_files_count: git_stats
+                    .as_ref()
+                    .map(|s| s.uncommitted_files_count),
+                commits_ahead_count: if worktree_exists {
+                    match compute_commits_ahead_count(
+                        &session.worktree_path,
+                        &session.branch,
+                        &session.parent_branch,
+                    ) {
+                        Ok(count) => Some(count),
+                        Err(err) => {
+                            log::warn!(
+                                "Ahead-count computation failed for '{}': {err}",
+                                session.name
+                            );
+                            Some(0)
+                        }
+                    }
+                } else {
+                    Some(0)
+                },
             };
 
             let terminals = vec![

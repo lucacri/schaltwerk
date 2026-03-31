@@ -7,13 +7,15 @@ interface UncommittedIndicatorProps {
     samplePaths?: string[]
     className?: string
     label?: string
+    count?: number
 }
 
 export function UncommittedIndicator({
     sessionName,
     samplePaths,
     className,
-    label = 'dirty'
+    label,
+    count,
 }: UncommittedIndicatorProps) {
     const buttonRef = useRef<HTMLButtonElement>(null)
     const [showTooltip, setShowTooltip] = useState(false)
@@ -63,7 +65,7 @@ export function UncommittedIndicator({
                 <span className="relative flex items-center">
                     <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
                 </span>
-                <span style={{ lineHeight: theme.lineHeight.badge }}>{label}</span>
+                <span style={{ lineHeight: theme.lineHeight.badge }}>{label ?? (typeof count === 'number' ? `${count} dirty` : 'dirty')}</span>
             </button>
             {showTooltip && (
                 <div

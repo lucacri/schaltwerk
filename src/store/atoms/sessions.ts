@@ -1631,6 +1631,8 @@ export const initializeSessionsEventsActionAtom = atom(
                 merge_has_conflicts?: boolean
                 merge_is_up_to_date?: boolean
                 merge_conflicting_paths?: string[] | null
+                uncommitted_files_count?: number
+                commits_ahead_count?: number
             }
 
             if (!hasSessionInActiveProject(event.session_name)) {
@@ -1664,6 +1666,8 @@ export const initializeSessionsEventsActionAtom = atom(
                         merge_conflicting_paths: event.merge_conflicting_paths && event.merge_conflicting_paths.length > 0
                             ? event.merge_conflicting_paths
                             : session.info.merge_conflicting_paths,
+                        uncommitted_files_count: event.uncommitted_files_count ?? session.info.uncommitted_files_count,
+                        commits_ahead_count: event.commits_ahead_count ?? session.info.commits_ahead_count,
                     },
                 }
             }))

@@ -94,6 +94,8 @@ export interface SessionInfo {
     pr_url?: string
     is_consolidation?: boolean
     consolidation_sources?: string[]
+    uncommitted_files_count?: number
+    commits_ahead_count?: number
 }
 
 export interface DiffStats {

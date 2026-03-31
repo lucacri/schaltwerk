@@ -79,8 +79,9 @@ describe('Sidebar status indicators and actions', () => {
     const reviewedItem = screen.getAllByRole('button').find(b => /s2/.test(b.textContent || ''))!
     expect(reviewedItem).toHaveTextContent('Reviewed')
 
-    // Click Unmark
-    const unmarkCandidates = within(reviewedItem).getAllByRole('button', { name: /Unmark as reviewed/i })
+    fireEvent.click(reviewedItem)
+
+    const unmarkCandidates = await waitFor(() => within(reviewedItem).getAllByRole('button', { name: /Unmark as reviewed/i }))
     const unmarkBtn = unmarkCandidates.find(el => (el as HTMLElement).tagName === 'BUTTON') as HTMLElement
     fireEvent.click(unmarkBtn)
 
@@ -199,7 +200,10 @@ describe('Sidebar status indicators and actions', () => {
       expect(items.length).toBe(1)
     })
 
-    const cancelBtn = screen.getByRole('button', { name: /Cancel session/i })
+    const sessionCard = screen.getAllByRole('button').find(b => (b.textContent || '').includes('para/'))!
+    fireEvent.click(sessionCard)
+
+    const cancelBtn = await screen.findByRole('button', { name: /Cancel session/i })
 
     const eventSpy = vi.fn()
     window.addEventListener('schaltwerk:session-action', eventSpy as EventListener, { once: true })
@@ -266,7 +270,8 @@ describe('Sidebar status indicators and actions', () => {
     window.addEventListener(String(UiEvent.SessionAction), listener)
 
     const specButton = screen.getByText('Spec One').closest('[role="button"]') as HTMLElement
-    const deleteButton = within(specButton).getByLabelText(/Delete spec/i)
+    fireEvent.click(specButton)
+    const deleteButton = await waitFor(() => within(specButton).getByLabelText(/Delete spec/i))
     fireEvent.click(deleteButton)
 
     await waitFor(() => {
@@ -378,7 +383,10 @@ describe('Sidebar status indicators and actions', () => {
       expect(button).toBeTruthy()
     })
 
-    const convertButton = screen.getAllByRole('button', { name: /Move to spec/i })[0]
+    const sessionCard = screen.getAllByRole('button').find(b => /s1/.test(b.textContent || ''))!
+    fireEvent.click(sessionCard)
+
+    const convertButton = (await waitFor(() => screen.getAllByRole('button', { name: /Move to spec/i })))[0]
     fireEvent.click(convertButton)
 
     await waitFor(() => {

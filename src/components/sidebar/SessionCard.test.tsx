@@ -70,7 +70,7 @@ describe('SessionCard dirty indicator', () => {
     expect(indicator).toHaveAttribute('title')
   })
 
-  it('does not show dirty indicator for running sessions even when dirty', () => {
+  it('shows dirty indicator for running sessions with uncommitted changes', () => {
     const session: EnrichedSession = {
       ...baseSession,
       info: {
@@ -96,7 +96,8 @@ describe('SessionCard dirty indicator', () => {
       />
     )
 
-    expect(screen.queryByRole('button', { name: /has uncommitted changes/i })).toBeNull()
+    const indicator = screen.getByRole('button', { name: /has uncommitted changes/i })
+    expect(indicator).toBeInTheDocument()
   })
 
   it('does not show dirty indicator when has_uncommitted_changes is false for reviewed session', () => {
@@ -255,13 +256,117 @@ describe('SessionCard metadata badges', () => {
   })
 })
 
+describe('SessionCard expand/collapse', () => {
+  it('hides action buttons when card is not selected (collapsed)', () => {
+    renderWithProviders(
+      <SessionCard
+        session={baseSession}
+        index={0}
+        isSelected={false}
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+    expect(screen.queryByRole('button', { name: 'Mark as reviewed' })).toBeNull()
+  })
+
+  it('shows action buttons when card is selected (expanded)', () => {
+    renderWithProviders(
+      <SessionCard
+        session={baseSession}
+        index={0}
+        isSelected={true}
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Mark as reviewed' })).toBeInTheDocument()
+  })
+
+  it('collapses when already-selected card is clicked', () => {
+    const { container } = renderWithProviders(
+      <SessionCard
+        session={baseSession}
+        index={0}
+        isSelected={true}
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Mark as reviewed' })).toBeInTheDocument()
+    const card = container.querySelector('[data-session-id="s1"]')!
+    fireEvent.click(card)
+    expect(screen.queryByRole('button', { name: 'Mark as reviewed' })).toBeNull()
+  })
+})
+
+describe('SessionCard stats display', () => {
+  it('shows commits ahead count when available', () => {
+    renderWithProviders(
+      <SessionCard
+        session={{
+          ...baseSession,
+          info: {
+            ...baseSession.info,
+            commits_ahead_count: 5,
+          },
+        }}
+        index={0}
+        isSelected={false}
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+    expect(screen.getByTitle('5 commits ahead')).toBeInTheDocument()
+  })
+
+  it('shows uncommitted files count when available', () => {
+    renderWithProviders(
+      <SessionCard
+        session={{
+          ...baseSession,
+          info: {
+            ...baseSession.info,
+            uncommitted_files_count: 3,
+          },
+        }}
+        index={0}
+        isSelected={false}
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+    expect(screen.getByTitle('3 uncommitted files')).toBeInTheDocument()
+  })
+})
+
 describe('SessionCard review cooldown', () => {
   it('disables the mark reviewed action when mark ready is temporarily blocked', () => {
     renderWithProviders(
       <SessionCard
         session={baseSession}
         index={0}
-        isSelected={false}
+        isSelected={true}
 
         hasFollowUpMessage={false}
         onSelect={() => {}}

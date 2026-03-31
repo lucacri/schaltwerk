@@ -720,6 +720,8 @@ pub async fn merge_session_with_events(
                         merge_has_conflicts: merge_snapshot.merge_has_conflicts,
                         merge_conflicting_paths: merge_snapshot.merge_conflicting_paths,
                         merge_is_up_to_date: merge_snapshot.merge_is_up_to_date,
+                        uncommitted_files_count: None,
+                        commits_ahead_count: None,
                     };
 
                     if let Err(err) = emit_event(app, SchaltEvent::SessionGitStats, &payload) {
@@ -2548,6 +2550,8 @@ pub async fn schaltwerk_core_mark_session_ready(
             merge_has_conflicts: merge_snapshot.merge_has_conflicts,
             merge_conflicting_paths: merge_snapshot.merge_conflicting_paths,
             merge_is_up_to_date: merge_snapshot.merge_is_up_to_date,
+            uncommitted_files_count: None,
+            commits_ahead_count: None,
         };
 
         if let Err(err) = emit_event(&app, SchaltEvent::SessionGitStats, &payload) {

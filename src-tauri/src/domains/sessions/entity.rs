@@ -213,6 +213,8 @@ pub struct GitStats {
     pub lines_added: u32,
     pub lines_removed: u32,
     pub has_uncommitted: bool,
+    #[serde(default)]
+    pub uncommitted_files_count: u32,
     pub calculated_at: DateTime<Utc>,
     // Timestamp (unix seconds) of the most recent meaningful diff change:
     // max(latest commit ahead of base, latest mtime among uncommitted changed files)
@@ -324,6 +326,10 @@ pub struct SessionInfo {
     pub is_consolidation: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consolidation_sources: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uncommitted_files_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commits_ahead_count: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize)]

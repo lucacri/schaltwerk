@@ -148,6 +148,8 @@ impl<E: EventEmitter> ActivityTracker<E> {
                         merge_has_conflicts: merge_snapshot.merge_has_conflicts,
                         merge_conflicting_paths: merge_snapshot.merge_conflicting_paths,
                         merge_is_up_to_date: merge_snapshot.merge_is_up_to_date,
+                        uncommitted_files_count: None,
+                        commits_ahead_count: None,
                     };
                     let _ = self.emitter.emit_session_git_stats(payload);
 
@@ -250,6 +252,10 @@ pub struct SessionGitStatsUpdated {
     pub merge_conflicting_paths: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub merge_is_up_to_date: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uncommitted_files_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commits_ahead_count: Option<u32>,
 }
 
 pub fn start_activity_tracking_with_app(db: Arc<Database>, app: AppHandle) {
@@ -350,6 +356,8 @@ mod tests {
             merge_has_conflicts: None,
             merge_conflicting_paths: None,
             merge_is_up_to_date: None,
+            uncommitted_files_count: None,
+            commits_ahead_count: None,
         };
 
         mock_emitter
@@ -383,6 +391,8 @@ mod tests {
             merge_has_conflicts: Some(false),
             merge_conflicting_paths: None,
             merge_is_up_to_date: Some(true),
+            uncommitted_files_count: None,
+            commits_ahead_count: None,
         };
 
         assert_eq!(payload.session_id, "session-456");

@@ -1,4 +1,4 @@
-import { memo, useCallback, type CSSProperties } from "react";
+import { memo, useCallback, useState, useRef, type CSSProperties } from "react";
 import { clsx } from "clsx";
 import { useAtomValue } from "jotai";
 import { VscIssues, VscGitPullRequest } from "react-icons/vsc";
@@ -250,6 +250,14 @@ export const SessionCard = memo<SessionCardProps>(
       }
       return "Select session";
     };
+    const [userCollapsed, setUserCollapsed] = useState(false)
+    const prevSelectedRef = useRef(isSelected)
+    if (isSelected && !prevSelectedRef.current && userCollapsed) {
+      setUserCollapsed(false)
+    }
+    prevSelectedRef.current = isSelected
+    const isExpanded = isSelected && !userCollapsed
+
     const s = session.info;
     const color = getSessionStateColor(s.session_state);
     const sessionName = getSessionDisplayName(s);
@@ -268,8 +276,8 @@ export const SessionCard = memo<SessionCardProps>(
 
     const agentColor = getAgentColorKey(agentKey);
     const colorScheme = getAgentColorScheme(agentColor);
-    const showReviewedDirtyBadge =
-      isReviewedState && !isReadyToMerge && !!s.has_uncommitted_changes;
+    const showDirtyBadge =
+      sessionState !== 'spec' && !!s.has_uncommitted_changes;
 
     const surface = getSessionCardSurfaceClasses({
       sessionState,
@@ -329,13 +337,21 @@ export const SessionCard = memo<SessionCardProps>(
         aria-busy={isBusy}
         onClick={() => {
           if (isBusy) return;
-          onSelect(session.info.session_id);
+          if (isSelected) {
+            setUserCollapsed(prev => !prev);
+          } else {
+            onSelect(session.info.session_id);
+          }
         }}
         onKeyDown={(e) => {
           if (isBusy) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            onSelect(session.info.session_id);
+            if (isSelected) {
+              setUserCollapsed(prev => !prev);
+            } else {
+              onSelect(session.info.session_id);
+            }
           }
         }}
         onMouseEnter={() => onHover?.(session.info.session_id)}
@@ -442,11 +458,12 @@ export const SessionCard = memo<SessionCardProps>(
               </span>
             )}
 
-            {showReviewedDirtyBadge && (
+            {showDirtyBadge && (
               <UncommittedIndicator
                 className="flex-shrink-0"
                 sessionName={sessionName}
                 samplePaths={s.top_uncommitted_paths}
+                count={s.uncommitted_files_count ?? undefined}
               />
             )}
 
@@ -601,8 +618,30 @@ export const SessionCard = memo<SessionCardProps>(
                 </div>
               )}
               {metadataBadges}
-              <span style={{ color: "var(--color-accent-green-light)" }}>+{additions}</span>
-              <span style={{ color: "var(--color-accent-red-light)" }}>-{deletions}</span>
+              {(s.uncommitted_files_count ?? 0) > 0 && (
+                <span
+                  style={{
+                    ...sessionText.statsNumber,
+                    color: 'var(--color-accent-amber-light)',
+                  }}
+                  title={`${s.uncommitted_files_count} uncommitted files`}
+                >
+                  {s.uncommitted_files_count}⚡
+                </span>
+              )}
+              {(s.commits_ahead_count ?? 0) > 0 && (
+                <span
+                  style={{
+                    ...sessionText.statsNumber,
+                    color: 'var(--color-text-secondary)',
+                  }}
+                  title={`${s.commits_ahead_count} commits ahead`}
+                >
+                  {s.commits_ahead_count}↑
+                </span>
+              )}
+              <span style={{ ...sessionText.statsNumber, color: "var(--color-accent-green-light)" }}>+{additions}</span>
+              <span style={{ ...sessionText.statsNumber, color: "var(--color-accent-red-light)" }}>-{deletions}</span>
               <span className="truncate max-w-[120px]" title={s.branch}>
                 {s.branch}
               </span>
@@ -638,46 +677,52 @@ export const SessionCard = memo<SessionCardProps>(
             </div>
           </>
         )}
-        <div className="mt-2 flex items-center justify-between">
-          <SessionActions
-            sessionState={sessionState as "spec" | "running" | "reviewed"}
-            isReadyToMerge={isReadyToMerge}
-            sessionId={s.session_id}
-            sessionSlug={s.session_id}
-            worktreePath={s.worktree_path}
-            branch={s.branch}
-            defaultBranch={s.parent_branch ?? undefined}
-            showPromoteIcon={showPromoteIcon}
-            onCreatePullRequest={onCreatePullRequest}
-            onCreateGitlabMr={onCreateGitlabMr}
-            prNumber={s.pr_number}
-            prUrl={s.pr_url}
-            onRunSpec={onRunDraft}
-            onRefineSpec={onRefineSpec}
-            onDeleteSpec={onDeleteSpec}
-            onMarkReviewed={onMarkReady}
-            onUnmarkReviewed={onUnmarkReady}
-            onCancel={onCancel}
-            onConvertToSpec={onConvertToSpec}
-            onPromoteVersion={onPromoteVersion}
-            onPromoteVersionHover={onPromoteVersionHover}
-            onPromoteVersionHoverEnd={onPromoteVersionHoverEnd}
-            onReset={onReset}
-            onRestartTerminals={onRestartTerminals}
-            onSwitchModel={onSwitchModel}
-            isResetting={isResetting}
-            onMerge={onMerge}
-            onQuickMerge={onQuickMerge}
-            disableMerge={disableMerge}
-            mergeStatus={mergeStatus}
-            mergeConflictingPaths={s.merge_conflicting_paths}
-            isMarkReadyDisabled={isMarkReadyDisabled}
-            onLinkPr={onLinkPr}
-            epic={s.epic}
-            onEpicChange={handleEpicChange}
-            epicDisabled={isBusy}
-          />
-        </div>
+        {isExpanded && (
+          <div
+            className="mt-2 flex items-center justify-between"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <SessionActions
+              sessionState={sessionState as "spec" | "running" | "reviewed"}
+              isReadyToMerge={isReadyToMerge}
+              sessionId={s.session_id}
+              sessionSlug={s.session_id}
+              worktreePath={s.worktree_path}
+              branch={s.branch}
+              defaultBranch={s.parent_branch ?? undefined}
+              showPromoteIcon={showPromoteIcon}
+              onCreatePullRequest={onCreatePullRequest}
+              onCreateGitlabMr={onCreateGitlabMr}
+              prNumber={s.pr_number}
+              prUrl={s.pr_url}
+              onRunSpec={onRunDraft}
+              onRefineSpec={onRefineSpec}
+              onDeleteSpec={onDeleteSpec}
+              onMarkReviewed={onMarkReady}
+              onUnmarkReviewed={onUnmarkReady}
+              onCancel={onCancel}
+              onConvertToSpec={onConvertToSpec}
+              onPromoteVersion={onPromoteVersion}
+              onPromoteVersionHover={onPromoteVersionHover}
+              onPromoteVersionHoverEnd={onPromoteVersionHoverEnd}
+              onReset={onReset}
+              onRestartTerminals={onRestartTerminals}
+              onSwitchModel={onSwitchModel}
+              isResetting={isResetting}
+              onMerge={onMerge}
+              onQuickMerge={onQuickMerge}
+              disableMerge={disableMerge}
+              mergeStatus={mergeStatus}
+              mergeConflictingPaths={s.merge_conflicting_paths}
+              isMarkReadyDisabled={isMarkReadyDisabled}
+              onLinkPr={onLinkPr}
+              epic={s.epic}
+              onEpicChange={handleEpicChange}
+              epicDisabled={isBusy}
+            />
+          </div>
+        )}
       </div>
     );
 });

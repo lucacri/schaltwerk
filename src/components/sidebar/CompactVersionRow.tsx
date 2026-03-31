@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 import { useAtomValue } from 'jotai'
 import { VscIssues, VscGitPullRequest } from 'react-icons/vsc'
@@ -99,6 +99,17 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   useAtomValue(agentResponseTickAtom)
   const agentResponseTime = formatAgentResponseTime(agentResponseMap, session.info.session_id)
 
+  const [userCollapsed, setUserCollapsed] = useState(false)
+  const prevSelectedRef = useRef(isSelected)
+  if (isSelected && !prevSelectedRef.current) {
+    setUserCollapsed(false)
+  }
+  if (!isSelected && prevSelectedRef.current) {
+    setUserCollapsed(false)
+  }
+  prevSelectedRef.current = isSelected
+  const isExpanded = isSelected && !userCollapsed
+
   const s = session.info
   const additions = s.diff_stats?.insertions || s.diff_stats?.additions || 0
   const deletions = s.diff_stats?.deletions || 0
@@ -106,7 +117,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   const isReadyToMerge = s.ready_to_merge || false
   const sessionState = mapSessionUiState(s)
   const isReviewedState = sessionState === 'reviewed'
-  const showReviewedDirtyBadge = isReviewedState && !isReadyToMerge && !!s.has_uncommitted_changes
+  const showDirtyBadge = sessionState !== 'spec' && !!s.has_uncommitted_changes
   const agentType = s.original_agent_type as SessionInfo['original_agent_type']
   const agentKey = (agentType || '').toLowerCase()
 
@@ -262,13 +273,21 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
         data-session-selected={isSelected ? 'true' : 'false'}
         onClick={() => {
           if (isBusy) return
-          onSelect(s.session_id)
+          if (isSelected) {
+            setUserCollapsed(prev => !prev)
+          } else {
+            onSelect(s.session_id)
+          }
         }}
         onKeyDown={(event) => {
           if (isBusy) return
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
-            onSelect(s.session_id)
+            if (isSelected) {
+              setUserCollapsed(prev => !prev)
+            } else {
+              onSelect(s.session_id)
+            }
           }
         }}
         onMouseEnter={() => onHover?.(s.session_id)}
@@ -329,14 +348,37 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                     {agentKey}
                   </span>
                 )}
-                <span style={{ color: 'var(--color-accent-green-light)' }}>+{additions}</span>
-                <span style={{ color: 'var(--color-accent-red-light)' }}>-{deletions}</span>
+                {(s.uncommitted_files_count ?? 0) > 0 && (
+                  <span
+                    style={{
+                      ...sessionText.statsNumber,
+                      color: 'var(--color-accent-amber-light)',
+                    }}
+                    title={`${s.uncommitted_files_count} uncommitted files`}
+                  >
+                    {s.uncommitted_files_count}⚡
+                  </span>
+                )}
+                {(s.commits_ahead_count ?? 0) > 0 && (
+                  <span
+                    style={{
+                      ...sessionText.statsNumber,
+                      color: 'var(--color-text-secondary)',
+                    }}
+                    title={`${s.commits_ahead_count} commits ahead`}
+                  >
+                    {s.commits_ahead_count}↑
+                  </span>
+                )}
+                <span style={{ ...sessionText.statsNumber, color: 'var(--color-accent-green-light)' }}>+{additions}</span>
+                <span style={{ ...sessionText.statsNumber, color: 'var(--color-accent-red-light)' }}>-{deletions}</span>
                 {statusIndicator}
-                {showReviewedDirtyBadge && (
+                {showDirtyBadge && (
                   <UncommittedIndicator
                     className="flex-shrink-0"
                     sessionName={s.display_name ?? s.session_id}
                     samplePaths={s.top_uncommitted_paths}
+                    count={s.uncommitted_files_count ?? undefined}
                   />
                 )}
               </>
@@ -353,47 +395,49 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
             )}
           </div>
 
-          <div className="flex-shrink-0" onClick={(event) => event.stopPropagation()}>
-            <SessionActions
-              sessionState={sessionState as 'spec' | 'running' | 'reviewed'}
-              isReadyToMerge={isReadyToMerge}
-              sessionId={s.session_id}
-              sessionSlug={s.session_id}
-              worktreePath={s.worktree_path}
-              branch={s.branch}
-              defaultBranch={s.parent_branch ?? undefined}
-              showPromoteIcon={showPromoteIcon}
-              onCreatePullRequest={onCreatePullRequest}
-              onCreateGitlabMr={onCreateGitlabMr}
-              prNumber={s.pr_number}
-              prUrl={s.pr_url}
-              onRunSpec={onRunDraft}
-              onRefineSpec={onRefineSpec}
-              onDeleteSpec={onDeleteSpec}
-              onMarkReviewed={onMarkReady}
-              onUnmarkReviewed={onUnmarkReady}
-              onCancel={onCancel}
-              onConvertToSpec={onConvertToSpec}
-              onPromoteVersion={onPromoteVersion}
-              onPromoteVersionHover={onPromoteVersionHover}
-              onPromoteVersionHoverEnd={onPromoteVersionHoverEnd}
-              onReset={onReset}
-              onRestartTerminals={onRestartTerminals}
-              onSwitchModel={onSwitchModel}
-              isResetting={isResetting}
-              onMerge={onMerge}
-              onQuickMerge={onQuickMerge}
-              disableMerge={disableMerge}
-              mergeStatus={mergeStatus}
-              mergeConflictingPaths={s.merge_conflicting_paths}
-              isMarkReadyDisabled={isMarkReadyDisabled}
-              hasUncommittedChanges={s.has_uncommitted_changes}
-              onLinkPr={onLinkPr}
-              epic={s.epic}
-              onEpicChange={handleEpicChange}
-              epicDisabled={isBusy}
-            />
-          </div>
+          {isExpanded && (
+            <div className="flex-shrink-0" onClick={(event) => event.stopPropagation()}>
+              <SessionActions
+                sessionState={sessionState as 'spec' | 'running' | 'reviewed'}
+                isReadyToMerge={isReadyToMerge}
+                sessionId={s.session_id}
+                sessionSlug={s.session_id}
+                worktreePath={s.worktree_path}
+                branch={s.branch}
+                defaultBranch={s.parent_branch ?? undefined}
+                showPromoteIcon={showPromoteIcon}
+                onCreatePullRequest={onCreatePullRequest}
+                onCreateGitlabMr={onCreateGitlabMr}
+                prNumber={s.pr_number}
+                prUrl={s.pr_url}
+                onRunSpec={onRunDraft}
+                onRefineSpec={onRefineSpec}
+                onDeleteSpec={onDeleteSpec}
+                onMarkReviewed={onMarkReady}
+                onUnmarkReviewed={onUnmarkReady}
+                onCancel={onCancel}
+                onConvertToSpec={onConvertToSpec}
+                onPromoteVersion={onPromoteVersion}
+                onPromoteVersionHover={onPromoteVersionHover}
+                onPromoteVersionHoverEnd={onPromoteVersionHoverEnd}
+                onReset={onReset}
+                onRestartTerminals={onRestartTerminals}
+                onSwitchModel={onSwitchModel}
+                isResetting={isResetting}
+                onMerge={onMerge}
+                onQuickMerge={onQuickMerge}
+                disableMerge={disableMerge}
+                mergeStatus={mergeStatus}
+                mergeConflictingPaths={s.merge_conflicting_paths}
+                isMarkReadyDisabled={isMarkReadyDisabled}
+                hasUncommittedChanges={s.has_uncommitted_changes}
+                onLinkPr={onLinkPr}
+                epic={s.epic}
+                onEpicChange={handleEpicChange}
+                epicDisabled={isBusy}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

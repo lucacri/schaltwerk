@@ -41,6 +41,8 @@ const createBaseSessionInfo = (): SessionInfo => ({
     merge_conflicting_paths: undefined,
     merge_has_conflicts: undefined,
     merge_is_up_to_date: undefined,
+    uncommitted_files_count: undefined,
+    commits_ahead_count: undefined,
 })
 
 describe('sessionComparison', () => {
@@ -94,6 +96,18 @@ describe('sessionComparison', () => {
             expect(areSessionInfosEqual(session1, session2)).toBe(false)
         })
 
+        it('should return false when uncommitted_files_count differs', () => {
+            const session1 = { ...createBaseSessionInfo(), uncommitted_files_count: 3 }
+            const session2 = { ...createBaseSessionInfo(), uncommitted_files_count: 5 }
+            expect(areSessionInfosEqual(session1, session2)).toBe(false)
+        })
+
+        it('should return false when commits_ahead_count differs', () => {
+            const session1 = { ...createBaseSessionInfo(), commits_ahead_count: 2 }
+            const session2 = { ...createBaseSessionInfo(), commits_ahead_count: 7 }
+            expect(areSessionInfosEqual(session1, session2)).toBe(false)
+        })
+
         it('should handle undefined diff_stats', () => {
             const session1 = { ...createBaseSessionInfo(), diff_stats: undefined }
             const session2 = { ...createBaseSessionInfo(), diff_stats: undefined }
@@ -141,6 +155,8 @@ describe('sessionComparison', () => {
                 merge_conflicting_paths: ['c.ts'],
                 merge_has_conflicts: false,
                 merge_is_up_to_date: true,
+                uncommitted_files_count: 3,
+                commits_ahead_count: 5,
             }
             const session2 = { ...session }
             expect(areSessionInfosEqual(session, session2)).toBe(true)
