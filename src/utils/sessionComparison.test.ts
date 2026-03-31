@@ -96,6 +96,18 @@ describe('sessionComparison', () => {
             expect(areSessionInfosEqual(session1, session2)).toBe(false)
         })
 
+        it('should return false when dirty_files_count differs', () => {
+            const session1 = { ...createBaseSessionInfo(), dirty_files_count: 3 }
+            const session2 = { ...createBaseSessionInfo(), dirty_files_count: 5 }
+            expect(areSessionInfosEqual(session1, session2)).toBe(false)
+        })
+
+        it('should return false when commits_ahead_count differs', () => {
+            const session1 = { ...createBaseSessionInfo(), commits_ahead_count: 2 }
+            const session2 = { ...createBaseSessionInfo(), commits_ahead_count: 7 }
+            expect(areSessionInfosEqual(session1, session2)).toBe(false)
+        })
+
         it('should handle undefined diff_stats', () => {
             const session1 = { ...createBaseSessionInfo(), diff_stats: undefined }
             const session2 = { ...createBaseSessionInfo(), diff_stats: undefined }
