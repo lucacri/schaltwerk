@@ -3,11 +3,30 @@ import { screen, fireEvent } from '@testing-library/react'
 import { ForgePrDetail } from './ForgePrDetail'
 import { renderWithProviders } from '../../tests/test-utils'
 import { TauriCommands } from '../../common/tauriCommands'
+import { UiEvent } from '../../common/uiEvents'
 import type { ForgePrDetails, ForgeProviderData } from '../../types/forgeTypes'
+import type { ContextualAction } from '../../types/contextualAction'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }))
+
+const { mockUseContextualActions, mockEmitUiEvent } = vi.hoisted(() => ({
+  mockUseContextualActions: vi.fn(),
+  mockEmitUiEvent: vi.fn(),
+}))
+
+vi.mock('../../hooks/useContextualActions', () => ({
+  useContextualActions: () => mockUseContextualActions(),
+}))
+
+vi.mock('../../common/uiEvents', async () => {
+  const actual = await vi.importActual<typeof import('../../common/uiEvents')>('../../common/uiEvents')
+  return {
+    ...actual,
+    emitUiEvent: mockEmitUiEvent,
+  }
+})
 
 const { invoke } = await import('@tauri-apps/api/core')
 const mockedInvoke = vi.mocked(invoke)
@@ -51,6 +70,14 @@ describe('ForgePrDetail', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseContextualActions.mockReturnValue({
+      actions: [],
+      loading: false,
+      error: null,
+      saveActions: vi.fn(),
+      resetToDefaults: vi.fn(),
+      reloadActions: vi.fn(),
+    })
   })
 
   it('renders PR title with #id format', () => {
@@ -235,6 +262,77 @@ describe('ForgePrDetail', () => {
     const header = container.querySelector('[style*="border-bottom"]')
     expect(header).toBeTruthy()
     expect(header!.childNodes.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('uses unified pr variables for GitHub contextual actions', () => {
+    const actions: ContextualAction[] = [
+      {
+        id: 'review-pr',
+        name: 'Review PR',
+        context: 'pr',
+        promptTemplate: 'Author {{pr.author}} from {{pr.sourceBranch}} to {{pr.targetBranch}}. Diff: {{pr.diff}}',
+        mode: 'session',
+        isBuiltIn: false,
+      },
+    ]
+    mockUseContextualActions.mockReturnValue({
+      actions,
+      loading: false,
+      error: null,
+      saveActions: vi.fn(),
+      resetToDefaults: vi.fn(),
+      reloadActions: vi.fn(),
+    })
+
+    renderWithProviders(
+      <ForgePrDetail details={makeDetails()} onBack={onBack} forgeType="github" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    fireEvent.click(screen.getByText('Actions'))
+    fireEvent.click(screen.getByText('Review PR'))
+
+    expect(mockEmitUiEvent).toHaveBeenCalledWith(UiEvent.ContextualActionCreateSession, {
+      prompt: 'Author alice from feature/dark-mode to main. Diff: ',
+      actionName: 'Review PR',
+      agentType: undefined,
+      variantId: undefined,
+      presetId: undefined,
+    })
+  })
+
+  it('uses unified pr variables for GitLab contextual actions', () => {
+    const actions: ContextualAction[] = [
+      {
+        id: 'review-mr',
+        name: 'Review MR',
+        context: 'pr',
+        promptTemplate: '{{pr.title}} by {{pr.author}} from {{pr.sourceBranch}} to {{pr.targetBranch}} ({{pr.labels}})',
+        mode: 'spec',
+        isBuiltIn: false,
+      },
+    ]
+    mockUseContextualActions.mockReturnValue({
+      actions,
+      loading: false,
+      error: null,
+      saveActions: vi.fn(),
+      resetToDefaults: vi.fn(),
+      reloadActions: vi.fn(),
+    })
+
+    renderWithProviders(
+      <ForgePrDetail details={makeDetails({ providerData: gitlabProvider() })} onBack={onBack} forgeType="gitlab" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    fireEvent.click(screen.getByText('Actions'))
+    fireEvent.click(screen.getByText('Review MR'))
+
+    expect(mockEmitUiEvent).toHaveBeenCalledWith(UiEvent.ContextualActionCreateSpec, {
+      prompt: 'Add dark mode support by alice from feature/dark-mode to main (enhancement, ui)',
+      name: 'Review MR',
+    })
   })
 
   describe('GitHub-specific sections', () => {

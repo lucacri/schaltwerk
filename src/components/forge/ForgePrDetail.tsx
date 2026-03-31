@@ -346,7 +346,10 @@ export function ForgePrDetail({
   const contextVariables: Record<string, string> = {
     'pr.title': summary.title ?? '',
     'pr.description': details.body ?? '',
-    'pr.headRefName': summary.sourceBranch ?? '',
+    'pr.author': summary.author ?? '',
+    'pr.sourceBranch': summary.sourceBranch ?? '',
+    'pr.targetBranch': summary.targetBranch ?? '',
+    'pr.diff': '',
     'pr.url': summary.url ?? '',
     'pr.labels': summary.labels.map(l => l.name).join(', '),
   }

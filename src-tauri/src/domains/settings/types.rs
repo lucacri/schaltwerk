@@ -337,7 +337,7 @@ pub struct AgentPreset {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ContextualActionContext {
-    Mr,
+    #[serde(alias = "mr")]
     Pr,
     Issue,
     Both,
@@ -368,24 +368,30 @@ pub struct ContextualAction {
     pub is_built_in: bool,
 }
 
+pub fn normalize_contextual_action(action: ContextualAction) -> ContextualAction {
+    ContextualAction {
+        prompt_template: action
+            .prompt_template
+            .replace("{{mr.", "{{pr.")
+            .replace("pr.headRefName", "pr.sourceBranch"),
+        ..action
+    }
+}
+
+pub fn normalize_contextual_actions(actions: Vec<ContextualAction>) -> Vec<ContextualAction> {
+    actions
+        .into_iter()
+        .map(normalize_contextual_action)
+        .collect()
+}
+
 pub fn default_contextual_actions() -> Vec<ContextualAction> {
-    vec![
-        ContextualAction {
-            id: "builtin-review-mr".to_string(),
-            name: "Review this MR".to_string(),
-            context: ContextualActionContext::Mr,
-            prompt_template: "Review the following merge request:\n\nTitle: {{mr.title}}\nAuthor: {{mr.author}}\nSource: {{mr.sourceBranch}} -> {{mr.targetBranch}}\n\nDescription:\n{{mr.description}}\n\nDiff:\n{{mr.diff}}".to_string(),
-            mode: ContextualActionMode::Session,
-            agent_type: Some("claude".to_string()),
-            variant_id: None,
-            preset_id: None,
-            is_built_in: true,
-        },
+    normalize_contextual_actions(vec![
         ContextualAction {
             id: "builtin-review-pr".to_string(),
-            name: "Review this PR".to_string(),
+            name: "Review this PR/MR".to_string(),
             context: ContextualActionContext::Pr,
-            prompt_template: "Review the following pull request:\n\nTitle: {{pr.title}}\nBranch: {{pr.headRefName}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}".to_string(),
+            prompt_template: "Review the following pull request or merge request:\n\nTitle: {{pr.title}}\nAuthor: {{pr.author}}\nSource: {{pr.sourceBranch}} -> {{pr.targetBranch}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}\n\nDiff:\n{{pr.diff}}".to_string(),
             mode: ContextualActionMode::Session,
             agent_type: Some("claude".to_string()),
             variant_id: None,
@@ -403,7 +409,7 @@ pub fn default_contextual_actions() -> Vec<ContextualAction> {
             preset_id: None,
             is_built_in: true,
         },
-    ]
+    ])
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

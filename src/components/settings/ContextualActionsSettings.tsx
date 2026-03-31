@@ -5,7 +5,7 @@ import { useAgentPresets } from '../../hooks/useAgentPresets'
 import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
 import { generateId } from '../../common/generateId'
 import type { ContextualAction, ContextualActionContext, ContextualActionMode } from '../../types/contextualAction'
-import { MR_TEMPLATE_VARIABLES, ISSUE_TEMPLATE_VARIABLES } from '../../types/contextualAction'
+import { PR_TEMPLATE_VARIABLES, ISSUE_TEMPLATE_VARIABLES } from '../../types/contextualAction'
 
 function createEmptyAction(): ContextualAction {
     return {
@@ -83,7 +83,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
 
     const getTemplateVars = useCallback((context: ContextualActionContext) => {
         const vars: string[] = []
-        if (context === 'mr' || context === 'both') vars.push(...MR_TEMPLATE_VARIABLES)
+        if (context === 'pr' || context === 'both') vars.push(...PR_TEMPLATE_VARIABLES)
         if (context === 'issue' || context === 'both') vars.push(...ISSUE_TEMPLATE_VARIABLES)
         return [...new Set(vars)]
     }, [])
@@ -140,7 +140,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
             </div>
 
             <p className="text-caption text-text-tertiary">
-                {'Define actions that appear on MR and Issue detail views. Use {{variable}} syntax in templates to inject context.'}
+                {'Define actions that appear on PR/MR and issue detail views. Use {{variable}} syntax in templates to inject context.'}
             </p>
 
             {currentActions.length === 0 && (
@@ -197,7 +197,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                             type="text"
                                             value={action.name}
                                             onChange={e => handleUpdate(action.id, { name: e.target.value })}
-                                            placeholder="e.g. Review this MR"
+                                            placeholder="e.g. Review this PR/MR"
                                             className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body"
                                         />
                                     </div>
@@ -209,8 +209,8 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                                 onChange={e => handleUpdate(action.id, { context: e.target.value as ContextualActionContext })}
                                                 className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)] text-body settings-select"
                                             >
-                                                <option value="mr">MR only</option>
-                                                <option value="issue">Issue only</option>
+                                                <option value="pr">PR/MR</option>
+                                                <option value="issue">Issue</option>
                                                 <option value="both">Both</option>
                                             </select>
                                         </div>
@@ -256,7 +256,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                     <textarea
                                         value={action.promptTemplate}
                                         onChange={e => handleUpdate(action.id, { promptTemplate: e.target.value })}
-                                        placeholder="Review the merge request:\n\nTitle: {{mr.title}}\nDescription: {{mr.description}}"
+                                        placeholder="Review the pull/merge request:\n\nTitle: {{pr.title}}\nDescription: {{pr.description}}"
                                         rows={8}
                                         className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body font-mono"
                                     />

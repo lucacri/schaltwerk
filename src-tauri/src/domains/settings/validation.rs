@@ -70,6 +70,11 @@ pub fn clean_invalid_binary_paths(settings: &mut Settings) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn missing_agent_name(agent_name: &str) -> String {
+        format!("lucode-test-missing-wrapper-{agent_name}")
+    }
+
     fn make_config(agent_name: &str, custom_path: Option<&str>) -> Option<AgentBinaryConfig> {
         Some(AgentBinaryConfig {
             agent_name: agent_name.to_string(),
@@ -105,8 +110,9 @@ mod tests {
     #[test]
     fn js_path_reverts_to_auto_detect_when_no_wrapper_found() {
         let mut settings = Settings::default();
+        let agent_name = missing_agent_name("claude");
         settings.agent_binaries.claude =
-            make_config("claude", Some("/some/node_modules/.bin/claude.js"));
+            make_config(&agent_name, Some("/some/node_modules/.bin/claude.js"));
 
         clean_invalid_binary_paths(&mut settings);
 
@@ -118,8 +124,9 @@ mod tests {
     #[test]
     fn mjs_path_reverts_to_auto_detect_when_no_wrapper_found() {
         let mut settings = Settings::default();
+        let agent_name = missing_agent_name("codex");
         settings.agent_binaries.codex =
-            make_config("codex", Some("/tmp/codex.mjs"));
+            make_config(&agent_name, Some("/tmp/codex.mjs"));
 
         clean_invalid_binary_paths(&mut settings);
 
@@ -141,15 +148,24 @@ mod tests {
     #[test]
     fn processes_all_agent_fields() {
         let mut settings = Settings::default();
-        settings.agent_binaries.claude = make_config("claude", Some("/x/claude.js"));
-        settings.agent_binaries.copilot = make_config("copilot", Some("/x/copilot.js"));
-        settings.agent_binaries.opencode = make_config("opencode", Some("/x/opencode.js"));
-        settings.agent_binaries.gemini = make_config("gemini", Some("/x/gemini.js"));
-        settings.agent_binaries.codex = make_config("codex", Some("/x/codex.js"));
-        settings.agent_binaries.droid = make_config("droid", Some("/x/droid.js"));
-        settings.agent_binaries.qwen = make_config("qwen", Some("/x/qwen.js"));
-        settings.agent_binaries.amp = make_config("amp", Some("/x/amp.js"));
-        settings.agent_binaries.kilocode = make_config("kilocode", Some("/x/kilocode.js"));
+        settings.agent_binaries.claude =
+            make_config(&missing_agent_name("claude"), Some("/x/claude.js"));
+        settings.agent_binaries.copilot =
+            make_config(&missing_agent_name("copilot"), Some("/x/copilot.js"));
+        settings.agent_binaries.opencode =
+            make_config(&missing_agent_name("opencode"), Some("/x/opencode.js"));
+        settings.agent_binaries.gemini =
+            make_config(&missing_agent_name("gemini"), Some("/x/gemini.js"));
+        settings.agent_binaries.codex =
+            make_config(&missing_agent_name("codex"), Some("/x/codex.js"));
+        settings.agent_binaries.droid =
+            make_config(&missing_agent_name("droid"), Some("/x/droid.js"));
+        settings.agent_binaries.qwen =
+            make_config(&missing_agent_name("qwen"), Some("/x/qwen.js"));
+        settings.agent_binaries.amp =
+            make_config(&missing_agent_name("amp"), Some("/x/amp.js"));
+        settings.agent_binaries.kilocode =
+            make_config(&missing_agent_name("kilocode"), Some("/x/kilocode.js"));
 
         clean_invalid_binary_paths(&mut settings);
 
