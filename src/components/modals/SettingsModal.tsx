@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, ReactElement 
 import { TauriCommands } from '../../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
-import { useAtom } from 'jotai'
+import { useAtom, useSetAtom } from 'jotai'
 import { terminalFontSizeAtom, uiFontSizeAtom } from '../../store/atoms/fontSize'
 import { useSettings } from '../../hooks/useSettings'
 import type { AgentType, ProjectMergePreferences, AttentionNotificationMode, AgentPreferenceConfig } from '../../hooks/useSettings'
@@ -46,6 +46,12 @@ import { AgentVariantsSettings } from '../settings/AgentVariantsSettings'
 import { AgentPresetsSettings } from '../settings/AgentPresetsSettings'
 import { ContextualActionsSettings } from '../settings/ContextualActionsSettings'
 import { EditorOverridesSettings } from '../settings/EditorOverridesSettings'
+import {
+    type DefaultGenerationPrompts,
+    type GenerationSettingsPrompts,
+    findMissingGenerationPromptVariables,
+} from '../../common/generationPrompts'
+import { loadContextualActionsAtom } from '../../store/atoms/contextualActions'
 
 const shortcutArraysEqual = (a: string[] = [], b: string[] = []) => {
     if (a.length !== b.length) return false
@@ -288,6 +294,18 @@ const CODEX_REASONING_OPTIONS: AgentPreferenceMetadataOption[] = [
     { value: 'xhigh', label: 'Extra high' },
 ]
 
+type GenerationPromptKey = keyof DefaultGenerationPrompts
+
+const EMPTY_DEFAULT_GENERATION_PROMPTS: DefaultGenerationPrompts = {
+    name_prompt: '',
+    commit_prompt: '',
+    consolidation_prompt: '',
+    review_pr_prompt: '',
+    plan_issue_prompt: '',
+    issue_prompt: '',
+    pr_prompt: '',
+}
+
 const AGENT_PREFERENCE_METADATA: Record<AgentType, AgentPreferenceMetadata> = {
     claude: {},
     copilot: {},
@@ -380,13 +398,10 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const [initialAgentCommandPrefix, setInitialAgentCommandPrefix] = useState<string>('')
     const [generationAgent, setGenerationAgent] = useState<string>('')
     const [generationCliArgs, setGenerationCliArgs] = useState<string>('')
-    const [generationNamePrompt, setGenerationNamePrompt] = useState<string>('')
-    const [generationCommitPrompt, setGenerationCommitPrompt] = useState<string>('')
-    const [defaultNamePrompt, setDefaultNamePrompt] = useState<string>('')
-    const [defaultCommitPrompt, setDefaultCommitPrompt] = useState<string>('')
-    const [namePromptIsCustom, setNamePromptIsCustom] = useState<boolean>(false)
-    const [commitPromptIsCustom, setCommitPromptIsCustom] = useState<boolean>(false)
+    const [generationPrompts, setGenerationPrompts] = useState<DefaultGenerationPrompts>(EMPTY_DEFAULT_GENERATION_PROMPTS)
+    const [defaultGenerationPrompts, setDefaultGenerationPrompts] = useState<DefaultGenerationPrompts>(EMPTY_DEFAULT_GENERATION_PROMPTS)
     const [showCustomPrompts, setShowCustomPrompts] = useState<boolean>(false)
+    const reloadContextualActions = useSetAtom(loadContextualActionsAtom)
     const platform = useMemo(() => detectPlatformSafe(), [])
 
     const [keyboardShortcutsState, setKeyboardShortcutsState] = useState<KeyboardShortcutConfig>(() => mergeShortcutConfig(defaultShortcutConfig))
@@ -800,25 +815,28 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
 
         let loadedGenerationAgent = ''
         let loadedGenerationCliArgs = ''
-        let loadedGenerationNamePrompt = ''
-        let loadedGenerationCommitPrompt = ''
-        let loadedDefaultNamePrompt = ''
-        let loadedDefaultCommitPrompt = ''
-        let loadedNameIsCustom = false
-        let loadedCommitIsCustom = false
+        let loadedGenerationPrompts = EMPTY_DEFAULT_GENERATION_PROMPTS
+        let loadedDefaultPrompts = EMPTY_DEFAULT_GENERATION_PROMPTS
         try {
             const [genSettings, defaults] = await Promise.all([
-                invoke<{ agent: string | null; cli_args: string | null; name_prompt: string | null; commit_prompt: string | null }>(TauriCommands.GetGenerationSettings),
-                invoke<{ name_prompt: string; commit_prompt: string }>(TauriCommands.GetDefaultGenerationPrompts),
+                invoke<GenerationSettingsPrompts & { agent: string | null; cli_args: string | null }>(TauriCommands.GetGenerationSettings),
+                invoke<DefaultGenerationPrompts>(TauriCommands.GetDefaultGenerationPrompts),
             ])
-            loadedDefaultNamePrompt = defaults.name_prompt
-            loadedDefaultCommitPrompt = defaults.commit_prompt
+            loadedDefaultPrompts = {
+                ...EMPTY_DEFAULT_GENERATION_PROMPTS,
+                ...(defaults ?? {}),
+            }
             loadedGenerationAgent = genSettings.agent ?? ''
             loadedGenerationCliArgs = genSettings.cli_args ?? ''
-            loadedNameIsCustom = genSettings.name_prompt !== null && genSettings.name_prompt !== ''
-            loadedCommitIsCustom = genSettings.commit_prompt !== null && genSettings.commit_prompt !== ''
-            loadedGenerationNamePrompt = genSettings.name_prompt ?? defaults.name_prompt
-            loadedGenerationCommitPrompt = genSettings.commit_prompt ?? defaults.commit_prompt
+            loadedGenerationPrompts = {
+                name_prompt: genSettings.name_prompt ?? loadedDefaultPrompts.name_prompt,
+                commit_prompt: genSettings.commit_prompt ?? loadedDefaultPrompts.commit_prompt,
+                consolidation_prompt: genSettings.consolidation_prompt ?? loadedDefaultPrompts.consolidation_prompt,
+                review_pr_prompt: genSettings.review_pr_prompt ?? loadedDefaultPrompts.review_pr_prompt,
+                plan_issue_prompt: genSettings.plan_issue_prompt ?? loadedDefaultPrompts.plan_issue_prompt,
+                issue_prompt: genSettings.issue_prompt ?? loadedDefaultPrompts.issue_prompt,
+                pr_prompt: genSettings.pr_prompt ?? loadedDefaultPrompts.pr_prompt,
+            }
         } catch (error) {
             logger.info('Generation settings not available:', error)
         }
@@ -837,13 +855,12 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         setInitialAgentCommandPrefix(loadedCommandPrefix)
         setGenerationAgent(loadedGenerationAgent)
         setGenerationCliArgs(loadedGenerationCliArgs)
-        setGenerationNamePrompt(loadedGenerationNamePrompt)
-        setGenerationCommitPrompt(loadedGenerationCommitPrompt)
-        setDefaultNamePrompt(loadedDefaultNamePrompt)
-        setDefaultCommitPrompt(loadedDefaultCommitPrompt)
-        setNamePromptIsCustom(loadedNameIsCustom)
-        setCommitPromptIsCustom(loadedCommitIsCustom)
-        setShowCustomPrompts(loadedNameIsCustom || loadedCommitIsCustom)
+        setGenerationPrompts(loadedGenerationPrompts)
+        setDefaultGenerationPrompts(loadedDefaultPrompts)
+        setShowCustomPrompts(Object.keys(loadedGenerationPrompts).some(key => {
+            const promptKey = key as GenerationPromptKey
+            return loadedGenerationPrompts[promptKey].trim() !== loadedDefaultPrompts[promptKey].trim()
+        }))
         setAgentPreferences(loadedAgentPrefs)
         const normalizedShortcuts = mergeShortcutConfig(loadedShortcuts)
         setKeyboardShortcutsState(normalizedShortcuts)
@@ -1002,26 +1019,27 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const saveGenerationSettings = useCallback(async (
         agent: string,
         cliArgs: string,
-        namePrompt: string,
-        commitPrompt: string
+        prompts: DefaultGenerationPrompts
     ) => {
         try {
-            const nameValue = (namePrompt && namePrompt.trim() !== defaultNamePrompt.trim()) ? namePrompt : null
-            const commitValue = (commitPrompt && commitPrompt.trim() !== defaultCommitPrompt.trim()) ? commitPrompt : null
-            setNamePromptIsCustom(nameValue !== null)
-            setCommitPromptIsCustom(commitValue !== null)
             await invoke(TauriCommands.SetGenerationSettings, {
                 settings: {
                     agent: agent || null,
                     cli_args: cliArgs || null,
-                    name_prompt: nameValue,
-                    commit_prompt: commitValue,
+                    name_prompt: prompts.name_prompt.trim() !== defaultGenerationPrompts.name_prompt.trim() ? prompts.name_prompt : null,
+                    commit_prompt: prompts.commit_prompt.trim() !== defaultGenerationPrompts.commit_prompt.trim() ? prompts.commit_prompt : null,
+                    consolidation_prompt: prompts.consolidation_prompt.trim() !== defaultGenerationPrompts.consolidation_prompt.trim() ? prompts.consolidation_prompt : null,
+                    review_pr_prompt: prompts.review_pr_prompt.trim() !== defaultGenerationPrompts.review_pr_prompt.trim() ? prompts.review_pr_prompt : null,
+                    plan_issue_prompt: prompts.plan_issue_prompt.trim() !== defaultGenerationPrompts.plan_issue_prompt.trim() ? prompts.plan_issue_prompt : null,
+                    issue_prompt: prompts.issue_prompt.trim() !== defaultGenerationPrompts.issue_prompt.trim() ? prompts.issue_prompt : null,
+                    pr_prompt: prompts.pr_prompt.trim() !== defaultGenerationPrompts.pr_prompt.trim() ? prompts.pr_prompt : null,
                 },
             })
+            void reloadContextualActions()
         } catch (error) {
             logger.error('Failed to save generation settings:', error)
         }
-    }, [defaultNamePrompt, defaultCommitPrompt])
+    }, [defaultGenerationPrompts, reloadContextualActions])
 
     const handleBinaryPathChange = async (agent: AgentType, path: string | null) => {
         try {
@@ -2478,163 +2496,238 @@ fi`}
         </div>
     )
 
-    const renderGenerationSettings = () => (
-        <div className="flex flex-col h-full">
-            <div className="flex-1 overflow-y-auto p-6">
-                <div className="space-y-6">
-                    <div>
-                        <h3 className="text-body font-medium text-text-primary mb-1">
-                            {t.settings.generation.title}
-                        </h3>
-                        <p className="text-body text-text-tertiary mb-4">
-                            {t.settings.generation.description}
-                        </p>
-                    </div>
+    const renderGenerationSettings = () => {
+            const isPromptCustom = (key: GenerationPromptKey) => (
+                generationPrompts[key].trim() !== defaultGenerationPrompts[key].trim()
+            )
 
-                    <div>
-                        <label className="text-body font-medium text-text-primary block mb-1">
-                            {t.settings.generation.agent}
-                        </label>
-                        <p className="text-caption text-text-tertiary mb-2">
-                            {t.settings.generation.agentDesc}
-                        </p>
-                        <select
-                            className="w-full bg-bg-tertiary text-text-primary border border-border-subtle rounded px-3 py-2 text-body settings-select focus:outline-none focus:border-[var(--color-border-focus)]"
-                            value={generationAgent}
-                            onChange={(e) => {
-                                setGenerationAgent(e.target.value)
-                                void saveGenerationSettings(e.target.value, generationCliArgs, generationNamePrompt, generationCommitPrompt)
-                            }}
-                        >
-                            <option value="">{t.settings.generation.agentDefault}</option>
-                            <option value="claude">Claude</option>
-                            <option value="gemini">Gemini</option>
-                            <option value="codex">Codex</option>
-                            <option value="opencode">OpenCode</option>
-                            <option value="kilocode">Kilocode</option>
-                        </select>
-                    </div>
+            const promptSections: Array<{
+                title: string
+                prompts: Array<{
+                    key: GenerationPromptKey
+                    label: string
+                    description: string
+                    placeholder: string
+                    availableVariables: string[]
+                    requiredVariables: string[]
+                }>
+            }> = [
+                {
+                    title: t.settings.generation.sessionPrompts,
+                    prompts: [
+                        {
+                            key: 'name_prompt',
+                            label: t.settings.generation.namePrompt,
+                            description: t.settings.generation.namePromptDesc,
+                            placeholder: t.settings.generation.namePromptPlaceholder,
+                            availableVariables: ['{task}'],
+                            requiredVariables: ['{task}'],
+                        },
+                        {
+                            key: 'consolidation_prompt',
+                            label: t.settings.generation.consolidationPrompt,
+                            description: t.settings.generation.consolidationPromptDesc,
+                            placeholder: t.settings.generation.consolidationPromptPlaceholder,
+                            availableVariables: ['{sessionList}'],
+                            requiredVariables: ['{sessionList}'],
+                        },
+                        {
+                            key: 'commit_prompt',
+                            label: t.settings.generation.commitPrompt,
+                            description: t.settings.generation.commitPromptDesc,
+                            placeholder: t.settings.generation.commitPromptPlaceholder,
+                            availableVariables: ['{commits}', '{files}'],
+                            requiredVariables: ['{commits}', '{files}'],
+                        },
+                    ],
+                },
+                {
+                    title: t.settings.generation.codeReviewPrompts,
+                    prompts: [
+                        {
+                            key: 'review_pr_prompt',
+                            label: t.settings.generation.reviewPrPrompt,
+                            description: t.settings.generation.reviewPrPromptDesc,
+                            placeholder: t.settings.generation.reviewPrPromptPlaceholder,
+                            availableVariables: ['{{pr.title}}', '{{pr.description}}', '{{pr.author}}', '{{pr.sourceBranch}}', '{{pr.targetBranch}}', '{{pr.diff}}', '{{pr.url}}', '{{pr.labels}}'],
+                            requiredVariables: ['{{pr.title}}', '{{pr.diff}}'],
+                        },
+                        {
+                            key: 'plan_issue_prompt',
+                            label: t.settings.generation.planIssuePrompt,
+                            description: t.settings.generation.planIssuePromptDesc,
+                            placeholder: t.settings.generation.planIssuePromptPlaceholder,
+                            availableVariables: ['{{issue.title}}', '{{issue.description}}', '{{issue.labels}}'],
+                            requiredVariables: ['{{issue.title}}', '{{issue.description}}'],
+                        },
+                    ],
+                },
+                {
+                    title: t.settings.generation.sessionCreationPrompts,
+                    prompts: [
+                        {
+                            key: 'issue_prompt',
+                            label: t.settings.generation.issuePrompt,
+                            description: t.settings.generation.issuePromptDesc,
+                            placeholder: t.settings.generation.issuePromptPlaceholder,
+                            availableVariables: ['{title}', '{number}', '{url}', '{body}', '{labels}', '{comments}', '{labelsSection}', '{commentsSection}'],
+                            requiredVariables: ['{title}', '{body}'],
+                        },
+                        {
+                            key: 'pr_prompt',
+                            label: t.settings.generation.prPrompt,
+                            description: t.settings.generation.prPromptDesc,
+                            placeholder: t.settings.generation.prPromptPlaceholder,
+                            availableVariables: ['{title}', '{number}', '{url}', '{branch}', '{body}', '{labels}', '{comments}', '{labelsSection}', '{commentsSection}'],
+                            requiredVariables: ['{title}', '{branch}', '{body}'],
+                        },
+                    ],
+                },
+            ]
 
-                    <div>
-                        <label className="text-body font-medium text-text-primary block mb-1">
-                            {t.settings.generation.cliArgs}
-                        </label>
-                        <p className="text-caption text-text-tertiary mb-2">
-                            {t.settings.generation.cliArgsDesc}
-                        </p>
-                        <input
-                            type="text"
-                            value={generationCliArgs}
-                            onChange={(e) => setGenerationCliArgs(e.target.value)}
-                            onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationNamePrompt, generationCommitPrompt)}
-                            placeholder={t.settings.generation.cliArgsPlaceholder}
-                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
-                        />
-                    </div>
-
-                    <div className="border-t border-border-subtle pt-6">
-                        <button
-                            onClick={() => setShowCustomPrompts(!showCustomPrompts)}
-                            className="flex items-center gap-2 text-body font-medium text-text-primary cursor-pointer"
-                        >
-                            <svg
-                                className={`w-4 h-4 transition-transform ${showCustomPrompts ? 'rotate-90' : ''}`}
-                                fill="none" viewBox="0 0 24 24" stroke="currentColor"
-                            >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                            {t.settings.generation.customPrompts}
-                        </button>
-                        <p className="text-caption text-text-tertiary mt-1 ml-6">
-                            {t.settings.generation.customPromptsDesc}
-                        </p>
-
-                        {showCustomPrompts && (
-                            <div className="mt-4 ml-6 space-y-4">
-                                <div>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <label className="text-body font-medium text-text-primary">
-                                            {t.settings.generation.namePrompt}
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <span className={`text-caption ${namePromptIsCustom ? 'text-accent-blue' : 'text-text-muted'}`}>
-                                                {namePromptIsCustom ? t.settings.generation.customized : t.settings.generation.usingDefault}
-                                            </span>
-                                            {namePromptIsCustom && (
-                                                <button
-                                                    onClick={() => {
-                                                        setGenerationNamePrompt(defaultNamePrompt)
-                                                        setNamePromptIsCustom(false)
-                                                        void saveGenerationSettings(generationAgent, generationCliArgs, defaultNamePrompt, generationCommitPrompt)
-                                                    }}
-                                                    className="text-caption text-accent-blue hover:text-text-primary cursor-pointer"
-                                                >
-                                                    {t.settings.generation.resetToDefault}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <p className="text-caption text-text-tertiary mb-2">
-                                        {t.settings.generation.namePromptDesc}
-                                    </p>
-                                    <textarea
-                                        value={generationNamePrompt}
-                                        onChange={(e) => {
-                                            setGenerationNamePrompt(e.target.value)
-                                            setNamePromptIsCustom(e.target.value.trim() !== defaultNamePrompt.trim())
-                                        }}
-                                        onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationNamePrompt, generationCommitPrompt)}
-                                        placeholder={t.settings.generation.namePromptPlaceholder}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body min-h-[100px] resize-y"
-                                        rows={6}
-                                    />
-                                </div>
-
-                                <div>
-                                    <div className="flex items-center justify-between mb-1">
-                                        <label className="text-body font-medium text-text-primary">
-                                            {t.settings.generation.commitPrompt}
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <span className={`text-caption ${commitPromptIsCustom ? 'text-accent-blue' : 'text-text-muted'}`}>
-                                                {commitPromptIsCustom ? t.settings.generation.customized : t.settings.generation.usingDefault}
-                                            </span>
-                                            {commitPromptIsCustom && (
-                                                <button
-                                                    onClick={() => {
-                                                        setGenerationCommitPrompt(defaultCommitPrompt)
-                                                        setCommitPromptIsCustom(false)
-                                                        void saveGenerationSettings(generationAgent, generationCliArgs, generationNamePrompt, defaultCommitPrompt)
-                                                    }}
-                                                    className="text-caption text-accent-blue hover:text-text-primary cursor-pointer"
-                                                >
-                                                    {t.settings.generation.resetToDefault}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <p className="text-caption text-text-tertiary mb-2">
-                                        {t.settings.generation.commitPromptDesc}
-                                    </p>
-                                    <textarea
-                                        value={generationCommitPrompt}
-                                        onChange={(e) => {
-                                            setGenerationCommitPrompt(e.target.value)
-                                            setCommitPromptIsCustom(e.target.value.trim() !== defaultCommitPrompt.trim())
-                                        }}
-                                        onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationNamePrompt, generationCommitPrompt)}
-                                        placeholder={t.settings.generation.commitPromptPlaceholder}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body min-h-[100px] resize-y"
-                                        rows={6}
-                                    />
-                                </div>
+            return (
+                <div className="flex flex-col h-full">
+                    <div className="flex-1 overflow-y-auto p-6">
+                        <div className="space-y-6">
+                            <div>
+                                <h3 className="text-body font-medium text-text-primary mb-1">
+                                    {t.settings.generation.title}
+                                </h3>
+                                <p className="text-body text-text-tertiary mb-4">
+                                    {t.settings.generation.description}
+                                </p>
                             </div>
-                        )}
+
+                            <div>
+                                <label className="text-body font-medium text-text-primary block mb-1">
+                                    {t.settings.generation.agent}
+                                </label>
+                                <p className="text-caption text-text-tertiary mb-2">
+                                    {t.settings.generation.agentDesc}
+                                </p>
+                                <select
+                                    className="w-full bg-bg-tertiary text-text-primary border border-border-subtle rounded px-3 py-2 text-body settings-select focus:outline-none focus:border-[var(--color-border-focus)]"
+                                    value={generationAgent}
+                                    onChange={(e) => {
+                                        setGenerationAgent(e.target.value)
+                                        void saveGenerationSettings(e.target.value, generationCliArgs, generationPrompts)
+                                    }}
+                                >
+                                    <option value="">{t.settings.generation.agentDefault}</option>
+                                    <option value="claude">Claude</option>
+                                    <option value="gemini">Gemini</option>
+                                    <option value="codex">Codex</option>
+                                    <option value="opencode">OpenCode</option>
+                                    <option value="kilocode">Kilocode</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="text-body font-medium text-text-primary block mb-1">
+                                    {t.settings.generation.cliArgs}
+                                </label>
+                                <p className="text-caption text-text-tertiary mb-2">
+                                    {t.settings.generation.cliArgsDesc}
+                                </p>
+                                <input
+                                    type="text"
+                                    value={generationCliArgs}
+                                    onChange={(e) => setGenerationCliArgs(e.target.value)}
+                                    onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts)}
+                                    placeholder={t.settings.generation.cliArgsPlaceholder}
+                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
+                                />
+                            </div>
+
+                            <div className="border-t border-border-subtle pt-6">
+                                <button
+                                    onClick={() => setShowCustomPrompts(!showCustomPrompts)}
+                                    className="flex items-center gap-2 text-body font-medium text-text-primary cursor-pointer"
+                                >
+                                    <svg
+                                        className={`w-4 h-4 transition-transform ${showCustomPrompts ? 'rotate-90' : ''}`}
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                                    >
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                    {t.settings.generation.customPrompts}
+                                </button>
+                                <p className="text-caption text-text-tertiary mt-1 ml-6">
+                                    {t.settings.generation.customPromptsDesc}
+                                </p>
+
+                                {showCustomPrompts && (
+                                    <div className="mt-4 ml-6 space-y-6">
+                                        {promptSections.map(section => (
+                                            <div key={section.title} className="space-y-4">
+                                                <div className="text-body font-medium text-text-primary">{section.title}</div>
+                                                {section.prompts.map(prompt => {
+                                                    const value = generationPrompts[prompt.key]
+                                                    const isCustom = isPromptCustom(prompt.key)
+                                                    const missingVariables = findMissingGenerationPromptVariables(value, prompt.requiredVariables)
+
+                                                    return (
+                                                        <div key={prompt.key}>
+                                                            <div className="flex items-center justify-between mb-1">
+                                                                <label className="text-body font-medium text-text-primary">
+                                                                    {prompt.label}
+                                                                </label>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className={`text-caption ${isCustom ? 'text-accent-blue' : 'text-text-muted'}`}>
+                                                                        {isCustom ? t.settings.generation.customized : t.settings.generation.usingDefault}
+                                                                    </span>
+                                                                    {isCustom && (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                const nextPrompts = {
+                                                                                    ...generationPrompts,
+                                                                                    [prompt.key]: defaultGenerationPrompts[prompt.key],
+                                                                                }
+                                                                                setGenerationPrompts(nextPrompts)
+                                                                                void saveGenerationSettings(generationAgent, generationCliArgs, nextPrompts)
+                                                                            }}
+                                                                            className="text-caption text-accent-blue hover:text-text-primary cursor-pointer"
+                                                                        >
+                                                                            {t.settings.generation.resetToDefault}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-caption text-text-tertiary mb-2">
+                                                                {prompt.description}
+                                                            </p>
+                                                            <textarea
+                                                                value={value}
+                                                                onChange={(e) => setGenerationPrompts(prev => ({
+                                                                    ...prev,
+                                                                    [prompt.key]: e.target.value,
+                                                                }))}
+                                                                onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts)}
+                                                                placeholder={prompt.placeholder}
+                                                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body min-h-[100px] resize-y"
+                                                                rows={6}
+                                                            />
+                                                            <p className="text-caption text-text-tertiary mt-2">
+                                                                {t.settings.generation.availableVariables.replace('{variables}', prompt.availableVariables.join(', '))}
+                                                            </p>
+                                                            {missingVariables.length > 0 && (
+                                                                <p className="text-caption text-accent-red mt-1">
+                                                                    {t.settings.generation.missingRequiredVariables.replace('{variables}', missingVariables.join(', '))}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    )
+            )
+    }
 
     const renderSessionSettings = () => (
         <div className="flex flex-col h-full">

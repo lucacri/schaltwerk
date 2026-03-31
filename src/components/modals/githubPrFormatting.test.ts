@@ -1,9 +1,28 @@
 import { describe, it, expect } from 'vitest'
 import {
+  buildPrPromptFromTemplate,
   formatPrReviewCommentsForTerminal,
   formatPrReviewCommentsForClipboard,
   type PrReviewComment
 } from './githubPrFormatting'
+import type { GithubPrDetails } from '../../types/githubIssues'
+
+const baseDetails: GithubPrDetails = {
+  number: 12,
+  title: 'Feature: Auth',
+  url: 'https://github.com/example/repo/pull/12',
+  body: 'PR body',
+  state: 'OPEN',
+  labels: [{ name: 'backend' }],
+  comments: [
+    { author: 'alice', createdAt: '2024-01-02T00:00:00Z', body: 'Looks good' },
+  ],
+  headRefName: 'feature/auth',
+  reviewDecision: null,
+  statusCheckState: null,
+  latestReviews: [],
+  isFork: false,
+}
 
 describe('githubPrFormatting', () => {
   const createComment = (overrides: Partial<PrReviewComment> = {}): PrReviewComment => ({
@@ -102,6 +121,34 @@ describe('githubPrFormatting', () => {
       const result = formatPrReviewCommentsForClipboard(comments)
 
       expect(result).toContain('**Unknown**')
+    })
+  })
+
+  describe('buildPrPromptFromTemplate', () => {
+    it('renders the default-style prompt sections from template variables', () => {
+      const prompt = buildPrPromptFromTemplate(baseDetails, [
+        'GitHub Pull Request Context: {title} (#{number})',
+        'Link: {url}',
+        'Branch: {branch}',
+        '{labelsSection}',
+        '',
+        'PR Description:',
+        '{body}',
+        '{commentsSection}',
+      ].join('\n'))
+
+      expect(prompt).toContain('GitHub Pull Request Context: Feature: Auth (#12)')
+      expect(prompt).toContain('Branch: feature/auth')
+      expect(prompt).toContain('Labels: [backend]')
+      expect(prompt).toContain('Comment by alice (2024-01-02T00:00:00Z):')
+    })
+
+    it('supports custom prompt layouts', () => {
+      const prompt = buildPrPromptFromTemplate(baseDetails, 'Title={title}\nBranch={branch}\nComments={comments}')
+
+      expect(prompt).toContain('Title=Feature: Auth')
+      expect(prompt).toContain('Branch=feature/auth')
+      expect(prompt).toContain('Comments=Comment by alice (2024-01-02T00:00:00Z):')
     })
   })
 })

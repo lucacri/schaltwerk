@@ -122,7 +122,7 @@ export function UnifiedSearchModal({
         setLoadingItem(issue.number)
         try {
           const details = await issueSearch.fetchDetails(issue.number)
-          const prompt = buildIssuePrompt(details)
+          const prompt = await buildIssuePrompt(details)
           onSelectIssue({ details, prompt })
           onClose()
         } catch (err) {
@@ -137,7 +137,7 @@ export function UnifiedSearchModal({
         setLoadingItem(pr.number)
         try {
           const details = await prSearch.fetchDetails(pr.number)
-          const prompt = buildPrPrompt(details)
+          const prompt = await buildPrPrompt(details)
           onSelectPr({ details, prompt })
           onClose()
         } catch (err) {
@@ -307,8 +307,8 @@ export function UnifiedSearchModal({
                 onClick={() => {
                   setLoadingItem(issue.number)
                   issueSearch.fetchDetails(issue.number)
-                    .then(details => {
-                      const prompt = buildIssuePrompt(details)
+                    .then(async details => {
+                      const prompt = await buildIssuePrompt(details)
                       onSelectIssue({ details, prompt })
                       onClose()
                     })
@@ -445,8 +445,8 @@ export function UnifiedSearchModal({
                 onClick={() => {
                   setLoadingItem(pr.number)
                   prSearch.fetchDetails(pr.number)
-                    .then(details => {
-                      const prompt = buildPrPrompt(details)
+                    .then(async details => {
+                      const prompt = await buildPrPrompt(details)
                       onSelectPr({ details, prompt })
                       onClose()
                     })

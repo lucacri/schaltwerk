@@ -682,8 +682,15 @@ describe('SettingsModal project settings navigation', () => {
 })
 
 describe('SettingsModal AI Generation custom prompts', () => {
-  const defaultNamePrompt = 'Default name prompt with {task} placeholder'
-  const defaultCommitPrompt = 'Default commit prompt with {commits} and {files}'
+  const defaultPrompts = {
+    name_prompt: 'Default name prompt with {task} placeholder',
+    commit_prompt: 'Default commit prompt with {commits} and {files}',
+    consolidation_prompt: 'Default consolidation prompt with {sessionList}',
+    review_pr_prompt: 'Default review prompt with {{pr.title}} and {{pr.diff}}',
+    plan_issue_prompt: 'Default issue plan prompt with {{issue.title}} and {{issue.description}}',
+    issue_prompt: 'Default issue session prompt with {title} and {comments}',
+    pr_prompt: 'Default PR session prompt with {title}, {branch}, and {comments}',
+  }
 
   beforeEach(() => {
     useSettingsMock.mockReset()
@@ -693,10 +700,20 @@ describe('SettingsModal AI Generation custom prompts', () => {
     invokeMock.mockClear()
     invokeMock.mockImplementation(async (command: string, args?: unknown) => {
       if (command === TauriCommands.GetDefaultGenerationPrompts) {
-        return { name_prompt: defaultNamePrompt, commit_prompt: defaultCommitPrompt }
+        return defaultPrompts
       }
       if (command === TauriCommands.GetGenerationSettings) {
-        return { agent: null, cli_args: null, name_prompt: null, commit_prompt: null }
+        return {
+          agent: null,
+          cli_args: null,
+          name_prompt: null,
+          commit_prompt: null,
+          consolidation_prompt: null,
+          review_pr_prompt: null,
+          plan_issue_prompt: null,
+          issue_prompt: null,
+          pr_prompt: null,
+        }
       }
       return baseInvokeImplementation(command, args)
     })
@@ -713,11 +730,10 @@ describe('SettingsModal AI Generation custom prompts', () => {
     await user.click(customPromptsButton)
 
     const textareas = await screen.findAllByRole('textbox')
-    const nameTextarea = textareas.find(el => (el as HTMLTextAreaElement).value === defaultNamePrompt)
-    const commitTextarea = textareas.find(el => (el as HTMLTextAreaElement).value === defaultCommitPrompt)
+    const promptValues = new Set(Object.values(defaultPrompts))
+    const promptTextareas = textareas.filter(el => promptValues.has((el as HTMLTextAreaElement).value))
 
-    expect(nameTextarea).toBeDefined()
-    expect(commitTextarea).toBeDefined()
+    expect(promptTextareas).toHaveLength(7)
   })
 
   it('shows "Using default" indicator when prompts match defaults', async () => {
@@ -730,16 +746,26 @@ describe('SettingsModal AI Generation custom prompts', () => {
     await user.click(customPromptsButton)
 
     const indicators = await screen.findAllByText('Using default')
-    expect(indicators.length).toBe(2)
+    expect(indicators.length).toBe(7)
   })
 
   it('shows "Customized" and reset button when custom prompt is saved', async () => {
     invokeMock.mockImplementation(async (command: string, args?: unknown) => {
       if (command === TauriCommands.GetDefaultGenerationPrompts) {
-        return { name_prompt: defaultNamePrompt, commit_prompt: defaultCommitPrompt }
+        return defaultPrompts
       }
       if (command === TauriCommands.GetGenerationSettings) {
-        return { agent: null, cli_args: null, name_prompt: 'My custom name prompt', commit_prompt: null }
+        return {
+          agent: null,
+          cli_args: null,
+          name_prompt: 'My custom name prompt',
+          commit_prompt: null,
+          consolidation_prompt: null,
+          review_pr_prompt: null,
+          plan_issue_prompt: null,
+          issue_prompt: null,
+          pr_prompt: null,
+        }
       }
       return baseInvokeImplementation(command, args)
     })
@@ -765,7 +791,7 @@ describe('SettingsModal AI Generation custom prompts', () => {
     await user.click(customPromptsButton)
 
     const textareas = await screen.findAllByRole('textbox')
-    const nameTextarea = textareas.find(el => (el as HTMLTextAreaElement).value === defaultNamePrompt) as HTMLTextAreaElement
+    const nameTextarea = textareas.find(el => (el as HTMLTextAreaElement).value === defaultPrompts.name_prompt) as HTMLTextAreaElement
 
     await user.click(nameTextarea)
     await user.tab()
@@ -784,10 +810,20 @@ describe('SettingsModal AI Generation custom prompts', () => {
   it('resets prompt to default when reset button is clicked', async () => {
     invokeMock.mockImplementation(async (command: string, args?: unknown) => {
       if (command === TauriCommands.GetDefaultGenerationPrompts) {
-        return { name_prompt: defaultNamePrompt, commit_prompt: defaultCommitPrompt }
+        return defaultPrompts
       }
       if (command === TauriCommands.GetGenerationSettings) {
-        return { agent: null, cli_args: null, name_prompt: 'Custom prompt', commit_prompt: null }
+        return {
+          agent: null,
+          cli_args: null,
+          name_prompt: 'Custom prompt',
+          commit_prompt: null,
+          consolidation_prompt: null,
+          review_pr_prompt: null,
+          plan_issue_prompt: null,
+          issue_prompt: null,
+          pr_prompt: null,
+        }
       }
       return baseInvokeImplementation(command, args)
     })
@@ -809,5 +845,26 @@ describe('SettingsModal AI Generation custom prompts', () => {
         expect(settings.name_prompt).toBeNull()
       }
     })
+  })
+
+  it('shows a warning when a required template variable is removed', async () => {
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    const customPromptsButton = await screen.findByText('Custom Prompts')
+    await user.click(customPromptsButton)
+
+    const textareas = await screen.findAllByRole('textbox')
+    const consolidationTextarea = textareas.find(
+      el => (el as HTMLTextAreaElement).value === defaultPrompts.consolidation_prompt
+    ) as HTMLTextAreaElement
+
+    await user.clear(consolidationTextarea)
+    await user.type(consolidationTextarea, 'Custom consolidation prompt')
+
+    const warnings = await screen.findAllByText(/Missing required variable/i)
+    expect(warnings.some(node => node.textContent?.includes('{sessionList}'))).toBe(true)
   })
 })

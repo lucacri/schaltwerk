@@ -105,7 +105,7 @@ export function GitHubPrPromptSection({
       setActivePr(summary.number)
       try {
         const details = await fetchDetails(summary.number)
-        const prompt = buildPrPrompt(details)
+        const prompt = await buildPrPrompt(details)
         onPrLoaded({ details, prompt })
       } catch (err) {
         logger.error(`Failed to load GitHub PR details for #${summary.number}`, err)

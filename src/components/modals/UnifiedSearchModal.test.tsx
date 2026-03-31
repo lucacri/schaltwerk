@@ -55,13 +55,13 @@ vi.mock('../../hooks/useGithubPrSearch', () => ({
 }))
 
 vi.mock('./githubIssueFormatting', () => ({
-  buildIssuePrompt: vi.fn().mockReturnValue('issue prompt'),
+  buildIssuePrompt: vi.fn().mockResolvedValue('issue prompt'),
   buildIssuePreview: vi.fn().mockReturnValue('issue preview'),
   formatIssueUpdatedTimestamp: vi.fn().mockReturnValue('2 days ago'),
 }))
 
 vi.mock('./githubPrFormatting', () => ({
-  buildPrPrompt: vi.fn().mockReturnValue('pr prompt'),
+  buildPrPrompt: vi.fn().mockResolvedValue('pr prompt'),
   buildPrPreview: vi.fn().mockReturnValue('pr preview'),
   formatPrUpdatedTimestamp: vi.fn().mockReturnValue('1 day ago'),
 }))

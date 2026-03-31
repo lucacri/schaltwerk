@@ -105,7 +105,7 @@ export function GitHubIssuePromptSection({
       setActiveIssue(summary.number)
       try {
         const details = await fetchDetails(summary.number)
-        const prompt = buildIssuePrompt(details)
+        const prompt = await buildIssuePrompt(details)
         onIssueLoaded({ details, prompt })
       } catch (err) {
         logger.error(`Failed to load GitHub issue details for #${summary.number}`, err)

@@ -313,13 +313,33 @@ export interface Translations {
       cliArgsPlaceholder: string
       customPrompts: string
       customPromptsDesc: string
+      sessionPrompts: string
+      codeReviewPrompts: string
+      sessionCreationPrompts: string
       namePrompt: string
       namePromptDesc: string
       namePromptPlaceholder: string
+      consolidationPrompt: string
+      consolidationPromptDesc: string
+      consolidationPromptPlaceholder: string
       commitPrompt: string
       commitPromptDesc: string
       commitPromptPlaceholder: string
+      reviewPrPrompt: string
+      reviewPrPromptDesc: string
+      reviewPrPromptPlaceholder: string
+      planIssuePrompt: string
+      planIssuePromptDesc: string
+      planIssuePromptPlaceholder: string
+      issuePrompt: string
+      issuePromptDesc: string
+      issuePromptPlaceholder: string
+      prPrompt: string
+      prPromptDesc: string
+      prPromptPlaceholder: string
       resetToDefault: string
+      availableVariables: string
+      missingRequiredVariables: string
       usingDefault: string
       customized: string
     }

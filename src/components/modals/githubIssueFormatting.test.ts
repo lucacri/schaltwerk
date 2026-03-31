@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest'
 import type { GithubIssueDetails, GithubIssueSummary } from '../../types/githubIssues'
-import { buildIssuePreview, buildIssuePrompt, formatIssueUpdatedTimestamp } from './githubIssueFormatting'
+import {
+  buildIssuePreview,
+  buildIssuePromptFromTemplate,
+  formatIssueUpdatedTimestamp,
+} from './githubIssueFormatting'
 
 const baseDetails: GithubIssueDetails = {
   number: 42,
@@ -13,7 +17,7 @@ const baseDetails: GithubIssueDetails = {
 }
 
 describe('githubIssueFormatting', () => {
-  test('buildIssuePrompt returns a structured prompt with labels and comments', () => {
+  test('buildIssuePromptFromTemplate returns a structured prompt with labels and comments', () => {
     const details: GithubIssueDetails = {
       ...baseDetails,
       labels: [{ name: 'bug' }, { name: 'frontend' }],
@@ -23,13 +27,30 @@ describe('githubIssueFormatting', () => {
       ],
     }
 
-    const prompt = buildIssuePrompt(details)
+    const prompt = buildIssuePromptFromTemplate(details, [
+      'GitHub Issue Context: {title} (#{number})',
+      'Link: {url}',
+      '{labelsSection}',
+      '',
+      'Issue Description:',
+      '{body}',
+      '{commentsSection}',
+    ].join('\n'))
+
     expect(prompt).toContain('GitHub Issue Context: Improve prompt flow (#42)')
     expect(prompt).toContain('Labels: [bug] [frontend]')
     expect(prompt).toContain('Comment by alice (2024-01-01T00:00:00Z):')
     expect(prompt).toContain('First comment')
     expect(prompt).toContain('Comment by Unknown author (2024-01-02T00:00:00Z):')
     expect(prompt).toContain('_No comment provided._')
+  })
+
+  test('buildIssuePromptFromTemplate supports fully custom layouts', () => {
+    const prompt = buildIssuePromptFromTemplate(baseDetails, 'Title={title}\nBody={body}\nComments={comments}')
+
+    expect(prompt).toContain('Title=Improve prompt flow')
+    expect(prompt).toContain('Body=Issue body')
+    expect(prompt).toContain('Comments=')
   })
 
   test('buildIssuePreview produces markdown with labels and comments', () => {

@@ -84,6 +84,7 @@ import { resolveOpenPathForOpenButton } from './utils/resolveOpenPath'
 import { TauriCommands } from './common/tauriCommands'
 import { validatePanelPercentage } from './utils/panel'
 import { countLogicalRunningSessions } from './utils/sessionVersions'
+import { loadGenerationPrompts, renderGenerationPrompt } from './common/generationPrompts'
 import {
   UiEvent,
   listenUiEvent,
@@ -1618,48 +1619,37 @@ function AppContent() {
 
   useEffect(() => {
     return listenUiEvent(UiEvent.ConsolidateVersionGroup, (detail: ConsolidateVersionGroupDetail) => {
-      const { baseName, baseBranch, epicId: groupEpicId, sessions } = detail
+      void (async () => {
+        const { baseName, baseBranch, epicId: groupEpicId, sessions } = detail
 
-      const sessionList = sessions.map(s => {
-        const stats = s.diffStats
-        const statsStr = stats
-          ? `Files changed: ${stats.files_changed}, +${stats.additions} -${stats.deletions}`
-          : 'No diff stats available'
-        return `- ${s.name} (branch: ${s.branch}, worktree: ${s.worktreePath})\n  ${statsStr}`
-      }).join('\n')
+        const sessionList = sessions.map(s => {
+          const stats = s.diffStats
+          const statsStr = stats
+            ? `Files changed: ${stats.files_changed}, +${stats.additions} -${stats.deletions}`
+            : 'No diff stats available'
+          return `- ${s.name} (branch: ${s.branch}, worktree: ${s.worktreePath})\n  ${statsStr}`
+        }).join('\n')
 
-      const prompt = `You are consolidating the results of multiple parallel agent sessions.
+        const prompts = await loadGenerationPrompts()
+        const prompt = renderGenerationPrompt(prompts.consolidation_prompt, { sessionList })
 
-Review each branch's changes, compare approaches, and produce a single
-reconciled version that takes the best from each:
+        emitUiEvent(UiEvent.NewSessionPrefillPending)
+        setNewSessionOpen(true)
 
-Sessions to review:
-${sessionList}
+        const sourceIds = sessions.map(s => s.id)
 
-Instructions:
-1. Read the code in each worktree path listed above
-2. Compare the approaches taken by each agent
-3. Choose the best base implementation
-4. Incorporate any valuable improvements from the other versions
-5. Produce a clean, unified result in this worktree
-6. Run \`just test\` to verify everything passes`
-
-      emitUiEvent(UiEvent.NewSessionPrefillPending)
-      setNewSessionOpen(true)
-
-      const sourceIds = sessions.map(s => s.id)
-
-      requestAnimationFrame(() => {
-        emitUiEvent(UiEvent.NewSessionPrefill, {
-          name: `${baseName}-consolidation`,
-          taskContent: prompt,
-          baseBranch,
-          lockName: false,
-          isConsolidation: true,
-          epicId: groupEpicId,
-          consolidationSourceIds: sourceIds,
+        requestAnimationFrame(() => {
+          emitUiEvent(UiEvent.NewSessionPrefill, {
+            name: `${baseName}-consolidation`,
+            taskContent: prompt,
+            baseBranch,
+            lockName: false,
+            isConsolidation: true,
+            epicId: groupEpicId,
+            consolidationSourceIds: sourceIds,
+          })
         })
-      })
+      })()
     })
   }, [])
 

@@ -1,4 +1,4 @@
-use super::types::*;
+use super::{default_contextual_actions, types::*};
 use super::validation::clean_invalid_binary_paths;
 use std::collections::HashMap;
 
@@ -560,7 +560,7 @@ impl SettingsService {
     pub fn get_contextual_actions(&self) -> Vec<ContextualAction> {
         let actions = &self.settings.contextual_actions;
         if actions.is_empty() {
-            return default_contextual_actions();
+            return default_contextual_actions(&self.settings.generation);
         }
         normalize_contextual_actions(actions.clone())
     }
@@ -576,9 +576,9 @@ impl SettingsService {
     pub fn reset_contextual_actions_to_defaults(
         &mut self,
     ) -> Result<Vec<ContextualAction>, SettingsServiceError> {
-        self.settings.contextual_actions = default_contextual_actions();
+        self.settings.contextual_actions.clear();
         self.save()?;
-        Ok(self.settings.contextual_actions.clone())
+        Ok(default_contextual_actions(&self.settings.generation))
     }
 
     pub fn get_agent_presets(&self) -> Vec<AgentPreset> {
@@ -1098,6 +1098,11 @@ mod tests {
             cli_args: Some("--model gemini-2.0-flash".to_string()),
             name_prompt: None,
             commit_prompt: None,
+            consolidation_prompt: None,
+            review_pr_prompt: None,
+            plan_issue_prompt: None,
+            issue_prompt: None,
+            pr_prompt: None,
         };
         service
             .set_generation_settings(settings)
@@ -1124,6 +1129,11 @@ mod tests {
             cli_args: None,
             name_prompt: Some("Custom: {task}".to_string()),
             commit_prompt: Some("Custom: {commits}\n{files}".to_string()),
+            consolidation_prompt: Some("Review these sessions:\n{sessionList}".to_string()),
+            review_pr_prompt: Some("Custom review {{pr.title}} {{pr.diff}}".to_string()),
+            plan_issue_prompt: Some("Custom plan {{issue.title}} {{issue.description}}".to_string()),
+            issue_prompt: Some("Issue prompt {title} {comments}".to_string()),
+            pr_prompt: Some("PR prompt {title} {branch}".to_string()),
         };
         service
             .set_generation_settings(settings)
@@ -1134,6 +1144,20 @@ mod tests {
             loaded.commit_prompt,
             Some("Custom: {commits}\n{files}".to_string())
         );
+        assert_eq!(
+            loaded.consolidation_prompt,
+            Some("Review these sessions:\n{sessionList}".to_string())
+        );
+        assert_eq!(
+            loaded.review_pr_prompt,
+            Some("Custom review {{pr.title}} {{pr.diff}}".to_string())
+        );
+        assert_eq!(
+            loaded.plan_issue_prompt,
+            Some("Custom plan {{issue.title}} {{issue.description}}".to_string())
+        );
+        assert_eq!(loaded.issue_prompt, Some("Issue prompt {title} {comments}".to_string()));
+        assert_eq!(loaded.pr_prompt, Some("PR prompt {title} {branch}".to_string()));
     }
 
     #[test]
@@ -1274,7 +1298,7 @@ mod tests {
 
     #[test]
     fn default_contextual_actions_use_unified_pr_templates() {
-        let defaults = default_contextual_actions();
+        let defaults = default_contextual_actions(&GenerationSettings::default());
 
         assert_eq!(
             defaults
@@ -1303,7 +1327,36 @@ mod tests {
             .reset_contextual_actions_to_defaults()
             .expect("should reset contextual actions");
 
-        assert_eq!(repo_handle.snapshot().contextual_actions, defaults);
-        assert!(!repo_handle.snapshot().contextual_actions.is_empty());
+        assert!(repo_handle.snapshot().contextual_actions.is_empty());
+        assert!(!defaults.is_empty());
+    }
+
+    #[test]
+    fn default_contextual_actions_use_generation_prompt_overrides() {
+        let repo = InMemoryRepository::default();
+        {
+            let mut state = repo.state.lock().unwrap();
+            state.generation.review_pr_prompt = Some("Review custom {{pr.title}} {{pr.diff}}".to_string());
+            state.generation.plan_issue_prompt =
+                Some("Plan custom {{issue.title}} {{issue.description}}".to_string());
+        }
+
+        let service = SettingsService::new(Box::new(repo));
+        let defaults = service.get_contextual_actions();
+
+        let review_action = defaults
+            .iter()
+            .find(|action| action.id == "builtin-review-pr")
+            .expect("expected review action");
+        let plan_action = defaults
+            .iter()
+            .find(|action| action.id == "builtin-plan-issue")
+            .expect("expected issue action");
+
+        assert_eq!(review_action.prompt_template, "Review custom {{pr.title}} {{pr.diff}}");
+        assert_eq!(
+            plan_action.prompt_template,
+            "Plan custom {{issue.title}} {{issue.description}}"
+        );
     }
 }

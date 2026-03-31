@@ -717,6 +717,11 @@ pub async fn set_agent_command_prefix(app: AppHandle, prefix: Option<String>) ->
 pub struct DefaultGenerationPrompts {
     pub name_prompt: String,
     pub commit_prompt: String,
+    pub consolidation_prompt: String,
+    pub review_pr_prompt: String,
+    pub plan_issue_prompt: String,
+    pub issue_prompt: String,
+    pub pr_prompt: String,
 }
 
 #[tauri::command]
@@ -724,6 +729,11 @@ pub fn get_default_generation_prompts() -> DefaultGenerationPrompts {
     DefaultGenerationPrompts {
         name_prompt: lucode::domains::agents::naming::default_name_prompt_template(),
         commit_prompt: lucode::domains::agents::commit_message::default_commit_prompt_template(),
+        consolidation_prompt: lucode::domains::settings::default_consolidation_prompt_template(),
+        review_pr_prompt: lucode::domains::settings::default_review_pr_prompt_template(),
+        plan_issue_prompt: lucode::domains::settings::default_plan_issue_prompt_template(),
+        issue_prompt: lucode::domains::settings::default_issue_session_prompt_template(),
+        pr_prompt: lucode::domains::settings::default_pr_session_prompt_template(),
     }
 }
 
@@ -1432,8 +1442,18 @@ mod tests {
         let prompts = get_default_generation_prompts();
         assert!(!prompts.name_prompt.is_empty());
         assert!(!prompts.commit_prompt.is_empty());
+        assert!(!prompts.consolidation_prompt.is_empty());
+        assert!(!prompts.review_pr_prompt.is_empty());
+        assert!(!prompts.plan_issue_prompt.is_empty());
+        assert!(!prompts.issue_prompt.is_empty());
+        assert!(!prompts.pr_prompt.is_empty());
         assert!(prompts.name_prompt.contains("{task}"));
         assert!(prompts.commit_prompt.contains("{commits}"));
         assert!(prompts.commit_prompt.contains("{files}"));
+        assert!(prompts.consolidation_prompt.contains("{sessionList}"));
+        assert!(prompts.review_pr_prompt.contains("{{pr.title}}"));
+        assert!(prompts.plan_issue_prompt.contains("{{issue.title}}"));
+        assert!(prompts.issue_prompt.contains("{title}"));
+        assert!(prompts.pr_prompt.contains("{branch}"));
     }
 }

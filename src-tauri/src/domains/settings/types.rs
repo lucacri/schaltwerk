@@ -219,6 +219,16 @@ pub struct GenerationSettings {
     pub name_prompt: Option<String>,
     #[serde(default)]
     pub commit_prompt: Option<String>,
+    #[serde(default)]
+    pub consolidation_prompt: Option<String>,
+    #[serde(default)]
+    pub review_pr_prompt: Option<String>,
+    #[serde(default)]
+    pub plan_issue_prompt: Option<String>,
+    #[serde(default)]
+    pub issue_prompt: Option<String>,
+    #[serde(default)]
+    pub pr_prompt: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -383,33 +393,6 @@ pub fn normalize_contextual_actions(actions: Vec<ContextualAction>) -> Vec<Conte
         .into_iter()
         .map(normalize_contextual_action)
         .collect()
-}
-
-pub fn default_contextual_actions() -> Vec<ContextualAction> {
-    normalize_contextual_actions(vec![
-        ContextualAction {
-            id: "builtin-review-pr".to_string(),
-            name: "Review this PR/MR".to_string(),
-            context: ContextualActionContext::Pr,
-            prompt_template: "Review the following pull request or merge request:\n\nTitle: {{pr.title}}\nAuthor: {{pr.author}}\nSource: {{pr.sourceBranch}} -> {{pr.targetBranch}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}\n\nDiff:\n{{pr.diff}}".to_string(),
-            mode: ContextualActionMode::Session,
-            agent_type: Some("claude".to_string()),
-            variant_id: None,
-            preset_id: None,
-            is_built_in: true,
-        },
-        ContextualAction {
-            id: "builtin-plan-issue".to_string(),
-            name: "Plan fix for this issue".to_string(),
-            context: ContextualActionContext::Issue,
-            prompt_template: "Create an implementation plan for the following issue:\n\nTitle: {{issue.title}}\n\nDescription:\n{{issue.description}}\n\nLabels: {{issue.labels}}".to_string(),
-            mode: ContextualActionMode::Spec,
-            agent_type: Some("claude".to_string()),
-            variant_id: None,
-            preset_id: None,
-            is_built_in: true,
-        },
-    ])
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
