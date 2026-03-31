@@ -14,6 +14,8 @@ const createBaseSessionInfo = (): SessionInfo => ({
     last_modified: '2024-01-01T00:00:00Z',
     last_modified_ts: 1704067200000,
     has_uncommitted_changes: false,
+    dirty_files_count: 0,
+    commits_ahead_count: 0,
     has_conflicts: false,
     is_current: false,
     session_type: 'worktree',
@@ -41,8 +43,6 @@ const createBaseSessionInfo = (): SessionInfo => ({
     merge_conflicting_paths: undefined,
     merge_has_conflicts: undefined,
     merge_is_up_to_date: undefined,
-    uncommitted_files_count: undefined,
-    commits_ahead_count: undefined,
 })
 
 describe('sessionComparison', () => {
@@ -96,9 +96,9 @@ describe('sessionComparison', () => {
             expect(areSessionInfosEqual(session1, session2)).toBe(false)
         })
 
-        it('should return false when uncommitted_files_count differs', () => {
-            const session1 = { ...createBaseSessionInfo(), uncommitted_files_count: 3 }
-            const session2 = { ...createBaseSessionInfo(), uncommitted_files_count: 5 }
+        it('should return false when dirty_files_count differs', () => {
+            const session1 = { ...createBaseSessionInfo(), dirty_files_count: 3 }
+            const session2 = { ...createBaseSessionInfo(), dirty_files_count: 5 }
             expect(areSessionInfosEqual(session1, session2)).toBe(false)
         })
 
@@ -133,6 +133,8 @@ describe('sessionComparison', () => {
                 last_modified: '2024-01-01T00:00:00Z',
                 last_modified_ts: 1704067200000,
                 has_uncommitted_changes: true,
+                dirty_files_count: 2,
+                commits_ahead_count: 1,
                 has_conflicts: true,
                 is_current: true,
                 session_type: 'worktree' as const,
@@ -155,8 +157,6 @@ describe('sessionComparison', () => {
                 merge_conflicting_paths: ['c.ts'],
                 merge_has_conflicts: false,
                 merge_is_up_to_date: true,
-                uncommitted_files_count: 3,
-                commits_ahead_count: 5,
             }
             const session2 = { ...session }
             expect(areSessionInfosEqual(session, session2)).toBe(true)
@@ -177,6 +177,8 @@ describe('sessionComparison', () => {
                 ['last_modified', '2024-02-01T00:00:00Z'],
                 ['last_modified_ts', 9999999],
                 ['has_uncommitted_changes', true],
+                ['dirty_files_count', 2],
+                ['commits_ahead_count', 1],
                 ['has_conflicts', true],
                 ['is_current', true],
                 ['session_type', 'container' as const],

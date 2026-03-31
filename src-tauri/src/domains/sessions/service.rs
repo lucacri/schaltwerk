@@ -53,24 +53,6 @@ fn agent_binary_available(agent: &str, binary_paths: &HashMap<String, String>) -
         .unwrap_or(false)
 }
 
-fn compute_commits_ahead_count(
-    worktree_path: &Path,
-    branch: &str,
-    parent_branch: &str,
-) -> Result<u32> {
-    if parent_branch.trim().is_empty() {
-        return Ok(0);
-    }
-
-    let repo = git2::Repository::open(worktree_path)?;
-    let session_ref = repo.find_branch(branch, git2::BranchType::Local)?;
-    let parent_ref = repo.find_branch(parent_branch, git2::BranchType::Local)?;
-    let session_oid = session_ref.get().peel_to_commit()?.id();
-    let parent_oid = parent_ref.get().peel_to_commit()?.id();
-
-    crate::domains::merge::service::count_commits_ahead(&repo, session_oid, parent_oid)
-}
-
 fn resolve_launch_agent(
     preferred: &str,
     binary_paths: &HashMap<String, String>,
@@ -94,6 +76,19 @@ fn resolve_launch_agent(
     Err(anyhow!(
         "Agent '{desired}' is not available{configured_path}. Please install it or select a different agent in Settings."
     ))
+}
+
+fn compute_commits_ahead_count(
+    worktree_path: &Path,
+    session_branch: &str,
+    parent_branch: &str,
+) -> Option<u32> {
+    let repo = git2::Repository::open(worktree_path).ok()?;
+    let session_oid =
+        crate::domains::merge::service::resolve_branch_oid(&repo, session_branch).ok()?;
+    let parent_oid =
+        crate::domains::merge::service::resolve_branch_oid(&repo, parent_branch).ok()?;
+    crate::domains::merge::service::count_commits_ahead(&repo, session_oid, parent_oid).ok()
 }
 
 /// Info needed for session cancellation (extracted with brief lock, then released)
@@ -703,7 +698,7 @@ mod service_unified_tests {
             "resume should be gated off on first start"
         );
         assert!(
-            first_shell.contains("--prompt \"test prompt\""),
+            cmd_first.initial_command.as_deref() == Some("test prompt"),
             "first start should use initial prompt when resume is gated"
         );
 
@@ -734,8 +729,8 @@ mod service_unified_tests {
             "second start should resume once gate is lifted"
         );
         assert!(
-            !second_shell.contains("--prompt"),
-            "resume path should not include prompt"
+            cmd_second.initial_command.is_none(),
+            "resume path should not include an initial command"
         );
 
         if let Some(prev) = prev_home {
@@ -2611,6 +2606,8 @@ impl SessionManager {
                 created_at: Some(spec.created_at),
                 last_modified: Some(spec.updated_at),
                 has_uncommitted_changes: Some(false),
+                dirty_files_count: None,
+                commits_ahead_count: None,
                 has_conflicts: Some(false),
                 is_current: false,
                 session_type: SessionType::Worktree,
@@ -2627,8 +2624,6 @@ impl SessionManager {
                 pr_url: spec.pr_url.clone(),
                 is_consolidation: false,
                 consolidation_sources: None,
-                uncommitted_files_count: Some(0),
-                commits_ahead_count: Some(0),
             };
 
             enriched.push(EnrichedSession {
@@ -2677,6 +2672,8 @@ impl SessionManager {
                     created_at: Some(session.created_at),
                     last_modified: session.last_activity,
                     has_uncommitted_changes: Some(false),
+                    dirty_files_count: None,
+                    commits_ahead_count: None,
                     has_conflicts: Some(false),
                     is_current: false,
                     session_type: SessionType::Worktree,
@@ -2696,8 +2693,6 @@ impl SessionManager {
                     pr_url: session.pr_url.clone(),
                     is_consolidation: session.is_consolidation,
                     consolidation_sources: session.consolidation_sources.clone(),
-                    uncommitted_files_count: Some(0),
-                    commits_ahead_count: Some(0),
                 };
 
                 enriched.push(EnrichedSession {
@@ -2777,6 +2772,16 @@ impl SessionManager {
                 .as_ref()
                 .map(|s| s.has_uncommitted)
                 .unwrap_or(false);
+            let dirty_files_count = git_stats.as_ref().map(|s| s.dirty_files_count);
+            let commits_ahead_count = if worktree_exists {
+                compute_commits_ahead_count(
+                    &session.worktree_path,
+                    &session.branch,
+                    &session.parent_branch,
+                )
+            } else {
+                None
+            };
 
             let diff_stats = git_stats.as_ref().map(|stats| DiffStats {
                 files_changed: stats.files_changed as usize,
@@ -2828,6 +2833,8 @@ impl SessionManager {
                 created_at: Some(session.created_at),
                 last_modified: session.last_activity,
                 has_uncommitted_changes: Some(has_uncommitted),
+                dirty_files_count,
+                commits_ahead_count,
                 has_conflicts,
                 is_current: false,
                 session_type: SessionType::Worktree,
@@ -2844,27 +2851,6 @@ impl SessionManager {
                 pr_url: session.pr_url.clone(),
                 is_consolidation: session.is_consolidation,
                 consolidation_sources: session.consolidation_sources.clone(),
-                uncommitted_files_count: git_stats
-                    .as_ref()
-                    .map(|s| s.uncommitted_files_count),
-                commits_ahead_count: if worktree_exists {
-                    match compute_commits_ahead_count(
-                        &session.worktree_path,
-                        &session.branch,
-                        &session.parent_branch,
-                    ) {
-                        Ok(count) => Some(count),
-                        Err(err) => {
-                            log::warn!(
-                                "Ahead-count computation failed for '{}': {err}",
-                                session.name
-                            );
-                            Some(0)
-                        }
-                    }
-                } else {
-                    Some(0)
-                },
             };
 
             let terminals = vec![

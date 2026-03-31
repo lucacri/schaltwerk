@@ -12,6 +12,8 @@ const SESSION_INFO_KEYS: ReadonlyArray<keyof SessionInfo> = [
     'last_modified',
     'last_modified_ts',
     'has_uncommitted_changes',
+    'dirty_files_count',
+    'commits_ahead_count',
     'has_conflicts',
     'is_current',
     'session_type',
@@ -34,8 +36,6 @@ const SESSION_INFO_KEYS: ReadonlyArray<keyof SessionInfo> = [
     'merge_conflicting_paths',
     'merge_has_conflicts',
     'merge_is_up_to_date',
-    'uncommitted_files_count',
-    'commits_ahead_count',
 ] as const
 
 const DIFF_STATS_KEYS: ReadonlyArray<keyof DiffStats> = [

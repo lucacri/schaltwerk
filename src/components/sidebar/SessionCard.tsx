@@ -1,4 +1,4 @@
-import { memo, useCallback, useState, useRef, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useState, type CSSProperties } from "react";
 import { clsx } from "clsx";
 import { useAtomValue } from "jotai";
 import { VscIssues, VscGitPullRequest } from "react-icons/vsc";
@@ -250,14 +250,6 @@ export const SessionCard = memo<SessionCardProps>(
       }
       return "Select session";
     };
-    const [userCollapsed, setUserCollapsed] = useState(false)
-    const prevSelectedRef = useRef(isSelected)
-    if (isSelected && !prevSelectedRef.current && userCollapsed) {
-      setUserCollapsed(false)
-    }
-    prevSelectedRef.current = isSelected
-    const isExpanded = isSelected && !userCollapsed
-
     const s = session.info;
     const color = getSessionStateColor(s.session_state);
     const sessionName = getSessionDisplayName(s);
@@ -276,8 +268,26 @@ export const SessionCard = memo<SessionCardProps>(
 
     const agentColor = getAgentColorKey(agentKey);
     const colorScheme = getAgentColorScheme(agentColor);
-    const showDirtyBadge =
-      sessionState !== 'spec' && !!s.has_uncommitted_changes;
+    const hasUncommittedChanges = !!s.has_uncommitted_changes;
+    const dirtyFilesCount =
+      s.dirty_files_count
+      ?? (hasUncommittedChanges ? Math.max(s.top_uncommitted_paths?.length ?? 0, 1) : 0);
+    const showDirtyIndicator = hasUncommittedChanges || dirtyFilesCount > 0;
+    const commitsAheadCount = s.commits_ahead_count ?? 0;
+    const filesChanged = s.diff_stats?.files_changed ?? 0;
+    const canCollapse = sessionState !== "spec";
+    const [isExpanded, setIsExpanded] = useState<boolean>(isSelected || !canCollapse);
+    const showExpandedDetails = !canCollapse || isExpanded;
+
+    useEffect(() => {
+      if (!canCollapse) {
+        setIsExpanded(true);
+        return;
+      }
+      if (isSelected) {
+        setIsExpanded(true);
+      }
+    }, [canCollapse, isSelected]);
 
     const surface = getSessionCardSurfaceClasses({
       sessionState,
@@ -337,21 +347,19 @@ export const SessionCard = memo<SessionCardProps>(
         aria-busy={isBusy}
         onClick={() => {
           if (isBusy) return;
-          if (isSelected) {
-            setUserCollapsed(prev => !prev);
-          } else {
-            onSelect(session.info.session_id);
+          if (canCollapse) {
+            setIsExpanded((previous) => !previous);
           }
+          onSelect(session.info.session_id);
         }}
         onKeyDown={(e) => {
           if (isBusy) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            if (isSelected) {
-              setUserCollapsed(prev => !prev);
-            } else {
-              onSelect(session.info.session_id);
+            if (canCollapse) {
+              setIsExpanded((previous) => !previous);
             }
+            onSelect(session.info.session_id);
           }
         }}
         onMouseEnter={() => onHover?.(session.info.session_id)}
@@ -458,15 +466,6 @@ export const SessionCard = memo<SessionCardProps>(
               </span>
             )}
 
-            {showDirtyBadge && (
-              <UncommittedIndicator
-                className="flex-shrink-0"
-                sessionName={sessionName}
-                samplePaths={s.top_uncommitted_paths}
-                count={s.uncommitted_files_count ?? undefined}
-              />
-            )}
-
             {hasFollowUpMessage && !isReadyToMerge && (
               <span
                 className="flex-shrink-0 inline-flex items-center gap-1"
@@ -520,7 +519,64 @@ export const SessionCard = memo<SessionCardProps>(
             )}
           </div>
         </div>
-        {taskDescription && (
+        {sessionState !== "spec" && (
+          <div
+            className="mt-1 flex items-center gap-2 flex-wrap"
+            style={sessionText.meta}
+          >
+            {showDirtyIndicator ? (
+              <UncommittedIndicator
+                className="flex-shrink-0"
+                count={dirtyFilesCount}
+                sessionName={sessionName}
+                samplePaths={s.top_uncommitted_paths}
+              />
+            ) : (
+              <span
+                data-testid="session-card-stat-dirty"
+                className="inline-flex items-center gap-1 rounded border px-1.5 py-[1px]"
+                style={{
+                  ...sessionText.badge,
+                  color: "var(--color-text-tertiary)",
+                  backgroundColor: "rgb(var(--color-bg-hover-rgb) / 0.35)",
+                  borderColor: "var(--color-border-subtle)",
+                }}
+                title={`Dirty files: ${dirtyFilesCount}`}
+              >
+                {dirtyFilesCount} dirty
+              </span>
+            )}
+            <span
+              data-testid="session-card-stat-ahead"
+              className="inline-flex items-center gap-1 rounded border px-1.5 py-[1px]"
+              style={{
+                ...sessionText.badge,
+                color: commitsAheadCount > 0 ? "var(--color-accent-blue-light)" : "var(--color-text-tertiary)",
+                backgroundColor: commitsAheadCount > 0 ? "var(--color-accent-blue-bg)" : "rgb(var(--color-bg-hover-rgb) / 0.35)",
+                borderColor: commitsAheadCount > 0 ? "var(--color-accent-blue-border)" : "var(--color-border-subtle)",
+              }}
+              title={`Commits ahead of ${s.base_branch}: ${commitsAheadCount}`}
+            >
+              {commitsAheadCount} ahead
+            </span>
+            <span
+              data-testid="session-card-stat-diff"
+              className="inline-flex items-center gap-1 rounded border px-1.5 py-[1px]"
+              style={{
+                ...sessionText.badge,
+                color: "var(--color-text-secondary)",
+                backgroundColor: "rgb(var(--color-bg-hover-rgb) / 0.35)",
+                borderColor: "var(--color-border-subtle)",
+              }}
+              title={`Diff summary: ${filesChanged} files, +${additions}, -${deletions}`}
+            >
+              <span>{filesChanged} files</span>
+              <span style={{ color: "var(--color-accent-green-light)" }}>+{additions}</span>
+              <span style={{ color: "var(--color-accent-red-light)" }}>-{deletions}</span>
+            </span>
+          </div>
+        )}
+        {showExpandedDetails && taskDescription && (
           <div
             className="truncate"
             style={{
@@ -532,131 +588,109 @@ export const SessionCard = memo<SessionCardProps>(
             {taskDescription}
           </div>
         )}
-        <div
-          className="mt-1 flex items-center gap-2"
-          style={sessionText.meta}
-        >
-          {sessionState === "spec" ? (
-            <>
-              <span
-                className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded border"
-                style={{
-                  ...sessionText.badge,
-                  backgroundColor: "var(--color-accent-amber-bg)",
-                  color: "var(--color-accent-amber-light)",
-                  borderColor: "var(--color-accent-amber-border)",
-                }}
-              >
-                {t.session.spec}
-              </span>
-              {metadataBadges}
-            </>
-          ) : (
-            <>
-              {agentType && !isWithinVersionGroup && (
+        {showExpandedDetails && (
+          <div
+            className="mt-1 flex items-center gap-2"
+            style={sessionText.meta}
+          >
+            {sessionState === "spec" ? (
+              <>
                 <span
                   className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded border"
                   style={{
                     ...sessionText.badge,
-                    backgroundColor: colorScheme.bg,
-                    color: colorScheme.light,
-                    borderColor: colorScheme.border,
+                    backgroundColor: "var(--color-accent-amber-bg)",
+                    color: "var(--color-accent-amber-light)",
+                    borderColor: "var(--color-accent-amber-border)",
                   }}
-                  title={`Agent: ${agentLabel}`}
                 >
-                  <span
-                    className="w-1 h-1 rounded-full"
-                    style={{
-                      backgroundColor: colorScheme.DEFAULT,
-                    }}
-                  />
-                  {agentLabel}
+                  {t.session.spec}
                 </span>
-              )}
-              {s.is_consolidation && (
-                <div className="flex items-center gap-1.5 flex-shrink-0">
+                {metadataBadges}
+              </>
+            ) : (
+              <>
+                {agentType && !isWithinVersionGroup && (
                   <span
-                    className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border"
+                    className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded border"
                     style={{
                       ...sessionText.badge,
-                      backgroundColor: 'var(--color-accent-purple-bg)',
-                      color: 'var(--color-accent-purple-light)',
-                      borderColor: 'var(--color-accent-purple-border)',
+                      backgroundColor: colorScheme.bg,
+                      color: colorScheme.light,
+                      borderColor: colorScheme.border,
                     }}
+                    title={`Agent: ${agentLabel}`}
                   >
-                    <svg className="w-2.5 h-2.5" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M5 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm6.5 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 16a2 2 0 1 1 0-4 2 2 0 0 1 0 4zM3 5v3.5a.5.5 0 0 0 .5.5H8v3h0V9h4.5a.5.5 0 0 0 .5-.5V5h-1v3H8.5V5h-1v3H4V5H3z" />
-                    </svg>
-                    MERGE
+                    <span
+                      className="w-1 h-1 rounded-full"
+                      style={{
+                        backgroundColor: colorScheme.DEFAULT,
+                      }}
+                    />
+                    {agentLabel}
                   </span>
-                  
-                  {s.consolidation_sources && s.consolidation_sources.length > 0 && (
-                    <div className="flex items-center">
-                      <span className="mr-1 text-muted text-caption">←</span>
-                      <div className="flex items-center -space-x-1">
-                        {s.consolidation_sources.map((sourceId, i) => {
-                          const source = siblings.find(sib => sib.session_id === sourceId)
-                          const agentType = source?.original_agent_type || 'terminal'
-                          const scheme = getAgentColorScheme(getAgentColorKey(agentType))
-                          const version = source?.version_number
-                          
-                          return (
-                            <div 
-                              key={sourceId}
-                              className="flex items-center justify-center w-4 h-4 rounded-full border border-[var(--color-bg-primary)]"
-                              style={{ 
-                                backgroundColor: scheme.DEFAULT,
-                                zIndex: 10 - i 
-                              }}
-                              title={source ? `${agentType}${version ? ` (v${version})` : ''}` : `Session ${sourceId}`}
-                            />
-                          )
-                        })}
+                )}
+                {s.is_consolidation && (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span
+                      className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border"
+                      style={{
+                        ...sessionText.badge,
+                        backgroundColor: 'var(--color-accent-purple-bg)',
+                        color: 'var(--color-accent-purple-light)',
+                        borderColor: 'var(--color-accent-purple-border)',
+                      }}
+                    >
+                      <svg className="w-2.5 h-2.5" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M5 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm6.5 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 16a2 2 0 1 1 0-4 2 2 0 0 1 0 4zM3 5v3.5a.5.5 0 0 0 .5.5H8v3h0V9h4.5a.5.5 0 0 0 .5-.5V5h-1v3H8.5V5h-1v3H4V5H3z" />
+                      </svg>
+                      MERGE
+                    </span>
+                    
+                    {s.consolidation_sources && s.consolidation_sources.length > 0 && (
+                      <div className="flex items-center">
+                        <span className="mr-1 text-muted text-caption">←</span>
+                        <div className="flex items-center -space-x-1">
+                          {s.consolidation_sources.map((sourceId, i) => {
+                            const source = siblings.find(sib => sib.session_id === sourceId)
+                            const agentType = source?.original_agent_type || 'terminal'
+                            const scheme = getAgentColorScheme(getAgentColorKey(agentType))
+                            const version = source?.version_number
+                            
+                            return (
+                              <div 
+                                key={sourceId}
+                                className="flex items-center justify-center w-4 h-4 rounded-full border border-[var(--color-bg-primary)]"
+                                style={{ 
+                                  backgroundColor: scheme.DEFAULT,
+                                  zIndex: 10 - i 
+                                }}
+                                title={source ? `${agentType}${version ? ` (v${version})` : ''}` : `Session ${sourceId}`}
+                              />
+                            )
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
-              {metadataBadges}
-              {(s.uncommitted_files_count ?? 0) > 0 && (
-                <span
-                  style={{
-                    ...sessionText.statsNumber,
-                    color: 'var(--color-accent-amber-light)',
-                  }}
-                  title={`${s.uncommitted_files_count} uncommitted files`}
-                >
-                  {s.uncommitted_files_count}⚡
+                    )}
+                  </div>
+                )}
+                {metadataBadges}
+                <span className="truncate max-w-[120px]" title={s.branch}>
+                  {s.branch}
                 </span>
-              )}
-              {(s.commits_ahead_count ?? 0) > 0 && (
-                <span
-                  style={{
-                    ...sessionText.statsNumber,
-                    color: 'var(--color-text-secondary)',
-                  }}
-                  title={`${s.commits_ahead_count} commits ahead`}
-                >
-                  {s.commits_ahead_count}↑
-                </span>
-              )}
-              <span style={{ ...sessionText.statsNumber, color: "var(--color-accent-green-light)" }}>+{additions}</span>
-              <span style={{ ...sessionText.statsNumber, color: "var(--color-accent-red-light)" }}>-{deletions}</span>
-              <span className="truncate max-w-[120px]" title={s.branch}>
-                {s.branch}
-              </span>
-              {agentResponseTime && (
-                <span
-                  style={{ color: "var(--color-text-muted)" }}
-                  title={t.session.lastAgentOutput}
-                >
-                  {agentResponseTime}
-                </span>
-              )}
-            </>
-          )}
-        </div>
-        {progressPercent > 0 && (
+                {agentResponseTime && (
+                  <span
+                    style={{ color: "var(--color-text-muted)" }}
+                    title={t.session.lastAgentOutput}
+                  >
+                    {agentResponseTime}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        )}
+        {showExpandedDetails && progressPercent > 0 && (
           <>
             <div className="mt-3 h-2 rounded bg-[var(--color-bg-tertiary)]">
               <div
@@ -677,51 +711,51 @@ export const SessionCard = memo<SessionCardProps>(
             </div>
           </>
         )}
-        {isExpanded && (
-          <div
-            className="mt-2 flex items-center justify-between"
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            <SessionActions
-              sessionState={sessionState as "spec" | "running" | "reviewed"}
-              isReadyToMerge={isReadyToMerge}
-              sessionId={s.session_id}
-              sessionSlug={s.session_id}
-              worktreePath={s.worktree_path}
-              branch={s.branch}
-              defaultBranch={s.parent_branch ?? undefined}
-              showPromoteIcon={showPromoteIcon}
-              onCreatePullRequest={onCreatePullRequest}
-              onCreateGitlabMr={onCreateGitlabMr}
-              prNumber={s.pr_number}
-              prUrl={s.pr_url}
-              onRunSpec={onRunDraft}
-              onRefineSpec={onRefineSpec}
-              onDeleteSpec={onDeleteSpec}
-              onMarkReviewed={onMarkReady}
-              onUnmarkReviewed={onUnmarkReady}
-              onCancel={onCancel}
-              onConvertToSpec={onConvertToSpec}
-              onPromoteVersion={onPromoteVersion}
-              onPromoteVersionHover={onPromoteVersionHover}
-              onPromoteVersionHoverEnd={onPromoteVersionHoverEnd}
-              onReset={onReset}
-              onRestartTerminals={onRestartTerminals}
-              onSwitchModel={onSwitchModel}
-              isResetting={isResetting}
-              onMerge={onMerge}
-              onQuickMerge={onQuickMerge}
-              disableMerge={disableMerge}
-              mergeStatus={mergeStatus}
-              mergeConflictingPaths={s.merge_conflicting_paths}
-              isMarkReadyDisabled={isMarkReadyDisabled}
-              onLinkPr={onLinkPr}
-              epic={s.epic}
-              onEpicChange={handleEpicChange}
-              epicDisabled={isBusy}
-            />
-          </div>
+        {showExpandedDetails && (
+        <div
+          className="mt-2 flex items-center justify-between"
+          data-testid="session-card-actions"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <SessionActions
+            sessionState={sessionState as "spec" | "running" | "reviewed"}
+            isReadyToMerge={isReadyToMerge}
+            sessionId={s.session_id}
+            sessionSlug={s.session_id}
+            worktreePath={s.worktree_path}
+            branch={s.branch}
+            defaultBranch={s.parent_branch ?? undefined}
+            showPromoteIcon={showPromoteIcon}
+            onCreatePullRequest={onCreatePullRequest}
+            onCreateGitlabMr={onCreateGitlabMr}
+            prNumber={s.pr_number}
+            prUrl={s.pr_url}
+            onRunSpec={onRunDraft}
+            onRefineSpec={onRefineSpec}
+            onDeleteSpec={onDeleteSpec}
+            onMarkReviewed={onMarkReady}
+            onUnmarkReviewed={onUnmarkReady}
+            onCancel={onCancel}
+            onConvertToSpec={onConvertToSpec}
+            onPromoteVersion={onPromoteVersion}
+            onPromoteVersionHover={onPromoteVersionHover}
+            onPromoteVersionHoverEnd={onPromoteVersionHoverEnd}
+            onReset={onReset}
+            onRestartTerminals={onRestartTerminals}
+            onSwitchModel={onSwitchModel}
+            isResetting={isResetting}
+            onMerge={onMerge}
+            onQuickMerge={onQuickMerge}
+            disableMerge={disableMerge}
+            mergeStatus={mergeStatus}
+            mergeConflictingPaths={s.merge_conflicting_paths}
+            isMarkReadyDisabled={isMarkReadyDisabled}
+            onLinkPr={onLinkPr}
+            epic={s.epic}
+            onEpicChange={handleEpicChange}
+            epicDisabled={isBusy}
+          />
+        </div>
         )}
       </div>
     );

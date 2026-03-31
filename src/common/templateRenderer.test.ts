@@ -3,26 +3,26 @@ import { renderTemplate } from './templateRenderer'
 
 describe('renderTemplate', () => {
     it('replaces simple variables', () => {
-        const template = 'Review {{mr.title}} by {{mr.author}}'
-        const vars = { 'mr.title': 'Fix login', 'mr.author': 'alice' }
+        const template = 'Review {{pr.title}} by {{pr.author}}'
+        const vars = { 'pr.title': 'Fix login', 'pr.author': 'alice' }
         expect(renderTemplate(template, vars)).toBe('Review Fix login by alice')
     })
 
     it('leaves unknown variables as-is', () => {
-        const template = 'Title: {{mr.title}}, Unknown: {{mr.unknown}}'
-        const vars = { 'mr.title': 'Fix' }
-        expect(renderTemplate(template, vars)).toBe('Title: Fix, Unknown: {{mr.unknown}}')
+        const template = 'Title: {{pr.title}}, Unknown: {{pr.unknown}}'
+        const vars = { 'pr.title': 'Fix' }
+        expect(renderTemplate(template, vars)).toBe('Title: Fix, Unknown: {{pr.unknown}}')
     })
 
     it('handles empty values', () => {
-        const template = 'Desc: {{mr.description}}'
-        const vars = { 'mr.description': '' }
+        const template = 'Desc: {{pr.description}}'
+        const vars = { 'pr.description': '' }
         expect(renderTemplate(template, vars)).toBe('Desc: ')
     })
 
     it('handles multiline values', () => {
-        const template = 'Diff:\n{{mr.diff}}'
-        const vars = { 'mr.diff': '+ added\n- removed' }
+        const template = 'Diff:\n{{pr.diff}}'
+        const vars = { 'pr.diff': '+ added\n- removed' }
         expect(renderTemplate(template, vars)).toBe('Diff:\n+ added\n- removed')
     })
 
@@ -31,6 +31,6 @@ describe('renderTemplate', () => {
     })
 
     it('handles empty template', () => {
-        expect(renderTemplate('', { 'mr.title': 'x' })).toBe('')
+        expect(renderTemplate('', { 'pr.title': 'x' })).toBe('')
     })
 })

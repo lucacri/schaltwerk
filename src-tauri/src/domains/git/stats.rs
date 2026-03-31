@@ -278,24 +278,19 @@ pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Re
         .include_untracked(true)
         .recurse_untracked_dirs(true);
     let statuses = repo.statuses(Some(&mut status_opts))?;
-    // Compute filtered has_uncommitted: ignore .lucode internal files
-    let has_uncommitted_filtered = statuses.iter().any(|entry| {
-        if let Some(path) = entry.path()
-            && is_internal_tooling_path(path)
-        {
-            return false;
-        }
-        true
-    }) && !statuses.is_empty();
-    let uncommitted_files_count: u32 = statuses
+    // Compute filtered dirty paths: ignore .lucode internal files.
+    let dirty_paths: HashSet<String> = statuses
         .iter()
-        .filter(|entry| {
-            entry
-                .path()
-                .map(|p| !is_internal_tooling_path(p))
-                .unwrap_or(true)
+        .filter_map(|entry| {
+            let path = entry.path()?;
+            if is_internal_tooling_path(path) {
+                return None;
+            }
+            Some(path.to_string())
         })
-        .count() as u32;
+        .collect();
+    let dirty_files_count = u32::try_from(dirty_paths.len()).unwrap_or(u32::MAX);
+    let has_uncommitted_filtered = !dirty_paths.is_empty();
     let has_conflicts_detected = statuses.iter().any(|entry| {
         entry.status().contains(git2::Status::CONFLICTED)
             && entry
@@ -464,7 +459,7 @@ pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Re
             lines_added: v.lines_added,
             lines_removed: v.lines_removed,
             has_uncommitted: has_uncommitted_filtered,
-            uncommitted_files_count,
+            dirty_files_count,
             calculated_at: Utc::now(),
             last_diff_change_ts,
             has_conflicts: has_conflicts_detected,
@@ -584,7 +579,7 @@ pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Re
         lines_added: insertions,
         lines_removed: deletions,
         has_uncommitted: has_uncommitted_filtered,
-        uncommitted_files_count,
+        dirty_files_count,
         calculated_at: Utc::now(),
         last_diff_change_ts,
         has_conflicts: has_conflicts_detected,

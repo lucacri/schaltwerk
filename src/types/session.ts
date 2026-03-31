@@ -70,6 +70,8 @@ export interface SessionInfo {
     last_modified?: string
     last_modified_ts?: number
     has_uncommitted_changes?: boolean
+    dirty_files_count?: number
+    commits_ahead_count?: number
     has_conflicts?: boolean
     merge_has_conflicts?: boolean
     merge_conflicting_paths?: string[]
@@ -94,8 +96,6 @@ export interface SessionInfo {
     pr_url?: string
     is_consolidation?: boolean
     consolidation_sources?: string[]
-    uncommitted_files_count?: number
-    commits_ahead_count?: number
 }
 
 export interface DiffStats {

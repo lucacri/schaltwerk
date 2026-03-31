@@ -16,7 +16,7 @@ use tokio::time::sleep;
 use super::file_index::refresh_project_files;
 
 use crate::domains::git::service as git;
-use crate::shared::merge_snapshot_gateway::{MergeSnapshotGateway, MergeStateSnapshot};
+use crate::shared::merge_snapshot_gateway::MergeSnapshotGateway;
 use crate::shared::session_metadata_gateway::{ChangedFile, SessionGitStatsUpdated};
 use git2::{Oid, Repository};
 
@@ -343,37 +343,30 @@ impl FileWatcher {
                 let (merge_snapshot, commits_ahead_count) = Repository::open(worktree_path)
                     .ok()
                     .and_then(|repo| {
-                        let session_oid = repo.head().ok().and_then(|h| h.target());
+                        let session_oid = repo.head().ok().and_then(|h| h.target())?;
                         let parent_obj = repo.revparse_single(base_branch).ok()?;
                         let parent_oid = parent_obj.peel_to_commit().ok()?.id();
                         let branch_name = session_branch_name.clone();
-
-                        let commits_ahead = session_oid.and_then(|oid| {
-                            crate::domains::merge::service::count_commits_ahead(
-                                &repo, oid, parent_oid,
-                            )
-                            .ok()
-                        });
-
-                        let snapshot = session_oid.and_then(|oid| {
-                            MergeSnapshotGateway::compute(
-                                &repo,
-                                oid,
-                                parent_oid,
-                                &branch_name,
-                                base_branch,
-                            )
-                            .map_err(|err| {
-                                log::debug!(
-                                    "Watcher merge assessment failed for {session_name}: {err}"
-                                );
-                            })
-                            .ok()
-                        });
-
-                        Some((snapshot.unwrap_or_default(), commits_ahead))
+                        let merge_snapshot = MergeSnapshotGateway::compute(
+                            &repo,
+                            session_oid,
+                            parent_oid,
+                            &branch_name,
+                            base_branch,
+                        )
+                        .map_err(|err| {
+                            log::debug!("Watcher merge assessment failed for {session_name}: {err}");
+                        })
+                        .ok()?;
+                        let commits_ahead_count = crate::domains::merge::service::count_commits_ahead(
+                            &repo,
+                            session_oid,
+                            parent_oid,
+                        )
+                        .ok();
+                        Some((merge_snapshot, commits_ahead_count))
                     })
-                    .unwrap_or((MergeStateSnapshot::default(), None));
+                    .unwrap_or((Default::default(), None));
                 // Collect a small sample of uncommitted paths to help frontend tooltips
                 let sample = match crate::domains::git::operations::uncommitted_sample_paths(
                     worktree_path,
@@ -389,13 +382,13 @@ impl FileWatcher {
                     lines_added: stats.lines_added,
                     lines_removed: stats.lines_removed,
                     has_uncommitted: stats.has_uncommitted,
+                    dirty_files_count: Some(stats.dirty_files_count),
+                    commits_ahead_count,
                     has_conflicts,
                     top_uncommitted_paths: sample,
                     merge_has_conflicts: merge_snapshot.merge_has_conflicts,
                     merge_conflicting_paths: merge_snapshot.merge_conflicting_paths,
                     merge_is_up_to_date: merge_snapshot.merge_is_up_to_date,
-                    uncommitted_files_count: Some(stats.uncommitted_files_count),
-                    commits_ahead_count,
                 };
                 let _ = emit_event(app_handle, SchaltEvent::SessionGitStats, &payload);
                 debug!(

@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import { clsx } from 'clsx'
 import { useAtomValue } from 'jotai'
 import { VscIssues, VscGitPullRequest } from 'react-icons/vsc'
@@ -99,27 +99,35 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   useAtomValue(agentResponseTickAtom)
   const agentResponseTime = formatAgentResponseTime(agentResponseMap, session.info.session_id)
 
-  const [userCollapsed, setUserCollapsed] = useState(false)
-  const prevSelectedRef = useRef(isSelected)
-  if (isSelected && !prevSelectedRef.current) {
-    setUserCollapsed(false)
-  }
-  if (!isSelected && prevSelectedRef.current) {
-    setUserCollapsed(false)
-  }
-  prevSelectedRef.current = isSelected
-  const isExpanded = isSelected && !userCollapsed
-
   const s = session.info
   const additions = s.diff_stats?.insertions || s.diff_stats?.additions || 0
   const deletions = s.diff_stats?.deletions || 0
+  const filesChanged = s.diff_stats?.files_changed || 0
   const isBlocked = s.is_blocked || false
   const isReadyToMerge = s.ready_to_merge || false
   const sessionState = mapSessionUiState(s)
   const isReviewedState = sessionState === 'reviewed'
-  const showDirtyBadge = sessionState !== 'spec' && !!s.has_uncommitted_changes
+  const hasUncommittedChanges = !!s.has_uncommitted_changes
+  const dirtyFilesCount =
+    s.dirty_files_count
+    ?? (hasUncommittedChanges ? Math.max(s.top_uncommitted_paths?.length ?? 0, 1) : 0)
+  const showDirtyIndicator = hasUncommittedChanges || dirtyFilesCount > 0
+  const commitsAheadCount = s.commits_ahead_count ?? 0
+  const canCollapse = sessionState !== 'spec'
+  const [isExpanded, setIsExpanded] = useState<boolean>(isSelected || !canCollapse)
+  const showExpandedActions = !canCollapse || isExpanded
   const agentType = s.original_agent_type as SessionInfo['original_agent_type']
   const agentKey = (agentType || '').toLowerCase()
+
+  useEffect(() => {
+    if (!canCollapse) {
+      setIsExpanded(true)
+      return
+    }
+    if (isSelected) {
+      setIsExpanded(true)
+    }
+  }, [canCollapse, isSelected])
 
   const agentColor = getAgentColorKey(agentKey)
   const colorScheme = getAgentColorScheme(agentColor)
@@ -273,21 +281,19 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
         data-session-selected={isSelected ? 'true' : 'false'}
         onClick={() => {
           if (isBusy) return
-          if (isSelected) {
-            setUserCollapsed(prev => !prev)
-          } else {
-            onSelect(s.session_id)
+          if (canCollapse) {
+            setIsExpanded((previous) => !previous)
           }
+          onSelect(s.session_id)
         }}
         onKeyDown={(event) => {
           if (isBusy) return
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
-            if (isSelected) {
-              setUserCollapsed(prev => !prev)
-            } else {
-              onSelect(s.session_id)
+            if (canCollapse) {
+              setIsExpanded((previous) => !previous)
             }
+            onSelect(s.session_id)
           }
         }}
         onMouseEnter={() => onHover?.(s.session_id)}
@@ -348,39 +354,57 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                     {agentKey}
                   </span>
                 )}
-                {(s.uncommitted_files_count ?? 0) > 0 && (
+                {showDirtyIndicator ? (
+                  <div data-testid="compact-stat-dirty">
+                    <UncommittedIndicator
+                      className="flex-shrink-0"
+                      count={dirtyFilesCount}
+                      sessionName={s.display_name ?? s.session_id}
+                      samplePaths={s.top_uncommitted_paths}
+                    />
+                  </div>
+                ) : (
                   <span
+                    data-testid="compact-stat-dirty"
+                    className="inline-flex items-center px-1.5 py-[1px] rounded border"
                     style={{
-                      ...sessionText.statsNumber,
-                      color: 'var(--color-accent-amber-light)',
+                      ...sessionText.badge,
+                      color: 'var(--color-text-tertiary)',
+                      backgroundColor: 'rgb(var(--color-bg-hover-rgb) / 0.35)',
+                      borderColor: 'var(--color-border-subtle)',
                     }}
-                    title={`${s.uncommitted_files_count} uncommitted files`}
+                    title={`Dirty files: ${dirtyFilesCount}`}
                   >
-                    {s.uncommitted_files_count}⚡
+                    {dirtyFilesCount} dirty
                   </span>
                 )}
-                {(s.commits_ahead_count ?? 0) > 0 && (
-                  <span
-                    style={{
-                      ...sessionText.statsNumber,
-                      color: 'var(--color-text-secondary)',
-                    }}
-                    title={`${s.commits_ahead_count} commits ahead`}
-                  >
-                    {s.commits_ahead_count}↑
-                  </span>
-                )}
-                <span style={{ ...sessionText.statsNumber, color: 'var(--color-accent-green-light)' }}>+{additions}</span>
-                <span style={{ ...sessionText.statsNumber, color: 'var(--color-accent-red-light)' }}>-{deletions}</span>
+                <span
+                  data-testid="compact-stat-ahead"
+                  className="inline-flex items-center px-1.5 py-[1px] rounded border"
+                  style={{
+                    ...sessionText.badge,
+                    color: commitsAheadCount > 0 ? 'var(--color-accent-blue-light)' : 'var(--color-text-tertiary)',
+                    backgroundColor: commitsAheadCount > 0 ? 'var(--color-accent-blue-bg)' : 'rgb(var(--color-bg-hover-rgb) / 0.35)',
+                    borderColor: commitsAheadCount > 0 ? 'var(--color-accent-blue-border)' : 'var(--color-border-subtle)',
+                  }}
+                  title={`Commits ahead of ${s.base_branch}: ${commitsAheadCount}`}
+                >
+                  {commitsAheadCount} ahead
+                </span>
+                <span
+                  className="inline-flex items-center px-1.5 py-[1px] rounded border"
+                  style={{
+                    ...sessionText.badge,
+                    color: 'var(--color-text-secondary)',
+                    backgroundColor: 'rgb(var(--color-bg-hover-rgb) / 0.35)',
+                    borderColor: 'var(--color-border-subtle)',
+                  }}
+                  title={`Diff summary: ${filesChanged} files, +${additions}, -${deletions}`}
+                >
+                  {filesChanged} files <span style={{ color: 'var(--color-accent-green-light)' }}>+{additions}</span>{' '}
+                  <span style={{ color: 'var(--color-accent-red-light)' }}>-{deletions}</span>
+                </span>
                 {statusIndicator}
-                {showDirtyBadge && (
-                  <UncommittedIndicator
-                    className="flex-shrink-0"
-                    sessionName={s.display_name ?? s.session_id}
-                    samplePaths={s.top_uncommitted_paths}
-                    count={s.uncommitted_files_count ?? undefined}
-                  />
-                )}
               </>
             )}
             {metadataBadges}
@@ -395,7 +419,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
             )}
           </div>
 
-          {isExpanded && (
+          {showExpandedActions && (
             <div className="flex-shrink-0" onClick={(event) => event.stopPropagation()}>
               <SessionActions
                 sessionState={sessionState as 'spec' | 'running' | 'reviewed'}

@@ -30,6 +30,8 @@ const createSession = (id: string, createdAt: string, readyToMerge = false): Enr
   terminals: [],
 })
 
+const sessionRows = () => screen.getAllByRole('button').filter(button => button.hasAttribute('data-session-id'))
+
 describe('Sidebar creation-date sorting', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -72,18 +74,15 @@ describe('Sidebar creation-date sorting', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getAllByRole('button').some(btn => btn.textContent?.includes('schaltwerk/alpha_session'))).toBe(true)
+      expect(sessionRows().some(button => button.getAttribute('data-session-id') === 'alpha_session')).toBe(true)
     })
 
-    const orderedButtons = screen.getAllByRole('button').filter(btn => {
-      const label = btn.textContent || ''
-      return label.includes('schaltwerk/') && !label.includes('main (orchestrator)')
-    })
+    const orderedButtons = sessionRows()
 
-    expect(orderedButtons.map(btn => btn.textContent)).toEqual([
-      expect.stringContaining('zebra_session'),
-      expect.stringContaining('alpha_session'),
-      expect.stringContaining('beta_session'),
+    expect(orderedButtons.map(button => button.getAttribute('data-session-id'))).toEqual([
+      'zebra_session',
+      'alpha_session',
+      'beta_session',
     ])
   })
 })

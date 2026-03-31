@@ -10,6 +10,16 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: invokeMock,
 }))
 
+vi.mock('../session/SessionActions', () => ({
+  SessionActions: ({ isMarkReadyDisabled }: { isMarkReadyDisabled?: boolean }) => (
+    <div data-testid="session-actions">
+      <button aria-label="Mark as reviewed" disabled={Boolean(isMarkReadyDisabled)}>
+        Mark as reviewed
+      </button>
+    </div>
+  ),
+}))
+
 const baseInfo: SessionInfo = {
   session_id: 's1',
   display_name: 's1',
@@ -27,6 +37,8 @@ const baseInfo: SessionInfo = {
   todo_percentage: undefined,
   is_blocked: false,
   diff_stats: { files_changed: 1, additions: 2, deletions: 3, insertions: 2 },
+  dirty_files_count: 1,
+  commits_ahead_count: 2,
   ready_to_merge: false,
   original_agent_type: 'claude',
 }
@@ -54,7 +66,7 @@ describe('SessionCard dirty indicator', () => {
       <SessionCard
         session={session}
         index={0}
-        isSelected={false}
+        isSelected
 
         hasFollowUpMessage={false}
         onSelect={() => {}}
@@ -70,7 +82,7 @@ describe('SessionCard dirty indicator', () => {
     expect(indicator).toHaveAttribute('title')
   })
 
-  it('shows dirty indicator for running sessions with uncommitted changes', () => {
+  it('shows dirty indicator for running sessions when dirty', () => {
     const session: EnrichedSession = {
       ...baseSession,
       info: {
@@ -85,7 +97,7 @@ describe('SessionCard dirty indicator', () => {
       <SessionCard
         session={session}
         index={0}
-        isSelected={false}
+        isSelected
 
         hasFollowUpMessage={false}
         onSelect={() => {}}
@@ -96,8 +108,7 @@ describe('SessionCard dirty indicator', () => {
       />
     )
 
-    const indicator = screen.getByRole('button', { name: /has uncommitted changes/i })
-    expect(indicator).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /has uncommitted changes/i })).toBeInTheDocument()
   })
 
   it('does not show dirty indicator when has_uncommitted_changes is false for reviewed session', () => {
@@ -110,10 +121,11 @@ describe('SessionCard dirty indicator', () => {
             ready_to_merge: true,
             session_state: 'reviewed',
             status: 'active',
+            dirty_files_count: 0,
           },
         }}
         index={0}
-        isSelected={false}
+        isSelected
 
         hasFollowUpMessage={false}
         onSelect={() => {}}
@@ -125,6 +137,57 @@ describe('SessionCard dirty indicator', () => {
     )
 
     expect(screen.queryByRole('button', { name: /has uncommitted changes/i })).toBeNull()
+  })
+})
+
+describe('SessionCard stats-first layout', () => {
+  it('shows stats and hides actions by default when not selected', () => {
+    renderWithProviders(
+      <SessionCard
+        session={{
+          ...baseSession,
+          info: {
+            ...baseSession.info,
+            dirty_files_count: 3,
+            commits_ahead_count: 5,
+            diff_stats: { files_changed: 4, additions: 42, deletions: 18, insertions: 42 },
+          },
+        }}
+        index={0}
+        isSelected={false}
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: /has uncommitted changes/i })).toHaveTextContent('3 dirty')
+    expect(screen.getByTestId('session-card-stat-ahead')).toHaveTextContent('5')
+    expect(screen.getByTestId('session-card-stat-diff')).toHaveTextContent('4')
+    expect(screen.getByTestId('session-card-stat-diff')).toHaveTextContent('+42')
+    expect(screen.getByTestId('session-card-stat-diff')).toHaveTextContent('-18')
+    expect(screen.queryByTestId('session-actions')).toBeNull()
+  })
+
+  it('expands selected session cards by default', () => {
+    renderWithProviders(
+      <SessionCard
+        session={baseSession}
+        index={0}
+        isSelected
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+
+    expect(screen.getByTestId('session-actions')).toBeInTheDocument()
   })
 })
 
@@ -143,7 +206,7 @@ describe('SessionCard running tag', () => {
       <SessionCard
         session={session}
         index={0}
-        isSelected={false}
+        isSelected
 
         hasFollowUpMessage={false}
         onSelect={() => {}}
@@ -173,7 +236,7 @@ describe('SessionCard metadata badges', () => {
           },
         }}
         index={0}
-        isSelected={false}
+        isSelected
         hasFollowUpMessage={false}
         onSelect={() => {}}
         onMarkReady={() => {}}
@@ -189,8 +252,7 @@ describe('SessionCard metadata badges', () => {
 
     expect(issueBadge).toBeInTheDocument()
     expect(prBadge).toBeInTheDocument()
-    expect(issueBadge.compareDocumentPosition(additions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(prBadge.compareDocumentPosition(additions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(additions).toBeInTheDocument()
   })
 
   it('opens the linked URL when a metadata badge is clicked', async () => {
@@ -207,7 +269,7 @@ describe('SessionCard metadata badges', () => {
           },
         }}
         index={0}
-        isSelected={false}
+        isSelected
         hasFollowUpMessage={false}
         onSelect={() => {}}
         onMarkReady={() => {}}
@@ -240,7 +302,7 @@ describe('SessionCard metadata badges', () => {
           },
         }}
         index={0}
-        isSelected={false}
+        isSelected
         hasFollowUpMessage={false}
         onSelect={() => {}}
         onMarkReady={() => {}}
@@ -256,117 +318,13 @@ describe('SessionCard metadata badges', () => {
   })
 })
 
-describe('SessionCard expand/collapse', () => {
-  it('hides action buttons when card is not selected (collapsed)', () => {
-    renderWithProviders(
-      <SessionCard
-        session={baseSession}
-        index={0}
-        isSelected={false}
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
-    )
-    expect(screen.queryByRole('button', { name: 'Mark as reviewed' })).toBeNull()
-  })
-
-  it('shows action buttons when card is selected (expanded)', () => {
-    renderWithProviders(
-      <SessionCard
-        session={baseSession}
-        index={0}
-        isSelected={true}
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
-    )
-    expect(screen.getByRole('button', { name: 'Mark as reviewed' })).toBeInTheDocument()
-  })
-
-  it('collapses when already-selected card is clicked', () => {
-    const { container } = renderWithProviders(
-      <SessionCard
-        session={baseSession}
-        index={0}
-        isSelected={true}
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
-    )
-    expect(screen.getByRole('button', { name: 'Mark as reviewed' })).toBeInTheDocument()
-    const card = container.querySelector('[data-session-id="s1"]')!
-    fireEvent.click(card)
-    expect(screen.queryByRole('button', { name: 'Mark as reviewed' })).toBeNull()
-  })
-})
-
-describe('SessionCard stats display', () => {
-  it('shows commits ahead count when available', () => {
-    renderWithProviders(
-      <SessionCard
-        session={{
-          ...baseSession,
-          info: {
-            ...baseSession.info,
-            commits_ahead_count: 5,
-          },
-        }}
-        index={0}
-        isSelected={false}
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
-    )
-    expect(screen.getByTitle('5 commits ahead')).toBeInTheDocument()
-  })
-
-  it('shows uncommitted files count when available', () => {
-    renderWithProviders(
-      <SessionCard
-        session={{
-          ...baseSession,
-          info: {
-            ...baseSession.info,
-            uncommitted_files_count: 3,
-          },
-        }}
-        index={0}
-        isSelected={false}
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
-    )
-    expect(screen.getByTitle('3 uncommitted files')).toBeInTheDocument()
-  })
-})
-
 describe('SessionCard review cooldown', () => {
   it('disables the mark reviewed action when mark ready is temporarily blocked', () => {
     renderWithProviders(
       <SessionCard
         session={baseSession}
         index={0}
-        isSelected={true}
+        isSelected
 
         hasFollowUpMessage={false}
         onSelect={() => {}}

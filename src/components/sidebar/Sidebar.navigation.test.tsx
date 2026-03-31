@@ -270,19 +270,17 @@ describe('Sidebar navigation with arrow keys including orchestrator', () => {
   it('Cmd+P opens switch model modal for a session and confirms switch', async () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    await screen.findAllByLabelText(/Select session \(⌘/i)
+    await waitFor(() => expect(mockSwitchModel).not.toHaveBeenCalled())
+    await screen.findAllByLabelText(/Select session/i)
 
+    // Select first session (running)
     pressKey('ArrowDown', { metaKey: true })
-
     await waitFor(() => {
-      expect(screen.getByLabelText(/Selected session/i)).toBeTruthy()
+      expect(screen.getByRole('button', { name: /Selected session/i })).toHaveAttribute('data-session-id', 's1')
     })
 
-    const switchButton = await waitFor(() => {
-      const btns = screen.getAllByLabelText('Switch model')
-      expect(btns.length).toBeGreaterThanOrEqual(1)
-      return btns[btns.length - 1]
-    })
+    const sessionRow = screen.getByRole('button', { name: /Selected session/i })
+    const switchButton = within(sessionRow).getByLabelText('Switch model')
     await act(async () => {
       fireEvent.click(switchButton)
     })

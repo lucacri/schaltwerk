@@ -37,6 +37,8 @@ const baseInfo: SessionInfo = {
   ready_to_merge: false,
   attention_required: false,
   is_blocked: false,
+  dirty_files_count: 2,
+  commits_ahead_count: 4,
   original_agent_type: 'claude',
   diff_stats: { files_changed: 2, additions: 42, deletions: 3, insertions: 42 },
   issue_number: 8,
@@ -96,12 +98,9 @@ describe('CompactVersionRow', () => {
     expect(screen.getByRole('button', { name: 'Open PR #11' })).toBeInTheDocument()
     expect(screen.getByText('just now')).toBeInTheDocument()
     expect(screen.getByTestId('compact-row-status-running')).toBeInTheDocument()
+    expect(screen.getByTestId('compact-stat-dirty')).toHaveTextContent('2 dirty')
+    expect(screen.getByTestId('compact-stat-ahead')).toHaveTextContent('4')
     expect(screen.queryByTestId('session-actions')).toBeNull()
-  })
-
-  it('shows session actions when selected (expanded)', () => {
-    renderRow({ isSelected: true })
-    expect(screen.getByTestId('session-actions')).toBeInTheDocument()
   })
 
   it('renders idle state when attention is required', () => {
@@ -156,5 +155,10 @@ describe('CompactVersionRow', () => {
 
     fireEvent.click(screen.getByTestId('compact-version-row'))
     expect(onSelect).toHaveBeenCalledWith('feature_v2')
+  })
+
+  it('expands selected rows by default and shows actions', () => {
+    renderRow({ isSelected: true })
+    expect(screen.getByTestId('session-actions')).toBeInTheDocument()
   })
 })

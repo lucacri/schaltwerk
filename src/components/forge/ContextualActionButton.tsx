@@ -6,7 +6,7 @@ import type { ContextualAction } from '../../types/contextualAction'
 import { logger } from '../../utils/logger'
 
 interface ContextualActionButtonProps {
-    context: 'mr' | 'pr' | 'issue'
+    context: 'pr' | 'issue'
     variables: Record<string, string>
 }
 

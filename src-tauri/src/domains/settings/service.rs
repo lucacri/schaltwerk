@@ -50,6 +50,7 @@ impl SettingsService {
         let mut settings = repository.load().unwrap_or_default();
         clean_invalid_binary_paths(&mut settings);
         migrate_generation_model_to_cli_args(&mut settings);
+        settings.contextual_actions = normalize_contextual_actions(settings.contextual_actions);
 
         Self {
             repository,
@@ -561,23 +562,23 @@ impl SettingsService {
         if actions.is_empty() {
             return default_contextual_actions();
         }
-        actions.clone()
+        normalize_contextual_actions(actions.clone())
     }
 
     pub fn set_contextual_actions(
         &mut self,
         actions: Vec<ContextualAction>,
     ) -> Result<(), SettingsServiceError> {
-        self.settings.contextual_actions = actions;
+        self.settings.contextual_actions = normalize_contextual_actions(actions);
         self.save()
     }
 
     pub fn reset_contextual_actions_to_defaults(
         &mut self,
     ) -> Result<Vec<ContextualAction>, SettingsServiceError> {
-        self.settings.contextual_actions = Vec::new();
+        self.settings.contextual_actions = default_contextual_actions();
         self.save()?;
-        Ok(default_contextual_actions())
+        Ok(self.settings.contextual_actions.clone())
     }
 
     pub fn get_agent_presets(&self) -> Vec<AgentPreset> {
@@ -1243,5 +1244,66 @@ mod tests {
         let service = SettingsService::new(Box::new(repo));
         let loaded = service.get_generation_settings();
         assert_eq!(loaded.cli_args, Some("--model new-model".to_string()));
+    }
+
+    #[test]
+    fn get_contextual_actions_migrates_legacy_templates_on_load() {
+        let repo = InMemoryRepository::default();
+        {
+            let mut state = repo.state.lock().unwrap();
+            state.contextual_actions = serde_json::from_value(serde_json::json!([
+                {
+                    "id": "legacy-review",
+                    "name": "Review legacy MR",
+                    "context": "mr",
+                    "promptTemplate": "{{mr.title}} {{pr.headRefName}}",
+                    "mode": "session",
+                    "isBuiltIn": false
+                }
+            ]))
+            .unwrap();
+        }
+
+        let service = SettingsService::new(Box::new(repo));
+        let actions = service.get_contextual_actions();
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].context, ContextualActionContext::Pr);
+        assert_eq!(actions[0].prompt_template, "{{pr.title}} {{pr.sourceBranch}}");
+    }
+
+    #[test]
+    fn default_contextual_actions_use_unified_pr_templates() {
+        let defaults = default_contextual_actions();
+
+        assert_eq!(
+            defaults
+                .iter()
+                .filter(|action| action.context == ContextualActionContext::Pr)
+                .count(),
+            1
+        );
+        let review_action = defaults
+            .iter()
+            .find(|action| action.context == ContextualActionContext::Pr)
+            .expect("expected a unified PR review action");
+        assert!(!review_action.prompt_template.contains("mr."));
+        assert!(!review_action.prompt_template.contains("pr.headRefName"));
+        assert!(review_action.prompt_template.contains("pr.sourceBranch"));
+        assert!(review_action.prompt_template.contains("pr.targetBranch"));
+    }
+
+    #[test]
+    fn reset_contextual_actions_to_defaults_persists_defaults() {
+        let repo = InMemoryRepository::default();
+        let repo_handle = repo.clone();
+        let mut service = SettingsService::new(Box::new(repo));
+
+        let defaults = service
+            .reset_contextual_actions_to_defaults()
+            .expect("should reset contextual actions");
+
+        assert_eq!(repo_handle.snapshot().contextual_actions, defaults);
+        assert!(!repo_handle.snapshot().contextual_actions.is_empty());
     }
 }
