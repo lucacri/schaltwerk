@@ -25,6 +25,8 @@ describe('Sidebar status indicators and actions', () => {
   ]
 
   let unlistenFns: Array<() => void> = []
+  const sessionRows = () => screen.getAllByRole('button').filter(button => button.hasAttribute('data-session-id'))
+  const getSessionRow = (id: string) => sessionRows().find(button => button.getAttribute('data-session-id') === id)
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -72,12 +74,12 @@ describe('Sidebar status indicators and actions', () => {
     fireEvent.click(screen.getByTitle('Show reviewed agents'))
 
     await waitFor(() => {
-      const items = screen.getAllByRole('button').filter(b => (b.textContent || '').includes('para/'))
-      expect(items.length).toBe(1)
+      expect(sessionRows().map(button => button.getAttribute('data-session-id'))).toEqual(['s2'])
     })
 
-    const reviewedItem = screen.getAllByRole('button').find(b => /s2/.test(b.textContent || ''))!
+    const reviewedItem = getSessionRow('s2')!
     expect(reviewedItem).toHaveTextContent('Reviewed')
+    fireEvent.click(reviewedItem)
 
     // Click Unmark
     const unmarkCandidates = within(reviewedItem).getAllByRole('button', { name: /Unmark as reviewed/i })
@@ -195,11 +197,13 @@ describe('Sidebar status indicators and actions', () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
-      const items = screen.getAllByRole('button').filter(b => (b.textContent || '').includes('para/'))
-      expect(items.length).toBe(1)
+      expect(sessionRows().map(button => button.getAttribute('data-session-id'))).toEqual(['s1'])
     })
 
-    const cancelBtn = screen.getByRole('button', { name: /Cancel session/i })
+    const sessionRow = getSessionRow('s1')!
+    fireEvent.click(sessionRow)
+
+    const cancelBtn = within(sessionRow).getByRole('button', { name: /Cancel session/i })
 
     const eventSpy = vi.fn()
     window.addEventListener('schaltwerk:session-action', eventSpy as EventListener, { once: true })
@@ -374,11 +378,13 @@ describe('Sidebar status indicators and actions', () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
-      const button = screen.getAllByRole('button').find(b => /s1/.test(b.textContent || ''))
-      expect(button).toBeTruthy()
+      expect(getSessionRow('s1')).toBeTruthy()
     })
 
-    const convertButton = screen.getAllByRole('button', { name: /Move to spec/i })[0]
+    const sessionRow = getSessionRow('s1') as HTMLElement
+    fireEvent.click(sessionRow)
+
+    const convertButton = within(sessionRow).getByRole('button', { name: /Move to spec/i })
     fireEvent.click(convertButton)
 
     await waitFor(() => {
@@ -392,17 +398,16 @@ describe('Sidebar status indicators and actions', () => {
     fireEvent.click(screen.getByTitle('Show spec agents'))
 
     await waitFor(() => {
-      const specButtons = screen.getAllByRole('button').filter(b => /s1-spec/.test(b.textContent || ''))
-      expect(specButtons).toHaveLength(1)
-      expect(specButtons[0]).toHaveTextContent('Spec')
+      const specButton = getSessionRow('s1-spec')
+      expect(specButton).toBeTruthy()
+      expect(specButton).toHaveTextContent('Spec')
     })
 
     // Switch to reviewed filter and ensure session is not present
     fireEvent.click(screen.getByTitle('Show reviewed agents'))
 
     await waitFor(() => {
-      const reviewedButtons = screen.getAllByRole('button').filter(b => /s1/.test(b.textContent || ''))
-      expect(reviewedButtons).toHaveLength(0)
+      expect(getSessionRow('s1')).toBeUndefined()
     })
   })
 

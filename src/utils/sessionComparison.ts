@@ -12,6 +12,8 @@ const SESSION_INFO_KEYS: ReadonlyArray<keyof SessionInfo> = [
     'last_modified',
     'last_modified_ts',
     'has_uncommitted_changes',
+    'dirty_files_count',
+    'commits_ahead_count',
     'has_conflicts',
     'is_current',
     'session_type',

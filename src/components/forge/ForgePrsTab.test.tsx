@@ -413,7 +413,7 @@ describe('ForgePrsTab', () => {
       expect(screen.getByText('Updated PR')).toBeTruthy()
     })
 
-    expect(screen.getByText(/Updated/)).toBeTruthy()
+    expect(screen.getByText(/^Updated\b/, { selector: 'span[title]' })).toBeTruthy()
   })
 
   it('does not show timestamp when updatedAt is absent', async () => {

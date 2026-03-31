@@ -47,6 +47,9 @@ const createSession = (id: string, readyToMerge = false, sessionState?: 'spec' |
   terminals: []
 })
 
+const sessionRows = () => screen.getAllByRole('button').filter(button => button.hasAttribute('data-session-id'))
+const getSessionRow = (id: string) => sessionRows().find(button => button.getAttribute('data-session-id') === id)
+
 
 describe('Sidebar filter functionality and persistence', () => {
   beforeEach(() => {
@@ -223,11 +226,10 @@ describe('Sidebar filter functionality and persistence', () => {
       fireEvent.click(runningButton)
 
       await waitFor(() => {
-        const sessions = screen.getAllByRole('button').filter(b => (b.textContent || '').includes('para/'))
-        expect(sessions).toHaveLength(3)
+        expect(sessionRows()).toHaveLength(3)
       })
 
-      const firstSessionButton = screen.getAllByRole('button').find(b => b.textContent?.includes('running-1'))
+      const firstSessionButton = getSessionRow('running-1')
       expect(firstSessionButton).toBeInTheDocument()
       fireEvent.click(firstSessionButton!)
 

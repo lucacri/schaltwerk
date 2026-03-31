@@ -1626,6 +1626,8 @@ export const initializeSessionsEventsActionAtom = atom(
                 lines_added?: number
                 lines_removed?: number
                 has_uncommitted?: boolean
+                dirty_files_count?: number
+                commits_ahead_count?: number
                 has_conflicts?: boolean
                 top_uncommitted_paths?: string[] | null
                 merge_has_conflicts?: boolean
@@ -1653,6 +1655,8 @@ export const initializeSessionsEventsActionAtom = atom(
                         ...session.info,
                         diff_stats: diffStats,
                         has_uncommitted_changes: event.has_uncommitted ?? session.info.has_uncommitted_changes,
+                        dirty_files_count: event.dirty_files_count ?? session.info.dirty_files_count,
+                        commits_ahead_count: event.commits_ahead_count ?? session.info.commits_ahead_count,
                         has_conflicts: event.has_conflicts ?? session.info.has_conflicts,
                         top_uncommitted_paths: event.top_uncommitted_paths && event.top_uncommitted_paths.length > 0
                             ? event.top_uncommitted_paths
