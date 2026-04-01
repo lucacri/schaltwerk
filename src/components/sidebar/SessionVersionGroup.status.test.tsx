@@ -76,8 +76,8 @@ const requiredCallbacks = {
 }
 
 describe('SessionVersionGroup status summary', () => {
-  it('shows Running as the primary group status when any version is still running', () => {
-    const { getByLabelText } = render(
+  it('does not show a primary status badge in the group header', () => {
+    const { queryByLabelText } = render(
       <SessionVersionGroup
         group={baseGroup}
         selection={{ kind: 'session', payload: 'unrelated' }}
@@ -86,10 +86,11 @@ describe('SessionVersionGroup status summary', () => {
       />
     )
 
-    expect(getByLabelText('Group status: Running')).toBeInTheDocument()
+    expect(queryByLabelText('Group status: Running')).toBeNull()
+    expect(queryByLabelText('Group status: Reviewed')).toBeNull()
   })
 
-  it('shows Reviewed as the primary group status only after all versions finish', () => {
+  it('does not show a primary status badge even when all versions are reviewed', () => {
     const reviewedGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
@@ -98,7 +99,7 @@ describe('SessionVersionGroup status summary', () => {
       ]
     }
 
-    const { getByLabelText, queryByLabelText } = render(
+    const { queryByLabelText } = render(
       <SessionVersionGroup
         group={reviewedGroup}
         selection={{ kind: 'session', payload: 'unrelated' }}
@@ -107,12 +108,12 @@ describe('SessionVersionGroup status summary', () => {
       />
     )
 
-    expect(getByLabelText('Group status: Reviewed')).toBeInTheDocument()
     expect(queryByLabelText('Group status: Running')).toBeNull()
+    expect(queryByLabelText('Group status: Reviewed')).toBeNull()
   })
 
-  it('keeps primary status visible when collapsed', () => {
-    const { getByLabelText, getByRole, getByTestId } = render(
+  it('keeps status area visible when collapsed', () => {
+    const { getByRole, getByTestId } = render(
       <SessionVersionGroup
         group={baseGroup}
         selection={{ kind: 'session', payload: 'unrelated' }}
@@ -121,15 +122,13 @@ describe('SessionVersionGroup status summary', () => {
       />
     )
 
-    expect(getByLabelText('Group status: Running')).toBeInTheDocument()
-
     const statusRow = getByTestId('version-group-status')
     expect(statusRow.className).not.toContain('flex-wrap')
 
     const toggle = getByRole('button', { name: /feature-A/i })
     fireEvent.click(toggle)
 
-    expect(getByLabelText('Group status: Running')).toBeVisible()
+    expect(getByTestId('version-group-status')).toBeVisible()
   })
 
   it('shows consolidate button disabled when fewer than two running/reviewed sessions exist', () => {
@@ -218,7 +217,7 @@ describe('SessionVersionGroup status summary', () => {
     expect(queryByTestId('terminate-group-button')).toBeNull()
   })
 
-  it('renders shared group task description once above compact version rows', () => {
+  it('renders the first available group description above compact version rows', () => {
     const { getByText, getAllByTestId, queryAllByTestId } = render(
       <SessionVersionGroup
         group={baseGroup}
@@ -233,7 +232,7 @@ describe('SessionVersionGroup status summary', () => {
     expect(queryAllByTestId('session-card')).toHaveLength(0)
   })
 
-  it('does not render shared task summary when version descriptions differ', () => {
+  it('renders the first available description when version descriptions differ', () => {
     const mixedTasksGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
@@ -242,7 +241,7 @@ describe('SessionVersionGroup status summary', () => {
       ],
     }
 
-    const { queryByText } = render(
+    const { getByText, queryByText } = render(
       <SessionVersionGroup
         group={mixedTasksGroup}
         selection={{ kind: 'session', payload: 'unrelated' }}
@@ -251,11 +250,11 @@ describe('SessionVersionGroup status summary', () => {
       />
     )
 
-    expect(queryByText('Task one')).toBeNull()
+    expect(getByText('Task one')).toBeInTheDocument()
     expect(queryByText('Task two')).toBeNull()
   })
 
-  it('does not render shared task summary when some versions have no description', () => {
+  it('renders the first available description when some versions have no description', () => {
     const mixedCompletenessGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
@@ -264,7 +263,7 @@ describe('SessionVersionGroup status summary', () => {
       ],
     }
 
-    const { queryByText } = render(
+    const { getByText } = render(
       <SessionVersionGroup
         group={mixedCompletenessGroup}
         selection={{ kind: 'session', payload: 'unrelated' }}
@@ -273,6 +272,6 @@ describe('SessionVersionGroup status summary', () => {
       />
     )
 
-    expect(queryByText('Task one')).toBeNull()
+    expect(getByText('Task one')).toBeInTheDocument()
   })
 })

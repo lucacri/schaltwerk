@@ -7,7 +7,7 @@ import { logger } from '../../utils/logger'
 
 export const sessionText = {
   title: {
-    ...typography.heading,
+    ...typography.body,
     fontWeight: 600,
     color: 'var(--color-text-primary)',
   },

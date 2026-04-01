@@ -131,13 +131,9 @@ describe('Collapsed sidebar mini rail', () => {
     expect(screen.queryByText(/REPO/)).toBeNull()
   })
 
-  it('renders diff summary without visible names in collapsed rail', async () => {
+  it('renders diff summary with truncated session name in collapsed rail', async () => {
     await renderCollapsedSidebar()
-    // Names should not be visible in rail
-    expect(screen.queryByText('spec-session')).toBeNull()
-    expect(screen.queryByText('running-session')).toBeNull()
-    expect(screen.queryByText('reviewed-session')).toBeNull()
-    // Diff summary should show additions and deletions even when files are hidden
+    expect(screen.getByText('spec-session')).toBeInTheDocument()
     expect(screen.getAllByText('+0').length).toBeGreaterThan(0)
     expect(screen.getAllByText('-0').length).toBeGreaterThan(0)
   })

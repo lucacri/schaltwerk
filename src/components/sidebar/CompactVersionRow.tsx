@@ -7,7 +7,7 @@ import { ProgressIndicator } from '../common/ProgressIndicator'
 import { UncommittedIndicator } from '../common/UncommittedIndicator'
 import { getAgentColorScheme } from '../../common/theme'
 import type { MergeStatus } from '../../store/atoms/sessions'
-import { lastAgentResponseMapAtom, agentResponseTickAtom, formatAgentResponseTime } from '../../store/atoms/lastAgentResponse'
+import { lastAgentResponseMapAtom, agentResponseTickAtom } from '../../store/atoms/lastAgentResponse'
 import { mapSessionUiState } from '../../utils/sessionFilters'
 import { useEpics } from '../../hooks/useEpics'
 import { useTranslation } from '../../common/i18n/useTranslation'
@@ -95,9 +95,8 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
 }) => {
   const { t } = useTranslation()
   const { setItemEpic } = useEpics()
-  const agentResponseMap = useAtomValue(lastAgentResponseMapAtom)
+  useAtomValue(lastAgentResponseMapAtom)
   useAtomValue(agentResponseTickAtom)
-  const agentResponseTime = formatAgentResponseTime(agentResponseMap, session.info.session_id)
 
   const s = session.info
   const additions = s.diff_stats?.insertions || s.diff_stats?.additions || 0
@@ -137,6 +136,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
     isSelected,
     isReviewedState,
     isRunning: Boolean(isRunning),
+    isIdle: !!s.attention_required,
     hasFollowUpMessage,
     willBeDeleted,
     isPromotionPreview,
@@ -299,13 +299,30 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
         onMouseEnter={() => onHover?.(s.session_id)}
         onMouseLeave={() => onHover?.(null)}
         className={clsx(
-          'group relative w-full text-left px-2.5 py-1.5 rounded-md border transition-all duration-300',
+          'group relative w-full text-left pl-3.5 pr-2.5 py-1.5 rounded-md border transition-all duration-300',
           surface.className,
           isBusy ? 'cursor-progress opacity-60' : 'cursor-pointer',
         )}
         style={surface.style}
         aria-label={`Select session ${s.display_name ?? s.session_id}`}
       >
+        {sessionState !== 'spec' && (() => {
+          const isIdle = !!s.attention_required
+          const isActivelyRunning = !isIdle && sessionState === 'running' && !isReadyToMerge
+          const stripColor = isIdle
+            ? 'var(--color-accent-yellow)'
+            : isActivelyRunning
+              ? 'var(--color-accent-blue)'
+              : isReviewedState
+                ? 'var(--color-accent-green)'
+                : 'var(--color-border-subtle)'
+          return (
+            <div
+              className={clsx('absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md', isActivelyRunning && 'session-status-pulse')}
+              style={{ backgroundColor: stripColor }}
+            />
+          )
+        })()}
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2 overflow-hidden" style={sessionText.meta}>
             {sessionState === 'spec' ? (
@@ -322,20 +339,6 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
               </span>
             ) : (
               <>
-                {s.version_number && (
-                  <span
-                    className="inline-flex flex-shrink-0 items-center px-1.5 py-[1px] rounded border"
-                    style={{
-                      ...sessionText.badge,
-                      backgroundColor: 'rgb(var(--color-bg-hover-rgb) / 0.6)',
-                      color: 'var(--color-text-secondary)',
-                      borderColor: 'var(--color-border-subtle)',
-                    }}
-                    title={`Version ${s.version_number}`}
-                  >
-                    v{s.version_number}
-                  </span>
-                )}
                 {agentType && (
                   <span
                     className="inline-flex flex-shrink-0 items-center gap-1 px-1.5 py-[1px] rounded border"
@@ -351,7 +354,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                       className="w-1 h-1 rounded-full"
                       style={{ backgroundColor: colorScheme.DEFAULT }}
                     />
-                    {agentKey}
+                    {s.version_number ? `v${s.version_number} · ${agentKey}` : agentKey}
                   </span>
                 )}
                 {showDirtyIndicator ? (
@@ -363,60 +366,21 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                       samplePaths={s.top_uncommitted_paths}
                     />
                   </div>
-                ) : (
-                  <span
-                    data-testid="compact-stat-dirty"
-                    className="inline-flex items-center px-1.5 py-[1px] rounded border"
-                    style={{
-                      ...sessionText.badge,
-                      color: 'var(--color-text-tertiary)',
-                      backgroundColor: 'rgb(var(--color-bg-hover-rgb) / 0.35)',
-                      borderColor: 'var(--color-border-subtle)',
-                    }}
-                    title={`Dirty files: ${dirtyFilesCount}`}
-                  >
-                    {dirtyFilesCount} dirty
-                  </span>
-                )}
+                ) : null}
                 <span
-                  data-testid="compact-stat-ahead"
-                  className="inline-flex items-center px-1.5 py-[1px] rounded border"
-                  style={{
-                    ...sessionText.badge,
-                    color: commitsAheadCount > 0 ? 'var(--color-accent-blue-light)' : 'var(--color-text-tertiary)',
-                    backgroundColor: commitsAheadCount > 0 ? 'var(--color-accent-blue-bg)' : 'rgb(var(--color-bg-hover-rgb) / 0.35)',
-                    borderColor: commitsAheadCount > 0 ? 'var(--color-accent-blue-border)' : 'var(--color-border-subtle)',
-                  }}
-                  title={`Commits ahead of ${s.base_branch}: ${commitsAheadCount}`}
+                  className="inline-flex items-center gap-1"
+                  style={sessionText.meta}
+                  title={`${commitsAheadCount} ahead · ${filesChanged} files · +${additions} -${deletions}`}
                 >
-                  {commitsAheadCount} ahead
-                </span>
-                <span
-                  className="inline-flex items-center px-1.5 py-[1px] rounded border"
-                  style={{
-                    ...sessionText.badge,
-                    color: 'var(--color-text-secondary)',
-                    backgroundColor: 'rgb(var(--color-bg-hover-rgb) / 0.35)',
-                    borderColor: 'var(--color-border-subtle)',
-                  }}
-                  title={`Diff summary: ${filesChanged} files, +${additions}, -${deletions}`}
-                >
-                  {filesChanged} files <span style={{ color: 'var(--color-accent-green-light)' }}>+{additions}</span>{' '}
+                  <span>{commitsAheadCount} ahead</span>
+                  <span>{filesChanged} files</span>
+                  <span style={{ color: 'var(--color-accent-green-light)' }}>+{additions}</span>
                   <span style={{ color: 'var(--color-accent-red-light)' }}>-{deletions}</span>
                 </span>
                 {statusIndicator}
               </>
             )}
             {metadataBadges}
-            {agentResponseTime && (
-              <span
-                className="truncate"
-                style={{ color: 'var(--color-text-muted)' }}
-                title={t.session.lastAgentOutput}
-              >
-                {agentResponseTime}
-              </span>
-            )}
           </div>
 
           {showExpandedActions && (

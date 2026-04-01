@@ -78,6 +78,7 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
     isSelected,
     isReviewedState: sessionState === 'reviewed',
     isRunning,
+    isIdle: !!info.attention_required,
     hasFollowUpMessage,
   })
 
@@ -171,7 +172,18 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
           <span style={{ color: 'var(--color-accent-red-light)' }}>-{deletions}</span>
         </div>
 
-        {/* No branch/name text in rail */}
+        <div
+          className="mt-1 w-full text-center truncate"
+          style={{
+            fontSize: theme.fontSize.caption,
+            lineHeight: '1.2',
+            color: 'var(--color-text-tertiary)',
+            fontFamily: theme.fontFamily.sans,
+          }}
+          title={sessionName}
+        >
+          {sessionName}
+        </div>
       </div>
     </div>
   )

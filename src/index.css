@@ -387,6 +387,15 @@ body.is-split-dragging[data-split-orientation="mixed"] {
   background-color: var(--color-accent-purple-bg) !important;
 }
 
+@keyframes session-status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.session-status-pulse {
+  animation: session-status-pulse 2s ease-in-out infinite;
+}
+
 .session-ring-magenta {
   box-shadow: 0 0 0 2px var(--color-accent-magenta), 0 0 0 4px var(--color-accent-magenta-bg);
   background-color: var(--color-accent-magenta-bg) !important;

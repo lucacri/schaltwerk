@@ -5,7 +5,6 @@ import { VscIssues, VscGitPullRequest } from "react-icons/vsc";
 import { SessionActions } from "../session/SessionActions";
 import { SessionInfo, SessionMonitorStatus } from "../../types/session";
 import { UncommittedIndicator } from "../common/UncommittedIndicator";
-import { ProgressIndicator } from "../common/ProgressIndicator";
 import { InlineEditableText } from "../common/InlineEditableText";
 import { theme, getAgentColorScheme } from "../../common/theme";
 import type { MergeStatus } from "../../store/atoms/sessions";
@@ -64,24 +63,12 @@ interface SessionCardProps {
   isHighlighted?: boolean;
 }
 
-function getSessionStateColor(state?: string): "green" | "violet" | "gray" {
-  switch (state) {
-    case "active":
-      return "green";
-    case "review":
-    case "ready":
-      return "violet";
-    case "stale":
-    default:
-      return "gray";
-  }
-}
-
 type SessionCardSurfaceOptions = {
   sessionState: SessionInfo['session_state']
   isSelected: boolean
   isReviewedState: boolean
   isRunning: boolean
+  isIdle: boolean
   hasFollowUpMessage?: boolean
   willBeDeleted?: boolean
   isPromotionPreview?: boolean
@@ -102,8 +89,9 @@ type SessionCardSurfaceStyle = CSSProperties & {
 export function getSessionCardSurfaceClasses({
   sessionState,
   isSelected,
-  isReviewedState,
-  isRunning,
+  isReviewedState: _isReviewedState,
+  isRunning: _isRunning,
+  isIdle,
   hasFollowUpMessage,
   willBeDeleted,
   isPromotionPreview,
@@ -146,21 +134,18 @@ export function getSessionCardSurfaceClasses({
   } else if (isSelected) {
     style['--session-card-border'] = 'transparent'
     className = clsx(className, "session-ring session-ring-blue")
-  } else if (isReviewedState) {
-    style['--session-card-border'] = 'transparent'
-    className = clsx(className, "session-ring session-ring-green opacity-90")
   }
 
   if (!willBeDeleted && !isSelected) {
+    if (isIdle) {
+      style['--session-card-bg'] = 'var(--color-accent-yellow-bg)'
+      style['--session-card-hover-bg'] = 'var(--color-accent-yellow-bg)'
+      style['--session-card-border'] = 'var(--color-accent-yellow-border)'
+    }
     if (hasFollowUpMessage) {
       style['--session-card-bg'] = 'var(--color-accent-blue-bg)'
       style['--session-card-hover-bg'] = 'var(--color-accent-blue-bg)'
       className = clsx(className, "ring-2 ring-[var(--color-accent-blue-border)]")
-    }
-    if (isRunning) {
-      style['--session-card-bg'] = 'var(--color-accent-magenta-bg)'
-      style['--session-card-hover-bg'] = 'var(--color-accent-magenta-bg)'
-      className = clsx(className, "ring-2 ring-[var(--color-accent-magenta-border)]")
     }
   }
 
@@ -251,10 +236,8 @@ export const SessionCard = memo<SessionCardProps>(
       return "Select session";
     };
     const s = session.info;
-    const color = getSessionStateColor(s.session_state);
     const sessionName = getSessionDisplayName(s);
     const taskDescription = s.current_task || s.spec_content;
-    const progressPercent = s.todo_percentage || 0;
     const additions = s.diff_stats?.insertions || s.diff_stats?.additions || 0;
     const deletions = s.diff_stats?.deletions || 0;
     const isBlocked = s.is_blocked || false;
@@ -294,6 +277,7 @@ export const SessionCard = memo<SessionCardProps>(
       isSelected,
       isReviewedState,
       isRunning: Boolean(isRunning),
+      isIdle: !!s.attention_required,
       hasFollowUpMessage,
       willBeDeleted,
       isPromotionPreview,
@@ -367,13 +351,30 @@ export const SessionCard = memo<SessionCardProps>(
         data-session-id={session.info.session_id}
         data-session-selected={isSelected ? "true" : "false"}
         className={clsx(
-          "group relative w-full text-left px-3 py-2.5 rounded-md mb-2 border transition-all duration-300",
+          "group relative w-full text-left pl-4 pr-3 py-2.5 rounded-md mb-2 border transition-all duration-300",
           surface.className,
           isBusy ? "cursor-progress opacity-60" : "cursor-pointer",
         )}
         style={surface.style}
         aria-label={getAccessibilityLabel(isSelected, index)}
       >
+        {sessionState !== "spec" && (() => {
+          const isIdle = !!s.attention_required
+          const isActivelyRunning = !isIdle && sessionState === "running" && !isReadyToMerge
+          const stripColor = isIdle
+            ? "var(--color-accent-yellow)"
+            : isActivelyRunning
+              ? "var(--color-accent-blue)"
+              : isReviewedState
+                ? "var(--color-accent-green)"
+                : "var(--color-border-subtle)"
+          return (
+            <div
+              className={clsx("absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md", isActivelyRunning && "session-status-pulse")}
+              style={{ backgroundColor: stripColor }}
+            />
+          )
+        })()}
         {isBusy && (
           <div
             className="absolute inset-0 z-10 flex items-center justify-center rounded-md pointer-events-none"
@@ -396,52 +397,30 @@ export const SessionCard = memo<SessionCardProps>(
           className="flex items-start justify-between gap-2"
           style={{ marginBottom: "8px" }}
         >
-          <div className="flex-1 min-w-0 flex items-center gap-2">
-            <div className="truncate flex items-center gap-2" style={sessionText.title}>
-              {onRename ? (
-                <InlineEditableText
-                  value={sessionName}
-                  onSave={(newName) => onRename(s.session_id, newName)}
-                  textStyle={sessionText.title}
-                  disabled={isBusy}
-                />
-              ) : (
-                sessionName
-              )}
-            </div>
-            {sessionState !== "spec" && (
-              <div className="flex-shrink-0 flex items-center">
-                {!s.attention_required &&
-                  sessionState === "running" &&
-                  !isReadyToMerge && <ProgressIndicator size="sm" />}
-                {s.attention_required && (
-                  <span
-                    className="idle-indicator"
-                    style={{
-                      fontSize: theme.fontSize.caption,
-                      lineHeight: theme.lineHeight.compact,
-                      fontFamily: theme.fontFamily.sans,
-                      fontWeight: 600,
-                      color: "var(--color-accent-yellow-light)",
-                    }}
-                  >
-                    {t.session.idle}
-                  </span>
-                )}
-                {isRunning && isReviewedState && (
-                  <span
-                    className="px-1.5 py-0.5 rounded border"
-                    style={{
-                      ...sessionText.badge,
-                      backgroundColor: "var(--color-accent-magenta-bg)",
-                      color: "var(--color-accent-magenta)",
-                      borderColor: "var(--color-accent-magenta-border)",
-                    }}
-                  >
-                    {t.session.running}
-                  </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="truncate flex items-center gap-2" style={sessionText.title}>
+                {onRename ? (
+                  <InlineEditableText
+                    value={sessionName}
+                    onSave={(newName) => onRename(s.session_id, newName)}
+                    textStyle={sessionText.title}
+                    disabled={isBusy}
+                  />
+                ) : (
+                  sessionName
                 )}
               </div>
+            {s.attention_required && (
+              <span
+                className="flex-shrink-0"
+                style={{
+                  ...sessionText.badge,
+                  color: "var(--color-accent-yellow-light)",
+                }}
+              >
+                {t.session.idle}
+              </span>
             )}
             {isReviewedState && (
               <span
@@ -492,8 +471,18 @@ export const SessionCard = memo<SessionCardProps>(
                 </span>
               </span>
             )}
+            </div>
+            {taskDescription && (
+              <div
+                className="truncate mt-0.5"
+                style={sessionText.meta}
+                title={taskDescription}
+              >
+                {taskDescription}
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-start gap-2 flex-shrink-0">
             {index < 8 && (
               <span
                 className="px-1.5 py-0.5 rounded"
@@ -574,18 +563,6 @@ export const SessionCard = memo<SessionCardProps>(
               <span style={{ color: "var(--color-accent-green-light)" }}>+{additions}</span>
               <span style={{ color: "var(--color-accent-red-light)" }}>-{deletions}</span>
             </span>
-          </div>
-        )}
-        {showExpandedDetails && taskDescription && (
-          <div
-            className="truncate"
-            style={{
-              ...sessionText.agent,
-              color: "var(--color-text-primary)",
-            }}
-            title={taskDescription}
-          >
-            {taskDescription}
           </div>
         )}
         {showExpandedDetails && (
@@ -689,27 +666,6 @@ export const SessionCard = memo<SessionCardProps>(
               </>
             )}
           </div>
-        )}
-        {showExpandedDetails && progressPercent > 0 && (
-          <>
-            <div className="mt-3 h-2 rounded bg-[var(--color-bg-tertiary)]">
-              <div
-                className="h-2 rounded"
-                style={{
-                  width: `${progressPercent}%`,
-                  backgroundColor:
-                    color === "green"
-                      ? "var(--color-accent-green)"
-                      : color === "violet"
-                        ? "var(--color-accent-violet)"
-                        : "var(--color-text-muted)",
-                }}
-              />
-            </div>
-            <div className="mt-1" style={sessionText.meta}>
-              {progressPercent}{t.session.complete}
-            </div>
-          </>
         )}
         {showExpandedDetails && (
         <div

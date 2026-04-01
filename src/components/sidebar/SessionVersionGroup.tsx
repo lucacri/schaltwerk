@@ -2,10 +2,9 @@ import { memo, useState } from 'react'
 import { clsx } from 'clsx'
 import { SessionCard } from './SessionCard'
 import { CompactVersionRow } from './CompactVersionRow'
-import { getSessionVersionGroupAggregate, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
+import { SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
 import { isSpec } from '../../utils/sessionFilters'
 import { SessionSelection } from '../../hooks/useSessionManagement'
-import { ProgressIndicator } from '../common/ProgressIndicator'
 import type { MergeStatus } from '../../store/atoms/sessions'
 import { sessionText } from './sessionCardStyles'
 
@@ -142,41 +141,6 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   )
   const hasSelectedVersion = !!selectedVersionInGroup
 
-  const aggregate = getSessionVersionGroupAggregate(group)
-  const primaryStatus = (() => {
-    if (aggregate.state === 'running') {
-      return {
-        label: 'Running',
-        bg: 'var(--color-accent-blue-bg)',
-        light: 'var(--color-accent-blue-light)',
-        border: 'var(--color-accent-blue-border)',
-        icon: (
-          <span className="flex items-center" aria-hidden="true">
-            <ProgressIndicator size="sm" />
-          </span>
-        )
-      }
-    }
-
-    if (aggregate.state === 'reviewed') {
-      return {
-        label: 'Reviewed',
-        bg: 'var(--color-accent-green-bg)',
-        light: 'var(--color-accent-green-light)',
-        border: 'var(--color-accent-green-border)',
-        icon: <span aria-hidden="true">✓</span>
-      }
-    }
-
-    return {
-      label: 'Spec',
-      bg: 'var(--color-accent-amber-bg)',
-      light: 'var(--color-accent-amber-light)',
-      border: 'var(--color-accent-amber-border)',
-      icon: <span aria-hidden="true">Draft</span>
-    }
-  })()
-
   const hasMultipleVersions = group.versions.length >= 2
   const runningOrReviewedCount = group.versions.filter(v => {
     const state = v.session.info.session_state
@@ -184,16 +148,12 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   }).length
   const canConsolidate = runningOrReviewedCount >= 2
   const hasRunning = group.versions.some(v => v.session.info.session_state === 'running')
-  const versionDescriptions = group.versions
+  const groupDescription = group.versions
     .map(version => (version.session.info.current_task || version.session.info.spec_content || '').trim())
-  const allDescriptionsPresent = versionDescriptions.every(Boolean)
-  const uniqueDescriptions = [...new Set(versionDescriptions)]
-  const sharedTaskDescription = allDescriptionsPresent && uniqueDescriptions.length === 1
-    ? uniqueDescriptions[0]
-    : undefined
+    .find(Boolean) || undefined
 
   return (
-    <div className="mb-3 relative">
+    <div className="mb-2 relative">
       {/* Version group container with subtle background */}
       <div className={clsx(
         'rounded-lg border transition-all duration-200'
@@ -230,31 +190,31 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
           }}
           title={`${group.baseName} (${group.versions.length} versions) - Click to expand/collapse`}
         >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {/* Expand/collapse icon */}
-            <svg 
-              className={clsx('w-3 h-3 transition-transform', isExpanded ? 'rotate-90' : 'rotate-0')} 
-              fill="currentColor" 
-              viewBox="0 0 20 20"
-            >
-              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-            </svg>
-            <span className="font-medium text-[var(--color-text-primary)]">{group.baseName}</span>
-            <span
-              className="text-xs px-2 py-0.5 rounded-full font-medium ml-2"
-              style={hasSelectedVersion ? {
-                backgroundColor: 'var(--color-accent-blue-bg)',
-                color: 'var(--color-accent-blue-light)',
-                borderColor: 'var(--color-accent-blue-border)'
-              } : {
-                backgroundColor: 'rgba(var(--color-bg-hover-rgb), 0.5)',
-                color: 'var(--color-text-secondary)',
-                borderColor: 'rgba(var(--color-border-subtle-rgb), 0.5)'
-              }}
-            >
-              {group.versions.length}x
-            </span>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <svg
+                className={clsx('w-3 h-3 flex-shrink-0 transition-transform', isExpanded ? 'rotate-90' : 'rotate-0')}
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              </svg>
+              <span className="truncate" style={sessionText.title}>{group.baseName}</span>
+              <span
+                className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
+                style={hasSelectedVersion ? {
+                  backgroundColor: 'var(--color-accent-blue-bg)',
+                  color: 'var(--color-accent-blue-light)',
+                  borderColor: 'var(--color-accent-blue-border)'
+                } : {
+                  backgroundColor: 'rgba(var(--color-bg-hover-rgb), 0.5)',
+                  color: 'var(--color-text-secondary)',
+                  borderColor: 'rgba(var(--color-border-subtle-rgb), 0.5)'
+                }}
+              >
+                {group.versions.length}x
+              </span>
             
             {/* Base branch indicator */}
             {(() => {
@@ -271,10 +231,20 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                 </>
               )
             })()}
+            </div>
+            {groupDescription && (
+              <div
+                className="truncate mt-0.5 pl-5"
+                style={sessionText.meta}
+                title={groupDescription}
+              >
+                {groupDescription}
+              </div>
+            )}
           </div>
-          
+
           <div
-            className="flex items-center gap-1 justify-end overflow-hidden flex-nowrap"
+            className="flex items-center gap-1 justify-end overflow-hidden flex-nowrap flex-shrink-0"
             data-testid="version-group-status"
           >
             {hasMultipleVersions && onConsolidate && (
@@ -318,43 +288,16 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                 </svg>
               </button>
             )}
-            <span
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold tracking-tight whitespace-nowrap flex-shrink-0"
-              aria-label={`Group status: ${primaryStatus.label}`}
-              style={{
-                backgroundColor: primaryStatus.bg,
-                color: primaryStatus.light,
-                borderColor: primaryStatus.border,
-              }}
-            >
-              {primaryStatus.icon}
-              <span>{primaryStatus.label}</span>
-            </span>
           </div>
         </div>
         </button>
 
-        {sharedTaskDescription && (
-          <div className="px-3 pb-2">
-            <div
-              className="truncate"
-              style={{
-                ...sessionText.agent,
-                color: 'var(--color-text-primary)',
-              }}
-              title={sharedTaskDescription}
-            >
-              {sharedTaskDescription}
-            </div>
-          </div>
-        )}
-
         {isExpanded && (
-          <div className="p-2 pt-0">
+          <div className="p-2 pt-2">
             <div className="relative pl-6">
               <div className="absolute left-2 top-2 bottom-2 w-px bg-[rgba(var(--color-border-strong-rgb),0.5)]" />
 
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {group.versions.map((version, versionIndex) => {
                   const isSelected = (selection.kind === 'session' && selection.payload === version.session.info.session_id) ||
                     (isInSpecMode === true && isSpec(version.session.info) && currentSpecId === version.session.info.session_id)

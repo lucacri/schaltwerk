@@ -55,6 +55,7 @@ import { EpicModal } from '../modals/EpicModal'
 import { ConfirmModal } from '../modals/ConfirmModal'
 import { useEpics } from '../../hooks/useEpics'
 import { EpicGroupHeader } from './EpicGroupHeader'
+import { getEpicAccentScheme } from '../../utils/epicColors'
 import { projectForgeAtom } from '../../store/atoms/forge'
 
 // Removed legacy terminal-stuck idle handling; we rely on last-edited timestamps only
@@ -1712,7 +1713,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                 className={clsx(
                                     'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
                                     filterMode === FilterMode.Spec
-                                        ? 'bg-[var(--color-bg-hover)] text-[var(--color-text-primary)] border-[var(--color-border-default)]'
+                                        ? 'bg-[var(--color-accent-blue-bg)] text-[var(--color-text-primary)] border-[var(--color-accent-blue-border)] font-medium'
                                         : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
                                     keyboardNavigatedFilter === FilterMode.Spec && ''
                                 )}
@@ -1725,7 +1726,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                 className={clsx(
                                     'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
                                     filterMode === FilterMode.Running
-                                        ? 'bg-[var(--color-bg-hover)] text-[var(--color-text-primary)] border-[var(--color-border-default)]'
+                                        ? 'bg-[var(--color-accent-blue-bg)] text-[var(--color-text-primary)] border-[var(--color-accent-blue-border)] font-medium'
                                         : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
                                     keyboardNavigatedFilter === FilterMode.Running && ''
                                 )}
@@ -1738,7 +1739,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                 className={clsx(
                                     'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
                                     filterMode === FilterMode.Reviewed
-                                        ? 'bg-[var(--color-bg-hover)] text-[var(--color-text-primary)] border-[var(--color-border-default)]'
+                                        ? 'bg-[var(--color-accent-blue-bg)] text-[var(--color-text-primary)] border-[var(--color-accent-blue-border)] font-medium'
                                         : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
                                     keyboardNavigatedFilter === FilterMode.Reviewed && ''
                                 )}
@@ -2024,26 +2025,33 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
 	                                const sessionCount = epicGroup.groups.reduce((acc, group) => acc + group.versions.length, 0)
 	                                const collapsed = Boolean(collapsedEpicIds[epic.id])
 	                                const countLabel = `${sessionCount} session${sessionCount === 1 ? '' : 's'}`
+	                                const epicScheme = getEpicAccentScheme(epic.color)
 
 	                                elements.push(
-	                                    <EpicGroupHeader
-	                                        key={`epic-header-${epic.id}`}
-	                                        epic={epic}
-	                                        collapsed={collapsed}
-	                                        countLabel={countLabel}
-	                                        menuOpen={epicMenuOpenId === epic.id}
-	                                        onMenuOpenChange={(open) => setEpicMenuOpenId(open ? epic.id : null)}
-	                                        onToggleCollapsed={() => toggleEpicCollapsed(epic.id)}
-	                                        onEdit={() => setEditingEpic(epic)}
-	                                        onDelete={() => setDeleteEpicTarget(epic)}
-	                                    />
+	                                    <div key={`epic-group-${epic.id}`} className="mt-2 mb-2">
+	                                        <EpicGroupHeader
+	                                            epic={epic}
+	                                            collapsed={collapsed}
+	                                            countLabel={countLabel}
+	                                            menuOpen={epicMenuOpenId === epic.id}
+	                                            onMenuOpenChange={(open) => setEpicMenuOpenId(open ? epic.id : null)}
+	                                            onToggleCollapsed={() => toggleEpicCollapsed(epic.id)}
+	                                            onEdit={() => setEditingEpic(epic)}
+	                                            onDelete={() => setDeleteEpicTarget(epic)}
+	                                        />
+	                                        {!collapsed && (
+	                                            <div
+	                                                className="ml-1 pl-2 pb-1"
+	                                                style={{
+	                                                    borderLeft: `2px solid ${epicScheme?.DEFAULT ?? 'var(--color-border-subtle)'}`,
+	                                                    marginLeft: '6px',
+	                                                }}
+	                                            >
+	                                                {epicGroup.groups.map(group => renderVersionGroup(group))}
+	                                            </div>
+	                                        )}
+	                                    </div>
 	                                )
-
-                                if (!collapsed) {
-                                    for (const group of epicGroup.groups) {
-                                        elements.push(renderVersionGroup(group))
-                                    }
-                                }
                             }
 
                             if (epicGrouping.ungroupedGroups.length > 0) {

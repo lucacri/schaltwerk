@@ -32,10 +32,12 @@ export function EpicGroupHeader({
     return (
         <div
             data-testid={`epic-header-${epic.id}`}
-            className="mt-3 mb-2 rounded border"
+            className="mb-2 rounded border"
             style={{
                 backgroundColor: 'var(--color-bg-tertiary)',
                 borderColor: 'var(--color-border-default)',
+                borderLeftWidth: '3px',
+                borderLeftColor: scheme?.DEFAULT ?? 'var(--color-text-muted)',
             }}
         >
             <div className="flex items-center justify-between px-2 py-1.5">

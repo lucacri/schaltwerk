@@ -192,7 +192,7 @@ describe('SessionCard stats-first layout', () => {
 })
 
 describe('SessionCard running tag', () => {
-  it('shows running tag when session is reviewed but still running', () => {
+  it('shows status strip and reviewed label when session is reviewed but still running', () => {
     const session: EnrichedSession = {
       ...baseSession,
       info: {
@@ -217,7 +217,10 @@ describe('SessionCard running tag', () => {
       />
     )
 
-    expect(screen.getByText('Running')).toBeInTheDocument()
+    const card = screen.getByRole('button', { name: /selected session/i })
+    const statusStrip = card.querySelector('.w-\\[3px\\]')
+    expect(statusStrip).toBeInTheDocument()
+    expect(screen.getByText(/✓ Reviewed/)).toBeInTheDocument()
   })
 })
 
