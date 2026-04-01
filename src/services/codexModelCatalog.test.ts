@@ -20,7 +20,7 @@ describe('codexModelCatalog', () => {
             models: [
                 {
                     id: 'gpt-5.3-codex',
-                    label: 'GPT-5.3 Codex',
+                    label: 'GPT-5.4 Codex',
                     description: 'General purpose',
                     defaultReasoning: 'high',
                     reasoningOptions: [
@@ -51,14 +51,14 @@ describe('codexModelCatalog', () => {
         expect(catalog.defaultModelId).toBe(catalog.models[0]?.id ?? '')
     })
 
-    test('fallback catalog includes gpt-5.1-codex-max with extra high reasoning', async () => {
+    test('fallback catalog includes gpt-5.4 with extra high reasoning', async () => {
         mockInvoke.mockRejectedValue(new Error('backend unavailable'))
 
         const catalog = await loadCodexModelCatalog()
-        const max = catalog.models.find(model => model.id === 'gpt-5.1-codex-max')
+        const gpt54 = catalog.models.find(model => model.id === 'gpt-5.4')
 
-        expect(max).toBeDefined()
-        expect(max?.defaultReasoning).toBe('medium')
-        expect(max?.reasoningOptions.map(option => option.id)).toContain('xhigh')
+        expect(gpt54).toBeDefined()
+        expect(gpt54?.defaultReasoning).toBe('medium')
+        expect(gpt54?.reasoningOptions.map(option => option.id)).toContain('xhigh')
     })
 })

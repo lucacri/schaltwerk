@@ -22,7 +22,6 @@ export interface CodexModelCatalogDefinition {
 
 interface CodexModelConfiguration {
     latest: CodexModelCatalogDefinition
-    legacy: CodexModelCatalogDefinition
 }
 
 const RAW_CODEX_MODEL_CONFIGURATION = codexModelConfig as CodexModelConfiguration
@@ -44,9 +43,6 @@ export function cloneCodexCatalog(config: CodexModelCatalogDefinition): CodexMod
 export const LATEST_CODEX_CATALOG: CodexModelCatalogDefinition = cloneCodexCatalog(
     RAW_CODEX_MODEL_CONFIGURATION.latest
 )
-export const LEGACY_CODEX_CATALOG: CodexModelCatalogDefinition = cloneCodexCatalog(
-    RAW_CODEX_MODEL_CONFIGURATION.legacy
-)
 
 export const FALLBACK_CODEX_MODELS: CodexModelMetadata[] = cloneCodexCatalog(
     LATEST_CODEX_CATALOG
@@ -56,12 +52,9 @@ export function getCodexModelMetadata(
     modelId: string,
     models: CodexModelMetadata[] = FALLBACK_CODEX_MODELS
 ): CodexModelMetadata | undefined {
-    return (
-        models.find(model => model.id === modelId) ||
-        LEGACY_CODEX_CATALOG.models.find(model => model.id === modelId)
-    )
+    return models.find(model => model.id === modelId)
 }
 
 export function getAllCodexModels(): CodexModelMetadata[] {
-    return [...LATEST_CODEX_CATALOG.models, ...LEGACY_CODEX_CATALOG.models].map(cloneModel)
+    return LATEST_CODEX_CATALOG.models.map(cloneModel)
 }
