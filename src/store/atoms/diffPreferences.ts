@@ -101,6 +101,20 @@ export const diffLayoutPreferenceAtom = atom(
   }
 )
 
+export const expandAllFilesActionAtom = atom(
+  null,
+  (_get, set, filePaths: string[]) => {
+    set(expandedFilesAtom, new Set(filePaths))
+  }
+)
+
+export const collapseAllFilesActionAtom = atom(
+  null,
+  (_get, set) => {
+    set(expandedFilesAtom, new Set<string>())
+  }
+)
+
 export const initializeInlineDiffPreferenceActionAtom = atom(
   null,
   async (_get, set) => {

@@ -35,7 +35,9 @@ import {
   VscListFlat,
   VscListSelection,
   VscCheck,
+  VscCollapseAll,
   VscDiff,
+  VscExpandAll,
   VscSplitHorizontal,
   VscChevronDown,
   VscChevronRight,
@@ -72,7 +74,9 @@ import { buildFolderTree, getVisualFileOrder } from "../../utils/folderTree";
 import { useClaudeSession } from "../../hooks/useClaudeSession";
 import {
   inlineSidebarDefaultPreferenceAtom,
+  collapseAllFilesActionAtom,
   diffLayoutPreferenceAtom,
+  expandAllFilesActionAtom,
   expandedFilesAtom,
   type DiffLayoutMode,
 } from "../../store/atoms/diffPreferences";
@@ -291,6 +295,8 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
   const historyLoadedRef = useRef<Set<string>>(new Set());
   const [historyPrefetchVersion, setHistoryPrefetchVersion] = useState(0);
   const [expandedFiles, setExpandedFiles] = useAtom(expandedFilesAtom);
+  const expandAllFilesAction = useSetAtom(expandAllFilesActionAtom);
+  const collapseAllFilesAction = useSetAtom(collapseAllFilesActionAtom);
   const [alwaysShowLargeDiffs, setAlwaysShowLargeDiffs] = useState(false);
   const deferredHeightPathsRef = useRef<Set<string>>(new Set());
   const didInitializeCompactExpansionRef = useRef(false);
@@ -2600,7 +2606,22 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
       });
       return mutated ? next : prev;
     });
-  }, [files]);
+
+    setExpandedFiles((prev) => {
+      if (prev.size === 0) return prev;
+      const validPaths = new Set(files.map((f) => f.path));
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((path) => {
+        if (validPaths.has(path)) {
+          next.add(path);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [files, setExpandedFiles]);
 
   useEffect(() => {
     setExpandedFiles((prev: Set<string>) => {
@@ -2673,16 +2694,17 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
   }, []);
 
   const handleExpandAllFiles = useCallback(() => {
+    if (files.length === 0) return;
     withVirtualizationLock(() => {
-      setExpandedFiles(new Set(files.map((file) => file.path)));
+      expandAllFilesAction(files.map((file) => file.path));
     });
-  }, [files, setExpandedFiles, withVirtualizationLock]);
+  }, [files, expandAllFilesAction, withVirtualizationLock]);
 
   const handleCollapseAllFiles = useCallback(() => {
     withVirtualizationLock(() => {
-      setExpandedFiles(new Set());
+      collapseAllFilesAction();
     });
-  }, [setExpandedFiles, withVirtualizationLock]);
+  }, [collapseAllFilesAction, withVirtualizationLock]);
 
   const handleFileExpandFromSidebar = useCallback((path: string) => {
     expandFile(path);
@@ -2727,8 +2749,23 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
       });
     } else {
       setExpandedSections(new Map());
+      setExpandedFiles(new Set());
     }
-  }, [compactDiffs, allFileDiffs]);
+  }, [compactDiffs, allFileDiffs, setExpandedFiles]);
+
+  useEffect(() => {
+    collapseAllFilesAction();
+  }, [selection.kind, sessionName, collapseAllFilesAction]);
+
+  useEffect(() => {
+    if (!filePath) return;
+    setExpandedFiles((prev) => {
+      if (prev.has(filePath)) return prev;
+      const next = new Set(prev);
+      next.add(filePath);
+      return next;
+    });
+  }, [filePath, setExpandedFiles]);
 
   const handleSubmitComment = useCallback(
     async (text: string) => {
@@ -3184,6 +3221,24 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         </button>
       )}
       <button
+        onClick={handleExpandAllFiles}
+        className="p-1.5 hover:bg-slate-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Expand all files"
+        aria-label="Expand all files"
+        disabled={files.length === 0}
+      >
+        <VscExpandAll className="text-xl" />
+      </button>
+      <button
+        onClick={handleCollapseAllFiles}
+        className="p-1.5 hover:bg-slate-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Collapse all files"
+        aria-label="Collapse all files"
+        disabled={files.length === 0}
+      >
+        <VscCollapseAll className="text-xl" />
+      </button>
+      <button
         onClick={() => {
           toggleCompactDiffs();
         }}
@@ -3408,6 +3463,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
               selectedFile={selectedFile}
               visibleFilePath={visibleFilePath}
               onFileSelect={(path, index) => {
+                expandFile(path);
                 void scrollToFile(path, index, {
                   origin: "user",
                   allowWhileUserScrolling: true,

@@ -4,9 +4,9 @@ import { useTranslation } from '../../common/i18n'
 
 interface CollapsedDiffBadgeProps {
   filterResult: DiffFilterResult
-  onClick: () => void
   additions?: number
   deletions?: number
+  onClick: () => void
 }
 
 export function CollapsedDiffBadge({ filterResult, onClick, additions, deletions }: CollapsedDiffBadgeProps) {

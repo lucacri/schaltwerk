@@ -693,9 +693,10 @@ export function PierreDiffViewer({
                 role="button"
                 tabIndex={0}
                 aria-expanded={isFileExpanded}
-                aria-label={`${file.path} ${file.change_type}`}
+                aria-label={`Toggle ${file.path} diff`}
+                data-testid="file-header"
                 className={clsx(
-                  'sticky top-0 z-10 bg-slate-950 border-b border-slate-700 px-4 py-3 flex items-center justify-between gap-4',
+                  'sticky top-0 z-10 bg-slate-950 border-b border-slate-700 px-4 py-3 flex items-center justify-between gap-4 cursor-pointer select-none',
                   isCurrentFile && 'bg-slate-900'
                 )}
                 onClick={() => onToggleFileExpanded(file.path)}
@@ -715,14 +716,16 @@ export function PierreDiffViewer({
                 }}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  {getFileIcon(file.change_type, file.path)}
                   <VscChevronRight
-                    className="text-sm flex-shrink-0 text-slate-400"
+                    data-testid="file-collapse-chevron"
+                    data-expanded={isFileExpanded ? 'true' : 'false'}
+                    className="text-base text-slate-300 flex-shrink-0"
                     style={{
                       transform: isFileExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
                       transition: 'transform 0.2s ease',
                     }}
                   />
+                  {getFileIcon(file.change_type, file.path)}
                   <div className="min-w-0">
                     <div className="font-medium text-sm text-slate-100 truncate">{file.path}</div>
                     <div className="text-xs text-slate-400">
@@ -766,28 +769,28 @@ export function PierreDiffViewer({
                     </button>
                   )}
                   {onOpenFile && (
-                    <OpenInSplitButton resolvePath={() => onOpenFile(file.path)} filter={editorFilter} />
+                    <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                      <OpenInSplitButton resolvePath={() => onOpenFile(file.path)} filter={editorFilter} />
+                    </div>
                   )}
                 </div>
               </div>
 
               {/* File diff content */}
-              {!isRendered ? (
+              {shouldCollapse ? (
+                <CollapsedDiffBadge
+                  filterResult={
+                    file.change_type === 'deleted'
+                      ? { ...filterResult, shouldCollapse: true, reason: 'deleted' }
+                      : filterResult
+                  }
+                  additions={file.additions}
+                  deletions={file.deletions}
+                  onClick={() => onToggleFileExpanded(file.path)}
+                />
+              ) : !isRendered ? (
                 <div className="px-4 py-8 text-center text-slate-500" style={{ minHeight: 200 }}>
                   <div className="h-20" />
-                </div>
-              ) : shouldCollapse ? (
-                <div aria-hidden="true">
-                  <CollapsedDiffBadge
-                    filterResult={
-                      file.change_type === 'deleted'
-                        ? { ...filterResult, shouldCollapse: true, reason: 'deleted' }
-                        : filterResult
-                    }
-                    additions={file.additions}
-                    deletions={file.deletions}
-                    onClick={() => onToggleFileExpanded(file.path)}
-                  />
                 </div>
               ) : isLoading || !fileDiff ? (
                 <div className="px-4 py-8 text-center text-slate-500" style={{ minHeight: 200 }}>
