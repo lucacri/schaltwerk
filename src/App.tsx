@@ -1822,6 +1822,7 @@ function AppContent() {
             issueUrl: data.issueUrl ?? null,
             prNumber: data.prNumber ?? null,
             prUrl: data.prUrl ?? null,
+            userEditedName: data.userEditedName ?? false,
           })
           setNewSessionOpen(false)
           setCachedPrompt('')
@@ -1978,23 +1979,57 @@ function AppContent() {
   useEffect(() => {
     const sessionCleanup = listenUiEvent(UiEvent.ContextualActionCreateSession, (detail: ContextualActionCreateSessionDetail) => {
       logger.info('[App] Contextual action create session:', detail)
-      const name = sanitizeName(detail.actionName) || 'contextual-action'
+
+      const name = detail.contextType && detail.contextNumber
+        ? sanitizeName(
+            detail.contextType === 'pr'
+              ? `pr-${detail.contextNumber}-${detail.contextTitle ?? ''}`
+              : `${detail.contextNumber}-${detail.contextTitle ?? ''}`
+          ) || 'contextual-action'
+        : sanitizeName(detail.actionName) || 'contextual-action'
+
       void handleCreateSession({
         name,
         prompt: detail.prompt,
         baseBranch: '',
         agentType: detail.agentType,
+        userEditedName: true,
+        ...(detail.contextType === 'issue' && detail.contextNumber ? {
+          issueNumber: Number(detail.contextNumber),
+          issueUrl: detail.contextUrl,
+        } : {}),
+        ...(detail.contextType === 'pr' && detail.contextNumber ? {
+          prNumber: Number(detail.contextNumber),
+          prUrl: detail.contextUrl,
+        } : {}),
       })
     })
     const specCleanup = listenUiEvent(UiEvent.ContextualActionCreateSpec, (detail: ContextualActionCreateSpecDetail) => {
       logger.info('[App] Contextual action create spec:', detail)
-      const name = sanitizeName(detail.name) || 'contextual-action'
+
+      const name = detail.contextType && detail.contextNumber
+        ? sanitizeName(
+            detail.contextType === 'pr'
+              ? `pr-${detail.contextNumber}-${detail.contextTitle ?? ''}`
+              : `${detail.contextNumber}-${detail.contextTitle ?? ''}`
+          ) || 'contextual-action'
+        : sanitizeName(detail.name) || 'contextual-action'
+
       void handleCreateSession({
         name,
         prompt: detail.prompt,
         baseBranch: '',
         isSpec: true,
         draftContent: detail.prompt,
+        userEditedName: true,
+        ...(detail.contextType === 'issue' && detail.contextNumber ? {
+          issueNumber: Number(detail.contextNumber),
+          issueUrl: detail.contextUrl,
+        } : {}),
+        ...(detail.contextType === 'pr' && detail.contextNumber ? {
+          prNumber: Number(detail.contextNumber),
+          prUrl: detail.contextUrl,
+        } : {}),
       })
     })
     return () => {

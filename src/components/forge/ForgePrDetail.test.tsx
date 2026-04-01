@@ -298,6 +298,10 @@ describe('ForgePrDetail', () => {
       agentType: undefined,
       variantId: undefined,
       presetId: undefined,
+      contextType: 'pr',
+      contextNumber: '99',
+      contextTitle: 'Add dark mode support',
+      contextUrl: 'https://github.com/owner/repo/pull/99',
     })
   })
 
@@ -332,6 +336,51 @@ describe('ForgePrDetail', () => {
     expect(mockEmitUiEvent).toHaveBeenCalledWith(UiEvent.ContextualActionCreateSpec, {
       prompt: 'Add dark mode support by alice from feature/dark-mode to main (enhancement, ui)',
       name: 'Review MR',
+      contextType: 'pr',
+      contextNumber: '99',
+      contextTitle: 'Add dark mode support',
+      contextUrl: 'https://github.com/owner/repo/pull/99',
+    })
+  })
+
+  it('interpolates pr.number in contextual action templates', () => {
+    const actions: ContextualAction[] = [
+      {
+        id: 'review-pr-number',
+        name: 'Review PR Number',
+        context: 'pr',
+        promptTemplate: 'Review PR #{{pr.number}}: {{pr.title}}',
+        mode: 'session',
+        isBuiltIn: false,
+      },
+    ]
+    mockUseContextualActions.mockReturnValue({
+      actions,
+      loading: false,
+      error: null,
+      saveActions: vi.fn(),
+      resetToDefaults: vi.fn(),
+      reloadActions: vi.fn(),
+    })
+
+    renderWithProviders(
+      <ForgePrDetail details={makeDetails()} onBack={onBack} forgeType="github" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    fireEvent.click(screen.getByText('Actions'))
+    fireEvent.click(screen.getByText('Review PR Number'))
+
+    expect(mockEmitUiEvent).toHaveBeenCalledWith(UiEvent.ContextualActionCreateSession, {
+      prompt: 'Review PR #99: Add dark mode support',
+      actionName: 'Review PR Number',
+      agentType: undefined,
+      variantId: undefined,
+      presetId: undefined,
+      contextType: 'pr',
+      contextNumber: '99',
+      contextTitle: 'Add dark mode support',
+      contextUrl: 'https://github.com/owner/repo/pull/99',
     })
   })
 

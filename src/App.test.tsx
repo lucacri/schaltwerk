@@ -1558,6 +1558,226 @@ describe('validatePanelPercentage', () => {
 
     invokeMock.mockImplementation(defaultInvokeImpl)
   })
+
+  it('creates contextual PR sessions with context-derived names and metadata', async () => {
+    mockState.isGitRepo = true
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        expect(args).toEqual(expect.objectContaining({
+          name: 'pr-7-refactor-auth-module',
+          prompt: 'Review the auth refactor',
+          userEditedName: true,
+          prNumber: 7,
+        }))
+
+        return buildRawSession('pr-7-refactor-auth-module')
+      }
+
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.ContextualActionCreateSession, {
+        prompt: 'Review the auth refactor',
+        actionName: 'Review PR',
+        agentType: 'claude',
+        contextType: 'pr',
+        contextNumber: '7',
+        contextTitle: 'Refactor auth module',
+        contextUrl: 'https://github.com/example/repo/pull/7',
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        TauriCommands.SchaltwerkCoreCreateSession,
+        expect.objectContaining({
+          name: 'pr-7-refactor-auth-module',
+          userEditedName: true,
+          prNumber: 7,
+        })
+      )
+      expect(invokeMock).toHaveBeenCalledWith(
+        TauriCommands.SchaltwerkCoreLinkSessionToPr,
+        {
+          name: 'pr-7-refactor-auth-module',
+          prNumber: 7,
+          prUrl: 'https://github.com/example/repo/pull/7',
+        }
+      )
+    })
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
+  it('creates contextual issue specs with context-derived names and user-edited flag', async () => {
+    mockState.isGitRepo = true
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSpecSession) {
+        expect(args).toEqual(expect.objectContaining({
+          name: '42-add-dark-mode-support',
+          specContent: 'Plan the dark mode rollout',
+          userEditedName: true,
+          issueNumber: 42,
+          issueUrl: 'https://github.com/example/repo/issues/42',
+        }))
+      }
+
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.ContextualActionCreateSpec, {
+        prompt: 'Plan the dark mode rollout',
+        name: 'Review issue',
+        contextType: 'issue',
+        contextNumber: '42',
+        contextTitle: 'Add dark mode support',
+        contextUrl: 'https://github.com/example/repo/issues/42',
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        TauriCommands.SchaltwerkCoreCreateSpecSession,
+        expect.objectContaining({
+          name: '42-add-dark-mode-support',
+          userEditedName: true,
+          issueNumber: 42,
+          issueUrl: 'https://github.com/example/repo/issues/42',
+        })
+      )
+    })
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
+  it('creates contextual issue sessions with context-derived names and metadata', async () => {
+    mockState.isGitRepo = true
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        expect(args).toEqual(expect.objectContaining({
+          name: '1337-fix-login-page-crashes-on',
+          prompt: 'Fix the login crash',
+          userEditedName: true,
+          issueNumber: 1337,
+          issueUrl: 'https://github.com/example/repo/issues/1337',
+        }))
+
+        return buildRawSession('1337-fix-login-page-crashes-on')
+      }
+
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.ContextualActionCreateSession, {
+        prompt: 'Fix the login crash',
+        actionName: 'Fix issue',
+        agentType: 'claude',
+        contextType: 'issue',
+        contextNumber: '1337',
+        contextTitle: 'Fix: login page crashes on empty email',
+        contextUrl: 'https://github.com/example/repo/issues/1337',
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        TauriCommands.SchaltwerkCoreCreateSession,
+        expect.objectContaining({
+          name: '1337-fix-login-page-crashes-on',
+          userEditedName: true,
+          issueNumber: 1337,
+          issueUrl: 'https://github.com/example/repo/issues/1337',
+        })
+      )
+    })
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
+  it('creates contextual PR specs with context-derived names and metadata', async () => {
+    mockState.isGitRepo = true
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSpecSession) {
+        expect(args).toEqual(expect.objectContaining({
+          name: 'pr-256-feat-ui-consolidate-sid',
+          specContent: 'Review the sidebar refactor',
+          userEditedName: true,
+          prNumber: 256,
+          prUrl: 'https://github.com/example/repo/pull/256',
+        }))
+      }
+
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.ContextualActionCreateSpec, {
+        prompt: 'Review the sidebar refactor',
+        name: 'Review PR',
+        contextType: 'pr',
+        contextNumber: '256',
+        contextTitle: 'feat(ui): consolidate sidebar layout',
+        contextUrl: 'https://github.com/example/repo/pull/256',
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        TauriCommands.SchaltwerkCoreCreateSpecSession,
+        expect.objectContaining({
+          name: 'pr-256-feat-ui-consolidate-sid',
+          userEditedName: true,
+          prNumber: 256,
+          prUrl: 'https://github.com/example/repo/pull/256',
+        })
+      )
+    })
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
 })
 
 describe('Multi-agent comparison logic', () => {

@@ -365,6 +365,10 @@ fn spawn_spec_name_generation(
     });
 }
 
+fn should_spawn_spec_name_generation(user_edited_name: Option<bool>) -> bool {
+    !user_edited_name.unwrap_or(false)
+}
+
 #[tauri::command]
 pub async fn schaltwerk_core_generate_session_name(
     content: String,
@@ -2618,6 +2622,7 @@ pub async fn schaltwerk_core_create_spec_session(
     issue_url: Option<String>,
     pr_number: Option<i64>,
     pr_url: Option<String>,
+    user_edited_name: Option<bool>,
 ) -> Result<Session, String> {
     log::info!("Creating spec: {name} with agent_type={agent_type:?}");
     let _ = skip_permissions;
@@ -2645,19 +2650,20 @@ pub async fn schaltwerk_core_create_spec_session(
             .map_err(|e| format!("Failed to persist spec PR metadata: {e}"))?;
     }
 
-    let naming_agent = agent_type.clone().unwrap_or_else(|| {
-        core.db
-            .get_agent_type()
-            .unwrap_or_else(|_| "claude".to_string())
-    });
-
-    spawn_spec_name_generation(
-        app.clone(),
-        spec.id.clone(),
-        spec.name.clone(),
-        spec_content.clone(),
-        naming_agent,
-    );
+    if should_spawn_spec_name_generation(user_edited_name) {
+        let naming_agent = agent_type.clone().unwrap_or_else(|| {
+            core.db
+                .get_agent_type()
+                .unwrap_or_else(|_| "claude".to_string())
+        });
+        spawn_spec_name_generation(
+            app.clone(),
+            spec.id.clone(),
+            spec.name.clone(),
+            spec_content.clone(),
+            naming_agent,
+        );
+    }
 
     let spec_session = manager
         .list_sessions_by_state(SessionState::Spec)
@@ -3085,6 +3091,13 @@ mod tests {
         assert_eq!(sh_quote_string("a'b"), "'a'\\''b'");
         assert_eq!(sh_quote_string("a b"), "'a b'");
         assert!(sh_quote_string("--flag").starts_with("'--flag'"));
+    }
+
+    #[test]
+    fn spec_name_generation_respects_user_edited_name() {
+        assert!(should_spawn_spec_name_generation(None));
+        assert!(should_spawn_spec_name_generation(Some(false)));
+        assert!(!should_spawn_spec_name_generation(Some(true)));
     }
 
     #[tokio::test]

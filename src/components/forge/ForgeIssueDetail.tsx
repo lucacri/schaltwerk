@@ -111,6 +111,7 @@ export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType }: Fo
         <ContextualActionButton
           context="issue"
           variables={{
+            'issue.number': summary.id,
             'issue.title': summary.title ?? '',
             'issue.description': body ?? '',
             'issue.author': summary.author ?? '',

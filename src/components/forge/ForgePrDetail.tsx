@@ -344,6 +344,7 @@ export function ForgePrDetail({
   }
 
   const contextVariables: Record<string, string> = {
+    'pr.number': summary.id,
     'pr.title': summary.title ?? '',
     'pr.description': details.body ?? '',
     'pr.author': summary.author ?? '',

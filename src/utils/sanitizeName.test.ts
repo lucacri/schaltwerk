@@ -50,6 +50,16 @@ describe('sanitizeName', () => {
   it('handles already valid names', () => {
     expect(sanitizeName('already-valid-name')).toBe('already-valid-name')
   })
+
+  it('handles issue-style number-prefixed names', () => {
+    expect(sanitizeName('42-Add dark mode support')).toBe('42-add-dark-mode-support')
+    expect(sanitizeName('1337-Fix: login page crashes on empty email')).toBe('1337-fix-login-page-crashes-on')
+  })
+
+  it('handles PR-style number-prefixed names', () => {
+    expect(sanitizeName('pr-7-Refactor auth module')).toBe('pr-7-refactor-auth-module')
+    expect(sanitizeName('pr-256-feat(ui): consolidate sidebar layout')).toBe('pr-256-feat-ui-consolidate-sid')
+  })
 })
 
 describe('validateDisplayName', () => {

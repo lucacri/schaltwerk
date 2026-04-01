@@ -37,10 +37,18 @@ export function ContextualActionButton({ context, variables }: ContextualActionB
         const prompt = renderTemplate(action.promptTemplate, variables)
         logger.info(`[ContextualAction] Triggering "${action.name}" in ${action.mode} mode`)
 
+        const contextNumber = variables[`${context}.number`]
+        const contextTitle = variables[`${context}.title`]
+        const contextUrl = variables[`${context}.url`]
+
         if (action.mode === 'spec') {
             emitUiEvent(UiEvent.ContextualActionCreateSpec, {
                 prompt,
                 name: action.name,
+                contextType: context,
+                contextNumber,
+                contextTitle,
+                contextUrl,
             })
         } else {
             emitUiEvent(UiEvent.ContextualActionCreateSession, {
@@ -49,9 +57,13 @@ export function ContextualActionButton({ context, variables }: ContextualActionB
                 agentType: action.agentType,
                 variantId: action.variantId,
                 presetId: action.presetId,
+                contextType: context,
+                contextNumber,
+                contextTitle,
+                contextUrl,
             })
         }
-    }, [variables])
+    }, [variables, context])
 
     if (matchingActions.length === 0) return null
 

@@ -1,13 +1,33 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent } from '@testing-library/react'
-import { ForgeIssueDetail } from './ForgeIssueDetail'
 import { renderWithProviders } from '../../tests/test-utils'
 import { TauriCommands } from '../../common/tauriCommands'
+import { UiEvent } from '../../common/uiEvents'
 import type { ForgeIssueDetails } from '../../types/forgeTypes'
+import type { ContextualAction } from '../../types/contextualAction'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }))
+
+const { mockUseContextualActions, mockEmitUiEvent } = vi.hoisted(() => ({
+  mockUseContextualActions: vi.fn(),
+  mockEmitUiEvent: vi.fn(),
+}))
+
+vi.mock('../../hooks/useContextualActions', () => ({
+  useContextualActions: () => mockUseContextualActions(),
+}))
+
+vi.mock('../../common/uiEvents', async () => {
+  const actual = await vi.importActual<typeof import('../../common/uiEvents')>('../../common/uiEvents')
+  return {
+    ...actual,
+    emitUiEvent: (...args: unknown[]) => mockEmitUiEvent(...args),
+  }
+})
+
+const { ForgeIssueDetail } = await import('./ForgeIssueDetail')
 
 const { invoke } = await import('@tauri-apps/api/core')
 const mockedInvoke = vi.mocked(invoke)
@@ -40,6 +60,14 @@ describe('ForgeIssueDetail', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseContextualActions.mockReturnValue({
+      actions: [],
+      loading: false,
+      error: null,
+      saveActions: vi.fn(),
+      resetToDefaults: vi.fn(),
+      reloadActions: vi.fn(),
+    })
   })
 
   it('renders issue title with #id format', () => {
@@ -199,5 +227,84 @@ describe('ForgeIssueDetail', () => {
     )
 
     expect(screen.getByText('my-project')).toBeTruthy()
+  })
+
+  it('forwards issue context in contextual action session event', () => {
+    const actions: ContextualAction[] = [
+      {
+        id: 'implement-issue',
+        name: 'Implement',
+        context: 'issue',
+        promptTemplate: 'Fix issue {{issue.number}}: {{issue.title}}',
+        mode: 'session',
+        isBuiltIn: false,
+      },
+    ]
+    mockUseContextualActions.mockReturnValue({
+      actions,
+      loading: false,
+      error: null,
+      saveActions: vi.fn(),
+      resetToDefaults: vi.fn(),
+      reloadActions: vi.fn(),
+    })
+
+    renderWithProviders(
+      <ForgeIssueDetail details={makeDetails()} onBack={onBack} forgeType="github" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    fireEvent.click(screen.getByText('Actions'))
+    fireEvent.click(screen.getByText('Implement'))
+
+    expect(mockEmitUiEvent).toHaveBeenCalledWith(UiEvent.ContextualActionCreateSession, {
+      prompt: 'Fix issue 42: Fix login bug',
+      actionName: 'Implement',
+      agentType: undefined,
+      variantId: undefined,
+      presetId: undefined,
+      contextType: 'issue',
+      contextNumber: '42',
+      contextTitle: 'Fix login bug',
+      contextUrl: 'https://github.com/owner/repo/issues/42',
+    })
+  })
+
+  it('forwards issue context in contextual action spec event', () => {
+    const actions: ContextualAction[] = [
+      {
+        id: 'plan-issue',
+        name: 'Plan',
+        context: 'issue',
+        promptTemplate: 'Plan for #{{issue.number}}',
+        mode: 'spec',
+        isBuiltIn: false,
+      },
+    ]
+    mockUseContextualActions.mockReturnValue({
+      actions,
+      loading: false,
+      error: null,
+      saveActions: vi.fn(),
+      resetToDefaults: vi.fn(),
+      reloadActions: vi.fn(),
+    })
+
+    renderWithProviders(
+      <ForgeIssueDetail details={makeDetails()} onBack={onBack} forgeType="github" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    fireEvent.click(screen.getByText('Actions'))
+    fireEvent.click(screen.getByText('Plan'))
+
+    expect(mockEmitUiEvent).toHaveBeenCalledWith(UiEvent.ContextualActionCreateSpec, {
+      prompt: 'Plan for #42',
+      name: 'Plan',
+      contextType: 'issue',
+      contextNumber: '42',
+      contextTitle: 'Fix login bug',
+      contextUrl: 'https://github.com/owner/repo/issues/42',
+    })
   })
 })

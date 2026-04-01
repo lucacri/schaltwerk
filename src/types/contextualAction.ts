@@ -16,12 +16,12 @@ export interface ContextualAction {
 }
 
 export const PR_TEMPLATE_VARIABLES = [
-    'pr.title', 'pr.description', 'pr.author',
+    'pr.number', 'pr.title', 'pr.description', 'pr.author',
     'pr.sourceBranch', 'pr.targetBranch', 'pr.diff',
     'pr.url', 'pr.labels',
 ] as const
 
 export const ISSUE_TEMPLATE_VARIABLES = [
-    'issue.title', 'issue.description', 'issue.author',
+    'issue.number', 'issue.title', 'issue.description', 'issue.author',
     'issue.labels', 'issue.url',
 ] as const

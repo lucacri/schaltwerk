@@ -242,11 +242,19 @@ export interface ContextualActionCreateSessionDetail {
   agentType?: string
   variantId?: string
   presetId?: string
+  contextType?: 'issue' | 'pr'
+  contextNumber?: string
+  contextTitle?: string
+  contextUrl?: string
 }
 
 export interface ContextualActionCreateSpecDetail {
   prompt: string
   name: string
+  contextType?: 'issue' | 'pr'
+  contextNumber?: string
+  contextTitle?: string
+  contextUrl?: string
 }
 
 export type UiEventPayloads = {

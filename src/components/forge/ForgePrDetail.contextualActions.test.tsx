@@ -59,6 +59,7 @@ describe('ForgePrDetail contextual action variables', () => {
 
     expect(props.context).toBe('pr')
     expect(props.variables).toMatchObject({
+      'pr.number': '42',
       'pr.title': 'Unify contextual actions',
       'pr.description': 'Please review end-to-end behavior.',
       'pr.author': 'carol',
