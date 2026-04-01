@@ -660,7 +660,8 @@ export function PierreDiffViewer({
           const filterResult = filterResultsMap.get(file.path) ?? { shouldCollapse: false, isGenerated: false, isLarge: false, reason: undefined }
 
           const isFileExpanded = expandedFiles.has(file.path)
-          const shouldCollapse = !isFileExpanded
+          const isDeletedFile = file.change_type === 'deleted'
+          const shouldShowCollapsedBadge = isDeletedFile || filterResult.shouldCollapse
 
           const isRendered = renderedFileSet ? renderedFileSet.has(file.path) : true
           const isLoading = loadingFiles ? loadingFiles.has(file.path) : false
@@ -777,17 +778,19 @@ export function PierreDiffViewer({
               </div>
 
               {/* File diff content */}
-              {shouldCollapse ? (
-                <CollapsedDiffBadge
-                  filterResult={
-                    file.change_type === 'deleted'
-                      ? { ...filterResult, shouldCollapse: true, reason: 'deleted' }
-                      : filterResult
-                  }
-                  additions={file.additions}
-                  deletions={file.deletions}
-                  onClick={() => onToggleFileExpanded(file.path)}
-                />
+              {!isFileExpanded ? (
+                shouldShowCollapsedBadge ? (
+                  <CollapsedDiffBadge
+                    filterResult={
+                      isDeletedFile
+                        ? { ...filterResult, shouldCollapse: true, reason: 'deleted' }
+                        : filterResult
+                    }
+                    additions={file.additions}
+                    deletions={file.deletions}
+                    onClick={() => onToggleFileExpanded(file.path)}
+                  />
+                ) : null
               ) : !isRendered ? (
                 <div className="px-4 py-8 text-center text-slate-500" style={{ minHeight: 200 }}>
                   <div className="h-20" />

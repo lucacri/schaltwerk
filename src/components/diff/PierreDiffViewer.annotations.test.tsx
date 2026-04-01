@@ -153,15 +153,17 @@ describe('PierreDiffViewer annotation display', () => {
   })
 
   it('shows collapsed badge change stats when file is collapsed', () => {
+    const deletedFile: ChangedFile = { path: 'src/test.ts', change_type: 'deleted', additions: 0, deletions: 5 }
     render(
       <PierreDiffViewer
         {...defaultProps}
+        files={[deletedFile]}
         expandedFiles={new Set()}
       />
     )
 
-    expect(screen.getByText('+5')).toBeInTheDocument()
-    expect(screen.getByText('-2')).toBeInTheDocument()
+    expect(screen.getByText('+0')).toBeInTheDocument()
+    expect(screen.getByText('-5')).toBeInTheDocument()
   })
 
   it('renders multiple annotations for multi-line comments', () => {

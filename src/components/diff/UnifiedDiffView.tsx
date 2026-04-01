@@ -285,6 +285,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
   const visibilityFrameRef = useRef<number | NodeJS.Timeout | null>(null);
   const recentlyVisibleRef = useRef<string[]>([]);
   const [isVirtualizationLocked, setIsVirtualizationLocked] = useState(false);
+  const bulkVirtualizationUnlockFrameRef = useRef<number | null>(null);
   const virtualizationUnlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const previousVisibleSetRef = useRef<Set<string>>(new Set());
   const historyPrefetchQueueRef = useRef<string[]>([]);
@@ -683,6 +684,36 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
       diffLayoutPreference === "unified" ? "split" : "unified";
     setDiffLayoutPreference(nextLayout);
   }, [mode, isSidebarMode, diffLayoutPreference, setDiffLayoutPreference]);
+
+  const releaseBulkVirtualizationLock = useCallback(() => {
+    if (bulkVirtualizationUnlockFrameRef.current !== null) {
+      cancelAnimationFrame(bulkVirtualizationUnlockFrameRef.current);
+    }
+    bulkVirtualizationUnlockFrameRef.current = null;
+    setIsVirtualizationLocked(false);
+  }, []);
+
+  const withBulkVirtualizationLock = useCallback(
+    (action: () => void) => {
+      setIsVirtualizationLocked(true);
+      action();
+
+      if (bulkVirtualizationUnlockFrameRef.current !== null) {
+        cancelAnimationFrame(bulkVirtualizationUnlockFrameRef.current);
+      }
+
+      bulkVirtualizationUnlockFrameRef.current = requestAnimationFrame(
+        () => {
+          bulkVirtualizationUnlockFrameRef.current =
+            requestAnimationFrame(() => {
+              bulkVirtualizationUnlockFrameRef.current = null;
+              setIsVirtualizationLocked(false);
+            });
+        },
+      );
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isOpen || mode === "history" || isSidebarMode) {
@@ -1345,7 +1376,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
 
   useEffect(() => {
     if (!isOpen || isLargeDiffMode) {
-      setIsVirtualizationLocked(false);
+      releaseBulkVirtualizationLock();
       if (virtualizationUnlockTimeoutRef.current) {
         clearTimeout(virtualizationUnlockTimeoutRef.current);
         virtualizationUnlockTimeoutRef.current = null;
@@ -1421,7 +1452,19 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         trimTimeoutRef.current = null;
       }
     };
-  }, [isOpen, isLargeDiffMode]);
+  }, [isOpen, isLargeDiffMode, releaseBulkVirtualizationLock]);
+
+  useEffect(() => {
+    return () => {
+      releaseBulkVirtualizationLock();
+    };
+  }, [releaseBulkVirtualizationLock]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      collapseAllFilesAction();
+    }
+  }, [isOpen, collapseAllFilesAction]);
 
   useEffect(() => {
     if (!isOpen || viewMode !== "sidebar") return;
@@ -2653,26 +2696,18 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
     });
   }, [setExpandedFiles]);
 
-  const withVirtualizationLock = useCallback((action: () => void) => {
-    setIsVirtualizationLocked(true);
-    action();
-    requestAnimationFrame(() => {
-      setIsVirtualizationLocked(false);
-    });
-  }, []);
-
   const handleExpandAllFiles = useCallback(() => {
     if (files.length === 0) return;
-    withVirtualizationLock(() => {
+    withBulkVirtualizationLock(() => {
       expandAllFilesAction(files.map((file) => file.path));
     });
-  }, [files, expandAllFilesAction, withVirtualizationLock]);
+  }, [files, expandAllFilesAction, withBulkVirtualizationLock]);
 
   const handleCollapseAllFiles = useCallback(() => {
-    withVirtualizationLock(() => {
+    withBulkVirtualizationLock(() => {
       collapseAllFilesAction();
     });
-  }, [collapseAllFilesAction, withVirtualizationLock]);
+  }, [collapseAllFilesAction, withBulkVirtualizationLock]);
 
   const handleFileExpandFromSidebar = useCallback((path: string) => {
     expandFile(path);
