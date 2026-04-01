@@ -40,7 +40,7 @@ const baseProps: PierreDiffViewerProps = {
   isLargeDiffMode: false,
   isCompactView: false,
   alwaysShowLargeDiffs: false,
-  expandedFiles: new Set<string>(),
+  expandedFiles: new Set<string>(['src/a.ts']),
   onToggleFileExpanded: vi.fn(),
   getCommentsForFile: vi.fn(() => []),
   themeId: 'dark',

@@ -7,7 +7,7 @@ import {
   useLayoutEffect,
   memo,
 } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { TauriCommands } from "../../common/tauriCommands";
 import { invoke } from "@tauri-apps/api/core";
 import { useSelection } from "../../hooks/useSelection";
@@ -37,6 +37,8 @@ import {
   VscCheck,
   VscDiff,
   VscSplitHorizontal,
+  VscChevronDown,
+  VscChevronRight,
 } from "react-icons/vsc";
 import { SearchBox } from "../common/SearchBox";
 import { logger } from "../../utils/logger";
@@ -71,6 +73,7 @@ import { useClaudeSession } from "../../hooks/useClaudeSession";
 import {
   inlineSidebarDefaultPreferenceAtom,
   diffLayoutPreferenceAtom,
+  expandedFilesAtom,
   type DiffLayoutMode,
 } from "../../store/atoms/diffPreferences";
 import {
@@ -287,9 +290,10 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
   const activeSelectionFileRef = useRef<string | null>(null);
   const historyLoadedRef = useRef<Set<string>>(new Set());
   const [historyPrefetchVersion, setHistoryPrefetchVersion] = useState(0);
-  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  const [expandedFiles, setExpandedFiles] = useAtom(expandedFilesAtom);
   const [alwaysShowLargeDiffs, setAlwaysShowLargeDiffs] = useState(false);
   const deferredHeightPathsRef = useRef<Set<string>>(new Set());
+  const didInitializeCompactExpansionRef = useRef(false);
 
   // Force continuous scroll in sidebar mode
   const isSidebarMode = viewMode === "sidebar";
@@ -2598,8 +2602,40 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
     });
   }, [files]);
 
+  useEffect(() => {
+    setExpandedFiles((prev: Set<string>) => {
+      if (prev.size === 0) {
+        return prev;
+      }
+      const validPaths = new Set(files.map((f) => f.path));
+      let mutated = false;
+      const next = new Set<string>();
+      prev.forEach((path: string) => {
+        if (validPaths.has(path)) {
+          next.add(path);
+        } else {
+          mutated = true;
+        }
+      });
+      return mutated ? next : prev;
+    });
+  }, [files, setExpandedFiles]);
+
+  useEffect(() => {
+    setExpandedFiles(new Set<string>());
+  }, [sessionName, setExpandedFiles]);
+
+  useEffect(() => {
+    if (!didInitializeCompactExpansionRef.current) {
+      didInitializeCompactExpansionRef.current = true;
+      return;
+    }
+
+    setExpandedFiles(new Set<string>());
+  }, [compactDiffs, setExpandedFiles]);
+
   const toggleFileExpanded = useCallback((filePath: string) => {
-    setExpandedFiles((prev) => {
+    setExpandedFiles((prev: Set<string>) => {
       const next = new Set(prev);
       if (next.has(filePath)) {
         next.delete(filePath);
@@ -2608,7 +2644,55 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
       }
       return next;
     });
+  }, [setExpandedFiles]);
+
+  const expandFile = useCallback((filePath: string) => {
+    setExpandedFiles((prev: Set<string>) => {
+      if (prev.has(filePath)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(filePath);
+      return next;
+    });
+  }, [setExpandedFiles]);
+
+  useEffect(() => {
+    if (!filePath) {
+      return;
+    }
+    expandFile(filePath);
+  }, [filePath, expandFile]);
+
+  const withVirtualizationLock = useCallback((action: () => void) => {
+    setIsVirtualizationLocked(true);
+    action();
+    requestAnimationFrame(() => {
+      setIsVirtualizationLocked(false);
+    });
   }, []);
+
+  const handleExpandAllFiles = useCallback(() => {
+    withVirtualizationLock(() => {
+      setExpandedFiles(new Set(files.map((file) => file.path)));
+    });
+  }, [files, setExpandedFiles, withVirtualizationLock]);
+
+  const handleCollapseAllFiles = useCallback(() => {
+    withVirtualizationLock(() => {
+      setExpandedFiles(new Set());
+    });
+  }, [setExpandedFiles, withVirtualizationLock]);
+
+  const handleFileExpandFromSidebar = useCallback((path: string) => {
+    expandFile(path);
+    requestAnimationFrame(() => {
+      const fileElement = fileRefs.current.get(path);
+      if (fileElement) {
+        fileElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+  }, [expandFile]);
 
   useEffect(() => {
     if (!compactDiffs) {
@@ -3069,6 +3153,24 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
   }) => (
     <>
       {headerActions}
+      <button
+        onClick={handleExpandAllFiles}
+        className="p-1.5 hover:bg-slate-800 rounded-lg"
+        title="Expand all files"
+        aria-label="Expand all files"
+        disabled={files.length === 0}
+      >
+        <VscChevronDown className="text-xl" />
+      </button>
+      <button
+        onClick={handleCollapseAllFiles}
+        className="p-1.5 hover:bg-slate-800 rounded-lg"
+        title="Collapse all files"
+        aria-label="Collapse all files"
+        disabled={files.length === 0}
+      >
+        <VscChevronRight className="text-xl" />
+      </button>
       {isSidebarMode && currentReview && currentReview.comments.length > 0 && (
         <button
           onClick={() => {
@@ -3154,6 +3256,13 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         alwaysShowLargeDiffs={alwaysShowLargeDiffs}
         expandedFiles={expandedFiles}
         onToggleFileExpanded={toggleFileExpanded}
+        onFileSelect={(path) => {
+          const index = filePathToIndexRef.current.get(path);
+          void scrollToFile(path, index, {
+            origin: "user",
+            allowWhileUserScrolling: true,
+          });
+        }}
         getCommentsForFile={getThreadsForFile}
         onCopyLine={(payload) => {
           void handleCopyLineFromContext(payload);
@@ -3304,6 +3413,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
                   allowWhileUserScrolling: true,
                 });
               }}
+              onFileExpanded={handleFileExpandFromSidebar}
               getCommentsForFile={emptyReviewCommentsForFile}
               currentReview={null}
               onFinishReview={() => undefined}
@@ -3352,6 +3462,13 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
               alwaysShowLargeDiffs={alwaysShowLargeDiffs}
               expandedFiles={expandedFiles}
               onToggleFileExpanded={toggleFileExpanded}
+              onFileSelect={(path) => {
+                const index = filePathToIndexRef.current.get(path);
+                void scrollToFile(path, index, {
+                  origin: "user",
+                  allowWhileUserScrolling: true,
+                });
+              }}
               getCommentsForFile={emptyThreadCommentsForFile}
               onCopyLine={(payload) => {
                 void handleCopyLineFromContext(payload);
@@ -3445,11 +3562,12 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
                   selectedFile={selectedFile}
                   visibleFilePath={visibleFilePath}
                   onFileSelect={(path, index) => {
-                  void scrollToFile(path, index, {
-                    origin: "user",
-                    allowWhileUserScrolling: true,
-                  });
-                }}
+                    void scrollToFile(path, index, {
+                      origin: "user",
+                      allowWhileUserScrolling: true,
+                    });
+                  }}
+                  onFileExpanded={handleFileExpandFromSidebar}
                   getCommentsForFile={getCommentsForFile}
                   currentReview={currentReview}
                   onFinishReview={() => {

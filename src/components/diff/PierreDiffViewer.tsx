@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState, memo, useEffect, type ReactNode, type RefObject, type MutableRefObject } from 'react'
 import clsx from 'clsx'
-import { VscComment, VscDiscard, VscEdit, VscTrash } from 'react-icons/vsc'
+import { VscChevronRight, VscComment, VscDiscard, VscEdit, VscTrash } from 'react-icons/vsc'
 import { FileDiff, type DiffLineAnnotation, type FileDiffMetadata } from '@pierre/diffs/react'
 import { getHunkSeparatorSlotName, type GetHoveredLineResult, type ThemesType, type FileDiffOptions, type SelectedLineRange, type HunkData } from '@pierre/diffs'
 
@@ -50,6 +50,7 @@ export interface PierreDiffViewerProps {
   alwaysShowLargeDiffs: boolean
   expandedFiles: Set<string>
   onToggleFileExpanded: (filePath: string) => void
+  onFileSelect?: (filePath: string) => void
   getCommentsForFile: (filePath: string) => ReviewCommentThread[]
   onCopyLine?: (payload: { filePath: string; lineNumber: number; side: 'old' | 'new' }) => void
   onCopyCode?: (payload: { filePath: string; text: string }) => void
@@ -444,6 +445,7 @@ export function PierreDiffViewer({
   alwaysShowLargeDiffs,
   expandedFiles,
   onToggleFileExpanded,
+  onFileSelect,
   getCommentsForFile,
   onCopyLine,
   onCopyCode,
@@ -658,8 +660,7 @@ export function PierreDiffViewer({
           const filterResult = filterResultsMap.get(file.path) ?? { shouldCollapse: false, isGenerated: false, isLarge: false, reason: undefined }
 
           const isFileExpanded = expandedFiles.has(file.path)
-          const isDeletedFile = file.change_type === 'deleted'
-          const shouldCollapse = (isDeletedFile && !isFileExpanded) || (filterResult.shouldCollapse && !isFileExpanded)
+          const shouldCollapse = !isFileExpanded
 
           const isRendered = renderedFileSet ? renderedFileSet.has(file.path) : true
           const isLoading = loadingFiles ? loadingFiles.has(file.path) : false
@@ -689,13 +690,39 @@ export function PierreDiffViewer({
             >
               {/* File header */}
               <div
+                role="button"
+                tabIndex={0}
+                aria-expanded={isFileExpanded}
+                aria-label={`${file.path} ${file.change_type}`}
                 className={clsx(
                   'sticky top-0 z-10 bg-slate-950 border-b border-slate-700 px-4 py-3 flex items-center justify-between gap-4',
                   isCurrentFile && 'bg-slate-900'
                 )}
+                onClick={() => onToggleFileExpanded(file.path)}
+                onKeyDown={(event) => {
+                  if (event.key === ' ') {
+                    event.preventDefault()
+                    onToggleFileExpanded(file.path)
+                    return
+                  }
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    onFileSelect?.(file.path)
+                    if (!isFileExpanded) {
+                      onToggleFileExpanded(file.path)
+                    }
+                  }
+                }}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {getFileIcon(file.change_type, file.path)}
+                  <VscChevronRight
+                    className="text-sm flex-shrink-0 text-slate-400"
+                    style={{
+                      transform: isFileExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s ease',
+                    }}
+                  />
                   <div className="min-w-0">
                     <div className="font-medium text-sm text-slate-100 truncate">{file.path}</div>
                     <div className="text-xs text-slate-400">
@@ -708,7 +735,11 @@ export function PierreDiffViewer({
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
+                <div
+                  className="flex items-center gap-3 flex-shrink-0"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
                   {commentCount > 0 && (
                     <div
                       className="flex items-center gap-1 text-xs font-medium"
@@ -745,19 +776,23 @@ export function PierreDiffViewer({
                 <div className="px-4 py-8 text-center text-slate-500" style={{ minHeight: 200 }}>
                   <div className="h-20" />
                 </div>
+              ) : shouldCollapse ? (
+                <div aria-hidden="true">
+                  <CollapsedDiffBadge
+                    filterResult={
+                      file.change_type === 'deleted'
+                        ? { ...filterResult, shouldCollapse: true, reason: 'deleted' }
+                        : filterResult
+                    }
+                    additions={file.additions}
+                    deletions={file.deletions}
+                    onClick={() => onToggleFileExpanded(file.path)}
+                  />
+                </div>
               ) : isLoading || !fileDiff ? (
                 <div className="px-4 py-8 text-center text-slate-500" style={{ minHeight: 200 }}>
                   <AnimatedText text="loading" size="sm" />
                 </div>
-              ) : shouldCollapse ? (
-                <CollapsedDiffBadge
-                  filterResult={
-                    isDeletedFile
-                      ? { ...filterResult, shouldCollapse: true, reason: 'deleted' }
-                      : filterResult
-                  }
-                  onClick={() => onToggleFileExpanded(file.path)}
-                />
               ) : fileDiff.isBinary ? (
                 <div className="px-4 py-10 text-center text-slate-400">
                   <div className="text-lg font-medium text-slate-200">{t.diffViewer.binaryFile}</div>

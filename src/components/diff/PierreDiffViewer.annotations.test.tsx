@@ -70,7 +70,7 @@ const defaultProps: PierreDiffViewerProps = {
   isLargeDiffMode: false,
   isCompactView: false,
   alwaysShowLargeDiffs: false,
-  expandedFiles: new Set(),
+  expandedFiles: new Set(['src/test.ts']),
   onToggleFileExpanded: vi.fn(),
   getCommentsForFile: vi.fn(() => []),
   themeId: 'dark',
@@ -150,6 +150,18 @@ describe('PierreDiffViewer annotation display', () => {
 
     expect(screen.getByTestId('pierre-file-diff')).toBeInTheDocument()
     expect(screen.queryByTestId('annotation-content')).not.toBeInTheDocument()
+  })
+
+  it('shows collapsed badge change stats when file is collapsed', () => {
+    render(
+      <PierreDiffViewer
+        {...defaultProps}
+        expandedFiles={new Set()}
+      />
+    )
+
+    expect(screen.getByText('+5')).toBeInTheDocument()
+    expect(screen.getByText('-2')).toBeInTheDocument()
   })
 
   it('renders multiple annotations for multi-line comments', () => {

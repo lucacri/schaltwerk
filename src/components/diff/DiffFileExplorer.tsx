@@ -19,6 +19,7 @@ export interface DiffFileExplorerProps {
   selectedFile: string | null
   visibleFilePath: string | null
   onFileSelect: (filePath: string, index: number) => void
+  onFileExpanded?: (filePath: string) => void
   getCommentsForFile: (filePath: string) => ReviewComment[]
   currentReview: {
     sessionName: string
@@ -36,6 +37,7 @@ export function DiffFileExplorer({
   selectedFile,
   visibleFilePath,
   onFileSelect,
+  onFileExpanded,
   getCommentsForFile,
   currentReview,
   onFinishReview,
@@ -76,7 +78,10 @@ export function DiffFileExplorer({
           isLeftSelected && "bg-slate-800"
         )}
         style={{ paddingLeft: `${depth * 12 + 12}px`, paddingTop: '4px', paddingBottom: '4px' }}
-        onClick={() => onFileSelect(node.file.path, fileIndex)}
+        onClick={() => {
+          onFileSelect(node.file.path, fileIndex)
+          onFileExpanded?.(node.file.path)
+        }}
       >
         {getFileIcon(node.file.change_type, node.file.path)}
         <div className="flex-1 min-w-0">

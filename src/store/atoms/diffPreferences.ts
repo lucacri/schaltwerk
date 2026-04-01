@@ -16,6 +16,7 @@ interface DiffViewPreferences {
 const inlineSidebarDefaultAtom = atom<boolean>(true)
 const diffLayoutAtom = atom<DiffLayoutMode>('unified')
 const initializedAtom = atom(false)
+export const expandedFilesAtom = atom<Set<string>>(new Set<string>())
 
 let lastSavedValue: { inline_sidebar_default: boolean; diff_layout: DiffLayoutMode } | null = null
 let pendingSaveValue: Partial<{ inline_sidebar_default: boolean; diff_layout: DiffLayoutMode }> = {}
