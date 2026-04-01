@@ -157,8 +157,8 @@ describe('UnifiedDiffView file folding', () => {
   it('collapses all files by default', async () => {
     const { store } = renderModal()
 
-    const firstHeader = await screen.findByRole('button', { name: 'src/first.ts modified' })
-    const secondHeader = await screen.findByRole('button', { name: 'src/second.ts modified' })
+    const firstHeader = await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
+    const secondHeader = await screen.findByRole('button', { name: 'Toggle src/second.ts diff' })
 
     expect(firstHeader).toHaveAttribute('aria-expanded', 'false')
     expect(secondHeader).toHaveAttribute('aria-expanded', 'false')
@@ -168,7 +168,7 @@ describe('UnifiedDiffView file folding', () => {
   it('auto-expands pre-selected file from filePath prop', async () => {
     const { store } = renderModal('src/second.ts')
 
-    const secondHeader = await screen.findByRole('button', { name: 'src/second.ts modified' })
+    const secondHeader = await screen.findByRole('button', { name: 'Toggle src/second.ts diff' })
     expect(secondHeader).toHaveAttribute('aria-expanded', 'true')
     expect(store.get(expandedFilesAtom)).toEqual(new Set(['src/second.ts']))
   })
@@ -176,8 +176,8 @@ describe('UnifiedDiffView file folding', () => {
   it('keeps all files collapsed when filePath prop is null', async () => {
     renderModal(null)
 
-    const firstHeader = await screen.findByRole('button', { name: 'src/first.ts modified' })
-    const secondHeader = await screen.findByRole('button', { name: 'src/second.ts modified' })
+    const firstHeader = await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
+    const secondHeader = await screen.findByRole('button', { name: 'Toggle src/second.ts diff' })
 
     expect(firstHeader).toHaveAttribute('aria-expanded', 'false')
     expect(secondHeader).toHaveAttribute('aria-expanded', 'false')
@@ -186,8 +186,8 @@ describe('UnifiedDiffView file folding', () => {
   it('clicking file header toggles file expansion only', async () => {
     const { store } = renderModal()
 
-    const firstHeader = await screen.findByRole('button', { name: 'src/first.ts modified' })
-    const secondHeader = await screen.findByRole('button', { name: 'src/second.ts modified' })
+    const firstHeader = await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
+    const secondHeader = await screen.findByRole('button', { name: 'Toggle src/second.ts diff' })
 
     fireEvent.click(firstHeader)
 
@@ -199,7 +199,7 @@ describe('UnifiedDiffView file folding', () => {
   it('unmounts file diff content while file is collapsed', async () => {
     renderModal()
 
-    await screen.findByRole('button', { name: 'src/first.ts modified' })
+    await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
     expect(screen.queryByText('a')).not.toBeInTheDocument()
     expect(screen.queryByText('b')).not.toBeInTheDocument()
   })
@@ -209,25 +209,25 @@ describe('UnifiedDiffView file folding', () => {
 
     fireEvent.click(await screen.findByText('second.ts'))
 
-    expect(screen.getByRole('button', { name: 'src/second.ts modified' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: 'Toggle src/second.ts diff' })).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('expand all and collapse all controls update all files', async () => {
     const { store } = renderModal()
 
-    await screen.findByRole('button', { name: 'src/first.ts modified' })
-    await screen.findByRole('button', { name: 'src/second.ts modified' })
+    await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
+    await screen.findByRole('button', { name: 'Toggle src/second.ts diff' })
     const expandAll = await screen.findByRole('button', { name: 'Expand all files' })
     const collapseAll = screen.getByRole('button', { name: 'Collapse all files' })
 
     fireEvent.click(expandAll)
-    expect(screen.getByRole('button', { name: 'src/first.ts modified' })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByRole('button', { name: 'src/second.ts modified' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: 'Toggle src/first.ts diff' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: 'Toggle src/second.ts diff' })).toHaveAttribute('aria-expanded', 'true')
     expect(store.get(expandedFilesAtom)).toEqual(new Set(['src/first.ts', 'src/second.ts']))
 
     fireEvent.click(collapseAll)
-    expect(screen.getByRole('button', { name: 'src/first.ts modified' })).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByRole('button', { name: 'src/second.ts modified' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('button', { name: 'Toggle src/first.ts diff' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('button', { name: 'Toggle src/second.ts diff' })).toHaveAttribute('aria-expanded', 'false')
     expect(store.get(expandedFilesAtom)).toEqual(new Set())
   })
 
@@ -237,8 +237,8 @@ describe('UnifiedDiffView file folding', () => {
     const expandAll = await screen.findByRole('button', { name: 'Expand all files' })
     fireEvent.click(expandAll)
 
-    const firstHeader = screen.getByRole('button', { name: 'src/first.ts modified' })
-    const secondHeader = screen.getByRole('button', { name: 'src/second.ts modified' })
+    const firstHeader = screen.getByRole('button', { name: 'Toggle src/first.ts diff' })
+    const secondHeader = screen.getByRole('button', { name: 'Toggle src/second.ts diff' })
     expect(firstHeader).toHaveAttribute('aria-expanded', 'true')
     expect(secondHeader).toHaveAttribute('aria-expanded', 'true')
 
@@ -251,7 +251,7 @@ describe('UnifiedDiffView file folding', () => {
   it('space toggles focused file expansion', async () => {
     const { store } = renderModal()
 
-    const firstHeader = await screen.findByRole('button', { name: 'src/first.ts modified' })
+    const firstHeader = await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
     firstHeader.focus()
     fireEvent.keyDown(firstHeader, { key: ' ' })
 
@@ -262,7 +262,7 @@ describe('UnifiedDiffView file folding', () => {
   it('enter expands and keeps expanded on repeat', async () => {
     const { store } = renderModal()
 
-    const firstHeader = await screen.findByRole('button', { name: 'src/first.ts modified' })
+    const firstHeader = await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
     firstHeader.focus()
 
     fireEvent.keyDown(firstHeader, { key: 'Enter' })
@@ -275,7 +275,7 @@ describe('UnifiedDiffView file folding', () => {
   it('prunes stale expanded file paths that are not in the current file list', async () => {
     const { store } = renderModal('src/missing.ts')
 
-    await screen.findByRole('button', { name: 'src/first.ts modified' })
+    await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
 
     await waitFor(() => {
       const expandedFiles = store.get(expandedFilesAtom)
@@ -285,7 +285,7 @@ describe('UnifiedDiffView file folding', () => {
 
   it('clears expanded files on session switch', async () => {
     const { store } = renderModal()
-    const firstHeader = await screen.findByRole('button', { name: 'src/first.ts modified' })
+    const firstHeader = await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
 
     fireEvent.click(firstHeader)
     expect(firstHeader).toHaveAttribute('aria-expanded', 'true')
@@ -310,7 +310,7 @@ describe('UnifiedDiffView file folding', () => {
 
   it('clears expanded files when compact mode toggles', async () => {
     const { store } = renderModal()
-    const firstHeader = await screen.findByRole('button', { name: 'src/first.ts modified' })
+    const firstHeader = await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
     fireEvent.click(firstHeader)
     expect(firstHeader).toHaveAttribute('aria-expanded', 'true')
 
@@ -335,7 +335,7 @@ describe('UnifiedDiffView file folding', () => {
 
   it('keeps aria-expanded synchronized with header toggle state', async () => {
     renderModal()
-    const firstHeader = await screen.findByRole('button', { name: 'src/first.ts modified' })
+    const firstHeader = await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
 
     expect(firstHeader).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(firstHeader)

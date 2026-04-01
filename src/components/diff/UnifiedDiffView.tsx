@@ -39,8 +39,6 @@ import {
   VscDiff,
   VscExpandAll,
   VscSplitHorizontal,
-  VscChevronDown,
-  VscChevronRight,
 } from "react-icons/vsc";
 import { SearchBox } from "../common/SearchBox";
 import { logger } from "../../utils/logger";
@@ -2624,29 +2622,6 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
   }, [files, setExpandedFiles]);
 
   useEffect(() => {
-    setExpandedFiles((prev: Set<string>) => {
-      if (prev.size === 0) {
-        return prev;
-      }
-      const validPaths = new Set(files.map((f) => f.path));
-      let mutated = false;
-      const next = new Set<string>();
-      prev.forEach((path: string) => {
-        if (validPaths.has(path)) {
-          next.add(path);
-        } else {
-          mutated = true;
-        }
-      });
-      return mutated ? next : prev;
-    });
-  }, [files, setExpandedFiles]);
-
-  useEffect(() => {
-    setExpandedFiles(new Set<string>());
-  }, [sessionName, setExpandedFiles]);
-
-  useEffect(() => {
     if (!didInitializeCompactExpansionRef.current) {
       didInitializeCompactExpansionRef.current = true;
       return;
@@ -2677,13 +2652,6 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
       return next;
     });
   }, [setExpandedFiles]);
-
-  useEffect(() => {
-    if (!filePath) {
-      return;
-    }
-    expandFile(filePath);
-  }, [filePath, expandFile]);
 
   const withVirtualizationLock = useCallback((action: () => void) => {
     setIsVirtualizationLocked(true);
@@ -2749,9 +2717,8 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
       });
     } else {
       setExpandedSections(new Map());
-      setExpandedFiles(new Set());
     }
-  }, [compactDiffs, allFileDiffs, setExpandedFiles]);
+  }, [compactDiffs, allFileDiffs]);
 
   useEffect(() => {
     collapseAllFilesAction();
@@ -2759,13 +2726,8 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
 
   useEffect(() => {
     if (!filePath) return;
-    setExpandedFiles((prev) => {
-      if (prev.has(filePath)) return prev;
-      const next = new Set(prev);
-      next.add(filePath);
-      return next;
-    });
-  }, [filePath, setExpandedFiles]);
+    expandFile(filePath);
+  }, [filePath, expandFile]);
 
   const handleSubmitComment = useCallback(
     async (text: string) => {
@@ -3190,24 +3152,6 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
   }) => (
     <>
       {headerActions}
-      <button
-        onClick={handleExpandAllFiles}
-        className="p-1.5 hover:bg-slate-800 rounded-lg"
-        title="Expand all files"
-        aria-label="Expand all files"
-        disabled={files.length === 0}
-      >
-        <VscChevronDown className="text-xl" />
-      </button>
-      <button
-        onClick={handleCollapseAllFiles}
-        className="p-1.5 hover:bg-slate-800 rounded-lg"
-        title="Collapse all files"
-        aria-label="Collapse all files"
-        disabled={files.length === 0}
-      >
-        <VscChevronRight className="text-xl" />
-      </button>
       {isSidebarMode && currentReview && currentReview.comments.length > 0 && (
         <button
           onClick={() => {
