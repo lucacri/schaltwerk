@@ -148,6 +148,15 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   }).length
   const canConsolidate = runningOrReviewedCount >= 2
   const hasRunning = group.versions.some(v => v.session.info.session_state === 'running')
+  const maxTagLength = Math.max(
+    ...group.versions.map(v => {
+      const agent = (v.session.info.original_agent_type || '').toLowerCase()
+      const vNum = v.session.info.version_number
+      const text = vNum ? `v${vNum} · ${agent}` : agent
+      return text.length
+    })
+  )
+  const tagMinWidth = `${maxTagLength + 2}ch`
   const groupDescription = group.versions
     .map(version => (version.session.info.current_task || version.session.info.spec_content || '').trim())
     .find(Boolean) || undefined
@@ -315,6 +324,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                       session={version.session}
                       index={startIndex + versionIndex}
                       isSelected={isSelected}
+                      tagMinWidth={tagMinWidth}
                       hasFollowUpMessage={hasFollowUpMessage(version.session.info.session_id)}
                       showPromoteIcon={isSelected}
                       willBeDeleted={willBeDeleted}

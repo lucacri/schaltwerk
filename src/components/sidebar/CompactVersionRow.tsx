@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from 'react'
+import { memo, useCallback } from 'react'
 import { clsx } from 'clsx'
 import { useAtomValue } from 'jotai'
 import { VscIssues, VscGitPullRequest } from 'react-icons/vsc'
@@ -25,6 +25,7 @@ interface CompactVersionRowProps {
   isSelected: boolean
   hasFollowUpMessage: boolean
   showPromoteIcon?: boolean
+  tagMinWidth?: string
   willBeDeleted?: boolean
   isPromotionPreview?: boolean
   onSelect: (sessionId: string) => void
@@ -62,6 +63,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   isSelected,
   hasFollowUpMessage,
   showPromoteIcon = false,
+  tagMinWidth,
   willBeDeleted = false,
   isPromotionPreview = false,
   onSelect,
@@ -112,21 +114,8 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
     ?? (hasUncommittedChanges ? Math.max(s.top_uncommitted_paths?.length ?? 0, 1) : 0)
   const showDirtyIndicator = hasUncommittedChanges || dirtyFilesCount > 0
   const commitsAheadCount = s.commits_ahead_count ?? 0
-  const canCollapse = sessionState !== 'spec'
-  const [isExpanded, setIsExpanded] = useState<boolean>(isSelected || !canCollapse)
-  const showExpandedActions = !canCollapse || isExpanded
   const agentType = s.original_agent_type as SessionInfo['original_agent_type']
   const agentKey = (agentType || '').toLowerCase()
-
-  useEffect(() => {
-    if (!canCollapse) {
-      setIsExpanded(true)
-      return
-    }
-    if (isSelected) {
-      setIsExpanded(true)
-    }
-  }, [canCollapse, isSelected])
 
   const agentColor = getAgentColorKey(agentKey)
   const colorScheme = getAgentColorScheme(agentColor)
@@ -281,18 +270,12 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
         data-session-selected={isSelected ? 'true' : 'false'}
         onClick={() => {
           if (isBusy) return
-          if (canCollapse) {
-            setIsExpanded((previous) => !previous)
-          }
           onSelect(s.session_id)
         }}
         onKeyDown={(event) => {
           if (isBusy) return
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
-            if (canCollapse) {
-              setIsExpanded((previous) => !previous)
-            }
             onSelect(s.session_id)
           }
         }}
@@ -323,7 +306,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
             />
           )
         })()}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-1">
           <div className="flex min-w-0 items-center gap-2 overflow-hidden" style={sessionText.meta}>
             {sessionState === 'spec' ? (
               <span
@@ -344,6 +327,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                     className="inline-flex flex-shrink-0 items-center gap-1 px-1.5 py-[1px] rounded border"
                     style={{
                       ...sessionText.badge,
+                      minWidth: tagMinWidth,
                       backgroundColor: colorScheme.bg,
                       color: colorScheme.light,
                       borderColor: colorScheme.border,
@@ -383,8 +367,8 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
             {metadataBadges}
           </div>
 
-          {showExpandedActions && (
-            <div className="flex-shrink-0" onClick={(event) => event.stopPropagation()}>
+          {isSelected && (
+            <div data-testid="compact-row-actions" className="flex justify-end" onClick={(event) => event.stopPropagation()}>
               <SessionActions
                 sessionState={sessionState as 'spec' | 'running' | 'reviewed'}
                 isReadyToMerge={isReadyToMerge}

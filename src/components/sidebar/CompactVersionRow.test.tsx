@@ -159,4 +159,43 @@ describe('CompactVersionRow', () => {
     renderRow({ isSelected: true })
     expect(screen.getByTestId('session-actions')).toBeInTheDocument()
   })
+
+  it('hides actions when not selected', () => {
+    renderRow({ isSelected: false })
+    expect(screen.queryByTestId('session-actions')).toBeNull()
+  })
+
+  it('shows actions on a separate line when selected', () => {
+    renderRow({ isSelected: true })
+    const actions = screen.getByTestId('session-actions')
+    expect(actions).toBeInTheDocument()
+    const actionsRow = actions.closest('[data-testid="compact-row-actions"]')
+    expect(actionsRow).toBeInTheDocument()
+  })
+
+  it('applies tagMinWidth to the version badge', () => {
+    renderRow({ tagMinWidth: '14ch' })
+    const badge = screen.getByText('v2 · claude')
+    expect(badge.style.minWidth).toBe('14ch')
+  })
+
+  it('does not set minWidth when tagMinWidth is undefined', () => {
+    renderRow()
+    const badge = screen.getByText('v2 · claude')
+    expect(badge.style.minWidth).toBe('')
+  })
+
+  it('renders longer agent labels without truncation', () => {
+    renderRow({
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          original_agent_type: 'kilocode',
+        },
+      },
+    })
+
+    expect(screen.getByText('v2 · kilocode')).toBeInTheDocument()
+  })
 })
