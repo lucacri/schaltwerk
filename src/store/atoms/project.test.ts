@@ -9,7 +9,24 @@ import {
   closeProjectActionAtom,
   __resetProjectsTestingState,
 } from './project'
+import { resetSelectionAtomsForTest } from './selection'
+import { __resetSessionsTestingState } from './sessions'
 import { TauriCommands } from '../../common/tauriCommands'
+import { computeProjectOrchestratorId } from '../../common/agentSpawn'
+
+vi.mock('../../terminal/transport/backend', () => ({
+  createTerminalBackend: vi.fn(() => Promise.resolve()),
+  closeTerminalBackend: vi.fn(() => Promise.resolve()),
+}))
+
+vi.mock('../../terminal/registry/terminalRegistry', () => ({
+  hasTerminalInstance: vi.fn(() => false),
+  removeTerminalInstance: vi.fn(),
+}))
+
+vi.mock('../../components/terminal/Terminal', () => ({
+  clearTerminalStartedTracking: vi.fn(),
+}))
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -23,6 +40,8 @@ describe('project lifecycle atoms', () => {
 
   beforeEach(async () => {
     __resetProjectsTestingState()
+    resetSelectionAtomsForTest()
+    __resetSessionsTestingState()
     store = createStore()
 
     const core = await import('@tauri-apps/api/core')
@@ -34,6 +53,11 @@ describe('project lifecycle atoms', () => {
         case TauriCommands.AddRecentProject:
         case TauriCommands.CloseProject:
           return null
+        case TauriCommands.DirectoryExists:
+        case TauriCommands.PathExists:
+          return true
+        case TauriCommands.TerminalExists:
+          return false
         default:
           return null
       }
@@ -213,6 +237,76 @@ describe('project lifecycle atoms', () => {
     secondSwitch.resolve()
     await second
     expect(store.get(projectPathAtom)).toBe('/repo/two')
+  })
+
+  it('cleans up previous project orchestrator terminals after opening a new project', async () => {
+    const backend = await import('../../terminal/transport/backend')
+
+    await store.set(openProjectActionAtom, { path: '/repo/alpha' })
+    vi.mocked(backend.closeTerminalBackend).mockClear()
+
+    await store.set(openProjectActionAtom, { path: '/repo/beta' })
+
+    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/^orchestrator-alpha-[0-9a-f]{1,6}-top$/),
+    )
+    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/^orchestrator-alpha-[0-9a-f]{1,6}-bottom$/),
+    )
+  })
+
+  it('cleans up the actual previous project when queued switches change the active project before execution', async () => {
+    const backend = await import('../../terminal/transport/backend')
+
+    await store.set(openProjectActionAtom, { path: '/repo/base' })
+    await store.set(openProjectActionAtom, { path: '/repo/two' })
+    await store.set(selectProjectActionAtom, { path: '/repo/base' })
+
+    const firstSwitch = deferredPromise()
+    const secondSwitch = deferredPromise()
+    invoke.mockImplementation(async (command, args?: InvokeArgsType) => {
+      const pathArg = (args as { path?: string } | undefined)?.path
+      if (command === TauriCommands.InitializeProject && pathArg === '/repo/one') {
+        return firstSwitch.promise
+      }
+      if (command === TauriCommands.InitializeProject && pathArg === '/repo/two') {
+        return secondSwitch.promise
+      }
+      if (command === TauriCommands.InitializeProject) {
+        return null
+      }
+      if (command === TauriCommands.DirectoryExists || command === TauriCommands.PathExists) {
+        return true
+      }
+      if (command === TauriCommands.TerminalExists) {
+        return false
+      }
+      return null
+    })
+
+    const first = store.set(openProjectActionAtom, { path: '/repo/one' })
+    const queuedSwitch = store.set(selectProjectActionAtom, { path: '/repo/two' })
+
+    await flushMicrotask()
+    firstSwitch.resolve()
+    await first
+    await flushMicrotask()
+
+    vi.mocked(backend.closeTerminalBackend).mockClear()
+
+    secondSwitch.resolve()
+    await queuedSwitch
+
+    const oneTop = computeProjectOrchestratorId('/repo/one')
+    const oneBottom = oneTop?.replace(/-top$/, '-bottom')
+    const baseTop = computeProjectOrchestratorId('/repo/base')
+
+    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenCalledWith(oneTop)
+    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenCalledWith(oneBottom)
+    expect(vi.mocked(backend.closeTerminalBackend)).not.toHaveBeenCalledWith(baseTop)
   })
 
   it('deduplicates concurrent openProject calls for the same path during initial open', async () => {

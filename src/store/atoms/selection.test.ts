@@ -16,11 +16,18 @@ import {
   waitForSelectionAsyncEffectsForTest,
   getFilterModeForProjectForTest,
   isSwitchInProgressForTest,
+  switchingProjectAtom,
 } from './selection'
+import {
+  allSessionsAtom,
+  refreshSessionsActionAtom,
+  __resetSessionsTestingState,
+} from './sessions'
 import { projectPathAtom } from './project'
 import { TauriCommands } from '../../common/tauriCommands'
 import { FilterMode } from '../../types/sessionFilters'
 import { stableSessionTerminalId } from '../../common/terminalIdentity'
+import { SessionState, type EnrichedSession } from '../../types/session'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -105,6 +112,34 @@ function createRawSession(overrides: Partial<Record<string, unknown>> = {}) {
   }
 }
 
+function createEnrichedSession(sessionId: string, worktreePath: string): EnrichedSession {
+  return {
+    info: {
+      session_id: sessionId,
+      display_name: sessionId,
+      base_branch: 'main',
+      status: 'active',
+      session_state: SessionState.Running,
+      branch: `schaltwerk/${sessionId}`,
+      worktree_path: worktreePath,
+      created_at: '2024-01-01T00:00:00.000Z',
+      last_modified: '2024-01-01T00:00:00.000Z',
+      ready_to_merge: false,
+      has_uncommitted_changes: false,
+      has_conflicts: false,
+      diff_stats: {
+        files_changed: 0,
+        additions: 0,
+        deletions: 0,
+        insertions: 0,
+      },
+      is_current: false,
+      session_type: 'worktree',
+    },
+    terminals: [],
+  }
+}
+
 async function withNodeEnv<T>(value: string, fn: () => Promise<T> | T): Promise<T> {
   const previous = process.env.NODE_ENV
   process.env.NODE_ENV = value
@@ -120,16 +155,19 @@ describe('selection atoms', () => {
   let core: typeof import('@tauri-apps/api/core')
   let nextSessionResponse: ReturnType<typeof createRawSession> | null
   let nextPathExistsResult: boolean | null
+  let sessionsByProject: Record<string, EnrichedSession[]>
 
   beforeEach(async () => {
     store = createStore()
     resetSelectionAtomsForTest()
+    __resetSessionsTestingState()
     selectionEventHandlers.length = 0
     sessionsRefreshedHandlers.length = 0
     sessionStateHandlers.length = 0
     nextSessionResponse = null
     nextPathExistsResult = null
     eventListenCallCount = 0
+    sessionsByProject = {}
 
     core = await import('@tauri-apps/api/core')
     const invoke = vi.mocked(core.invoke)
@@ -162,6 +200,10 @@ describe('selection atoms', () => {
       }
       if (cmd === TauriCommands.TerminalExists) {
         return false
+      }
+      if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+        const activeProject = store.get(projectPathAtom)
+        return activeProject ? (sessionsByProject[activeProject] ?? []) : []
       }
       throw new Error(`Unexpected command ${cmd}`)
     })
@@ -579,6 +621,82 @@ describe('selection atoms', () => {
     await store.set(getSessionSnapshotActionAtom, { sessionId: 'session-1' })
 
     expect(getInvokeCallCount(TauriCommands.SchaltwerkCoreGetSession)).toBe(2)
+  })
+
+  it('hydrates cached sessions for the target project immediately when switching projects', async () => {
+    const alphaSession = createEnrichedSession('alpha-session', '/tmp/worktrees/alpha-session')
+    const betaSession = createEnrichedSession('beta-session', '/tmp/worktrees/beta-session')
+    sessionsByProject['/projects/alpha'] = [alphaSession]
+    sessionsByProject['/projects/beta'] = [betaSession]
+
+    await store.set(setProjectPathActionAtom, '/projects/alpha')
+    await store.set(refreshSessionsActionAtom)
+    expect(store.get(allSessionsAtom).map(session => session.info.session_id)).toEqual(['alpha-session'])
+
+    await store.set(setProjectPathActionAtom, '/projects/beta')
+    await store.set(refreshSessionsActionAtom)
+    expect(store.get(allSessionsAtom).map(session => session.info.session_id)).toEqual(['beta-session'])
+
+    await store.set(setProjectPathActionAtom, '/projects/alpha')
+
+    expect(store.get(allSessionsAtom).map(session => session.info.session_id)).toEqual(['alpha-session'])
+  })
+
+  it('clears sessions immediately when switching to a project without cached sessions', async () => {
+    sessionsByProject['/projects/alpha'] = [createEnrichedSession('alpha-session', '/tmp/worktrees/alpha-session')]
+
+    await store.set(setProjectPathActionAtom, '/projects/alpha')
+    await store.set(refreshSessionsActionAtom)
+    expect(store.get(allSessionsAtom).map(session => session.info.session_id)).toEqual(['alpha-session'])
+
+    await store.set(setProjectPathActionAtom, '/projects/gamma')
+
+    expect(store.get(allSessionsAtom)).toEqual([])
+  })
+
+  it('tracks switchingProjectAtom during async remembered selection resolution', async () => {
+    await store.set(setProjectPathActionAtom, '/projects/alpha')
+    await store.set(setSelectionActionAtom, {
+      selection: {
+        kind: 'session',
+        payload: 'remembered-session',
+        sessionState: 'running',
+        worktreePath: '/tmp/worktrees/remembered-session',
+      },
+      isIntentional: true,
+    })
+
+    let resolveSnapshot!: (value: unknown) => void
+    vi.mocked(core.invoke).mockImplementation(async (cmd, args?: unknown) => {
+      if (cmd === TauriCommands.SchaltwerkCoreGetSession) {
+        const typedArgs = args as Record<string, unknown> | undefined
+        if (typedArgs?.name === 'remembered-session') {
+          return new Promise(resolve => {
+            resolveSnapshot = resolve
+          })
+        }
+        return createRawSession({ name: typedArgs?.name })
+      }
+      if (cmd === TauriCommands.PathExists) return true
+      if (cmd === TauriCommands.DirectoryExists) return true
+      if (cmd === TauriCommands.TerminalExists) return false
+      if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+        const activeProject = store.get(projectPathAtom)
+        return activeProject ? (sessionsByProject[activeProject] ?? []) : []
+      }
+      throw new Error(`Unexpected command ${cmd}`)
+    })
+
+    await store.set(setProjectPathActionAtom, '/projects/beta')
+
+    const switchPromise = store.set(setProjectPathActionAtom, '/projects/alpha')
+
+    expect(store.get(switchingProjectAtom)).toBe(true)
+
+    resolveSnapshot(createRawSession({ name: 'remembered-session' }))
+    await switchPromise
+
+    expect(store.get(switchingProjectAtom)).toBe(false)
   })
 
   it('refresh option bypasses snapshot cache', async () => {

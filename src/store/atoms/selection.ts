@@ -17,6 +17,7 @@ import { startSwitchPhaseProfile } from '../../terminal/profiling/switchProfiler
 import type { RawSession } from '../../types/session'
 import { FilterMode } from '../../types/sessionFilters'
 import { projectPathAtom } from './project'
+import { hydrateProjectSessionsForSwitchActionAtom } from './sessions'
 
 export interface Selection {
   kind: 'session' | 'orchestrator'
@@ -57,6 +58,8 @@ interface SnapshotRequest {
 }
 
 const selectionAtom = atom<Selection>({ kind: 'orchestrator', projectPath: null })
+const switchingProjectStateAtom = atom(false)
+export const switchingProjectAtom = atom(get => get(switchingProjectStateAtom))
 let currentFilterMode: FilterMode = FilterMode.Running
 const projectFilterModes = new Map<string, FilterMode>()
 let defaultFilterModeForProjects: FilterMode = FilterMode.Running
@@ -775,6 +778,9 @@ export const setProjectPathActionAtom = atom(
       return
     }
 
+    set(switchingProjectStateAtom, true)
+    set(hydrateProjectSessionsForSwitchActionAtom, path)
+
     currentFilterMode = path ? (projectFilterModes.get(path) ?? defaultFilterModeForProjects) : defaultFilterModeForProjects
 
     const resolveRememberedSelectionForProject = async (project: string): Promise<{ selection: Selection; hadRemembered: boolean }> => {
@@ -831,37 +837,41 @@ export const setProjectPathActionAtom = atom(
       return { selection: orchestratorSelection, hadRemembered: true }
     }
 
-    let nextSelection: Selection = { kind: 'orchestrator' }
-    let remembered: Selection | null = null
-    if (path) {
-      const resolved = await resolveRememberedSelectionForProject(path)
-      nextSelection = resolved.selection
-      remembered = resolved.hadRemembered ? resolved.selection : null
-    }
+    try {
+      let nextSelection: Selection = { kind: 'orchestrator' }
+      let remembered: Selection | null = null
+      if (path) {
+        const resolved = await resolveRememberedSelectionForProject(path)
+        nextSelection = resolved.selection
+        remembered = resolved.hadRemembered ? resolved.selection : null
+      }
 
-    const matchesFilter = selectionMatchesCurrentFilter(nextSelection)
-    if (!matchesFilter) {
-      nextSelection = { kind: 'orchestrator' }
-    }
+      const matchesFilter = selectionMatchesCurrentFilter(nextSelection)
+      if (!matchesFilter) {
+        nextSelection = { kind: 'orchestrator' }
+      }
 
-    if (path && matchesFilter) {
-      rememberSelectionForProject(path, nextSelection)
-    } else if (path && !matchesFilter && !remembered) {
-      rememberSelectionForProject(path, nextSelection)
-    }
+      if (path && matchesFilter) {
+        rememberSelectionForProject(path, nextSelection)
+      } else if (path && !matchesFilter && !remembered) {
+        rememberSelectionForProject(path, nextSelection)
+      }
 
-    await set(setSelectionActionAtom, {
-      selection: nextSelection,
-      forceRecreate: false,
-      isIntentional: false,
-      remember: false,
-      rememberProjectPath: path ?? undefined,
-    })
+      await set(setSelectionActionAtom, {
+        selection: nextSelection,
+        forceRecreate: false,
+        isIntentional: false,
+        remember: false,
+        rememberProjectPath: path ?? undefined,
+      })
 
-    lastProcessedProjectPath = path
+      lastProcessedProjectPath = path
 
-    if (previouslyHandledPath !== path) {
-      emitUiEvent(UiEvent.ProjectSwitchComplete, { projectPath: path ?? '' })
+      if (previouslyHandledPath !== path) {
+        emitUiEvent(UiEvent.ProjectSwitchComplete, { projectPath: path ?? '' })
+      }
+    } finally {
+      set(switchingProjectStateAtom, false)
     }
   },
 )

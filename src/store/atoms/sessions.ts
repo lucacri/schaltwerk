@@ -766,6 +766,14 @@ function recomputeCrossProjectCounts(projectPath: string): { attention: number; 
     return { attention, running }
 }
 
+function stripAttentionState(sessions: EnrichedSession[]): EnrichedSession[] {
+    return sessions.map(session =>
+        session.info.attention_required != null
+            ? { ...session, info: { ...session.info, attention_required: undefined } }
+            : session,
+    )
+}
+
 function parseSessionsRefreshedPayload(payload: unknown): { projectPath: string | null; sessions: EnrichedSession[] } {
     if (payload && typeof payload === 'object' && payload !== null && 'sessions' in payload) {
         const scoped = payload as Partial<SessionsRefreshedEventPayload>
@@ -787,11 +795,7 @@ function syncSnapshotsFromAtom(get: Getter) {
 
     const projectPath = get(projectPathAtom)
     if (projectPath) {
-        const stripped = current.map(session =>
-            session.info.attention_required != null
-                ? { ...session, info: { ...session.info, attention_required: undefined } }
-                : session,
-        )
+        const stripped = stripAttentionState(current)
         projectSessionsSnapshotCache.set(projectPath, stripped)
         projectSessionStatesCache.set(projectPath, new Map(stateMap))
         updateSessionProjectIndex(projectPath, current)
@@ -901,6 +905,36 @@ export function __getSessionsEventHandlerForTest(event: SchaltEvent): ((payload:
 export const autoCancelAfterMergeAtom = atom((get) => get(autoCancelAfterMergeStateAtom))
 export const autoCancelAfterPrAtom = atom((get) => get(autoCancelAfterPrStateAtom))
 export const sessionsLoadingAtom = atom((get) => get(loadingStateAtom))
+export const hydrateProjectSessionsForSwitchActionAtom = atom(
+    null,
+    (get, set, projectPath: string | null) => {
+        const activeProject = activeSessionsProjectPath
+        const activeSessions = get(allSessionsAtom)
+
+        if (activeProject && activeProject !== projectPath) {
+            cacheCrossProjectSnapshot(set, activeProject, activeSessions)
+        }
+
+        if (!projectPath) {
+            set(allSessionsAtom, [])
+            previousSessionsSnapshot = []
+            previousSessionStates = new Map()
+            activeSessionsProjectPath = null
+            syncMergeStatuses(set, [])
+            return
+        }
+
+        const cachedSnapshot = projectSessionsSnapshotCache.get(projectPath) ?? []
+        const strippedSnapshot = stripAttentionState(cachedSnapshot)
+        const stateMap = projectSessionStatesCache.get(projectPath) ?? buildStateMap(strippedSnapshot)
+
+        set(allSessionsAtom, strippedSnapshot)
+        previousSessionsSnapshot = [...strippedSnapshot]
+        previousSessionStates = new Map(stateMap)
+        activeSessionsProjectPath = projectPath
+        syncMergeStatuses(set, strippedSnapshot)
+    },
+)
 
 export const expectSessionActionAtom = atom(
     null,
@@ -1106,11 +1140,7 @@ export const refreshSessionsActionAtom = atom(
 
         try {
             if (cachedSnapshot && cachedSnapshot.length > 0) {
-                const stripped = cachedSnapshot.map(s =>
-                    s.info.attention_required != null
-                        ? { ...s, info: { ...s.info, attention_required: undefined } }
-                        : s,
-                )
+                const stripped = stripAttentionState(cachedSnapshot)
                 await applySessionsSnapshot(get, set, stripped, projectPath, {
                     reason: 'cache-hydrate',
                     previousStates: cachedStates ? new Map(cachedStates) : new Map(previousSessionStates),
