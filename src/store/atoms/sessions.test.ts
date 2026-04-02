@@ -1560,6 +1560,137 @@ describe('sessions atoms', () => {
         expect(counts['/projects/alpha']).toEqual({ attention: 1, running: 1 })
     })
 
+    it('snapshots outgoing project counts on switch and excludes reviewed sessions', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                const activeProject = store.get(projectPathAtom)
+                if (activeProject === '/projects/alpha') {
+                    return [
+                        createSession({
+                            session_id: 'alpha-running',
+                            worktree_path: '/tmp/alpha-running',
+                            session_state: SessionState.Running,
+                            ready_to_merge: false,
+                        }),
+                        createSession({
+                            session_id: 'alpha-reviewed',
+                            worktree_path: '/tmp/alpha-reviewed',
+                            session_state: SessionState.Reviewed,
+                            ready_to_merge: true,
+                        }),
+                    ]
+                }
+                if (activeProject === '/projects/beta') {
+                    return [createSession({ session_id: 'beta-running', worktree_path: '/tmp/beta-running' })]
+                }
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 0, running: 1 })
+    })
+
+    it('does not count version groups as running when all running versions need attention or are reviewed', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                return [createSession({ session_id: 'beta-session', worktree_path: '/tmp/beta' })]
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:sessions-refreshed']?.({
+            projectPath: '/projects/alpha',
+            sessions: [
+                createSession({
+                    session_id: 'feature_v1',
+                    worktree_path: '/tmp/feature-v1',
+                    version_number: 1,
+                    session_state: SessionState.Reviewed,
+                    ready_to_merge: true,
+                    attention_required: false,
+                }),
+                createSession({
+                    session_id: 'feature_v2',
+                    worktree_path: '/tmp/feature-v2',
+                    version_number: 2,
+                    session_state: SessionState.Running,
+                    ready_to_merge: false,
+                    attention_required: true,
+                }),
+            ],
+        })
+
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 1, running: 0 })
+    })
+
+    it('resets cached cross-project counts when switching away from an empty project', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        let alphaSessions: EnrichedSession[] = [
+            createSession({ session_id: 'alpha-running', worktree_path: '/tmp/alpha-running' }),
+        ]
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                const activeProject = store.get(projectPathAtom)
+                if (activeProject === '/projects/alpha') {
+                    return alphaSessions
+                }
+                if (activeProject === '/projects/beta') {
+                    return [createSession({ session_id: 'beta-session', worktree_path: '/tmp/beta' })]
+                }
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 0, running: 1 })
+
+        alphaSessions = []
+
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+        expect(store.get(allSessionsAtom)).toEqual([])
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 0, running: 0 })
+    })
+
     it('counts a running multi-version group as one running unit for non-active projects', async () => {
         const { invoke } = await import('@tauri-apps/api/core')
 

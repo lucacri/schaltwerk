@@ -276,6 +276,30 @@ describe('sessionVersions', () => {
 
       expect(countLogicalRunningSessions(sessions)).toBe(2)
     })
+
+    it('excludes sessions needing attention when needsAttention callback is provided', () => {
+      const sessions = [
+        createMockSession('idle-standalone', undefined, { session_state: 'running' }),
+        createMockSession('attention-standalone', undefined, {
+          session_state: 'running',
+          attention_required: true,
+        }),
+        createMockSession('feature', undefined, {
+          version_group_id: 'group-1',
+          version_number: 1,
+          session_state: 'reviewed',
+          ready_to_merge: true,
+        }),
+        createMockSession('feature_v2', undefined, {
+          version_group_id: 'group-1',
+          version_number: 2,
+          session_state: 'running',
+          attention_required: true,
+        }),
+      ]
+
+      expect(countLogicalRunningSessions(sessions, s => s.info.attention_required === true)).toBe(1)
+    })
   })
 
   describe('selectBestVersionAndCleanup', () => {

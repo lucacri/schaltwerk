@@ -20,7 +20,7 @@ import { logger } from '../../utils/logger'
 import { getErrorMessage } from '../../types/errors'
 import { closePreview } from '../../features/preview/previewIframeRegistry'
 import { buildPreviewKey, clearPreviewStateActionAtom } from './preview'
-import { groupSessionsByVersion, getSessionVersionGroupAggregate } from '../../utils/sessionVersions'
+import { countLogicalRunningSessions } from '../../utils/sessionVersions'
 
 type MergeModeOption = 'squash' | 'reapply'
 
@@ -693,6 +693,7 @@ async function applySessionsSnapshot(
 
     const stateMap = buildStateMap(resolved)
     previousSessionStates = stateMap
+    activeSessionsProjectPath = projectPath ?? null
 
     if (projectPath) {
         projectSessionsSnapshotCache.set(projectPath, resolved)
@@ -726,6 +727,28 @@ function updateCrossProjectAttention(projectPath: string, sessionId: string, nee
     projectMap.set(sessionId, needsAttention)
 }
 
+function setCrossProjectCounts(
+    set: Setter,
+    projectPath: string,
+    counts: { attention: number; running: number },
+) {
+    set(crossProjectCountsAtom, (prev) => {
+        const existing = prev[projectPath]
+        if (existing?.attention === counts.attention && existing?.running === counts.running) {
+            return prev
+        }
+        return { ...prev, [projectPath]: counts }
+    })
+}
+
+function cacheCrossProjectSnapshot(set: Setter, projectPath: string, sessions: EnrichedSession[]) {
+    cacheProjectSnapshot(projectPath, sessions)
+    for (const session of sessions) {
+        updateCrossProjectAttention(projectPath, session.info.session_id, session.info.attention_required === true)
+    }
+    setCrossProjectCounts(set, projectPath, recomputeCrossProjectCounts(projectPath))
+}
+
 function recomputeCrossProjectCounts(projectPath: string): { attention: number; running: number } {
     const sessions = projectSessionsSnapshotCache.get(projectPath) ?? []
     const attentionMap = crossProjectAttention.get(projectPath) ?? new Map()
@@ -738,25 +761,7 @@ function recomputeCrossProjectCounts(projectPath: string): { attention: number; 
         if (needsAttention && !isReviewed) attention++
     }
 
-    let running = 0
-    const groups = groupSessionsByVersion(sessions)
-    for (const group of groups) {
-        const aggregate = getSessionVersionGroupAggregate(group)
-        if (aggregate.state !== 'running') continue
-
-        if (group.isVersionGroup) {
-            running++
-            continue
-        }
-
-        const standalone = group.versions[0]?.session
-        if (!standalone) continue
-        const needsAttention = attentionMap.get(standalone.info.session_id) === true
-        const isReviewed = standalone.info.ready_to_merge === true || standalone.info.session_state === 'reviewed'
-        if (!needsAttention && !isReviewed) {
-            running++
-        }
-    }
+    const running = countLogicalRunningSessions(sessions, session => attentionMap.get(session.info.session_id) === true)
 
     return { attention, running }
 }
@@ -876,6 +881,7 @@ type ProjectKey = string | null
 const expectedSessionsByProject = new Map<ProjectKey, Map<string, ExpectedSession>>()
 const sessionProjectIndex = new Map<string, string>()
 const crossProjectAttention = new Map<string, Map<string, boolean>>()
+let activeSessionsProjectPath: string | null = null
 
 function getExpectedSessionsForProject(projectPath: ProjectKey, create = false): Map<string, ExpectedSession> | undefined {
     let bucket = expectedSessionsByProject.get(projectPath)
@@ -1066,9 +1072,14 @@ export const refreshSessionsActionAtom = atom(
     null,
     async (get, set) => {
         const projectPath = get(projectPathAtom)
+        const activeSessions = get(allSessionsAtom)
 
         const started = performance.now()
         logger.debug(`[SessionsAtoms] refreshSessionsActionAtom start (project=${projectPath ?? 'none'})`)
+
+        if (activeSessionsProjectPath && activeSessionsProjectPath !== projectPath) {
+            cacheCrossProjectSnapshot(set, activeSessionsProjectPath, activeSessions)
+        }
 
         let cachedSnapshot: EnrichedSession[] | null = null
         let cachedStates: Map<string, string> | null = null
@@ -1088,6 +1099,7 @@ export const refreshSessionsActionAtom = atom(
             suppressedAutoStart.clear()
             previousSessionsSnapshot = []
             previousSessionStates = new Map()
+            activeSessionsProjectPath = null
             set(lastRefreshStateAtom, Date.now())
             return
         }
@@ -1324,24 +1336,7 @@ export const initializeSessionsEventsActionAtom = atom(
             const activeProject = get(projectPathAtom)
 
             if (normalized.projectPath && normalized.projectPath !== activeProject) {
-                cacheProjectSnapshot(normalized.projectPath, normalized.sessions)
-                for (const session of normalized.sessions) {
-                    if (session.info.attention_required != null) {
-                        updateCrossProjectAttention(
-                            normalized.projectPath,
-                            session.info.session_id,
-                            session.info.attention_required === true,
-                        )
-                    }
-                }
-                const counts = recomputeCrossProjectCounts(normalized.projectPath)
-                set(crossProjectCountsAtom, (prev) => {
-                    const existing = prev[normalized.projectPath!]
-                    if (existing?.attention === counts.attention && existing?.running === counts.running) {
-                        return prev
-                    }
-                    return { ...prev, [normalized.projectPath!]: counts }
-                })
+                cacheCrossProjectSnapshot(set, normalized.projectPath, normalized.sessions)
                 return
             }
 
@@ -1608,15 +1603,7 @@ export const initializeSessionsEventsActionAtom = atom(
             if (!ownerProject) return
 
             updateCrossProjectAttention(ownerProject, event.session_id, needsAttention)
-
-            const counts = recomputeCrossProjectCounts(ownerProject)
-            set(crossProjectCountsAtom, (prev) => {
-                const existing = prev[ownerProject]
-                if (existing?.attention === counts.attention && existing?.running === counts.running) {
-                    return prev
-                }
-                return { ...prev, [ownerProject]: counts }
-            })
+            setCrossProjectCounts(set, ownerProject, recomputeCrossProjectCounts(ownerProject))
         })
 
         await register(SchaltEvent.SessionGitStats, (payload) => {
@@ -1888,6 +1875,7 @@ export function __resetSessionsTestingState() {
     backgroundAgentStartDrainScheduled = false
     sessionProjectIndex.clear()
     crossProjectAttention.clear()
+    activeSessionsProjectPath = null
 }
 
 export const openMergeDialogActionAtom = atom(

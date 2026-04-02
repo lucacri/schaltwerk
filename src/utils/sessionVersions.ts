@@ -172,8 +172,16 @@ export function getSessionVersionGroupAggregate(group: SessionVersionGroup): Ses
   }
 }
 
-export function countLogicalRunningSessions(sessions: EnrichedSession[]): number {
-  return groupSessionsByVersion(sessions).filter(group => getSessionVersionGroupAggregate(group).state === 'running').length
+export function countLogicalRunningSessions(
+  sessions: EnrichedSession[],
+  needsAttention?: (session: EnrichedSession) => boolean,
+): number {
+  return groupSessionsByVersion(sessions).filter(group => {
+    return group.versions.some(version => {
+      if (mapSessionUiState(version.session.info) !== 'running') return false
+      return needsAttention ? !needsAttention(version.session) : true
+    })
+  }).length
 }
 
 /**
