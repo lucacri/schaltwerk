@@ -6,6 +6,7 @@ import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
 import { generateId } from '../../common/generateId'
 import type { ContextualAction, ContextualActionContext, ContextualActionMode } from '../../types/contextualAction'
 import { PR_TEMPLATE_VARIABLES, ISSUE_TEMPLATE_VARIABLES } from '../../types/contextualAction'
+import { Button, Select, TextInput, Textarea } from '../ui'
 
 function createEmptyAction(): ContextualAction {
     return {
@@ -130,12 +131,12 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                     {'Contextual Actions'}
                 </h3>
                 <div className="flex gap-2">
-                    <button onClick={() => void handleReset()} className="settings-btn text-caption text-text-muted px-3 py-1.5 rounded-lg">
+                    <Button size="sm" variant="ghost" onClick={() => void handleReset()}>
                         {'Reset to Defaults'}
-                    </button>
-                    <button onClick={handleAdd} className="settings-btn text-body px-3 py-1.5 rounded-lg">
+                    </Button>
+                    <Button size="sm" onClick={handleAdd}>
                         {'+ Add Action'}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -172,12 +173,13 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                             </div>
                             <div className="flex items-center gap-2">
                                 {!action.isBuiltIn && (
-                                    <button
+                                    <Button
+                                        size="sm"
+                                        variant="danger"
                                         onClick={(e) => { e.stopPropagation(); handleRemove(action.id) }}
-                                        className="settings-btn-danger text-caption px-2 py-1 rounded"
                                     >
                                         {'Delete'}
-                                    </button>
+                                    </Button>
                                 )}
                                 <svg
                                     className={`w-4 h-4 text-text-muted transition-transform ${expandedId === action.id ? 'rotate-180' : ''}`}
@@ -193,52 +195,47 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                 <div className="pt-3">
                                     <div>
                                         <label className="block text-caption text-text-secondary mb-1">Name</label>
-                                        <input
-                                            type="text"
+                                        <TextInput
+                                            aria-label="Name"
                                             value={action.name}
                                             onChange={e => handleUpdate(action.id, { name: e.target.value })}
                                             placeholder="e.g. Review this PR/MR"
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body"
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 mt-3">
                                         <div>
                                             <label className="block text-caption text-text-secondary mb-1">Context</label>
-                                            <select
+                                            <Select
                                                 value={action.context}
-                                                onChange={e => handleUpdate(action.id, { context: e.target.value as ContextualActionContext })}
-                                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)] text-body settings-select"
-                                            >
-                                                <option value="pr">PR/MR</option>
-                                                <option value="issue">Issue</option>
-                                                <option value="both">Both</option>
-                                            </select>
+                                                onChange={value => handleUpdate(action.id, { context: value as ContextualActionContext })}
+                                                options={[
+                                                    { value: 'pr', label: 'PR/MR' },
+                                                    { value: 'issue', label: 'Issue' },
+                                                    { value: 'both', label: 'Both' },
+                                                ]}
+                                            />
                                         </div>
                                         <div>
                                             <label className="block text-caption text-text-secondary mb-1">Mode</label>
-                                            <select
+                                            <Select
                                                 value={action.mode}
-                                                onChange={e => handleUpdate(action.id, { mode: e.target.value as ContextualActionMode })}
-                                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)] text-body settings-select"
-                                            >
-                                                <option value="session">Create Session</option>
-                                                <option value="spec">Create Spec</option>
-                                            </select>
+                                                onChange={value => handleUpdate(action.id, { mode: value as ContextualActionMode })}
+                                                options={[
+                                                    { value: 'session', label: 'Create Session' },
+                                                    { value: 'spec', label: 'Create Spec' },
+                                                ]}
+                                            />
                                         </div>
                                     </div>
                                 </div>
 
                                 <div>
                                     <label className="block text-caption text-text-secondary mb-1">Agent / Variant / Preset</label>
-                                    <select
+                                    <Select
                                         value={getAgentSourceValue(action)}
-                                        onChange={e => handleAgentSourceChange(action.id, e.target.value)}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)] text-body settings-select"
-                                    >
-                                        {agentSourceOptions.map(opt => (
-                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                        ))}
-                                    </select>
+                                        onChange={value => handleAgentSourceChange(action.id, value)}
+                                        options={agentSourceOptions}
+                                    />
                                 </div>
 
                                 <div>
@@ -253,12 +250,13 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                             </span>
                                         ))}
                                     </div>
-                                    <textarea
+                                    <Textarea
+                                        aria-label="Prompt Template"
                                         value={action.promptTemplate}
                                         onChange={e => handleUpdate(action.id, { promptTemplate: e.target.value })}
                                         placeholder="Review the pull/merge request:\n\nTitle: {{pr.title}}\nDescription: {{pr.description}}"
                                         rows={8}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body font-mono"
+                                        monospace
                                     />
                                 </div>
                             </div>
@@ -271,18 +269,12 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                 <div
                     className="flex justify-end gap-3 pt-3 mt-2 border-t border-border-subtle"
                 >
-                    <button
-                        onClick={handleDiscard}
-                        className="settings-btn text-body text-text-muted px-4 py-1.5 rounded-lg"
-                    >
+                    <Button variant="ghost" onClick={handleDiscard}>
                         {'Discard'}
-                    </button>
-                    <button
-                        onClick={() => void handleSave()}
-                        className="settings-btn-primary text-body px-5 py-1.5 rounded-lg font-semibold"
-                    >
+                    </Button>
+                    <Button variant="primary" onClick={() => void handleSave()}>
                         {'Save Changes'}
-                    </button>
+                    </Button>
                 </div>
             )}
         </div>

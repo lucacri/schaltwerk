@@ -51,6 +51,13 @@
   --color-border-focus: #83a598;
   --color-border-focus-rgb: 131 165 152;
 
+  /* Form controls */
+  --control-bg: var(--color-bg-tertiary);
+  --control-bg-hover: var(--color-bg-hover);
+  --control-border: var(--color-border-subtle);
+  --control-border-focus: var(--color-border-focus);
+  --control-border-error: var(--color-accent-red);
+
   /* Accent Colors - Gruvbox palette */
   --color-accent-blue: #83a598;
   --color-accent-blue-rgb: 131 165 152;

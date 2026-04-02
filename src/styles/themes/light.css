@@ -49,6 +49,13 @@
   --color-border-focus: #0969da;
   --color-border-focus-rgb: 9 105 218;
 
+  /* Form controls */
+  --control-bg: var(--color-bg-tertiary);
+  --control-bg-hover: var(--color-bg-hover);
+  --control-border: var(--color-border-subtle);
+  --control-border-focus: var(--color-border-focus);
+  --control-border-error: var(--color-accent-red);
+
   /* Accent Colors */
   --color-accent-blue: #0969da;
   --color-accent-blue-rgb: 9 105 218;

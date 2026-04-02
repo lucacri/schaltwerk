@@ -509,89 +509,6 @@ code {
   position: relative;
 }
 
-/* Settings action buttons */
-.settings-btn {
-  background-color: var(--color-bg-elevated);
-  border: 1px solid var(--color-border-subtle);
-  color: var(--color-text-secondary);
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
-  cursor: pointer;
-}
-
-.settings-btn:hover {
-  background-color: var(--color-bg-hover);
-  border-color: var(--color-border-strong);
-  color: var(--color-text-primary);
-}
-
-.settings-btn:active {
-  background-color: var(--color-bg-active);
-}
-
-.settings-btn-recording {
-  background-color: var(--color-accent-blue-bg);
-  border: 1px solid var(--color-accent-blue);
-  color: var(--color-accent-blue);
-  cursor: pointer;
-}
-
-.settings-btn-danger {
-  background-color: var(--color-bg-elevated);
-  border: 1px solid var(--color-border-subtle);
-  color: var(--color-text-tertiary);
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
-  cursor: pointer;
-}
-
-.settings-btn-danger:hover {
-  background-color: var(--color-accent-red-bg);
-  border-color: var(--color-accent-red-border);
-  color: var(--color-accent-red);
-}
-
-.settings-btn-danger:active {
-  background-color: var(--color-bg-active);
-}
-
-.settings-btn-success {
-  background-color: var(--color-accent-green-bg);
-  border: 1px solid var(--color-accent-green-border);
-  color: var(--color-accent-green-light);
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
-  cursor: pointer;
-}
-.settings-btn-success:hover { background-color: var(--color-accent-green-dark); }
-.settings-btn-success:active { background-color: var(--color-bg-active); }
-
-.settings-btn-text {
-  color: var(--color-text-secondary);
-  transition: color 150ms ease;
-  cursor: pointer;
-}
-
-.settings-btn-text:hover {
-  color: var(--color-text-primary);
-}
-
-.settings-btn-dashed {
-  border: 2px dashed var(--color-border-subtle);
-  color: var(--color-text-tertiary);
-  transition: border-color 150ms ease, color 150ms ease;
-  cursor: pointer;
-}
-.settings-btn-dashed:hover { border-color: var(--color-border-strong); color: var(--color-text-secondary); }
-
-.settings-btn-primary {
-  background-color: var(--color-accent-blue);
-  border: 1px solid var(--color-accent-blue-border);
-  color: var(--color-text-inverse);
-  transition: background-color 150ms ease, border-color 150ms ease;
-  cursor: pointer;
-}
-.settings-btn-primary:hover { background-color: var(--color-accent-blue-dark); }
-.settings-btn-primary:focus { outline: 2px solid var(--color-border-focus); outline-offset: 2px; }
-.settings-btn-primary:active { background-color: var(--color-accent-blue); }
-
 .settings-binary-item {
   background-color: var(--color-bg-elevated);
   border: 1px solid var(--color-border-subtle);
@@ -608,14 +525,4 @@ code {
   background-color: var(--color-accent-blue-bg);
   border: 1px solid var(--color-accent-blue-border);
   cursor: pointer;
-}
-
-/* Settings select styling — removes native browser chrome */
-.settings-select {
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.75rem center;
-  padding-right: 2.5rem;
 }

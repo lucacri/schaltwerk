@@ -47,8 +47,7 @@ describe('TerminalGrid reset button (session header)', () => {
       </TestProviders>
     )
 
-    // Wait for header to appear (Agent — demo-session)
-    await waitFor(() => expect(screen.getByText(/Agent — demo-session/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: /reset session/i })).toBeInTheDocument())
 
     // Click the reset button (trash icon)
     const btn = screen.getByRole('button', { name: /reset session/i })
@@ -77,7 +76,7 @@ describe('TerminalGrid reset button (session header)', () => {
       </TestProviders>
     )
 
-    await waitFor(() => expect(screen.getByText(/Agent — demo-session/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: /reset session/i })).toBeInTheDocument())
 
     fireEvent.click(screen.getByRole('button', { name: /reset session/i }))
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }))

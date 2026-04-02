@@ -46,6 +46,7 @@ import { AgentVariantsSettings } from '../settings/AgentVariantsSettings'
 import { AgentPresetsSettings } from '../settings/AgentPresetsSettings'
 import { ContextualActionsSettings } from '../settings/ContextualActionsSettings'
 import { EditorOverridesSettings } from '../settings/EditorOverridesSettings'
+import { Button, Checkbox, FormGroup, SectionHeader, Select, TextInput, Textarea, Toggle } from '../ui'
 import {
     type DefaultGenerationPrompts,
     type GenerationSettingsPrompts,
@@ -1235,65 +1236,61 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                     {forge !== 'gitlab' && <GithubProjectIntegrationCard projectPath={projectPath} onNotify={showNotification} />}
                     {forge !== 'github' && <GitlabProjectIntegrationCard onNotify={showNotification} />}
 
-                    <div>
-                        <h3 className="text-body font-medium text-text-primary mb-2">{t.settings.projectGeneral.branchPrefix}</h3>
-                        <div className="text-body text-text-tertiary mb-3">
-                            {t.settings.projectGeneral.branchPrefixDesc.split('. ').map((sentence, i, arr) => (
+                    <SectionHeader
+                        title={t.settings.categories.projectGeneral ?? t.settings.projectGeneral.branchPrefix}
+                        description={t.settings.projectGeneral.worktreeBaseDirectoryDesc}
+                    />
+
+                    <FormGroup
+                        label={t.settings.projectGeneral.branchPrefix}
+                        help={t.settings.projectGeneral.branchPrefixDesc.split('. ').map((sentence, i, arr) => (
                                 <span key={i}>{sentence}{i < arr.length - 1 ? '. ' : ''}</span>
                             ))}
-                        </div>
-                        <input
-                            type="text"
+                    >
+                        <TextInput
+                            aria-label={t.settings.projectGeneral.branchPrefix}
                             value={projectSettings.branchPrefix}
                             onChange={(e) => {
                                 const sanitized = e.target.value.replace(/\s+/g, '-')
                                 setProjectSettings(prev => ({ ...prev, branchPrefix: sanitized }))
                                 setHasUnsavedChanges(true)
                             }}
-                            placeholder=""
-                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted text-body focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                             spellCheck={false}
                         />
-                    </div>
+                    </FormGroup>
 
-                    <div>
-                        <h3 className="text-body font-medium text-text-primary mb-2">{t.settings.projectGeneral.worktreeBaseDirectory}</h3>
-                        <div className="text-body text-text-tertiary mb-3">
-                            {t.settings.projectGeneral.worktreeBaseDirectoryDesc}
-                        </div>
-                        <input
-                            type="text"
+                    <FormGroup
+                        label={t.settings.projectGeneral.worktreeBaseDirectory}
+                        help={t.settings.projectGeneral.worktreeBaseDirectoryDesc}
+                    >
+                        <TextInput
+                            aria-label={t.settings.projectGeneral.worktreeBaseDirectory}
                             value={projectSettings.worktreeBaseDirectory}
                             onChange={(e) => {
                                 setProjectSettings(prev => ({ ...prev, worktreeBaseDirectory: e.target.value }))
                                 setHasUnsavedChanges(true)
                             }}
                             placeholder=".schaltwerk/worktrees"
-                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted text-body focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                             spellCheck={false}
                         />
-                    </div>
+                    </FormGroup>
 
                     <div>
                         <h3 className="text-body font-medium text-text-primary mb-2">{t.settings.projectGeneral.mergeDefaults}</h3>
                         <div className="text-body text-text-tertiary mb-3">
                             {t.settings.projectGeneral.mergeDefaultsDesc}
                         </div>
-                        <label className="flex items-center gap-3 text-sm text-text-primary">
-                            <input
-                                type="checkbox"
-                                checked={mergePreferences.autoCancelAfterMerge}
-                                onChange={(event) => {
-                                    setMergePreferences(prev => ({
-                                        ...prev,
-                                        autoCancelAfterMerge: event.target.checked,
-                                    }))
-                                    setHasUnsavedChanges(true)
-                                }}
-                                className="rounded border-border-strong bg-bg-elevated text-accent-blue focus:ring-accent-blue"
-                            />
-                            <span>{t.settings.projectGeneral.autoCancelAfterMerge}</span>
-                        </label>
+                        <Checkbox
+                            checked={mergePreferences.autoCancelAfterMerge}
+                            onChange={(checked) => {
+                                setMergePreferences(prev => ({
+                                    ...prev,
+                                    autoCancelAfterMerge: checked,
+                                }))
+                                setHasUnsavedChanges(true)
+                            }}
+                            label={t.settings.projectGeneral.autoCancelAfterMerge}
+                        />
                         <p className="text-caption text-text-muted mt-2">
                             {t.settings.projectGeneral.mergeToggleNote}
                         </p>
@@ -1308,13 +1305,12 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
             <div className="flex-1 overflow-y-auto p-6">
                 <div className="space-y-8">
                     <div>
-                        <h3 className="text-body font-medium text-text-primary mb-2">{t.settings.projectRun.worktreeSetup}</h3>
-                        <div className="text-body text-text-tertiary mb-4">
-                            {t.settings.projectRun.worktreeSetupDesc}
-                            
-                        </div>
+                        <SectionHeader
+                            title={t.settings.projectRun.worktreeSetup}
+                            description={t.settings.projectRun.worktreeSetupDesc}
+                        />
 
-                        <div className="mb-4 p-3 bg-bg-elevated rounded">
+                        <div className="mb-4 mt-4 rounded bg-bg-elevated p-3">
                             <div className="text-caption text-text-tertiary mb-2">
                                 <strong>{t.settings.projectRun.availableVariables}</strong>
                             </div>
@@ -1344,7 +1340,7 @@ fi`}
                             />
                         </div>
 
-                        <div className="mt-4 p-3 border rounded" style={{ backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-border-subtle)' }}>
+                        <div className="mt-4 rounded border p-3" style={{ backgroundColor: 'var(--color-bg-elevated)', borderColor: 'var(--color-border-subtle)' }}>
                             <div className="text-caption mb-2 text-text-secondary">
                                 <strong>{t.settings.projectRun.exampleUseCases}</strong>
                             </div>
@@ -1359,139 +1355,122 @@ fi`}
                     </div>
 
                     <div>
-                        <h3 className="text-body font-medium text-text-primary mb-2">{t.settings.projectRun.runScript}</h3>
-                        <div className="text-body text-text-tertiary mb-4">
-                            {t.settings.projectRun.runScriptDesc}
-                        </div>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-caption text-text-tertiary mb-1">{t.settings.projectRun.command}</label>
-                                <input
-                                    type="text"
+                        <SectionHeader
+                            title={t.settings.projectRun.runScript}
+                            description={t.settings.projectRun.runScriptDesc}
+                        />
+                        <div className="mt-4 space-y-3">
+                            <FormGroup label={t.settings.projectRun.command}>
+                                <TextInput
+                                    aria-label={t.settings.projectRun.command}
                                     value={runScript.command}
                                     onChange={(e) => setRunScript(prev => ({ ...prev, command: e.target.value }))}
                                     placeholder={t.settings.projectRun.commandPlaceholder}
-                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                                 />
-                            </div>
-                            <div>
-                                <label className="block text-caption text-text-tertiary mb-1">{t.settings.projectRun.workingDirectory}</label>
-                                <input
-                                    type="text"
+                            </FormGroup>
+                            <FormGroup label={t.settings.projectRun.workingDirectory}>
+                                <TextInput
+                                    aria-label={t.settings.projectRun.workingDirectory}
                                     value={runScript.workingDirectory || ''}
                                     onChange={(e) => setRunScript(prev => ({ ...prev, workingDirectory: e.target.value }))}
                                     placeholder={t.settings.projectRun.workingDirectoryPlaceholder}
-                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
                                 />
-                            </div>
-                            <div>
-                                <label className="block text-caption text-text-tertiary mb-2">{t.settings.projectRun.envVars}</label>
+                            </FormGroup>
+                            <FormGroup label={t.settings.projectRun.envVars}>
                                 <div className="space-y-2">
                                     {Object.entries(runScript.environmentVariables || {}).map(([k, v], index) => (
                                         <div key={index} className="flex gap-2">
-                                            <input
-                                                type="text"
+                                            <TextInput
+                                                aria-label={`${t.settings.projectRun.envVars} key ${index + 1}`}
                                                 value={k}
                                                 onChange={(e) => handleRunEnvVarChange(index, 'key', e.target.value)}
                                                 placeholder="KEY"
-                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                                                className="flex-1"
                                             />
-                                            <input
-                                                type="text"
+                                            <TextInput
+                                                aria-label={`${t.settings.projectRun.envVars} value ${index + 1}`}
                                                 value={v}
                                                 onChange={(e) => handleRunEnvVarChange(index, 'value', e.target.value)}
                                                 placeholder="value"
-                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                                                className="flex-1"
                                             />
-                                            <button
-                                                onClick={() => handleRemoveRunEnvVar(index)}
-                                                className="settings-btn-danger px-3 py-2 rounded-lg"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <Button variant="danger" size="md" onClick={() => handleRemoveRunEnvVar(index)}>
+                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                                 </svg>
-                                            </button>
+                                            </Button>
+                                        </div>
+                                    ))}
+                                    <Button className="mt-1 w-full" onClick={handleAddRunEnvVar} leftIcon={(
+                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                    )}>
+                                        {t.settings.projectRun.addEnvVar}
+                                    </Button>
                                 </div>
-                            ))}
-                            <button
-                                onClick={handleAddRunEnvVar}
-                                className="settings-btn w-full mt-1 px-4 py-2 rounded-lg flex items-center justify-center gap-2"
-                            >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                                {t.settings.projectRun.addEnvVar}
-                            </button>
+                            </FormGroup>
                             <div className="space-y-2 pt-3">
                                 <div className="text-caption text-text-tertiary">{t.settings.projectRun.previewAutomation}</div>
-                                <div className="flex items-center justify-between bg-bg-tertiary rounded px-3 py-2">
+                                <div className="flex items-center justify-between rounded bg-bg-tertiary px-3 py-2">
                                     <div>
                                         <div className="text-body text-text-primary">{t.settings.projectRun.previewLocalhost}</div>
                                         <div className="text-caption text-text-tertiary">{t.settings.projectRun.previewLocalhostDesc}</div>
                                     </div>
-                                    <input
-                                        type="checkbox"
-                                        className="h-4 w-4"
+                                    <Toggle
                                         checked={Boolean(runScript.previewLocalhostOnClick)}
-                                        onChange={(e) => setRunScript(prev => ({ ...prev, previewLocalhostOnClick: e.target.checked }))}
-                                        aria-label={t.settings.projectRun.previewLocalhost}
+                                        onChange={(checked) => setRunScript(prev => ({ ...prev, previewLocalhostOnClick: checked }))}
+                                        label={t.settings.projectRun.previewLocalhost}
                                     />
                                 </div>
                             </div>
-                        </div>
-                            </div>
-                            <div className="p-3 bg-bg-elevated rounded text-caption text-text-muted">
+                            <div className="rounded bg-bg-elevated p-3 text-caption text-text-muted">
                                 {t.settings.projectRun.runScriptTip}
                             </div>
                         </div>
                     </div>
 
                     <div>
-                        <h3 className="text-body font-medium text-text-primary mb-2">{t.settings.projectRun.projectEnvVars}</h3>
-                        <div className="text-body text-text-tertiary mb-4">
-                            {t.settings.projectRun.projectEnvVarsDesc}
-                        </div>
+                        <SectionHeader
+                            title={t.settings.projectRun.projectEnvVars}
+                            description={t.settings.projectRun.projectEnvVarsDesc}
+                        />
 
-                        <div className="space-y-2">
+                        <div className="mt-4 space-y-2">
                             {projectSettings.environmentVariables.map((envVar, index) => (
                                 <div key={index} className="flex gap-2">
-                                    <input
-                                        type="text"
+                                    <TextInput
+                                        aria-label={`${t.settings.projectRun.projectEnvVars} key ${index + 1}`}
                                         value={envVar.key}
                                         onChange={(e) => handleProjectEnvVarChange(index, 'key', e.target.value)}
                                         placeholder="KEY"
-                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                                        className="flex-1"
                                     />
-                                    <input
-                                        type="text"
+                                    <TextInput
+                                        aria-label={`${t.settings.projectRun.projectEnvVars} value ${index + 1}`}
                                         value={envVar.value}
                                         onChange={(e) => handleProjectEnvVarChange(index, 'value', e.target.value)}
                                         placeholder="value"
-                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] transition-colors"
+                                        className="flex-1"
                                     />
-                                    <button
-                                        onClick={() => handleRemoveProjectEnvVar(index)}
-                                        className="settings-btn-danger px-3 py-2 rounded-lg"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <Button variant="danger" onClick={() => handleRemoveProjectEnvVar(index)}>
+                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                         </svg>
-                                    </button>
+                                    </Button>
                                 </div>
                             ))}
 
-                            <button
-                                onClick={handleAddProjectEnvVar}
-                                className="settings-btn w-full mt-2 px-4 py-2 rounded-lg flex items-center justify-center gap-2"
-                            >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <Button className="mt-2 w-full" onClick={handleAddProjectEnvVar} leftIcon={(
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                 </svg>
+                            )}>
                                 {t.settings.projectRun.addEnvVar}
-                            </button>
+                            </Button>
                         </div>
 
-                        <div className="mt-4 p-3 bg-bg-elevated rounded">
+                        <div className="mt-4 rounded bg-bg-elevated p-3">
                             <div className="text-caption text-text-tertiary">
                                 <strong>{t.settings.projectRun.commonEnvVars}</strong>
                                 <ul className="mt-2 space-y-1 list-disc list-inside">
@@ -1535,10 +1514,9 @@ fi`}
                         {editableActionButtons.map((button, index) => (
                             <div key={button.id} className="bg-bg-elevated rounded-lg p-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-body text-text-secondary mb-2">{t.settings.projectActions.label}</label>
-                                        <input
-                                            type="text"
+                                    <FormGroup label={t.settings.projectActions.label}>
+                                        <TextInput
+                                            aria-label={t.settings.projectActions.label}
                                             value={button.label}
                                             onChange={(e) => {
                                                 const updated = [...editableActionButtons]
@@ -1546,62 +1524,67 @@ fi`}
                                                 setEditableActionButtons(updated)
                                                 setHasUnsavedChanges(true)
                                             }}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:border-[var(--color-border-focus)] focus:outline-none"
                                             placeholder="Button Label"
                                         />
-                                    </div>
-                                    <div>
-                                        <label className="block text-body text-text-secondary mb-2">{t.settings.projectActions.color}</label>
-                                        <select
+                                    </FormGroup>
+                                    <FormGroup label={t.settings.projectActions.color}>
+                                        <Select
                                             value={button.color || 'slate'}
-                                            onChange={(e) => {
+                                            onChange={(value) => {
                                                 const updated = [...editableActionButtons]
-                                                updated[index] = { ...button, color: e.target.value }
+                                                updated[index] = { ...button, color: value }
                                                 setEditableActionButtons(updated)
                                                 setHasUnsavedChanges(true)
                                             }}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:border-[var(--color-border-focus)] focus:outline-none settings-select"
-                                        >
-                                            <option value="slate">{t.settings.projectActions.colorOptions.slate}</option>
-                                            <option value="green">{t.settings.projectActions.colorOptions.green}</option>
-                                            <option value="blue">{t.settings.projectActions.colorOptions.blue}</option>
-                                            <option value="amber">{t.settings.projectActions.colorOptions.amber}</option>
-                                        </select>
-                                    </div>
+                                            options={[
+                                                { value: 'slate', label: t.settings.projectActions.colorOptions.slate },
+                                                { value: 'green', label: t.settings.projectActions.colorOptions.green },
+                                                { value: 'blue', label: t.settings.projectActions.colorOptions.blue },
+                                                { value: 'amber', label: t.settings.projectActions.colorOptions.amber },
+                                            ]}
+                                        />
+                                    </FormGroup>
                                 </div>
                                 <div className="mt-4">
-                                    <label className="block text-body text-text-secondary mb-2">{t.settings.projectActions.aiPrompt}</label>
-                                    <textarea
-                                        value={button.prompt}
-                                        onChange={(e) => {
-                                            const updated = [...editableActionButtons]
-                                            updated[index] = { ...button, prompt: e.target.value }
-                                            setEditableActionButtons(updated)
-                                            setHasUnsavedChanges(true)
-                                        }}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:border-[var(--color-border-focus)] focus:outline-none font-mono text-body min-h-[80px] resize-y"
-                                        placeholder={t.settings.projectActions.promptPlaceholder}
-                                    />
+                                    <FormGroup label={t.settings.projectActions.aiPrompt}>
+                                        <Textarea
+                                            aria-label={t.settings.projectActions.aiPrompt}
+                                            value={button.prompt}
+                                            onChange={(e) => {
+                                                const updated = [...editableActionButtons]
+                                                updated[index] = { ...button, prompt: e.target.value }
+                                                setEditableActionButtons(updated)
+                                                setHasUnsavedChanges(true)
+                                            }}
+                                            className="min-h-[80px]"
+                                            monospace
+                                            resize="vertical"
+                                            placeholder={t.settings.projectActions.promptPlaceholder}
+                                        />
+                                    </FormGroup>
                                 </div>
                                 <div className="mt-4 flex justify-end">
-                                    <button
+                                    <Button
+                                        variant="danger"
                                         onClick={() => {
                                             setEditableActionButtons(editableActionButtons.filter((_, i) => i !== index))
                                             setHasUnsavedChanges(true)
                                         }}
-                                        className="settings-btn-danger text-body flex items-center gap-1 rounded-lg px-2 py-1"
+                                        leftIcon={(
+                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        )}
                                     >
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
                                         {t.settings.projectActions.removeButton}
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                         ))}
 
                         {editableActionButtons.length < 6 ? (
-                            <button
+                            <Button
+                                variant="dashed"
                                 onClick={() => {
                                     const newButton: HeaderActionConfig = {
                                         id: `custom-${Date.now()}`,
@@ -1612,13 +1595,15 @@ fi`}
                                     setEditableActionButtons([...editableActionButtons, newButton])
                                     setHasUnsavedChanges(true)
                                 }}
-                                className="settings-btn-dashed w-full rounded-lg p-4 flex items-center justify-center gap-2"
+                                className="w-full"
+                                leftIcon={(
+                                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                )}
                             >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
                                 {t.settings.projectActions.addButton}
-                            </button>
+                            </Button>
                         ) : (
                             <div className="w-full border-2 border-dashed border-border-subtle rounded-lg p-4 text-text-muted flex items-center justify-center gap-2">
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1632,7 +1617,8 @@ fi`}
             </div>
 
             <div className="border-t border-border-subtle p-4 bg-bg-secondary flex items-center justify-between">
-                <button
+                <Button
+                    variant="ghost"
                     onClick={() => {
                         void (async () => {
                             const success = await resetToDefaults()
@@ -1642,10 +1628,9 @@ fi`}
                             }
                         })()
                     }}
-                    className="settings-btn-text text-body"
                 >
                     {t.settings.projectActions.resetToDefaults}
-                </button>
+                </Button>
                 <span className={`text-caption ${hasUnsavedChanges ? 'text-amber-300' : 'text-text-muted'}`}>
                     {hasUnsavedChanges ? t.settings.projectActions.unsavedChanges : t.settings.projectActions.saved}
                 </span>
@@ -1746,16 +1731,18 @@ fi`}
                         <div className="mb-4 p-3 bg-bg-elevated rounded">
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-caption text-text-tertiary">{t.settings.environment.currentBinary}</span>
-                                <button
+                                <Button
+                                    size="sm"
                                     onClick={() => { void handleRefreshBinaryDetection(activeAgentTab) }}
-                                    className="settings-btn flex items-center gap-2 rounded-lg px-3 py-2"
                                     title={t.settings.common.refresh}
+                                    leftIcon={(
+                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                    )}
                                 >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
                                     {t.settings.common.refresh}
-                                </button>
+                                </Button>
                             </div>
                             
                             {binaryConfigs[activeAgentTab].custom_path ? (
@@ -1764,12 +1751,13 @@ fi`}
                                         {binaryConfigs[activeAgentTab].custom_path}
                                     </div>
                                     <div className="text-caption text-text-muted">{t.settings.environment.customPath}</div>
-                                    <button
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
                                         onClick={() => { void handleBinaryPathChange(activeAgentTab, null) }}
-                                        className="settings-btn-text text-caption"
                                     >
                                         {t.settings.environment.resetToAutoDetect}
-                                    </button>
+                                    </Button>
                                 </div>
                             ) : binaryConfigs[activeAgentTab].detected_binaries.length > 0 ? (
                                 <div className="space-y-2">
@@ -1809,20 +1797,20 @@ fi`}
                         {/* Custom Binary Path Input */}
                         <div className="space-y-3">
                             <div className="flex gap-2">
-                                <input
-                                    type="text"
+                                <TextInput
+                                    aria-label={t.settings.environment.binaryPath}
                                     value={binaryConfigs[activeAgentTab].custom_path || ''}
                                     onChange={(e) => { void handleBinaryPathChange(activeAgentTab, e.target.value || null) }}
                                     placeholder={binaryConfigs[activeAgentTab].detected_binaries.find(b => b.is_recommended)?.path || `Path to ${displayNameForAgent(activeAgentTab)} binary`}
-                                    className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
+                                    className="flex-1"
+                                    style={{ fontVariantLigatures: 'none' }}
                                 />
-                                <button
+                                <Button
                                     onClick={() => { void openFilePicker(activeAgentTab) }}
-                                    className="settings-btn rounded-lg px-3 py-2"
                                     title={t.settings.common.browse}
                                 >
                                     {t.settings.common.browse}
-                                </button>
+                                </Button>
                             </div>
 
                             {/* Detected Binaries List */}
@@ -2021,27 +2009,28 @@ fi`}
                                         inputMode="text"
                                         style={{ fontVariantLigatures: 'none' }}
                                     />
-                                    <button
+                                    <Button
+                                        variant="danger"
                                         onClick={() => handleRemoveEnvVar(activeAgentTab, index)}
-                                        className="settings-btn-danger px-3 py-2 rounded-lg"
                                     >
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                         </svg>
-                                    </button>
+                                    </Button>
                                 </div>
                             ))}
                         </div>
 
-                        <button
+                        <Button
                             onClick={() => handleAddEnvVar(activeAgentTab)}
-                            className="settings-btn flex items-center gap-2 px-4 py-2 rounded-lg"
+                            leftIcon={(
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                </svg>
+                            )}
                         >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                            </svg>
                             {t.settings.environment.addEnvVar}
-                        </button>
+                        </Button>
                     </div>
 
                     {activeAgentTab === 'claude' && (
@@ -2165,12 +2154,9 @@ fi`}
                                             background: `linear-gradient(to right, var(--color-accent-blue) 0%, var(--color-accent-blue) ${((terminalFontSize - 8) / 16) * 100}%, var(--color-bg-active) ${((terminalFontSize - 8) / 16) * 100}%, var(--color-bg-active) 100%)`
                                         }}
                                     />
-                                    <button
-                                        onClick={() => setTerminalFontSize(13)}
-                                        className="settings-btn px-3 py-1 text-caption rounded-lg"
-                                    >
+                                    <Button size="sm" onClick={() => setTerminalFontSize(13)}>
                                         {t.settings.common.reset}
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
 
@@ -2191,30 +2177,26 @@ fi`}
                                             background: `linear-gradient(to right, var(--color-accent-blue) 0%, var(--color-accent-blue) ${((uiFontSize - 8) / 16) * 100}%, var(--color-bg-active) ${((uiFontSize - 8) / 16) * 100}%, var(--color-bg-active) 100%)`
                                         }}
                                     />
-                                    <button
-                                        onClick={() => setUiFontSize(12)}
-                                        className="settings-btn px-3 py-1 text-caption rounded-lg"
-                                    >
+                                    <Button size="sm" onClick={() => setUiFontSize(12)}>
                                         {t.settings.common.reset}
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                         </div>
 
                         <div className="mt-6">
-                            <label className="block text-body text-text-secondary mb-2">{t.settings.appearance.terminalFontFamily}</label>
-                            <input
-                                type="text"
+                            <FormGroup
+                                label={t.settings.appearance.terminalFontFamily}
+                                help={t.settings.appearance.fontFamilyDesc}
+                            >
+                            <TextInput
+                                aria-label={t.settings.appearance.terminalFontFamily}
                                 value={terminalSettings.fontFamily || ''}
                                 onChange={(e) => setTerminalSettings({ ...terminalSettings, fontFamily: e.target.value || null })}
                                 placeholder={t.settings.appearance.fontFamilyPlaceholder}
-                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                             />
                             <div className="mt-2">
-                                <button
-                                    onClick={() => setShowFontPicker(v => !v)}
-                                    className="settings-btn px-3 py-1.5 text-caption rounded-lg"
-                                >{t.settings.appearance.browseFonts}</button>
+                                <Button size="sm" onClick={() => setShowFontPicker(v => !v)}>{t.settings.appearance.browseFonts}</Button>
                             </div>
                             {showFontPicker && (
                                 <FontPicker
@@ -2226,21 +2208,15 @@ fi`}
                                     onClose={() => setShowFontPicker(false)}
                                 />
                             )}
-                            <div className="mt-2 text-caption text-text-muted">
-                                {t.settings.appearance.fontFamilyDesc}
-                            </div>
+                            </FormGroup>
                         </div>
 
                         <div className="mt-6">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={terminalSettings.webglEnabled ?? true}
-                                    onChange={(e) => setTerminalSettings({ ...terminalSettings, webglEnabled: e.target.checked })}
-                                    className="w-4 h-4 bg-bg-tertiary border border-border-subtle rounded cursor-pointer"
-                                />
-                                <span className="text-body text-text-secondary">{t.settings.appearance.gpuAcceleration}</span>
-                            </label>
+                            <Checkbox
+                                checked={terminalSettings.webglEnabled ?? true}
+                                onChange={(checked) => setTerminalSettings({ ...terminalSettings, webglEnabled: checked })}
+                                label={t.settings.appearance.gpuAcceleration}
+                            />
                             <div className="mt-2 text-caption text-text-muted">
                                 {t.settings.appearance.gpuAccelerationDesc}
                             </div>
@@ -2251,17 +2227,13 @@ fi`}
                             <div className="text-body text-text-tertiary mb-3">
                                 {t.settings.appearance.devDiagnosticsDesc}
                             </div>
-                            <label className="flex items-center gap-3 text-sm text-text-primary">
-                                <input
-                                    type="checkbox"
-                                    checked={devErrorToastsEnabled}
-                                    onChange={(event) => {
-                                        setDevErrorToastsEnabled(event.target.checked)
-                                    }}
-                                    className="rounded border-border-strong bg-bg-elevated text-accent-blue focus:ring-accent-blue"
-                                />
-                                <span>{t.settings.appearance.showErrorToasts}</span>
-                            </label>
+                            <Toggle
+                                checked={devErrorToastsEnabled}
+                                onChange={(checked) => {
+                                    setDevErrorToastsEnabled(checked)
+                                }}
+                                label={t.settings.appearance.showErrorToasts}
+                            />
                         </div>
 
                         <div className="mt-6 p-3 bg-bg-elevated rounded">
@@ -2319,24 +2291,19 @@ fi`}
                                                 className="w-48 bg-bg-tertiary text-text-primary border border-border-subtle rounded px-2.5 py-1.5 text-caption focus:outline-none focus:border-[var(--color-border-focus)] disabled:opacity-60"
                                                 disabled={isRecording}
                                             />
-                                            <button
+                                            <Button
+                                                size="sm"
+                                                variant={isRecording ? 'primary' : 'default'}
                                                 onClick={() => handleShortcutRecord(item.action)}
-                                                className={`px-2.5 py-1.5 text-caption rounded-lg ${isRecording ? 'settings-btn-recording' : 'settings-btn'}`}
                                             >
                                                 {isRecording ? 'Listening…' : 'Record'}
-                                            </button>
-                                            <button
-                                                onClick={() => handleShortcutReset(item.action)}
-                                                className="px-2.5 py-1.5 text-caption rounded-lg settings-btn"
-                                            >
+                                            </Button>
+                                            <Button size="sm" onClick={() => handleShortcutReset(item.action)}>
                                                 Reset
-                                            </button>
-                                            <button
-                                                onClick={() => handleShortcutClear(item.action)}
-                                                className="px-2.5 py-1.5 text-caption rounded-lg settings-btn-danger"
-                                            >
+                                            </Button>
+                                            <Button size="sm" variant="danger" onClick={() => handleShortcutClear(item.action)}>
                                                 Clear
-                                            </button>
+                                            </Button>
                                         </div>
                                     </div>
                                 )
@@ -2354,12 +2321,9 @@ fi`}
             </div>
             <div className="border-t border-border-subtle p-4 bg-bg-secondary flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={handleResetAllShortcuts}
-                        className="px-3 py-1.5 text-caption rounded-lg settings-btn"
-                    >
+                    <Button size="sm" onClick={handleResetAllShortcuts}>
                         Reset All
-                    </button>
+                    </Button>
                     {shortcutsDirty ? (
                         <span className="text-caption text-amber-300">Unsaved shortcut changes</span>
                     ) : (
@@ -2598,46 +2562,39 @@ fi`}
                                 </p>
                             </div>
 
-                            <div>
-                                <label className="text-body font-medium text-text-primary block mb-1">
-                                    {t.settings.generation.agent}
-                                </label>
-                                <p className="text-caption text-text-tertiary mb-2">
-                                    {t.settings.generation.agentDesc}
-                                </p>
-                                <select
-                                    className="w-full bg-bg-tertiary text-text-primary border border-border-subtle rounded px-3 py-2 text-body settings-select focus:outline-none focus:border-[var(--color-border-focus)]"
+                            <FormGroup
+                                label={t.settings.generation.agent}
+                                help={t.settings.generation.agentDesc}
+                            >
+                                <Select
                                     value={generationAgent}
-                                    onChange={(e) => {
-                                        setGenerationAgent(e.target.value)
-                                        void saveGenerationSettings(e.target.value, generationCliArgs, generationPrompts)
+                                    onChange={(value) => {
+                                        setGenerationAgent(value)
+                                        void saveGenerationSettings(value, generationCliArgs, generationPrompts)
                                     }}
-                                >
-                                    <option value="">{t.settings.generation.agentDefault}</option>
-                                    <option value="claude">Claude</option>
-                                    <option value="gemini">Gemini</option>
-                                    <option value="codex">Codex</option>
-                                    <option value="opencode">OpenCode</option>
-                                    <option value="kilocode">Kilocode</option>
-                                </select>
-                            </div>
+                                    options={[
+                                        { value: '', label: t.settings.generation.agentDefault },
+                                        { value: 'claude', label: 'Claude' },
+                                        { value: 'gemini', label: 'Gemini' },
+                                        { value: 'codex', label: 'Codex' },
+                                        { value: 'opencode', label: 'OpenCode' },
+                                        { value: 'kilocode', label: 'Kilocode' },
+                                    ]}
+                                />
+                            </FormGroup>
 
-                            <div>
-                                <label className="text-body font-medium text-text-primary block mb-1">
-                                    {t.settings.generation.cliArgs}
-                                </label>
-                                <p className="text-caption text-text-tertiary mb-2">
-                                    {t.settings.generation.cliArgsDesc}
-                                </p>
-                                <input
-                                    type="text"
+                            <FormGroup
+                                label={t.settings.generation.cliArgs}
+                                help={t.settings.generation.cliArgsDesc}
+                            >
+                                <TextInput
+                                    aria-label={t.settings.generation.cliArgs}
                                     value={generationCliArgs}
                                     onChange={(e) => setGenerationCliArgs(e.target.value)}
                                     onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts)}
                                     placeholder={t.settings.generation.cliArgsPlaceholder}
-                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                                 />
-                            </div>
+                            </FormGroup>
 
                             <div className="border-t border-border-subtle pt-6">
                                 <button
@@ -2740,89 +2697,69 @@ fi`}
                         </div>
                         
                         <div className="space-y-4">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                  <input
-                                      type="checkbox"
-                                      checked={sessionPreferences.skip_confirmation_modals}
-                                       onChange={(e) => setSessionPreferences({
-                                           ...sessionPreferences,
-                                           skip_confirmation_modals: e.target.checked
-                                       })}
-                                       className="w-4 h-4 text-accent-blue bg-bg-elevated border-border-strong rounded focus:ring-accent-blue focus:ring-2"
-                                 />
-                                <div className="flex-1">
-                                    <div className="text-body font-medium text-text-primary">
-                                        {t.settings.sessions.skipConfirmation}
+                            <Checkbox
+                                checked={sessionPreferences.skip_confirmation_modals}
+                                onChange={(checked) => setSessionPreferences({
+                                    ...sessionPreferences,
+                                    skip_confirmation_modals: checked,
+                                })}
+                                label={(
+                                    <div className="flex-1">
+                                        <div className="text-body font-medium text-text-primary">
+                                            {t.settings.sessions.skipConfirmation}
+                                        </div>
+                                        <div className="text-caption text-text-tertiary mt-1">
+                                            {t.settings.sessions.skipConfirmationDesc}
+                                        </div>
                                     </div>
-                                    <div className="text-caption text-text-tertiary mt-1">
-                                        {t.settings.sessions.skipConfirmationDesc}
-                                        
-                                    </div>
-                                </div>
-                            </label>
+                                )}
+                            />
 
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                  <input
-                                      type="checkbox"
-                                      checked={sessionPreferences.always_show_large_diffs}
-                                       onChange={(e) => setSessionPreferences({
-                                           ...sessionPreferences,
-                                           always_show_large_diffs: e.target.checked
-                                       })}
-                                       className="w-4 h-4 text-accent-blue bg-bg-elevated border-border-strong rounded focus:ring-accent-blue focus:ring-2"
-                                 />
-                                <div className="flex-1">
-                                    <div className="text-body font-medium text-text-primary">
-                                        {t.settings.sessions.alwaysShowLargeDiffs}
+                            <Checkbox
+                                checked={sessionPreferences.always_show_large_diffs}
+                                onChange={(checked) => setSessionPreferences({
+                                    ...sessionPreferences,
+                                    always_show_large_diffs: checked,
+                                })}
+                                label={(
+                                    <div className="flex-1">
+                                        <div className="text-body font-medium text-text-primary">
+                                            {t.settings.sessions.alwaysShowLargeDiffs}
+                                        </div>
+                                        <div className="text-caption text-text-tertiary mt-1">
+                                            {t.settings.sessions.alwaysShowLargeDiffsDesc}
+                                        </div>
                                     </div>
-                                    <div className="text-caption text-text-tertiary mt-1">
-                                        {t.settings.sessions.alwaysShowLargeDiffsDesc}
-                                        
-                                    </div>
-                                </div>
-                            </label>
+                                )}
+                            />
 
                             <div className="pt-4 mt-6 border-t border-border-subtle/60 space-y-3">
                                 <h4 className="text-body font-medium text-text-primary">
                                     {t.settings.sessions.idleNotifications}
                                 </h4>
-                                <label className="flex items-center gap-3 cursor-pointer select-none">
-                                    <input
-                                        type="checkbox"
-                                        checked={attentionNotificationsEnabled}
-                                        onChange={(event) => setSessionPreferences({
-                                            ...sessionPreferences,
-                                            attention_notification_mode: event.target.checked ? 'dock' : 'off'
-                                        })}
-                                        className="w-4 h-4 text-accent-blue bg-bg-elevated border-border-strong rounded focus:ring-accent-blue focus:ring-2"
-                                    />
-                                    <span className="text-body text-text-primary">{t.settings.sessions.notifyOnIdle}</span>
-                                </label>
-                                <label
-                                    className={`flex items-start gap-3 cursor-pointer transition-opacity ${
-                                        attentionNotificationsEnabled ? '' : 'opacity-50 cursor-not-allowed'
-                                    }`}
-                                >
-                                    <input
-                                        type="checkbox"
+                                <Toggle
+                                    checked={attentionNotificationsEnabled}
+                                    onChange={(checked) => setSessionPreferences({
+                                        ...sessionPreferences,
+                                        attention_notification_mode: checked ? 'dock' : 'off',
+                                    })}
+                                    label={t.settings.sessions.notifyOnIdle}
+                                />
+                                <div className={attentionNotificationsEnabled ? '' : 'opacity-50'}>
+                                    <Checkbox
                                         checked={sessionPreferences.remember_idle_baseline}
                                         disabled={!attentionNotificationsEnabled}
-                                        onChange={(e) => setSessionPreferences({
+                                        onChange={(checked) => setSessionPreferences({
                                             ...sessionPreferences,
-                                            remember_idle_baseline: e.target.checked
+                                            remember_idle_baseline: checked,
                                         })}
-                                        className="w-4 h-4 text-accent-blue bg-bg-elevated border-border-strong rounded focus:ring-accent-blue focus:ring-2"
+                                        label={<span className="text-body text-text-primary">{t.settings.sessions.rememberIdleSessions}</span>}
                                     />
-                                    <span className="text-body text-text-primary">{t.settings.sessions.rememberIdleSessions}</span>
-                                </label>
+                                </div>
                                 {attentionNotificationsEnabled && (
-                                    <button
-                                        type="button"
-                                        onClick={() => { void requestDockBounce() }}
-                                        className="settings-btn mt-2 px-3 py-1.5 rounded-lg text-body"
-                                    >
+                                    <Button className="mt-2" onClick={() => { void requestDockBounce() }}>
                                         {t.settings.sessions.testNotification}
-                                    </button>
+                                    </Button>
                                 )}
                             </div>
                         </div>
@@ -2868,14 +2805,11 @@ fi`}
                                     </span>
                                 </div>
                                 <label className="flex items-center gap-3" htmlFor="restore-open-projects-toggle">
-                                    <input
-                                        id="restore-open-projects-toggle"
-                                        type="checkbox"
-                                        aria-label={t.settings.restoreOpenProjects.label}
-                                        className="w-4 h-4 text-accent-blue bg-bg-elevated border-border-strong rounded focus:ring-accent-blue focus:ring-2"
+                                    <Toggle
                                         checked={restoreOpenProjects}
                                         disabled={loadingRestoreOpenProjects}
                                         onChange={() => { void handleRestoreOpenProjectsToggle() }}
+                                        label={t.settings.restoreOpenProjects.label}
                                     />
                                     <span className="text-caption text-text-secondary">
                                         {loadingRestoreOpenProjects ? t.settings.common.loading : restoreOpenProjects ? t.settings.common.enabled : t.settings.common.disabled}
@@ -2890,14 +2824,11 @@ fi`}
                                     </span>
                                 </div>
                                 <label className="flex items-center gap-3" htmlFor="auto-update-toggle">
-                                    <input
-                                        id="auto-update-toggle"
-                                        type="checkbox"
-                                        aria-label="Automatically install updates"
-                                        className="w-4 h-4 text-accent-blue bg-bg-elevated border-border-strong rounded focus:ring-accent-blue focus:ring-2"
+                                    <Toggle
                                         checked={autoUpdateEnabled}
                                         disabled={loadingAutoUpdate}
                                         onChange={() => { void handleAutoUpdateToggle() }}
+                                        label="Automatically install updates"
                                     />
                                     <span className="text-caption text-text-secondary">
                                         {loadingAutoUpdate ? 'Loading...' : autoUpdateEnabled ? 'Enabled' : 'Disabled'}
@@ -2911,14 +2842,9 @@ fi`}
                                         {t.settings.version.manualCheckDesc}
                                     </span>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => { void handleManualUpdateCheck() }}
-                                    disabled={checkingUpdate}
-                                    className="settings-btn px-4 py-2 rounded-lg text-body disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
+                                <Button onClick={() => { void handleManualUpdateCheck() }} disabled={checkingUpdate}>
                                     {checkingUpdate ? t.settings.version.checking : t.settings.version.checkForUpdates}
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     </div>
@@ -2980,39 +2906,37 @@ fi`}
         <div className="flex justify-between w-full">
             <div className="flex gap-2">
                 {onOpenTutorial && (
-                    <button
+                    <Button
                         onClick={() => {
                             onOpenTutorial()
                             onClose()
                         }}
-                        className="settings-btn px-4 py-2 rounded-lg flex items-center gap-2"
                         title="Open interactive tutorial"
+                        leftIcon={(
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            </svg>
+                        )}
                     >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                        </svg>
                         Open Tutorial
-                    </button>
+                    </Button>
                 )}
             </div>
             <div className="flex gap-2">
-                <button
-                    onClick={onClose}
-                    className="settings-btn px-4 py-2 rounded-lg"
-                >
+                <Button onClick={onClose}>
                     {t.settings.common.cancel}
-                </button>
-                <button
+                </Button>
+                <Button
+                    variant="primary"
                     onClick={() => { void handleSave() }}
                     disabled={saving}
-                    className="settings-btn-primary px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {saving ? (
-                        <span className="text-button text-white/80">Saving...</span>
+                        'Saving...'
                     ) : (
                         t.settings.common.save
                     )}
-                </button>
+                </Button>
             </div>
         </div>
     ) : undefined

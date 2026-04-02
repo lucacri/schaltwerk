@@ -52,6 +52,13 @@
   --color-border-focus: #7E9CD8;
   --color-border-focus-rgb: 126 156 216;
 
+  /* Form controls */
+  --control-bg: var(--color-bg-tertiary);
+  --control-bg-hover: var(--color-bg-hover);
+  --control-border: var(--color-border-subtle);
+  --control-border-focus: var(--color-border-focus);
+  --control-border-error: var(--color-accent-red);
+
   /* Accent Colors - Kanagawa palette */
   --color-accent-blue: #7E9CD8;
   --color-accent-blue-rgb: 126 156 216;

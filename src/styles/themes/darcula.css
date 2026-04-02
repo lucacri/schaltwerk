@@ -50,6 +50,13 @@
   --color-border-focus: #66d9ef;
   --color-border-focus-rgb: 102 217 239;
 
+  /* Form controls */
+  --control-bg: var(--color-bg-tertiary);
+  --control-bg-hover: var(--color-bg-hover);
+  --control-border: var(--color-border-subtle);
+  --control-border-focus: var(--color-border-focus);
+  --control-border-error: var(--color-accent-red);
+
   /* Accent Colors - Monokai palette */
   --color-accent-blue: #66d9ef;
   --color-accent-blue-rgb: 102 217 239;

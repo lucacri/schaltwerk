@@ -458,7 +458,7 @@ describe('SettingsModal version settings', () => {
     )
 
     await userEvent.click(await screen.findByRole('button', { name: 'Version' }))
-    const toggle = await screen.findByRole('checkbox', { name: /Automatically install updates/i })
+    const toggle = await screen.findByRole('switch', { name: /Automatically install updates/i })
     await userEvent.click(toggle)
 
     expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SetAutoUpdateEnabled, { enabled: false })
@@ -516,8 +516,8 @@ describe('SettingsModal appearance settings', () => {
       expect(invokeMock).toHaveBeenCalledWith(TauriCommands.GetDevErrorToastsEnabled)
     })
 
-    await screen.findByRole('checkbox', { name: /Show error toasts automatically during dev runs/i })
-    await userEvent.click(screen.getByRole('checkbox', { name: /Show error toasts automatically during dev runs/i }))
+    await screen.findByRole('switch', { name: /Show error toasts automatically during dev runs/i })
+    await userEvent.click(screen.getByRole('switch', { name: /Show error toasts automatically during dev runs/i }))
 
     await userEvent.click(await screen.findByRole('button', { name: 'Save' }))
 

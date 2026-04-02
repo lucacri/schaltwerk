@@ -3,6 +3,7 @@ import { useAgentVariants } from '../../hooks/useAgentVariants'
 import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
 import { generateId } from '../../common/generateId'
 import type { AgentVariant } from '../../types/agentVariant'
+import { Button, Select, TextInput, Textarea } from '../ui'
 
 function createEmptyVariant(): AgentVariant {
     return {
@@ -100,12 +101,9 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                 <h3 className="text-body font-medium text-text-primary">
                     {'Agent Variants'}
                 </h3>
-                <button
-                    onClick={handleAdd}
-                    className="settings-btn text-body px-3 py-1.5 rounded-lg"
-                >
+                <Button onClick={handleAdd}>
                     {'+ Add Variant'}
-                </button>
+                </Button>
             </div>
 
             <p className="text-caption text-text-tertiary">
@@ -139,12 +137,13 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                             </div>
                             <div className="flex items-center gap-2">
                                 {!variant.isBuiltIn && (
-                                    <button
+                                    <Button
+                                        size="sm"
+                                        variant="danger"
                                         onClick={(e) => { e.stopPropagation(); handleRemove(variant.id) }}
-                                        className="settings-btn-danger text-caption px-2 py-1 rounded"
                                     >
                                         {'Delete'}
-                                    </button>
+                                    </Button>
                                 )}
                                 <svg
                                     className={`w-4 h-4 text-text-muted transition-transform ${expandedId === variant.id ? 'rotate-180' : ''}`}
@@ -162,27 +161,22 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                         <label className="block text-caption text-text-secondary mb-1">
                                             {'Name'}
                                         </label>
-                                        <input
-                                            type="text"
+                                        <TextInput
+                                            aria-label="Name"
                                             value={variant.name}
                                             onChange={e => handleUpdate(variant.id, { name: e.target.value })}
                                             placeholder={'e.g. Claude Opus High'}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body"
                                         />
                                     </div>
                                     <div>
                                         <label className="block text-caption text-text-secondary mb-1">
                                             {'Agent Type'}
                                         </label>
-                                        <select
+                                        <Select
                                             value={variant.agentType}
-                                            onChange={e => handleUpdate(variant.id, { agentType: e.target.value as AgentType })}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)] text-body settings-select"
-                                        >
-                                            {NON_TERMINAL_AGENTS.map(agent => (
-                                                <option key={agent} value={agent}>{agent}</option>
-                                            ))}
-                                        </select>
+                                            onChange={value => handleUpdate(variant.id, { agentType: value as AgentType })}
+                                            options={NON_TERMINAL_AGENTS.map(agent => ({ value: agent, label: agent }))}
+                                        />
                                     </div>
                                 </div>
 
@@ -191,24 +185,22 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                         <label className="block text-caption text-text-secondary mb-1">
                                             {'Model'}
                                         </label>
-                                        <input
-                                            type="text"
+                                        <TextInput
+                                            aria-label="Model"
                                             value={variant.model ?? ''}
                                             onChange={e => handleUpdate(variant.id, { model: e.target.value || undefined })}
                                             placeholder={'e.g. opus, o3'}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body"
                                         />
                                     </div>
                                     <div>
                                         <label className="block text-caption text-text-secondary mb-1">
                                             {'Reasoning Effort'}
                                         </label>
-                                        <input
-                                            type="text"
+                                        <TextInput
+                                            aria-label="Reasoning Effort"
                                             value={variant.reasoningEffort ?? ''}
                                             onChange={e => handleUpdate(variant.id, { reasoningEffort: e.target.value || undefined })}
                                             placeholder={'e.g. high, medium, low'}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body"
                                         />
                                     </div>
                                 </div>
@@ -217,12 +209,13 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                     <label className="block text-caption text-text-secondary mb-1">
                                         {'CLI Arguments (one per line)'}
                                     </label>
-                                    <textarea
+                                    <Textarea
+                                        aria-label="CLI Arguments"
                                         value={(variant.cliArgs ?? []).join('\n')}
                                         onChange={e => handleCliArgsChange(variant.id, e.target.value)}
                                         placeholder={'--dangerously-skip-permissions\n--model opus'}
                                         rows={3}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body font-mono"
+                                        monospace
                                     />
                                 </div>
 
@@ -231,35 +224,29 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                         <label className="text-caption text-text-secondary">
                                             {'Environment Variables'}
                                         </label>
-                                        <button
-                                            onClick={() => handleEnvVarAdd(variant.id)}
-                                            className="settings-btn text-caption px-2 py-0.5 rounded"
-                                        >
+                                        <Button size="sm" onClick={() => handleEnvVarAdd(variant.id)}>
                                             {'+ Add'}
-                                        </button>
+                                        </Button>
                                     </div>
                                     {variant.envVars && Object.entries(variant.envVars).map(([key, value], idx) => (
                                         <div key={idx} className="flex gap-2 mb-1">
-                                            <input
-                                                type="text"
+                                            <TextInput
+                                                aria-label="Environment variable key"
                                                 value={key}
                                                 onChange={e => handleEnvVarChange(variant.id, key, e.target.value, value)}
                                                 placeholder="KEY"
-                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-caption font-mono"
+                                                className="flex-1"
                                             />
-                                            <input
-                                                type="text"
+                                            <TextInput
+                                                aria-label="Environment variable value"
                                                 value={value}
                                                 onChange={e => handleEnvVarChange(variant.id, key, key, e.target.value)}
                                                 placeholder="value"
-                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-caption font-mono"
+                                                className="flex-1"
                                             />
-                                            <button
-                                                onClick={() => handleEnvVarRemove(variant.id, key)}
-                                                className="settings-btn-danger text-caption px-2 py-1 rounded"
-                                            >
+                                            <Button size="sm" variant="danger" onClick={() => handleEnvVarRemove(variant.id, key)}>
                                                 &times;
-                                            </button>
+                                            </Button>
                                         </div>
                                     ))}
                                 </div>
@@ -271,18 +258,12 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
 
             {hasUnsavedChanges && (
                 <div className="flex justify-end gap-2 pt-2">
-                    <button
-                        onClick={handleDiscard}
-                        className="settings-btn text-body text-text-muted px-3 py-1.5 rounded-lg"
-                    >
+                    <Button variant="ghost" onClick={handleDiscard}>
                         {'Discard'}
-                    </button>
-                    <button
-                        onClick={() => void handleSave()}
-                        className="settings-btn-primary text-body px-4 py-1.5 rounded-lg"
-                    >
+                    </Button>
+                    <Button variant="primary" onClick={() => void handleSave()}>
                         {'Save'}
-                    </button>
+                    </Button>
                 </div>
             )}
         </div>

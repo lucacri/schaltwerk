@@ -40,6 +40,19 @@
   --radius-xl: 0.75rem;
   --radius-full: 9999px;
 
+  /* Form Control Variables */
+  --control-height-sm: 24px;
+  --control-height-md: 30px;
+  --control-height-lg: 36px;
+  --control-padding-x: 0.625rem;
+  --control-padding-y: 0.375rem;
+  --control-border-radius: var(--radius-default);
+  --control-bg: var(--color-bg-tertiary);
+  --control-bg-hover: var(--color-bg-hover);
+  --control-border: var(--color-border-subtle);
+  --control-border-focus: var(--color-border-focus);
+  --control-border-error: var(--color-accent-red);
+
   /* Animation Variables */
   --duration-fast: 150ms;
   --duration-normal: 300ms;

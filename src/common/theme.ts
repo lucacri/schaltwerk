@@ -373,6 +373,22 @@ export const theme = {
     xl: '0.75rem',   // 12px
     full: '9999px',
   },
+
+  control: {
+    height: {
+      sm: 'var(--control-height-sm)',
+      md: 'var(--control-height-md)',
+      lg: 'var(--control-height-lg)',
+    },
+    paddingX: 'var(--control-padding-x)',
+    paddingY: 'var(--control-padding-y)',
+    borderRadius: 'var(--control-border-radius)',
+    background: 'var(--control-bg)',
+    backgroundHover: 'var(--control-bg-hover)',
+    border: 'var(--control-border)',
+    borderFocus: 'var(--control-border-focus)',
+    borderError: 'var(--control-border-error)',
+  },
   
   fontSize: {
     caption: 'var(--font-caption)',

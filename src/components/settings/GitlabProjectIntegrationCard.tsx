@@ -5,6 +5,7 @@ import { useTranslation } from '../../common/i18n/useTranslation'
 import { useGitlabIntegrationContext } from '../../contexts/GitlabIntegrationContext'
 import { GitlabSourcesSettings } from '../gitlab/GitlabSourcesSettings'
 import { logger } from '../../utils/logger'
+import { Button } from '../ui'
 
 interface GitlabProjectIntegrationCardProps {
   onNotify: (message: string, tone: 'success' | 'error' | 'info') => void
@@ -141,14 +142,14 @@ export function GitlabProjectIntegrationCard({ onNotify }: GitlabProjectIntegrat
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          <Button
+            size="sm"
             onClick={() => { void handleRefresh() }}
             disabled={isRefreshing}
-            className="settings-btn px-3 py-2 text-caption font-medium rounded-md flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            leftIcon={<VscRefresh className="text-label" />}
           >
-            <VscRefresh className="text-label" />
             <span>{t.settings.common.refresh}</span>
-          </button>
+          </Button>
         </div>
       </div>
       <div className="mt-3 text-caption flex flex-wrap gap-x-6 gap-y-1" style={{ color: 'var(--color-text-secondary)' }}>

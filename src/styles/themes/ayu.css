@@ -51,6 +51,13 @@
   --color-border-focus: #59C2FF;
   --color-border-focus-rgb: 89 194 255;
 
+  /* Form controls */
+  --control-bg: var(--color-bg-tertiary);
+  --control-bg-hover: var(--color-bg-hover);
+  --control-border: var(--color-border-subtle);
+  --control-border-focus: var(--color-border-focus);
+  --control-border-error: var(--color-accent-red);
+
   /* Accent Colors - Ayu palette */
   --color-accent-blue: #59C2FF;
   --color-accent-blue-rgb: 89 194 255;

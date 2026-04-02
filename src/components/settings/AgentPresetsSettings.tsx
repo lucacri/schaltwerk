@@ -4,6 +4,7 @@ import { useAgentVariants } from '../../hooks/useAgentVariants'
 import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
 import { generateId } from '../../common/generateId'
 import type { AgentPreset, AgentPresetSlot } from '../../types/agentPreset'
+import { Button, Checkbox, Select, TextInput } from '../ui'
 
 function createEmptyPreset(): AgentPreset {
     return {
@@ -102,9 +103,9 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                 <h3 className="text-body font-medium text-text-primary">
                     {'Agent Presets'}
                 </h3>
-                <button onClick={handleAdd} className="settings-btn text-body px-3 py-1.5 rounded-lg">
+                <Button onClick={handleAdd}>
                     {'+ Add Preset'}
-                </button>
+                </Button>
             </div>
 
             <p className="text-caption text-text-tertiary">
@@ -137,12 +138,13 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                             </div>
                             <div className="flex items-center gap-2">
                                 {!preset.isBuiltIn && (
-                                    <button
+                                    <Button
+                                        size="sm"
+                                        variant="danger"
                                         onClick={(e) => { e.stopPropagation(); handleRemove(preset.id) }}
-                                        className="settings-btn-danger text-caption px-2 py-1 rounded"
                                     >
                                         {'Delete'}
-                                    </button>
+                                    </Button>
                                 )}
                                 <svg
                                     className={`w-4 h-4 text-text-muted transition-transform ${expandedId === preset.id ? 'rotate-180' : ''}`}
@@ -159,12 +161,11 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                     <label className="block text-caption text-text-secondary mb-1">
                                         {'Name'}
                                     </label>
-                                    <input
-                                        type="text"
+                                    <TextInput
+                                        aria-label="Name"
                                         value={preset.name}
                                         onChange={e => handleUpdate(preset.id, { name: e.target.value })}
                                         placeholder={'e.g. The Trio'}
-                                        className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted focus:outline-none focus:border-[var(--color-border-focus)] text-body"
                                     />
                                 </div>
 
@@ -173,19 +174,15 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                         <label className="text-caption text-text-secondary">
                                             {'Agent Slots'}
                                         </label>
-                                        <button
-                                            onClick={() => handleSlotAdd(preset.id)}
-                                            className="settings-btn text-caption px-2 py-0.5 rounded"
-                                        >
+                                        <Button size="sm" onClick={() => handleSlotAdd(preset.id)}>
                                             {'+ Add'}
-                                        </button>
+                                        </Button>
                                     </div>
                                     {preset.slots.map((slot, idx) => (
                                         <div key={idx} className="flex items-center gap-2 mb-2">
-                                            <select
+                                            <Select
                                                 value={slot.variantId ? `variant:${slot.variantId}` : slot.agentType}
-                                                onChange={(e) => {
-                                                    const val = e.target.value
+                                                onChange={(val) => {
                                                     if (val.startsWith('variant:')) {
                                                         const variantId = val.slice(8)
                                                         const variant = variants.find(v => v.id === variantId)
@@ -202,39 +199,23 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                                         })
                                                     }
                                                 }}
-                                                className="flex-1 bg-bg-tertiary text-text-primary rounded px-2 py-1.5 border border-border-subtle focus:outline-none focus:border-[var(--color-border-focus)] text-caption settings-select"
-                                            >
-                                                <optgroup label="Agents">
-                                                    {NON_TERMINAL_AGENTS.map(agent => (
-                                                        <option key={agent} value={agent}>{agent}</option>
-                                                    ))}
-                                                </optgroup>
-                                                {variants.length > 0 && (
-                                                    <optgroup label="Variants">
-                                                        {variants.map(v => (
-                                                            <option key={v.id} value={`variant:${v.id}`}>
-                                                                {v.name} ({v.agentType})
-                                                            </option>
-                                                        ))}
-                                                    </optgroup>
-                                                )}
-                                            </select>
+                                                options={[
+                                                    ...NON_TERMINAL_AGENTS.map(agent => ({ value: agent, label: agent })),
+                                                    ...variants.map(v => ({ value: `variant:${v.id}`, label: `${v.name} (${v.agentType})` })),
+                                                ]}
+                                                className="flex-1"
+                                            />
                                             <label className="flex items-center gap-1 text-caption text-text-muted">
-                                                <input
-                                                    type="checkbox"
+                                                <Checkbox
                                                     checked={slot.skipPermissions ?? false}
-                                                    onChange={e => handleSlotUpdate(preset.id, idx, { skipPermissions: e.target.checked || undefined })}
-                                                    className="rounded"
+                                                    onChange={checked => handleSlotUpdate(preset.id, idx, { skipPermissions: checked || undefined })}
                                                 />
                                                 Skip
                                             </label>
                                             {preset.slots.length > 1 && (
-                                                <button
-                                                    onClick={() => handleSlotRemove(preset.id, idx)}
-                                                    className="settings-btn-danger text-caption px-2 py-1 rounded"
-                                                >
+                                                <Button size="sm" variant="danger" onClick={() => handleSlotRemove(preset.id, idx)}>
                                                     &times;
-                                                </button>
+                                                </Button>
                                             )}
                                         </div>
                                     ))}
@@ -247,15 +228,12 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
 
             {hasUnsavedChanges && (
                 <div className="flex justify-end gap-2 pt-2">
-                    <button onClick={handleDiscard} className="settings-btn text-body text-text-muted px-3 py-1.5 rounded-lg">
+                    <Button variant="ghost" onClick={handleDiscard}>
                         {'Discard'}
-                    </button>
-                    <button
-                        onClick={() => void handleSave()}
-                        className="settings-btn-primary text-body px-4 py-1.5 rounded-lg"
-                    >
+                    </Button>
+                    <Button variant="primary" onClick={() => void handleSave()}>
                         {'Save'}
-                    </button>
+                    </Button>
                 </div>
             )}
         </div>

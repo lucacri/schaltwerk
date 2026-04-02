@@ -4,6 +4,7 @@ import { VscRefresh, VscWarning, VscCheck, VscInfo } from 'react-icons/vsc'
 import { useTranslation } from '../../common/i18n/useTranslation'
 import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationContext'
 import { logger } from '../../utils/logger'
+import { Button } from '../ui'
 
 interface GithubProjectIntegrationCardProps {
   projectPath: string
@@ -201,27 +202,27 @@ export function GithubProjectIntegrationCard({ projectPath, onNotify }: GithubPr
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          <Button
+            size="sm"
             onClick={() => { void handleAuthenticate() }}
             disabled={!installed || github.isAuthenticating}
-            className="settings-btn px-3 py-2 text-xs font-medium rounded-md disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {authenticateLabel}
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
             onClick={() => { void handleConnect() }}
             disabled={!canConnectProject || github.isConnecting}
-            className="settings-btn px-3 py-2 text-xs font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {connectLabel}
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
             onClick={() => { void handleRefresh() }}
-            className="settings-btn px-3 py-2 text-xs font-medium rounded-md flex items-center gap-1"
+            leftIcon={<VscRefresh className="text-[13px]" />}
           >
-            <VscRefresh className="text-[13px]" />
             <span>{t.settings.common.refresh}</span>
-          </button>
+          </Button>
         </div>
       </div>
       {feedback && (

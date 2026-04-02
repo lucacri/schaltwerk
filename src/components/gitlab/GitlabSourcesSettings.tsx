@@ -4,6 +4,7 @@ import type { GitlabSource } from '../../types/gitlabTypes'
 import { useTranslation } from '../../common/i18n'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
+import { Button, Checkbox, TextInput } from '../ui'
 
 interface GitlabSourcesSettingsProps {
   sources: GitlabSource[]
@@ -130,13 +131,13 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
           {t.gitlabSources.title}
         </h3>
         {!formVisible && (
-          <button
+          <Button
+            size="sm"
             onClick={handleAdd}
-            className="settings-btn px-2 py-1 rounded text-caption flex items-center gap-1"
+            leftIcon={<VscAdd className="text-caption" />}
           >
-            <VscAdd className="text-caption" />
             {t.gitlabSources.addSource}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -209,21 +210,22 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
             </div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
-            <button
+            <Button
+              size="sm"
               onClick={() => handleEdit(source)}
-              className="settings-btn p-1.5 rounded"
               title={t.gitlabSources.editSource}
             >
               <VscEdit className="text-body" />
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
               onClick={() => { void handleDelete(source.id) }}
               disabled={saving}
-              className="settings-btn-danger p-1.5 rounded disabled:opacity-50"
               title={t.gitlabSources.deleteSource}
             >
               <VscTrash className="text-body" />
-            </button>
+            </Button>
           </div>
         </div>
       ))}
@@ -251,15 +253,13 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
               >
                 {t.gitlabSources.labelField}
               </span>
-              <input
-                type="text"
+              <TextInput
+                aria-label={t.gitlabSources.labelField}
                 value={formData.label}
                 onChange={(e) => setFormData({ ...formData, label: e.target.value })}
                 placeholder={t.gitlabSources.labelPlaceholder}
-                className="w-full px-2 py-1.5 rounded text-body"
                 style={{
                   backgroundColor: 'var(--color-bg-primary)',
-                  border: '1px solid var(--color-border-subtle)',
                   color: 'var(--color-text-primary)',
                 }}
               />
@@ -272,15 +272,13 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
               >
                 {t.gitlabSources.projectPathField}
               </span>
-              <input
-                type="text"
+              <TextInput
+                aria-label={t.gitlabSources.projectPathField}
                 value={formData.projectPath}
                 onChange={(e) => setFormData({ ...formData, projectPath: e.target.value })}
                 placeholder={t.gitlabSources.projectPathPlaceholder}
-                className="w-full px-2 py-1.5 rounded text-body font-mono"
                 style={{
                   backgroundColor: 'var(--color-bg-primary)',
-                  border: '1px solid var(--color-border-subtle)',
                   color: 'var(--color-text-primary)',
                 }}
               />
@@ -293,15 +291,13 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
               >
                 {t.gitlabSources.hostnameField}
               </span>
-              <input
-                type="text"
+              <TextInput
+                aria-label={t.gitlabSources.hostnameField}
                 value={formData.hostname}
                 onChange={(e) => setFormData({ ...formData, hostname: e.target.value })}
                 placeholder={t.gitlabSources.hostnamePlaceholder}
-                className="w-full px-2 py-1.5 rounded text-body"
                 style={{
                   backgroundColor: 'var(--color-bg-primary)',
-                  border: '1px solid var(--color-border-subtle)',
                   color: 'var(--color-text-primary)',
                 }}
               />
@@ -310,12 +306,9 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
 
           <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={formData.issuesEnabled}
-                onChange={(e) => setFormData({ ...formData, issuesEnabled: e.target.checked })}
-                className="w-4 h-4 rounded"
-                style={{ accentColor: 'var(--color-accent-blue)' }}
+                onChange={(checked) => setFormData({ ...formData, issuesEnabled: checked })}
               />
               <span
                 className="text-caption"
@@ -325,12 +318,9 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
               </span>
             </label>
             <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={formData.mrsEnabled}
-                onChange={(e) => setFormData({ ...formData, mrsEnabled: e.target.checked })}
-                className="w-4 h-4 rounded"
-                style={{ accentColor: 'var(--color-accent-blue)' }}
+                onChange={(checked) => setFormData({ ...formData, mrsEnabled: checked })}
               />
               <span
                 className="text-caption"
@@ -340,12 +330,9 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
               </span>
             </label>
             <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={formData.pipelinesEnabled}
-                onChange={(e) => setFormData({ ...formData, pipelinesEnabled: e.target.checked })}
-                className="w-4 h-4 rounded"
-                style={{ accentColor: 'var(--color-accent-blue)' }}
+                onChange={(checked) => setFormData({ ...formData, pipelinesEnabled: checked })}
               />
               <span
                 className="text-caption"
@@ -357,19 +344,20 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
           </div>
 
           <div className="flex items-center gap-2 pt-1">
-            <button
+            <Button
+              size="sm"
+              variant="primary"
               onClick={() => { void handleSubmit() }}
               disabled={!isFormValid || saving}
-              className="settings-btn-success px-3 py-1.5 rounded text-caption font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? t.settings.common.saving : t.settings.common.save}
-            </button>
-            <button
+            </Button>
+            <Button
+              size="sm"
               onClick={handleCancel}
-              className="settings-btn px-3 py-1.5 rounded text-caption"
             >
               {t.settings.common.cancel}
-            </button>
+            </Button>
           </div>
         </div>
       )}

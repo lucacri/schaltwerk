@@ -4,6 +4,7 @@ import { AnimatedText } from '../common/AnimatedText'
 import { TauriCommands } from '../../common/tauriCommands'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n/useTranslation'
+import { Button } from '../ui'
 
 interface MCPStatus {
   mcp_server_path: string
@@ -298,31 +299,33 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
               <div className="flex flex-wrap gap-2">
                 {status.cli_available ? (
                   status.is_configured ? (
-                    <button
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={() => { void configureMCP() }}
                        disabled={loading}
-                       className="settings-btn-success px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm"
-                     >
+                      >
                        {requiresGlobalConfig ? t.settings.mcp.reconfigureMcpGlobal : t.settings.mcp.reconfigureMcp}
-                     </button>
+                      </Button>
                   ) : (
-                    <button
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={() => { void configureMCP() }}
                        disabled={loading}
-                         className="settings-btn-success px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm"
-                     >
+                      >
                        {agent === 'codex' || agent === 'amp' || agent === 'droid' ? t.settings.mcp.enableMcpGlobalBtn : t.settings.mcp.configureMcpProject}
-                     </button>
+                      </Button>
                   )
                 ) : (
                   <>
                      {agent === 'claude' ? (
                          <a
-                           href="https://claude.ai/download"
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           className="settings-btn-success px-3 py-1 rounded text-sm inline-block"
-                        >
+                            href="https://claude.ai/download"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex h-[var(--control-height-sm)] items-center justify-center rounded-[var(--control-border-radius)] border border-[var(--color-accent-blue-border)] bg-accent-blue px-3 text-caption text-text-inverse transition-[background-color,border-color,color] duration-150 hover:bg-[var(--color-accent-blue-dark)]"
+                         >
                          {t.settings.mcp.installClaudeFirst}
                        </a>
                      ) : agent === 'codex' ? (
@@ -330,12 +333,12 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                          {t.settings.mcp.installCodexFirst}
                        </div>
                      ) : agent === 'opencode' ? (
-                        <a
-                          href="https://opencode.ai"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="settings-btn px-3 py-1 rounded text-sm inline-block"
-                       >
+                         <a
+                           href="https://opencode.ai"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           className="inline-flex h-[var(--control-height-sm)] items-center justify-center rounded-[var(--control-border-radius)] border border-border-subtle bg-bg-elevated px-3 text-caption text-text-secondary transition-[background-color,border-color,color] duration-150 hover:border-border-strong hover:bg-[var(--control-bg-hover)] hover:text-text-primary"
+                        >
                          {t.settings.mcp.installOpencodeFirst}
                        </a>
                      ) : agent === 'amp' ? (
@@ -351,21 +354,21 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                 )}
 
                 {status.is_configured && (
-                  <button
+                  <Button
+                    size="sm"
                     onClick={() => { void removeMCP() }}
                     disabled={loading}
-                    className="settings-btn px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm"
                   >
                     {t.settings.common.remove}
-                  </button>
+                  </Button>
                 )}
                 
-                <button
+                <Button
+                  size="sm"
                   onClick={() => setShowManualSetup(!showManualSetup)}
-                  className="settings-btn px-3 py-1 rounded text-sm"
                 >
                   {showManualSetup ? t.settings.mcp.hide : t.settings.mcp.manualSetup}
-                </button>
+                </Button>
               </div>
 
               {showManualSetup && (
@@ -403,13 +406,14 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                       </div>
                     </div>
                     
-                    <button
+                    <Button
+                      size="sm"
                       onClick={() => { void copyCommand() }}
-                      className="settings-btn px-2 py-1 rounded text-xs flex-shrink-0 self-start"
+                      className="self-start"
                       title={t.mcpMessages.copyCommand}
                     >
                       {t.settings.common.copy}
-                    </button>
+                    </Button>
                   </div>
                   
                    <p className="text-xs text-text-muted mt-2 italic">
