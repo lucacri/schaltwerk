@@ -169,6 +169,45 @@ describe('TerminalGrid InsertTerminalText handling', () => {
     expect(pushToastMock).not.toHaveBeenCalled()
   })
 
+  it('opens a new orchestrator agent tab and inserts refine text there', async () => {
+    render(
+      <TestProviders>
+        <TerminalGrid />
+      </TestProviders>
+    )
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId(/terminal-tabs-/)).not.toHaveLength(0)
+      expect(orchestratorTerminalIdRef.current).toBeTruthy()
+    })
+
+    const originalTerminalId = orchestratorTerminalIdRef.current!
+
+    act(() => {
+      emitUiEvent(UiEvent.RefineSpecInNewTab, {
+        sessionName: 'alpha',
+        displayName: 'Auth System',
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`terminal-${originalTerminalId}-1`)).toBeInTheDocument()
+      expect(writeCalls).toHaveLength(2)
+    })
+
+    const [clearCall, textCall] = writeCalls
+    expect(clearCall.id).toBe(`${originalTerminalId}-1`)
+    expect(clearCall.data).toBe('\u0015')
+    expect(textCall).toEqual({
+      id: `${originalTerminalId}-1`,
+      data: 'Refine spec: Auth System (alpha) ',
+    })
+
+    const focusSpy = focusSpies.get(`${originalTerminalId}-1`)
+    expect(focusSpy).toBeDefined()
+    expect(focusSpy).toHaveBeenCalled()
+  })
+
   it('shows toast when orchestrator terminal is unavailable', async () => {
     terminalExists = false
 

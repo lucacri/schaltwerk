@@ -234,11 +234,13 @@ describe('UnifiedDiffView file folding', () => {
   it('expand all then collapse one file only affects that file', async () => {
     const { store } = renderModal()
 
+    await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
+    await screen.findByRole('button', { name: 'Toggle src/second.ts diff' })
     const expandAll = await screen.findByRole('button', { name: 'Expand all files' })
     fireEvent.click(expandAll)
 
-    const firstHeader = screen.getByRole('button', { name: 'Toggle src/first.ts diff' })
-    const secondHeader = screen.getByRole('button', { name: 'Toggle src/second.ts diff' })
+    const firstHeader = await screen.findByRole('button', { name: 'Toggle src/first.ts diff' })
+    const secondHeader = await screen.findByRole('button', { name: 'Toggle src/second.ts diff' })
     expect(firstHeader).toHaveAttribute('aria-expanded', 'true')
     expect(secondHeader).toHaveAttribute('aria-expanded', 'true')
 

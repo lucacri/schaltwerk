@@ -108,7 +108,7 @@ export const useAgentTabs = (
     }, [sessionId, baseTerminalId, agentTabsMap])
 
     const addTab = useCallback(
-        (agentType: AgentType, options?: { skipPermissions?: boolean }) => {
+        (agentType: AgentType, options?: { skipPermissions?: boolean; label?: string }) => {
             if (!sessionId || !baseTerminalId) return
 
             let newTerminalId = ''
@@ -146,7 +146,7 @@ export const useAgentTabs = (
                 const newTab: AgentTab = {
                     id: `tab-${newTabNumericIndex}`,
                     terminalId: newTerminalId,
-                    label: displayNameForAgent(agentType) ?? DEFAULT_AGENT_TAB_LABEL,
+                    label: options?.label ?? displayNameForAgent(agentType) ?? DEFAULT_AGENT_TAB_LABEL,
                     agentType,
                 }
 

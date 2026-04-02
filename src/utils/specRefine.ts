@@ -11,7 +11,7 @@ export function buildSpecRefineReference(sessionId: string, displayName?: string
 export function emitSpecRefine(sessionId: string, displayName?: string | null): string {
   const text = buildSpecRefineReference(sessionId, displayName)
   emitUiEvent(UiEvent.OpenSpecInOrchestrator, { sessionName: sessionId })
-  emitUiEvent(UiEvent.InsertTerminalText, { text })
+  emitUiEvent(UiEvent.RefineSpecInNewTab, { sessionName: sessionId, displayName })
   return text
 }
 

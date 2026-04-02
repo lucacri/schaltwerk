@@ -188,8 +188,9 @@ describe('Sidebar status indicators and actions', () => {
     })
 
     expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.OpenSpecInOrchestrator, { sessionName: 'spec-alpha' })
-    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.InsertTerminalText, {
-      text: 'Refine spec: Spec Alpha (spec-alpha)',
+    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.RefineSpecInNewTab, {
+      sessionName: 'spec-alpha',
+      displayName: 'Spec Alpha',
     })
   })
 

@@ -124,8 +124,9 @@ describe('SpecEditor keyboard shortcuts', () => {
     })
 
     expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.OpenSpecInOrchestrator, { sessionName: 'refine-session' })
-    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.InsertTerminalText, {
-      text: 'Refine spec: Auth System (refine-session)'
+    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.RefineSpecInNewTab, {
+      sessionName: 'refine-session',
+      displayName: 'Auth System',
     })
   })
 

@@ -65,6 +65,7 @@ import { useSessionManagement } from '../../hooks/useSessionManagement'
 import { startOrchestratorTop } from '../../common/agentSpawn'
 import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
 import { useTranslation } from '../../common/i18n'
+import { buildSpecRefineReference } from '../../utils/specRefine'
 
 type TerminalTabDescriptor = { index: number; terminalId: string; label: string }
 type TerminalTabsUiState = {
@@ -1316,6 +1317,20 @@ const TerminalGridComponent = () => {
         })
         return cleanup
     }, [applyPendingInsert])
+
+    useEffect(() => {
+        const cleanup = listenUiEvent(UiEvent.RefineSpecInNewTab, (detail) => {
+            if (selection.kind !== 'orchestrator' || !detail?.sessionName) {
+                return
+            }
+
+            const displayName = detail.displayName?.trim() ? detail.displayName.trim() : detail.sessionName
+            pendingInsertTextRef.current = buildSpecRefineReference(detail.sessionName, detail.displayName)
+            addAgentTab(agentType as AgentType, { label: `Refine: ${displayName}` })
+            void applyPendingInsert()
+        })
+        return cleanup
+    }, [addAgentTab, agentType, applyPendingInsert, selection.kind])
 
     useEffect(() => {
         void applyPendingInsert()

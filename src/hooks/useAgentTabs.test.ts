@@ -113,6 +113,27 @@ describe('useAgentTabs', () => {
             )
         })
 
+        it('uses a custom label when provided', async () => {
+            const { result } = renderTabsHook('session-1', 'term-1')
+
+            act(() => {
+                result.current.ensureInitialized('claude')
+            })
+
+            await act(async () => {
+                await result.current.addTab('codex', { label: 'Refine: auth-system' })
+            })
+
+            const state = result.current.getTabsState()
+            expect(state?.tabs[1]).toMatchObject({
+                id: 'tab-1',
+                terminalId: 'term-1-1',
+                agentType: 'codex',
+                label: 'Refine: auth-system',
+            })
+            expect(state?.activeTab).toBe(1)
+        })
+
         it('forces fresh start when adding duplicate agent type', async () => {
             const { result } = renderTabsHook('session-1', 'term-1')
 

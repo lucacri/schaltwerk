@@ -20,9 +20,9 @@ describe('runSpecRefineWithOrchestrator', () => {
     })
 
     expect(selectOrchestrator).toHaveBeenCalledTimes(1)
-    const insertCall = emitUiEventSpy.mock.calls.find(([event]) => event === uiEvents.UiEvent.InsertTerminalText)
-    expect(insertCall).toBeDefined()
-    expect(insertCall?.[1]).toEqual({ text: 'Refine spec: Foo (foo)' })
+    const refineCall = emitUiEventSpy.mock.calls.find(([event]) => event === uiEvents.UiEvent.RefineSpecInNewTab)
+    expect(refineCall).toBeDefined()
+    expect(refineCall?.[1]).toEqual({ sessionName: 'foo', displayName: 'Foo' })
   })
 
   it('logs a warning but still emits when orchestrator selection fails', async () => {
@@ -40,7 +40,7 @@ describe('runSpecRefineWithOrchestrator', () => {
 
     expect(selectOrchestrator).toHaveBeenCalledTimes(1)
     expect(warnSpy).toHaveBeenCalledWith('[test] Failed to switch to orchestrator for refine', error)
-    const insertCall = emitUiEventSpy.mock.calls.find(([event]) => event === uiEvents.UiEvent.InsertTerminalText)
-    expect(insertCall?.[1]).toEqual({ text: 'Refine spec: foo (foo)' })
+    const refineCall = emitUiEventSpy.mock.calls.find(([event]) => event === uiEvents.UiEvent.RefineSpecInNewTab)
+    expect(refineCall?.[1]).toEqual({ sessionName: 'foo', displayName: undefined })
   })
 })

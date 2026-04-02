@@ -45,6 +45,7 @@ export enum UiEvent {
   CreatePullRequest = 'schaltwerk:create-pull-request',
   AgentLifecycle = 'schaltwerk:agent-lifecycle',
   OpenSpecInOrchestrator = 'schaltwerk:open-spec-in-orchestrator',
+  RefineSpecInNewTab = 'schaltwerk:refine-spec-in-new-tab',
   ProjectSwitchComplete = 'schaltwerk:project-switch-complete',
   TerminalDimensionRefresh = 'schaltwerk:terminal-dimension-refresh',
   OpenSettings = 'schaltwerk:open-settings',
@@ -193,6 +194,11 @@ export interface OpenSpecInOrchestratorDetail {
   sessionName: string
 }
 
+export interface RefineSpecInNewTabDetail {
+  sessionName: string
+  displayName?: string | null
+}
+
 export interface ProjectSwitchCompleteDetail {
   projectPath: string
 }
@@ -299,6 +305,7 @@ export type UiEventPayloads = {
   [UiEvent.CreatePullRequest]: CreatePullRequestDetail
   [UiEvent.AgentLifecycle]: AgentLifecycleDetail
   [UiEvent.OpenSpecInOrchestrator]: OpenSpecInOrchestratorDetail
+  [UiEvent.RefineSpecInNewTab]: RefineSpecInNewTabDetail
   [UiEvent.ProjectSwitchComplete]: ProjectSwitchCompleteDetail
   [UiEvent.TerminalDimensionRefresh]: TerminalDimensionRefreshDetail
   [UiEvent.SelectionChanged]: SelectionChangedDetail

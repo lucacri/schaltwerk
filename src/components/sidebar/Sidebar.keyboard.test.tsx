@@ -196,8 +196,9 @@ describe('Sidebar keyboard navigation basic', () => {
     })
 
     expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.OpenSpecInOrchestrator, { sessionName: 'spec-session' })
-    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.InsertTerminalText, {
-      text: 'Refine spec: Spec Draft (spec-session)',
+    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.RefineSpecInNewTab, {
+      sessionName: 'spec-session',
+      displayName: 'Spec Draft',
     })
   })
 
