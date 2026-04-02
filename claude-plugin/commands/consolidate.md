@@ -36,63 +36,31 @@ For the selected group, show a table with:
 
 Ask the user for any custom consolidation criteria (e.g., "prioritize test coverage", "the v2 approach to the API was better"). Accept empty for defaults.
 
-### Step 4: Confirm (interactive only)
+### Step 4: Confirm target session (interactive only)
 
-Show summary: "Will create a consolidation session for spec `{display_name}` reviewing {N} branches"
+Show summary: "Will consolidate directly into session `{session_name}` for spec `{display_name}` reviewing {N} branches"
 
 Ask for confirmation before proceeding.
 
-### Step 5: Create consolidation session
+### Step 5: Consolidate in place
 
-Before creating, check if a session named `consolidate-{display_name}` already exists by searching the session list from Step 1. If it does, increment the suffix (`-v2`, `-v3`, etc.) until an unused name is found.
+Pick one existing session in the selected group as the working session:
+- If the user named a specific session, use it.
+- If the user gave custom criteria, prefer the session that best matches them.
+- Otherwise prefer the highest-version non-spec session, falling back to the first running/reviewed session in the group.
 
-Call `mcp__lucode__lucode_create` with:
-- `name`: the resolved unique name (sanitized: lowercase, spaces replaced with hyphens, max 50 chars)
-- `skip_permissions`: true
-- `prompt`: the consolidation prompt (see template below)
-- `epic_id`: the `epic_id` from the selected group's sessions (use the first non-null `epic_id` found in the group). Omit if no sessions have an epic.
+Do NOT create a new consolidation session.
 
-If the call fails, report the error to the user and stop.
+In the chosen session, the agent should:
+- Review sibling branches with `git diff main...{branch}` for each sibling session.
+- Cherry-pick or manually apply the strongest ideas from the other versions into the chosen session branch.
+- Run `just test`.
+- Call `mcp__lucode__lucode_promote` with:
+  - `session_name`: the chosen session name
+  - `reason`: a concise justification describing why this version won and what it absorbed from siblings
+
+The promote call automatically cleans up sibling sessions. If promotion reports failures, surface them clearly to the user.
 
 ### Step 6: Report
 
-Output the created session name and branch. Tell the user to select the session in the Lucode app and start an agent to begin the consolidation work. Do NOT reference any slash commands like `/lucode list` or `/lucode status` — they do not exist.
-
-## Consolidation Prompt Template
-
-The prompt passed to `lucode_create` should be:
-
-```
-## Task: Consolidate {N} parallel implementations into one final version
-
-You are consolidating work from {N} parallel agent sessions that all worked on the same spec: {display_name}.
-
-### Branches to review
-
-{table of session name and branch}
-
-### Instructions
-
-1. **Review all {N} branches** - run `git diff main...{branch}` for each branch to understand what each agent implemented. Take notes on the approach, architecture, and completeness of each.
-
-2. **Compare and rank** - identify which version has:
-   - Best architecture and code organization
-   - Cleanest code (following CLAUDE.md guidelines)
-   - Most complete implementation
-   - Best test coverage
-   - Note unique strengths from each version
-
-3. **Pick the best base** - cherry-pick or manually apply the best version's changes to your branch, then improve it by incorporating the strongest ideas/fixes from the other versions.
-
-4. **Validate** - run `just test` and ensure everything passes before considering the work done.
-
-If the user provided custom criteria in Step 3, include this section (omit entirely otherwise):
-
-### Additional criteria
-- {user's custom criteria, one bullet per item}
-
-### Important
-- Follow all CLAUDE.md guidelines
-- The final version should be the best possible synthesis of all {N} attempts
-- Do NOT just pick one version blindly - actively look for improvements from the others
-```
+Output the promoted session name, the justification used, and any cleanup failures. Do NOT reference any slash commands like `/lucode list` or `/lucode status` — they do not exist.

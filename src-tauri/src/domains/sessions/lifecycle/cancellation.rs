@@ -591,6 +591,7 @@ mod tests {
             pr_url: None,
             is_consolidation: false,
             consolidation_sources: None,
+            promotion_reason: None,
         }
     }
 
@@ -687,6 +688,7 @@ mod tests {
             pr_url: None,
             is_consolidation: false,
             consolidation_sources: None,
+            promotion_reason: None,
         };
 
         let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);

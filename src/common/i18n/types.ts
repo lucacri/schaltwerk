@@ -429,6 +429,7 @@ export interface Translations {
     running: string
     reviewed: string
     blocked: string
+    promoted: string
     spec: string
     complete: string
     lastAgentOutput: string

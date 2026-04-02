@@ -519,6 +519,7 @@ mod tests {
             pr_url: None,
             is_consolidation: false,
             consolidation_sources: None,
+            promotion_reason: None,
         };
         db.create_session(&session).unwrap();
 
@@ -593,6 +594,7 @@ mod tests {
             pr_url: None,
             is_consolidation: false,
             consolidation_sources: None,
+            promotion_reason: None,
         };
         db.create_session(&session).unwrap();
 

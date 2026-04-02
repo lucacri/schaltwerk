@@ -427,6 +427,7 @@
     "running": "Running",
     "reviewed": "✓ Reviewed",
     "blocked": "⚠ blocked",
+    "promoted": "★ Promoted",
     "spec": "Spec",
     "complete": "% complete",
     "lastAgentOutput": "Last agent output"

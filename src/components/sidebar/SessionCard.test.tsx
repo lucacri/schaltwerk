@@ -343,3 +343,50 @@ describe('SessionCard review cooldown', () => {
     expect(markReviewedButton).toBeDisabled()
   })
 })
+
+describe('SessionCard promoted badge', () => {
+  it('shows promoted badge and reason when promotion_reason is set', () => {
+    renderWithProviders(
+      <SessionCard
+        session={{
+          ...baseSession,
+          info: {
+            ...baseSession.info,
+            promotion_reason: 'Best test coverage. Cherry-picked caching from v2.',
+          },
+        }}
+        index={0}
+        isSelected
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+
+    const badge = screen.getByText(/Promoted/i)
+    expect(badge).toBeInTheDocument()
+    expect(badge).toHaveAttribute('title', 'Best test coverage. Cherry-picked caching from v2.')
+    expect(screen.getByText('Best test coverage. Cherry-picked caching from v2.')).toBeInTheDocument()
+  })
+
+  it('does not show promoted badge when promotion_reason is null', () => {
+    renderWithProviders(
+      <SessionCard
+        session={baseSession}
+        index={0}
+        isSelected
+        hasFollowUpMessage={false}
+        onSelect={() => {}}
+        onMarkReady={() => {}}
+        onUnmarkReady={() => {}}
+        onCancel={() => {}}
+        isRunning={false}
+      />
+    )
+
+    expect(screen.queryByText(/Promoted/i)).toBeNull()
+  })
+})

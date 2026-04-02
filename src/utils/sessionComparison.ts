@@ -27,6 +27,8 @@ const SESSION_INFO_KEYS: ReadonlyArray<keyof SessionInfo> = [
     'version_number',
     'original_agent_type',
     'spec_content',
+    'promotion_reason',
+    'promotionReason',
     'issue_number',
     'issue_url',
     'pr_number',

@@ -76,6 +76,20 @@ interface MergeSessionApiResponse {
   cancel_error?: string | null
 }
 
+interface PromoteSessionApiResponse {
+  session_name: string
+  siblings_cancelled: string[]
+  reason: string
+  failures?: string[]
+}
+
+export interface PromoteSessionResult {
+  sessionName: string
+  siblingsCancelled: string[]
+  reason: string
+  failures: string[]
+}
+
 export interface MergeSessionResult {
   sessionName: string
   parentBranch: string
@@ -1389,6 +1403,41 @@ export class LucodeBridge {
     } catch (error) {
       console.error('Failed to mark session as reviewed via API:', error)
       throw error
+    }
+  }
+
+  async promoteSession(sessionName: string, reason: string, projectPath?: string): Promise<PromoteSessionResult> {
+    const trimmedSessionName = sessionName.trim()
+    const trimmedReason = reason.trim()
+
+    if (!trimmedSessionName) {
+      throw new Error('sessionName is required to promote a session')
+    }
+    if (!trimmedReason) {
+      throw new Error('reason is required and must be a non-empty string when promoting a session.')
+    }
+
+    const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(sessionName)}/promote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getProjectHeaders(projectPath)
+      },
+      body: JSON.stringify({ reason: trimmedReason })
+    })
+
+    const responseBody = await response.text()
+    if (!response.ok) {
+      const detail = responseBody ? ` - ${this.extractErrorMessage(responseBody)}` : ''
+      throw new Error(`Failed to promote session '${sessionName}': ${response.status} ${response.statusText}${detail}`)
+    }
+
+    const payload = JSON.parse(responseBody) as PromoteSessionApiResponse
+    return {
+      sessionName: payload.session_name,
+      siblingsCancelled: payload.siblings_cancelled,
+      reason: payload.reason,
+      failures: payload.failures ?? [],
     }
   }
 

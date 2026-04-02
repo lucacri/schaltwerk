@@ -29,6 +29,7 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             pending_name_generation BOOLEAN DEFAULT FALSE,
             was_auto_generated BOOLEAN DEFAULT FALSE,
             spec_content TEXT,
+            promotion_reason TEXT DEFAULT NULL,
             UNIQUE(repository_path, name)
         )",
         [],
@@ -336,6 +337,11 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
     // Consolidation source session IDs
     let _ = conn.execute(
         "ALTER TABLE sessions ADD COLUMN consolidation_sources TEXT DEFAULT NULL",
+        [],
+    );
+    // Promotion reason — non-null means this session was promoted (winner of consolidation)
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN promotion_reason TEXT DEFAULT NULL",
         [],
     );
     Ok(())

@@ -660,6 +660,38 @@ describe('LucodeBridge untested methods', () => {
     })
   })
 
+  describe('promoteSession', () => {
+    it('posts reason to the promote endpoint and normalizes the response', async () => {
+      fetchMock.mockResolvedValue(createResponse({
+        session_name: 'feature_v3',
+        siblings_cancelled: ['feature_v1', 'feature_v2'],
+        reason: 'Best coverage',
+      }))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.promoteSession('feature_v3', 'Best coverage')
+
+      expect(result.sessionName).toBe('feature_v3')
+      expect(result.siblingsCancelled).toEqual(['feature_v1', 'feature_v2'])
+
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/sessions/feature_v3/promote')
+      expect(init?.method).toBe('POST')
+      expect(JSON.parse(String(init?.body))).toEqual({ reason: 'Best coverage' })
+    })
+
+    it('throws on API error using the backend error message', async () => {
+      fetchMock.mockResolvedValue(
+        createErrorResponse(400, 'Bad Request', JSON.stringify({ error: 'No siblings found' }))
+      )
+
+      const bridge = new LucodeBridge()
+      await expect(
+        bridge.promoteSession('bad-session', 'Best coverage')
+      ).rejects.toThrow('No siblings found')
+    })
+  })
+
   describe('linkSessionToPr', () => {
     it('posts PR metadata to the link-pr endpoint', async () => {
       const payload = {

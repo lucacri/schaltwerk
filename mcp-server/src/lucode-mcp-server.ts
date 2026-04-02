@@ -91,6 +91,11 @@ interface LucodeMergeArgs {
   cancel_after_merge?: boolean
 }
 
+interface LucodePromoteArgs {
+  session_name: string
+  reason: string
+}
+
 interface LucodeCreatePrArgs {
   session_name: string
   pr_title: string
@@ -733,6 +738,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["session_name"]
         },
         outputSchema: toolOutputSchemas.lucode_mark_session_reviewed
+      },
+      {
+        name: "lucode_promote",
+        description: `Promote a winning session version and automatically clean up its siblings. Use this after consolidating the best changes into one session and provide a concise reason describing why it won.`,
+        inputSchema: {
+          type: "object",
+          properties: {
+            session_name: {
+              type: "string",
+              description: "Name of the session version to keep."
+            },
+            reason: {
+              type: "string",
+              description: "Required justification for why this session was promoted."
+            }
+          },
+          required: ["session_name", "reason"],
+          additionalProperties: false
+        },
+        outputSchema: toolOutputSchemas.lucode_promote
       },
       {
         name: "lucode_convert_to_spec",
@@ -1581,6 +1606,35 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         const structured = { session: markReviewedArgs.session_name, reviewed: true }
         const summary = `Session '${markReviewedArgs.session_name}' has been marked as reviewed and is ready for merge`
         response = buildStructuredResponse(structured, { summaryText: summary })
+        break
+      }
+
+      case "lucode_promote": {
+        const promoteArgs = args as unknown as LucodePromoteArgs
+
+        if (!promoteArgs.session_name || typeof promoteArgs.session_name !== 'string') {
+          throw new Error('session_name is required when invoking lucode_promote.')
+        }
+        if (!promoteArgs.reason || typeof promoteArgs.reason !== 'string' || promoteArgs.reason.trim().length === 0) {
+          throw new Error('reason is required when invoking lucode_promote.')
+        }
+
+        const promoteResult = await bridge.promoteSession(promoteArgs.session_name, promoteArgs.reason, projectPath)
+
+        const structured = {
+          session: promoteResult.sessionName,
+          siblings_cancelled: promoteResult.siblingsCancelled,
+          reason: promoteResult.reason,
+          failures: promoteResult.failures,
+        }
+        const cancelledList = promoteResult.siblingsCancelled.length > 0
+          ? promoteResult.siblingsCancelled.join(', ')
+          : 'none'
+        const failureNote = promoteResult.failures.length > 0
+          ? `\n- Failures: ${promoteResult.failures.join(', ')}`
+          : ''
+        const summary = `Session '${promoteResult.sessionName}' promoted. Reason: ${promoteResult.reason}\n- Siblings cancelled: ${cancelledList}${failureNote}`
+        response = buildStructuredResponse(structured, { summaryText: summary, jsonFirst: true })
         break
       }
 

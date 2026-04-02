@@ -242,6 +242,7 @@ export const SessionCard = memo<SessionCardProps>(
     const deletions = s.diff_stats?.deletions || 0;
     const isBlocked = s.is_blocked || false;
     const isReadyToMerge = s.ready_to_merge || false;
+    const promotionReason = s.promotionReason?.trim() || s.promotion_reason?.trim();
     const sessionState = mapSessionUiState(s);
     const isReviewedState = sessionState === "reviewed";
     const agentType =
@@ -442,6 +443,20 @@ export const SessionCard = memo<SessionCardProps>(
                 }}
               >
                 {t.session.blocked}
+              </span>
+            )}
+            {promotionReason && (
+              <span
+                className="flex-shrink-0 inline-flex items-center gap-1 rounded border px-1.5 py-[1px]"
+                title={promotionReason}
+                style={{
+                  ...sessionText.badge,
+                  backgroundColor: "var(--color-accent-green-bg)",
+                  color: "var(--color-accent-green-light)",
+                  borderColor: "var(--color-accent-green-border)",
+                }}
+              >
+                {t.session.promoted}
               </span>
             )}
 
@@ -652,6 +667,15 @@ export const SessionCard = memo<SessionCardProps>(
                   </div>
                 )}
                 {metadataBadges}
+                {promotionReason && (
+                  <span
+                    className="truncate max-w-[200px]"
+                    title={promotionReason}
+                    style={{ color: "var(--color-text-secondary)" }}
+                  >
+                    {promotionReason}
+                  </span>
+                )}
                 <span className="truncate max-w-[120px]" title={s.branch}>
                   {s.branch}
                 </span>

@@ -516,6 +516,19 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
+  lucode_promote: {
+    $schema: draft2020,
+    type: 'object',
+    properties: {
+      session: { type: 'string' },
+      siblings_cancelled: { type: 'array', items: { type: 'string' } },
+      reason: { type: 'string' },
+      failures: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['session', 'siblings_cancelled', 'reason', 'failures'],
+    additionalProperties: false,
+  },
+
   lucode_convert_to_spec: {
     $schema: draft2020,
     type: 'object',

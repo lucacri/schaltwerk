@@ -220,6 +220,12 @@ const sampleStructuredOutputs: Record<string, any> = {
     session: 'alpha',
     reviewed: true,
   },
+  lucode_promote: {
+    session: 'alpha_v3',
+    siblings_cancelled: ['alpha_v1', 'alpha_v2'],
+    reason: 'Best coverage',
+    failures: [],
+  },
   lucode_convert_to_spec: {
     session: 'alpha',
     converted: true,

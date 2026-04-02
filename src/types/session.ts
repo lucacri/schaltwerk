@@ -96,6 +96,8 @@ export interface SessionInfo {
     pr_url?: string
     is_consolidation?: boolean
     consolidation_sources?: string[]
+    promotion_reason?: string | null
+    promotionReason?: string | null
 }
 
 export interface DiffStats {
@@ -157,4 +159,6 @@ export interface RawSession {
     pr_url?: string
     is_consolidation?: boolean
     consolidation_sources?: string[]
+    promotion_reason?: string | null
+    promotionReason?: string | null
 }

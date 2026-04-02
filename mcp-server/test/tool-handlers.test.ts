@@ -103,6 +103,14 @@ const listEpicsMock = mock(() =>
 )
 const listSessionsByStateMock = mock(() => Promise.resolve([]))
 const markSessionReviewedMock = mock(() => Promise.resolve())
+const promoteSessionMock = mock(() =>
+  Promise.resolve({
+    sessionName: 'feature_v3',
+    siblingsCancelled: ['feature_v1', 'feature_v2'],
+    reason: 'Best coverage',
+    failures: [],
+  })
+)
 const linkSessionToPrMock = mock(() =>
   Promise.resolve({ session: 'my-sess', pr_number: 42, pr_url: 'https://github.com/owner/repo/pull/42', linked: true })
 )
@@ -175,6 +183,7 @@ describe('MCP tool handler logic', () => {
       listEpics: listEpicsMock,
       listSessionsByState: listSessionsByStateMock,
       markSessionReviewed: markSessionReviewedMock,
+      promoteSession: promoteSessionMock,
       sendFollowUpMessage: sendFollowUpMessageMock,
       setWorktreeBaseDirectory: setWorktreeBaseDirectoryMock,
       unlinkSessionFromPr: unlinkSessionFromPrMock,
@@ -204,6 +213,7 @@ describe('MCP tool handler logic', () => {
     listEpicsMock.mockClear()
     listSessionsByStateMock.mockClear()
     markSessionReviewedMock.mockClear()
+    promoteSessionMock.mockClear()
     sendFollowUpMessageMock.mockClear()
     setWorktreeBaseDirectoryMock.mockClear()
     unlinkSessionFromPrMock.mockClear()
@@ -431,6 +441,28 @@ describe('MCP tool handler logic', () => {
       const parsed = JSON.parse(json.text)
       expect(parsed.session).toBe('my-sess')
       expect(parsed.reviewed).toBe(true)
+    })
+  })
+
+  describe('lucode_promote', () => {
+    it('promotes a session and returns structured response', async () => {
+      const result = await callTool('lucode_promote', {
+        session_name: 'feature_v3',
+        reason: 'Best coverage',
+      })
+
+      expect(promoteSessionMock).toHaveBeenCalledTimes(1)
+      expect(promoteSessionMock).toHaveBeenCalledWith('feature_v3', 'Best coverage', undefined)
+      const json = result.content.find((c: any) => c.mimeType === 'application/json')
+      const parsed = JSON.parse(json.text)
+      expect(parsed.session).toBe('feature_v3')
+      expect(parsed.siblings_cancelled).toEqual(['feature_v1', 'feature_v2'])
+      expect(parsed.reason).toBe('Best coverage')
+      expect(parsed.failures).toEqual([])
+    })
+
+    it('rejects missing reason', async () => {
+      await expect(callTool('lucode_promote', { session_name: 'feature_v3' })).rejects.toThrow('reason is required')
     })
   })
 

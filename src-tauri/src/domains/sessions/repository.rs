@@ -453,6 +453,16 @@ impl SessionDbManager {
             .map_err(|e| anyhow!("Failed to delete session '{session_id}': {e}"))
     }
 
+    pub fn update_session_promotion_reason(
+        &self,
+        session_id: &str,
+        reason: Option<&str>,
+    ) -> Result<()> {
+        self.db
+            .update_session_promotion_reason(session_id, reason)
+            .map_err(|e| anyhow!("Failed to update promotion reason: {e}"))
+    }
+
     pub fn update_git_stats(&self, session_id: &str) -> Result<()> {
         let session = self.get_session_by_id(session_id)?;
         git::calculate_git_stats_fast(&session.worktree_path, &session.parent_branch)?;

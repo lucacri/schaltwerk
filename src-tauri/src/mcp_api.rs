@@ -5,8 +5,9 @@ use hyper::{
     header::{CONTENT_TYPE, HeaderValue},
 };
 use log::{debug, error, info, warn};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
+use std::future::Future;
 use std::path::PathBuf;
 use url::form_urlencoded;
 
@@ -28,7 +29,7 @@ use crate::{
 use lucode::domains::attention::get_session_attention_state;
 use lucode::domains::git::service::{ForgeType, detect_forge};
 use lucode::domains::merge::MergeMode;
-use lucode::domains::sessions::entity::{Session, Spec};
+use lucode::domains::sessions::entity::{Session, SessionStatus, Spec};
 use lucode::domains::settings::setup_script::SetupScriptService;
 use lucode::infrastructure::database::Database;
 use lucode::infrastructure::database::SpecMethods;
@@ -173,6 +174,12 @@ async fn handle_mcp_request_inner(
             let name = extract_session_name_for_action(path, "/convert-to-spec");
             convert_session_to_spec(&name, app).await
         }
+        (&Method::POST, path)
+            if path.starts_with("/api/sessions/") && path.ends_with("/promote") =>
+        {
+            let name = extract_session_name_for_action(path, "/promote");
+            promote_session(req, &name, app).await
+        }
         (&Method::POST, path) if path.starts_with("/api/sessions/") && path.ends_with("/reset") => {
             let name = extract_session_name_for_action(path, "/reset");
             reset_session(req, &name, app).await
@@ -301,6 +308,182 @@ fn json_response(status: StatusCode, json: String) -> Response<String> {
 fn json_error_response(status: StatusCode, message: String) -> Response<String> {
     let body = serde_json::json!({ "error": message }).to_string();
     json_response(status, body)
+}
+
+#[derive(Debug, Deserialize)]
+struct PromoteSessionRequest {
+    reason: String,
+}
+
+#[derive(Debug, Serialize)]
+struct PromoteSessionResponse {
+    session_name: String,
+    siblings_cancelled: Vec<String>,
+    reason: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    failures: Vec<String>,
+}
+
+#[derive(Debug)]
+struct PromoteSessionOutcome {
+    status: StatusCode,
+    response: PromoteSessionResponse,
+}
+
+fn strip_version_suffix(name: &str) -> &str {
+    if let Some(idx) = name.rfind("_v") {
+        let suffix = &name[idx + 2..];
+        if !suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_digit()) {
+            return &name[..idx];
+        }
+    }
+    name
+}
+
+fn has_version_suffix(name: &str) -> bool {
+    strip_version_suffix(name) != name
+}
+
+fn parse_version_suffix(name: &str) -> Option<i32> {
+    name.rsplit_once("_v")
+        .and_then(|(_, suffix)| suffix.parse::<i32>().ok())
+}
+
+fn sort_sessions_for_promotion(sessions: &mut [Session]) {
+    sessions.sort_by_key(|session| {
+        session
+            .version_number
+            .or_else(|| parse_version_suffix(&session.name))
+            .unwrap_or(0)
+    });
+}
+
+fn find_promotion_siblings(manager: &SessionManager, session: &Session) -> anyhow::Result<Vec<Session>> {
+    let all_sessions = manager.list_sessions()?;
+
+    let mut siblings = if let Some(group_id) = session.version_group_id.as_deref() {
+        all_sessions
+            .iter()
+            .filter(|candidate| {
+                candidate.id != session.id
+                    && candidate.version_group_id.as_deref() == Some(group_id)
+                    && candidate.status == SessionStatus::Active
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+
+    if siblings.is_empty() {
+        let base_name = strip_version_suffix(&session.name);
+        siblings = all_sessions
+            .into_iter()
+            .filter(|candidate| {
+                candidate.id != session.id
+                    && candidate.status == SessionStatus::Active
+                    && has_version_suffix(&candidate.name)
+                    && strip_version_suffix(&candidate.name) == base_name
+            })
+            .collect();
+    }
+
+    sort_sessions_for_promotion(&mut siblings);
+    Ok(siblings)
+}
+
+async fn execute_session_promotion<RefreshFn, CancelFn, CancelFuture>(
+    manager: &SessionManager,
+    name: &str,
+    reason: &str,
+    refresh_fn: RefreshFn,
+    mut cancel_fn: CancelFn,
+) -> Result<PromoteSessionOutcome, (StatusCode, String)>
+where
+    RefreshFn: FnOnce() -> anyhow::Result<()>,
+    CancelFn: FnMut(&str) -> CancelFuture,
+    CancelFuture: Future<Output = anyhow::Result<()>>,
+{
+    let trimmed_reason = reason.trim();
+    if trimmed_reason.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "'reason' is required".to_string()));
+    }
+
+    let session = manager.get_session(name).map_err(|error| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Session '{name}' not found: {error}"),
+        )
+    })?;
+
+    if session.session_state == SessionState::Spec {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Session '{name}' is a spec and cannot be promoted"),
+        ));
+    }
+
+    let siblings = find_promotion_siblings(manager, &session).map_err(|error| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list sessions: {error}"),
+        )
+    })?;
+
+    if siblings.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Session '{name}' has no siblings to promote over"),
+        ));
+    }
+
+    manager
+        .update_session_promotion_reason(name, Some(trimmed_reason))
+        .map_err(|error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to store promotion reason: {error}"),
+            )
+        })?;
+
+    let mut siblings_cancelled = Vec::new();
+    let mut failures = Vec::new();
+
+    for sibling in siblings {
+        match cancel_fn(&sibling.name).await {
+            Ok(()) => siblings_cancelled.push(sibling.name),
+            Err(error) => failures.push(format!("{}: {}", sibling.name, error)),
+        }
+    }
+
+    if let Err(error) = refresh_fn() {
+        failures.push(format!("sessions refresh: {error}"));
+    }
+
+    let status = if failures.is_empty() {
+        StatusCode::OK
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    };
+
+    Ok(PromoteSessionOutcome {
+        status,
+        response: PromoteSessionResponse {
+            session_name: name.to_string(),
+            siblings_cancelled,
+            reason: trimmed_reason.to_string(),
+            failures,
+        },
+    })
+}
+
+fn promote_outcome_response(name: &str, outcome: PromoteSessionOutcome) -> Response<String> {
+    let json = serde_json::to_string(&outcome.response).unwrap_or_else(|error| {
+        error!("Failed to serialize promote response for '{name}': {error}");
+        "{}".to_string()
+    });
+
+    json_response(outcome.status, json)
 }
 
 async fn diff_summary(req: Request<Incoming>) -> Result<Response<String>, hyper::Error> {
@@ -1196,6 +1379,208 @@ mod tests {
         assert_eq!(json["session_name"], "test");
         assert_eq!(json["cancel_requested"], true);
         assert!(json["cancel_error"].is_null());
+    }
+
+    #[test]
+    fn strip_version_suffix_removes_vn() {
+        assert_eq!(strip_version_suffix("feature_v1"), "feature");
+        assert_eq!(strip_version_suffix("feature_v2"), "feature");
+        assert_eq!(strip_version_suffix("feature_v123"), "feature");
+    }
+
+    #[test]
+    fn strip_version_suffix_preserves_non_versioned() {
+        assert_eq!(strip_version_suffix("feature"), "feature");
+        assert_eq!(strip_version_suffix("my_feature"), "my_feature");
+        assert_eq!(strip_version_suffix("feature_vx"), "feature_vx");
+        assert_eq!(strip_version_suffix("feature_v"), "feature_v");
+    }
+
+    #[test]
+    fn promote_session_response_omits_failures_when_empty() {
+        let response = PromoteSessionResponse {
+            session_name: "feature_v3".to_string(),
+            siblings_cancelled: vec!["feature_v1".to_string(), "feature_v2".to_string()],
+            reason: "Best coverage".to_string(),
+            failures: Vec::new(),
+        };
+
+        let json = serde_json::to_value(&response).unwrap();
+        assert!(json.get("failures").is_none());
+    }
+
+    #[tokio::test]
+    async fn promote_session_logic_promotes_version_group_and_cancels_siblings() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, Some("group-1"), Some(1))
+            .expect("create v1");
+        manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, Some("group-1"), Some(2))
+            .expect("create v2");
+        manager
+            .create_session_with_auto_flag("feature_v3", None, None, false, Some("group-1"), Some(3))
+            .expect("create v3");
+
+        let cancelled = Arc::new(Mutex::new(Vec::new()));
+        let cancelled_clone = cancelled.clone();
+
+        let outcome = execute_session_promotion(
+            &manager,
+            "feature_v3",
+            "Best test coverage. Cherry-picked caching from v2.",
+            || Ok(()),
+            move |name| {
+                cancelled_clone.lock().unwrap().push(name.to_string());
+                std::future::ready(Ok(()))
+            },
+        )
+        .await
+        .expect("promotion should succeed");
+
+        assert_eq!(outcome.status, StatusCode::OK);
+        assert_eq!(outcome.response.session_name, "feature_v3");
+        assert_eq!(
+            outcome.response.siblings_cancelled,
+            vec!["feature_v1".to_string(), "feature_v2".to_string()]
+        );
+        assert!(outcome.response.failures.is_empty());
+
+        let promoted = db
+            .get_session_by_name(Path::new(&repo_path), "feature_v3")
+            .expect("load promoted session");
+        assert_eq!(
+            promoted.promotion_reason.as_deref(),
+            Some("Best test coverage. Cherry-picked caching from v2.")
+        );
+        assert_eq!(
+            cancelled.lock().unwrap().clone(),
+            vec!["feature_v1".to_string(), "feature_v2".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn promote_session_logic_skips_inactive_siblings() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let v1 = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, Some("group-9"), Some(1))
+            .expect("create v1");
+        let v2 = manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, Some("group-9"), Some(2))
+            .expect("create v2");
+        manager
+            .create_session_with_auto_flag("feature_v3", None, None, false, Some("group-9"), Some(3))
+            .expect("create v3");
+
+        db.update_session_status(&v2.id, SessionStatus::Cancelled)
+            .expect("cancel v2");
+
+        let outcome = execute_session_promotion(
+            &manager,
+            "feature_v3",
+            "Keep only active siblings",
+            || Ok(()),
+            |_| std::future::ready(Ok(())),
+        )
+        .await
+        .expect("promotion should succeed");
+
+        assert_eq!(outcome.status, StatusCode::OK);
+        assert_eq!(outcome.response.siblings_cancelled, vec![v1.name]);
+    }
+
+    #[tokio::test]
+    async fn promote_session_logic_rejects_session_without_siblings() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db, repo_path);
+        manager
+            .create_session_with_auto_flag("feature", None, None, false, None, None)
+            .expect("create session");
+
+        let err = execute_session_promotion(
+            &manager,
+            "feature",
+            "Best version",
+            || Ok(()),
+            |_| std::future::ready(Ok(())),
+        )
+        .await
+        .expect_err("promotion should fail");
+
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.contains("has no siblings"));
+    }
+
+    #[tokio::test]
+    async fn promote_session_logic_rejects_spec_sessions() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let session = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, None, None)
+            .expect("create session");
+        db.update_session_state(&session.id, SessionState::Spec)
+            .expect("mark as spec");
+
+        let err = execute_session_promotion(
+            &manager,
+            "feature_v1",
+            "Keep this one",
+            || Ok(()),
+            |_| std::future::ready(Ok(())),
+        )
+        .await
+        .expect_err("promotion should fail");
+
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.contains("is a spec"));
+    }
+
+    #[tokio::test]
+    async fn promote_session_logic_reports_partial_cleanup_failure() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, Some("group-2"), Some(1))
+            .expect("create v1");
+        manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, Some("group-2"), Some(2))
+            .expect("create v2");
+        manager
+            .create_session_with_auto_flag("feature_v3", None, None, false, Some("group-2"), Some(3))
+            .expect("create v3");
+
+        let outcome = execute_session_promotion(
+            &manager,
+            "feature_v3",
+            "Most stable branch",
+            || Ok(()),
+            |name| {
+                if name == "feature_v2" {
+                    std::future::ready(Err(anyhow::anyhow!("forced cleanup failure")))
+                } else {
+                    std::future::ready(Ok(()))
+                }
+            },
+        )
+        .await
+        .expect("promotion should return structured outcome");
+
+        assert_eq!(outcome.status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(outcome.response.siblings_cancelled, vec!["feature_v1".to_string()]);
+        assert_eq!(outcome.response.failures.len(), 1);
+        assert!(outcome.response.failures[0].contains("feature_v2"));
+
+        let promoted = db
+            .get_session_by_name(Path::new(&repo_path), "feature_v3")
+            .expect("load promoted session");
+        assert_eq!(promoted.promotion_reason.as_deref(), Some("Most stable branch"));
     }
 
     #[test]
@@ -2703,6 +3088,54 @@ async fn mark_session_reviewed(
                 format!("Failed to mark session as reviewed: {e}"),
             ))
         }
+    }
+}
+
+async fn promote_session(
+    req: Request<Incoming>,
+    name: &str,
+    app: tauri::AppHandle,
+) -> Result<Response<String>, hyper::Error> {
+    let body_bytes = req.into_body().collect().await?.to_bytes();
+    let payload: PromoteSessionRequest = match serde_json::from_slice(&body_bytes) {
+        Ok(payload) => payload,
+        Err(error) => {
+            return Ok(json_error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Invalid JSON payload: {error}"),
+            ));
+        }
+    };
+
+    let manager = match get_core_write().await {
+        Ok(core) => core.session_manager(),
+        Err(error) => {
+            error!("Failed to get lucode core for promotion: {error}");
+            return Ok(json_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Internal error: {error}"),
+            ));
+        }
+    };
+    let manager_ref = &manager;
+
+    match execute_session_promotion(
+        &manager,
+        name,
+        &payload.reason,
+        || {
+            request_sessions_refresh(&app, SessionsRefreshReason::MergeWorkflow);
+            Ok(())
+        },
+        move |sibling_name| {
+            let sibling_name = sibling_name.to_string();
+            async move { manager_ref.fast_cancel_session(&sibling_name).await }
+        },
+    )
+    .await
+    {
+        Ok(outcome) => Ok(promote_outcome_response(name, outcome)),
+        Err((status, message)) => Ok(json_error_response(status, message)),
     }
 }
 

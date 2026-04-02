@@ -251,6 +251,7 @@ mod service_unified_tests {
             pr_url: None,
             is_consolidation: false,
             consolidation_sources: None,
+            promotion_reason: None,
         }
     }
 
@@ -2272,6 +2273,7 @@ impl SessionManager {
             pr_url: None,
             is_consolidation: params.is_consolidation,
             consolidation_sources: params.consolidation_source_ids,
+            promotion_reason: None,
         };
 
         let finalizer = SessionFinalizer::new(&self.db_manager, &self.cache_manager);
@@ -2489,6 +2491,12 @@ impl SessionManager {
             .update_session_pr_info(&session.id, Some(pr_number), Some(pr_url))
     }
 
+    pub fn update_session_promotion_reason(&self, name: &str, reason: Option<&str>) -> Result<()> {
+        let session = self.db_manager.get_session_by_name(name)?;
+        self.db_manager
+            .update_session_promotion_reason(&session.id, reason)
+    }
+
     pub fn unlink_session_from_pr(&self, name: &str) -> Result<()> {
         let session = self.db_manager.get_session_by_name(name)?;
         self.db_manager
@@ -2624,6 +2632,7 @@ impl SessionManager {
                 pr_url: spec.pr_url.clone(),
                 is_consolidation: false,
                 consolidation_sources: None,
+                promotion_reason: None,
             };
 
             enriched.push(EnrichedSession {
@@ -2693,6 +2702,7 @@ impl SessionManager {
                     pr_url: session.pr_url.clone(),
                     is_consolidation: session.is_consolidation,
                     consolidation_sources: session.consolidation_sources.clone(),
+                    promotion_reason: session.promotion_reason.clone(),
                 };
 
                 enriched.push(EnrichedSession {
@@ -2851,6 +2861,7 @@ impl SessionManager {
                 pr_url: session.pr_url.clone(),
                 is_consolidation: session.is_consolidation,
                 consolidation_sources: session.consolidation_sources.clone(),
+                promotion_reason: session.promotion_reason.clone(),
             };
 
             let terminals = vec![
@@ -3844,6 +3855,7 @@ impl SessionManager {
             amp_thread_id: None,
             is_consolidation: false,
             consolidation_sources: None,
+            promotion_reason: None,
         }
     }
 

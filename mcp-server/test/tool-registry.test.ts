@@ -10,6 +10,7 @@ describe('MCP tool registry', () => {
     expect(content).toContain('name: "lucode_merge_session"')
     expect(content).toContain('name: "lucode_create_pr"')
     expect(content).toContain('name: "lucode_link_pr"')
+    expect(content).toContain('name: "lucode_promote"')
     expect(content).toContain('name: "lucode_spec_list"')
     expect(content).toContain('name: "lucode_spec_read"')
     expect(content).toContain('name: "lucode_diff_summary"')

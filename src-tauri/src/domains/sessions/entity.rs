@@ -115,6 +115,7 @@ pub struct Session {
     pub pr_url: Option<String>,
     pub is_consolidation: bool,
     pub consolidation_sources: Option<Vec<String>>,
+    pub promotion_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -330,6 +331,8 @@ pub struct SessionInfo {
     pub is_consolidation: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consolidation_sources: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub promotion_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
