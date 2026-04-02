@@ -18,6 +18,7 @@ describe('MCP tool registry', () => {
     expect(content).toContain('name: "lucode_get_pr_feedback"')
     expect(content).toContain('name: "lucode_get_setup_script"')
     expect(content).toContain('name: "lucode_set_setup_script"')
+    expect(content).not.toContain('name: "lucode_current_spec_update"')
     expect(content).toContain('inspect the repo for untracked config (e.g., .env*, .npmrc) that should be copied into worktrees; (3) confirm the exact files to copy with the user')
   })
 })

@@ -189,9 +189,6 @@ async fn handle_mcp_request_inner(
         (&Method::POST, "/api/project/run-script/execute") => execute_project_run_script().await,
         (&Method::GET, "/api/epics") => list_epics().await,
         (&Method::POST, "/api/epics") => create_epic(req, app).await,
-        (&Method::GET, "/api/current-spec-mode-session") => {
-            get_current_spec_mode_session(app).await
-        }
         _ => Ok(not_found_response()),
     }
 }
@@ -3186,14 +3183,6 @@ async fn create_epic(
             ))
         }
     }
-}
-
-async fn get_current_spec_mode_session(
-    _app: tauri::AppHandle,
-) -> Result<Response<String>, hyper::Error> {
-    // For now, return not found since we don't have persistent state tracking
-    // This could be enhanced later with proper state management
-    Ok(error_response(StatusCode::NOT_FOUND, "Spec mode session tracking not yet implemented. Use schaltwerk_draft_update with explicit session name.".to_string()))
 }
 
 #[derive(Debug, serde::Deserialize)]

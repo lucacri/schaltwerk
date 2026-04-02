@@ -86,14 +86,6 @@ const sampleStructuredOutputs: Record<string, any> = {
     content_length: 256,
     content_preview: '# Updated plan',
   },
-  lucode_current_spec_update: {
-    status: 'updated',
-    session: 'alpha_spec',
-    updated: true,
-    append: true,
-    content_length: 42,
-    content_preview: '# delta',
-  },
   lucode_spec_list: {
     specs: [
       {
@@ -296,6 +288,10 @@ describe('MCP output schemas', () => {
     const schemaNames = Object.keys(toolOutputSchemas)
     const sampleNames = Object.keys(sampleStructuredOutputs)
     expect(schemaNames.sort()).toEqual(sampleNames.sort())
+  })
+
+  it('does not expose a schema for lucode_current_spec_update', () => {
+    expect(toolOutputSchemas).not.toHaveProperty('lucode_current_spec_update')
   })
 
   for (const [toolName, schema] of Object.entries(toolOutputSchemas)) {

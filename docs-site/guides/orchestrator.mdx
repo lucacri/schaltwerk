@@ -75,7 +75,7 @@ Draft multiple specs for complex features:
 ### Refine Mode: Iterative Spec Development
 
 <Info>
-  **Requires MCP:** The orchestrator agent must be able to call `lucode_current_spec_update` to edit specs. Enable MCP in **Settings → Agent Configuration** for your agent (Claude Code, Codex, OpenCode, or Gemini).
+  **Requires MCP:** The orchestrator agent must be able to read the spec and call `lucode_draft_update` with the explicit spec session name to edit it. Enable MCP in **Settings → Agent Configuration** for your agent (Claude Code, Codex, OpenCode, or Gemini).
 </Info>
 
 Refine Mode enables iterative spec development by switching to the orchestrator while keeping the spec visible for live updates:
@@ -94,7 +94,7 @@ Refine Mode enables iterative spec development by switching to the orchestrator 
     The agent can now:
     - Read the current spec content via MCP
     - Ask clarifying questions
-    - Update the spec with `lucode_current_spec_update`
+    - Update the spec with `lucode_draft_update` using the spec session name from the refine prompt/reference
     - Preview changes in real-time on the right panel
 
     You watch the spec evolve in the right panel while collaborating with the agent in the terminal.

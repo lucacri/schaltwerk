@@ -113,7 +113,6 @@ const sendFollowUpMessageMock = mock(() => Promise.resolve())
 const setWorktreeBaseDirectoryMock = mock(() =>
   Promise.resolve({ worktree_base_directory: '/new/path', has_custom_directory: true })
 )
-const getCurrentSpecModeSessionMock = mock(() => Promise.resolve(null))
 const getPrFeedbackMock = mock(() =>
   Promise.resolve({
     state: 'OPEN',
@@ -179,7 +178,6 @@ describe('MCP tool handler logic', () => {
       sendFollowUpMessage: sendFollowUpMessageMock,
       setWorktreeBaseDirectory: setWorktreeBaseDirectoryMock,
       unlinkSessionFromPr: unlinkSessionFromPrMock,
-      getCurrentSpecModeSession: getCurrentSpecModeSessionMock,
       getPrFeedback: getPrFeedbackMock,
     }
 
@@ -209,7 +207,6 @@ describe('MCP tool handler logic', () => {
     sendFollowUpMessageMock.mockClear()
     setWorktreeBaseDirectoryMock.mockClear()
     unlinkSessionFromPrMock.mockClear()
-    getCurrentSpecModeSessionMock.mockClear()
     getPrFeedbackMock.mockClear()
   })
 

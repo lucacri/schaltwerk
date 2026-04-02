@@ -1591,28 +1591,4 @@ export class LucodeBridge {
     }
   }
 
-  async getCurrentSpecModeSession(projectPath?: string): Promise<string | null> {
-    try {
-      const response = await this.fetchWithAutoPort('/api/current-spec-mode-session', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...this.getProjectHeaders(projectPath)
-        }
-      })
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null // No active spec mode session
-        }
-        throw new Error(`Failed to get current spec mode session: ${response.statusText}`)
-      }
-
-      const data = await response.json() as { session_name: string }
-      return data.session_name
-    } catch (error) {
-      console.error('Failed to get current spec mode session:', error)
-      return null
-    }
-  }
 }

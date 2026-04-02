@@ -272,20 +272,6 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
-  lucode_current_spec_update: {
-    $schema: draft2020,
-    type: 'object',
-    properties: {
-      status: { type: 'string' },
-      session: { type: 'string' },
-      updated: { type: 'boolean' },
-      append: { type: 'boolean' },
-      content_length: nullableNumber,
-      content_preview: nullableString,
-    },
-    additionalProperties: true,
-  },
-
   lucode_get_setup_script: {
     $schema: draft2020,
     type: 'object',

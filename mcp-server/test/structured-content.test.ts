@@ -177,6 +177,7 @@ describe('Structured content responses', () => {
     expect(listTool?.outputSchema).toBeDefined()
     expect(tasksTool?.outputSchema).toBeDefined()
     expect(createTool?.outputSchema).toBeDefined()
+    expect(response.tools.some((tool: any) => tool.name === 'lucode_current_spec_update')).toBeFalse()
   })
 
   it('returns structured sessions for lucode_list', async () => {

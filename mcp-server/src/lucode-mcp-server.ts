@@ -61,11 +61,6 @@ interface LucodeDraftUpdateArgs {
   append?: boolean
 }
 
-interface LucodeCurrentSpecUpdateArgs {
-  content: string
-  append?: boolean
-}
-
 interface LucodeDraftStartArgs {
   session_name: string
   agent_type?: 'claude' | 'opencode' | 'gemini' | 'codex' | 'qwen' | 'droid' | 'amp' | 'kilocode'
@@ -553,26 +548,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["session_name", "content"]
         },
         outputSchema: toolOutputSchemas.lucode_draft_update
-      },
-      {
-        name: "lucode_current_spec_update",
-        description: `Update the spec currently open in Spec Mode without naming it explicitly. Works only when Spec Mode has a selected draft. Set append true to add text instead of replacing it.`,
-        inputSchema: {
-          type: "object",
-          properties: {
-            content: {
-              type: "string",
-              description: "New or additional content in Markdown format"
-            },
-            append: {
-              type: "boolean",
-              description: "Append to existing content instead of replacing (default: false)",
-              default: false
-            }
-          },
-          required: ["content"]
-        },
-        outputSchema: toolOutputSchemas.lucode_current_spec_update
       },
       {
         name: "lucode_spec_list",
@@ -1417,44 +1392,6 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
 
         const summary = `Spec '${draftUpdateArgs.session_name}' updated successfully.
 - Update Mode: ${draftUpdateArgs.append ? 'Append' : 'Replace'}
-- Content Preview: ${contentPreview}`
-        response = buildStructuredResponse(structured, { summaryText: summary })
-        break
-      }
-
-      case "lucode_current_spec_update": {
-        const currentSpecUpdateArgs = args as unknown as LucodeCurrentSpecUpdateArgs
-
-        const currentSpec = await bridge.getCurrentSpecModeSession(projectPath)
-        if (!currentSpec) {
-          const structured = { status: "no_current_spec" }
-          const summary = 'Spec mode session tracking not yet implemented. Please use lucode_draft_update with explicit session name instead.\n\nAlternatively, check available specs with lucode_draft_list first.'
-          response = buildStructuredResponse(structured, { summaryText: summary })
-          break
-        }
-
-        await bridge.updateDraftContent(
-          currentSpec,
-          currentSpecUpdateArgs.content,
-          currentSpecUpdateArgs.append,
-          projectPath
-        )
-
-        const contentPreview = currentSpecUpdateArgs.content.length > 100
-          ? currentSpecUpdateArgs.content.substring(0, 100) + '...'
-          : currentSpecUpdateArgs.content
-
-        const structured = {
-          status: "updated",
-          session: currentSpec,
-          updated: true,
-          append: currentSpecUpdateArgs.append ?? false,
-          content_length: currentSpecUpdateArgs.content.length,
-          content_preview: contentPreview
-        }
-
-        const summary = `Current spec '${currentSpec}' updated successfully.
-- Update Mode: ${currentSpecUpdateArgs.append ? 'Append' : 'Replace'}
 - Content Preview: ${contentPreview}`
         response = buildStructuredResponse(structured, { summaryText: summary })
         break
