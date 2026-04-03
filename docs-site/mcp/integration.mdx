@@ -19,7 +19,7 @@ Lucode ships with a Model Context Protocol (MCP) server so AI assistants (Claude
   </Step>
 
   <Step title="Configure MCP">
-    Go to **Agent Configuration**, select your agent (Claude Code, Codex, OpenCode, or Gemini), and toggle **Enable MCP**. Lucode writes the necessary config pointing to the embedded server.
+    Go to **Agent Configuration**, select your agent (Claude Code, Codex, OpenCode, or Gemini), and toggle **Enable MCP**. Lucode writes the necessary config pointing to the embedded server. For OpenCode, this is a project-local `opencode.json` file in the repo root.
   </Step>
 
   <Step title="Restart Agent">
@@ -30,6 +30,8 @@ Lucode ships with a Model Context Protocol (MCP) server so AI assistants (Claude
 ### Option 2: Manual Setup
 
 If you prefer manual setup or your agent doesn't appear in settings:
+
+OpenCode supports both project-local `opencode.json` and global `~/.config/opencode/opencode.json`. Lucode uses the project-local file so the MCP server follows the current repository.
 
 <Tabs>
   <Tab title="Codex">
@@ -48,6 +50,24 @@ If you prefer manual setup or your agent doesn't appear in settings:
     ```
 
     Restart Claude Code to load the MCP server. Rebuild only if you modified the source.
+  </Tab>
+
+  <Tab title="OpenCode">
+    Add this to `opencode.json` in the project root:
+
+    ```json
+    {
+      "mcp": {
+        "lucode": {
+          "type": "local",
+          "command": ["node", "/absolute/path/to/lucode/mcp-server/build/lucode-mcp-server.js"],
+          "enabled": true
+        }
+      }
+    }
+    ```
+
+    Restart OpenCode after saving the file so it reloads the MCP configuration.
   </Tab>
 
   <Tab title="Factory Droid">
@@ -245,7 +265,7 @@ Both endpoints diff against the same backing data the desktop app uses, so you a
   </Accordion>
 
   <Accordion title="Agent can't connect">
-    Restart your agent after setting up MCP. The MCP tools are only loaded when the agent starts.
+    Restart your agent after setting up MCP. The MCP tools are only loaded when the agent starts. For OpenCode, make sure it has reloaded the project-local `opencode.json`.
   </Accordion>
 </AccordionGroup>
 

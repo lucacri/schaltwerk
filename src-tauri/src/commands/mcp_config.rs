@@ -5,6 +5,8 @@ use std::process::Command;
 use which::which;
 
 const MCP_SERVER_PATH: &str = "mcp-server/build/lucode-mcp-server.js";
+const LUCODE_MCP_SERVER_KEY: &str = "lucode";
+const OPENCODE_CONFIG_SCHEMA_URL: &str = "https://opencode.ai/config.json";
 
 fn resolve_node_command_path() -> Option<PathBuf> {
     which("node").ok()
@@ -404,27 +406,41 @@ mod client {
     pub fn generate_setup_command(client: McpClient, mcp_server_path: &str) -> String {
         match client {
             McpClient::Claude => format!(
-                "{} mcp add --transport stdio --scope project lucode node \"{mcp_server_path}\"",
-                client.as_str()
+                "{} mcp add --transport stdio --scope project {} node \"{mcp_server_path}\"",
+                client.as_str(),
+                LUCODE_MCP_SERVER_KEY
             ),
             McpClient::Codex => {
                 let command = resolved_node_command();
                 format!(
-                    "Add to ~/.codex/config.toml:\n[mcp_servers.lucode]\ncommand = \"{}\"\nargs = [\"{}\"]",
+                    "Add to ~/.codex/config.toml:\n[mcp_servers.{LUCODE_MCP_SERVER_KEY}]\ncommand = \"{}\"\nargs = [\"{}\"]",
                     command.replace('"', "\\\""),
                     mcp_server_path.replace('"', "\\\"")
                 )
             }
-            McpClient::OpenCode => format!(
-                "Add to opencode.json:\n{{\n  \"mcp\": {{\n    \"lucode\": {{\n      \"type\": \"local\",\n      \"command\": [\"node\", \"{}\"],\n      \"enabled\": true\n    }}\n  }}\n}}",
-                mcp_server_path.replace('"', "\\\"")
-            ),
+            McpClient::OpenCode => {
+                let snippet = serde_json::to_string_pretty(&serde_json::json!({
+                    "mcp": {
+                        LUCODE_MCP_SERVER_KEY: opencode_lucode_config(mcp_server_path)
+                    }
+                }))
+                .unwrap_or_else(|_| {
+                    format!(
+                        "{{\n  \"mcp\": {{\n    \"{}\": {{\n      \"type\": \"local\",\n      \"command\": [\"node\", \"{}\"],\n      \"enabled\": true\n    }}\n  }}\n}}",
+                        LUCODE_MCP_SERVER_KEY,
+                        mcp_server_path.replace('"', "\\\"")
+                    )
+                });
+                format!("Add to opencode.json in the project root:\n{snippet}")
+            }
             McpClient::Amp => format!(
-                "Add to ~/.config/amp/settings.json:\n{{\n  \"amp.mcpServers\": {{\n    \"lucode\": {{\n      \"command\": \"node\",\n      \"args\": [\"{}\"]\n    }}\n  }}\n}}",
+                "Add to ~/.config/amp/settings.json:\n{{\n  \"amp.mcpServers\": {{\n    \"{}\": {{\n      \"command\": \"node\",\n      \"args\": [\"{}\"]\n    }}\n  }}\n}}",
+                LUCODE_MCP_SERVER_KEY,
                 mcp_server_path.replace('"', "\\\"")
             ),
             McpClient::Droid => format!(
-                "Add to ~/.factory/mcp.json:\n{{\n  \"mcpServers\": {{\n    \"lucode\": {{\n      \"type\": \"stdio\",\n      \"command\": \"node\",\n      \"args\": [\"{}\"]\n    }}\n  }}\n}}",
+                "Add to ~/.factory/mcp.json:\n{{\n  \"mcpServers\": {{\n    \"{}\": {{\n      \"type\": \"stdio\",\n      \"command\": \"node\",\n      \"args\": [\"{}\"]\n    }}\n  }}\n}}",
+                LUCODE_MCP_SERVER_KEY,
                 mcp_server_path.replace('"', "\\\"")
             ),
         }
@@ -462,18 +478,88 @@ mod client {
         Ok((path, !base.exists()))
     }
 
-    pub fn opencode_config_path(project_path: &str) -> Result<(PathBuf, bool), String> {
-        // Check for project-specific config first
-        let project_config = PathBuf::from(project_path).join("opencode.json");
-        if project_config.exists() {
-            return Ok((project_config, false));
+    pub fn opencode_config_path(project_path: &str) -> PathBuf {
+        PathBuf::from(project_path).join("opencode.json")
+    }
+
+    fn opencode_default_config() -> serde_json::Value {
+        serde_json::json!({
+            "$schema": OPENCODE_CONFIG_SCHEMA_URL
+        })
+    }
+
+    fn opencode_lucode_config(mcp_server_path: &str) -> serde_json::Value {
+        serde_json::json!({
+            "type": "local",
+            "command": ["node", mcp_server_path],
+            "enabled": true
+        })
+    }
+
+    fn opencode_root_object(
+        config: &mut serde_json::Value,
+    ) -> Result<&mut serde_json::Map<String, serde_json::Value>, String> {
+        config
+            .as_object_mut()
+            .ok_or_else(|| "OpenCode config root must be a JSON object".to_string())
+    }
+
+    fn opencode_mcp_object(
+        config: &mut serde_json::Value,
+    ) -> Result<&mut serde_json::Map<String, serde_json::Value>, String> {
+        let root = opencode_root_object(config)?;
+        let mcp = root
+            .entry("mcp".to_string())
+            .or_insert_with(|| serde_json::json!({}));
+        mcp.as_object_mut()
+            .ok_or_else(|| "OpenCode config 'mcp' section must be a JSON object".to_string())
+    }
+
+    fn is_node_command(command: &str) -> bool {
+        Path::new(command)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(|value| {
+                value.eq_ignore_ascii_case("node") || value.eq_ignore_ascii_case("node.exe")
+            })
+            .unwrap_or(false)
+    }
+
+    pub(super) fn is_valid_opencode_lucode_config(
+        entry: &serde_json::Value,
+        mcp_server_path: &str,
+    ) -> bool {
+        let Some(entry) = entry.as_object() else {
+            return false;
+        };
+
+        if entry.get("type").and_then(|value| value.as_str()) != Some("local") {
+            return false;
         }
 
-        // Fall back to global config
-        let home = dirs::home_dir().ok_or("Could not determine home directory")?;
-        let global_config = home.join(".opencode").join("config.json");
-        let exists = global_config.exists();
-        Ok((global_config, !exists))
+        let Some(command) = entry.get("command").and_then(|value| value.as_array()) else {
+            return false;
+        };
+
+        if command.len() != 2 {
+            return false;
+        }
+
+        let Some(command_name) = command.first().and_then(|value| value.as_str()) else {
+            return false;
+        };
+        if !is_node_command(command_name) {
+            return false;
+        }
+
+        if command.get(1).and_then(|value| value.as_str()) != Some(mcp_server_path) {
+            return false;
+        }
+
+        entry
+            .get("enabled")
+            .map(|value| value.as_bool() == Some(true))
+            .unwrap_or(true)
     }
 
     pub fn amp_config_path() -> Result<(PathBuf, bool), String> {
@@ -528,42 +614,25 @@ mod client {
         project_path: &str,
         mcp_server_path: &str,
     ) -> Result<String, String> {
-        let (config_path, created_dir) = opencode_config_path(project_path)?;
+        let config_path = opencode_config_path(project_path);
 
-        if created_dir && let Some(parent) = config_path.parent() {
-            log::info!("Created OpenCode config directory at {}", parent.display());
-        }
-
-        // Read existing config or create new one
         let config_content = if config_path.exists() {
             std::fs::read_to_string(&config_path)
                 .map_err(|e| format!("Failed to read OpenCode config: {e}"))?
         } else {
-            String::from("{\n  \"$schema\": \"https://opencode.ai/config.json\"\n}")
+            serde_json::to_string_pretty(&opencode_default_config())
+                .map_err(|e| format!("Failed to serialize default OpenCode config: {e}"))?
         };
 
-        // Parse JSON to check if MCP section exists
         let mut config: serde_json::Value = serde_json::from_str(&config_content)
             .map_err(|e| format!("Failed to parse OpenCode config JSON: {e}"))?;
 
-        // Ensure MCP section exists
-        if config.get("mcp").is_none() {
-            config["mcp"] = serde_json::json!({});
-        }
+        let mcp_section = opencode_mcp_object(&mut config)?;
+        mcp_section.insert(
+            LUCODE_MCP_SERVER_KEY.to_string(),
+            opencode_lucode_config(mcp_server_path),
+        );
 
-        // Add or update Lucode MCP server
-        let schaltwerk_config = serde_json::json!({
-            "type": "local",
-            "command": ["node", mcp_server_path],
-            "enabled": true
-        });
-        let mcp_section = config
-            .get_mut("mcp")
-            .and_then(|value| value.as_object_mut())
-            .ok_or_else(|| "OpenCode config 'mcp' section must be a JSON object".to_string())?;
-        mcp_section.insert("lucode".to_string(), schaltwerk_config);
-
-        // Write updated config
         if let Some(dir) = config_path.parent() {
             std::fs::create_dir_all(dir)
                 .map_err(|e| format!("Failed to create OpenCode config dir: {e}"))?;
@@ -580,7 +649,7 @@ mod client {
     }
 
     pub fn remove_mcp_opencode(project_path: &str) -> Result<String, String> {
-        let (config_path, _) = opencode_config_path(project_path)?;
+        let config_path = opencode_config_path(project_path);
 
         if !config_path.exists() {
             return Ok("OpenCode config not found".to_string());
@@ -592,12 +661,11 @@ mod client {
         let mut config: serde_json::Value = serde_json::from_str(&config_content)
             .map_err(|e| format!("Failed to parse OpenCode config JSON: {e}"))?;
 
-        // Remove Lucode from MCP section
         let mut remove_mcp_section = false;
         if let Some(mcp_section) = config.get_mut("mcp")
             && let Some(mcp_obj) = mcp_section.as_object_mut()
         {
-            mcp_obj.remove("lucode");
+            mcp_obj.remove(LUCODE_MCP_SERVER_KEY);
             remove_mcp_section = mcp_obj.is_empty();
         }
 
@@ -861,28 +929,23 @@ fn parse_client_or_default(client: Option<String>) -> client::McpClient {
     }
 }
 
-fn check_opencode_config_status(project_path: &str) -> bool {
-    if let Ok((config_path, _)) = client::opencode_config_path(project_path) {
-        if config_path.exists() {
-            std::fs::read_to_string(config_path)
-                .map(|content| {
-                    // Parse JSON and check if lucode MCP server is configured
-                    serde_json::from_str::<serde_json::Value>(&content)
-                        .map(|config| {
-                            config
-                                .get("mcp")
-                                .and_then(|mcp| mcp.get("lucode"))
-                                .is_some()
-                        })
-                        .unwrap_or(false)
-                })
-                .unwrap_or(false)
-        } else {
-            false
-        }
-    } else {
-        false
+fn check_opencode_config_status(project_path: &str, mcp_server_path: &str) -> bool {
+    let config_path = client::opencode_config_path(project_path);
+    if !config_path.exists() {
+        return false;
     }
+
+    std::fs::read_to_string(config_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+        .and_then(|config| {
+            config
+                .get("mcp")
+                .and_then(|mcp| mcp.get(LUCODE_MCP_SERVER_KEY))
+                .cloned()
+        })
+        .map(|entry| client::is_valid_opencode_lucode_config(&entry, mcp_server_path))
+        .unwrap_or(false)
 }
 
 fn check_amp_config_status() -> bool {
@@ -931,7 +994,11 @@ fn check_droid_config_status() -> bool {
     }
 }
 
-fn check_mcp_configuration_status(project_path: &str, client: client::McpClient) -> bool {
+fn check_mcp_configuration_status(
+    project_path: &str,
+    client: client::McpClient,
+    mcp_server_path: &str,
+) -> bool {
     match client {
         client::McpClient::Claude => {
             let mcp_config_path = PathBuf::from(project_path).join(".mcp.json");
@@ -956,7 +1023,7 @@ fn check_mcp_configuration_status(project_path: &str, client: client::McpClient)
                 false
             }
         }
-        client::McpClient::OpenCode => check_opencode_config_status(project_path),
+        client::McpClient::OpenCode => check_opencode_config_status(project_path, mcp_server_path),
         client::McpClient::Amp => check_amp_config_status(),
         client::McpClient::Droid => check_droid_config_status(),
     }
@@ -1001,7 +1068,8 @@ pub async fn get_mcp_status(
     log::debug!("Node.js available: {node_available}");
 
     // Check if MCP is already configured (per-client logic)
-    let is_configured = check_mcp_configuration_status(&project_path, client);
+    let is_configured =
+        check_mcp_configuration_status(&project_path, client, &mcp_path.to_string_lossy());
     log::debug!("MCP configured for project: {is_configured}");
 
     // Generate setup command
@@ -1088,6 +1156,239 @@ pub async fn ensure_mcp_gitignored(project_path: String) -> Result<String, Strin
 
     log::info!("Added .mcp.json to gitignore");
     Ok("Added to gitignore".to_string())
+}
+
+#[cfg(test)]
+mod tests_opencode_mcp {
+    use super::check_opencode_config_status;
+    use super::client::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn opencode_config_path_is_project_local_for_lucode_setup() {
+        let temp_dir = TempDir::new().expect("temp dir");
+
+        let path = opencode_config_path(&temp_dir.path().to_string_lossy());
+
+        assert_eq!(path, temp_dir.path().join("opencode.json"));
+    }
+
+    #[test]
+    fn configure_mcp_opencode_preserves_unrelated_root_and_mcp_settings() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let config_path = temp_dir.path().join("opencode.json");
+        let mcp_server_path = "/path/to/lucode-mcp-server.js";
+
+        fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&serde_json::json!({
+                "$schema": "https://opencode.ai/config.json",
+                "model": "anthropic/claude-sonnet-4-5",
+                "mcp": {
+                    "context7": {
+                        "type": "remote",
+                        "url": "https://mcp.context7.com/mcp"
+                    }
+                }
+            }))
+            .expect("serialize config"),
+        )
+        .expect("write config");
+
+        configure_mcp_opencode(&temp_dir.path().to_string_lossy(), mcp_server_path)
+            .expect("configure opencode mcp");
+
+        let config: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&config_path).expect("read config"))
+                .expect("parse config");
+
+        assert_eq!(
+            config["mcp"]["lucode"],
+            serde_json::json!({
+                "type": "local",
+                "command": ["node", mcp_server_path],
+                "enabled": true
+            })
+        );
+        assert_eq!(
+            config["mcp"]["context7"]["url"].as_str(),
+            Some("https://mcp.context7.com/mcp")
+        );
+        assert_eq!(
+            config["model"].as_str(),
+            Some("anthropic/claude-sonnet-4-5")
+        );
+    }
+
+    #[test]
+    fn check_opencode_config_status_requires_expected_payload_shape() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let config_path = temp_dir.path().join("opencode.json");
+
+        fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&serde_json::json!({
+                "$schema": "https://opencode.ai/config.json",
+                "mcp": {
+                    "lucode": {
+                        "type": "remote",
+                        "url": "https://example.com/mcp",
+                        "enabled": true
+                    }
+                }
+            }))
+            .expect("serialize config"),
+        )
+        .expect("write config");
+
+        assert!(!check_opencode_config_status(
+            &temp_dir.path().to_string_lossy(),
+            "/path/to/lucode-mcp-server.js",
+        ));
+    }
+
+    #[test]
+    fn check_opencode_config_status_accepts_valid_local_entry() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let config_path = temp_dir.path().join("opencode.json");
+        let mcp_server_path = "/path/to/lucode-mcp-server.js";
+
+        fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&serde_json::json!({
+                "$schema": "https://opencode.ai/config.json",
+                "mcp": {
+                    "lucode": {
+                        "type": "local",
+                        "command": ["/usr/local/bin/node", mcp_server_path],
+                        "enabled": true
+                    }
+                }
+            }))
+            .expect("serialize config"),
+        )
+        .expect("write config");
+
+        assert!(check_opencode_config_status(
+            &temp_dir.path().to_string_lossy(),
+            mcp_server_path,
+        ));
+    }
+
+    #[test]
+    fn check_opencode_config_status_rejects_stale_server_path() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let config_path = temp_dir.path().join("opencode.json");
+
+        fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&serde_json::json!({
+                "$schema": "https://opencode.ai/config.json",
+                "mcp": {
+                    "lucode": {
+                        "type": "local",
+                        "command": ["node", "/old/path/lucode-mcp-server.js"],
+                        "enabled": true
+                    }
+                }
+            }))
+            .expect("serialize config"),
+        )
+        .expect("write config");
+
+        assert!(!check_opencode_config_status(
+            &temp_dir.path().to_string_lossy(),
+            "/new/path/lucode-mcp-server.js",
+        ));
+    }
+
+    #[test]
+    fn remove_mcp_opencode_preserves_other_servers_and_root_config() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let config_path = temp_dir.path().join("opencode.json");
+
+        fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&serde_json::json!({
+                "$schema": "https://opencode.ai/config.json",
+                "model": "anthropic/claude-sonnet-4-5",
+                "mcp": {
+                    "lucode": {
+                        "type": "local",
+                        "command": ["node", "/path/to/lucode-mcp-server.js"],
+                        "enabled": true
+                    },
+                    "context7": {
+                        "type": "remote",
+                        "url": "https://mcp.context7.com/mcp"
+                    }
+                }
+            }))
+            .expect("serialize config"),
+        )
+        .expect("write config");
+
+        remove_mcp_opencode(&temp_dir.path().to_string_lossy()).expect("remove opencode mcp");
+
+        let config: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&config_path).expect("read config"))
+                .expect("parse config");
+
+        assert!(config["mcp"].get("lucode").is_none());
+        assert_eq!(
+            config["mcp"]["context7"]["url"].as_str(),
+            Some("https://mcp.context7.com/mcp")
+        );
+        assert_eq!(
+            config["model"].as_str(),
+            Some("anthropic/claude-sonnet-4-5")
+        );
+    }
+
+    #[test]
+    fn configure_and_remove_opencode_mcp_roundtrip_cleans_empty_mcp_section() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let config_path = temp_dir.path().join("opencode.json");
+        let mcp_server_path = "/path/to/lucode-mcp-server.js";
+
+        fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&serde_json::json!({
+                "$schema": "https://opencode.ai/config.json"
+            }))
+            .expect("serialize config"),
+        )
+        .expect("write config");
+
+        configure_mcp_opencode(&temp_dir.path().to_string_lossy(), mcp_server_path)
+            .expect("configure opencode mcp");
+        remove_mcp_opencode(&temp_dir.path().to_string_lossy()).expect("remove opencode mcp");
+
+        let config: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&config_path).expect("read config"))
+                .expect("parse config");
+
+        assert!(config.get("mcp").is_none());
+        assert_eq!(
+            config["$schema"].as_str(),
+            Some("https://opencode.ai/config.json")
+        );
+    }
+
+    #[test]
+    fn generate_setup_command_opencode_matches_project_local_snippet() {
+        let mcp_server_path = "/path/to/lucode-mcp-server.js";
+        let command = generate_setup_command(McpClient::OpenCode, mcp_server_path);
+
+        assert!(command.contains("Add to opencode.json in the project root:"));
+        assert!(command.contains("\"lucode\""));
+        assert!(command.contains("\"type\": \"local\""));
+        assert!(command.contains("\"command\": ["));
+        assert!(command.contains("\"node\""));
+        assert!(command.contains(mcp_server_path));
+        assert!(command.contains("\"enabled\": true"));
+    }
 }
 
 #[cfg(test)]

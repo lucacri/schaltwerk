@@ -351,7 +351,7 @@
       "downloadNode": "Download Node.js",
       "claudeDesc": "Allow {agent} to control Lucode sessions in this project via MCP.",
       "codexDesc": "Enable {agent} to control Lucode sessions via a global MCP entry in ~/.codex/config.toml. The server is project-aware and routes by your current repo.",
-      "opencodeDesc": "Enable {agent} to control Lucode sessions via MCP configuration. The server is project-aware and routes by your current repo.",
+      "opencodeDesc": "Enable {agent} to control Lucode sessions via a project-local opencode.json MCP entry. OpenCode also merges ~/.config/opencode/opencode.json, but the project file takes precedence for this repo.",
       "ampDesc": "Enable {agent} to control Lucode sessions via a global MCP entry in ~/.config/amp/settings.json. The server is project-aware and routes by your current repo.",
       "droidDesc": "Enable {agent} to control Lucode sessions via a global MCP entry in ~/.factory/mcp.json. The server is project-aware and routes by your current repo.",
       "enableMcpHint": "Enable MCP configuration to allow {agent} to manage sessions in this project.",
@@ -385,7 +385,7 @@
       },
       "manualSetupPrefix": "Run from project directory:",
       "codexConfigNote": "This config is global. Codex will load it on next start.",
-      "opencodeConfigNote": "This config can be project-specific (opencode.json) or global (~/.opencode/config.json).",
+      "opencodeConfigNote": "Lucode writes this project-local config to opencode.json. OpenCode also merges ~/.config/opencode/opencode.json on startup, but project config takes precedence for this repo.",
       "ampConfigNote": "This config is global in ~/.config/amp/settings.json. Amp will load it on next start.",
       "droidConfigNote": "This config is global in ~/.factory/mcp.json. Droid will load it on next start.",
       "claudeConfigNote": "Tip: Scroll horizontally to see the full command"

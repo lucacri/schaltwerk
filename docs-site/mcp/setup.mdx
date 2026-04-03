@@ -21,9 +21,10 @@ Lucode ships with a prebuilt Model Context Protocol (MCP) server. In most cases 
   </Step>
 
   <Step title="Enable the MCP toggle">
-    In the **MCP Server Configuration** panel, turn on **Enable MCP**. Lucode writes the necessary `.mcp.json` entry using the embedded server binary.
+    In the **MCP Server Configuration** panel, turn on **Enable MCP**. Lucode writes the agent-specific MCP config for the embedded server binary.
 
     - If the agent CLI is missing, install it first (for example `brew install claude-code`).
+    - For OpenCode, Lucode writes `opencode.json` in the project root with a `mcp.lucode` local server entry.
     - When the toggle succeeds you’ll see the server status marked as **📦 Embedded** and configuration **✅ Configured**.
   </Step>
 
@@ -35,6 +36,29 @@ Lucode ships with a prebuilt Model Context Protocol (MCP) server. In most cases 
     In your agent (e.g., Claude Code) run a query such as “List my Lucode sessions.” You should see the active sessions from this project.
   </Step>
 </Steps>
+
+## OpenCode Config Details
+
+OpenCode supports both project-local and global configuration. Lucode uses the project-local file so MCP stays tied to the current repo:
+
+- Project-local: `opencode.json` in the repo root
+- Global alternative supported by OpenCode: `~/.config/opencode/opencode.json`
+
+Lucode writes this payload for OpenCode:
+
+```json
+{
+  "mcp": {
+    "lucode": {
+      "type": "local",
+      "command": ["node", "/absolute/path/to/lucode/mcp-server/build/lucode-mcp-server.js"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Restart OpenCode after enabling MCP so it reloads `opencode.json`.
 
 ## Troubleshooting
 
@@ -55,7 +79,7 @@ Lucode ships with a prebuilt Model Context Protocol (MCP) server. In most cases 
   </Accordion>
 
   <Accordion title="Need to remove MCP configuration">
-    Turn off the **Enable MCP** toggle. Lucode removes the entry from `.mcp.json` (or the agent’s global config).
+    Turn off the **Enable MCP** toggle. Lucode removes the managed entry from the agent config file it wrote. For OpenCode that means removing `mcp.lucode` from the project’s `opencode.json`.
   </Accordion>
 </AccordionGroup>
 

@@ -23,6 +23,8 @@ interface Props {
    agent: 'claude' | 'codex' | 'opencode' | 'amp' | 'droid'
  }
 
+const managedMcpServerName = 'lucode'
+
 function getAgentDisplayName(agent: Props['agent']): string {
   switch (agent) {
     case 'claude':
@@ -374,7 +376,7 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
               {showManualSetup && (
                 <div className="p-3 bg-bg-tertiary border border-border-subtle rounded">
                    <p className="text-xs text-text-tertiary mb-2">
-                     {agent === 'codex' ? 'Add to ~/.codex/config.toml:' : agent === 'opencode' ? 'Add to opencode.json:' : agent === 'amp' ? 'Add to ~/.config/amp/settings.json:' : agent === 'droid' ? 'Add to ~/.factory/mcp.json:' : t.settings.mcp.manualSetupPrefix}
+                     {agent === 'codex' ? 'Add to ~/.codex/config.toml:' : agent === 'opencode' ? 'Add to opencode.json in the project root:' : agent === 'amp' ? 'Add to ~/.config/amp/settings.json:' : agent === 'droid' ? 'Add to ~/.factory/mcp.json:' : t.settings.mcp.manualSetupPrefix}
                    </p>
 
                   <div className="flex gap-2">
@@ -383,24 +385,24 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
                          <code className="text-xs text-text-secondary whitespace-nowrap block font-mono">
                            {agent === 'codex'
                              ? (<>
-                                 [mcp_servers.schaltwerk]
+                                 {`[mcp_servers.${managedMcpServerName}]`}
                                  <br />command = "{nodeCommand}"
                                  <br />args = ["{status.mcp_server_path}"]
                                </>)
                              : agent === 'opencode'
                              ? (<>
-                                 {`{\n  "mcp": {\n    "schaltwerk": {\n      "type": "local",\n      "command": ["node", "${status.mcp_server_path}"],\n      "enabled": true\n    }\n  }\n}`}
+                                 {`{\n  "mcp": {\n    "${managedMcpServerName}": {\n      "type": "local",\n      "command": ["node", "${status.mcp_server_path}"],\n      "enabled": true\n    }\n  }\n}`}
                                </>)
                              : agent === 'amp'
                              ? (<>
-                                 {`"amp.mcpServers": {\n  "schaltwerk": {\n    "command": "node",\n    "args": ["${status.mcp_server_path}"]\n  }\n}`}
+                                 {`"amp.mcpServers": {\n  "${managedMcpServerName}": {\n    "command": "node",\n    "args": ["${status.mcp_server_path}"]\n  }\n}`}
                                </>)
                              : agent === 'droid'
                              ? (<>
-                                 {`{\n  "mcpServers": {\n    "schaltwerk": {\n      "type": "stdio",\n      "command": "node",\n      "args": ["${status.mcp_server_path}"]\n    }\n  }\n}`}
+                                 {`{\n  "mcpServers": {\n    "${managedMcpServerName}": {\n      "type": "stdio",\n      "command": "node",\n      "args": ["${status.mcp_server_path}"]\n    }\n  }\n}`}
                                </>)
                              : (<>
-                                 {agent} mcp add --transport stdio --scope project schaltwerk node "{status.mcp_server_path}"
+                                 {`${agent} mcp add --transport stdio --scope project ${managedMcpServerName} node "${status.mcp_server_path}"`}
                                </>)}
                          </code>
                       </div>

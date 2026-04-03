@@ -351,7 +351,7 @@
       "downloadNode": "下载 Node.js",
       "claudeDesc": "允许 {agent} 通过 MCP 控制此项目中的 Lucode 会话。",
       "codexDesc": "通过 ~/.codex/config.toml 中的全局 MCP 条目启用 {agent} 控制 Lucode 会话。服务器可感知项目并按当前仓库路由。",
-      "opencodeDesc": "通过 MCP 配置启用 {agent} 控制 Lucode 会话。服务器可感知项目并按当前仓库路由。",
+      "opencodeDesc": "通过项目级 opencode.json MCP 条目启用 {agent} 控制 Lucode 会话。OpenCode 启动时也会合并 ~/.config/opencode/opencode.json，但此仓库优先使用项目文件。",
       "ampDesc": "通过 ~/.config/amp/settings.json 中的全局 MCP 条目启用 {agent} 控制 Lucode 会话。服务器可感知项目并按当前仓库路由。",
       "droidDesc": "通过 ~/.factory/mcp.json 中的全局 MCP 条目启用 {agent} 控制 Lucode 会话。服务器可感知项目并按当前仓库路由。",
       "enableMcpHint": "启用 MCP 配置以允许 {agent} 管理此项目中的会话。",
@@ -385,7 +385,7 @@
       },
       "manualSetupPrefix": "从项目目录运行：",
       "codexConfigNote": "此配置是全局的。Codex 将在下次启动时加载。",
-      "opencodeConfigNote": "此配置可以是项目特定的 (opencode.json) 或全局的 (~/.opencode/config.json)。",
+      "opencodeConfigNote": "Lucode 会将此项目级配置写入 opencode.json。OpenCode 启动时也会合并 ~/.config/opencode/opencode.json，但对于此仓库，项目配置优先。",
       "ampConfigNote": "此配置是全局的，位于 ~/.config/amp/settings.json。Amp 将在下次启动时加载。",
       "droidConfigNote": "此配置是全局的，位于 ~/.factory/mcp.json。Droid 将在下次启动时加载。",
       "claudeConfigNote": "提示：水平滚动可查看完整命令"
