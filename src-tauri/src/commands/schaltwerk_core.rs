@@ -1,6 +1,7 @@
 use crate::{
     PROJECT_MANAGER, SETTINGS_MANAGER, commands::session_lookup_cache::global_session_lookup_cache,
     errors::SchaltError, get_core_read, get_core_write, get_file_watcher_manager,
+    get_settings_manager,
     get_terminal_manager,
 };
 use lucode::infrastructure::attention_bridge::clear_session_attention_state;
@@ -981,6 +982,7 @@ pub struct CreateSessionParams {
     epic_id: Option<String>,
     agent_type: Option<String>,
     skip_permissions: Option<bool>,
+    autonomy_enabled: Option<bool>,
     issue_number: Option<i64>,
     issue_url: Option<String>,
     pr_number: Option<i64>,
@@ -1004,6 +1006,7 @@ pub async fn schaltwerk_core_create_session(
     epic_id: Option<String>,
     agent_type: Option<String>,
     skip_permissions: Option<bool>,
+    autonomy_enabled: Option<bool>,
     issue_number: Option<i64>,
     issue_url: Option<String>,
     pr_number: Option<i64>,
@@ -1023,6 +1026,7 @@ pub async fn schaltwerk_core_create_session(
         epic_id,
         agent_type,
         skip_permissions,
+        autonomy_enabled,
         issue_number,
         issue_url,
         pr_number,
@@ -1032,9 +1036,27 @@ pub async fn schaltwerk_core_create_session(
     let was_user_edited = params.user_edited_name.unwrap_or(false);
     let was_auto_generated = !was_user_edited;
 
+    let autonomy_template = {
+        let settings_manager = get_settings_manager(&app).await.map_err(|message| {
+            SchaltError::DatabaseError {
+                message,
+            }
+        })?;
+        let manager = settings_manager.lock().await;
+        manager
+            .get_generation_settings()
+            .autonomy_prompt_template
+            .unwrap_or_else(lucode::domains::settings::default_autonomy_prompt_template)
+    };
+    let expanded_prompt = lucode::domains::sessions::autonomy::build_initial_prompt(
+        params.prompt.as_deref(),
+        params.autonomy_enabled.unwrap_or(false),
+        &autonomy_template,
+    );
+
     let creation_params = lucode::domains::sessions::service::SessionCreationParams {
         name: &params.name,
-        prompt: params.prompt.as_deref(),
+        prompt: expanded_prompt.as_deref(),
         base_branch: params.base_branch.as_deref(),
         custom_branch: params.custom_branch.as_deref(),
         use_existing_branch: params.use_existing_branch.unwrap_or(false),

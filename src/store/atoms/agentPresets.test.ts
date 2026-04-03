@@ -33,8 +33,8 @@ describe('agentPresets atoms', () => {
             {
                 id: 'p1', name: 'The Duo', isBuiltIn: false,
                 slots: [
-                    { agentType: 'claude', skipPermissions: true },
-                    { agentType: 'codex' },
+                    { agentType: 'claude', skipPermissions: true, autonomyEnabled: true },
+                    { agentType: 'codex', autonomyEnabled: false },
                 ],
             }
         ]
@@ -48,7 +48,7 @@ describe('agentPresets atoms', () => {
 
     it('saves presets to backend', async () => {
         const presets: AgentPreset[] = [
-            { id: 'p1', name: 'Solo', isBuiltIn: false, slots: [{ agentType: 'claude' }] }
+            { id: 'p1', name: 'Solo', isBuiltIn: false, slots: [{ agentType: 'claude', autonomyEnabled: true }] }
         ]
         mockInvoke.mockResolvedValueOnce(undefined)
 

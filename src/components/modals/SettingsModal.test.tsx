@@ -690,6 +690,7 @@ describe('SettingsModal AI Generation custom prompts', () => {
     plan_issue_prompt: 'Default issue plan prompt with {{issue.title}} and {{issue.description}}',
     issue_prompt: 'Default issue session prompt with {title} and {comments}',
     pr_prompt: 'Default PR session prompt with {title}, {branch}, and {comments}',
+    autonomy_prompt_template: '## Agent Instructions\n\nDefault autonomy template',
   }
 
   beforeEach(() => {
@@ -713,6 +714,7 @@ describe('SettingsModal AI Generation custom prompts', () => {
           plan_issue_prompt: null,
           issue_prompt: null,
           pr_prompt: null,
+          autonomy_prompt_template: null,
         }
       }
       return baseInvokeImplementation(command, args)
@@ -765,6 +767,7 @@ describe('SettingsModal AI Generation custom prompts', () => {
           plan_issue_prompt: null,
           issue_prompt: null,
           pr_prompt: null,
+          autonomy_prompt_template: null,
         }
       }
       return baseInvokeImplementation(command, args)
@@ -823,6 +826,7 @@ describe('SettingsModal AI Generation custom prompts', () => {
           plan_issue_prompt: null,
           issue_prompt: null,
           pr_prompt: null,
+          autonomy_prompt_template: null,
         }
       }
       return baseInvokeImplementation(command, args)
@@ -866,5 +870,48 @@ describe('SettingsModal AI Generation custom prompts', () => {
 
     const warnings = await screen.findAllByText(/Missing required variable/i)
     expect(warnings.some(node => node.textContent?.includes('{sessionList}'))).toBe(true)
+  })
+
+  it('resets the autonomy template to the default value', async () => {
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === TauriCommands.GetDefaultGenerationPrompts) {
+        return defaultPrompts
+      }
+      if (command === TauriCommands.GetGenerationSettings) {
+        return {
+          agent: null,
+          cli_args: null,
+          name_prompt: null,
+          commit_prompt: null,
+          consolidation_prompt: null,
+          review_pr_prompt: null,
+          plan_issue_prompt: null,
+          issue_prompt: null,
+          pr_prompt: null,
+          autonomy_prompt_template: 'Custom autonomy template',
+        }
+      }
+      return baseInvokeImplementation(command, args)
+    })
+
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="agentConfiguration" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    expect(await screen.findByDisplayValue('Custom autonomy template')).toBeInTheDocument()
+
+    const resetButton = await screen.findByText('Reset to default')
+    await user.click(resetButton)
+
+    await waitFor(() => {
+      const saveCall = invokeMock.mock.calls.find(
+        ([cmd]) => cmd === TauriCommands.SetGenerationSettings
+      )
+      if (saveCall) {
+        const settings = (saveCall[1] as { settings: { autonomy_prompt_template: string | null } }).settings
+        expect(settings.autonomy_prompt_template).toBeNull()
+      }
+    })
   })
 })

@@ -27,6 +27,8 @@ interface ModelSelectorProps {
     agentSelectionDisabled?: boolean
     skipPermissions?: boolean
     onSkipPermissionsChange?: (value: boolean) => void
+    autonomyEnabled?: boolean
+    onAutonomyChange?: (value: boolean) => void
     onDropdownOpenChange?: (open: boolean) => void
     showShortcutHint?: boolean
     allowedAgents?: readonly AgentType[]
@@ -39,6 +41,8 @@ export function ModelSelector({
     agentSelectionDisabled = false,
     skipPermissions,
     onSkipPermissionsChange,
+    autonomyEnabled,
+    onAutonomyChange,
     onDropdownOpenChange,
     showShortcutHint = false,
     allowedAgents
@@ -60,6 +64,7 @@ export function ModelSelector({
     const selectedModel = models.find(m => m.value === value) || models[0]
     const selectedSupportsPermissions = AGENT_SUPPORTS_SKIP_PERMISSIONS[selectedModel.value]
     const canConfigurePermissions = selectedSupportsPermissions && typeof skipPermissions === 'boolean' && typeof onSkipPermissionsChange === 'function'
+    const canConfigureAutonomy = selectedModel.value !== 'terminal' && typeof autonomyEnabled === 'boolean' && typeof onAutonomyChange === 'function'
 
     const handleSelect = useCallback((modelValue: AgentType) => {
         if (agentSelectionDisabled || !isAvailable(modelValue)) return
@@ -99,6 +104,11 @@ export function ModelSelector({
             onSkipPermissionsChange(true)
         }
     }, [canConfigurePermissions, disabled, skipPermissions, onSkipPermissionsChange])
+
+    const handleToggleAutonomy = useCallback(() => {
+        if (!canConfigureAutonomy || disabled || !onAutonomyChange) return
+        onAutonomyChange(!autonomyEnabled)
+    }, [autonomyEnabled, canConfigureAutonomy, disabled, onAutonomyChange])
 
     const items = models.map(model => {
         const available = isAvailable(model.value)
@@ -206,38 +216,59 @@ export function ModelSelector({
                     </button>
                 )}
             </Dropdown>
-            {canConfigurePermissions && (
-                <div className="flex gap-2" role="group" aria-label={t.modelSelector.permissionHandling}>
-                    <button
-                        type="button"
-                        onClick={handleRequirePermissions}
-                        disabled={disabled}
-                        aria-pressed={!skipPermissions}
-                        className="flex-1 px-3 py-1.5 rounded border text-xs"
-                        style={{
-                            backgroundColor: skipPermissions ? 'var(--color-bg-elevated)' : 'var(--color-accent-blue)',
-                            borderColor: skipPermissions ? 'var(--color-border-default)' : 'var(--color-accent-blue)',
-                            color: disabled ? 'var(--color-text-muted)' : (skipPermissions ? 'var(--color-text-secondary)' : 'var(--color-accent-blue-text)')
-                        }}
-                        title={t.sessionConfig.requirePermissionsTitle}
-                    >
-                        {t.sessionConfig.requirePermissions}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleSkipPermissions}
-                        disabled={disabled}
-                        aria-pressed={!!skipPermissions}
-                        className="flex-1 px-3 py-1.5 rounded border text-xs"
-                        style={{
-                            backgroundColor: skipPermissions ? 'var(--color-accent-blue)' : 'var(--color-bg-elevated)',
-                            borderColor: skipPermissions ? 'var(--color-accent-blue)' : 'var(--color-border-default)',
-                            color: disabled ? 'var(--color-text-muted)' : (skipPermissions ? 'var(--color-accent-blue-text)' : 'var(--color-text-secondary)')
-                        }}
-                        title={t.sessionConfig.skipPermissionsTitle}
-                    >
-                        {t.sessionConfig.skipPermissions}
-                    </button>
+            {(canConfigurePermissions || canConfigureAutonomy) && (
+                <div className="space-y-2">
+                    {canConfigurePermissions && (
+                        <div className="flex gap-2" role="group" aria-label={t.modelSelector.permissionHandling}>
+                            <button
+                                type="button"
+                                onClick={handleRequirePermissions}
+                                disabled={disabled}
+                                aria-pressed={!skipPermissions}
+                                className="flex-1 px-3 py-1.5 rounded border text-xs"
+                                style={{
+                                    backgroundColor: skipPermissions ? 'var(--color-bg-elevated)' : 'var(--color-accent-blue)',
+                                    borderColor: skipPermissions ? 'var(--color-border-default)' : 'var(--color-accent-blue)',
+                                    color: disabled ? 'var(--color-text-muted)' : (skipPermissions ? 'var(--color-text-secondary)' : 'var(--color-accent-blue-text)')
+                                }}
+                                title={t.sessionConfig.requirePermissionsTitle}
+                            >
+                                {t.sessionConfig.requirePermissions}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSkipPermissions}
+                                disabled={disabled}
+                                aria-pressed={!!skipPermissions}
+                                className="flex-1 px-3 py-1.5 rounded border text-xs"
+                                style={{
+                                    backgroundColor: skipPermissions ? 'var(--color-accent-blue)' : 'var(--color-bg-elevated)',
+                                    borderColor: skipPermissions ? 'var(--color-accent-blue)' : 'var(--color-border-default)',
+                                    color: disabled ? 'var(--color-text-muted)' : (skipPermissions ? 'var(--color-accent-blue-text)' : 'var(--color-text-secondary)')
+                                }}
+                                title={t.sessionConfig.skipPermissionsTitle}
+                            >
+                                {t.sessionConfig.skipPermissions}
+                            </button>
+                        </div>
+                    )}
+                    {canConfigureAutonomy && (
+                        <button
+                            type="button"
+                            onClick={handleToggleAutonomy}
+                            disabled={disabled}
+                            aria-pressed={!!autonomyEnabled}
+                            className="w-full px-3 py-1.5 rounded border text-xs"
+                            style={{
+                                backgroundColor: autonomyEnabled ? 'var(--color-accent-green)' : 'var(--color-bg-elevated)',
+                                borderColor: autonomyEnabled ? 'var(--color-accent-green)' : 'var(--color-border-default)',
+                                color: disabled ? 'var(--color-text-muted)' : (autonomyEnabled ? 'var(--color-accent-green-text)' : 'var(--color-text-secondary)')
+                            }}
+                            title={t.sessionConfig.fullAutonomousTitle}
+                        >
+                            {t.sessionConfig.fullAutonomous}
+                        </button>
+                    )}
                 </div>
             )}
         </div>

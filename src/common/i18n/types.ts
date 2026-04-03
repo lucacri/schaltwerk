@@ -65,6 +65,7 @@ export interface Translations {
       archives: string
       keyboard: string
       environment: string
+      agentConfiguration: string
       projectGeneral: string
       projectRun: string
       projectActions: string
@@ -342,6 +343,11 @@ export interface Translations {
       missingRequiredVariables: string
       usingDefault: string
       customized: string
+    }
+    agentConfiguration: {
+      autonomyTemplate: string
+      autonomyTemplateDesc: string
+      autonomyTemplateHint: string
     }
     mcp: {
       title: string
@@ -994,8 +1000,10 @@ export interface Translations {
     noReasoningOptions: string
     requirePermissions: string
     skipPermissions: string
+    fullAutonomous: string
     requirePermissionsTitle: string
     skipPermissionsTitle: string
+    fullAutonomousTitle: string
   }
   githubMenu: {
     title: string

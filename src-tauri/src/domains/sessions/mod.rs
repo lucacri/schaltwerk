@@ -1,4 +1,5 @@
 pub mod activity;
+pub mod autonomy;
 pub mod cache;
 pub mod db_sessions;
 pub mod entity;

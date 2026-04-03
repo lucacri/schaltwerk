@@ -118,6 +118,7 @@ import {
 import { registerDevErrorListeners } from './dev/registerDevErrorListeners'
 import { AgentCliMissingModal } from './components/agentBinary/AgentCliMissingModal'
 import type { SettingsCategory } from './types/settings'
+import type { AgentLaunchSlot } from './types/agentLaunch'
 import { SPLIT_GUTTER_SIZE } from './common/splitLayout'
 import { isNotificationPermissionGranted } from './utils/notificationPermission'
 import { sanitizeSplitSizes, areSizesEqual } from './utils/splitStorage'
@@ -1796,6 +1797,8 @@ function AppContent() {
     agentType?: string
     skipPermissions?: boolean
     agentTypes?: string[]
+    agentSlots?: AgentLaunchSlot[]
+    autonomyEnabled?: boolean
     issueNumber?: number
     issueUrl?: string
     prNumber?: number
@@ -1830,12 +1833,19 @@ function AppContent() {
           // Dispatch event for other components to know a spec was created
           emitUiEvent(UiEvent.SpecCreated, { name: data.name })
         } else {
-          // Create one or multiple sessions depending on versionCount or agentTypes
+          // Create one or multiple sessions depending on versionCount, agentTypes, or agentSlots
+          const useAgentSlots = Boolean(data.agentSlots && data.agentSlots.length > 0)
           const useAgentTypes = Boolean(data.agentTypes && data.agentTypes.length > 0)
-          const count = useAgentTypes ? (data.agentTypes?.length ?? 1) : Math.max(1, Math.min(4, data.versionCount ?? 1))
+          const count = useAgentSlots
+            ? (data.agentSlots?.length ?? 1)
+            : useAgentTypes
+              ? (data.agentTypes?.length ?? 1)
+              : Math.max(1, Math.min(4, data.versionCount ?? 1))
 
           logger.info('[App] Creating sessions with multi-agent data:', {
+            useAgentSlots,
             useAgentTypes,
+            agentSlots: data.agentSlots,
             agentTypes: data.agentTypes,
             agentType: data.agentType,
             count,
@@ -1854,14 +1864,17 @@ function AppContent() {
           for (let i = 1; i <= count; i++) {
             // All versions get _v{N} suffix when creating multiple
             const versionName = count === 1 ? baseName : `${baseName}_v${i}`
-            const agentTypeForVersion = useAgentTypes ? (data.agentTypes?.[i - 1] ?? null) : data.agentType
+            const agentSlotForVersion = useAgentSlots ? (data.agentSlots?.[i - 1] ?? null) : null
+            const agentTypeForVersion = agentSlotForVersion?.agentType ?? (useAgentTypes ? (data.agentTypes?.[i - 1] ?? null) : data.agentType)
 
             logger.info(`[App] Creating version ${i}/${count}:`, {
               versionName,
               agentTypeForVersion,
+              fromSlots: useAgentSlots,
               fromArray: useAgentTypes,
               arrayIndex: i - 1,
-              arrayValue: data.agentTypes?.[i - 1]
+              arrayValue: data.agentTypes?.[i - 1],
+              slotValue: agentSlotForVersion,
             })
 
             if (!data.isSpec) {
@@ -1876,7 +1889,10 @@ function AppContent() {
             // For multiple versions, don't mark as user-edited so they can be renamed as a group
             const versionSkipPermissions = agentTypeForVersion && !AGENT_SUPPORTS_SKIP_PERMISSIONS[agentTypeForVersion as AgentType]
               ? false
-              : data.skipPermissions
+              : agentSlotForVersion?.skipPermissions ?? data.skipPermissions
+            const versionAutonomyEnabled = agentTypeForVersion === 'terminal'
+              ? false
+              : agentSlotForVersion?.autonomyEnabled ?? data.autonomyEnabled
             const createdSession = await invoke<RawSession | null>(TauriCommands.SchaltwerkCoreCreateSession, {
               name: versionName,
               prompt: data.prompt || null,
@@ -1890,6 +1906,7 @@ function AppContent() {
               epicId: data.epicId ?? null,
               agentType: agentTypeForVersion,
               skipPermissions: versionSkipPermissions,
+              autonomyEnabled: versionAutonomyEnabled,
               issueNumber: data.issueNumber || null,
               issueUrl: data.issueUrl || null,
               prNumber: data.prNumber || null,

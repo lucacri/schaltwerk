@@ -35,6 +35,7 @@ import { EpicSelect } from '../shared/EpicSelect'
 import { useAgentVariants } from '../../hooks/useAgentVariants'
 import { useAgentPresets } from '../../hooks/useAgentPresets'
 import type { AgentVariant } from '../../types/agentVariant'
+import type { AgentLaunchSlot } from '../../types/agentLaunch'
 import { useEpics } from '../../hooks/useEpics'
 import {
     MAX_VERSION_COUNT,
@@ -81,7 +82,9 @@ interface Props {
         versionCount?: number
         agentType?: AgentType
         agentTypes?: AgentType[]
+        agentSlots?: AgentLaunchSlot[]
         skipPermissions?: boolean
+        autonomyEnabled?: boolean
         issueNumber?: number
         issueUrl?: string
         prNumber?: number
@@ -110,6 +113,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [useExistingBranch, setUseExistingBranch] = useState(false)
     const [agentType, setAgentType] = useState<AgentType>('claude')
     const [skipPermissions, setSkipPermissions] = useState(false)
+    const [autonomyEnabled, setAutonomyEnabled] = useState(false)
     const [validationError, setValidationError] = useState('')
     const [creating, setCreating] = useState(false)
     const [createAsDraft, setCreateAsDraft] = useState(false)
@@ -601,25 +605,33 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             const selectedPreset = presetTabActive && selectedPresetId
                 ? agentPresetsList.find(p => p.id === selectedPresetId)
                 : null
-            const presetAgentTypes = selectedPreset
-                ? selectedPreset.slots.map(s => s.agentType as AgentType)
+            const presetAgentSlots = selectedPreset
+                ? selectedPreset.slots.map(slot => ({
+                    agentType: slot.agentType as AgentType,
+                    skipPermissions: slot.skipPermissions,
+                    autonomyEnabled: slot.autonomyEnabled,
+                }))
                 : null
             const useMultiAgentTypes = !createAsDraft && (multiAgentMode && normalizedAgentTypes.length > 0)
-            const usePreset = !createAsDraft && !!presetAgentTypes && presetAgentTypes.length > 0
+            const usePreset = !createAsDraft && !!presetAgentSlots && presetAgentSlots.length > 0
             const effectiveAgentTypes = usePreset
-                ? presetAgentTypes
+                ? presetAgentSlots.map(slot => slot.agentType)
                 : useMultiAgentTypes
                     ? normalizedAgentTypes
                     : null
-            const agentTypesPayload = effectiveAgentTypes ?? undefined
+            const agentTypesPayload = usePreset ? undefined : (effectiveAgentTypes ?? undefined)
+            const agentSlotsPayload = usePreset ? presetAgentSlots ?? undefined : undefined
             const effectiveVersionCount = createAsDraft
                 ? 1
-                : effectiveAgentTypes
-                    ? effectiveAgentTypes.length
+                : usePreset
+                    ? (presetAgentSlots?.length ?? 1)
+                    : effectiveAgentTypes
+                        ? effectiveAgentTypes.length
                     : versionCount
             const primaryAgentType = effectiveAgentTypes
                 ? (effectiveAgentTypes[0] ?? agentType)
                 : agentType
+            const effectiveAutonomyEnabled = primaryAgentType === 'terminal' ? false : autonomyEnabled
 
             const isPrFromSameRepo = promptSource === 'github_pull_request'
                 && githubPrSelection
@@ -652,11 +664,15 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 draftContent: createAsDraft ? currentPrompt : undefined,
                 versionCount: effectiveVersionCount,
                 agentType: primaryAgentType,
-                skipPermissions: createAsDraft ? skipPermissions : undefined,
+                skipPermissions: createAsDraft ? skipPermissions : (usePreset ? undefined : skipPermissions),
+                autonomyEnabled: createAsDraft ? undefined : (usePreset ? undefined : effectiveAutonomyEnabled),
                 epicId,
                 ...issueInfo,
                 ...prInfo,
                 ...(isConsolidation ? { isConsolidation: true, consolidationSourceIds } : {}),
+            }
+            if (agentSlotsPayload) {
+                createData.agentSlots = agentSlotsPayload
             }
             if (agentTypesPayload) {
                 createData.agentTypes = agentTypesPayload
@@ -687,7 +703,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setValidationError(errorMessage)
             setCreating(false)
         }
-    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, selectedPresetId, agentPresetsList])
+    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, selectedPresetId, agentPresetsList])
 
     // Keep ref in sync immediately on render to avoid stale closures in tests
     createRef.current = () => { void handleCreate() }
@@ -948,6 +964,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 setEpicId(null)
                 setIsConsolidation(false)
                 setConsolidationSourceIds([])
+                setAutonomyEnabled(false)
                 setShowVersionMenu(false)
                 setVersionCount(1)
                 const shouldIgnorePersisted = hasAgentOverrideRef.current
@@ -1041,6 +1058,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setBaseBranch('')
             setAgentType(lastAgentTypeRef.current)
             setSkipPermissions(false)
+            setAutonomyEnabled(false)
             setVersionCount(1)
             setShowVersionMenu(false)
             setIsConsolidation(false)
@@ -1749,6 +1767,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                 onBaseBranchChange={handleBranchChange}
                                 onAgentTypeChange={handleAgentTypeChange}
                                 onSkipPermissionsChange={handleSkipPermissionsChange}
+                                onAutonomyChange={setAutonomyEnabled}
                                 onCustomBranchChange={(branch) => {
                                     setCustomBranch(branch)
                                     if (validationError) {
@@ -1764,6 +1783,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                 initialBaseBranch={baseBranch}
                                 initialAgentType={agentType}
                                 initialSkipPermissions={skipPermissions}
+                                initialAutonomyEnabled={autonomyEnabled}
                                 initialCustomBranch={customBranch}
                                 initialUseExistingBranch={useExistingBranch}
                                 codexModel={agentPreferences.codex?.model}

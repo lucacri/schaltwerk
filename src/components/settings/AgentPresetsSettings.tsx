@@ -212,6 +212,13 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                                 />
                                                 Skip
                                             </label>
+                                            <label className="flex items-center gap-1 text-caption text-text-muted">
+                                                <Checkbox
+                                                    checked={slot.autonomyEnabled ?? false}
+                                                    onChange={checked => handleSlotUpdate(preset.id, idx, { autonomyEnabled: checked || undefined })}
+                                                />
+                                                Full autonomous
+                                            </label>
                                             {preset.slots.length > 1 && (
                                                 <Button size="sm" variant="danger" onClick={() => handleSlotRemove(preset.id, idx)}>
                                                     &times;

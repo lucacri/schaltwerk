@@ -18,11 +18,13 @@ interface SessionConfigurationPanelProps {
     onBaseBranchChange?: (branch: string) => void
     onAgentTypeChange?: (agentType: AgentType) => void
     onSkipPermissionsChange?: (enabled: boolean) => void
+    onAutonomyChange?: (enabled: boolean) => void
     onCustomBranchChange?: (branch: string) => void
     onUseExistingBranchChange?: (useExisting: boolean) => void
     initialBaseBranch?: string
     initialAgentType?: AgentType
     initialSkipPermissions?: boolean
+    initialAutonomyEnabled?: boolean
     initialCustomBranch?: string
     initialUseExistingBranch?: boolean
     codexModel?: string
@@ -44,6 +46,7 @@ export interface SessionConfiguration {
     baseBranch: string
     agentType: AgentType
     skipPermissions: boolean
+    autonomyEnabled: boolean
     isValid: boolean
 }
 
@@ -53,11 +56,13 @@ export function SessionConfigurationPanel({
     onBaseBranchChange,
     onAgentTypeChange,
     onSkipPermissionsChange,
+    onAutonomyChange,
     onCustomBranchChange,
     onUseExistingBranchChange,
     initialBaseBranch = '',
     initialAgentType = 'claude',
     initialSkipPermissions = false,
+    initialAutonomyEnabled = false,
     initialCustomBranch = '',
     initialUseExistingBranch = false,
     codexModel,
@@ -81,6 +86,7 @@ export function SessionConfigurationPanel({
     const [isValidBranch, setIsValidBranch] = useState(true)
     const [agentType, setAgentType] = useState<AgentType>(initialAgentType)
     const [skipPermissions, setSkipPermissions] = useState(initialSkipPermissions)
+    const [autonomyEnabled, setAutonomyEnabled] = useState(initialAutonomyEnabled)
     const [customBranch, setCustomBranch] = useState(initialCustomBranch)
     const [useExistingBranch, setUseExistingBranch] = useState(initialUseExistingBranch)
     const [branchPrefix, setBranchPrefix] = useState<string>('schaltwerk')
@@ -89,6 +95,7 @@ export function SessionConfigurationPanel({
     const onBaseBranchChangeRef = useRef(onBaseBranchChange)
     const onAgentTypeChangeRef = useRef(onAgentTypeChange)
     const onSkipPermissionsChangeRef = useRef(onSkipPermissionsChange)
+    const onAutonomyChangeRef = useRef(onAutonomyChange)
     const onCustomBranchChangeRef = useRef(onCustomBranchChange)
     const onUseExistingBranchChangeRef = useRef(onUseExistingBranchChange)
     const baseBranchValueRef = useRef(initialBaseBranch)
@@ -107,6 +114,7 @@ export function SessionConfigurationPanel({
     useEffect(() => { onBaseBranchChangeRef.current = onBaseBranchChange }, [onBaseBranchChange])
     useEffect(() => { onAgentTypeChangeRef.current = onAgentTypeChange }, [onAgentTypeChange])
     useEffect(() => { onSkipPermissionsChangeRef.current = onSkipPermissionsChange }, [onSkipPermissionsChange])
+    useEffect(() => { onAutonomyChangeRef.current = onAutonomyChange }, [onAutonomyChange])
     useEffect(() => { onCustomBranchChangeRef.current = onCustomBranchChange }, [onCustomBranchChange])
     useEffect(() => { onUseExistingBranchChangeRef.current = onUseExistingBranchChange }, [onUseExistingBranchChange])
     useEffect(() => { getSkipPermissionsRef.current = getSkipPermissions }, [getSkipPermissions])
@@ -219,6 +227,11 @@ export function SessionConfigurationPanel({
         await saveSkipPermissions(enabled)
     }, [saveSkipPermissions])
 
+    const handleAutonomyChange = useCallback((enabled: boolean) => {
+        setAutonomyEnabled(enabled)
+        onAutonomyChangeRef.current?.(enabled)
+    }, [])
+
     const handleAgentTypeChange = useCallback(async (type: AgentType) => {
         agentTypeTouchedRef.current = true
         setAgentType(type)
@@ -292,6 +305,12 @@ export function SessionConfigurationPanel({
     }, [initialSkipPermissions, skipPermissions, agentType])
 
     useEffect(() => {
+        if (initialAutonomyEnabled !== autonomyEnabled) {
+            setAutonomyEnabled(initialAutonomyEnabled)
+        }
+    }, [initialAutonomyEnabled, autonomyEnabled])
+
+    useEffect(() => {
         if (initialAgentType && initialAgentType !== agentType) {
             initialAgentTypeRef.current = initialAgentType
             agentTypeTouchedRef.current = false
@@ -348,11 +367,13 @@ export function SessionConfigurationPanel({
                             value={agentType}
                             onChange={(type) => { void handleAgentTypeChange(type) }}
                             disabled={disabled}
-                            agentSelectionDisabled={agentSelectionDisabled}
-                            skipPermissions={skipPermissions}
-                            onSkipPermissionsChange={(enabled) => { void handleSkipPermissionsChange(enabled) }}
-                            showShortcutHint={shouldShowShortcutHint}
-                        />
+                        agentSelectionDisabled={agentSelectionDisabled}
+                        skipPermissions={skipPermissions}
+                        onSkipPermissionsChange={(enabled) => { void handleSkipPermissionsChange(enabled) }}
+                        autonomyEnabled={autonomyEnabled}
+                        onAutonomyChange={handleAutonomyChange}
+                        showShortcutHint={shouldShowShortcutHint}
+                    />
                     </div>
                 </div>
             </div>
@@ -455,6 +476,8 @@ export function SessionConfigurationPanel({
                     agentSelectionDisabled={agentSelectionDisabled}
                     skipPermissions={skipPermissions}
                     onSkipPermissionsChange={(enabled) => { void handleSkipPermissionsChange(enabled) }}
+                    autonomyEnabled={autonomyEnabled}
+                    onAutonomyChange={handleAutonomyChange}
                     showShortcutHint={shouldShowShortcutHint}
                 />
                 {agentType === 'codex' && effectiveCodexModelOptions && onCodexModelChange && (
@@ -706,6 +729,7 @@ export function useSessionConfiguration(): [SessionConfiguration, (config: Parti
         baseBranch: '',
         agentType: 'claude',
         skipPermissions: false,
+        autonomyEnabled: false,
         isValid: false
     })
 

@@ -24,6 +24,7 @@ const defaults: DefaultGenerationPrompts = {
   plan_issue_prompt: 'default issue {{issue.title}} {{issue.description}}',
   issue_prompt: 'default issue prompt {title} {body} {comments}',
   pr_prompt: 'default pr prompt {title} {branch} {body} {comments}',
+  autonomy_prompt_template: '## Agent Instructions\n\nDefault autonomy template',
 }
 
 describe('generationPrompts', () => {
@@ -40,6 +41,7 @@ describe('generationPrompts', () => {
       plan_issue_prompt: null,
       issue_prompt: null,
       pr_prompt: null,
+      autonomy_prompt_template: null,
     }
 
     expect(resolveGenerationPrompts(settings, defaults)).toEqual(defaults)
@@ -54,6 +56,7 @@ describe('generationPrompts', () => {
       plan_issue_prompt: null,
       issue_prompt: 'custom issue {title}',
       pr_prompt: 'custom pr {title}',
+      autonomy_prompt_template: 'custom autonomy instructions',
     }
 
     expect(resolveGenerationPrompts(settings, defaults)).toMatchObject({
@@ -62,6 +65,7 @@ describe('generationPrompts', () => {
       consolidation_prompt: 'custom consolidation {sessionList}',
       issue_prompt: 'custom issue {title}',
       pr_prompt: 'custom pr {title}',
+      autonomy_prompt_template: 'custom autonomy instructions',
     })
   })
 
@@ -92,6 +96,7 @@ describe('generationPrompts', () => {
           plan_issue_prompt: null,
           issue_prompt: null,
           pr_prompt: null,
+          autonomy_prompt_template: null,
         }
       }
       if (command === TauriCommands.GetDefaultGenerationPrompts) {
@@ -104,6 +109,7 @@ describe('generationPrompts', () => {
       name_prompt: defaults.name_prompt,
       commit_prompt: 'saved commit {commits}',
       consolidation_prompt: 'saved consolidation {sessionList}',
+      autonomy_prompt_template: defaults.autonomy_prompt_template,
     })
   })
 

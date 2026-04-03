@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from './tauriCommands'
 import { logger } from '../utils/logger'
+import { DEFAULT_AUTONOMY_PROMPT_TEMPLATE } from './autonomyPrompt'
 
 export interface GenerationSettingsPrompts {
   name_prompt?: string | null
@@ -10,6 +11,7 @@ export interface GenerationSettingsPrompts {
   plan_issue_prompt?: string | null
   issue_prompt?: string | null
   pr_prompt?: string | null
+  autonomy_prompt_template?: string | null
 }
 
 export interface DefaultGenerationPrompts {
@@ -20,6 +22,7 @@ export interface DefaultGenerationPrompts {
   plan_issue_prompt: string
   issue_prompt: string
   pr_prompt: string
+  autonomy_prompt_template?: string
 }
 
 const FALLBACK_DEFAULT_GENERATION_PROMPTS: DefaultGenerationPrompts = {
@@ -103,6 +106,7 @@ Instructions:
     '{body}',
     '{commentsSection}',
   ].join('\n'),
+  autonomy_prompt_template: DEFAULT_AUTONOMY_PROMPT_TEMPLATE,
 }
 
 export function resolveGenerationPrompts(
@@ -117,6 +121,7 @@ export function resolveGenerationPrompts(
     plan_issue_prompt: settings.plan_issue_prompt ?? defaults.plan_issue_prompt,
     issue_prompt: settings.issue_prompt ?? defaults.issue_prompt,
     pr_prompt: settings.pr_prompt ?? defaults.pr_prompt,
+    autonomy_prompt_template: settings.autonomy_prompt_template ?? defaults.autonomy_prompt_template,
   }
 }
 

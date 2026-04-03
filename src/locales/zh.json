@@ -63,6 +63,7 @@
       "archives": "归档",
       "keyboard": "键盘快捷键",
       "environment": "代理配置",
+      "agentConfiguration": "启动配置",
       "projectGeneral": "项目设置",
       "projectRun": "运行与环境",
       "projectActions": "操作按钮",
@@ -340,6 +341,11 @@
       "missingRequiredVariables": "缺少必需变量：{variables}",
       "usingDefault": "使用默认值",
       "customized": "已自定义"
+    },
+    "agentConfiguration": {
+      "autonomyTemplate": "自主执行提示模板",
+      "autonomyTemplateDesc": "当会话启动时启用“完全自主”后，这段文本会追加到初始提示词末尾。",
+      "autonomyTemplateHint": "v1 在所有代理之间共享。重置会恢复默认的自主执行指令块。"
     },
     "mcp": {
       "title": "MCP 服务器配置",
@@ -992,8 +998,10 @@
     "noReasoningOptions": "没有可用的推理选项",
     "requirePermissions": "需要权限",
     "skipPermissions": "跳过权限",
+    "fullAutonomous": "完全自主",
     "requirePermissionsTitle": "启动代理时需要 macOS 权限提示",
-    "skipPermissionsTitle": "启动代理时跳过 macOS 权限提示"
+    "skipPermissionsTitle": "启动代理时跳过 macOS 权限提示",
+    "fullAutonomousTitle": "创建会话时追加共享的自主执行指令模板"
   },
   "githubMenu": {
     "title": "GitHub CLI",

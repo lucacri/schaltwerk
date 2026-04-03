@@ -229,6 +229,8 @@ pub struct GenerationSettings {
     pub issue_prompt: Option<String>,
     #[serde(default)]
     pub pr_prompt: Option<String>,
+    #[serde(default)]
+    pub autonomy_prompt_template: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -332,6 +334,8 @@ pub struct AgentPresetSlot {
     pub variant_id: Option<String>,
     #[serde(default)]
     pub skip_permissions: Option<bool>,
+    #[serde(default)]
+    pub autonomy_enabled: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]

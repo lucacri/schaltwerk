@@ -165,6 +165,8 @@ type OnCreatePayload = {
   userEditedName?: boolean
   skipPermissions?: boolean
   agentTypes?: string[]
+  agentSlots?: Array<{ agentType: string; skipPermissions?: boolean; autonomyEnabled?: boolean }>
+  autonomyEnabled?: boolean
   draftContent?: string
   issueNumber?: number
   issueUrl?: string
@@ -1157,6 +1159,59 @@ describe('validatePanelPercentage', () => {
       pendingResolvers.forEach(resolve => resolve())
     })
     await createPromise
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
+  it('forwards slot-aligned autonomy metadata for preset launches', async () => {
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    const modalCall = newSessionModalMock.mock.calls.at(-1)
+    expect(modalCall).toBeTruthy()
+    const modalProps = modalCall![0] as { onCreate: OnCreateFn }
+
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        return buildRawSession(String(args?.name ?? 'feature_v1'))
+      }
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await modalProps.onCreate({
+      name: 'feature',
+      prompt: 'Implement feature',
+      baseBranch: 'main',
+      agentSlots: [
+        { agentType: 'claude', skipPermissions: true, autonomyEnabled: true },
+        { agentType: 'codex', skipPermissions: false, autonomyEnabled: false },
+      ],
+      userEditedName: true,
+    })
+
+    const createCalls = invokeMock.mock.calls.filter(
+      ([cmd]) => cmd === TauriCommands.SchaltwerkCoreCreateSession
+    )
+
+    expect(createCalls).toHaveLength(2)
+    expect(createCalls[0]?.[1]).toEqual(expect.objectContaining({
+      name: 'feature_v1',
+      agentType: 'claude',
+      skipPermissions: true,
+      autonomyEnabled: true,
+    }))
+    expect(createCalls[1]?.[1]).toEqual(expect.objectContaining({
+      name: 'feature_v2',
+      agentType: 'codex',
+      skipPermissions: false,
+      autonomyEnabled: false,
+    }))
 
     invokeMock.mockImplementation(defaultInvokeImpl)
   })

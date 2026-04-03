@@ -135,7 +135,7 @@ vi.mock('../../utils/dockerNames', () => ({
 }))
 
 const mockAgentPresets = vi.fn(() => ({
-  presets: [] as Array<{ id: string; name: string; slots: Array<{ agentType: string }>; isBuiltIn: boolean }>,
+  presets: [] as Array<{ id: string; name: string; slots: Array<{ agentType: string; skipPermissions?: boolean; autonomyEnabled?: boolean }>; isBuiltIn: boolean }>,
   loading: false,
   error: null,
   savePresets: vi.fn().mockResolvedValue(true),
@@ -238,6 +238,14 @@ describe('NewSessionModal', () => {
     mockGetAgentType.mockResolvedValue('claude')
     mockSetAgentType.mockClear()
     useAgentAvailabilityMock.mockClear()
+    mockAgentPresets.mockReset()
+    mockAgentPresets.mockReturnValue({
+      presets: [],
+      loading: false,
+      error: null,
+      savePresets: vi.fn().mockResolvedValue(true),
+      reloadPresets: vi.fn().mockResolvedValue(undefined),
+    })
   })
 
   afterEach(() => {
@@ -512,6 +520,80 @@ describe('NewSessionModal', () => {
 
     const restoredSkipButton = await screen.findByRole('button', { name: /Skip permissions/i })
     expect(restoredSkipButton).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('shows autonomy toggle for supported agents and hides it for terminal', async () => {
+    openModal()
+
+    expect(await screen.findByRole('button', { name: /Full autonomous/i })).toBeInTheDocument()
+
+    const agentDropdown = await screen.findByRole('button', { name: /Claude/i })
+    fireEvent.click(agentDropdown)
+
+    const terminalOptionButtons = await screen.findAllByRole('button', { name: /Terminal Only/i })
+    fireEvent.click(terminalOptionButtons[terminalOptionButtons.length - 1])
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /Full autonomous/i })).toBeNull()
+    })
+  })
+
+  it('passes autonomyEnabled for single-agent launches', async () => {
+    const onCreate = vi.fn()
+    render(<ModalProvider><NewSessionModal open={true} onClose={vi.fn()} onCreate={onCreate} /></ModalProvider>)
+
+    const autonomyButton = await screen.findByRole('button', { name: /Full autonomous/i })
+    fireEvent.click(autonomyButton)
+
+    await waitFor(() => expect(autonomyButton).toHaveAttribute('aria-pressed', 'true'))
+
+    fireEvent.click(screen.getByRole('button', { name: /Start Agent/i }))
+
+    await waitFor(() => expect(onCreate).toHaveBeenCalled())
+    expect(onCreate.mock.calls[0][0]).toEqual(expect.objectContaining({ autonomyEnabled: true }))
+  })
+
+  it('passes preset slot autonomy metadata without flattening slots', async () => {
+    mockAgentPresets.mockReturnValue({
+      presets: [
+        {
+          id: 'preset-duo',
+          name: 'Autonomy Duo',
+          isBuiltIn: false,
+          slots: [
+            { agentType: 'claude', skipPermissions: true, autonomyEnabled: true },
+            { agentType: 'codex', skipPermissions: false, autonomyEnabled: false },
+          ],
+        },
+      ],
+      loading: false,
+      error: null,
+      savePresets: vi.fn().mockResolvedValue(true),
+      reloadPresets: vi.fn().mockResolvedValue(undefined),
+    })
+
+    const onCreate = vi.fn()
+    render(<ModalProvider><NewSessionModal open={true} onClose={vi.fn()} onCreate={onCreate} /></ModalProvider>)
+
+    const presetTab = await screen.findByRole('tab', { name: /Preset/i })
+    fireEvent.click(presetTab)
+
+    const presetDropdown = await screen.findByRole('button', { name: /No preset/i })
+    fireEvent.click(presetDropdown)
+
+    const presetOption = await screen.findByRole('button', { name: /Autonomy Duo/i })
+    fireEvent.click(presetOption)
+
+    fireEvent.click(screen.getByRole('button', { name: /Start Agent/i }))
+
+    await waitFor(() => expect(onCreate).toHaveBeenCalled())
+    expect(onCreate.mock.calls[0][0]).toEqual(expect.objectContaining({
+      agentSlots: [
+        { agentType: 'claude', skipPermissions: true, autonomyEnabled: true },
+        { agentType: 'codex', skipPermissions: false, autonomyEnabled: false },
+      ],
+    }))
+    expect(onCreate.mock.calls[0][0].agentTypes).toBeUndefined()
   })
 
   it('restores the last selected agent type when reopening the modal', async () => {

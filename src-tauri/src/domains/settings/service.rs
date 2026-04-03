@@ -1103,6 +1103,7 @@ mod tests {
             plan_issue_prompt: None,
             issue_prompt: None,
             pr_prompt: None,
+            autonomy_prompt_template: None,
         };
         service
             .set_generation_settings(settings)
@@ -1134,6 +1135,7 @@ mod tests {
             plan_issue_prompt: Some("Custom plan {{issue.title}} {{issue.description}}".to_string()),
             issue_prompt: Some("Issue prompt {title} {comments}".to_string()),
             pr_prompt: Some("PR prompt {title} {branch}".to_string()),
+            autonomy_prompt_template: Some("Autonomy template".to_string()),
         };
         service
             .set_generation_settings(settings)
@@ -1158,6 +1160,7 @@ mod tests {
         );
         assert_eq!(loaded.issue_prompt, Some("Issue prompt {title} {comments}".to_string()));
         assert_eq!(loaded.pr_prompt, Some("PR prompt {title} {branch}".to_string()));
+        assert_eq!(loaded.autonomy_prompt_template, Some("Autonomy template".to_string()));
     }
 
     #[test]
@@ -1219,11 +1222,13 @@ mod tests {
                     agent_type: "claude".to_string(),
                     variant_id: None,
                     skip_permissions: Some(true),
+                    autonomy_enabled: Some(true),
                 },
                 AgentPresetSlot {
                     agent_type: "codex".to_string(),
                     variant_id: Some("variant-opus-high".to_string()),
                     skip_permissions: None,
+                    autonomy_enabled: None,
                 },
             ],
             is_built_in: false,

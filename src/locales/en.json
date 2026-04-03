@@ -63,6 +63,7 @@
       "archives": "Archives",
       "keyboard": "Keyboard Shortcuts",
       "environment": "Agent Configuration",
+      "agentConfiguration": "Launch Configuration",
       "projectGeneral": "Project Settings",
       "projectRun": "Run & Environment",
       "projectActions": "Action Buttons",
@@ -340,6 +341,11 @@
       "missingRequiredVariables": "Missing required variable(s): {variables}",
       "usingDefault": "Using default",
       "customized": "Customized"
+    },
+    "agentConfiguration": {
+      "autonomyTemplate": "Autonomy prompt template",
+      "autonomyTemplateDesc": "This text is appended to the initial prompt when Full autonomous is enabled for a session launch.",
+      "autonomyTemplateHint": "Shared across agents in v1. Reset restores the default autonomy instruction block."
     },
     "mcp": {
       "title": "MCP Server Configuration",
@@ -992,8 +998,10 @@
     "noReasoningOptions": "No reasoning options available",
     "requirePermissions": "Require permissions",
     "skipPermissions": "Skip permissions",
+    "fullAutonomous": "Full autonomous",
     "requirePermissionsTitle": "Require macOS permission prompts when starting the agent",
-    "skipPermissionsTitle": "Skip macOS permission prompts when starting the agent"
+    "skipPermissionsTitle": "Skip macOS permission prompts when starting the agent",
+    "fullAutonomousTitle": "Append the shared autonomy instruction template when this session is created"
   },
   "githubMenu": {
     "title": "GitHub CLI",

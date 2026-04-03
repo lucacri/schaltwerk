@@ -78,15 +78,20 @@ vi.mock('../inputs/ModelSelector', () => ({
         onChange,
         disabled,
         skipPermissions,
-        onSkipPermissionsChange
+        onSkipPermissionsChange,
+        autonomyEnabled,
+        onAutonomyChange
     }: {
         value?: string
         onChange?: (value: string) => void
         disabled?: boolean
         skipPermissions?: boolean
         onSkipPermissionsChange?: (skip: boolean) => void
+        autonomyEnabled?: boolean
+        onAutonomyChange?: (enabled: boolean) => void
     }) => {
         const supportsPermissions = value !== 'opencode'
+        const supportsAutonomy = value !== 'terminal'
         return (
             <div data-testid="model-selector">
                 <select
@@ -98,6 +103,7 @@ vi.mock('../inputs/ModelSelector', () => ({
                     <option value="opencode">OpenCode</option>
                     <option value="gemini">Gemini</option>
                     <option value="codex">Codex</option>
+                    <option value="terminal">Terminal</option>
                 </select>
                 {supportsPermissions && onSkipPermissionsChange ? (
                     <button
@@ -107,6 +113,17 @@ vi.mock('../inputs/ModelSelector', () => ({
                         disabled={disabled}
                     >
                         Toggle Skip
+                    </button>
+                ) : null}
+                {supportsAutonomy && onAutonomyChange ? (
+                    <button
+                        type="button"
+                        data-testid="toggle-autonomy"
+                        aria-pressed={!!autonomyEnabled}
+                        onClick={() => onAutonomyChange(!autonomyEnabled)}
+                        disabled={disabled}
+                    >
+                        Toggle Autonomy
                     </button>
                 ) : null}
             </div>
@@ -379,6 +396,45 @@ describe('SessionConfigurationPanel', () => {
         })
 
         expect(screen.queryByTestId('toggle-skip-permissions')).not.toBeInTheDocument()
+        expect(screen.getByTestId('toggle-autonomy')).toBeInTheDocument()
+    })
+
+    test('shows autonomy toggle for supported agents', async () => {
+        render(
+            <SessionConfigurationPanel
+                variant="modal"
+                onBaseBranchChange={vi.fn()}
+                onAgentTypeChange={vi.fn()}
+                onSkipPermissionsChange={vi.fn()}
+                onAutonomyChange={vi.fn()}
+                initialAgentType="claude"
+            />
+        )
+
+        await waitFor(() => {
+            expect(screen.getByTestId('model-selector')).toBeInTheDocument()
+        })
+
+        expect(screen.getByTestId('toggle-autonomy')).toBeInTheDocument()
+    })
+
+    test('hides autonomy toggle for terminal agent', async () => {
+        render(
+            <SessionConfigurationPanel
+                variant="modal"
+                onBaseBranchChange={vi.fn()}
+                onAgentTypeChange={vi.fn()}
+                onSkipPermissionsChange={vi.fn()}
+                onAutonomyChange={vi.fn()}
+                initialAgentType="terminal"
+            />
+        )
+
+        await waitFor(() => {
+            expect(screen.getByTestId('model-selector')).toBeInTheDocument()
+        })
+
+        expect(screen.queryByTestId('toggle-autonomy')).not.toBeInTheDocument()
     })
 
     test('loads branches and sets default branch on mount', async () => {

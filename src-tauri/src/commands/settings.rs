@@ -722,6 +722,7 @@ pub struct DefaultGenerationPrompts {
     pub plan_issue_prompt: String,
     pub issue_prompt: String,
     pub pr_prompt: String,
+    pub autonomy_prompt_template: String,
 }
 
 #[tauri::command]
@@ -734,6 +735,7 @@ pub fn get_default_generation_prompts() -> DefaultGenerationPrompts {
         plan_issue_prompt: lucode::domains::settings::default_plan_issue_prompt_template(),
         issue_prompt: lucode::domains::settings::default_issue_session_prompt_template(),
         pr_prompt: lucode::domains::settings::default_pr_session_prompt_template(),
+        autonomy_prompt_template: lucode::domains::settings::default_autonomy_prompt_template(),
     }
 }
 
@@ -1455,5 +1457,7 @@ mod tests {
         assert!(prompts.plan_issue_prompt.contains("{{issue.title}}"));
         assert!(prompts.issue_prompt.contains("{title}"));
         assert!(prompts.pr_prompt.contains("{branch}"));
+        assert!(prompts.autonomy_prompt_template.contains("## Agent Instructions"));
+        assert!(prompts.autonomy_prompt_template.contains("Complete the work by creating a squashed commit"));
     }
 }
