@@ -3772,11 +3772,11 @@ async fn start_orchestrator_with_prompt(
     skip_prompt: bool,
 ) -> Result<String, String> {
     let Some(prompt) = prompt.filter(|p| !p.trim().is_empty()) else {
-        return schaltwerk_core_start_claude_orchestrator(app, terminal_id, None, None, agent_type)
+        return schaltwerk_core_start_claude_orchestrator(app, terminal_id, None, None, agent_type, None)
             .await;
     };
     if skip_prompt {
-        return schaltwerk_core_start_claude_orchestrator(app, terminal_id, None, None, agent_type)
+        return schaltwerk_core_start_claude_orchestrator(app, terminal_id, None, None, agent_type, None)
             .await;
     }
 

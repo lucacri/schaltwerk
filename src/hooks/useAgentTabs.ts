@@ -24,7 +24,14 @@ type StartAgentFn = (params: {
     sessionId: string
     terminalId: string
     agentType: AgentType
+    freshSession?: boolean
 }) => Promise<void>
+
+type AddAgentTabOptions = {
+    skipPermissions?: boolean
+    label?: string
+    freshSession?: boolean
+}
 
 export const useAgentTabs = (
     sessionId: string | null,
@@ -108,8 +115,8 @@ export const useAgentTabs = (
     }, [sessionId, baseTerminalId, agentTabsMap])
 
     const addTab = useCallback(
-        (agentType: AgentType, options?: { skipPermissions?: boolean; label?: string }) => {
-            if (!sessionId || !baseTerminalId) return
+        (agentType: AgentType, options?: AddAgentTabOptions) => {
+            if (!sessionId || !baseTerminalId) return null
 
             let newTerminalId = ''
             let newTabArrayIndex = 0
@@ -165,11 +172,16 @@ export const useAgentTabs = (
 
             if (newTerminalId) {
                 logger.info(
-                    `[useAgentTabs] Starting new agent tab ${newTabArrayIndex} (idx=${newTabNumericIndex}) with ${agentType} in ${newTerminalId}, skipPermissions=${options?.skipPermissions}`
+                    `[useAgentTabs] Starting new agent tab ${newTabArrayIndex} (idx=${newTabNumericIndex}) with ${agentType} in ${newTerminalId}, skipPermissions=${options?.skipPermissions}, freshSession=${options?.freshSession}`
                 )
                 const effectiveSkipPermissions = !AGENT_SUPPORTS_SKIP_PERMISSIONS[agentType] ? false : options?.skipPermissions
                 const starter = startAgent
-                    ? startAgent({ sessionId, terminalId: newTerminalId, agentType })
+                    ? startAgent({
+                          sessionId,
+                          terminalId: newTerminalId,
+                          agentType,
+                          freshSession: options?.freshSession,
+                      })
                     : invoke(TauriCommands.SchaltwerkCoreStartSessionAgentWithRestart, {
                           params: {
                               sessionName: sessionId,
@@ -211,6 +223,8 @@ export const useAgentTabs = (
                     }
                 })
             }
+
+            return newTerminalId || null
         },
         [sessionId, baseTerminalId, setAgentTabsMap, startAgent, parseTabNumericIndex]
     )

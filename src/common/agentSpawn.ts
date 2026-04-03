@@ -192,8 +192,14 @@ export async function startOrchestratorTop(params: {
   terminalId: string
   measured?: { cols?: number | null; rows?: number | null }
   agentType?: string
+  freshSession?: boolean
 }) {
-  const { terminalId, measured, agentType: requestedAgentType } = params
+  const {
+    terminalId,
+    measured,
+    agentType: requestedAgentType,
+    freshSession = false,
+  } = params
   if (hasInflight(terminalId) || isTerminalStartingOrStarted(terminalId)) return
 
   const agentType = requestedAgentType ?? DEFAULT_AGENT
@@ -214,7 +220,13 @@ export async function startOrchestratorTop(params: {
     await singleflight(terminalId, async () => {
       try {
         await withAgentStartTimeout(
-          invoke(command, { terminalId, cols, rows, agentType: requestedAgentType }),
+          invoke(command, {
+            terminalId,
+            cols,
+            rows,
+            ...(requestedAgentType ? { agentType: requestedAgentType } : {}),
+            ...(freshSession ? { freshSession: true } : {}),
+          }),
           timeoutMs,
           { id: terminalId, command }
         )

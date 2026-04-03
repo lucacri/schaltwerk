@@ -2194,6 +2194,7 @@ pub async fn schaltwerk_core_start_claude_orchestrator(
     cols: Option<u16>,
     rows: Option<u16>,
     agent_type: Option<String>,
+    fresh_session: Option<bool>,
 ) -> Result<String, String> {
     let agent_label = agent_type.as_deref().unwrap_or("claude");
     log::info!("[AGENT_LAUNCH_TRACE] Starting {agent_label} for orchestrator in terminal: {terminal_id}");
@@ -2245,12 +2246,21 @@ pub async fn schaltwerk_core_start_claude_orchestrator(
         std::collections::HashMap::new()
     };
 
-    let command_spec = manager
-        .start_agent_in_orchestrator(&binary_paths, agent_type.as_deref(), None)
-        .map_err(|e| {
-            log::error!("Failed to build orchestrator command: {e}");
-            format!("Failed to start {agent_label} in orchestrator: {e}")
-        })?;
+    let command_spec = if fresh_session.unwrap_or(false) {
+        manager
+            .start_fresh_agent_in_orchestrator(&binary_paths, agent_type.as_deref())
+            .map_err(|e| {
+                log::error!("Failed to build fresh orchestrator command: {e}");
+                format!("Failed to start fresh {agent_label} in orchestrator: {e}")
+            })?
+    } else {
+        manager
+            .start_agent_in_orchestrator(&binary_paths, agent_type.as_deref(), None)
+            .map_err(|e| {
+                log::error!("Failed to build orchestrator command: {e}");
+                format!("Failed to start {agent_label} in orchestrator: {e}")
+            })?
+    };
 
     drop(core);
     log::info!("[AGENT_LAUNCH_TRACE] Dropped core read lock for {terminal_id}");

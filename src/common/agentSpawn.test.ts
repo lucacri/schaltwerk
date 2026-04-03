@@ -403,6 +403,22 @@ describe('agentSpawn', () => {
       })
     })
 
+    it('passes the fresh session flag when requested', async () => {
+      await startOrchestratorTop({
+        terminalId: 'orchestrator-test-top',
+        agentType: 'codex',
+        freshSession: true,
+      })
+
+      expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreStartClaudeOrchestrator, {
+        terminalId: 'orchestrator-test-top',
+        cols: 118,
+        rows: 40,
+        agentType: 'codex',
+        freshSession: true,
+      })
+    })
+
     it('cleans up background start mark on error', async () => {
       const error = new Error('Orchestrator start failed')
       vi.mocked(singleflight).mockRejectedValue(error)

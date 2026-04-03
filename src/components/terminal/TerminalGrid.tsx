@@ -117,6 +117,10 @@ const TerminalGridComponent = () => {
     const shouldShowActionButtons = (selection.kind === 'orchestrator' || selection.kind === 'session') && actionButtons.length > 0
     
     const [terminalKey, setTerminalKey] = useState(0)
+    const [pendingRefineRequest, setPendingRefineRequest] = useState<{
+        sessionName: string
+        displayName: string
+    } | null>(null)
 
     // Constants for special tab indices
     const RUN_TAB_INDEX = -1 // Special index for the Run tab
@@ -142,8 +146,17 @@ const TerminalGridComponent = () => {
 
     // Agent tabs state for multiple agents in top terminal
     const agentTabScopeId = selection.kind === 'session' ? (selection.payload ?? null) : selection.kind === 'orchestrator' ? 'orchestrator' : null
-    const orchestratorTabStarter = useCallback(async ({ terminalId, agentType }: { sessionId: string; terminalId: string; agentType: string }) => {
-        await startOrchestratorTop({ terminalId, agentType })
+    const orchestratorTabStarter = useCallback(async ({
+        terminalId,
+        agentType,
+        freshSession,
+    }: {
+        sessionId: string
+        terminalId: string
+        agentType: string
+        freshSession?: boolean
+    }) => {
+        await startOrchestratorTop({ terminalId, agentType, freshSession })
     }, [])
 
     const {
@@ -254,6 +267,7 @@ const TerminalGridComponent = () => {
     const isBottomCollapsedRef = useRef(isBottomCollapsed)
     const isDraggingRef = useRef(false)
     const pendingInsertTextRef = useRef<string | null>(null)
+    const pendingInsertTerminalIdRef = useRef<string | null>(null)
 
     useEffect(() => {
         isBottomCollapsedRef.current = isBottomCollapsed
@@ -324,6 +338,41 @@ const TerminalGridComponent = () => {
             setCustomAgentModalOpen(false)
         }
     }, [addAgentTab, pushToast])
+
+    const handlePendingRefineCancel = useCallback(() => {
+        pendingInsertTerminalIdRef.current = null
+        setPendingRefineRequest(null)
+    }, [])
+
+    const handlePendingRefineSwitch = useCallback(async ({ agentType: nextAgent, skipPermissions }: { agentType: AgentType; skipPermissions: boolean }) => {
+        if (!pendingRefineRequest) {
+            return
+        }
+
+        const displayName = pendingRefineRequest.displayName
+        pendingInsertTextRef.current = buildSpecRefineReference(
+            pendingRefineRequest.sessionName,
+            displayName
+        )
+        const terminalId = addAgentTab(nextAgent, {
+            label: `Refine: ${displayName}`,
+            skipPermissions,
+            freshSession: true,
+        })
+        if (!terminalId) {
+            pendingInsertTextRef.current = null
+            pendingInsertTerminalIdRef.current = null
+            pushToast({
+                tone: 'error',
+                title: t.terminalErrors.addAgentTabFailed,
+                description: t.terminalErrors.addAgentTabFailedDesc,
+            })
+            setPendingRefineRequest(null)
+            return
+        }
+        pendingInsertTerminalIdRef.current = terminalId
+        setPendingRefineRequest(null)
+    }, [addAgentTab, pendingRefineRequest, pushToast, t.terminalErrors.addAgentTabFailed, t.terminalErrors.addAgentTabFailedDesc])
 
     const handleConfirmReset = useCallback(() => {
         if (selection.kind !== 'session' || !selection.payload) return
@@ -1267,12 +1316,13 @@ const TerminalGridComponent = () => {
 
         const isOrchestrator = selection.kind === 'orchestrator'
         const sessionKey = selection.kind === 'session' && selection.payload ? selection.payload : 'orchestrator'
-        const targetTerminalId = getActiveAgentTerminalId(sessionKey) ?? terminalId
+        const targetTerminalId = pendingInsertTerminalIdRef.current ?? getActiveAgentTerminalId(sessionKey) ?? terminalId
 
         try {
             const exists = await invoke<boolean>(TauriCommands.TerminalExists, { id: targetTerminalId })
             if (!exists) {
                 pendingInsertTextRef.current = null
+                pendingInsertTerminalIdRef.current = null
                 logger.warn('[TerminalGrid] Terminal not available for text insert', { terminalId: targetTerminalId, selectionKind: selection.kind })
                 pushToast({
                     tone: 'error',
@@ -1291,6 +1341,7 @@ const TerminalGridComponent = () => {
             }
             await invoke(TauriCommands.WriteTerminal, { id: targetTerminalId, data: `${pendingText} ` })
             pendingInsertTextRef.current = null
+            pendingInsertTerminalIdRef.current = null
             setFocusForSession(sessionKey, 'claude')
             setLocalFocus('claude')
             safeTerminalFocus(() => {
@@ -1298,6 +1349,7 @@ const TerminalGridComponent = () => {
             }, isAnyModalOpen)
         } catch (error) {
             pendingInsertTextRef.current = null
+            pendingInsertTerminalIdRef.current = null
             logger.error('[TerminalGrid] Failed to insert text into terminal', { error, terminalId, selectionKind: selection.kind })
             pushToast({
                 tone: 'error',
@@ -1325,12 +1377,43 @@ const TerminalGridComponent = () => {
             }
 
             const displayName = detail.displayName?.trim() ? detail.displayName.trim() : detail.sessionName
-            pendingInsertTextRef.current = buildSpecRefineReference(detail.sessionName, detail.displayName)
-            addAgentTab(agentType as AgentType, { label: `Refine: ${displayName}` })
-            void applyPendingInsert()
+            setPendingRefineRequest({
+                sessionName: detail.sessionName,
+                displayName,
+            })
         })
         return cleanup
-    }, [addAgentTab, agentType, applyPendingInsert, selection.kind])
+    }, [selection.kind])
+
+    useEffect(() => {
+        if (selection.kind === 'orchestrator') {
+            return
+        }
+        pendingInsertTerminalIdRef.current = null
+        setPendingRefineRequest(null)
+    }, [selection.kind])
+
+    useEffect(() => {
+        const cleanup = listenUiEvent(UiEvent.AgentLifecycle, (detail) => {
+            if (!detail?.terminalId) {
+                return
+            }
+            if (detail.terminalId !== pendingInsertTerminalIdRef.current) {
+                return
+            }
+
+            if (detail.state === 'failed') {
+                pendingInsertTextRef.current = null
+                pendingInsertTerminalIdRef.current = null
+                return
+            }
+
+            if (detail.state === 'ready') {
+                void applyPendingInsert()
+            }
+        })
+        return cleanup
+    }, [applyPendingInsert])
 
     useEffect(() => {
         void applyPendingInsert()
@@ -1776,6 +1859,13 @@ const TerminalGridComponent = () => {
                 targetSessionId={selection.kind === 'session' ? selection.payload : null}
                 initialAgentType={agentType as AgentType}
                 onSwitch={handleConfigureAgentsSwitch}
+            />
+            <SwitchOrchestratorModal
+                open={selection.kind === 'orchestrator' && pendingRefineRequest !== null}
+                onClose={handlePendingRefineCancel}
+                scope="orchestrator"
+                initialAgentType={agentType as AgentType}
+                onSwitch={handlePendingRefineSwitch}
             />
             <CustomAgentModal
                 open={customAgentModalOpen && (selection.kind === 'session' || selection.kind === 'orchestrator')}

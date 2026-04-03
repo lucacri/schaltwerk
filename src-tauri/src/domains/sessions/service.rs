@@ -3450,6 +3450,14 @@ impl SessionManager {
         self.start_orchestrator_internal(binary_paths, true, agent_type_override, initial_prompt)
     }
 
+    pub fn start_fresh_agent_in_orchestrator(
+        &self,
+        binary_paths: &HashMap<String, String>,
+        agent_type_override: Option<&str>,
+    ) -> Result<AgentLaunchSpec> {
+        self.start_orchestrator_internal(binary_paths, false, agent_type_override, None)
+    }
+
     fn start_orchestrator_internal(
         &self,
         binary_paths: &HashMap<String, String>,
