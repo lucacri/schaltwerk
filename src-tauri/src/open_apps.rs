@@ -79,11 +79,9 @@ mod tests {
         assert_eq!(spec.program, "code");
         assert_eq!(spec.working_dir, Some(PathBuf::from("/repo/root")));
         assert!(spec.args.contains(&"--reuse-window".into()));
-        assert!(spec.args.contains(&"--folder-uri".into()));
         assert!(
-            spec.args
-                .iter()
-                .any(|arg| arg.starts_with("file:///repo/root"))
+            !spec.args.contains(&"--folder-uri".into()),
+            "should not include --folder-uri when opening a specific file"
         );
         assert!(spec.args.contains(&"--goto".into()));
         assert!(
@@ -490,34 +488,17 @@ fn build_command_macos(app_id: &str, req: &ResolvedRequest) -> Result<CommandSpe
             args: vec![format!("--working-directory={}", terminal_dir)],
             working_dir: None,
         }),
-        "vscode" | "code" => {
-            let mut args = vec![
-                "--reuse-window".into(),
-                "--folder-uri".into(),
-                to_file_uri(&req.worktree_root),
-            ];
+        "vscode" | "code" | "cursor" => {
+            let mut args = vec!["--reuse-window".into()];
             if let Some(g) = goto {
                 args.push("--goto".into());
                 args.push(g);
+            } else {
+                args.push("--folder-uri".into());
+                args.push(to_file_uri(&req.worktree_root));
             }
             Ok(CommandSpec {
-                program: "code".into(),
-                args,
-                working_dir: Some(req.worktree_root.clone()),
-            })
-        }
-        "cursor" => {
-            let mut args = vec![
-                "--reuse-window".into(),
-                "--folder-uri".into(),
-                to_file_uri(&req.worktree_root),
-            ];
-            if let Some(g) = goto {
-                args.push("--goto".into());
-                args.push(g);
-            }
-            Ok(CommandSpec {
-                program: "cursor".into(),
+                program: if app_id == "cursor" { "cursor" } else { "code" }.into(),
                 args,
                 working_dir: Some(req.worktree_root.clone()),
             })
