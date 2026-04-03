@@ -116,7 +116,7 @@ function updateTabStatus(
   set(projectTabsInternalAtom, next)
 }
 
-async function runProjectSwitch(get: GetAtomFunction, set: SetAtomFunction, path: string): Promise<boolean> {
+async function runProjectSwitch(set: SetAtomFunction, path: string): Promise<boolean> {
   if (!path) {
     return false
   }
@@ -142,11 +142,7 @@ async function runProjectSwitch(get: GetAtomFunction, set: SetAtomFunction, path
       if (abortController.signal.aborted) {
         return false
       }
-      const previousPath = get(projectPathAtom)
       await set(setProjectPathActionAtom, path)
-      if (previousPath && previousPath !== path) {
-        await set(cleanupOrchestratorTerminalsActionAtom, previousPath)
-      }
       return true
     } catch (error) {
       const { message, isPermission } = parsePermissionError(error)
@@ -249,7 +245,7 @@ export const openProjectActionAtom = atom(
           return true
         }
 
-        return runProjectSwitch(get as GetAtomFunction, set as SetAtomFunction, normalized)
+        return runProjectSwitch(set as SetAtomFunction, normalized)
       })
       if (!switched) {
         updateTabStatus(get as GetAtomFunction, set as SetAtomFunction, normalized, entry => ({
@@ -326,7 +322,7 @@ export const selectProjectActionAtom = atom(
           return true
         }
 
-        return runProjectSwitch(get as GetAtomFunction, set as SetAtomFunction, normalized)
+        return runProjectSwitch(set as SetAtomFunction, normalized)
       })
       if (!switched) {
         updateTabStatus(get as GetAtomFunction, set as SetAtomFunction, normalized, entry => ({

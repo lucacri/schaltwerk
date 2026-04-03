@@ -12,7 +12,6 @@ import {
 import { resetSelectionAtomsForTest } from './selection'
 import { __resetSessionsTestingState } from './sessions'
 import { TauriCommands } from '../../common/tauriCommands'
-import { computeProjectOrchestratorId } from '../../common/agentSpawn'
 
 vi.mock('../../terminal/transport/backend', () => ({
   createTerminalBackend: vi.fn(() => Promise.resolve()),
@@ -239,7 +238,7 @@ describe('project lifecycle atoms', () => {
     expect(store.get(projectPathAtom)).toBe('/repo/two')
   })
 
-  it('cleans up previous project orchestrator terminals after opening a new project', async () => {
+  it('keeps previous project orchestrator terminals alive after opening a new project', async () => {
     const backend = await import('../../terminal/transport/backend')
 
     await store.set(openProjectActionAtom, { path: '/repo/alpha' })
@@ -247,18 +246,10 @@ describe('project lifecycle atoms', () => {
 
     await store.set(openProjectActionAtom, { path: '/repo/beta' })
 
-    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenCalledTimes(2)
-    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenNthCalledWith(
-      1,
-      expect.stringMatching(/^orchestrator-alpha-[0-9a-f]{1,6}-top$/),
-    )
-    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenNthCalledWith(
-      2,
-      expect.stringMatching(/^orchestrator-alpha-[0-9a-f]{1,6}-bottom$/),
-    )
+    expect(vi.mocked(backend.closeTerminalBackend)).not.toHaveBeenCalled()
   })
 
-  it('cleans up the actual previous project when queued switches change the active project before execution', async () => {
+  it('keeps queued project orchestrators alive when the active project changes before execution', async () => {
     const backend = await import('../../terminal/transport/backend')
 
     await store.set(openProjectActionAtom, { path: '/repo/base' })
@@ -300,13 +291,52 @@ describe('project lifecycle atoms', () => {
     secondSwitch.resolve()
     await queuedSwitch
 
-    const oneTop = computeProjectOrchestratorId('/repo/one')
-    const oneBottom = oneTop?.replace(/-top$/, '-bottom')
-    const baseTop = computeProjectOrchestratorId('/repo/base')
+    expect(vi.mocked(backend.closeTerminalBackend)).not.toHaveBeenCalled()
+  })
 
-    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenCalledWith(oneTop)
-    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenCalledWith(oneBottom)
-    expect(vi.mocked(backend.closeTerminalBackend)).not.toHaveBeenCalledWith(baseTop)
+  it('cleans up project orchestrator terminals when closing a project', async () => {
+    const backend = await import('../../terminal/transport/backend')
+
+    await store.set(openProjectActionAtom, { path: '/repo/alpha' })
+    vi.mocked(backend.closeTerminalBackend).mockClear()
+
+    await store.set(closeProjectActionAtom, { path: '/repo/alpha' })
+
+    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/^orchestrator-alpha-[0-9a-f]{1,6}-top$/),
+    )
+    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/^orchestrator-alpha-[0-9a-f]{1,6}-bottom$/),
+    )
+  })
+
+  it('cleans up only the closed project orchestrator when closing an inactive project', async () => {
+    const backend = await import('../../terminal/transport/backend')
+
+    await store.set(openProjectActionAtom, { path: '/repo/alpha' })
+    await store.set(openProjectActionAtom, { path: '/repo/beta' })
+    vi.mocked(backend.closeTerminalBackend).mockClear()
+
+    await store.set(closeProjectActionAtom, { path: '/repo/alpha' })
+
+    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/^orchestrator-alpha-[0-9a-f]{1,6}-top$/),
+    )
+    expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/^orchestrator-alpha-[0-9a-f]{1,6}-bottom$/),
+    )
+    expect(vi.mocked(backend.closeTerminalBackend)).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^orchestrator-beta-[0-9a-f]{1,6}-top$/),
+    )
+    expect(vi.mocked(backend.closeTerminalBackend)).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^orchestrator-beta-[0-9a-f]{1,6}-bottom$/),
+    )
   })
 
   it('deduplicates concurrent openProject calls for the same path during initial open', async () => {
