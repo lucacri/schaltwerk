@@ -24,7 +24,7 @@ This skill has two modes. Detect which one applies:
 
 ### Step 1: Discover sessions
 
-Call `mcp__lucode__lucode_get_current_tasks` with `fields: ["name", "display_name", "status", "session_state", "branch", "epic_id"]` and `status_filter: "active"`.
+Call `mcp__lucode__lucode_get_current_tasks` with `fields: ["name", "display_name", "status", "session_state", "branch", "epic_id", "initial_prompt"]` and `status_filter: "active"`.
 
 Group sessions by `display_name`. Filter to groups with 2+ sessions (nothing to consolidate if only 1).
 
@@ -38,7 +38,19 @@ Parse `$ARGUMENTS`: detect `--auto` flag, remaining text (after removing the fla
 - If `--auto` flag AND no argument: pick the first eligible group automatically.
 - Otherwise (interactive mode): present eligible groups as a numbered list showing `display_name` and session count. Ask the user to pick ONE.
 
-### Step 3: Show details (interactive only)
+### Step 3: Resolve spec context
+
+After selecting the group, read the original spec content and store it as `spec_context`.
+
+Try these sources in order:
+1. Call `mcp__lucode__lucode_session_spec` on the first session in the group. If it returns spec markdown, use that.
+2. Otherwise, fall back to the first non-empty `initial_prompt` found in the group (from Step 1 data).
+
+If neither source provides content, set `spec_context` to:
+
+`No spec content found — review branch diffs to infer intent.`
+
+### Step 4: Show details (interactive only)
 
 For the selected group, show a table with:
 - Session name
@@ -46,13 +58,13 @@ For the selected group, show a table with:
 
 Ask the user for any custom consolidation criteria (e.g., "prioritize test coverage", "the v2 approach to the API was better"). Accept empty for defaults.
 
-### Step 4: Confirm (interactive only)
+### Step 5: Confirm (interactive only)
 
 Show summary: "Will create a consolidation session for spec `{display_name}` reviewing {N} branches"
 
 Ask for confirmation before proceeding.
 
-### Step 5: Create consolidation session
+### Step 6: Create consolidation session
 
 Before creating, check if a session named `consolidate-{display_name}` already exists by searching the session list from Step 1. If it does, increment the suffix (`-v2`, `-v3`, etc.) until an unused name is found.
 
@@ -64,7 +76,7 @@ Call `mcp__lucode__lucode_create` with:
 
 If the call fails, report the error to the user and stop.
 
-### Step 6: Report
+### Step 7: Report
 
 Output the created session name and branch. Tell the user to select the session in the Lucode app and start an agent to begin the consolidation work. Do NOT reference any slash commands like `/lucode list` or `/lucode status` — they do not exist.
 
@@ -77,6 +89,10 @@ You are consolidating work from {N} parallel agent sessions that all worked on t
 
 Use the /lucode:consolidate skill to execute the consolidation.
 
+### Original spec
+
+{spec_context}
+
 ### Branches to review
 
 {table of session name, branch, and worktree path}
@@ -85,7 +101,7 @@ Use the /lucode:consolidate skill to execute the consolidation.
 
 {comma-separated list of session names, e.g.: session_v1, session_v2, session_v3}
 
-{If custom criteria were provided in Step 3, include:}
+{If custom criteria were provided in Step 4, include:}
 ### Additional criteria
 - {user's custom criteria, one bullet per item}
 ```
@@ -96,11 +112,14 @@ Use the /lucode:consolidate skill to execute the consolidation.
 
 ### Step 1: Review all branches
 
+The original spec is included in your prompt above under "Original spec". Use it to evaluate which branch best fulfills the original requirements, not just which has the cleanest code.
+
 For each branch listed in the prompt, run `git diff main...{branch}` to understand what each agent implemented. Use parallel subagents for efficiency. Take notes on each approach's architecture, completeness, and code quality.
 
 ### Step 2: Compare and rank
 
 Identify which version has:
+- Closest adherence to the original spec's requirements
 - Best architecture and code organization
 - Cleanest code (following CLAUDE.md guidelines)
 - Most complete implementation
