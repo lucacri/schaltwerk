@@ -6,6 +6,7 @@ import { useModal } from '../../contexts/ModalContext'
 import { LoadingSpinner } from '../common/LoadingSpinner'
 import { useTranslation } from '../../common/i18n'
 import { logger } from '../../utils/logger'
+import { Checkbox, FormGroup, TextInput } from '../ui'
 
 export type MergeModeOption = 'squash' | 'reapply'
 
@@ -265,16 +266,7 @@ export function MergeSessionModal({
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              <input
-                type="checkbox"
-                checked={autoCancelEnabled}
-                onChange={handleToggleAutoCancel}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-400 focus:ring-cyan-400"
-                aria-label={t.mergeSessionModal.autoCancelAfterMerge}
-              />
-              <span>{t.mergeSessionModal.autoCancelAfterMerge}</span>
-            </label>
+            <Checkbox checked={autoCancelEnabled} onChange={handleToggleAutoCancel} label={t.mergeSessionModal.autoCancelAfterMerge} />
             <button
               onClick={onClose}
               className="text-sm"
@@ -400,51 +392,38 @@ export function MergeSessionModal({
               )}
 
               {mode === 'squash' && (
-                <div>
-                  <label style={fieldLabelStyle} htmlFor="merge-commit-message">
-                    {t.mergeSessionModal.commitMessage}
-                  </label>
-                  <div className="mt-1 flex gap-1.5">
-                    <input
-                      id="merge-commit-message"
-                      ref={commitMessageInputRef}
-                      autoFocus={mode === 'squash'}
-                      value={commitMessage}
-                      onChange={(event) => handleCommitMessageChange(event.target.value)}
-                      className="flex-1 min-w-0 rounded px-3 py-2 text-sm"
-                      style={{
-                        backgroundColor: 'var(--color-bg-tertiary)',
-                        border: '1px solid var(--color-border-subtle)',
-                        color: 'var(--color-text-primary)',
-                      }}
-                      placeholder={preview?.defaultCommitMessage || t.mergeSessionModal.commitPlaceholder}
-                    />
-                    <button
-                      type="button"
-                      data-testid="generate-commit-message-button"
-                      onClick={() => { void handleGenerateCommitMessage() }}
-                      disabled={generatingCommitMessage}
-                      className={`flex-shrink-0 w-9 h-9 rounded flex items-center justify-center border ${generatingCommitMessage ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-80'}`}
-                      style={{
-                        backgroundColor: 'var(--color-bg-tertiary)',
-                        borderColor: 'var(--color-border-subtle)',
-                      }}
-                      title={generatingCommitMessage ? t.mergeSessionModal.tooltips.generatingCommitMessage : t.mergeSessionModal.tooltips.generateCommitMessage}
-                    >
-                      {generatingCommitMessage ? (
-                        <span
-                          className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
-                          style={{ borderColor: 'var(--color-text-secondary)', borderTopColor: 'transparent' }}
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-secondary)' }}>
-                          <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" /><path d="M17.8 11.8 19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2 19 5" /><path d="M11 6.2 9.7 5" /><path d="M11 11.8 9.7 13" /><path d="M8 15h2c4.7 0 4.7 4 0 4H4c-.5 0-1-.2-1-.5S2 17 4 17c5 0 3 4 0 4" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
+                <FormGroup label={t.mergeSessionModal.commitMessage} htmlFor="merge-commit-message">
+                  <TextInput
+                    id="merge-commit-message"
+                    ref={commitMessageInputRef}
+                    autoFocus={mode === 'squash'}
+                    value={commitMessage}
+                    onChange={(event) => handleCommitMessageChange(event.target.value)}
+                    placeholder={preview?.defaultCommitMessage || t.mergeSessionModal.commitPlaceholder}
+                    rightElement={
+                      <button
+                        type="button"
+                        data-testid="generate-commit-message-button"
+                        onClick={() => { void handleGenerateCommitMessage() }}
+                        disabled={generatingCommitMessage}
+                        className={`inline-flex h-7 w-7 items-center justify-center rounded ${generatingCommitMessage ? 'cursor-not-allowed opacity-40' : 'hover:bg-[rgba(var(--color-bg-hover-rgb),0.45)]'}`}
+                        title={generatingCommitMessage ? t.mergeSessionModal.tooltips.generatingCommitMessage : t.mergeSessionModal.tooltips.generateCommitMessage}
+                      >
+                        {generatingCommitMessage ? (
+                          <span
+                            className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
+                            style={{ borderColor: 'var(--color-text-secondary)', borderTopColor: 'transparent' }}
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-secondary)' }}>
+                            <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" /><path d="M17.8 11.8 19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2 19 5" /><path d="M11 6.2 9.7 5" /><path d="M11 11.8 9.7 13" /><path d="M8 15h2c4.7 0 4.7 4 0 4H4c-.5 0-1-.2-1-.5S2 17 4 17c5 0 3 4 0 4" />
+                          </svg>
+                        )}
+                      </button>
+                    }
+                  />
+                </FormGroup>
               )}
 
               {hasConflicts && (

@@ -6,6 +6,7 @@ import { EPIC_COLOR_KEYS, type EpicColorKey, getEpicAccentScheme, labelForEpicCo
 import { getErrorMessage } from '../../types/errors'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
+import { Button, FormGroup, TextInput } from '../ui'
 
 interface EpicModalProps {
     open: boolean
@@ -106,29 +107,12 @@ export function EpicModal({ open, mode, initialName = '', initialColor = null, o
 
     const footer = (
         <>
-            <button
-                type="button"
-                onClick={onClose}
-                className="px-3 h-9 rounded border"
-                style={{
-                    backgroundColor: 'var(--color-bg-elevated)',
-                    color: 'var(--color-text-primary)',
-                    borderColor: 'var(--color-border-subtle)',
-                }}
-            >
+            <Button onClick={onClose}>
                 {t.epicModal.cancel}
-            </button>
-            <button
-                type="button"
-                onClick={() => { void handleSubmit() }}
-                disabled={saving}
-                className="px-3 h-9 rounded text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{
-                    backgroundColor: 'var(--color-accent-blue)',
-                }}
-            >
+            </Button>
+            <Button onClick={() => { void handleSubmit() }} disabled={saving} variant="primary">
                 {submitLabel}
-            </button>
+            </Button>
         </>
     )
 
@@ -151,20 +135,15 @@ export function EpicModal({ open, mode, initialName = '', initialColor = null, o
                     void handleSubmit()
                 }}
             >
-                <div className="flex flex-col gap-1">
-                    <label style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}>{t.epicModal.name}</label>
-                    <input
+                <FormGroup label={t.epicModal.name} htmlFor="epic-name" error={error || undefined}>
+                    <TextInput
+                        id="epic-name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="w-full px-3 py-2 rounded border"
-                        style={{
-                            backgroundColor: 'var(--color-bg-secondary)',
-                            color: 'var(--color-text-primary)',
-                            borderColor: error ? 'var(--color-accent-red-border)' : 'var(--color-border-subtle)',
-                        }}
                         placeholder={t.epicModal.namePlaceholder}
+                        error={error || undefined}
                     />
-                </div>
+                </FormGroup>
 
                 <div className="flex flex-col gap-1">
                     <label style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.caption }}>{t.epicModal.colorOptional}</label>

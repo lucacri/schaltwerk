@@ -6,7 +6,7 @@ import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
 import { generateId } from '../../common/generateId'
 import type { ContextualAction, ContextualActionContext, ContextualActionMode } from '../../types/contextualAction'
 import { PR_TEMPLATE_VARIABLES, ISSUE_TEMPLATE_VARIABLES } from '../../types/contextualAction'
-import { Button, Select, TextInput, Textarea } from '../ui'
+import { Button, Label, SectionHeader, Select, TextInput, Textarea } from '../ui'
 
 function createEmptyAction(): ContextualAction {
     return {
@@ -127,9 +127,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <h3 className="text-body font-medium text-text-primary">
-                    {'Contextual Actions'}
-                </h3>
+                <SectionHeader title="Contextual Actions" />
                 <div className="flex gap-2">
                     <Button size="sm" variant="ghost" onClick={() => void handleReset()}>
                         {'Reset to Defaults'}
@@ -194,7 +192,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                             <div className="px-4 pb-4 space-y-3 border-t border-border-subtle">
                                 <div className="pt-3">
                                     <div>
-                                        <label className="block text-caption text-text-secondary mb-1">Name</label>
+                                        <Label className="block mb-1">Name</Label>
                                         <TextInput
                                             aria-label="Name"
                                             value={action.name}
@@ -204,7 +202,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 mt-3">
                                         <div>
-                                            <label className="block text-caption text-text-secondary mb-1">Context</label>
+                                            <Label className="block mb-1">Context</Label>
                                             <Select
                                                 value={action.context}
                                                 onChange={value => handleUpdate(action.id, { context: value as ContextualActionContext })}
@@ -216,7 +214,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-caption text-text-secondary mb-1">Mode</label>
+                                            <Label className="block mb-1">Mode</Label>
                                             <Select
                                                 value={action.mode}
                                                 onChange={value => handleUpdate(action.id, { mode: value as ContextualActionMode })}
@@ -230,7 +228,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                 </div>
 
                                 <div>
-                                    <label className="block text-caption text-text-secondary mb-1">Agent / Variant / Preset</label>
+                                    <Label className="block mb-1">Agent / Variant / Preset</Label>
                                     <Select
                                         value={getAgentSourceValue(action)}
                                         onChange={value => handleAgentSourceChange(action.id, value)}
@@ -239,7 +237,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                 </div>
 
                                 <div>
-                                    <label className="block text-caption text-text-secondary mb-1">Prompt Template</label>
+                                    <Label className="block mb-1">Prompt Template</Label>
                                     <div className="flex flex-wrap gap-1 mb-2">
                                         {getTemplateVars(action.context).map(v => (
                                             <span

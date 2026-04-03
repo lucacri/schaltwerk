@@ -3,6 +3,7 @@ import { theme } from '../../common/theme'
 import { useTranslation } from '../../common/i18n'
 import { useModal } from '../../contexts/ModalContext'
 import { LoadingSpinner } from '../common/LoadingSpinner'
+import { Checkbox, FormGroup, TextInput, Textarea } from '../ui'
 
 export interface PrPreviewResponse {
   sessionName: string
@@ -230,16 +231,7 @@ export function PrSessionModal({
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-body" style={{ color: 'var(--color-text-secondary)' }}>
-              <input
-                type="checkbox"
-                checked={autoCancelEnabled}
-                onChange={handleToggleAutoCancel}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-400 focus:ring-cyan-400"
-                aria-label={t.prModal.autoCancelAfterPr}
-              />
-              <span>{t.prModal.autoCancelAfterPr}</span>
-            </label>
+            <Checkbox checked={autoCancelEnabled} onChange={handleToggleAutoCancel} label={t.prModal.autoCancelAfterPr} />
             <button
               onClick={onClose}
               className="text-body"
@@ -380,108 +372,60 @@ export function PrSessionModal({
               </div>
 
               {(mode === 'squash' || hasUncommittedChanges) && (
-                <div>
-                  <label style={fieldLabelStyle} htmlFor="pr-commit-message">
-                    {mode === 'squash' ? t.prModal.commitMessage : t.prModal.commitMessageUncommitted}
-                  </label>
-                  <input
+                <FormGroup
+                  label={mode === 'squash' ? t.prModal.commitMessage : t.prModal.commitMessageUncommitted}
+                  htmlFor="pr-commit-message"
+                >
+                  <TextInput
                     id="pr-commit-message"
                     value={commitMessage}
                     onChange={(event) => setCommitMessage(event.target.value)}
-                    className="mt-1 w-full rounded px-3 py-2 text-body"
-                    style={{
-                      backgroundColor: 'var(--color-bg-tertiary)',
-                      border: '1px solid var(--color-border-subtle)',
-                      color: 'var(--color-text-primary)',
-                    }}
                     placeholder={title || 'Describe the changes'}
                   />
-                </div>
+                </FormGroup>
               )}
 
-              <div>
-                <label style={fieldLabelStyle} htmlFor="pr-title">
-                  {t.prModal.prTitle}
-                </label>
-                <input
+              <FormGroup label={t.prModal.prTitle} htmlFor="pr-title">
+                <TextInput
                   id="pr-title"
                   ref={titleInputRef}
                   autoFocus
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
-                  className="mt-1 w-full rounded px-3 py-2 text-body"
-                  style={{
-                    backgroundColor: 'var(--color-bg-tertiary)',
-                    border: '1px solid var(--color-border-subtle)',
-                    color: 'var(--color-text-primary)',
-                  }}
                   placeholder={t.prModal.prTitlePlaceholder}
                 />
-              </div>
+              </FormGroup>
 
-              <div>
-                <label style={fieldLabelStyle} htmlFor="pr-body">
-                  {t.prModal.description}
-                </label>
-                <textarea
+              <FormGroup label={t.prModal.description} htmlFor="pr-body">
+                <Textarea
                   id="pr-body"
                   value={body}
                   onChange={(event) => setBody(event.target.value)}
                   rows={8}
-                  className="mt-1 w-full rounded px-3 py-2 text-body resize-y"
-                  style={{
-                    backgroundColor: 'var(--color-bg-tertiary)',
-                    border: '1px solid var(--color-border-subtle)',
-                    color: 'var(--color-text-primary)',
-                  }}
                   placeholder={t.prModal.descriptionPlaceholder}
                 />
-              </div>
+              </FormGroup>
 
-              <div>
-                <label style={fieldLabelStyle} htmlFor="pr-base-branch">
-                  {t.prModal.baseBranch}
-                </label>
-                <input
+              <FormGroup label={t.prModal.baseBranch} htmlFor="pr-base-branch" help={t.prModal.baseBranchHint}>
+                <TextInput
                   id="pr-base-branch"
                   value={baseBranch}
                   onChange={(event) => setBaseBranch(event.target.value)}
-                  className="mt-1 w-full rounded px-3 py-2 text-body"
-                  style={{
-                    backgroundColor: 'var(--color-bg-tertiary)',
-                    border: '1px solid var(--color-border-subtle)',
-                    color: 'var(--color-text-primary)',
-                  }}
                   placeholder={preview.parentBranch}
                 />
-                <p className="mt-1 text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
-                  {t.prModal.baseBranchHint}
-                </p>
-              </div>
+              </FormGroup>
 
               <div>
-                <label className="flex items-center gap-2 text-body mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-                  <input
-                    type="checkbox"
-                    checked={usePrBranchName}
-                    onChange={(e) => setUsePrBranchName(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-400 focus:ring-cyan-400"
-                  />
-                  <span>{t.prModal.useCustomBranch}</span>
-                </label>
+                <Checkbox checked={usePrBranchName} onChange={setUsePrBranchName} label={t.prModal.useCustomBranch} />
                 {usePrBranchName && (
                   <>
-                    <input
+                    <TextInput
                       id="pr-branch-name"
+                      aria-label={t.prModal.useCustomBranch}
                       value={prBranchName}
                       onChange={(event) => setPrBranchName(event.target.value)}
-                      className="mt-1 w-full rounded px-3 py-2 text-body"
-                      style={{
-                        backgroundColor: 'var(--color-bg-tertiary)',
-                        border: '1px solid var(--color-border-subtle)',
-                        color: 'var(--color-text-primary)',
-                      }}
                       placeholder={`pr/${sessionName}`}
+                      className="mt-2"
                     />
                     <p className="mt-1 text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
                       {t.prModal.customBranchHint}

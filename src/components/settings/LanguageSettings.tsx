@@ -3,6 +3,7 @@ import { currentLanguageAtom, setLanguageActionAtom } from '../../store/atoms/la
 import type { Language } from '../../common/i18n/types'
 import { theme } from '../../common/theme'
 import { useTranslation } from '../../common/i18n/useTranslation'
+import { Label } from '../ui'
 
 const languageOptions: { id: Language; label: string }[] = [
   { id: 'en', label: 'English' },
@@ -17,14 +18,9 @@ export function LanguageSettings() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <label
-          style={{
-            color: 'var(--color-text-secondary)',
-            fontSize: theme.fontSize.label,
-          }}
-        >
+        <Label>
           {t.settings.language.label}
-        </label>
+        </Label>
       </div>
       <div className="flex flex-wrap gap-2">
         {languageOptions.map((option) => {

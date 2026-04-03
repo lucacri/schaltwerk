@@ -4,7 +4,7 @@ import { AnimatedText } from '../common/AnimatedText'
 import { TauriCommands } from '../../common/tauriCommands'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n/useTranslation'
-import { Button } from '../ui'
+import { Button, Checkbox, SectionHeader } from '../ui'
 
 interface MCPStatus {
   mcp_server_path: string
@@ -162,38 +162,32 @@ export function MCPConfigPanel({ projectPath, agent }: Props) {
     <div className="space-y-4">
       <div>
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium text-text-primary">{t.settings.mcp.title}</h3>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={mcpEnabled}
-                  onChange={(e) => {
-                    setMcpEnabled(e.target.checked)
-                    if (!e.target.checked && status?.is_configured) {
-                      void removeMCP()
-                    }
-                  }}
-              className="w-4 h-4 rounded border-border-strong bg-bg-tertiary focus:ring-accent-blue focus:ring-offset-0"
-              style={{
-                color: 'var(--color-accent-blue-dark)',
-              }}
-            />
-             <span className="text-xs text-text-tertiary">
-               {requiresGlobalConfig ? t.settings.mcp.enableMcpGlobal : t.settings.mcp.enableMcp}
-             </span>
-          </label>
+          <SectionHeader
+            title={t.settings.mcp.title}
+            description={
+              agent === 'claude'
+                ? t.settings.mcp.claudeDesc.replace('{agent}', agentLabel)
+                : agent === 'codex'
+                ? t.settings.mcp.codexDesc.replace('{agent}', agentLabel)
+                : agent === 'opencode'
+                ? t.settings.mcp.opencodeDesc.replace('{agent}', agentLabel)
+                : agent === 'amp'
+                ? t.settings.mcp.ampDesc.replace('{agent}', agentLabel)
+                : t.settings.mcp.droidDesc.replace('{agent}', agentLabel)
+            }
+            className="flex-1 border-b-0 pb-0"
+          />
+          <Checkbox
+            checked={mcpEnabled}
+            onChange={(checked) => {
+              setMcpEnabled(checked)
+              if (!checked && status?.is_configured) {
+                void removeMCP()
+              }
+            }}
+            label={requiresGlobalConfig ? t.settings.mcp.enableMcpGlobal : t.settings.mcp.enableMcp}
+          />
         </div>
-         <p className="text-xs text-text-tertiary">
-           {agent === 'claude'
-             ? t.settings.mcp.claudeDesc.replace('{agent}', agentLabel)
-             : agent === 'codex'
-             ? t.settings.mcp.codexDesc.replace('{agent}', agentLabel)
-             : agent === 'opencode'
-             ? t.settings.mcp.opencodeDesc.replace('{agent}', agentLabel)
-             : agent === 'amp'
-             ? t.settings.mcp.ampDesc.replace('{agent}', agentLabel)
-             : t.settings.mcp.droidDesc.replace('{agent}', agentLabel)}
-         </p>
       </div>
 
        {!mcpEnabled && (

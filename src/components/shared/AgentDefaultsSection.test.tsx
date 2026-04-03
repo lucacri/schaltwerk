@@ -42,6 +42,15 @@ describe('AgentDefaultsSection', () => {
         expect(props.onCliArgsChange).toHaveBeenCalledWith('--debug')
     })
 
+    it('associates the advanced CLI arguments label with the textarea', async () => {
+        renderComponent()
+
+        fireEvent.click(screen.getByTestId('advanced-agent-settings-toggle'))
+
+        const textarea = await screen.findByLabelText('Default custom arguments')
+        expect(textarea).toHaveAttribute('data-testid', 'agent-cli-args-input')
+    })
+
     it('renders environment variables and handles interactions', async () => {
         const props = renderComponent()
 

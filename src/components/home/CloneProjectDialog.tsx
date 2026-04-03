@@ -8,6 +8,7 @@ import { listenEvent, SchaltEvent } from '../../common/eventSystem'
 import { logger } from '../../utils/logger'
 import { parseGitRemote, sanitizeFolderName } from '../../utils/gitRemote'
 import { useTranslation } from '../../common/i18n'
+import { Button, FormGroup, TextInput } from '../ui'
 
 function generateRequestId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -245,71 +246,37 @@ export function CloneProjectDialog({ isOpen, onClose, onProjectCloned }: ClonePr
             </div>
           )}
 
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium"
-              style={{ color: 'var(--color-text-secondary)' }}
-              htmlFor="clone-remote-url"
-            >
-              {t.cloneProject.remoteUrl}
-            </label>
-            <input
+          <FormGroup label={t.cloneProject.remoteUrl} htmlFor="clone-remote-url" help={helperText}>
+            <TextInput
               type="text"
               id="clone-remote-url"
               value={remoteUrl}
               onChange={(event) => setRemoteUrl(event.target.value)}
               placeholder={t.placeholders.gitRemoteUrl}
-              className="w-full px-3 py-2 rounded-lg"
-              style={{
-                backgroundColor: 'var(--color-bg-secondary)',
-                border: '1px solid var(--color-border-subtle)',
-                color: 'var(--color-text-primary)'
-              }}
               autoFocus
               spellCheck={false}
               disabled={isCloning}
             />
-            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {helperText}
-            </p>
-          </div>
+          </FormGroup>
 
-          <div className="space-y-2">
-            <label
-              className="text-sm font-medium"
-              style={{ color: 'var(--color-text-secondary)' }}
-              htmlFor="clone-parent-directory"
-            >
-              {t.cloneProject.parentDirectory}
-            </label>
+          <FormGroup label={t.cloneProject.parentDirectory} htmlFor="clone-parent-directory">
             <div className="flex gap-2 flex-col md:flex-row">
-              <input
+              <TextInput
                 type="text"
                 id="clone-parent-directory"
                 value={parentDirectory}
                 readOnly
-                className="flex-1 px-3 py-2 rounded-lg"
-                style={{
-                  backgroundColor: 'var(--color-bg-secondary)',
-                  border: '1px solid var(--color-border-subtle)',
-                  color: 'var(--color-text-primary)'
-                }}
+                className="flex-1"
               />
-              <button
+              <Button
                 onClick={() => { void handleSelectDirectory() }}
-                className="px-3 py-2 rounded-lg flex items-center gap-2"
-                style={{
-                  backgroundColor: 'var(--color-bg-hover)',
-                  border: '1px solid var(--color-border-subtle)',
-                  color: 'var(--color-text-primary)'
-                }}
                 disabled={isCloning}
+                leftIcon={<VscFolderOpened className="text-lg" />}
               >
-                <VscFolderOpened className="text-lg" />
                 {t.cloneProject.browse}
-              </button>
+              </Button>
             </div>
-          </div>
+          </FormGroup>
 
           <div
             className="rounded-lg px-4 py-3 space-y-1"
@@ -343,31 +310,21 @@ export function CloneProjectDialog({ isOpen, onClose, onProjectCloned }: ClonePr
         </div>
 
         <div className="flex items-center gap-3 px-6 py-4 border-t flex-shrink-0" style={{ borderColor: 'var(--color-border-default)' }}>
-          <button
+          <Button
             onClick={onClose}
-            className="flex-1 px-4 py-2 rounded-lg transition-colors"
-            style={{
-              backgroundColor: 'var(--color-bg-hover)',
-              border: '1px solid var(--color-border-subtle)',
-              color: 'var(--color-text-primary)'
-            }}
+            className="flex-1"
             disabled={isCloning}
           >
             {t.cloneProject.cancel}
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => { void handleClone() }}
-            className="flex-1 px-4 py-2 rounded-lg flex justify-center"
-            style={{
-              backgroundColor: 'var(--color-accent-blue-bg)',
-              border: '1px solid var(--color-accent-blue-border)',
-              color: 'var(--color-accent-blue)',
-              opacity: !isFormValid || isCloning ? 0.6 : 1
-            }}
+            className="flex-1"
+            variant="primary"
             disabled={!isFormValid || isCloning}
           >
             {isCloning ? t.cloneProject.cloning : t.cloneProject.cloneProject}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

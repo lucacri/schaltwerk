@@ -18,6 +18,11 @@ export interface SelectProps {
   disabled?: boolean
   placeholder?: string
   className?: string
+  id?: string
+  'aria-label'?: string
+  'aria-labelledby'?: string
+  'aria-describedby'?: string
+  'aria-invalid'?: boolean
 }
 
 const isPrintableKey = (key: string) => key.length === 1 && key.trim().length > 0
@@ -55,7 +60,19 @@ function findMatchByQuery(options: SelectOption[], query: string, startIndex: nu
   return -1
 }
 
-export function Select({ value, onChange, options, disabled = false, placeholder = 'Select', className }: SelectProps) {
+export function Select({
+  value,
+  onChange,
+  options,
+  disabled = false,
+  placeholder = 'Select',
+  className,
+  id,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
+  'aria-describedby': ariaDescribedBy,
+  'aria-invalid': ariaInvalid,
+}: SelectProps) {
   const [open, setOpen] = useState(false)
   const [focusedIndex, setFocusedIndex] = useState(-1)
   const [, setTypeahead] = useState('')
@@ -186,12 +203,16 @@ export function Select({ value, onChange, options, disabled = false, placeholder
   return (
     <div ref={containerRef} className={clsx('relative w-full', className)}>
       <button
+        id={id}
         type="button"
         role="combobox"
         aria-controls={listboxId}
         aria-expanded={open}
         aria-haspopup="listbox"
-        aria-label={selectedOption?.label ?? placeholder}
+        aria-label={ariaLabel ?? (ariaLabelledBy ? undefined : selectedOption?.label ?? placeholder)}
+        aria-labelledby={ariaLabelledBy}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid}
         disabled={disabled}
         onClick={() => {
           if (!disabled) {

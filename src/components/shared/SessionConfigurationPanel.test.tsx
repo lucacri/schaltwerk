@@ -177,6 +177,21 @@ describe('SessionConfigurationPanel', () => {
         expect(screen.getByText('Agent')).toBeInTheDocument()
     })
 
+    test('associates the branch name label with its input and uses shared checkbox chrome', async () => {
+        render(
+            <SessionConfigurationPanel
+                variant="modal"
+                onBaseBranchChange={vi.fn()}
+                onAgentTypeChange={vi.fn()}
+                onSkipPermissionsChange={vi.fn()}
+                codexModels={FALLBACK_CODEX_MODELS}
+            />
+        )
+
+        expect(await screen.findByLabelText('Branch name (optional)')).toBeInTheDocument()
+        expect(screen.getByRole('checkbox', { name: 'Use existing branch' })).toHaveClass('peer', 'sr-only')
+    })
+
     test('renders Codex model and reasoning selectors when provided with options', async () => {
         const onCodexModelChange = vi.fn()
         const onCodexReasoningChange = vi.fn()

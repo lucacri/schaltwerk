@@ -3,6 +3,7 @@ import { currentThemeIdAtom, setThemeActionAtom } from '../../store/atoms/theme'
 import { ThemeId } from '../../common/themes/types'
 import { theme } from '../../common/theme'
 import { useTranslation } from '../../common/i18n/useTranslation'
+import { Label } from '../ui'
 
 interface ThemeOption {
   id: ThemeId
@@ -265,14 +266,9 @@ export function ThemeSettings() {
 
   return (
     <div className="space-y-3">
-      <label
-        style={{
-          color: 'var(--color-text-secondary)',
-          fontSize: theme.fontSize.label,
-        }}
-      >
+      <Label>
         {t.settings.theme.label}
-      </label>
+      </Label>
       <div className="flex flex-wrap gap-3">
         {themeOptions.map((option) => (
           <ThemePreviewCard

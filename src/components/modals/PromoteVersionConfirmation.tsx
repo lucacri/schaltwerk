@@ -5,6 +5,7 @@ import { SessionVersionGroup } from '../../utils/sessionVersions'
 import { invoke } from '@tauri-apps/api/core'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
+import { Checkbox } from '../ui'
 
 interface SessionPreferences {
   skip_confirmation_modals: boolean
@@ -125,18 +126,7 @@ export function PromoteVersionConfirmation({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="dont-ask-again"
-              checked={dontAskAgain}
-              onChange={(e) => setDontAskAgain(e.target.checked)}
-              className="rounded border-slate-600 bg-slate-700 text-cyan-400 focus:ring-cyan-400 focus:ring-offset-0"
-            />
-            <label htmlFor="dont-ask-again" className="text-xs text-slate-400">
-              {t.promoteVersionConfirmation.dontAskAgain}
-            </label>
-          </div>
+          <Checkbox checked={dontAskAgain} onChange={setDontAskAgain} label={t.promoteVersionConfirmation.dontAskAgain} />
         </div>
       }
       confirmText={t.promoteVersionConfirmation.deleteOthers}

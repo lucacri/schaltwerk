@@ -6,6 +6,7 @@ import { Dropdown } from '../inputs/Dropdown'
 import { calculateDropdownGeometry, type DropdownGeometry } from '../inputs/dropdownGeometry'
 import { displayNameForAgent } from '../shared/agentDefaults'
 import { useTranslation } from '../../common/i18n'
+import { Checkbox } from '../ui'
 
 export const MAX_VERSION_COUNT = 4
 export const MULTI_AGENT_TYPES = AGENT_TYPES.filter(agent => agent !== 'terminal') as AgentType[]
@@ -167,30 +168,17 @@ export function MultiAgentAllocationDropdown({
                         {selectableAgents.map(agent => {
                             const count = allocations[agent] ?? 0
                             const checked = count > 0
-                            const checkboxId = `multi-agent-${agent}`
                             const unavailable = !isAgentAvailable(agent)
                             const reachedMax = totalCount >= maxCount
                             const disableNewSelection = !checked && (unavailable || reachedMax)
-                            const textColor = disableNewSelection && !checked
-                                ? 'var(--color-text-secondary)'
-                                : 'var(--color-text-primary)'
                             return (
                                 <div key={agent} className="flex items-center justify-between gap-3">
-                                    <label
-                                        htmlFor={checkboxId}
-                                        className="flex items-center gap-2 text-sm"
-                                        style={{ color: textColor }}
-                                    >
-                                        <input
-                                            id={checkboxId}
-                                            type="checkbox"
-                                            checked={checked}
-                                            disabled={disableNewSelection && !checked}
-                                            onChange={event => onToggleAgent(agent, event.target.checked)}
-                                            style={{ accentColor: 'var(--color-accent-blue)' }}
-                                        />
-                                        <span>{displayNameForAgent(agent)}</span>
-                                    </label>
+                                    <Checkbox
+                                        checked={checked}
+                                        disabled={disableNewSelection && !checked}
+                                        onChange={enabled => onToggleAgent(agent, enabled)}
+                                        label={displayNameForAgent(agent)}
+                                    />
                                     {checked && (
                                         <AgentCountSelector
                                             agent={agent}

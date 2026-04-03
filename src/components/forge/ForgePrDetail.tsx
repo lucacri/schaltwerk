@@ -7,6 +7,7 @@ import { TauriCommands } from '../../common/tauriCommands'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
 import { MarkdownRenderer } from '../specs/MarkdownRenderer'
+import { Checkbox, Textarea } from '../ui'
 import { ForgeLabelChip } from './ForgeLabelChip'
 import { PipelineStatusBadge } from './PipelineStatusBadge'
 import { ContextualActionButton } from './ContextualActionButton'
@@ -752,62 +753,27 @@ export function ForgePrDetail({
 
             {onMerge && (
               <div className="flex items-center gap-3">
-                <label
-                  className="flex items-center gap-1.5"
-                  style={{
-                    fontSize: theme.fontSize.caption,
-                    fontFamily: theme.fontFamily.sans,
-                    color: 'var(--color-text-secondary)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={squash}
-                    onChange={(e) => setSquash(e.target.checked)}
-                    style={{ accentColor: 'var(--color-accent-blue)' }}
-                  />
-                  {t.forgePrTab.squash}
-                </label>
+                <Checkbox
+                  checked={squash}
+                  onChange={(checked) => setSquash(checked)}
+                  label={t.forgePrTab.squash}
+                />
 
-                <label
-                  className="flex items-center gap-1.5"
-                  style={{
-                    fontSize: theme.fontSize.caption,
-                    fontFamily: theme.fontFamily.sans,
-                    color: 'var(--color-text-secondary)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={deleteBranch}
-                    onChange={(e) => setDeleteBranch(e.target.checked)}
-                    style={{ accentColor: 'var(--color-accent-blue)' }}
-                  />
-                  {t.forgePrTab.deleteSourceBranch}
-                </label>
+                <Checkbox
+                  checked={deleteBranch}
+                  onChange={(checked) => setDeleteBranch(checked)}
+                  label={t.forgePrTab.deleteSourceBranch}
+                />
               </div>
             )}
 
             {showCommentInput && onComment && (
               <div className="flex flex-col gap-2 mt-1">
-                <textarea
+                <Textarea
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                   rows={3}
-                  style={{
-                    fontSize: theme.fontSize.body,
-                    fontFamily: theme.fontFamily.sans,
-                    color: 'var(--color-text-primary)',
-                    backgroundColor: 'var(--color-bg-tertiary)',
-                    border: '1px solid var(--color-border-default)',
-                    borderRadius: 6,
-                    padding: '8px 10px',
-                    resize: 'vertical',
-                    lineHeight: theme.lineHeight.body,
-                    outline: 'none',
-                  }}
+                  resize="vertical"
                 />
                 <div className="flex items-center gap-2">
                   <button

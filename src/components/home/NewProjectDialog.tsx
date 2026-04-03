@@ -7,6 +7,7 @@ import { homeDir } from '@tauri-apps/api/path'
 import { AnimatedText } from '../common/AnimatedText'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
+import { Button, FormGroup, TextInput } from '../ui'
 
 interface NewProjectDialogProps {
   isOpen: boolean
@@ -160,47 +161,41 @@ export function NewProjectDialog({ isOpen, onClose, onProjectCreated }: NewProje
         )}
 
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">
-              {t.newProject.projectName}
-            </label>
-            <input
+          <FormGroup label={t.newProject.projectName} htmlFor="new-project-name">
+            <TextInput
+              id="new-project-name"
               type="text"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               placeholder={t.newProject.projectNamePlaceholder}
-              className="w-full px-3 py-2 bg-slate-950/50 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-600 focus:ring-1 focus:ring-cyan-600"
               autoFocus
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
               disabled={isCreating}
             />
-          </div>
+          </FormGroup>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-400 mb-2">
-              {t.newProject.parentDirectory}
-            </label>
+          <FormGroup label={t.newProject.parentDirectory} htmlFor="new-project-parent-directory">
             <div className="flex gap-2">
-              <input
+              <TextInput
+                id="new-project-parent-directory"
                 type="text"
                 value={parentPath}
                 readOnly
                 placeholder={t.newProject.parentDirPlaceholder}
-                className="flex-1 px-3 py-2 bg-slate-950/50 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500"
                 disabled={isCreating}
+                className="flex-1"
               />
-              <button
+              <Button
                 onClick={() => { void handleSelectDirectory() }}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg flex items-center gap-2 transition-colors"
                 disabled={isCreating}
+                leftIcon={<VscFolderOpened className="text-lg" />}
               >
-                <VscFolderOpened className="text-lg" />
                 {t.newProject.browse}
-              </button>
+              </Button>
             </div>
-          </div>
+          </FormGroup>
 
           <div className="bg-slate-950/30 border border-slate-800 rounded-lg p-3 text-sm text-slate-400">
             <p>{t.newProject.createInfo}</p>
@@ -213,24 +208,25 @@ export function NewProjectDialog({ isOpen, onClose, onProjectCreated }: NewProje
         </div>
 
         <div className="flex gap-3 mt-6">
-          <button
+          <Button
             onClick={onClose}
-            className="flex-1 py-2 px-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg transition-colors"
+            className="flex-1"
             disabled={isCreating}
           >
             {t.newProject.cancel}
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => { void handleCreate() }}
             disabled={isCreating || !projectName.trim() || !parentPath}
-            className="flex-1 py-2 px-4 bg-cyan-900/50 hover:bg-cyan-800/50 border border-cyan-700/50 text-cyan-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1"
+            variant="primary"
           >
             {isCreating ? (
               <AnimatedText text="loading" size="xs" />
             ) : (
               t.newProject.createProject
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

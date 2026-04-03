@@ -14,6 +14,7 @@ export interface FormGroupProps {
 }
 
 export function FormGroup({ label, htmlFor, required, help, error, children, className }: FormGroupProps) {
+  const labelId = useId()
   const helpId = useId()
   const errorId = useId()
   const describedBy = [help ? helpId : null, error ? errorId : null].filter(Boolean).join(' ')
@@ -21,6 +22,7 @@ export function FormGroup({ label, htmlFor, required, help, error, children, cla
 
   const content = childElement
     ? React.cloneElement(childElement, {
+        'aria-labelledby': [childElement.props['aria-labelledby'], label && !htmlFor ? labelId : null].filter(Boolean).join(' ') || undefined,
         'aria-describedby': [childElement.props['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined,
         'aria-invalid': error ? true : childElement.props['aria-invalid'],
       } as Record<string, unknown>)
@@ -28,7 +30,7 @@ export function FormGroup({ label, htmlFor, required, help, error, children, cla
 
   return (
     <div className={clsx('space-y-2', className)}>
-      {label ? <Label htmlFor={htmlFor} required={required}>{label}</Label> : null}
+      {label ? <Label id={labelId} htmlFor={htmlFor} required={required}>{label}</Label> : null}
       {content}
       {help ? <p id={helpId} className="text-text-muted" style={captionTextStyle}>{help}</p> : null}
       {error ? <p id={errorId} className="text-accent-red" style={captionTextStyle}>{error}</p> : null}

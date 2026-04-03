@@ -4,7 +4,7 @@ import { useAgentVariants } from '../../hooks/useAgentVariants'
 import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
 import { generateId } from '../../common/generateId'
 import type { AgentPreset, AgentPresetSlot } from '../../types/agentPreset'
-import { Button, Checkbox, Select, TextInput } from '../ui'
+import { Button, Checkbox, FormGroup, Label, SectionHeader, Select, TextInput } from '../ui'
 
 function createEmptyPreset(): AgentPreset {
     return {
@@ -100,17 +100,15 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <h3 className="text-body font-medium text-text-primary">
-                    {'Agent Presets'}
-                </h3>
+                <SectionHeader
+                    title={'Agent Presets'}
+                    description={'Define multi-agent launch configurations. Each preset specifies a set of agent slots that will be created together as a version group.'}
+                    className="flex-1 border-b-0 pb-0"
+                />
                 <Button onClick={handleAdd}>
                     {'+ Add Preset'}
                 </Button>
             </div>
-
-            <p className="text-caption text-text-tertiary">
-                {'Define multi-agent launch configurations. Each preset specifies a set of agent slots that will be created together as a version group.'}
-            </p>
 
             {currentPresets.length === 0 && (
                 <div className="text-text-muted text-center py-8 text-body">
@@ -157,72 +155,70 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
 
                         {expandedId === preset.id && (
                             <div className="px-4 pb-4 space-y-3 border-t border-border-subtle">
-                                <div className="pt-3">
-                                    <label className="block text-caption text-text-secondary mb-1">
-                                        {'Name'}
-                                    </label>
+                                <FormGroup label={'Name'} className="pt-3">
                                     <TextInput
-                                        aria-label="Name"
                                         value={preset.name}
                                         onChange={e => handleUpdate(preset.id, { name: e.target.value })}
                                         placeholder={'e.g. The Trio'}
                                     />
-                                </div>
+                                </FormGroup>
 
-                                <div>
+                                <div className="space-y-2">
                                     <div className="flex items-center justify-between mb-2">
-                                        <label className="text-caption text-text-secondary">
-                                            {'Agent Slots'}
-                                        </label>
+                                        <Label>{'Agent Slots'}</Label>
                                         <Button size="sm" onClick={() => handleSlotAdd(preset.id)}>
                                             {'+ Add'}
                                         </Button>
                                     </div>
                                     {preset.slots.map((slot, idx) => (
-                                        <div key={idx} className="flex items-center gap-2 mb-2">
-                                            <Select
-                                                value={slot.variantId ? `variant:${slot.variantId}` : slot.agentType}
-                                                onChange={(val) => {
-                                                    if (val.startsWith('variant:')) {
-                                                        const variantId = val.slice(8)
-                                                        const variant = variants.find(v => v.id === variantId)
-                                                        if (variant) {
+                                        <div key={idx} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+                                            <FormGroup label={`Agent Slot ${idx + 1}`} className="flex-1">
+                                                <Select
+                                                    value={slot.variantId ? `variant:${slot.variantId}` : slot.agentType}
+                                                    onChange={(val) => {
+                                                        if (val.startsWith('variant:')) {
+                                                            const variantId = val.slice(8)
+                                                            const variant = variants.find(v => v.id === variantId)
+                                                            if (variant) {
+                                                                handleSlotUpdate(preset.id, idx, {
+                                                                    agentType: variant.agentType,
+                                                                    variantId: variant.id,
+                                                                })
+                                                            }
+                                                        } else {
                                                             handleSlotUpdate(preset.id, idx, {
-                                                                agentType: variant.agentType,
-                                                                variantId: variant.id,
+                                                                agentType: val as AgentType,
+                                                                variantId: undefined,
                                                             })
                                                         }
-                                                    } else {
-                                                        handleSlotUpdate(preset.id, idx, {
-                                                            agentType: val as AgentType,
-                                                            variantId: undefined,
-                                                        })
-                                                    }
-                                                }}
-                                                options={[
-                                                    ...NON_TERMINAL_AGENTS.map(agent => ({ value: agent, label: agent })),
-                                                    ...variants.map(v => ({ value: `variant:${v.id}`, label: `${v.name} (${v.agentType})` })),
-                                                ]}
-                                                className="flex-1"
-                                            />
-                                            <label className="flex items-center gap-1 text-caption text-text-muted">
+                                                    }}
+                                                    options={[
+                                                        ...NON_TERMINAL_AGENTS.map(agent => ({ value: agent, label: agent })),
+                                                        ...variants.map(v => ({ value: `variant:${v.id}`, label: `${v.name} (${v.agentType})` })),
+                                                    ]}
+                                                    className="flex-1"
+                                                />
+                                            </FormGroup>
+                                            <div className="md:pb-[1px]">
                                                 <Checkbox
                                                     checked={slot.skipPermissions ?? false}
                                                     onChange={checked => handleSlotUpdate(preset.id, idx, { skipPermissions: checked || undefined })}
+                                                    label={'Skip'}
                                                 />
-                                                Skip
-                                            </label>
-                                            <label className="flex items-center gap-1 text-caption text-text-muted">
+                                            </div>
+                                            <div className="md:pb-[1px]">
                                                 <Checkbox
                                                     checked={slot.autonomyEnabled ?? false}
                                                     onChange={checked => handleSlotUpdate(preset.id, idx, { autonomyEnabled: checked || undefined })}
+                                                    label={'Full autonomous'}
                                                 />
-                                                Full autonomous
-                                            </label>
+                                            </div>
                                             {preset.slots.length > 1 && (
-                                                <Button size="sm" variant="danger" onClick={() => handleSlotRemove(preset.id, idx)}>
-                                                    &times;
-                                                </Button>
+                                                <div className="md:pb-[1px]">
+                                                    <Button size="sm" variant="danger" onClick={() => handleSlotRemove(preset.id, idx)}>
+                                                        {'\u00d7'}
+                                                    </Button>
+                                                </div>
                                             )}
                                         </div>
                                     ))}

@@ -18,5 +18,16 @@ describe('FontPicker', () => {
     fireEvent.click(item)
     expect(onSelect).toHaveBeenCalledWith('JetBrains Mono')
   })
-})
 
+  it('renders the monospace filter with shared checkbox chrome', async () => {
+    const load = vi.fn().mockResolvedValue([
+      { family: 'JetBrains Mono', monospace: true },
+    ])
+
+    render(<FontPicker load={load} onSelect={vi.fn()} onClose={vi.fn()} />)
+
+    await waitFor(() => expect(load).toHaveBeenCalled())
+    const checkbox = screen.getByRole('checkbox')
+    expect(checkbox).toHaveClass('peer', 'sr-only')
+  })
+})

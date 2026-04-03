@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../../common/tauriCommands'
 import { logger } from '../../utils/logger'
+import { Button, FormGroup, SectionHeader, Select, TextInput } from '../ui'
 
 interface OpenApp {
   id: string
@@ -82,12 +83,11 @@ export function EditorOverridesSettings({ onNotification }: EditorOverridesSetti
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-body font-medium text-text-primary mb-2">File Editor Overrides</h3>
-        <div className="text-body text-text-tertiary mb-4">
-          Configure which editor opens for specific file extensions. Files without an override use your system default application.
-        </div>
-      </div>
+      <SectionHeader
+        title="File Editor Overrides"
+        description="Configure which editor opens for specific file extensions. Files without an override use your system default application."
+        className="border-b-0 pb-0"
+      />
 
       {sortedEntries.length > 0 && (
         <div className="border border-border-subtle rounded-lg overflow-hidden">
@@ -104,29 +104,27 @@ export function EditorOverridesSettings({ onNotification }: EditorOverridesSetti
                 <tr key={ext} className="border-t border-border-subtle">
                   <td className="px-4 py-2 text-body text-text-primary font-mono">{ext}</td>
                   <td className="px-4 py-2">
-                    <select
+                    <Select
                       value={editorId}
-                      onChange={(e) => handleEditorChange(ext, e.target.value)}
-                      className="bg-bg-elevated text-text-primary text-body border border-border-subtle rounded px-2 py-1"
-                    >
-                      {editors.map(editor => (
-                        <option key={editor.id} value={editor.id}>{editor.name}</option>
-                      ))}
-                      {!editors.some(e => e.id === editorId) && (
-                        <option value={editorId}>{editorId}</option>
-                      )}
-                    </select>
+                      onChange={(value) => handleEditorChange(ext, value)}
+                      aria-label={`Editor for ${ext}`}
+                      options={[
+                        ...editors.map(editor => ({ value: editor.id, label: editor.name })),
+                        ...(!editors.some(e => e.id === editorId) ? [{ value: editorId, label: editorId }] : []),
+                      ]}
+                    />
                   </td>
                   <td className="px-4 py-2">
-                    <button
+                    <Button
+                      size="sm"
+                      variant="danger"
                       onClick={() => handleRemove(ext)}
-                      className="text-text-tertiary hover:text-status-error transition-colors"
                       title="Remove override"
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -136,31 +134,31 @@ export function EditorOverridesSettings({ onNotification }: EditorOverridesSetti
       )}
 
       {editors.length > 0 && (
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={newExtension}
-            onChange={(e) => setNewExtension(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
-            placeholder=".rs"
-            className="bg-bg-elevated text-text-primary text-body border border-border-subtle rounded px-3 py-1.5 w-24 font-mono"
-          />
-          <select
-            value={newEditor}
-            onChange={(e) => setNewEditor(e.target.value)}
-            className="bg-bg-elevated text-text-primary text-body border border-border-subtle rounded px-2 py-1.5 flex-1"
-          >
-            {editors.map(editor => (
-              <option key={editor.id} value={editor.id}>{editor.name}</option>
-            ))}
-          </select>
-          <button
+        <div className="flex items-end gap-2">
+          <FormGroup label="Extension" className="w-24">
+            <TextInput
+              type="text"
+              value={newExtension}
+              onChange={(e) => setNewExtension(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
+              placeholder=".rs"
+              className="font-mono"
+            />
+          </FormGroup>
+          <FormGroup label="Editor" className="flex-1">
+            <Select
+              value={newEditor}
+              onChange={setNewEditor}
+              options={editors.map(editor => ({ value: editor.id, label: editor.name }))}
+            />
+          </FormGroup>
+          <Button
+            variant="primary"
             onClick={handleAdd}
             disabled={!newExtension || !newEditor}
-            className="bg-accent-blue text-white text-body px-3 py-1.5 rounded disabled:opacity-50 hover:opacity-90 transition-opacity"
           >
             Add
-          </button>
+          </Button>
         </div>
       )}
 

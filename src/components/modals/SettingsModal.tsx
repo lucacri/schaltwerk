@@ -46,7 +46,7 @@ import { AgentVariantsSettings } from '../settings/AgentVariantsSettings'
 import { AgentPresetsSettings } from '../settings/AgentPresetsSettings'
 import { ContextualActionsSettings } from '../settings/ContextualActionsSettings'
 import { EditorOverridesSettings } from '../settings/EditorOverridesSettings'
-import { Button, Checkbox, FormGroup, SectionHeader, Select, TextInput, Textarea, Toggle } from '../ui'
+import { Button, Checkbox, FormGroup, Label, SectionHeader, Select, TextInput, Textarea, Toggle } from '../ui'
 import {
     type DefaultGenerationPrompts,
     type GenerationSettingsPrompts,
@@ -1890,23 +1890,30 @@ fi`}
 
                         return (
                             <div className="border-t border-border-subtle pt-6">
-                                <h3 className="text-body font-medium text-text-primary mb-2">{t.settings.environment.modelAndReasoning}</h3>
-                                <div className="text-body text-text-tertiary mb-4">
-                                    {t.settings.environment.modelReasoningDesc.replace('{agent}', displayNameForAgent(activeAgentTab))}
-                                </div>
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="space-y-2">
-                                        <label className="block text-caption text-text-tertiary">{t.settings.environment.model}</label>
-                                        <input
+                                <SectionHeader
+                                    title={t.settings.environment.modelAndReasoning}
+                                    description={t.settings.environment.modelReasoningDesc.replace('{agent}', displayNameForAgent(activeAgentTab))}
+                                    className="border-b-0 pb-0"
+                                />
+                                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                    <FormGroup
+                                        label={t.settings.environment.model}
+                                        htmlFor={`environment-model-${activeAgentTab}`}
+                                    >
+                                        <TextInput
+                                            id={`environment-model-${activeAgentTab}`}
                                             type="text"
                                             value={currentPrefs.model ?? ''}
                                             onChange={(e) => handleAgentPreferenceChange(activeAgentTab, 'model', e.target.value)}
                                             placeholder={modelPlaceholder}
                                             list={modelListId}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                                             autoCorrect="off"
                                             autoCapitalize="off"
                                             spellCheck={false}
+                                            style={{
+                                                fontFamily: 'var(--font-family-mono)',
+                                                fontVariantLigatures: 'none',
+                                            }}
                                         />
                                         {modelListId && (
                                             <datalist id={modelListId}>
@@ -1915,16 +1922,18 @@ fi`}
                                                 ))}
                                             </datalist>
                                         )}
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="block text-caption text-text-tertiary">{t.settings.environment.reasoningEffort}</label>
-                                        <input
+                                    </FormGroup>
+                                    <FormGroup
+                                        label={t.settings.environment.reasoningEffort}
+                                        htmlFor={`environment-reasoning-${activeAgentTab}`}
+                                    >
+                                        <TextInput
+                                            id={`environment-reasoning-${activeAgentTab}`}
                                             type="text"
                                             value={currentPrefs.reasoningEffort ?? ''}
                                             onChange={(e) => handleAgentPreferenceChange(activeAgentTab, 'reasoningEffort', e.target.value)}
                                             placeholder={reasoningPlaceholder}
                                             list={reasoningListId}
-                                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted text-body"
                                             autoCorrect="off"
                                             autoCapitalize="off"
                                             spellCheck={false}
@@ -1936,7 +1945,7 @@ fi`}
                                                 ))}
                                             </datalist>
                                         )}
-                                    </div>
+                                    </FormGroup>
                                 </div>
                                 <div className="mt-2 text-caption text-text-muted">
                                     {t.settings.environment.preferencesNote}
@@ -1947,23 +1956,28 @@ fi`}
 
                     {activeAgentTab !== 'terminal' && (
                     <div className="border-t border-border-subtle pt-6">
-                        <h3 className="text-body font-medium text-text-primary mb-2">{t.settings.environment.cliArgs}</h3>
-                        <div className="text-body text-text-tertiary mb-3">
-                            {t.settings.environment.cliArgsDesc.replace('{agent}', displayNameForAgent(activeAgentTab))}
-                        </div>
-                        <input
+                        <FormGroup
+                            label={t.settings.environment.cliArgs}
+                            htmlFor={`environment-cli-args-${activeAgentTab}`}
+                            help={t.settings.environment.cliArgsDesc.replace('{agent}', displayNameForAgent(activeAgentTab))}
+                        >
+                        <TextInput
+                            id={`environment-cli-args-${activeAgentTab}`}
                             type="text"
                             value={cliArgs[activeAgentTab]}
                             onChange={(e) => setCliArgs(prev => ({ ...prev, [activeAgentTab]: e.target.value }))}
                             placeholder="e.g., --profile test or -p some 'quoted value'"
-                            className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
                             autoCorrect="off"
                             autoCapitalize="off"
                             autoComplete="off"
                             spellCheck={false}
                             inputMode="text"
-                            style={{ fontVariantLigatures: 'none' }}
+                            style={{
+                                fontFamily: 'var(--font-family-mono)',
+                                fontVariantLigatures: 'none',
+                            }}
                         />
+                        </FormGroup>
                         <div className="mt-2 text-caption text-text-muted">
                             {t.settings.environment.cliArgsExamples} <code className="text-accent-blue">--profile test</code>, <code className="text-accent-blue">-d</code>, <code className="text-accent-blue">--model gpt-4</code>
                         </div>
@@ -1971,34 +1985,29 @@ fi`}
                     )}
 
                     <div className="border-t border-border-subtle pt-6">
-                        <h3 className="text-body font-medium text-text-primary mb-2">{t.settings.environment.envVars}</h3>
-                        <div className="text-body text-text-tertiary mb-4">
-                            {activeAgentTab === 'terminal' ? (
+                        <SectionHeader
+                            title={t.settings.environment.envVars}
+                            description={activeAgentTab === 'terminal' ? (
                                 <>
                                     {t.settings.environment.envVarsTerminalDesc}
-                                    
-                                    <div className="mt-3 p-3 bg-accent-blue/10 border border-accent-blue/50 rounded text-caption text-accent-blue">
-                                        <p className="font-medium mb-1">{t.settings.environment.terminalOnlyMode}</p>
+                                    <div className="mt-3 rounded border border-accent-blue/50 bg-accent-blue/10 p-3 text-caption text-accent-blue">
+                                        <p className="mb-1 font-medium">{t.settings.environment.terminalOnlyMode}</p>
                                         <p>{t.settings.environment.terminalOnlyModeDesc}</p>
                                     </div>
                                 </>
-                            ) : (
-                                <>
-                                    {t.settings.environment.envVarsDesc.replace('{agent}', displayNameForAgent(activeAgentTab))}
-                                    
-                                </>
-                            )}
-                        </div>
+                            ) : t.settings.environment.envVarsDesc.replace('{agent}', displayNameForAgent(activeAgentTab))}
+                            className="border-b-0 pb-0"
+                        />
 
-                        <div className="space-y-3">
+                        <div className="mt-4 space-y-3">
                             {envVars[activeAgentTab].map((item, index) => (
                                 <div key={index} className="flex gap-2">
-                                    <input
-                                        type="text"
+                                    <TextInput
                                         value={item.key}
                                         onChange={(e) => handleEnvVarChange(activeAgentTab, index, 'key', e.target.value)}
+                                        aria-label={`${t.settings.environment.varNamePlaceholder} ${index + 1}`}
                                         placeholder={t.settings.environment.varNamePlaceholder}
-                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted"
+                                        className="flex-1"
                                         autoCorrect="off"
                                         autoCapitalize="off"
                                         autoComplete="off"
@@ -2006,12 +2015,12 @@ fi`}
                                         inputMode="text"
                                         style={{ fontVariantLigatures: 'none' }}
                                     />
-                                    <input
-                                        type="text"
+                                    <TextInput
                                         value={item.value}
                                         onChange={(e) => handleEnvVarChange(activeAgentTab, index, 'value', e.target.value)}
+                                        aria-label={`${t.settings.environment.valuePlaceholder} ${index + 1}`}
                                         placeholder={t.settings.environment.valuePlaceholder}
-                                        className="flex-1 bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted"
+                                        className="flex-1"
                                         autoCorrect="off"
                                         autoCapitalize="off"
                                         autoComplete="off"
@@ -2349,26 +2358,31 @@ fi`}
             <div className="flex-1 overflow-y-auto p-6">
                 <div className="space-y-6">
                     <div>
-                        <h3 className="text-body font-medium text-text-primary mb-4">{t.settings.terminal.title}</h3>
+                        <SectionHeader title={t.settings.terminal.title} className="border-b-0 pb-0" />
                         
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-body text-text-secondary mb-2">{t.settings.terminal.shellPath}</label>
-                                <input
+                        <div className="mt-4 space-y-4">
+                            <FormGroup
+                                label={t.settings.terminal.shellPath}
+                                htmlFor="terminal-shell-path"
+                                help={<>{t.settings.terminal.shellPathExamples} <code className="text-accent-blue">/usr/local/bin/nu</code>, <code className="text-accent-blue">/opt/homebrew/bin/fish</code>, <code className="text-accent-blue">/bin/zsh</code></>}
+                            >
+                                <TextInput
+                                    id="terminal-shell-path"
                                     type="text"
                                     value={terminalSettings.shell || ''}
                                     onChange={(e) => setTerminalSettings({ ...terminalSettings, shell: e.target.value || null })}
                                     placeholder={t.settings.terminal.shellPathPlaceholder}
-                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
+                                    style={{ fontFamily: 'var(--font-family-mono)' }}
                                 />
-                                <div className="mt-2 text-caption text-text-muted">
-                                    {t.settings.terminal.shellPathExamples} <code className="text-accent-blue">/usr/local/bin/nu</code>, <code className="text-accent-blue">/opt/homebrew/bin/fish</code>, <code className="text-accent-blue">/bin/zsh</code>
-                                </div>
-                            </div>
+                            </FormGroup>
                             
-                            <div>
-                                <label className="block text-body text-text-secondary mb-2">{t.settings.terminal.shellArgs}</label>
-                                <input
+                            <FormGroup
+                                label={t.settings.terminal.shellArgs}
+                                htmlFor="terminal-shell-args"
+                                help={t.settings.terminal.shellArgsDesc}
+                            >
+                                <TextInput
+                                    id="terminal-shell-args"
                                     type="text"
                                     value={(terminalSettings.shellArgs || []).join(' ')}
                                     onChange={(e) => {
@@ -2377,12 +2391,9 @@ fi`}
                                         setTerminalSettings({ ...terminalSettings, shellArgs: args })
                                     }}
                                     placeholder={t.settings.terminal.shellArgsPlaceholder}
-                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
+                                    style={{ fontFamily: 'var(--font-family-mono)' }}
                                 />
-                                <div className="mt-2 text-caption text-text-muted">
-                                    {t.settings.terminal.shellArgsDesc}
-                                </div>
-                            </div>
+                            </FormGroup>
                         </div>
                         
                         <div className="mt-6 p-4 bg-bg-elevated rounded">
@@ -2427,22 +2438,23 @@ fi`}
                     </div>
 
                     <div className="pt-6 border-t border-border-subtle">
-                        <h3 className="text-body font-medium text-text-primary mb-4">{t.settings.terminal.agentCommandPrefix}</h3>
+                        <SectionHeader title={t.settings.terminal.agentCommandPrefix} className="border-b-0 pb-0" />
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-body text-text-secondary mb-2">{t.settings.terminal.commandPrefix}</label>
-                                <input
+                        <div className="mt-4 space-y-4">
+                            <FormGroup
+                                label={t.settings.terminal.commandPrefix}
+                                htmlFor="terminal-command-prefix"
+                                help={t.settings.terminal.commandPrefixDesc}
+                            >
+                                <TextInput
+                                    id="terminal-command-prefix"
                                     type="text"
                                     value={agentCommandPrefix}
                                     onChange={(e) => setAgentCommandPrefix(e.target.value)}
                                     placeholder={t.settings.terminal.commandPrefixPlaceholder}
-                                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body"
+                                    style={{ fontFamily: 'var(--font-family-mono)' }}
                                 />
-                                <div className="mt-2 text-caption text-text-muted">
-                                    {t.settings.terminal.commandPrefixDesc}
-                                </div>
-                            </div>
+                            </FormGroup>
                         </div>
 
                         <div className="mt-4 p-4 bg-bg-elevated rounded">
@@ -2632,19 +2644,22 @@ fi`}
                                                     const value = generationPrompts[prompt.key] ?? ''
                                                     const isCustom = isPromptCustom(prompt.key)
                                                     const missingVariables = findMissingGenerationPromptVariables(value, prompt.requiredVariables)
+                                                    const promptInputId = `generation-prompt-${prompt.key}`
 
                                                     return (
                                                         <div key={prompt.key}>
                                                             <div className="flex items-center justify-between mb-1">
-                                                                <label className="text-body font-medium text-text-primary">
+                                                                <Label htmlFor={promptInputId} className="text-body font-medium text-text-primary">
                                                                     {prompt.label}
-                                                                </label>
+                                                                </Label>
                                                                 <div className="flex items-center gap-2">
                                                                     <span className={`text-caption ${isCustom ? 'text-accent-blue' : 'text-text-muted'}`}>
                                                                         {isCustom ? t.settings.generation.customized : t.settings.generation.usingDefault}
                                                                     </span>
                                                                     {isCustom && (
-                                                                        <button
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="ghost"
                                                                             onClick={() => {
                                                                                 const nextPrompts = {
                                                                                     ...generationPrompts,
@@ -2653,17 +2668,17 @@ fi`}
                                                                                 setGenerationPrompts(nextPrompts)
                                                                                 void saveGenerationSettings(generationAgent, generationCliArgs, nextPrompts, autonomyPromptTemplate)
                                                                             }}
-                                                                            className="text-caption text-accent-blue hover:text-text-primary cursor-pointer"
                                                                         >
                                                                             {t.settings.generation.resetToDefault}
-                                                                        </button>
+                                                                        </Button>
                                                                     )}
                                                                 </div>
                                                             </div>
                                                             <p className="text-caption text-text-tertiary mb-2">
                                                                 {prompt.description}
                                                             </p>
-                                                            <textarea
+                                                            <Textarea
+                                                                id={promptInputId}
                                                                 value={value}
                                                                 onChange={(e) => setGenerationPrompts(prev => ({
                                                                     ...prev,
@@ -2671,8 +2686,9 @@ fi`}
                                                                 }))}
                                                                 onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, autonomyPromptTemplate)}
                                                                 placeholder={prompt.placeholder}
-                                                                className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body min-h-[100px] resize-y"
+                                                                className="min-h-[100px]"
                                                                 rows={6}
+                                                                monospace
                                                             />
                                                             <p className="text-caption text-text-tertiary mt-2">
                                                                 {t.settings.generation.availableVariables.replace('{variables}', prompt.availableVariables.join(', '))}
@@ -2701,14 +2717,11 @@ fi`}
 
         return (
             <div className="space-y-3">
-                <div>
-                    <h3 className="text-body font-medium text-text-primary">
-                        {t.settings.agentConfiguration.autonomyTemplate}
-                    </h3>
-                    <p className="text-caption text-text-tertiary mt-1">
-                        {t.settings.agentConfiguration.autonomyTemplateDesc}
-                    </p>
-                </div>
+                <SectionHeader
+                    title={t.settings.agentConfiguration.autonomyTemplate}
+                    description={t.settings.agentConfiguration.autonomyTemplateDesc}
+                    className="border-b-0 pb-0"
+                />
 
                 <div className="flex items-center justify-between gap-3">
                     <p className="text-caption text-text-tertiary">
@@ -2719,27 +2732,28 @@ fi`}
                             {autonomyTemplateIsCustom ? t.settings.generation.customized : t.settings.generation.usingDefault}
                         </span>
                         {autonomyTemplateIsCustom && (
-                            <button
-                                type="button"
+                            <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => {
                                     setAutonomyPromptTemplate(defaultAutonomyPromptTemplate)
                                     void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, defaultAutonomyPromptTemplate)
                                 }}
-                                className="text-caption text-accent-blue hover:text-text-primary cursor-pointer"
                             >
                                 {t.settings.generation.resetToDefault}
-                            </button>
+                            </Button>
                         )}
                     </div>
                 </div>
 
-                <textarea
+                <Textarea
                     aria-label={t.settings.agentConfiguration.autonomyTemplate}
                     value={autonomyPromptTemplate}
                     onChange={(e) => setAutonomyPromptTemplate(e.target.value)}
                     onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, autonomyPromptTemplate)}
-                    className="w-full bg-bg-tertiary text-text-primary rounded px-3 py-2 border border-border-subtle placeholder-text-muted font-mono text-body min-h-[180px] resize-y"
+                    monospace
                     rows={10}
+                    resize="vertical"
                 />
             </div>
         )

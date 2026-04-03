@@ -8,6 +8,7 @@ import { useToast } from '../../common/toast/ToastProvider'
 import { useGitlabIntegrationContext } from '../../contexts/GitlabIntegrationContext'
 import { logger } from '../../utils/logger'
 import type { GitlabSource } from '../../types/gitlabTypes'
+import { Checkbox, FormGroup, Select, TextInput, Textarea } from '../ui'
 
 export type MrModeOption = 'squash' | 'reapply'
 
@@ -191,6 +192,9 @@ export function GitlabMrSessionModal({
     if (!open) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (document.querySelector('[role="combobox"][aria-expanded="true"]')) {
+          return
+        }
         event.preventDefault()
         event.stopPropagation()
         onClose()
@@ -244,25 +248,18 @@ export function GitlabMrSessionModal({
                 {t.gitlabMrModal.noSourcesConfigured}
               </p>
             ) : (
-              <select
+              <Select
                 value={selectedSource?.id ?? ''}
-                onChange={(e) => {
-                  const source = sources.find(s => s.id === e.target.value)
+                onChange={(value) => {
+                  const source = sources.find(s => s.id === value)
                   setSelectedSource(source ?? null)
                 }}
-                className="mt-1 w-full rounded px-3 py-2 text-body"
-                style={{
-                  backgroundColor: 'var(--color-bg-tertiary)',
-                  border: '1px solid var(--color-border-subtle)',
-                  color: 'var(--color-text-primary)',
-                }}
-              >
-                {sources.map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.label} ({source.projectPath})
-                  </option>
-                ))}
-              </select>
+                options={sources.map((source) => ({
+                  value: source.id,
+                  label: `${source.label} (${source.projectPath})`,
+                }))}
+                className="mt-1"
+              />
             )}
           </div>
 
@@ -308,108 +305,57 @@ export function GitlabMrSessionModal({
           </div>
 
           {mode === 'squash' && (
-            <div>
-              <label style={fieldLabelStyle} htmlFor="gitlab-mr-commit-message">
-                {t.gitlabMrModal.commitMessage}
-              </label>
-              <input
+            <FormGroup label={t.gitlabMrModal.commitMessage} htmlFor="gitlab-mr-commit-message">
+              <TextInput
                 id="gitlab-mr-commit-message"
                 value={commitMessage}
                 onChange={(event) => setCommitMessage(event.target.value)}
-                className="mt-1 w-full rounded px-3 py-2 text-body"
-                style={{
-                  backgroundColor: 'var(--color-bg-tertiary)',
-                  border: '1px solid var(--color-border-subtle)',
-                  color: 'var(--color-text-primary)',
-                }}
                 placeholder={title || t.placeholders.describeChanges}
               />
-            </div>
+            </FormGroup>
           )}
 
-          <div>
-            <label style={fieldLabelStyle} htmlFor="gitlab-mr-title">
-              {t.gitlabMrModal.mrTitle}
-            </label>
-            <input
+          <FormGroup label={t.gitlabMrModal.mrTitle} htmlFor="gitlab-mr-title">
+            <TextInput
               id="gitlab-mr-title"
               ref={titleInputRef}
               autoFocus
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              className="mt-1 w-full rounded px-3 py-2 text-body"
-              style={{
-                backgroundColor: 'var(--color-bg-tertiary)',
-                border: '1px solid var(--color-border-subtle)',
-                color: 'var(--color-text-primary)',
-              }}
               placeholder={t.gitlabMrModal.mrTitlePlaceholder}
             />
-          </div>
+          </FormGroup>
 
-          <div>
-            <label style={fieldLabelStyle} htmlFor="gitlab-mr-body">
-              {t.gitlabMrModal.description}
-            </label>
-            <textarea
+          <FormGroup label={t.gitlabMrModal.description} htmlFor="gitlab-mr-body">
+            <Textarea
               id="gitlab-mr-body"
               value={body}
               onChange={(event) => setBody(event.target.value)}
               rows={6}
-              className="mt-1 w-full rounded px-3 py-2 text-body resize-y"
-              style={{
-                backgroundColor: 'var(--color-bg-tertiary)',
-                border: '1px solid var(--color-border-subtle)',
-                color: 'var(--color-text-primary)',
-              }}
               placeholder={t.gitlabMrModal.descriptionPlaceholder}
             />
-          </div>
+          </FormGroup>
 
-          <div>
-            <label style={fieldLabelStyle} htmlFor="gitlab-mr-target-branch">
-              {t.gitlabMrModal.targetBranch}
-            </label>
-            <input
+          <FormGroup label={t.gitlabMrModal.targetBranch} htmlFor="gitlab-mr-target-branch" help={t.gitlabMrModal.targetBranchHint}>
+            <TextInput
               id="gitlab-mr-target-branch"
               value={baseBranch}
               onChange={(event) => setBaseBranch(event.target.value)}
-              className="mt-1 w-full rounded px-3 py-2 text-body"
-              style={{
-                backgroundColor: 'var(--color-bg-tertiary)',
-                border: '1px solid var(--color-border-subtle)',
-                color: 'var(--color-text-primary)',
-              }}
               placeholder="main"
             />
-            <p className="mt-1 text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
-              {t.gitlabMrModal.targetBranchHint}
-            </p>
-          </div>
+          </FormGroup>
 
           <div>
-            <label className="flex items-center gap-2 text-body mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-              <input
-                type="checkbox"
-                checked={useMrBranchName}
-                onChange={(e) => setUseMrBranchName(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-400 focus:ring-cyan-400"
-              />
-              <span>{t.gitlabMrModal.useCustomBranch}</span>
-            </label>
+            <Checkbox checked={useMrBranchName} onChange={setUseMrBranchName} label={t.gitlabMrModal.useCustomBranch} />
             {useMrBranchName && (
               <>
-                <input
+                <TextInput
                   id="gitlab-mr-branch-name"
+                  aria-label={t.gitlabMrModal.useCustomBranch}
                   value={mrBranchName}
                   onChange={(event) => setMrBranchName(event.target.value)}
-                  className="mt-1 w-full rounded px-3 py-2 text-body"
-                  style={{
-                    backgroundColor: 'var(--color-bg-tertiary)',
-                    border: '1px solid var(--color-border-subtle)',
-                    color: 'var(--color-text-primary)',
-                  }}
                   placeholder={`mr/${sessionName}`}
+                  className="mt-2"
                 />
                 <p className="mt-1 text-caption" style={{ color: 'var(--color-text-tertiary)' }}>
                   {t.gitlabMrModal.customBranchHint}
@@ -419,24 +365,8 @@ export function GitlabMrSessionModal({
           </div>
 
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-body" style={{ color: 'var(--color-text-secondary)' }}>
-              <input
-                type="checkbox"
-                checked={squashOnMerge}
-                onChange={(e) => setSquashOnMerge(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-400 focus:ring-cyan-400"
-              />
-              <span>{t.gitlabMrModal.squashOnMerge}</span>
-            </label>
-            <label className="flex items-center gap-2 text-body" style={{ color: 'var(--color-text-secondary)' }}>
-              <input
-                type="checkbox"
-                checked={cancelAfterMr}
-                onChange={(e) => setCancelAfterMr(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-cyan-400 focus:ring-cyan-400"
-              />
-              <span>{t.gitlabMrModal.autoCancelAfterMr}</span>
-            </label>
+            <Checkbox checked={squashOnMerge} onChange={setSquashOnMerge} label={t.gitlabMrModal.squashOnMerge} />
+            <Checkbox checked={cancelAfterMr} onChange={setCancelAfterMr} label={t.gitlabMrModal.autoCancelAfterMr} />
           </div>
 
           {error && (

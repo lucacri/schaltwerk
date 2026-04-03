@@ -27,6 +27,7 @@ import { useProjectFileIndex } from '../../hooks/useProjectFileIndex'
 import { MarkdownEditor, type MarkdownEditorRef } from '../specs/MarkdownEditor'
 import { ResizableModal } from '../shared/ResizableModal'
 import { UnifiedSearchModal } from './UnifiedSearchModal'
+import { Checkbox, FormGroup, TextInput } from '../ui'
 import type { GithubIssueSelectionResult, GithubPrSelectionResult } from '../../types/githubIssues'
 import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationContext'
 import { FALLBACK_CODEX_MODELS, getCodexModelMetadata } from '../../common/codexModels'
@@ -1412,59 +1413,41 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
 	            <div className="flex flex-col h-full p-4 gap-4">
 	                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 	                    <div>
-	                        <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>{t.newSessionModal.agentName}</label>
-	                        <div className="flex gap-1.5">
-	                            <input
+	                        <FormGroup label={t.newSessionModal.agentName} htmlFor="new-session-name" error={nameError || undefined}>
+	                            <TextInput
+	                                id="new-session-name"
 	                                ref={nameInputRef}
 	                                value={name}
 	                                onChange={handleNameChange}
-                                onFocus={() => { setWasEdited(true); wasEditedRef.current = true }}
-                                onKeyDown={() => { setWasEdited(true); wasEditedRef.current = true }}
-                                onInput={() => { setWasEdited(true); wasEditedRef.current = true }}
-                                className={`flex-1 min-w-0 rounded px-3 py-2 border ${
-                                    nameError ? 'border-red-500' : ''
-                                }`}
-                                style={{
-                                    backgroundColor: 'var(--color-bg-elevated)',
-                                    color: 'var(--color-text-primary)',
-                                    borderColor: nameError ? undefined : 'var(--color-border-default)'
-                                }}
-                                placeholder="eager_cosmos"
-                                disabled={nameLocked}
-                            />
-                            <button
-                                type="button"
-                                data-testid="generate-name-button"
-                                onClick={() => { void handleGenerateName() }}
-                                disabled={generatingName || nameLocked || !taskContent.trim()}
-                                className={`flex-shrink-0 w-9 h-9 rounded flex items-center justify-center border ${generatingName || nameLocked || !taskContent.trim() ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-80'}`}
-                                style={{
-                                    backgroundColor: 'var(--color-bg-elevated)',
-                                    borderColor: 'var(--color-border-default)',
-                                }}
-                                title={generatingName ? t.newSessionModal.tooltips.generatingName : t.newSessionModal.tooltips.generateName}
-                            >
-                                {generatingName ? (
-                                    <span
-                                        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
-                                        style={{ borderColor: 'var(--color-text-secondary)', borderTopColor: 'transparent' }}
-                                        aria-hidden="true"
-                                    />
-                                ) : (
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-secondary)' }}>
-                                        <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" /><path d="M17.8 11.8 19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2 19 5" /><path d="M11 6.2 9.7 5" /><path d="M11 11.8 9.7 13" /><path d="M8 15h2c4.7 0 4.7 4 0 4H4c-.5 0-1-.2-1-.5S2 17 4 17c5 0 3 4 0 4" />
-                                    </svg>
-                                )}
-                            </button>
-                        </div>
-                        {nameError && (
-                            <div className="flex items-start gap-2 mt-1">
-                                <svg className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <p className="text-xs text-red-400">{nameError}</p>
-                            </div>
-                        )}
+                                    onFocus={() => { setWasEdited(true); wasEditedRef.current = true }}
+                                    onKeyDown={() => { setWasEdited(true); wasEditedRef.current = true }}
+                                    onInput={() => { setWasEdited(true); wasEditedRef.current = true }}
+	                                placeholder="eager_cosmos"
+	                                disabled={nameLocked}
+                                    rightElement={
+                                        <button
+                                            type="button"
+                                            data-testid="generate-name-button"
+                                            onClick={() => { void handleGenerateName() }}
+                                            disabled={generatingName || nameLocked || !taskContent.trim()}
+                                            className={`inline-flex h-7 w-7 items-center justify-center rounded ${generatingName || nameLocked || !taskContent.trim() ? 'cursor-not-allowed opacity-40' : 'hover:bg-[rgba(var(--color-bg-hover-rgb),0.45)]'}`}
+                                            title={generatingName ? t.newSessionModal.tooltips.generatingName : t.newSessionModal.tooltips.generateName}
+                                        >
+                                            {generatingName ? (
+                                                <span
+                                                    className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
+                                                    style={{ borderColor: 'var(--color-text-secondary)', borderTopColor: 'transparent' }}
+                                                    aria-hidden="true"
+                                                />
+                                            ) : (
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-secondary)' }}>
+                                                    <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" /><path d="M17.8 11.8 19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2 19 5" /><path d="M11 6.2 9.7 5" /><path d="M11 11.8 9.7 13" /><path d="M8 15h2c4.7 0 4.7 4 0 4H4c-.5 0-1-.2-1-.5S2 17 4 17c5 0 3 4 0 4" />
+                                                </svg>
+                                            )}
+                                        </button>
+                                    }
+	                            />
+	                        </FormGroup>
                         {originalSpecName && (
                             <div className="flex items-center justify-between mt-2 px-2 py-1 rounded text-xs" style={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-subtle)' }}>
                                 <div className="flex items-center gap-2">
@@ -1503,21 +1486,16 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
 	                    </div>
 	                    </div>
 	
-	                    <div className="flex items-center gap-2">
-	                        <input
-	                            id="createAsDraft"
-	                            type="checkbox"
+	                    <Checkbox
                             checked={createAsDraft}
-                            onChange={e => {
-                                setCreateAsDraft(e.target.checked)
+                            onChange={checked => {
+                                setCreateAsDraft(checked)
                                 if (validationError) {
                                     setValidationError('')
                                 }
                             }}
-                            style={{ color: 'var(--color-accent-cyan)' }}
+                            label={t.newSessionModal.createAsSpec}
                         />
-                        <label htmlFor="createAsDraft" className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t.newSessionModal.createAsSpec}</label>
-                    </div>
 
                     <div className="flex flex-col flex-1 min-h-0">
                         <div className="flex items-center justify-between mb-2">

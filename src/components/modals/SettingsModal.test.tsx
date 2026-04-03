@@ -914,4 +914,40 @@ describe('SettingsModal AI Generation custom prompts', () => {
       }
     })
   })
+
+  it('associates custom prompt labels with their editors', async () => {
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    const customPromptsButton = await screen.findByText('Custom Prompts')
+    await user.click(customPromptsButton)
+
+    expect(await screen.findByLabelText('Name Generation Prompt')).toBeInTheDocument()
+    expect(screen.getByLabelText('Session Consolidation Prompt')).toBeInTheDocument()
+    expect(screen.getByLabelText('Commit Message Prompt')).toBeInTheDocument()
+  })
+})
+
+describe('SettingsModal shared control wiring', () => {
+  it('associates environment labels with their inputs', async () => {
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="environment" onClose={() => {}} />
+    )
+
+    expect(await screen.findByLabelText('Model')).toBeInTheDocument()
+    expect(screen.getByLabelText('Reasoning Effort')).toBeInTheDocument()
+    expect(screen.getByLabelText('CLI Arguments')).toBeInTheDocument()
+  })
+
+  it('associates terminal labels with their inputs', async () => {
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="terminal" onClose={() => {}} />
+    )
+
+    expect(await screen.findByLabelText('Shell Path')).toBeInTheDocument()
+    expect(screen.getByLabelText('Shell Arguments')).toBeInTheDocument()
+    expect(screen.getByLabelText('Command Prefix')).toBeInTheDocument()
+  })
 })

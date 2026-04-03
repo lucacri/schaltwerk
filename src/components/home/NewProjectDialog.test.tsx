@@ -76,6 +76,8 @@ describe('NewProjectDialog', () => {
     await setup()
     
     expect(screen.getByRole('heading', { name: 'New Project' })).toBeInTheDocument()
+    expect(screen.getByLabelText(/project name/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/parent directory/i)).toBeInTheDocument()
     expect(screen.getByPlaceholderText(/my-awesome-project/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /browse/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /create project/i })).toBeInTheDocument()

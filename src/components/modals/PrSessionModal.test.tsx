@@ -48,9 +48,9 @@ describe('PrSessionModal', () => {
         )
 
         expect(screen.getByText('Create Pull Request')).toBeDefined()
-        expect(screen.getByDisplayValue('Test PR')).toBeDefined()
-        expect(screen.getByDisplayValue('Test Body')).toBeDefined()
-        expect(screen.getByDisplayValue('main')).toBeDefined() // Base branch
+        expect(screen.getByLabelText(/pr title/i)).toHaveValue('Test PR')
+        expect(screen.getByLabelText(/description/i)).toHaveValue('Test Body')
+        expect(screen.getByLabelText(/base branch/i)).toHaveValue('main')
         expect(screen.getByText(/All changes will be squashed/)).toBeDefined() // Default is squash
     })
 
@@ -212,7 +212,7 @@ describe('PrSessionModal', () => {
             expect(confirmButton).toHaveProperty('disabled', true)
         })
 
-        it('allows reapply mode when branch is pushed without uncommitted changes', () => {
+    it('allows reapply mode when branch is pushed without uncommitted changes', () => {
             const previewPushed: PrPreviewResponse = {
                 ...defaultPreview,
                 branchPushed: true,
@@ -311,5 +311,25 @@ describe('PrSessionModal', () => {
             fireEvent.click(confirmButton!)
             expect(mockOnConfirm).toHaveBeenCalled()
         })
+    })
+
+    it('renders the auto-cancel control with shared checkbox chrome', () => {
+        render(
+            <MockModalProvider>
+                <PrSessionModal
+                    open={true}
+                    sessionName="test-session"
+                    status="ready"
+                    preview={defaultPreview}
+                    onClose={mockOnClose}
+                    onConfirm={mockOnConfirm}
+                    autoCancelEnabled={false}
+                    onToggleAutoCancel={mockOnToggleAutoCancel}
+                />
+            </MockModalProvider>
+        )
+
+        const toggle = screen.getByRole('checkbox', { name: 'Auto-cancel after PR' })
+        expect(toggle).toHaveClass('peer', 'sr-only')
     })
 })

@@ -19,6 +19,11 @@ describe('Select', () => {
     expect(screen.getByRole('combobox', { name: 'Banana' })).toBeInTheDocument()
   })
 
+  test('prefers an explicit aria-label when provided', () => {
+    render(<Select value="banana" onChange={() => {}} options={options} aria-label="Favorite fruit" />)
+    expect(screen.getByRole('combobox', { name: 'Favorite fruit' })).toBeInTheDocument()
+  })
+
   test('opens and selects an option with the mouse', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()

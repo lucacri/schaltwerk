@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, useId } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import React from 'react'
 import { BranchAutocomplete } from '../inputs/BranchAutocomplete'
@@ -11,6 +11,7 @@ import { logger } from '../../utils/logger'
 import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../../types/session'
 import { FALLBACK_CODEX_MODELS, CodexModelMetadata } from '../../common/codexModels'
 import { useTranslation } from '../../common/i18n'
+import { Checkbox, FormGroup, TextInput } from '../ui'
 
 interface SessionConfigurationPanelProps {
     variant?: 'modal' | 'compact'
@@ -326,6 +327,7 @@ export function SessionConfigurationPanel({
 
     const isCompact = variant === 'compact'
     const shouldShowShortcutHint = variant === 'modal' && !hideAgentType
+    const customBranchInputId = useId()
 
     if (isCompact) {
         return (
@@ -388,19 +390,16 @@ export function SessionConfigurationPanel({
     const baseBranchSection = (
         <div data-onboarding="base-branch-selector">
             <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                <span className="block text-sm" style={{ color: 'var(--color-text-secondary)' }}>
                     {useExistingBranch ? t.sessionConfig.existingBranch : t.sessionConfig.baseBranch}
-                </label>
-                <label className={`flex items-center gap-1.5 text-xs cursor-pointer ${branchError ? 'text-red-400' : ''}`} style={branchError ? undefined : { color: 'var(--color-text-secondary)' }}>
-                    <input
-                        type="checkbox"
-                        checked={useExistingBranch}
-                        onChange={(e) => handleUseExistingBranchChange(e.target.checked)}
-                        disabled={disabled}
-                        className={`rounded ${branchError ? 'accent-red-500' : ''}`}
-                    />
-                    <span>{t.sessionConfig.useExistingBranch}</span>
-                </label>
+                </span>
+                <Checkbox
+                    checked={useExistingBranch}
+                    onChange={handleUseExistingBranchChange}
+                    disabled={disabled}
+                    label={t.sessionConfig.useExistingBranch}
+                    className={branchError ? 'text-accent-red' : undefined}
+                />
             </div>
             {loadingBranches ? (
                 <div
@@ -441,33 +440,26 @@ export function SessionConfigurationPanel({
     )
 
     const branchNameSection = useExistingBranch ? null : (
-        <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-                {t.sessionConfig.branchNameOptional}
-            </label>
-            <input
+        <FormGroup
+            label={t.sessionConfig.branchNameOptional}
+            htmlFor={customBranchInputId}
+            help={t.sessionConfig.branchNameHint.replace('{placeholder}', branchPlaceholder)}
+        >
+            <TextInput
+                id={customBranchInputId}
                 value={customBranch}
                 onChange={(e) => handleCustomBranchChange(e.target.value)}
-                className="w-full rounded px-3 py-2 border"
-                style={{
-                    backgroundColor: 'var(--color-bg-elevated)',
-                    color: 'var(--color-text-primary)',
-                    borderColor: 'var(--color-border-default)'
-                }}
                 placeholder={branchPlaceholder}
                 disabled={disabled}
             />
-            <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                {t.sessionConfig.branchNameHint.replace('{placeholder}', branchPlaceholder)}
-            </p>
-        </div>
+        </FormGroup>
     )
 
     const agentSection = hideAgentType ? null : (
         <div>
-            <label className="block text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+            <span className="block text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
                 {t.sessionConfig.agent}
-            </label>
+            </span>
             <div className="space-y-3">
                 <ModelSelector
                     value={agentType}

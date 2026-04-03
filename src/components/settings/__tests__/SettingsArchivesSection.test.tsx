@@ -105,6 +105,31 @@ describe('SettingsArchivesSection', () => {
     await waitFor(() => expect(screen.getByText('No archived specs.')).toBeInTheDocument())
   })
 
+  test('associates the archive limit label with its input', async () => {
+    invokeMock.mockImplementation((command) => {
+      switch (command) {
+        case TauriCommands.SchaltwerkCoreListArchivedSpecs:
+          return Promise.resolve([]) as ReturnType<typeof invoke>
+        case TauriCommands.SchaltwerkCoreGetArchiveMaxEntries:
+          return Promise.resolve(25) as ReturnType<typeof invoke>
+        default:
+          return Promise.reject(new Error(`Unexpected command: ${command as string}`))
+      }
+    })
+
+    render(
+      <SettingsArchivesSection
+        onClose={vi.fn()}
+        onOpenSpec={vi.fn()}
+        onNotify={vi.fn()}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Max entries')).toHaveValue(25)
+    })
+  })
+
   test('prevents state updates after unmounting during fetch', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const deferredArchives = createDeferred<unknown>()

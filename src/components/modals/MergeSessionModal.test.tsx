@@ -109,6 +109,7 @@ describe('MergeSessionModal', () => {
     renderModal({ autoCancelEnabled: false })
     const toggle = screen.getByRole('checkbox', { name: 'Auto-cancel after merge' }) as HTMLInputElement
     expect(toggle.checked).toBe(false)
+    expect(toggle).toHaveClass('peer', 'sr-only')
   })
 
   it('invokes toggle handler with next state', () => {

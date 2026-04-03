@@ -1,8 +1,8 @@
-import { useMemo, useState, useRef } from 'react'
-import type { CSSProperties } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { AgentType } from '../../types/session'
 import { AgentEnvVar, displayNameForAgent } from './agentDefaults'
 import { useTranslation } from '../../common/i18n'
+import { Button, FormGroup, Label, SectionHeader, TextInput, Textarea } from '../ui'
 
 interface Props {
     agentType: AgentType
@@ -30,15 +30,7 @@ export function AgentDefaultsSection({
     const [envEditorOpen, setEnvEditorOpen] = useState(false)
     const [advancedOpen, setAdvancedOpen] = useState(false)
     const cliArgsRef = useRef<HTMLTextAreaElement | null>(null)
-    const buttonStyleVars = useMemo(() => ({
-        '--agent-advanced-btn-bg': 'var(--color-bg-elevated)',
-        '--agent-advanced-btn-hover': 'var(--color-bg-hover)',
-        '--agent-advanced-btn-text': 'var(--color-text-secondary)',
-        '--agent-advanced-btn-text-hover': 'var(--color-text-primary)',
-        '--agent-advanced-btn-border': 'var(--color-border-subtle)',
-    }) as CSSProperties, [])
-
-    const buttonClasses = 'inline-flex items-center justify-center h-8 px-3 rounded-md border text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-[color:var(--agent-advanced-btn-bg)] text-[color:var(--agent-advanced-btn-text)] border-[color:var(--agent-advanced-btn-border)] hover:bg-[color:var(--agent-advanced-btn-hover)] hover:text-[color:var(--agent-advanced-btn-text-hover)] focus:outline-none focus:ring-1 focus:ring-[color:var(--agent-advanced-btn-border)] focus:ring-offset-0'
+    const cliArgsFieldId = useId()
 
     const summaryText = useMemo(() => {
         if (loading) {
@@ -102,95 +94,84 @@ export function AgentDefaultsSection({
     return (
         <div className="space-y-3" data-testid="agent-defaults-section">
             <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <p className="text-sm text-slate-300">{t.agentDefaults.title}</p>
-                    <p className="text-xs text-slate-400 mt-1">
-                        {agentType === 'terminal'
+                <SectionHeader
+                    title={t.agentDefaults.title}
+                    description={
+                        agentType === 'terminal'
                             ? t.agentDefaults.descriptionEnvOnly.replace('{agent}', agentDisplayName)
                             : t.agentDefaults.descriptionWithArgs.replace('{agent}', agentDisplayName)
-                        }
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    className={buttonClasses}
-                    style={buttonStyleVars}
+                    }
+                    className="min-w-0 flex-1 border-b-0 pb-0"
+                />
+                <Button
+                    size="sm"
                     onClick={handleToggleAdvanced}
                     data-testid="advanced-agent-settings-toggle"
                     aria-expanded={advancedOpen}
                 >
                     {advancedOpen ? t.agentDefaults.hideAdvanced : t.agentDefaults.showAdvanced}
-                </button>
+                </Button>
             </div>
 
             {advancedOpen && (
                 <div className="space-y-3">
                     {agentType !== 'terminal' && (
-                        <div>
-                            <label className="block text-sm text-slate-300 mb-1">{t.agentDefaults.defaultCustomArgs}</label>
-                            <textarea
+                        <FormGroup
+                            label={t.agentDefaults.defaultCustomArgs}
+                            htmlFor={cliArgsFieldId}
+                            help={t.agentDefaults.argsHint.replace('{agent}', agentDisplayName)}
+                        >
+                            <Textarea
+                                id={cliArgsFieldId}
                                 ref={cliArgsRef}
                                 data-testid="agent-cli-args-input"
                                 value={cliArgs}
                                 onChange={event => onCliArgsChange(event.target.value)}
-                                className="w-full bg-slate-800 text-slate-100 rounded px-3 py-2 border border-slate-700 font-mono text-sm"
                                 placeholder={t.agentDefaults.argsPlaceholder}
                                 rows={2}
                                 disabled={loading}
+                                monospace
                             />
-                            <p className="text-xs text-slate-400 mt-1">
-                                {t.agentDefaults.argsHint.replace('{agent}', agentDisplayName)}
-                            </p>
-                        </div>
+                        </FormGroup>
                     )}
-                    <div>
+                    <div className="space-y-2">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="min-w-0">
-                                <label className="block text-sm text-slate-300">{t.agentDefaults.envVars}</label>
-                                <p className="text-xs text-slate-400 mt-1" data-testid="env-summary">
+                                <Label>{t.agentDefaults.envVars}</Label>
+                                <p className="mt-1 text-caption text-text-muted" data-testid="env-summary">
                                     {summaryText}
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    className={buttonClasses}
-                                    style={buttonStyleVars}
+                                <Button
+                                    size="sm"
                                     onClick={handleToggleEditor}
                                     disabled={loading}
                                     data-testid="toggle-env-vars"
                                     aria-expanded={envEditorOpen}
                                 >
                                     {envEditorOpen ? t.agentDefaults.hideEditor : t.agentDefaults.editVariables}
-                                </button>
-                                <button
-                                    type="button"
-                                    className={buttonClasses}
-                                    style={buttonStyleVars}
+                                </Button>
+                                <Button
+                                    size="sm"
                                     onClick={handleAddVariable}
                                     disabled={loading}
                                     data-testid="add-env-var"
                                 >
                                     {t.agentDefaults.addVariable}
-                                </button>
+                                </Button>
                             </div>
                         </div>
                         {envEditorOpen && (
-                            <div
-                                className="rounded border mt-3"
-                                style={{
-                                    borderColor: 'var(--color-border-subtle)',
-                                    backgroundColor: 'var(--color-bg-elevated)',
-                                }}
-                            >
+                            <div className="mt-3 rounded border border-border-subtle bg-bg-elevated">
                                 <div
-                                    className="max-h-48 overflow-y-auto custom-scrollbar divide-y divide-slate-800"
+                                    className="max-h-48 overflow-y-auto custom-scrollbar divide-y divide-border-subtle"
                                     data-testid="env-vars-scroll"
                                 >
                                     {loading ? (
-                                        <div className="p-3 text-xs text-slate-400">{t.agentDefaults.loadingDefaults}</div>
+                                        <div className="p-3 text-caption text-text-muted">{t.agentDefaults.loadingDefaults}</div>
                                     ) : envVars.length === 0 ? (
-                                        <div className="p-3 text-xs text-slate-400">
+                                        <div className="p-3 text-caption text-text-muted">
                                             {t.agentDefaults.noEnvVarsConfigured}
                                         </div>
                                     ) : (
@@ -200,40 +181,42 @@ export function AgentDefaultsSection({
                                                 key={`env-var-${agentType}-${index}`}
                                                 data-testid={`env-var-row-${index}`}
                                             >
-                                                <input
+                                                <TextInput
                                                     data-testid={`env-var-key-${index}`}
+                                                    aria-label={`Environment variable key ${index + 1}`}
                                                     value={item.key}
                                                     onChange={event => onEnvVarChange(index, 'key', event.target.value)}
                                                     placeholder={t.agentDefaults.keyPlaceholder}
-                                                    className="col-span-4 bg-slate-800 text-slate-100 rounded px-2 py-1 border border-slate-700 text-xs"
+                                                    className="col-span-4"
                                                     disabled={loading}
                                                 />
-                                                <input
+                                                <TextInput
                                                     data-testid={`env-var-value-${index}`}
+                                                    aria-label={`Environment variable value ${index + 1}`}
                                                     value={item.value}
                                                     onChange={event => onEnvVarChange(index, 'value', event.target.value)}
                                                     placeholder={t.agentDefaults.valuePlaceholder}
-                                                    className="col-span-7 bg-slate-800 text-slate-100 rounded px-2 py-1 border border-slate-700 text-xs"
+                                                    className="col-span-7"
                                                     disabled={loading}
                                                 />
-                                                <button
-                                                    type="button"
+                                                <Button
+                                                    size="sm"
+                                                    variant="danger"
                                                     data-testid={`env-var-remove-${index}`}
                                                     onClick={() => onRemoveEnvVar(index)}
-                                                    className={`col-span-1 ${buttonClasses} !px-0`}
-                                                    style={buttonStyleVars}
+                                                    className="col-span-1 w-full !px-0"
                                                     disabled={loading}
                                                     title={t.agentDefaults.remove}
                                                 >
                                                     {t.agentDefaults.remove}
-                                                </button>
+                                                </Button>
                                             </div>
                                         ))
                                     )}
                                 </div>
                             </div>
                         )}
-                        <p className="text-xs text-slate-400 mt-1">
+                        <p className="mt-1 text-caption text-text-muted">
                             {agentType === 'terminal'
                                 ? t.agentDefaults.envVarsShellHint.replace('{agent}', agentDisplayName)
                                 : t.agentDefaults.envVarsProcessHint.replace('{agent}', agentDisplayName)

@@ -3,7 +3,7 @@ import { useAgentVariants } from '../../hooks/useAgentVariants'
 import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
 import { generateId } from '../../common/generateId'
 import type { AgentVariant } from '../../types/agentVariant'
-import { Button, Select, TextInput, Textarea } from '../ui'
+import { Button, FormGroup, Label, SectionHeader, Select, TextInput, Textarea } from '../ui'
 
 function createEmptyVariant(): AgentVariant {
     return {
@@ -98,17 +98,15 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
-                <h3 className="text-body font-medium text-text-primary">
-                    {'Agent Variants'}
-                </h3>
+                <SectionHeader
+                    title={'Agent Variants'}
+                    description={'Create named configurations with specific model, CLI args, and environment variables. Use variants in the new session modal to quickly apply saved configurations.'}
+                    className="flex-1 border-b-0 pb-0"
+                />
                 <Button onClick={handleAdd}>
                     {'+ Add Variant'}
                 </Button>
             </div>
-
-            <p className="text-caption text-text-tertiary">
-                {'Create named configurations with specific model, CLI args, and environment variables. Use variants in the new session modal to quickly apply saved configurations.'}
-            </p>
 
             {currentVariants.length === 0 && (
                 <div className="text-text-muted text-center py-8 text-body">
@@ -157,73 +155,52 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                         {expandedId === variant.id && (
                             <div className="px-4 pb-4 space-y-3 border-t border-border-subtle">
                                 <div className="grid grid-cols-2 gap-3 pt-3">
-                                    <div>
-                                        <label className="block text-caption text-text-secondary mb-1">
-                                            {'Name'}
-                                        </label>
+                                    <FormGroup label={'Name'}>
                                         <TextInput
-                                            aria-label="Name"
                                             value={variant.name}
                                             onChange={e => handleUpdate(variant.id, { name: e.target.value })}
                                             placeholder={'e.g. Claude Opus High'}
                                         />
-                                    </div>
-                                    <div>
-                                        <label className="block text-caption text-text-secondary mb-1">
-                                            {'Agent Type'}
-                                        </label>
+                                    </FormGroup>
+                                    <FormGroup label={'Agent Type'}>
                                         <Select
                                             value={variant.agentType}
                                             onChange={value => handleUpdate(variant.id, { agentType: value as AgentType })}
                                             options={NON_TERMINAL_AGENTS.map(agent => ({ value: agent, label: agent }))}
                                         />
-                                    </div>
+                                    </FormGroup>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-caption text-text-secondary mb-1">
-                                            {'Model'}
-                                        </label>
+                                    <FormGroup label={'Model'}>
                                         <TextInput
-                                            aria-label="Model"
                                             value={variant.model ?? ''}
                                             onChange={e => handleUpdate(variant.id, { model: e.target.value || undefined })}
                                             placeholder={'e.g. opus, o3'}
                                         />
-                                    </div>
-                                    <div>
-                                        <label className="block text-caption text-text-secondary mb-1">
-                                            {'Reasoning Effort'}
-                                        </label>
+                                    </FormGroup>
+                                    <FormGroup label={'Reasoning Effort'}>
                                         <TextInput
-                                            aria-label="Reasoning Effort"
                                             value={variant.reasoningEffort ?? ''}
                                             onChange={e => handleUpdate(variant.id, { reasoningEffort: e.target.value || undefined })}
                                             placeholder={'e.g. high, medium, low'}
                                         />
-                                    </div>
+                                    </FormGroup>
                                 </div>
 
-                                <div>
-                                    <label className="block text-caption text-text-secondary mb-1">
-                                        {'CLI Arguments (one per line)'}
-                                    </label>
+                                <FormGroup label={'CLI Arguments (one per line)'}>
                                     <Textarea
-                                        aria-label="CLI Arguments"
                                         value={(variant.cliArgs ?? []).join('\n')}
                                         onChange={e => handleCliArgsChange(variant.id, e.target.value)}
                                         placeholder={'--dangerously-skip-permissions\n--model opus'}
                                         rows={3}
                                         monospace
                                     />
-                                </div>
+                                </FormGroup>
 
-                                <div>
+                                <div className="space-y-2">
                                     <div className="flex items-center justify-between mb-1">
-                                        <label className="text-caption text-text-secondary">
-                                            {'Environment Variables'}
-                                        </label>
+                                        <Label>{'Environment Variables'}</Label>
                                         <Button size="sm" onClick={() => handleEnvVarAdd(variant.id)}>
                                             {'+ Add'}
                                         </Button>

@@ -122,4 +122,31 @@ describe('MCPConfigPanel', () => {
       )
     ).toBeInTheDocument()
   })
+
+  test('renders the enable control with the shared checkbox chrome', async () => {
+    invokeMock.mockImplementation((command, _args) => {
+      if (command === TauriCommands.GetMcpStatus) {
+        return Promise.resolve({
+          mcp_server_path: '/Applications/Lucode.app/Contents/Resources/mcp-server/build/lucode-mcp-server.js',
+          is_embedded: true,
+          cli_available: true,
+          node_command: '/Users/example/.local/state/fnm_multishells/node',
+          client: 'codex',
+          is_configured: true,
+          setup_command: 'node /Applications/Lucode.app/Contents/Resources/mcp-server/build/lucode-mcp-server.js',
+          project_path: '/Users/example/project',
+          node_available: true
+        }) as ReturnType<typeof invoke>
+      }
+
+      return Promise.reject(new Error(`Unexpected command: ${String(command)}`)) as ReturnType<
+        typeof invoke
+      >
+    })
+
+    render(<MCPConfigPanel projectPath="/Users/example/project" agent="codex" />)
+
+    const checkbox = await screen.findByRole('checkbox', { name: 'Enable MCP (global)' })
+    expect(checkbox).toHaveClass('peer', 'sr-only')
+  })
 })

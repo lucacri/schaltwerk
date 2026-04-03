@@ -339,8 +339,7 @@ describe('NewSessionModal', () => {
     const { onCreate } = openModal()
 
     expect(screen.getByText('Start new agent')).toBeInTheDocument()
-    // The input is not explicitly associated with the label, select by placeholder/value
-    const nameInput = screen.getByPlaceholderText('eager_cosmos') as HTMLInputElement
+    const nameInput = screen.getByLabelText('Agent name') as HTMLInputElement
     expect(nameInput).toBeInTheDocument()
     expect(nameInput.value).toBe('eager_cosmos')
 

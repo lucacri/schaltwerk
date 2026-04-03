@@ -4,7 +4,7 @@ import type { GitlabSource } from '../../types/gitlabTypes'
 import { useTranslation } from '../../common/i18n'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
-import { Button, Checkbox, TextInput } from '../ui'
+import { Button, Checkbox, FormGroup, TextInput, SectionHeader } from '../ui'
 
 interface GitlabSourcesSettingsProps {
   sources: GitlabSource[]
@@ -124,12 +124,7 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3
-          className="text-body font-medium"
-          style={{ color: 'var(--color-text-primary)' }}
-        >
-          {t.gitlabSources.title}
-        </h3>
+        <SectionHeader title={t.gitlabSources.title} />
         {!formVisible && (
           <Button
             size="sm"
@@ -238,109 +233,53 @@ export function GitlabSourcesSettings({ sources, onSave }: GitlabSourcesSettings
             backgroundColor: 'var(--color-bg-elevated)',
           }}
         >
-          <h4
-            className="text-body font-medium"
-            style={{ color: 'var(--color-text-primary)' }}
-          >
-            {editingId ? t.gitlabSources.editSourceTitle : t.gitlabSources.addSourceTitle}
-          </h4>
+          <SectionHeader title={editingId ? t.gitlabSources.editSourceTitle : t.gitlabSources.addSourceTitle} />
 
           <div className="space-y-2">
-            <label className="block">
-              <span
-                className="text-caption block mb-1"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                {t.gitlabSources.labelField}
-              </span>
+            <FormGroup label={t.gitlabSources.labelField}>
               <TextInput
                 aria-label={t.gitlabSources.labelField}
                 value={formData.label}
                 onChange={(e) => setFormData({ ...formData, label: e.target.value })}
                 placeholder={t.gitlabSources.labelPlaceholder}
-                style={{
-                  backgroundColor: 'var(--color-bg-primary)',
-                  color: 'var(--color-text-primary)',
-                }}
               />
-            </label>
+            </FormGroup>
 
-            <label className="block">
-              <span
-                className="text-caption block mb-1"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                {t.gitlabSources.projectPathField}
-              </span>
+            <FormGroup label={t.gitlabSources.projectPathField}>
               <TextInput
                 aria-label={t.gitlabSources.projectPathField}
                 value={formData.projectPath}
                 onChange={(e) => setFormData({ ...formData, projectPath: e.target.value })}
                 placeholder={t.gitlabSources.projectPathPlaceholder}
-                style={{
-                  backgroundColor: 'var(--color-bg-primary)',
-                  color: 'var(--color-text-primary)',
-                }}
               />
-            </label>
+            </FormGroup>
 
-            <label className="block">
-              <span
-                className="text-caption block mb-1"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                {t.gitlabSources.hostnameField}
-              </span>
+            <FormGroup label={t.gitlabSources.hostnameField}>
               <TextInput
                 aria-label={t.gitlabSources.hostnameField}
                 value={formData.hostname}
                 onChange={(e) => setFormData({ ...formData, hostname: e.target.value })}
                 placeholder={t.gitlabSources.hostnamePlaceholder}
-                style={{
-                  backgroundColor: 'var(--color-bg-primary)',
-                  color: 'var(--color-text-primary)',
-                }}
               />
-            </label>
+            </FormGroup>
           </div>
 
           <div className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-2">
-              <Checkbox
-                checked={formData.issuesEnabled}
-                onChange={(checked) => setFormData({ ...formData, issuesEnabled: checked })}
-              />
-              <span
-                className="text-caption"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                {t.gitlabSources.issues}
-              </span>
-            </label>
-            <label className="flex items-center gap-2">
-              <Checkbox
-                checked={formData.mrsEnabled}
-                onChange={(checked) => setFormData({ ...formData, mrsEnabled: checked })}
-              />
-              <span
-                className="text-caption"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                {t.gitlabSources.mergeRequests}
-              </span>
-            </label>
-            <label className="flex items-center gap-2">
-              <Checkbox
-                checked={formData.pipelinesEnabled}
-                onChange={(checked) => setFormData({ ...formData, pipelinesEnabled: checked })}
-              />
-              <span
-                className="text-caption"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                {t.gitlabSources.pipelines}
-              </span>
-            </label>
+            <Checkbox
+              checked={formData.issuesEnabled}
+              onChange={(checked) => setFormData({ ...formData, issuesEnabled: checked })}
+              label={t.gitlabSources.issues}
+            />
+            <Checkbox
+              checked={formData.mrsEnabled}
+              onChange={(checked) => setFormData({ ...formData, mrsEnabled: checked })}
+              label={t.gitlabSources.mergeRequests}
+            />
+            <Checkbox
+              checked={formData.pipelinesEnabled}
+              onChange={(checked) => setFormData({ ...formData, pipelinesEnabled: checked })}
+              label={t.gitlabSources.pipelines}
+            />
           </div>
 
           <div className="flex items-center gap-2 pt-1">

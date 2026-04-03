@@ -16,6 +16,7 @@ import { useSessions } from '../../hooks/useSessions'
 import { useEpics } from '../../hooks/useEpics'
 import { buildSpecRefineReference, runSpecRefineWithOrchestrator } from '../../utils/specRefine'
 import { theme } from '../../common/theme'
+import { Textarea } from '../ui'
 import { typography } from '../../common/typography'
 import { useAtom, useSetAtom } from 'jotai'
 import { useTranslation } from '../../common/i18n'
@@ -622,13 +623,13 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
                           .replace('{end}', String(lineSelection.selection.endLine))}
                   </div>
                 </div>
-                <textarea
+                <Textarea
                   ref={commentTextareaRef}
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                   placeholder={t.specEditor.writeComment}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded focus:outline-none focus:border-cyan-400 resize-none"
-                  style={{ fontSize: theme.fontSize.body }}
+                  className="w-full"
+                  resize="none"
                   rows={4}
                   onKeyDown={(e) => {
                     const nativeEvent = e.nativeEvent as KeyboardEvent
