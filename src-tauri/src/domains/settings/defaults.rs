@@ -13,12 +13,15 @@ Sessions to review:
 {sessionList}
 
 Instructions:
-1. Read the code in each worktree path listed above
+1. Read the diff for each session branch (git diff main...{branch})
 2. Compare the approaches taken by each agent
-3. Choose the best base implementation
+3. Choose the best base implementation — you MUST apply changes into
+   one of the existing versioned session worktrees listed above
 4. Incorporate any valuable improvements from the other versions
-5. Produce a clean, unified result in this worktree
-6. Run the project's test suite to verify everything passes"#
+5. Run the project's test suite to verify everything passes
+6. Create a single squashed commit with the consolidated result
+7. Call lucode_promote on the chosen session — this cleans up siblings
+   automatically. Do NOT work in a separate consolidation session."#
         .to_string()
 }
 
