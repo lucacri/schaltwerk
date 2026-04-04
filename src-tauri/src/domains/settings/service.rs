@@ -1318,8 +1318,12 @@ mod tests {
             .expect("expected a unified PR review action");
         assert!(!review_action.prompt_template.contains("mr."));
         assert!(!review_action.prompt_template.contains("pr.headRefName"));
+        assert_eq!(review_action.name, "Review this PR");
         assert!(review_action.prompt_template.contains("pr.sourceBranch"));
         assert!(review_action.prompt_template.contains("pr.targetBranch"));
+        assert!(review_action.prompt_template.contains("pr.number"));
+        assert!(review_action.prompt_template.contains("gh pr diff {{pr.number}}"));
+        assert!(!review_action.prompt_template.contains("pr.diff"));
     }
 
     #[test]

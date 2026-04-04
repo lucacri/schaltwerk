@@ -17,7 +17,7 @@ export interface ContextualAction {
 
 export const PR_TEMPLATE_VARIABLES = [
     'pr.number', 'pr.title', 'pr.description', 'pr.author',
-    'pr.sourceBranch', 'pr.targetBranch', 'pr.diff',
+    'pr.sourceBranch', 'pr.targetBranch',
     'pr.url', 'pr.labels',
 ] as const
 

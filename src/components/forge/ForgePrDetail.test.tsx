@@ -270,7 +270,7 @@ describe('ForgePrDetail', () => {
         id: 'review-pr',
         name: 'Review PR',
         context: 'pr',
-        promptTemplate: 'Author {{pr.author}} from {{pr.sourceBranch}} to {{pr.targetBranch}}. Diff: {{pr.diff}}',
+        promptTemplate: 'Author {{pr.author}} from {{pr.sourceBranch}} to {{pr.targetBranch}}. URL: {{pr.url}}',
         mode: 'session',
         isBuiltIn: false,
       },
@@ -293,7 +293,7 @@ describe('ForgePrDetail', () => {
     fireEvent.click(screen.getByText('Review PR'))
 
     expect(mockEmitUiEvent).toHaveBeenCalledWith(UiEvent.ContextualActionCreateSession, {
-      prompt: 'Author alice from feature/dark-mode to main. Diff: ',
+      prompt: 'Author alice from feature/dark-mode to main. URL: https://github.com/owner/repo/pull/99',
       actionName: 'Review PR',
       agentType: undefined,
       variantId: undefined,

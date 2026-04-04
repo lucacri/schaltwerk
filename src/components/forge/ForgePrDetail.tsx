@@ -351,7 +351,6 @@ export function ForgePrDetail({
     'pr.author': summary.author ?? '',
     'pr.sourceBranch': summary.sourceBranch ?? '',
     'pr.targetBranch': summary.targetBranch ?? '',
-    'pr.diff': '',
     'pr.url': summary.url ?? '',
     'pr.labels': summary.labels.map(l => l.name).join(', '),
   }

@@ -65,7 +65,6 @@ describe('ForgePrDetail contextual action variables', () => {
       'pr.author': 'carol',
       'pr.sourceBranch': 'feature/unify-context',
       'pr.targetBranch': 'main',
-      'pr.diff': '',
       'pr.url': 'https://github.com/owner/repo/pull/42',
       'pr.labels': 'review, backend',
     })

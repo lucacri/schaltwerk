@@ -85,7 +85,7 @@ Instructions:
 4. Incorporate any valuable improvements from the other versions
 5. Produce a clean, unified result in this worktree
 6. Run the project's test suite to verify everything passes`,
-  review_pr_prompt: 'Review the following pull request or merge request:\n\nTitle: {{pr.title}}\nAuthor: {{pr.author}}\nSource: {{pr.sourceBranch}} -> {{pr.targetBranch}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}\n\nDiff:\n{{pr.diff}}',
+  review_pr_prompt: 'Review the following pull request:\n\nTitle: {{pr.title}}\nAuthor: {{pr.author}}\nSource: {{pr.sourceBranch}} -> {{pr.targetBranch}}\nURL: {{pr.url}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}\n\nFetch and review the diff using the CLI (e.g., `gh pr diff {{pr.number}}` or `git diff {{pr.targetBranch}}...{{pr.sourceBranch}}`).',
   plan_issue_prompt: 'Create an implementation plan for the following issue:\n\nTitle: {{issue.title}}\n\nDescription:\n{{issue.description}}\n\nLabels: {{issue.labels}}',
   issue_prompt: [
     'GitHub Issue Context: {title} (#{number})',

@@ -197,7 +197,7 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
                                             aria-label="Name"
                                             value={action.name}
                                             onChange={e => handleUpdate(action.id, { name: e.target.value })}
-                                            placeholder="e.g. Review this PR/MR"
+                                            placeholder="e.g. Review this PR"
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 mt-3">

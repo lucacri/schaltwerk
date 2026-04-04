@@ -20,7 +20,7 @@ const defaults: DefaultGenerationPrompts = {
   name_prompt: 'default name {task}',
   commit_prompt: 'default commit {commits} {files}',
   consolidation_prompt: 'default consolidation {sessionList}',
-  review_pr_prompt: 'default review {{pr.title}} {{pr.diff}}',
+  review_pr_prompt: 'default review {{pr.title}} {{pr.url}}',
   plan_issue_prompt: 'default issue {{issue.title}} {{issue.description}}',
   issue_prompt: 'default issue prompt {title} {body} {comments}',
   pr_prompt: 'default pr prompt {title} {branch} {body} {comments}',
@@ -120,5 +120,8 @@ describe('generationPrompts', () => {
 
     expect(prompts.consolidation_prompt).toContain('{sessionList}')
     expect(prompts.review_pr_prompt).toContain('{{pr.title}}')
+    expect(prompts.review_pr_prompt).toContain('{{pr.number}}')
+    expect(prompts.review_pr_prompt).toContain('gh pr diff {{pr.number}}')
+    expect(prompts.review_pr_prompt).not.toContain('{{pr.diff}}')
   })
 })

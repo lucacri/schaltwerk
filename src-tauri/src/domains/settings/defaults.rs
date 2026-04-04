@@ -23,7 +23,7 @@ Instructions:
 }
 
 pub fn default_review_pr_prompt_template() -> String {
-    "Review the following pull request or merge request:\n\nTitle: {{pr.title}}\nAuthor: {{pr.author}}\nSource: {{pr.sourceBranch}} -> {{pr.targetBranch}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}\n\nDiff:\n{{pr.diff}}".to_string()
+    "Review the following pull request:\n\nTitle: {{pr.title}}\nAuthor: {{pr.author}}\nSource: {{pr.sourceBranch}} -> {{pr.targetBranch}}\nURL: {{pr.url}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}\n\nFetch and review the diff using the CLI (e.g., `gh pr diff {{pr.number}}` or `git diff {{pr.targetBranch}}...{{pr.sourceBranch}}`).".to_string()
 }
 
 pub fn default_plan_issue_prompt_template() -> String {
@@ -87,7 +87,7 @@ pub fn default_contextual_actions(generation: &GenerationSettings) -> Vec<Contex
     normalize_contextual_actions(vec![
         ContextualAction {
             id: "builtin-review-pr".to_string(),
-            name: "Review this PR/MR".to_string(),
+            name: "Review this PR".to_string(),
             context: ContextualActionContext::Pr,
             prompt_template: resolve_prompt(
                 generation.review_pr_prompt.as_deref(),

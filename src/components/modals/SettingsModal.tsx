@@ -2535,8 +2535,8 @@ fi`}
                             label: t.settings.generation.reviewPrPrompt,
                             description: t.settings.generation.reviewPrPromptDesc,
                             placeholder: t.settings.generation.reviewPrPromptPlaceholder,
-                            availableVariables: ['{{pr.title}}', '{{pr.description}}', '{{pr.author}}', '{{pr.sourceBranch}}', '{{pr.targetBranch}}', '{{pr.diff}}', '{{pr.url}}', '{{pr.labels}}'],
-                            requiredVariables: ['{{pr.title}}', '{{pr.diff}}'],
+                            availableVariables: ['{{pr.title}}', '{{pr.description}}', '{{pr.author}}', '{{pr.sourceBranch}}', '{{pr.targetBranch}}', '{{pr.number}}', '{{pr.url}}', '{{pr.labels}}'],
+                            requiredVariables: ['{{pr.title}}'],
                         },
                         {
                             key: 'plan_issue_prompt',

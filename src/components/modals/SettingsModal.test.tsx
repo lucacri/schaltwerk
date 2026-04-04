@@ -686,7 +686,7 @@ describe('SettingsModal AI Generation custom prompts', () => {
     name_prompt: 'Default name prompt with {task} placeholder',
     commit_prompt: 'Default commit prompt with {commits} and {files}',
     consolidation_prompt: 'Default consolidation prompt with {sessionList}',
-    review_pr_prompt: 'Default review prompt with {{pr.title}} and {{pr.diff}}',
+    review_pr_prompt: 'Default review prompt with {{pr.title}} and {{pr.url}}',
     plan_issue_prompt: 'Default issue plan prompt with {{issue.title}} and {{issue.description}}',
     issue_prompt: 'Default issue session prompt with {title} and {comments}',
     pr_prompt: 'Default PR session prompt with {title}, {branch}, and {comments}',

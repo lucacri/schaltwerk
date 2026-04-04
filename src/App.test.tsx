@@ -8,6 +8,16 @@ import type { RawSession } from './types/session'
 import { useAtomValue } from 'jotai'
 import { useEffect } from 'react'
 import { leftPanelCollapsedAtom } from './store/atoms/layout'
+import { logger } from './utils/logger'
+
+vi.mock('./utils/logger', () => ({
+  logger: {
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+  },
+}))
 
 const listenEventHandlers = vi.hoisted(
   () => [] as Array<{ event: unknown; handler: (detail: unknown) => void }>
@@ -1721,6 +1731,54 @@ describe('validatePanelPercentage', () => {
           issueNumber: 42,
           issueUrl: 'https://github.com/example/repo/issues/42',
         })
+      )
+    })
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
+  it('logs contextual session creation failures with the action detail', async () => {
+    mockState.isGitRepo = true
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    const invokeMock = await getInvokeMock()
+    const rejection = new Error('session create failed')
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        throw rejection
+      }
+
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.ContextualActionCreateSession, {
+        prompt: 'Review the auth refactor',
+        actionName: 'Review PR',
+        agentType: 'claude',
+        contextType: 'pr',
+        contextNumber: '7',
+        contextTitle: 'Refactor auth module',
+        contextUrl: 'https://github.com/example/repo/pull/7',
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(logger.error).toHaveBeenCalledWith(
+        '[App] Failed to create session from contextual action:',
+        expect.objectContaining({
+          actionName: 'Review PR',
+          contextType: 'pr',
+          contextNumber: '7',
+        }),
+        rejection,
       )
     })
 
