@@ -84,7 +84,7 @@ Instructions:
 3. Choose the best base implementation
 4. Incorporate any valuable improvements from the other versions
 5. Produce a clean, unified result in this worktree
-6. Run \`just test\` to verify everything passes`,
+6. Run the project's test suite to verify everything passes`,
   review_pr_prompt: 'Review the following pull request or merge request:\n\nTitle: {{pr.title}}\nAuthor: {{pr.author}}\nSource: {{pr.sourceBranch}} -> {{pr.targetBranch}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}\n\nDiff:\n{{pr.diff}}',
   plan_issue_prompt: 'Create an implementation plan for the following issue:\n\nTitle: {{issue.title}}\n\nDescription:\n{{issue.description}}\n\nLabels: {{issue.labels}}',
   issue_prompt: [

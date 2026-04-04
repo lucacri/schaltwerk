@@ -137,7 +137,7 @@ Cherry-pick or manually apply the best version's changes to your branch, then in
 
 ### Step 4: Verify
 
-**REQUIRED:** Use the superpowers:verification-before-completion skill. Run `just test` (or the project's test command) and ensure everything passes. Do NOT proceed until tests are green. Pre-existing failures unrelated to your changes are acceptable — document them explicitly.
+**REQUIRED:** Use the superpowers:verification-before-completion skill. Run the project's test command and ensure everything passes. Do NOT proceed until tests are green. Pre-existing failures unrelated to your changes are acceptable — document them explicitly.
 
 ### Step 5: Create squashed commit
 

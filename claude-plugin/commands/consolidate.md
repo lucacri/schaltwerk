@@ -54,7 +54,7 @@ Do NOT create a new consolidation session.
 In the chosen session, the agent should:
 - Review sibling branches with `git diff main...{branch}` for each sibling session.
 - Cherry-pick or manually apply the strongest ideas from the other versions into the chosen session branch.
-- Run `just test`.
+- Run the project's test suite.
 - Call `mcp__lucode__lucode_promote` with:
   - `session_name`: the chosen session name
   - `reason`: a concise justification describing why this version won and what it absorbed from siblings
