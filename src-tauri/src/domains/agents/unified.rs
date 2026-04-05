@@ -209,7 +209,6 @@ impl AgentAdapter for OpenCodeAdapter {
     }
 
     fn build_launch_spec(&self, ctx: AgentLaunchContext) -> AgentLaunchSpec {
-        let initial_command = ctx.initial_prompt.map(|prompt| prompt.to_string());
         let session_info = ctx
             .session_id
             .map(|id| super::opencode::OpenCodeSessionInfo {
@@ -227,12 +226,11 @@ impl AgentAdapter for OpenCodeAdapter {
         let command = super::opencode::build_opencode_command_with_config(
             ctx.worktree_path,
             session_info.as_ref(),
-            None,
+            ctx.initial_prompt,
             ctx.skip_permissions,
             Some(&config),
         );
         AgentLaunchSpec::new(command, ctx.worktree_path.to_path_buf())
-            .with_initial_command(initial_command)
     }
 }
 
@@ -512,7 +510,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_opencode_adapter_basic() {
+        fn test_opencode_adapter_passes_prompt_via_cli_flag() {
             let adapter = OpenCodeAdapter;
             let manifest = AgentManifest::get("opencode").unwrap();
 
@@ -528,10 +526,37 @@ mod tests {
             let spec = adapter.build_launch_spec(ctx);
             assert!(spec.shell_command.contains("opencode"));
             assert!(
-                !spec.shell_command.contains("--prompt"),
-                "prompt should be sent via initial_command, not embedded in shell command"
+                spec.shell_command.contains("--prompt"),
+                "prompt should be passed via --prompt CLI flag for deterministic delivery"
             );
-            assert_eq!(spec.initial_command.as_deref(), Some("test prompt"));
+            assert!(
+                spec.shell_command.contains("test prompt"),
+                "prompt text should be in the shell command"
+            );
+            assert!(
+                spec.initial_command.is_none(),
+                "should not use initial_command paste fallback"
+            );
+        }
+
+        #[test]
+        fn test_opencode_adapter_no_prompt() {
+            let adapter = OpenCodeAdapter;
+            let manifest = AgentManifest::get("opencode").unwrap();
+
+            let ctx = AgentLaunchContext {
+                worktree_path: Path::new("/test/path"),
+                session_id: None,
+                initial_prompt: None,
+                skip_permissions: true,
+                binary_override: Some("opencode"),
+                manifest,
+            };
+
+            let spec = adapter.build_launch_spec(ctx);
+            assert!(spec.shell_command.contains("opencode"));
+            assert!(!spec.shell_command.contains("--prompt"));
+            assert!(spec.initial_command.is_none());
         }
     }
 
