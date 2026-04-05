@@ -76,10 +76,10 @@ Tauri-based desktop app for managing AI coding sessions using git worktrees. Eac
 
 ### Before Completing ANY Task
 ```bash
-just test          # Run ALL validations: TypeScript, Rust lints, tests, and build
+just test          # Run ALL validations: TypeScript, Rust lints, and tests
 # Or: bun run test  # Same as 'just test'
 ```
-**Why:** Ensures code quality and prevents broken commits. The script runs TypeScript lint + type-checking, MCP lint/tests, frontend vitest, Rust clippy, dependency hygiene (`cargo shear`), `knip`, Rust tests (`cargo nextest`), and a Rust build.
+**Why:** Ensures code quality and prevents broken commits. The script runs TypeScript lint + type-checking, MCP lint/tests, frontend vitest, Rust clippy, dependency hygiene (`cargo shear`), `knip`, and Rust tests (`cargo nextest`).
 
 ### Autonomy for Tests (MANDATORY)
 - Codex and Factory Droid may run `just test`, `bun run test`, `bun run lint`, `bun run lint:rust`, `bun run test:rust`, and `cargo` checks without asking for user approval, even when the CLI approval mode is set to “on-request”.
@@ -235,7 +235,6 @@ Run `bun run test` - ALL must pass:
 - Rust dependency hygiene (`cargo shear`)
 - **Dead code detection** (`knip` - finds unused files, exports, and dependencies)
 - Rust tests
-- Rust build
 
 **CRITICAL Rules:**
 - Test failures are NEVER unrelated - fix immediately

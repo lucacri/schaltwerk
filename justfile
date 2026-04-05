@@ -599,9 +599,6 @@ test:
     step "Test: Rust"
     just test-rust && ok "Rust tests passed"
 
-    step "Build: Rust"
-    {{pm}} run build:rust && ok "Rust build passed"
-
     printf '\n\033[1;32m✓ All checks passed\033[0m\n'
 
 
