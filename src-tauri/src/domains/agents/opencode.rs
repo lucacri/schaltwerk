@@ -415,13 +415,27 @@ fn sanitize_path_for_opencode(path: &Path) -> String {
     result
 }
 
+pub struct OpenCodeCommandSpec {
+    pub command: String,
+    pub prompt_dispatched_via_cli: bool,
+}
+
+impl OpenCodeCommandSpec {
+    fn new(command: String, prompt_dispatched_via_cli: bool) -> Self {
+        Self {
+            command,
+            prompt_dispatched_via_cli,
+        }
+    }
+}
+
 pub fn build_opencode_command_with_config(
     worktree_path: &Path,
     session_info: Option<&OpenCodeSessionInfo>,
     initial_prompt: Option<&str>,
     _skip_permissions: bool,
     config: Option<&OpenCodeConfig>,
-) -> String {
+) -> OpenCodeCommandSpec {
     // Use simple binary name and let system PATH handle resolution
     let binary_name = if let Some(cfg) = config {
         if let Some(ref path) = cfg.binary_path {
@@ -440,6 +454,7 @@ pub fn build_opencode_command_with_config(
     let binary_invocation = format_binary_invocation(binary_name);
     let cwd_quoted = format_binary_invocation(&worktree_path.display().to_string());
     let mut cmd = format!("cd {cwd_quoted} && {binary_invocation}");
+    let mut prompt_dispatched_via_cli = false;
 
     match session_info {
         Some(info) if info.has_history => {
@@ -460,6 +475,7 @@ pub fn build_opencode_command_with_config(
                 // This avoids showing the auto-created assistant greeting
                 let escaped = escape_for_shell(prompt);
                 cmd.push_str(&format!(r#" --prompt "{escaped}""#));
+                prompt_dispatched_via_cli = true;
             } else {
                 // No prompt provided - start a new session instead of resuming
                 // the empty one. This prevents all empty sessions from showing
@@ -477,6 +493,7 @@ pub fn build_opencode_command_with_config(
                 log::debug!("Starting new session with prompt");
                 let escaped = escape_for_shell(prompt);
                 cmd.push_str(&format!(r#" --prompt "{escaped}""#));
+                prompt_dispatched_via_cli = true;
             } else {
                 log::debug!("Starting new session without prompt");
                 // OpenCode will start a new session by default
@@ -484,7 +501,7 @@ pub fn build_opencode_command_with_config(
         }
     }
 
-    cmd
+    OpenCodeCommandSpec::new(cmd, prompt_dispatched_via_cli)
 }
 
 fn resolve_opencode_binary_with_config(config: Option<&OpenCodeConfig>) -> String {
@@ -588,14 +605,14 @@ mod tests {
         let config = OpenCodeConfig {
             binary_path: Some("opencode".to_string()),
         };
-        let cmd = build_opencode_command_with_config(
+        let spec = build_opencode_command_with_config(
             Path::new("/path/with spaces"),
             None,
             None,
             false,
             Some(&config),
         );
-        assert!(cmd.starts_with(r#"cd "/path/with spaces" && "#));
+        assert!(spec.command.starts_with(r#"cd "/path/with spaces" && "#));
     }
 
     #[test]
@@ -884,7 +901,7 @@ mod tests {
         let config = OpenCodeConfig {
             binary_path: Some("opencode".to_string()),
         };
-        let cmd = build_opencode_command_with_config(
+        let spec = build_opencode_command_with_config(
             Path::new("/path/to/worktree"),
             None,
             Some("implement feature X"),
@@ -892,7 +909,7 @@ mod tests {
             Some(&config),
         );
         assert_eq!(
-            cmd,
+            spec.command,
             r#"cd /path/to/worktree && opencode --prompt "implement feature X""#
         );
     }
@@ -906,7 +923,7 @@ mod tests {
             id: "ses_743dfa323ffe5EQMH4dv6COsh1".to_string(),
             has_history: true,
         };
-        let cmd = build_opencode_command_with_config(
+        let spec = build_opencode_command_with_config(
             Path::new("/path/to/worktree"),
             Some(&session_info),
             None,
@@ -914,7 +931,7 @@ mod tests {
             Some(&config),
         );
         assert_eq!(
-            cmd,
+            spec.command,
             r#"cd /path/to/worktree && opencode --session "ses_743dfa323ffe5EQMH4dv6COsh1""#
         );
     }
@@ -924,14 +941,14 @@ mod tests {
         let config = OpenCodeConfig {
             binary_path: Some("opencode".to_string()),
         };
-        let cmd = build_opencode_command_with_config(
+        let spec = build_opencode_command_with_config(
             Path::new("/path/to/worktree"),
             None,
             None,
             false,
             Some(&config),
         );
-        assert_eq!(cmd, "cd /path/to/worktree && opencode");
+        assert_eq!(spec.command, "cd /path/to/worktree && opencode");
     }
 
     #[test]
@@ -945,17 +962,17 @@ mod tests {
             id: "ses_new_session".to_string(),
             has_history: false,
         };
-        let cmd = build_opencode_command_with_config(
+        let spec = build_opencode_command_with_config(
             Path::new("/path/to/worktree"),
             Some(&session_info),
             None,
             false,
             Some(&config),
         );
-        assert_eq!(cmd, "cd /path/to/worktree && opencode");
+        assert_eq!(spec.command, "cd /path/to/worktree && opencode");
 
         // Test session with no history but with a prompt - should start fresh
-        let cmd_with_prompt = build_opencode_command_with_config(
+        let spec_with_prompt = build_opencode_command_with_config(
             Path::new("/path/to/worktree"),
             Some(&session_info),
             Some("implement feature Y"),
@@ -963,7 +980,7 @@ mod tests {
             Some(&config),
         );
         assert_eq!(
-            cmd_with_prompt,
+            spec_with_prompt.command,
             r#"cd /path/to/worktree && opencode --prompt "implement feature Y""#
         );
     }
@@ -977,7 +994,7 @@ mod tests {
             id: "ses_743dfa323ffe5EQMH4dv6COsh1".to_string(),
             has_history: true,
         };
-        let cmd = build_opencode_command_with_config(
+        let spec = build_opencode_command_with_config(
             Path::new("/path/to/worktree"),
             Some(&session_info),
             Some("new agent"),
@@ -986,7 +1003,7 @@ mod tests {
         );
         // When session has history, we use --session to continue the specific session
         assert_eq!(
-            cmd,
+            spec.command,
             r#"cd /path/to/worktree && opencode --session "ses_743dfa323ffe5EQMH4dv6COsh1""#
         );
     }
@@ -996,7 +1013,7 @@ mod tests {
         let config = OpenCodeConfig {
             binary_path: Some("opencode".to_string()),
         };
-        let cmd = build_opencode_command_with_config(
+        let spec = build_opencode_command_with_config(
             Path::new("/path/to/worktree"),
             None,
             Some(r#"implement "feature" with quotes"#),
@@ -1004,9 +1021,58 @@ mod tests {
             Some(&config),
         );
         assert_eq!(
-            cmd,
+            spec.command,
             r#"cd /path/to/worktree && opencode --prompt "implement \"feature\" with quotes""#
         );
+    }
+
+    #[test]
+    fn test_prompt_dispatch_flag_new_session_with_prompt() {
+        let config = OpenCodeConfig {
+            binary_path: Some("opencode".to_string()),
+        };
+        let spec = build_opencode_command_with_config(
+            Path::new("/path/to/worktree"),
+            None,
+            Some("summarize the spec"),
+            false,
+            Some(&config),
+        );
+        assert!(spec.prompt_dispatched_via_cli);
+    }
+
+    #[test]
+    fn test_prompt_dispatch_flag_resume_with_history_skips_cli_prompt() {
+        let config = OpenCodeConfig {
+            binary_path: Some("opencode".to_string()),
+        };
+        let session_info = OpenCodeSessionInfo {
+            id: "ses_history".to_string(),
+            has_history: true,
+        };
+        let spec = build_opencode_command_with_config(
+            Path::new("/path/to/worktree"),
+            Some(&session_info),
+            Some("new summary"),
+            false,
+            Some(&config),
+        );
+        assert!(!spec.prompt_dispatched_via_cli);
+    }
+
+    #[test]
+    fn test_prompt_dispatch_flag_no_prompt() {
+        let config = OpenCodeConfig {
+            binary_path: Some("opencode".to_string()),
+        };
+        let spec = build_opencode_command_with_config(
+            Path::new("/path/to/worktree"),
+            None,
+            None,
+            false,
+            Some(&config),
+        );
+        assert!(!spec.prompt_dispatched_via_cli);
     }
 
     #[test]
@@ -1064,7 +1130,7 @@ Run Mode is a terminal interface feature that provides a dedicated "Run" tab.
   - `command`: The shell command to execute (e.g., "bun run dev" or "npm run dev")
   - `workingDirectory`: Optional relative path"#;
 
-        let cmd = build_opencode_command_with_config(
+        let spec = build_opencode_command_with_config(
             Path::new("/path/to/worktree"),
             None,
             Some(prompt),
@@ -1074,18 +1140,18 @@ Run Mode is a terminal interface feature that provides a dedicated "Run" tab.
 
         // The command should properly escape all special characters
         // Newlines should be escaped, quotes should be escaped, etc.
-        assert!(cmd.starts_with("cd /path/to/worktree && opencode --prompt "));
+        assert!(spec.command.starts_with("cd /path/to/worktree && opencode --prompt "));
 
         // Print the command for debugging
-        println!("Generated command: {}", cmd);
+        println!("Generated command: {}", spec.command);
 
         // Check that the prompt is properly quoted and doesn't break the shell command
-        assert!(!cmd.contains('\n')); // Newlines should be escaped
+        assert!(!spec.command.contains('\n')); // Newlines should be escaped
 
         // The command should have exactly 2 unescaped quotes (around the prompt)
         // Count unescaped quotes - should be exactly 2 (opening and closing)
         let mut unescaped_quotes = 0;
-        let mut chars = cmd.chars().peekable();
+        let mut chars = spec.command.chars().peekable();
         while let Some(ch) = chars.next() {
             if ch == '\\' {
                 // Skip the next character as it's escaped

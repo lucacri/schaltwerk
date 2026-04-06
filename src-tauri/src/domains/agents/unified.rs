@@ -209,7 +209,6 @@ impl AgentAdapter for OpenCodeAdapter {
     }
 
     fn build_launch_spec(&self, ctx: AgentLaunchContext) -> AgentLaunchSpec {
-        let initial_command = ctx.initial_prompt.map(|prompt| prompt.to_string());
         let session_info = ctx
             .session_id
             .map(|id| super::opencode::OpenCodeSessionInfo {
@@ -224,14 +223,19 @@ impl AgentAdapter for OpenCodeAdapter {
                     .to_string(),
             ),
         };
-        let command = super::opencode::build_opencode_command_with_config(
+        let command_spec = super::opencode::build_opencode_command_with_config(
             ctx.worktree_path,
             session_info.as_ref(),
-            None,
+            ctx.initial_prompt,
             ctx.skip_permissions,
             Some(&config),
         );
-        AgentLaunchSpec::new(command, ctx.worktree_path.to_path_buf())
+        let initial_command = if command_spec.prompt_dispatched_via_cli {
+            None
+        } else {
+            ctx.initial_prompt.map(|prompt| prompt.to_string())
+        };
+        AgentLaunchSpec::new(command_spec.command, ctx.worktree_path.to_path_buf())
             .with_initial_command(initial_command)
     }
 }
@@ -528,10 +532,63 @@ mod tests {
             let spec = adapter.build_launch_spec(ctx);
             assert!(spec.shell_command.contains("opencode"));
             assert!(
-                !spec.shell_command.contains("--prompt"),
-                "prompt should be sent via initial_command, not embedded in shell command"
+                spec.shell_command.contains(r#"--prompt "test prompt""#),
+                "prompt should be passed through CLI when launching"
             );
-            assert_eq!(spec.initial_command.as_deref(), Some("test prompt"));
+            assert_eq!(
+                spec.initial_command, None,
+                "initial command queue should be skipped when CLI already received the prompt"
+            );
+        }
+
+        #[test]
+        fn test_opencode_adapter_respects_resume_history_queue() {
+            let adapter = OpenCodeAdapter;
+            let manifest = AgentManifest::get("opencode").unwrap();
+
+            let ctx = AgentLaunchContext {
+                worktree_path: Path::new("/test/path"),
+                session_id: Some("session-123"),
+                initial_prompt: Some("resume prompt"),
+                skip_permissions: false,
+                binary_override: Some("opencode"),
+                manifest,
+            };
+
+            let spec = adapter.build_launch_spec(ctx);
+            assert!(
+                spec.shell_command.contains(r#"--session "session-123""#),
+                "resuming sessions should keep --session flag"
+            );
+            assert!(
+                !spec.shell_command.contains("--prompt"),
+                "resume path should not push prompt via CLI"
+            );
+            assert_eq!(
+                spec.initial_command.as_deref(),
+                Some("resume prompt"),
+                "resume path should queue prompt via terminal fallback"
+            );
+        }
+
+        #[test]
+        fn test_opencode_adapter_leaves_queue_empty_without_prompt() {
+            let adapter = OpenCodeAdapter;
+            let manifest = AgentManifest::get("opencode").unwrap();
+
+            let ctx = AgentLaunchContext {
+                worktree_path: Path::new("/test/path"),
+                session_id: None,
+                initial_prompt: None,
+                skip_permissions: false,
+                binary_override: Some("opencode"),
+                manifest,
+            };
+
+            let spec = adapter.build_launch_spec(ctx);
+            assert!(spec.shell_command.contains("opencode"));
+            assert!(!spec.shell_command.contains("--prompt"));
+            assert!(spec.initial_command.is_none());
         }
     }
 

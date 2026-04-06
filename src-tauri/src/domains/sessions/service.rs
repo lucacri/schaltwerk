@@ -699,8 +699,12 @@ mod service_unified_tests {
             "resume should be gated off on first start"
         );
         assert!(
-            cmd_first.initial_command.as_deref() == Some("test prompt"),
-            "first start should use initial prompt when resume is gated"
+            first_shell.contains(r#"--prompt "test prompt""#),
+            "fresh start should inline the prompt via CLI when resume is gated"
+        );
+        assert!(
+            cmd_first.initial_command.is_none(),
+            "CLI prompt should replace the queued initial command for fresh starts"
         );
 
         let refreshed = manager
