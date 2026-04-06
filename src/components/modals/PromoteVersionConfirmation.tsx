@@ -107,7 +107,7 @@ export function PromoteVersionConfirmation({
             <p className="text-sm text-slate-300 mb-3">
               {t.promoteVersionConfirmation.deleteDescription}
             </p>
-            <ul className="space-y-1 text-sm text-slate-400 bg-slate-800/50 rounded p-3 border border-slate-700">
+            <ul className="space-y-1 text-sm text-slate-400 bg-slate-800/50 rounded p-3 border border-border-subtle">
               {sessionsToDelete.map((version) => (
                 <li key={version.session.info.session_id} className="flex items-center gap-2">
                   <span className="text-red-400">•</span>

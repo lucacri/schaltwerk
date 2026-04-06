@@ -438,7 +438,7 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
       ref={diffContainerRef}
       tabIndex={-1}
       data-testid="right-panel-container"
-      className={`h-full flex flex-col bg-panel border-2 rounded ${localFocus ? 'border-cyan-400/60 shadow-lg shadow-cyan-400/20' : 'border-slate-800/50'}`}
+      className={`h-full flex flex-col bg-panel border-2 rounded ${localFocus ? 'border-cyan-400/60 shadow-lg shadow-cyan-400/20' : 'border-border-subtle/50'}`}
       onClick={handlePanelClick}
     >
       {/* Header */}

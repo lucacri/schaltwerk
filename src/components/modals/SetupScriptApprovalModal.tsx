@@ -33,7 +33,7 @@ export function SetupScriptApprovalModal({
             {t.setupScriptModal.description}
           </p>
           <div
-            className="rounded border border-slate-700 overflow-auto"
+            className="rounded border border-border-subtle overflow-auto"
             style={{ backgroundColor: 'var(--color-bg-tertiary)' }}
           >
             <pre

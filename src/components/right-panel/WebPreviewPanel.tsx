@@ -274,13 +274,13 @@ export const WebPreviewPanel = ({ previewKey, isResizing = false }: WebPreviewPa
 
   const buttonClass = (disabled?: boolean) =>
     [
-      'h-8 w-8 rounded flex items-center justify-center border border-slate-700 bg-slate-900 hover:bg-slate-800 transition-colors',
+      'h-8 w-8 rounded flex items-center justify-center border border-border-subtle bg-slate-900 hover:bg-slate-800 transition-colors',
       disabled ? 'opacity-40 cursor-not-allowed hover:bg-slate-900' : 'text-slate-200'
     ].join(' ')
 
   return (
     <div className="h-full w-full flex flex-col">
-      <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-3">
+      <div className="flex items-center gap-3 border-b border-border-subtle px-4 py-3">
         <div className="flex items-center gap-1">
           <button type="button" aria-label={t.webPreview.back} className={buttonClass(!canGoBack)} onClick={() => handleNavigate(-1)} disabled={!canGoBack}>
             <VscChevronLeft className="text-lg" />
@@ -322,7 +322,7 @@ export const WebPreviewPanel = ({ previewKey, isResizing = false }: WebPreviewPa
           </label>
           <input
             id="preview-url-input"
-            className="flex-1 rounded border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="flex-1 rounded border border-border-subtle bg-slate-900 px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
             value={inputValue}
             onChange={handleChange}
             placeholder={t.webPreview.urlPlaceholder}
@@ -332,7 +332,7 @@ export const WebPreviewPanel = ({ previewKey, isResizing = false }: WebPreviewPa
             <VscArrowRight className="text-lg" />
           </button>
         </form>
-        <div className="flex items-center gap-0.5 border-l border-slate-700 pl-2">
+        <div className="flex items-center gap-0.5 border-l border-border-subtle pl-2">
           <button
             type="button"
             aria-label={t.webPreview.zoomOut}
@@ -362,7 +362,7 @@ export const WebPreviewPanel = ({ previewKey, isResizing = false }: WebPreviewPa
         </div>
       </div>
       {error && (
-        <div className="px-4 py-2 text-xs text-red-400 border-b border-slate-800" role="status" aria-live="polite">
+        <div className="px-4 py-2 text-xs text-red-400 border-b border-border-subtle" role="status" aria-live="polite">
           {error}
         </div>
       )}

@@ -767,7 +767,7 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
         onOpenCommitDiff={(viewModel, filePath) => { void handleOpenCommitDiffInternal(viewModel.historyItem, filePath) }}
       />
       {hasMore && (
-        <div className="border-t border-slate-800 px-3 py-2 text-xs text-slate-400 flex items-center justify-between">
+        <div className="border-t border-border-subtle px-3 py-2 text-xs text-slate-400 flex items-center justify-between">
           {loadMoreError ? (
             <span className="text-red-400" title={loadMoreError}>
               Failed to load more commits
@@ -779,7 +779,7 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
             onClick={() => {
               void handleLoadMore()
             }}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-700 rounded text-slate-200"
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed border border-border-subtle rounded text-slate-200"
             disabled={isLoadingMore || pendingLoadMore}
           >
             {isLoadingMore || pendingLoadMore ? 'Loading…' : 'Load more commits'}

@@ -2,6 +2,7 @@ import { describe, it } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import { globSync } from 'glob';
 import { projectFiles } from 'archunit';
 import type { FileInfo } from 'archunit';
 import {
@@ -458,7 +459,7 @@ describe('Theme Consistency Architecture', () => {
     ];
 
     const collisions: string[] = [];
-    const missingControlBorderOverrides: string[] = [];
+    const darculaControlBorderMismatches: string[] = [];
 
     for (const relativePath of darkThemeFiles) {
       const themeCss = fs.readFileSync(path.resolve(projectRoot, relativePath), 'utf-8');
@@ -471,25 +472,47 @@ describe('Theme Consistency Architecture', () => {
 
       if (
         relativePath === 'src/styles/themes/darcula.css' &&
-        !themeCss.includes('--control-border: var(--color-border-default);')
+        !themeCss.includes('--control-border: var(--color-border-subtle);')
       ) {
-        missingControlBorderOverrides.push(relativePath);
+        darculaControlBorderMismatches.push(relativePath);
       }
     }
 
-    if (collisions.length > 0 || missingControlBorderOverrides.length > 0) {
-      throw new Error(
-        [
-          collisions.length > 0
-            ? `Dark themes with invisible elevated borders:\n  ${collisions.join('\n  ')}`
-            : null,
-          missingControlBorderOverrides.length > 0
-            ? `Darcula must use --color-border-default for --control-border:\n  ${missingControlBorderOverrides.join('\n  ')}`
-            : null,
-        ]
-          .filter(Boolean)
-          .join('\n\n'),
-      );
+    if (collisions.length > 0 || darculaControlBorderMismatches.length > 0) {
+      const messages = [];
+      if (collisions.length > 0) {
+        messages.push(
+          `Dark themes with invisible elevated borders:\n  ${collisions.join('\n  ')}`,
+        );
+      }
+      if (darculaControlBorderMismatches.length > 0) {
+        messages.push(
+          `Darcula must map --control-border to --color-border-subtle:\n  ${darculaControlBorderMismatches.join('\n  ')}`,
+        );
+      }
+      throw new Error(messages.join('\n\n'));
+    }
+  }, ARCH_RULE_TIMEOUT);
+
+  it('should not use border-slate-* utilities in components/constants', async () => {
+    const targetFiles = globSync('{src/components,src/constants}/**/*.{ts,tsx}', {
+      cwd: projectRoot,
+      ignore: ['**/*.test.*', '**/*.stories.*'],
+    });
+
+    const bannedPattern = /border-(?:slate|gray)-(?:6|7|8)0{2}(?:\/[0-9]{1,2})?/g;
+    const offenders: string[] = [];
+
+    for (const relativePath of targetFiles) {
+      const contents = fs.readFileSync(path.resolve(projectRoot, relativePath), 'utf-8');
+      bannedPattern.lastIndex = 0;
+      if (bannedPattern.test(contents)) {
+        offenders.push(relativePath);
+      }
+    }
+
+    if (offenders.length > 0) {
+      throw new Error(`border-slate-* utilities found in:\n  ${offenders.join('\n  ')}`);
     }
   }, ARCH_RULE_TIMEOUT);
 

@@ -3339,7 +3339,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
             }}
           />
           <div
-            className="fixed right-4 bg-slate-900 border border-slate-700 rounded-lg shadow-xl p-4 w-96 z-[60]"
+            className="fixed right-4 bg-slate-900 border border-border-subtle rounded-lg shadow-xl p-4 w-96 z-[60]"
             style={{
               top: commentFormPosition
                 ? Math.min(commentFormPosition.y, window.innerHeight - 300)
@@ -3833,7 +3833,7 @@ function CommentForm({
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="Write your comment..."
-        className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-sm focus:outline-none focus:border-cyan-400 resize-none"
+        className="w-full px-3 py-2 bg-slate-800 border border-border-subtle rounded text-sm focus:outline-none focus:border-cyan-400 resize-none"
         rows={4}
         onKeyDown={(e) => {
           const nativeEvent = e.nativeEvent as KeyboardEvent;

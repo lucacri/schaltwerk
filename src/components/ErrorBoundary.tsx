@@ -59,7 +59,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
       return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
-          <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 max-w-lg w-full mx-4">
+          <div className="bg-slate-900 border border-border-subtle rounded-lg p-6 max-w-lg w-full mx-4">
             {/* Header with animated text */}
             <div className="text-center mb-6">
               <div className="mb-4">
@@ -89,12 +89,12 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             </div>
 
             {/* Error details section */}
-            <details className="mb-6 bg-slate-800 border border-slate-700 rounded-md">
-              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-300 hover:text-slate-100 hover:bg-slate-700/50 border-b border-slate-700 select-none rounded-t-md">
+            <details className="mb-6 bg-slate-800 border border-border-subtle rounded-md">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-slate-300 hover:text-slate-100 hover:bg-slate-700/50 border-b border-border-subtle select-none rounded-t-md">
                 ▼ Error details
               </summary>
               <div className="p-4">
-                <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap break-words max-h-60 overflow-auto bg-slate-950 p-3 rounded border border-slate-700">
+                <pre className="text-xs font-mono text-slate-300 whitespace-pre-wrap break-words max-h-60 overflow-auto bg-slate-950 p-3 rounded border border-border-subtle">
                   {this.state.error.toString()}
                   {this.state.errorInfo && '\n\nComponent Stack:\n' + this.state.errorInfo.componentStack}
                 </pre>
@@ -105,7 +105,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => window.location.reload()}
-                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 group"
+                className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-border-subtle rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 group"
                 title="Reload App"
                 style={{
                   backgroundColor: 'var(--color-bg-elevated)',

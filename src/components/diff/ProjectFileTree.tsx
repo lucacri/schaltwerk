@@ -204,7 +204,7 @@ export function ProjectFileTree({ onFileSelect, sessionNameOverride, isCommander
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="px-3 py-2 border-b border-slate-800">
+      <div className="px-3 py-2 border-b border-border-subtle">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
             Project Files

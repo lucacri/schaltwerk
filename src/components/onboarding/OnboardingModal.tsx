@@ -212,8 +212,8 @@ export function OnboardingModal({ open, onClose, onComplete }: Props) {
                 
                 {highlightElement && <HighlightCutout highlightRect={highlightRect} />}
                 
-                <div className="w-[960px] max-w-[96vw] bg-slate-900 border border-slate-700 rounded-xl shadow-xl overflow-hidden relative z-40">
-                    <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                <div className="w-[960px] max-w-[96vw] bg-slate-900 border border-border-subtle rounded-xl shadow-xl overflow-hidden relative z-40">
+                    <div className="px-6 py-4 border-b border-border-subtle flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center"
                                  style={{ backgroundColor: 'var(--color-accent-blue-dark)' }}>
@@ -255,7 +255,7 @@ export function OnboardingModal({ open, onClose, onComplete }: Props) {
                         }
                     </div>
 
-                    <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between">
+                    <div className="px-6 py-4 border-t border-border-subtle flex items-center justify-between">
                         <button
                             onClick={handleSkip}
                             className="text-slate-400 hover:text-slate-300 text-sm transition-colors"
@@ -267,7 +267,7 @@ export function OnboardingModal({ open, onClose, onComplete }: Props) {
                             <button
                                 onClick={handlePrevious}
                                 disabled={currentStep === 0}
-                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed border border-slate-700 rounded text-sm transition-colors text-slate-300"
+                                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed border border-border-subtle rounded text-sm transition-colors text-slate-300"
                             >
                                 Previous
                             </button>

@@ -637,7 +637,7 @@ export function PierreDiffViewer({
   return (
     <>
       {branchInfo && (
-        <div className="px-4 py-2 text-xs text-slate-400 border-b border-slate-700 bg-slate-950">
+        <div className="px-4 py-2 text-xs text-slate-400 border-b border-border-subtle bg-slate-950">
           {branchInfo.baseBranch} ({branchInfo.baseCommit.slice(0, 7)}) &rarr; {branchInfo.currentBranch} ({branchInfo.headCommit.slice(0, 7)})
         </div>
       )}
@@ -682,7 +682,7 @@ export function PierreDiffViewer({
               key={file.path}
               ref={setFileRef}
               data-file-path={file.path}
-              className="border-b border-slate-800 last:border-b-0"
+              className="border-b border-border-subtle last:border-b-0"
               style={{
                 contentVisibility: 'auto',
                 contain: 'layout style paint',
@@ -697,7 +697,7 @@ export function PierreDiffViewer({
                 aria-label={`Toggle ${file.path} diff`}
                 data-testid="file-header"
                 className={clsx(
-                  'sticky top-0 z-10 bg-slate-950 border-b border-slate-700 px-4 py-3 flex items-center justify-between gap-4 cursor-pointer select-none',
+                  'sticky top-0 z-10 bg-slate-950 border-b border-border-subtle px-4 py-3 flex items-center justify-between gap-4 cursor-pointer select-none',
                   isCurrentFile && 'bg-slate-900'
                 )}
                 onClick={() => onToggleFileExpanded(file.path)}

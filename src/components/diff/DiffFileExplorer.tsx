@@ -116,10 +116,10 @@ export function DiffFileExplorer({
 
   return (
     <div
-      className="border-r border-slate-800 bg-slate-900/30 flex flex-col h-full"
+      className="border-r border-border-subtle bg-slate-900/30 flex flex-col h-full"
       style={{ width: '100%' }}
     >
-      <div className="p-3 border-b border-slate-800">
+      <div className="p-3 border-b border-border-subtle">
         <div className="text-sm font-medium mb-1">Changed Files</div>
         <div className="text-xs text-slate-500">{files.length} files</div>
       </div>
@@ -129,7 +129,7 @@ export function DiffFileExplorer({
       </div>
       
       {currentReview && currentReview.comments.length > 0 && (
-        <div className="p-3 border-t border-slate-800 flex flex-col gap-3">
+        <div className="p-3 border-t border-border-subtle flex flex-col gap-3">
           <div className="text-xs text-slate-500">
             <div className="font-medium text-slate-400 mb-2">Review Comments:</div>
             <ReviewCommentsList
