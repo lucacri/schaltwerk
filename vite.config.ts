@@ -1,6 +1,6 @@
+import { resolve } from 'path'
 import { defineConfig } from "vite";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
@@ -32,6 +32,10 @@ export default defineConfig(({ command }) => ({
   build: {
     minify: 'esbuild',
     rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        'style-guide': resolve(__dirname, 'style-guide.html'),
+      },
       output: {
         manualChunks: (id) => {
           if (id.includes('react') || id.includes('react-dom')) {

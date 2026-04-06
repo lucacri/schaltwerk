@@ -10,6 +10,9 @@
     "!src/**/*.test.{ts,tsx}"
   ],
   "ignore": [
+    "style-guide.html",
+    "src/style-guide.tsx",
+    "src/style-guide/**",
     "src/types/**/*.d.ts",
     "src/test-utils/**",
     "src/test/**"

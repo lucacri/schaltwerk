@@ -9,6 +9,7 @@ import { logger } from '../../utils/logger'
 const themeIdAtom = atom<ThemeId>('dark')
 const initializedAtom = atom(false)
 const systemPrefersDarkAtom = atom(true)
+let latestThemeId: ThemeId = 'dark'
 
 const resolveThemeId = (themeId: ThemeId, prefersDark: boolean): ResolvedTheme => {
   if (themeId === 'system') {
@@ -29,6 +30,7 @@ export const currentThemeIdAtom = atom((get) => get(themeIdAtom))
 export const setThemeActionAtom = atom(
   null,
   async (get, set, newThemeId: ThemeId) => {
+    latestThemeId = newThemeId
     set(themeIdAtom, newThemeId)
     const resolved = resolveThemeId(newThemeId, get(systemPrefersDarkAtom))
 
@@ -47,7 +49,7 @@ export const setThemeActionAtom = atom(
 
 export const initializeThemeActionAtom = atom(
   null,
-  async (get, set) => {
+  async (_get, set) => {
     let savedTheme: ThemeId = 'dark'
 
     try {
@@ -62,7 +64,7 @@ export const initializeThemeActionAtom = atom(
 
     const handleChange = (event: MediaQueryListEvent) => {
       set(systemPrefersDarkAtom, event.matches)
-      if (get(themeIdAtom) === 'system') {
+      if (latestThemeId === 'system') {
         const resolved = event.matches ? 'dark' : 'light'
         applyThemeToDOM(resolved)
         emitUiEvent(UiEvent.ThemeChanged, { themeId: 'system', resolved })
@@ -75,6 +77,7 @@ export const initializeThemeActionAtom = atom(
       mediaQuery.addListener(handleChange)
     }
 
+    latestThemeId = savedTheme
     set(themeIdAtom, savedTheme)
     const resolved = resolveThemeId(savedTheme, mediaQuery.matches)
     applyThemeToDOM(resolved)
