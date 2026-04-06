@@ -2287,11 +2287,11 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
              />
              {isAgentTopTerminal && agentStopped && hydrated && terminalEverStartedRef.current && (
                  <div className="absolute inset-0 flex items-center justify-center z-30">
-                     <div className="flex items-center gap-2 bg-slate-800/90 border border-slate-700 rounded px-3 py-2 shadow-lg">
-                         <span className="text-sm text-slate-300">Agent stopped</span>
+                     <div className="flex items-center gap-2 bg-bg-elevated/90 border border-border-default rounded px-3 py-2 shadow-lg">
+                         <span className="text-sm text-text-secondary">Agent stopped</span>
                           <button
                               onClick={(e) => { e.stopPropagation(); void restartAgent(); }}
-                              className="text-sm px-3 py-1 rounded text-white font-medium"
+                              className="text-sm px-3 py-1 rounded text-text-inverse font-medium"
                               style={{
                                   backgroundColor: 'var(--color-accent-blue-dark)',
                               }}

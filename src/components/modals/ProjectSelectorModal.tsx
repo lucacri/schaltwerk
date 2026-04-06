@@ -137,18 +137,7 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
           <div className="mb-6">
             <button
               onClick={() => { void handleSelectDirectory() }}
-              className="w-full py-3 px-4 rounded-lg flex items-center justify-center gap-3 transition-colors"
-              style={{
-                backgroundColor: 'var(--color-accent-blue-bg)',
-                border: '1px solid var(--color-accent-blue-border)',
-                color: 'var(--color-accent-blue)'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(var(--color-accent-blue-rgb), 0.13)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--color-accent-blue-bg)'
-              }}
+              className="w-full py-3 px-4 rounded-lg flex items-center justify-center gap-3 transition-colors bg-[var(--color-accent-blue-bg)] border border-[var(--color-accent-blue-border)] text-accent-blue hover:bg-[rgba(var(--color-accent-blue-rgb),0.13)]"
             >
               <VscFolderOpened className="text-xl" />
               <span className="font-medium">{t.projectSelector.openRepository}</span>
@@ -165,19 +154,7 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
                 {availableProjects.map((project, index) => (
                   <div
                     key={project.path}
-                    className="rounded-lg p-4 group relative transition-colors"
-                    style={{
-                      backgroundColor: 'var(--color-bg-secondary)',
-                      border: '1px solid var(--color-border-subtle)'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--color-bg-elevated)'
-                      e.currentTarget.style.borderColor = 'var(--color-border-default)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)'
-                      e.currentTarget.style.borderColor = 'var(--color-border-subtle)'
-                    }}
+                    className="rounded-lg p-4 group relative transition-colors bg-bg-secondary border border-border-subtle hover:bg-bg-elevated hover:border-border-default"
                   >
                     {index < 9 && (
                       <div className="absolute top-2 right-2 transition-opacity group-hover:opacity-0">
@@ -216,14 +193,7 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
                     </button>
                     <button
                       onClick={(e) => { void handleRemoveProject(project, e) }}
-                      className="absolute top-2 right-2 p-1 transition-all opacity-0 group-hover:opacity-100"
-                      style={{ color: 'var(--color-text-tertiary)' }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.color = 'var(--color-accent-red)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.color = 'var(--color-text-tertiary)'
-                      }}
+                      className="absolute top-2 right-2 p-1 transition-all opacity-0 group-hover:opacity-100 text-text-tertiary hover:text-accent-red"
                       title={`Remove ${project.name} from recent projects`}
                     >
                       <VscTrash className="text-sm" />

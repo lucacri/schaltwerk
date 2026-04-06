@@ -6,6 +6,7 @@ import { formatRelativeDate } from '../../utils/time'
 import { buildPrUrl } from '../../utils/githubUrls'
 import { useTranslation } from '../../common/i18n'
 import { TextInput } from '../ui'
+import { Button } from '../ui/Button'
 
 interface LinkPrModalProps {
   open: boolean
@@ -61,18 +62,18 @@ export function LinkPrModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 bg-bg-primary/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
       <div
-        className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-lg mx-4 flex flex-col"
+        className="bg-bg-secondary border border-border-default rounded-lg w-full max-w-lg mx-4 flex flex-col"
         style={{ maxHeight: '70vh' }}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b border-slate-700">
-          <h2 className="text-lg font-semibold text-slate-100 mb-3">{t.linkPrModal.title}</h2>
+        <div className="p-4 border-b border-border-default">
+          <h2 className="text-lg font-semibold text-text-primary mb-3">{t.linkPrModal.title}</h2>
 
           {!integrationReady ? (
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-text-tertiary">
               {t.linkPrModal.integrationNotAvailable}
             </p>
           ) : (
@@ -89,11 +90,11 @@ export function LinkPrModal({
 
         <div className="flex-1 overflow-auto min-h-0">
           {!integrationReady ? (
-            <div className="p-4 text-center text-slate-500 text-sm">
+            <div className="p-4 text-center text-text-muted text-sm">
               {t.linkPrModal.connectToGithub}
             </div>
           ) : loading ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-slate-400">
+            <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-text-tertiary">
               <span
                 className="h-4 w-4 rounded-full border-2 border-t-transparent animate-spin"
                 style={{ borderColor: 'var(--color-accent-blue)' }}
@@ -101,9 +102,9 @@ export function LinkPrModal({
               {t.linkPrModal.loadingPrs}
             </div>
           ) : results.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-slate-400">
+            <div className="flex flex-col items-center justify-center gap-2 py-8 text-sm text-text-tertiary">
               <span>{t.linkPrModal.noPrsFound}</span>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-text-muted">
                 {query ? t.linkPrModal.tryDifferentSearch : t.linkPrModal.noOpenPrs}
               </span>
             </div>
@@ -142,10 +143,10 @@ export function LinkPrModal({
                           {state.charAt(0).toUpperCase() + state.slice(1)}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-slate-200 truncate">
+                          <div className="text-sm font-medium text-text-secondary truncate">
                             {pr.title}
                           </div>
-                          <div className="text-xs text-slate-500 mt-0.5">
+                          <div className="text-xs text-text-muted mt-0.5">
                             #{pr.number} · {t.linkPrModal.updated.replace('{time}', formatRelativeDate(pr.updatedAt))}
                             {pr.author && ` · ${pr.author}`}
                           </div>
@@ -159,13 +160,10 @@ export function LinkPrModal({
           )}
         </div>
 
-        <div className="p-3 border-t border-slate-700 flex justify-end">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500"
-          >
+        <div className="p-3 border-t border-border-default flex justify-end">
+          <Button onClick={onCancel}>
             {t.linkPrModal.cancel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

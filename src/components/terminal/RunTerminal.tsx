@@ -360,7 +360,7 @@ export const RunTerminal = forwardRef<RunTerminalHandle, RunTerminalProps>(({
       <div className={`${className} flex items-center justify-center`} style={{ backgroundColor: 'var(--color-bg-primary)' }}>
         <div className="text-center">
           <AnimatedText text="loading" />
-          <div className="text-xs text-slate-600 mt-2">{t.runTerminal.loadingRunScript}</div>
+          <div className="text-xs text-text-muted mt-2">{t.runTerminal.loadingRunScript}</div>
         </div>
       </div>
     )
@@ -448,15 +448,15 @@ export const RunTerminal = forwardRef<RunTerminalHandle, RunTerminalProps>(({
         ) : (
           <div className="h-full flex items-center justify-center" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
             <div className="text-center">
-              <div className="text-slate-600 text-4xl mb-4">▶</div>
-              <div className="text-slate-500 text-sm">{t.runTerminal.pressToStart}</div>
+              <div className="text-text-muted text-4xl mb-4">▶</div>
+              <div className="text-text-muted text-sm">{t.runTerminal.pressToStart}</div>
             </div>
           </div>
         )}
       </div>
 
       {terminalCreated && !isRunning && (
-        <div className="border-t border-slate-800 px-4 py-1 text-[11px] text-slate-500 flex-shrink-0" style={{ backgroundColor: 'var(--color-bg-elevated)' }}>
+        <div className="border-t border-border-subtle px-4 py-1 text-[11px] text-text-muted flex-shrink-0" style={{ backgroundColor: 'var(--color-bg-elevated)' }}>
           [{t.runTerminal.processEnded}]
         </div>
       )}

@@ -49,9 +49,9 @@ export function SearchBox({ targetRef, isVisible, onClose, className = '' }: Sea
         const marks = m.element.querySelectorAll('mark')
         marks.forEach(mark => {
           if (i === matchIndex) {
-            mark.className = 'bg-orange-400 text-black'
+            mark.className = 'bg-accent-amber text-text-inverse'
           } else {
-            mark.className = 'bg-yellow-400 text-black'
+            mark.className = 'bg-accent-amber text-text-inverse'
           }
         })
       })
@@ -102,7 +102,7 @@ export function SearchBox({ targetRef, isVisible, onClose, className = '' }: Sea
           const matchText = highlightedHTML.substring(start, end)
           const after = highlightedHTML.substring(end)
           
-          highlightedHTML = `${before}<mark class="bg-yellow-400 text-black">${matchText}</mark>${after}`
+          highlightedHTML = `${before}<mark class="bg-accent-amber text-text-inverse">${matchText}</mark>${after}`
         })
 
         parent.innerHTML = highlightedHTML
@@ -182,7 +182,7 @@ export function SearchBox({ targetRef, isVisible, onClose, className = '' }: Sea
   if (!isVisible) return null
 
   return (
-    <div className={`absolute top-2 right-2 flex items-center bg-slate-800 border border-slate-700 rounded px-2 py-1 z-10 shadow-lg ${className}`}>
+    <div className={`absolute top-2 right-2 flex items-center bg-bg-elevated border border-border-default rounded px-2 py-1 z-10 shadow-lg ${className}`}>
       <input
         ref={inputRef}
         type="text"
@@ -190,18 +190,18 @@ export function SearchBox({ targetRef, isVisible, onClose, className = '' }: Sea
         onChange={(e) => handleSearch(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={t.searchBox.placeholder}
-        className="bg-transparent text-sm text-slate-200 outline-none w-40 placeholder:text-slate-500"
+        className="bg-transparent text-sm text-text-secondary outline-none w-40 placeholder:text-text-muted"
       />
 
       {totalMatches > 0 && (
-        <div className="text-xs text-slate-400 ml-2 whitespace-nowrap">
+        <div className="text-xs text-text-tertiary ml-2 whitespace-nowrap">
           {currentMatchIndex + 1}/{totalMatches}
         </div>
       )}
 
       <button
         onClick={findPrevious}
-        className="text-slate-400 hover:text-slate-200 ml-1 disabled:opacity-50"
+        className="text-text-tertiary hover:text-text-primary ml-1 disabled:opacity-50"
         title={t.searchBox.previousMatch}
         disabled={totalMatches === 0}
       >
@@ -212,7 +212,7 @@ export function SearchBox({ targetRef, isVisible, onClose, className = '' }: Sea
 
       <button
         onClick={findNext}
-        className="text-slate-400 hover:text-slate-200 ml-1 disabled:opacity-50"
+        className="text-text-tertiary hover:text-text-primary ml-1 disabled:opacity-50"
         title={t.searchBox.nextMatch}
         disabled={totalMatches === 0}
       >
@@ -223,7 +223,7 @@ export function SearchBox({ targetRef, isVisible, onClose, className = '' }: Sea
 
       <button
         onClick={handleClose}
-        className="text-slate-400 hover:text-slate-200 ml-2"
+        className="text-text-tertiary hover:text-text-primary ml-2"
         title={t.searchBox.closeSearch}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

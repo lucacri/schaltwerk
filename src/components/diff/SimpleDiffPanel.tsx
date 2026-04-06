@@ -435,15 +435,15 @@ const handleToggleInlinePreference = useCallback((event: ChangeEvent<HTMLInputEl
                   <div className="flex items-center gap-2 mr-1 pr-2" style={{ borderRight: '1px solid var(--color-border-subtle)' }}>
                     {prDetails.statusCheckState && (
                       <div title={`CI Status: ${prDetails.statusCheckState}`} className="flex items-center">
-                        {prDetails.statusCheckState === 'SUCCESS' && <VscPass className="text-green-500" />}
-                        {prDetails.statusCheckState === 'FAILURE' && <VscError className="text-red-500" />}
-                        {prDetails.statusCheckState === 'PENDING' && <VscCircleFilled className="text-yellow-500" />}
+                        {prDetails.statusCheckState === 'SUCCESS' && <VscPass className="text-accent-green" />}
+                        {prDetails.statusCheckState === 'FAILURE' && <VscError className="text-accent-red" />}
+                        {prDetails.statusCheckState === 'PENDING' && <VscCircleFilled className="text-accent-amber" />}
                       </div>
                     )}
                     {prDetails.reviewDecision && (
                       <div title={`Review: ${prDetails.reviewDecision}${prDetails.latestReviews.length > 0 ? ` by ${prDetails.latestReviews.map(r => r.author ?? 'Unknown').join(', ')}` : ''}`} className="flex items-center gap-1">
-                        {prDetails.reviewDecision === 'APPROVED' && <VscVerified className="text-green-500" />}
-                        {prDetails.reviewDecision === 'CHANGES_REQUESTED' && <VscRequestChanges className="text-red-500" />}
+                        {prDetails.reviewDecision === 'APPROVED' && <VscVerified className="text-accent-green" />}
+                        {prDetails.reviewDecision === 'CHANGES_REQUESTED' && <VscRequestChanges className="text-accent-red" />}
                         {prDetails.reviewDecision === 'REVIEW_REQUIRED' && <VscCircleFilled style={{ color: 'var(--color-text-tertiary)' }} />}
                         {prDetails.latestReviews.length > 0 && (
                           <span className="text-xs flex items-center gap-0.5" style={{ color: 'var(--color-text-secondary)' }}>
@@ -457,7 +457,7 @@ const handleToggleInlinePreference = useCallback((event: ChangeEvent<HTMLInputEl
                 )}
                 <button
                   onClick={() => { void handleFetchAndPasteComments() }}
-                  className="p-1 rounded text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50"
+                  className="p-1 rounded text-accent-blue hover:text-accent-blue transition-colors disabled:opacity-50"
                   title={`Send PR #${prNumber} review comments to terminal`}
                   disabled={fetchingComments}
                 >
@@ -466,7 +466,7 @@ const handleToggleInlinePreference = useCallback((event: ChangeEvent<HTMLInputEl
                 {prUrl && (
                   <button
                     onClick={() => { void invoke(TauriCommands.OpenExternalUrl, { url: prUrl }) }}
-                    className="p-1 rounded text-blue-400 hover:text-blue-300 transition-colors"
+                    className="p-1 rounded text-accent-blue hover:text-accent-blue transition-colors"
                     title={`Open PR #${prNumber} in browser`}
                   >
                     <VscLinkExternal />

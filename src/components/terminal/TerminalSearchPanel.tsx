@@ -32,7 +32,7 @@ export const TerminalSearchPanel = forwardRef<HTMLDivElement, Props>(
       <div
         ref={ref}
         data-terminal-search="true"
-        className="absolute top-2 right-2 flex items-center bg-slate-800 border border-slate-700 rounded px-2 py-1 z-10 shadow-lg"
+        className="absolute top-2 right-2 flex items-center bg-bg-elevated border border-border-default rounded px-2 py-1 z-10 shadow-lg"
       >
         <input
           type="text"
@@ -40,12 +40,12 @@ export const TerminalSearchPanel = forwardRef<HTMLDivElement, Props>(
           onChange={(event) => onSearchTermChange(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t.terminalSearch.placeholder}
-          className="bg-transparent text-sm text-slate-200 outline-none w-40 placeholder:text-slate-500"
+          className="bg-transparent text-sm text-text-secondary outline-none w-40 placeholder:text-text-muted"
           autoFocus
         />
         <button
           onClick={onFindPrevious}
-          className="text-slate-400 hover:text-slate-200 ml-1"
+          className="text-text-tertiary hover:text-text-primary ml-1"
           title={t.terminalSearch.previousMatch}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -54,7 +54,7 @@ export const TerminalSearchPanel = forwardRef<HTMLDivElement, Props>(
         </button>
         <button
           onClick={onFindNext}
-          className="text-slate-400 hover:text-slate-200 ml-1"
+          className="text-text-tertiary hover:text-text-primary ml-1"
           title={t.terminalSearch.nextMatch}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -63,7 +63,7 @@ export const TerminalSearchPanel = forwardRef<HTMLDivElement, Props>(
         </button>
         <button
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-200 ml-2"
+          className="text-text-tertiary hover:text-text-primary ml-2"
           title={t.terminalSearch.closeSearch}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

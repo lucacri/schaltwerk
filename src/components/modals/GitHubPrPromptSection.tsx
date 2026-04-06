@@ -11,6 +11,7 @@ import { withOpacity } from '../../common/colorUtils'
 import { buildPrPreview, buildPrPrompt, formatPrUpdatedTimestamp } from './githubPrFormatting'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
+import { TextInput } from '../ui'
 
 interface Props {
   selection: GithubPrSelectionResult | null
@@ -312,19 +313,14 @@ export function GitHubPrPromptSection({
         className="flex flex-col gap-3 p-4 border rounded"
         style={{ borderColor: 'var(--color-border-subtle)', backgroundColor: 'var(--color-bg-elevated)' }}
       >
-        <input
+        <TextInput
           type="search"
           value={query}
           onChange={event => setQuery(event.target.value)}
           placeholder={t.githubPr.searchPlaceholder}
+          aria-label={t.githubPr.searchPlaceholder}
           disabled
-          className="px-3 py-2 rounded text-sm"
-          style={{
-            backgroundColor: 'var(--color-bg-primary)',
-            color: 'var(--color-text-secondary)',
-            border: '1px solid var(--color-border-subtle)',
-            opacity: 0.6,
-          }}
+          className="opacity-60"
         />
       </div>
     )
@@ -339,25 +335,13 @@ export function GitHubPrPromptSection({
         <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
           {t.githubPr.searchHint}
         </p>
-        <input
+        <TextInput
           type="search"
           value={query}
           onChange={event => setQuery(event.target.value)}
           placeholder={t.githubPr.searchPlaceholder}
           aria-label={t.githubPr.searchPlaceholder}
-          className="w-full px-3 py-2 text-sm rounded"
-          style={{
-            backgroundColor: 'var(--color-bg-primary)',
-            color: 'var(--color-text-primary)',
-            border: '1px solid var(--color-border-default)',
-            boxShadow: '0 0 0 1px transparent',
-          }}
-          onFocus={event => {
-            event.currentTarget.style.boxShadow = '0 0 0 1px var(--color-accent-blue)';
-          }}
-          onBlur={event => {
-            event.currentTarget.style.boxShadow = '0 0 0 1px transparent';
-          }}
+          className="w-full"
         />
       </div>
       <div className="flex-1 overflow-auto">

@@ -116,9 +116,9 @@ export function InlineEditableText({
           placeholder={placeholder}
           disabled={isSaving}
           className={clsx(
-            'bg-slate-800 border rounded px-1.5 py-0.5 outline-none',
+            'bg-[var(--control-bg)] border rounded px-1.5 py-0.5 outline-none',
             'min-w-[120px] max-w-[200px]',
-            error ? 'border-red-500' : 'border-slate-600 focus:border-blue-500',
+            error ? 'border-[var(--control-border-error)]' : 'border-[var(--control-border)] focus:border-[var(--control-border-focus)]',
             isSaving && 'opacity-50'
           )}
           style={{
@@ -152,7 +152,7 @@ export function InlineEditableText({
         }
       }}
       className={clsx(
-        'truncate cursor-pointer hover:bg-slate-700/50 rounded px-0.5 -mx-0.5 transition-colors',
+        'truncate cursor-pointer hover:bg-bg-hover/50 rounded px-0.5 -mx-0.5 transition-colors',
         disabled && 'cursor-default hover:bg-transparent',
         className
       )}

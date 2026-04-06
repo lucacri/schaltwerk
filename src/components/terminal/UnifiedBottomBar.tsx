@@ -179,7 +179,7 @@ export const UnifiedBottomBar = forwardRef<HTMLDivElement, UnifiedBottomBarProps
           }}
           className={`w-7 h-7 flex items-center justify-center rounded ${
             isFocused
-              ? 'hover:bg-opacity-60 hover:text-white'
+              ? 'hover:bg-opacity-60 hover:text-text-primary'
               : 'hover:bg-hover hover:text-primary'
           }`}
           aria-label={isCollapsed ? t.terminalComponents.expandPanel : t.terminalComponents.collapsePanel}

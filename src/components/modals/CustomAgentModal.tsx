@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ModelSelector } from '../inputs/ModelSelector'
 import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../../types/session'
 import { useTranslation } from '../../common/i18n'
+import { Button } from '../ui/Button'
 
 interface Props {
     open: boolean
@@ -88,15 +89,15 @@ export function CustomAgentModal({
     if (!open) return null
 
     return (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
-            <div className="w-[480px] max-w-[95vw] bg-slate-900 border border-slate-700 rounded-xl shadow-xl">
-                <h2 className="px-4 py-3 border-b border-slate-800 text-slate-200 font-medium">
+        <div className="fixed inset-0 bg-bg-primary/60 z-50 flex items-center justify-center">
+            <div className="w-[480px] max-w-[95vw] bg-bg-secondary border border-border-default rounded-xl shadow-xl">
+                <h2 className="px-4 py-3 border-b border-border-subtle text-text-secondary font-medium">
                     {t.customAgentModal.title}
                 </h2>
 
                 <div className="p-4 space-y-4">
                     <div>
-                        <label className="block text-sm text-slate-300 mb-2">{t.customAgentModal.selectAgent}</label>
+                        <label className="block text-sm text-text-secondary mb-2">{t.customAgentModal.selectAgent}</label>
                         <ModelSelector
                             value={agentType}
                             onChange={setAgentType}
@@ -106,48 +107,33 @@ export function CustomAgentModal({
                             onDropdownOpenChange={setIsModelSelectorOpen}
                             allowedAgents={ALLOWED_AGENTS}
                         />
-                        <p className="text-xs text-slate-400 mt-2">
+                        <p className="text-xs text-text-tertiary mt-2">
                             {t.customAgentModal.helperText}
                         </p>
                     </div>
                 </div>
 
-                <div className="px-4 py-3 border-t border-slate-800 flex justify-end gap-2">
-                    <button
+                <div className="px-4 py-3 border-t border-border-subtle flex justify-end gap-2">
+                    <Button
                         onClick={onClose}
                         disabled={isSelecting}
-                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 disabled:opacity-50 rounded group relative"
                         title={t.customAgentModal.cancelEsc}
                     >
                         {t.customAgentModal.cancel}
                         <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">Esc</span>
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                         onClick={() => { void handleSelect() }}
                         disabled={isSelecting}
-                        className="px-3 py-1.5 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-white group relative inline-flex items-center gap-2"
-                        style={{
-                            backgroundColor: 'var(--color-accent-blue-dark)',
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = 'var(--color-accent-blue)'
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'var(--color-accent-blue-dark)'
-                        }}
+                        loading={isSelecting}
+                        variant="primary"
                         title={t.customAgentModal.addTabEnter}
                     >
-                        {isSelecting && (
-                            <span
-                                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/60 border-t-transparent"
-                                aria-hidden="true"
-                            />
-                        )}
                         <span>{t.customAgentModal.addTab}</span>
                         {!isSelecting && (
                             <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">↵</span>
                         )}
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>

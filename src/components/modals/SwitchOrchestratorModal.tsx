@@ -144,25 +144,25 @@ export function SwitchOrchestratorModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
-      <div className="w-[480px] max-w-[95vw] bg-slate-900 border border-slate-700 rounded-xl shadow-xl">
-        <h2 className="px-4 py-3 border-b border-slate-800 text-slate-200 font-medium">
+    <div className="fixed inset-0 bg-bg-primary/60 z-50 flex items-center justify-center">
+      <div className="w-[480px] max-w-[95vw] bg-bg-secondary border border-border-default rounded-xl shadow-xl">
+        <h2 className="px-4 py-3 border-b border-border-subtle text-text-secondary font-medium">
           {title}
         </h2>
 
         <div className="p-4 space-y-4">
-          <div className="p-3 bg-amber-900/20 border border-amber-700/50 rounded-lg">
+          <div className="p-3 bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)] rounded-lg">
             <div className="flex items-start gap-2">
-              <span className="text-amber-500 text-lg">⚠️</span>
-              <div className="text-sm text-amber-200">
+              <span className="text-accent-amber text-lg">⚠️</span>
+              <div className="text-sm text-accent-amber">
                 <p className="font-medium mb-1">{t.switchAgentModal.warning}</p>
-                <p className="text-amber-300/90">{warningBody}</p>
+                <p className="opacity-90">{warningBody}</p>
               </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">{t.switchAgentModal.selectAgent}</label>
+            <label className="block text-sm text-text-secondary mb-2">{t.switchAgentModal.selectAgent}</label>
             <ModelSelector
               value={agentType}
               onChange={setAgentType}
@@ -172,15 +172,15 @@ export function SwitchOrchestratorModal({
               onDropdownOpenChange={setIsModelSelectorOpen}
               allowedAgents={allowedAgents}
             />
-            <p className="text-xs text-slate-400 mt-2">{helperText}</p>
+            <p className="text-xs text-text-tertiary mt-2">{helperText}</p>
           </div>
         </div>
 
-        <div className="px-4 py-3 border-t border-slate-800 flex justify-end gap-2">
+        <div className="px-4 py-3 border-t border-border-subtle flex justify-end gap-2">
           <button
             onClick={onClose}
             disabled={switching}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-800 disabled:opacity-50 rounded group relative"
+            className="px-3 py-1.5 bg-bg-elevated hover:bg-bg-hover disabled:bg-bg-elevated disabled:opacity-50 rounded group relative"
             title={t.switchAgentModal.cancelEsc}
           >
             {t.switchAgentModal.cancel}
@@ -189,21 +189,12 @@ export function SwitchOrchestratorModal({
           <button
             onClick={() => { void handleSwitch() }}
             disabled={switching}
-            className="px-3 py-1.5 disabled:bg-slate-600 disabled:cursor-not-allowed rounded text-white group relative inline-flex items-center gap-2"
-            style={{
-              backgroundColor: 'var(--color-accent-blue-dark)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--color-accent-blue)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--color-accent-blue-dark)'
-            }}
+            className="px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed rounded text-text-inverse group relative inline-flex items-center gap-2 bg-accent-blue hover:bg-[var(--color-accent-blue-dark)]"
             title={t.switchAgentModal.switchAgentEnter}
           >
             {switching && (
               <span
-                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/60 border-t-transparent"
+                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current opacity-60 border-t-transparent"
                 aria-hidden="true"
               />
             )}

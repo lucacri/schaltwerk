@@ -1798,7 +1798,7 @@ fi`}
                                     })()}
                                 </div>
                             ) : (
-                                <div className="text-body text-yellow-400">
+                                <div className="text-body text-accent-amber">
                                     {t.settings.environment.noBinaryDetected.replace('{agent}', activeAgentTab)}
                                 </div>
                             )}
@@ -2276,7 +2276,7 @@ fi`}
         <div className="flex flex-col h-full">
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 {shortcutRecording && (
-                    <div className="px-4 py-3 rounded border border-amber-500/60 bg-amber-500/10 text-amber-100 text-body">
+                    <div className="px-4 py-3 rounded border border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] text-accent-amber text-body">
                         Press the new shortcut for <span className="font-semibold">{recordingLabel}</span> or press Escape to cancel.
                     </div>
                 )}
@@ -3019,10 +3019,10 @@ fi`}
         <>
             {notification.visible && (
                  <div className={`fixed top-4 right-4 z-[60] px-4 py-3 rounded-lg shadow-lg transition-opacity duration-300 ${
-                     notification.type === 'error' ? 'bg-red-900' :
-                     notification.type === 'success' ? 'bg-green-900' : 'bg-bg-elevated'
+                     notification.type === 'error' ? 'bg-[var(--color-accent-red-bg)]' :
+                     notification.type === 'success' ? 'bg-[var(--color-accent-green-bg)]' : 'bg-bg-elevated'
                  }`} style={notification.type === 'info' ? { backgroundColor: 'var(--color-status-info)' } : {}}>
-                    <div className="text-white text-body">{notification.message}</div>
+                    <div className="text-text-primary text-body">{notification.message}</div>
                 </div>
             )}
             <ResizableModal

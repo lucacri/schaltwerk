@@ -159,7 +159,7 @@ export function EpicModal({ open, mode, initialName = '', initialColor = null, o
                             <button
                                 type="button"
                                 onClick={toggle}
-                                className="w-full px-3 py-2 rounded border flex items-center justify-between"
+                                className="flex w-full items-center justify-between rounded border px-3 py-2 transition-colors hover:bg-bg-hover"
                                 style={{
                                     backgroundColor: 'var(--color-bg-secondary)',
                                     color: 'var(--color-text-primary)',

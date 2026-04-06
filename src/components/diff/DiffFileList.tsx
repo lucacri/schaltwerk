@@ -890,10 +890,10 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
     }
     
     switch (changeType) {
-      case 'added': return <VscDiffAdded className="text-green-500" />
-      case 'modified': return <VscDiffModified className="text-yellow-500" />
-      case 'deleted': return <VscDiffRemoved className="text-red-500" />
-      default: return <VscFile className="text-cyan-400" />
+      case 'added': return <VscDiffAdded className="text-accent-green" />
+      case 'modified': return <VscDiffModified className="text-accent-amber" />
+      case 'deleted': return <VscDiffRemoved className="text-accent-red" />
+      default: return <VscFile className="text-accent-cyan" />
     }
   }
 

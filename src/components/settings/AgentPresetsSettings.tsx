@@ -171,7 +171,7 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                         </Button>
                                     </div>
                                     {preset.slots.map((slot, idx) => (
-                                        <div key={idx} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+                                        <div key={idx} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto_auto] md:items-center">
                                             <FormGroup label={`Agent Slot ${idx + 1}`} className="flex-1">
                                                 <Select
                                                     value={slot.variantId ? `variant:${slot.variantId}` : slot.agentType}

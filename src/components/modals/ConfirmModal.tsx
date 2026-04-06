@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from '../../common/i18n'
+import { Button } from '../ui/Button'
 
 interface ConfirmModalProps {
   open: boolean
@@ -73,44 +74,42 @@ export function ConfirmModal({
 
   if (!open) return null
 
-  const confirmBaseClasses = 'px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 group disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2'
-  const confirmVariantClasses =
-    variant === 'danger'
-      ? 'bg-red-700 hover:bg-red-600 focus:ring-red-500'
-      : variant === 'warning'
-      ? 'bg-amber-700 hover:bg-amber-600 focus:ring-amber-500'
-      : variant === 'success'
-      ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
-      : 'bg-slate-700 hover:bg-slate-600 focus:ring-slate-500'
+  const confirmVariants: Record<NonNullable<ConfirmModalProps['variant']>, 'primary' | 'danger' | 'warning' | 'success'> = {
+    default: 'primary',
+    danger: 'danger',
+    warning: 'warning',
+    success: 'success',
+  }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 bg-bg-primary/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
       <div
-        className="bg-slate-900 border border-slate-700 rounded-lg p-6 max-w-md w-full mx-4"
+        className="bg-bg-secondary border border-border-default rounded-lg p-6 max-w-md w-full mx-4"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold mb-4 text-slate-100">{title}</h2>
+        <h2 className="text-lg font-semibold mb-4 text-text-primary">{title}</h2>
         {body && <div className="mb-6">{body}</div>}
         <div className="flex gap-3 justify-end">
-          <button
+          <Button
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 border border-slate-700 rounded-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 group"
+            className="group"
             title={cancelTitle || t.confirmModal.cancelDefault}
           >
             {cancelText}
             <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">{t.confirmModal.escKey}</span>
-          </button>
-          <button
+          </Button>
+          <Button
             ref={confirmButtonRef}
             onClick={handleConfirm}
             disabled={loading || confirmDisabled}
-            className={`${confirmBaseClasses} ${confirmVariantClasses}`}
+            className="group"
+            variant={confirmVariants[variant]}
             title={confirmTitle || t.confirmModal.confirmDefault}
           >
             <span>{confirmText}</span>
             <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">{t.confirmModal.enterKey}</span>
-          </button>
+          </Button>
         </div>
       </div>
     </div>

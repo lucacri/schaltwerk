@@ -202,21 +202,21 @@ export function PermissionPrompt({ onPermissionGranted, showOnlyIfNeeded = true,
           className="p-6 rounded-lg shadow-xl max-w-md mx-4"
           style={{ backgroundColor: 'var(--color-surface-modal)' }}
         >
-          <h2 className="text-xl font-semibold mb-4 text-white">{t.permissionPrompt.title}</h2>
+          <h2 className="text-xl font-semibold mb-4 text-text-primary">{t.permissionPrompt.title}</h2>
 
-          <p className="text-gray-300 mb-4">
+          <p className="text-text-secondary mb-4">
             {t.permissionPrompt.description}
           </p>
           
           {displayPath && (
-            <div className="mb-4 p-2 bg-gray-800 rounded font-mono text-sm text-gray-200">
+            <div className="mb-4 p-2 bg-bg-elevated rounded font-mono text-sm text-text-secondary">
               {displayPath}
             </div>
           )}
           
           {attemptCount > 0 && (
-            <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-600/50 rounded">
-              <p className="text-yellow-200 text-sm">
+            <div className="mb-4 p-3 bg-[var(--color-accent-amber-bg)] border border-[var(--color-accent-amber-border)] rounded">
+              <p className="text-accent-amber text-sm">
                 {attemptCount === 1
                   ? t.permissionPrompt.clickOk
                   : t.permissionPrompt.restartHint}
@@ -238,7 +238,7 @@ export function PermissionPrompt({ onPermissionGranted, showOnlyIfNeeded = true,
                 <button
                   onClick={() => { void handleRetryCheck() }}
                 disabled={isRetrying}
-                className="px-4 py-2 border border-gray-600 text-gray-300 rounded hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 border border-border-default text-text-secondary rounded hover:bg-bg-elevated disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {t.permissionPrompt.recheck}
               </button>
@@ -346,7 +346,7 @@ export function PermissionPrompt({ onPermissionGranted, showOnlyIfNeeded = true,
           
           {attemptCount > 1 && (
             <>
-              <p className="text-gray-400 text-xs mt-4">
+              <p className="text-text-tertiary text-xs mt-4">
                 {t.permissionPrompt.persistHint}
               </p>
               {onRetryAgent && hasPermission && (
@@ -355,7 +355,7 @@ export function PermissionPrompt({ onPermissionGranted, showOnlyIfNeeded = true,
                     onRetryAgent()
                     onPermissionGranted?.()
                   }}
-                  className="mt-2 w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                  className="mt-2 w-full px-4 py-2 bg-accent-green text-text-primary rounded hover:bg-[var(--color-accent-green-light)] transition-colors"
                 >
                   {t.permissionPrompt.retryAgent}
                 </button>

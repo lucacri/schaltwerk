@@ -106,7 +106,7 @@ export function SpecPickerOverlay({ specs, onSelect, onClose }: Props) {
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder={t.specPicker.searchSpecs}
-            className="flex-1 bg-transparent border-none outline-none placeholder:text-slate-500"
+            className="flex-1 bg-transparent border-none outline-none placeholder:text-text-muted"
             style={{
               color: 'var(--color-text-primary)',
               fontSize: theme.fontSize.body

@@ -1,6 +1,7 @@
 import { describe, it } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
 import { projectFiles } from 'archunit';
 import type { FileInfo } from 'archunit';
 import {
@@ -448,6 +449,50 @@ describe('Error Handling Architecture', () => {
 });
 
 describe('Theme Consistency Architecture', () => {
+  it('should keep subtle borders distinct from elevated backgrounds in dark themes', async () => {
+    const darkThemeFiles = [
+      'src/styles/themes/darcula.css',
+      'src/styles/themes/kanagawa.css',
+      'src/styles/themes/everforest.css',
+      'src/styles/themes/catppuccin.css',
+    ];
+
+    const collisions: string[] = [];
+    const missingControlBorderOverrides: string[] = [];
+
+    for (const relativePath of darkThemeFiles) {
+      const themeCss = fs.readFileSync(path.resolve(projectRoot, relativePath), 'utf-8');
+      const elevated = themeCss.match(/--color-bg-elevated:\s*([^;]+);/)?.[1]?.trim();
+      const subtle = themeCss.match(/--color-border-subtle:\s*([^;]+);/)?.[1]?.trim();
+
+      if (elevated && subtle && elevated === subtle) {
+        collisions.push(`${relativePath}: ${subtle}`);
+      }
+
+      if (
+        relativePath === 'src/styles/themes/darcula.css' &&
+        !themeCss.includes('--control-border: var(--color-border-default);')
+      ) {
+        missingControlBorderOverrides.push(relativePath);
+      }
+    }
+
+    if (collisions.length > 0 || missingControlBorderOverrides.length > 0) {
+      throw new Error(
+        [
+          collisions.length > 0
+            ? `Dark themes with invisible elevated borders:\n  ${collisions.join('\n  ')}`
+            : null,
+          missingControlBorderOverrides.length > 0
+            ? `Darcula must use --color-border-default for --control-border:\n  ${missingControlBorderOverrides.join('\n  ')}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      );
+    }
+  }, ARCH_RULE_TIMEOUT);
+
   it('should have a theme preset for each resolved theme', async () => {
     const { darkTheme, lightTheme, tokyonightTheme, catppuccinTheme, catppuccinMacchiatoTheme, everforestTheme, ayuTheme, kanagawaTheme, darculaTheme } = await import('../common/themes/presets');
     const { buildTerminalTheme } = await import('../common/themes/terminalTheme');

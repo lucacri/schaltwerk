@@ -1529,12 +1529,12 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         >
             <div className={clsx('flex items-center shrink-0 h-9', isCollapsed ? 'justify-center px-0' : 'justify-between px-2 pt-2')}>
                 {!isCollapsed && (
-                    <span className="text-xs font-medium text-slate-400 uppercase tracking-wider ml-1">{t.sidebar.header}</span>
+                    <span className="text-xs font-medium text-text-tertiary uppercase tracking-wider ml-1">{t.sidebar.header}</span>
                 )}
                 {onToggleSidebar && (
                     <div className="flex items-center gap-2">
                         {!isCollapsed && leftSidebarShortcut && (
-                            <span className="text-[11px] text-slate-500" aria-hidden="true">
+                            <span className="text-[11px] text-text-muted" aria-hidden="true">
                                 {leftSidebarShortcut}
                             </span>
                         )}
@@ -1544,7 +1544,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                 onToggleSidebar()
                             }}
                             className={clsx(
-                                "h-6 w-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors",
+                                "h-6 w-6 flex items-center justify-center rounded text-text-tertiary hover:text-text-primary hover:bg-bg-elevated transition-colors",
                                 !isCollapsed && "ml-auto"
                             )}
                             title={isCollapsed ? t.sidebar.showSidebar : t.sidebar.hideSidebar}
@@ -1568,11 +1568,11 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                         }
                     }}
                     className={clsx(
-                        'w-full text-left py-2 rounded-md mb-1 group border transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500/70 focus-visible:ring-offset-slate-900',
+                        'w-full text-left py-2 rounded-md mb-1 group border transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500/70 focus-visible:ring-offset-bg-secondary',
                         isCollapsed ? 'px-0 justify-center flex' : 'px-3',
                         selection.kind === 'orchestrator'
-                            ? 'bg-slate-800/60 session-ring session-ring-blue border-transparent'
-                            : 'hover:bg-slate-800/30 border-slate-800',
+                            ? 'bg-bg-elevated/60 session-ring session-ring-blue border-transparent'
+                            : 'hover:bg-bg-hover/30 border-border-subtle',
                         orchestratorRunning && selection.kind !== 'orchestrator' &&
                             'ring-2 ring-pink-500/50 shadow-lg shadow-pink-500/20 bg-pink-950/20'
                     )}
@@ -1583,7 +1583,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                     <div className={clsx('flex items-center w-full', isCollapsed ? 'flex-col justify-center gap-1' : 'justify-between')}>
                         {!isCollapsed && (
                             <>
-                                <div className="font-medium text-slate-100 flex items-center gap-2">
+                                <div className="font-medium text-text-primary flex items-center gap-2">
                                     {t.sidebar.orchestrator}
                                     {orchestratorRunning && (
                                         <ProgressIndicator size="sm" />
@@ -1621,21 +1621,21 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                             disabled={orchestratorResetting}
                                         />
                                     </div>
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400">
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-bg-hover/50 text-text-tertiary">
                                         {orchestratorShortcut || '⌘1'}
                                     </span>
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400">{orchestratorBranch}</span>
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-600/20 text-accent-blue">{orchestratorBranch}</span>
                                 </div>
                             </>
                         )}
                         {isCollapsed && (
                             <>
-                                <div className="text-slate-400">
+                                <div className="text-text-tertiary">
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                                     </svg>
                                 </div>
-                                <span className="text-[9px] text-blue-400 font-mono max-w-full truncate">
+                                <span className="text-[9px] text-accent-blue font-mono max-w-full truncate">
                                     {(orchestratorBranch === 'main' || orchestratorBranch === 'master') ? 'main' : (orchestratorBranch || 'brch')}
                                 </span>
                                 {orchestratorRunning && (
@@ -1831,7 +1831,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 data-onboarding="session-list"
             >
                 {sessions.length === 0 && !loading ? (
-                    <div className="text-center text-slate-500 py-4">{t.sidebar.empty}</div>
+                    <div className="text-center text-text-muted py-4">{t.sidebar.empty}</div>
                 ) : (
                     isCollapsed ? (
                         <CollapsedSidebarRail

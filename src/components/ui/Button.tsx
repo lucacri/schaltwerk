@@ -2,7 +2,7 @@ import React, { forwardRef } from 'react'
 import clsx from 'clsx'
 import { buttonTextStyle, controlHeightStyles } from './styles'
 
-type ButtonVariant = 'default' | 'primary' | 'danger' | 'ghost' | 'dashed'
+type ButtonVariant = 'default' | 'primary' | 'danger' | 'ghost' | 'dashed' | 'warning' | 'success'
 type ButtonSize = 'sm' | 'md'
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -16,7 +16,9 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 const variantClasses: Record<ButtonVariant, string> = {
   default: 'border-border-subtle bg-bg-elevated text-text-secondary hover:border-border-strong hover:bg-[var(--control-bg-hover)] hover:text-text-primary',
   primary: 'border-[var(--color-accent-blue-border)] bg-accent-blue text-text-inverse hover:bg-[var(--color-accent-blue-dark)]',
-  danger: 'border-border-subtle bg-bg-elevated text-text-tertiary hover:border-[var(--color-accent-red-border)] hover:bg-[var(--color-accent-red-bg)] hover:text-accent-red',
+  danger: 'border-[var(--color-accent-red-border)] bg-[var(--color-accent-red-bg)] text-accent-red hover:bg-[var(--color-accent-red)] hover:text-text-inverse',
+  warning: 'border-[var(--color-accent-amber-border)] bg-[var(--color-accent-amber-bg)] text-accent-amber hover:bg-[var(--color-accent-amber-dark)] hover:text-text-inverse',
+  success: 'border-[var(--color-accent-green-border)] bg-[var(--color-accent-green-bg)] text-accent-green hover:bg-[var(--color-accent-green-dark)] hover:text-text-inverse',
   ghost: 'border-transparent bg-transparent text-text-secondary hover:bg-[rgba(var(--color-bg-hover-rgb),0.35)] hover:text-text-primary',
   dashed: 'border-[var(--control-border)] border-dashed bg-transparent text-text-tertiary hover:border-border-strong hover:text-text-secondary',
 }

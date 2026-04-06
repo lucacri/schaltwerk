@@ -15,7 +15,7 @@ export function SpecPlaceholder() {
   }, [sessionName])
 
   if (!sessionName) {
-    return <div className="h-full flex items-center justify-center text-slate-400">{t.specWorkspacePanel.noSpecSelected}</div>
+    return <div className="h-full flex items-center justify-center text-text-tertiary">{t.specWorkspacePanel.noSpecSelected}</div>
   }
 
   return <SpecEditor sessionName={sessionName} onStart={handleRun} />

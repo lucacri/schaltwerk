@@ -45,8 +45,8 @@
   /* Border Colors */
   --color-border-default: #54546D;
   --color-border-default-rgb: 84 84 109;
-  --color-border-subtle: #363646;
-  --color-border-subtle-rgb: 54 54 70;
+  --color-border-subtle: #414154;
+  --color-border-subtle-rgb: 65 65 84;
   --color-border-strong: #727169;
   --color-border-strong-rgb: 114 113 105;
   --color-border-focus: #7E9CD8;
@@ -55,7 +55,7 @@
   /* Form controls */
   --control-bg: var(--color-bg-tertiary);
   --control-bg-hover: var(--color-bg-hover);
-  --control-border: var(--color-border-subtle);
+  --control-border: var(--color-border-default);
   --control-border-focus: var(--color-border-focus);
   --control-border-error: var(--color-accent-red);
 

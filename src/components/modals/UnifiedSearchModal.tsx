@@ -12,6 +12,7 @@ import { formatPrUpdatedTimestamp } from './githubPrFormatting'
 import { withOpacity } from '../../common/colorUtils'
 import { logger } from '../../utils/logger'
 import type { GithubIssueSelectionResult, GithubPrSelectionResult } from '../../types/githubIssues'
+import { TextInput } from '../ui'
 
 type TabId = 'branches' | 'prs' | 'issues'
 
@@ -576,19 +577,14 @@ export function UnifiedSearchModal({
         }}
       >
         <div className="p-3 border-b" style={{ borderColor: 'var(--color-border-subtle)' }}>
-          <input
+          <TextInput
             ref={inputRef}
             data-testid="unified-search-input"
             type="search"
             value={searchQuery}
             onChange={e => handleSearchChange(e.target.value)}
             placeholder={t.newSessionModal.unifiedSearch.searchPlaceholder}
-            className="w-full px-3 py-2 text-sm rounded"
-            style={{
-              backgroundColor: 'var(--color-bg-primary)',
-              color: 'var(--color-text-primary)',
-              border: '1px solid var(--color-border-default)',
-            }}
+            className="w-full"
           />
         </div>
 

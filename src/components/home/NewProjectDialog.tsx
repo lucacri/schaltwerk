@@ -135,19 +135,19 @@ export function NewProjectDialog({ isOpen, onClose, onProjectCreated }: NewProje
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-bg-primary/60 backdrop-blur-sm flex items-center justify-center z-50">
       <div 
-        className="bg-slate-900 border border-slate-800 rounded-lg p-6 max-w-md w-full mx-4"
+        className="bg-bg-secondary border border-border-subtle rounded-lg p-6 max-w-md w-full mx-4"
         onKeyDown={handleKeyDown}
       >
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <VscNewFolder className="text-cyan-400 text-2xl" />
-            <h2 className="text-xl font-semibold text-slate-200">{t.newProject.title}</h2>
+            <VscNewFolder className="text-accent-cyan text-2xl" />
+            <h2 className="text-xl font-semibold text-text-secondary">{t.newProject.title}</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-500 hover:text-slate-300 transition-colors"
+            className="text-text-muted hover:text-text-secondary transition-colors"
             disabled={isCreating}
           >
             <VscClose className="text-xl" />
@@ -155,7 +155,7 @@ export function NewProjectDialog({ isOpen, onClose, onProjectCreated }: NewProje
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-950/50 border border-red-800 rounded text-red-300 text-sm">
+          <div className="mb-4 p-3 bg-[var(--color-accent-red-bg)] border border-[var(--color-accent-red-border)] rounded text-accent-red text-sm">
             {error}
           </div>
         )}
@@ -197,10 +197,10 @@ export function NewProjectDialog({ isOpen, onClose, onProjectCreated }: NewProje
             </div>
           </FormGroup>
 
-          <div className="bg-slate-950/30 border border-slate-800 rounded-lg p-3 text-sm text-slate-400">
+          <div className="bg-bg-primary/30 border border-border-subtle rounded-lg p-3 text-sm text-text-tertiary">
             <p>{t.newProject.createInfo}</p>
             {projectName && parentPath && (
-              <p className="mt-2 text-cyan-300 font-mono text-xs">
+              <p className="mt-2 text-accent-cyan font-mono text-xs">
                 {parentPath}/{projectName}
               </p>
             )}

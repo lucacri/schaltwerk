@@ -44,6 +44,16 @@ describe('Button', () => {
     expect(screen.getByRole('button')).toBeInTheDocument()
   })
 
+  test('renders warning variant', () => {
+    render(<Button variant="warning">Warn</Button>)
+    expect(screen.getByRole('button')).toBeInTheDocument()
+  })
+
+  test('renders success variant', () => {
+    render(<Button variant="success">Success</Button>)
+    expect(screen.getByRole('button')).toBeInTheDocument()
+  })
+
   test('renders ghost variant', () => {
     render(<Button variant="ghost">Ghost</Button>)
     expect(screen.getByRole('button')).toBeInTheDocument()
