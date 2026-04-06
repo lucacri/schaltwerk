@@ -1994,7 +1994,11 @@ function AppContent() {
   }
 
   const handleContextualSessionCreate = useEffectEvent((detail: ContextualActionCreateSessionDetail) => {
-    logger.info('[App] Contextual action create session:', detail)
+    logger.info('[App] Contextual action create session - opening modal with prefill:', detail)
+
+    if (shouldBlockSessionModal('contextual action create session')) {
+      return
+    }
 
     const name = detail.contextType && detail.contextNumber
       ? sanitizeName(
@@ -2004,27 +2008,39 @@ function AppContent() {
         ) || 'contextual-action'
       : sanitizeName(detail.actionName) || 'contextual-action'
 
-    void handleCreateSession({
-      name,
-      prompt: detail.prompt,
-      baseBranch: '',
-      agentType: detail.agentType,
-      userEditedName: true,
-      ...(detail.contextType === 'issue' && detail.contextNumber ? {
-        issueNumber: Number(detail.contextNumber),
-        issueUrl: detail.contextUrl,
-      } : {}),
-      ...(detail.contextType === 'pr' && detail.contextNumber ? {
-        prNumber: Number(detail.contextNumber),
-        prUrl: detail.contextUrl,
-      } : {}),
-    }).catch(error => {
-      logger.error('[App] Failed to create session from contextual action:', detail, error)
+    previousFocusRef.current = document.activeElement
+    setStartFromSpecName(null)
+    emitUiEvent(UiEvent.NewSessionPrefillPending)
+    setCachedPrompt(detail.prompt)
+    setOpenAsSpec(false)
+    setNewSessionOpen(true)
+
+    requestAnimationFrame(() => {
+      emitUiEvent(UiEvent.NewSessionPrefill, {
+        name,
+        taskContent: detail.prompt,
+        lockName: true,
+        agentType: detail.agentType,
+        variantId: detail.variantId,
+        presetId: detail.presetId,
+        ...(detail.contextType === 'issue' && detail.contextNumber ? {
+          issueNumber: Number(detail.contextNumber),
+          issueUrl: detail.contextUrl,
+        } : {}),
+        ...(detail.contextType === 'pr' && detail.contextNumber ? {
+          prNumber: Number(detail.contextNumber),
+          prUrl: detail.contextUrl,
+        } : {}),
+      })
     })
   })
 
   const handleContextualSpecCreate = useEffectEvent((detail: ContextualActionCreateSpecDetail) => {
-    logger.info('[App] Contextual action create spec:', detail)
+    logger.info('[App] Contextual action create spec - opening modal with prefill:', detail)
+
+    if (shouldBlockSessionModal('contextual action create spec')) {
+      return
+    }
 
     const name = detail.contextType && detail.contextNumber
       ? sanitizeName(
@@ -2034,23 +2050,27 @@ function AppContent() {
         ) || 'contextual-action'
       : sanitizeName(detail.name) || 'contextual-action'
 
-    void handleCreateSession({
-      name,
-      prompt: detail.prompt,
-      baseBranch: '',
-      isSpec: true,
-      draftContent: detail.prompt,
-      userEditedName: true,
-      ...(detail.contextType === 'issue' && detail.contextNumber ? {
-        issueNumber: Number(detail.contextNumber),
-        issueUrl: detail.contextUrl,
-      } : {}),
-      ...(detail.contextType === 'pr' && detail.contextNumber ? {
-        prNumber: Number(detail.contextNumber),
-        prUrl: detail.contextUrl,
-      } : {}),
-    }).catch(error => {
-      logger.error('[App] Failed to create spec from contextual action:', detail, error)
+    previousFocusRef.current = document.activeElement
+    setStartFromSpecName(null)
+    emitUiEvent(UiEvent.NewSessionPrefillPending)
+    setCachedPrompt(detail.prompt)
+    setOpenAsSpec(true)
+    setNewSessionOpen(true)
+
+    requestAnimationFrame(() => {
+      emitUiEvent(UiEvent.NewSessionPrefill, {
+        name,
+        taskContent: detail.prompt,
+        lockName: true,
+        ...(detail.contextType === 'issue' && detail.contextNumber ? {
+          issueNumber: Number(detail.contextNumber),
+          issueUrl: detail.contextUrl,
+        } : {}),
+        ...(detail.contextType === 'pr' && detail.contextNumber ? {
+          prNumber: Number(detail.contextNumber),
+          prUrl: detail.contextUrl,
+        } : {}),
+      })
     })
   })
 

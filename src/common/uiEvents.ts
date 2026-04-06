@@ -113,6 +113,13 @@ export interface NewSessionPrefillDetail {
   epicId?: string | null
   isConsolidation?: boolean
   consolidationSourceIds?: string[]
+  agentType?: string
+  variantId?: string
+  presetId?: string
+  issueNumber?: number
+  issueUrl?: string
+  prNumber?: number
+  prUrl?: string
 }
 
 export interface SessionCreatedDetail {

@@ -126,6 +126,10 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [epicId, setEpicId] = useState<string | null>(null)
     const [isConsolidation, setIsConsolidation] = useState(false)
     const [consolidationSourceIds, setConsolidationSourceIds] = useState<string[]>([])
+    const [prefillPrNumber, setPrefillPrNumber] = useState<number | null>(null)
+    const [prefillPrUrl, setPrefillPrUrl] = useState<string | null>(null)
+    const [prefillIssueNumber, setPrefillIssueNumber] = useState<number | null>(null)
+    const [prefillIssueUrl, setPrefillIssueUrl] = useState<string | null>(null)
     const [repositoryIsEmpty, setRepositoryIsEmpty] = useState(false)
     const [isPrefillPending, setIsPrefillPending] = useState(false)
     const [hasPrefillData, setHasPrefillData] = useState(false)
@@ -648,10 +652,14 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
 
             const prInfo = promptSource === 'github_pull_request' && githubPrSelection
                 ? { prNumber: githubPrSelection.details.number, prUrl: githubPrSelection.details.url }
-                : {}
+                : prefillPrNumber != null
+                    ? { prNumber: prefillPrNumber, ...(prefillPrUrl ? { prUrl: prefillPrUrl } : {}) }
+                    : {}
             const issueInfo = promptSource === 'github_issue' && githubIssueSelection
                 ? { issueNumber: githubIssueSelection.details.number, issueUrl: githubIssueSelection.details.url }
-                : {}
+                : prefillIssueNumber != null
+                    ? { issueNumber: prefillIssueNumber, ...(prefillIssueUrl ? { issueUrl: prefillIssueUrl } : {}) }
+                    : {}
 
             const createData: CreateSessionPayload = {
                 name: finalName,
@@ -704,7 +712,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setValidationError(errorMessage)
             setCreating(false)
         }
-    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, selectedPresetId, agentPresetsList])
+    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, selectedPresetId, agentPresetsList, prefillPrNumber, prefillPrUrl, prefillIssueNumber, prefillIssueUrl])
 
     // Keep ref in sync immediately on render to avoid stale closures in tests
     createRef.current = () => { void handleCreate() }
@@ -965,6 +973,10 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 setEpicId(null)
                 setIsConsolidation(false)
                 setConsolidationSourceIds([])
+                setPrefillPrNumber(null)
+                setPrefillPrUrl(null)
+                setPrefillIssueNumber(null)
+                setPrefillIssueUrl(null)
                 setAutonomyEnabled(false)
                 setShowVersionMenu(false)
                 setVersionCount(1)
@@ -1064,6 +1076,10 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setShowVersionMenu(false)
             setIsConsolidation(false)
             setConsolidationSourceIds([])
+            setPrefillPrNumber(null)
+            setPrefillPrUrl(null)
+            setPrefillIssueNumber(null)
+            setPrefillIssueUrl(null)
             logger.info(`[NewSessionModal] Reapplying last agent type on close path ${JSON.stringify({
                 lastAgentType: lastAgentTypeRef.current,
                 hasOverride: hasAgentOverrideRef.current
@@ -1141,6 +1157,30 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             if (detail.consolidationSourceIds) {
                 setConsolidationSourceIds(detail.consolidationSourceIds)
             }
+            if (detail.agentType) {
+                const validAgent = AGENT_TYPES.find(a => a === detail.agentType) as AgentType | undefined
+                if (validAgent) {
+                    setAgentType(validAgent)
+                    setIgnorePersistedAgentType(true)
+                    hasAgentOverrideRef.current = true
+                }
+            }
+            if (detail.variantId) {
+                const variant = agentVariantsList.find(v => v.id === detail.variantId)
+                if (variant) handleVariantSelect(variant)
+            }
+            if (detail.presetId) {
+                setSelectedPresetId(detail.presetId)
+                setPresetTabActive(true)
+            }
+            if (detail.prNumber != null) {
+                setPrefillPrNumber(detail.prNumber)
+                setPrefillPrUrl(detail.prUrl ?? null)
+            }
+            if (detail.issueNumber != null) {
+                setPrefillIssueNumber(detail.issueNumber)
+                setPrefillIssueUrl(detail.issueUrl ?? null)
+            }
 
             setIsPrefillPending(false)
             setHasPrefillData(true)
@@ -1161,7 +1201,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             cleanupPrefill()
             cleanupPending()
         }
-    }, [])
+    }, [agentVariantsList, handleVariantSelect])
 
     useEffect(() => {
         if (!open) return
