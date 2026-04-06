@@ -8,6 +8,7 @@ import { useToast } from '../../common/toast/ToastProvider'
 import { useGitlabIntegrationContext } from '../../contexts/GitlabIntegrationContext'
 import { logger } from '../../utils/logger'
 import type { GitlabSource } from '../../types/gitlabTypes'
+import { ModalPortal } from '../shared/ModalPortal'
 import { Checkbox, FormGroup, Select, TextInput, Textarea } from '../ui'
 
 export type MrModeOption = 'squash' | 'reapply'
@@ -214,16 +215,17 @@ export function GitlabMrSessionModal({
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-[1300] px-4" style={modalBackdropStyle}>
-      <div
-        className="w-full max-w-2xl rounded-lg shadow-lg max-h-[90vh] flex flex-col"
-        style={modalContainerStyle}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="gitlab-mr-session-title"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalPortal>
+      <div className="fixed inset-0 flex items-center justify-center z-[1300] px-4" style={modalBackdropStyle}>
+        <div
+          className="w-full max-w-2xl rounded-lg shadow-lg max-h-[90vh] flex flex-col"
+          style={modalContainerStyle}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="gitlab-mr-session-title"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
         <div className="flex justify-between items-start gap-4 border-b px-6 py-4 flex-shrink-0" style={{ borderColor: 'var(--color-border-subtle)' }}>
           <div>
             <h2 id="gitlab-mr-session-title" className="text-heading font-semibold" style={{ color: 'var(--color-text-primary)' }}>
@@ -421,7 +423,8 @@ export function GitlabMrSessionModal({
             </button>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }

@@ -6,6 +6,7 @@ import { useModal } from '../../contexts/ModalContext'
 import { LoadingSpinner } from '../common/LoadingSpinner'
 import { useTranslation } from '../../common/i18n'
 import { logger } from '../../utils/logger'
+import { ModalPortal } from '../shared/ModalPortal'
 import { Checkbox, FormGroup, TextInput } from '../ui'
 
 export type MergeModeOption = 'squash' | 'reapply'
@@ -246,16 +247,17 @@ export function MergeSessionModal({
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-[1300] px-4" style={modalBackdropStyle}>
-      <div
-        className="w-full max-w-2xl rounded-lg shadow-lg"
-        style={modalContainerStyle}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="merge-session-title"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalPortal>
+      <div className="fixed inset-0 flex items-center justify-center z-[1300] px-4" style={modalBackdropStyle}>
+        <div
+          className="w-full max-w-2xl rounded-lg shadow-lg"
+          style={modalContainerStyle}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="merge-session-title"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
         <div className="flex justify-between items-start gap-4 border-b px-6 py-4" style={{ borderColor: 'var(--color-border-subtle)' }}>
           <div>
             <h2 id="merge-session-title" className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
@@ -516,7 +518,8 @@ export function MergeSessionModal({
             </button>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }

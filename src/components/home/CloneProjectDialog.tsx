@@ -8,6 +8,7 @@ import { listenEvent, SchaltEvent } from '../../common/eventSystem'
 import { logger } from '../../utils/logger'
 import { parseGitRemote, sanitizeFolderName } from '../../utils/gitRemote'
 import { useTranslation } from '../../common/i18n'
+import { ModalPortal } from '../shared/ModalPortal'
 import { Button, FormGroup, TextInput } from '../ui'
 
 function generateRequestId(): string {
@@ -206,14 +207,15 @@ export function CloneProjectDialog({ isOpen, onClose, onProjectCloned }: ClonePr
       : t.cloneProject.invalidUrl
 
   return (
-    <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ backgroundColor: 'var(--color-overlay-backdrop)' }}
-    >
+    <ModalPortal>
       <div
-        className="w-full max-w-2xl mx-4 border rounded-lg shadow-xl max-h-[90vh] flex flex-col"
-        style={{ backgroundColor: 'var(--color-bg-tertiary)', borderColor: 'var(--color-border-default)' }}
+        className="fixed inset-0 flex items-center justify-center z-50"
+        style={{ backgroundColor: 'var(--color-overlay-backdrop)' }}
       >
+        <div
+          className="w-full max-w-2xl mx-4 border rounded-lg shadow-xl max-h-[90vh] flex flex-col"
+          style={{ backgroundColor: 'var(--color-bg-tertiary)', borderColor: 'var(--color-border-default)' }}
+        >
         <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border-default)' }}>
           <div className="flex items-center gap-3">
             <VscRepoClone className="text-2xl" style={{ color: 'var(--color-accent-blue)' }} />
@@ -326,7 +328,8 @@ export function CloneProjectDialog({ isOpen, onClose, onProjectCloned }: ClonePr
             {isCloning ? t.cloneProject.cloning : t.cloneProject.cloneProject}
           </Button>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }

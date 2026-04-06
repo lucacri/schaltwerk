@@ -40,6 +40,26 @@ describe('ConfirmModal', () => {
     expect(screen.getByRole('button', { name: /Confirm/i })).toBeInTheDocument()
   })
 
+  it('portals the dialog to document.body so parent layout does not clip it', () => {
+    const { container } = render(
+      <div data-testid="layout-shell" className="overflow-hidden">
+        <ConfirmModal
+          open={true}
+          title="Confirm action"
+          body="Are you sure?"
+          confirmText="Confirm"
+          cancelText="Cancel"
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </div>
+    )
+
+    const dialog = screen.getByRole('dialog')
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.body).toContainElement(dialog)
+  })
+
   it('invokes onCancel on Esc key', async () => {
     const { onCancel } = openModal()
     const esc = new KeyboardEvent('keydown', { key: 'Escape' })

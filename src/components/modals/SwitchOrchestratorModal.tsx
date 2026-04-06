@@ -4,6 +4,7 @@ import { useClaudeSession } from '../../hooks/useClaudeSession'
 import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../../types/session'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
+import { ModalPortal } from '../shared/ModalPortal'
 
 interface Props {
   open: boolean
@@ -144,8 +145,9 @@ export function SwitchOrchestratorModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 bg-bg-primary/60 z-50 flex items-center justify-center">
-      <div className="w-[480px] max-w-[95vw] bg-bg-secondary border border-border-default rounded-xl shadow-xl">
+    <ModalPortal>
+      <div className="fixed inset-0 bg-bg-primary/60 z-50 flex items-center justify-center">
+        <div className="w-[480px] max-w-[95vw] bg-bg-secondary border border-border-default rounded-xl shadow-xl">
         <h2 className="px-4 py-3 border-b border-border-subtle text-text-secondary font-medium">
           {title}
         </h2>
@@ -204,7 +206,8 @@ export function SwitchOrchestratorModal({
             )}
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }

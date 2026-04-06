@@ -3,6 +3,7 @@ import { VscFolderOpened, VscTrash, VscClose } from 'react-icons/vsc'
 import { formatDateTime } from '../../utils/dateTime'
 import { useRecentProjects } from '../../hooks/useRecentProjects'
 import { useTranslation } from '../../common/i18n'
+import { ModalPortal } from '../shared/ModalPortal'
 
 const RECENT_PROJECT_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   dateStyle: 'medium'
@@ -91,20 +92,21 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
   if (!isOpen) return null
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center"
-      style={{ backgroundColor: 'var(--color-overlay-strong)' }}
-      onClick={onClose}
-    >
+    <ModalPortal>
       <div
-        className="relative rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden"
-        style={{
-          backgroundColor: 'var(--color-bg-primary)',
-          border: '1px solid var(--color-border-default)'
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-[100] flex items-center justify-center"
+        style={{ backgroundColor: 'var(--color-overlay-strong)' }}
+        onClick={onClose}
       >
+        <div
+          className="relative rounded-lg shadow-2xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden"
+          style={{
+            backgroundColor: 'var(--color-bg-primary)',
+            border: '1px solid var(--color-border-default)'
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderBottomColor: 'var(--color-border-default)' }}>
           <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
             {t.projectSelector.title}
@@ -204,7 +206,8 @@ export function ProjectSelectorModal({ open: isOpen, onClose, onOpenProject, ope
             </div>
           )}
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }

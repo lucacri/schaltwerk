@@ -2,7 +2,6 @@ import { describe, it } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import { globSync } from 'glob';
 import { projectFiles } from 'archunit';
 import type { FileInfo } from 'archunit';
 import {
@@ -43,6 +42,30 @@ function isTestFile(relativePath: string): boolean {
     relativePath.startsWith('src/test/') ||
     /\.test\.(ts|tsx)$/.test(relativePath)
   );
+}
+
+function collectSourceFiles(directory: string): string[] {
+  const absoluteDirectory = path.resolve(projectRoot, directory);
+  const entries = fs.readdirSync(absoluteDirectory, { withFileTypes: true });
+
+  return entries.flatMap((entry) => {
+    const absolutePath = path.join(absoluteDirectory, entry.name);
+    const relativePath = toRelativePath(absolutePath);
+
+    if (entry.isDirectory()) {
+      return collectSourceFiles(relativePath);
+    }
+
+    if (!/\.(ts|tsx)$/.test(entry.name)) {
+      return [];
+    }
+
+    if (/\.(test|stories)\./.test(entry.name)) {
+      return [];
+    }
+
+    return [relativePath];
+  });
 }
 
 function formatFailureDetails(details: Map<string, FailureDetail[]>): string {
@@ -495,10 +518,9 @@ describe('Theme Consistency Architecture', () => {
   }, ARCH_RULE_TIMEOUT);
 
   it('should not use border-slate-* utilities in components/constants', async () => {
-    const targetFiles = globSync('{src/components,src/constants}/**/*.{ts,tsx}', {
-      cwd: projectRoot,
-      ignore: ['**/*.test.*', '**/*.stories.*'],
-    });
+    const targetFiles = ['src/components', 'src/constants']
+      .flatMap((directory) => collectSourceFiles(directory))
+      .sort();
 
     const bannedPattern = /border-(?:slate|gray)-(?:6|7|8)0{2}(?:\/[0-9]{1,2})?/g;
     const offenders: string[] = [];

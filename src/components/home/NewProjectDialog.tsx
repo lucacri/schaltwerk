@@ -7,6 +7,7 @@ import { homeDir } from '@tauri-apps/api/path'
 import { AnimatedText } from '../common/AnimatedText'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
+import { ModalPortal } from '../shared/ModalPortal'
 import { Button, FormGroup, TextInput } from '../ui'
 
 interface NewProjectDialogProps {
@@ -135,11 +136,12 @@ export function NewProjectDialog({ isOpen, onClose, onProjectCreated }: NewProje
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-bg-primary/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div 
-        className="bg-bg-secondary border border-border-subtle rounded-lg p-6 max-w-md w-full mx-4"
-        onKeyDown={handleKeyDown}
-      >
+    <ModalPortal>
+      <div className="fixed inset-0 bg-bg-primary/60 backdrop-blur-sm flex items-center justify-center z-50">
+        <div 
+          className="bg-bg-secondary border border-border-subtle rounded-lg p-6 max-w-md w-full mx-4"
+          onKeyDown={handleKeyDown}
+        >
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <VscNewFolder className="text-accent-cyan text-2xl" />
@@ -228,7 +230,8 @@ export function NewProjectDialog({ isOpen, onClose, onProjectCreated }: NewProje
             )}
           </Button>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }

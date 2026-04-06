@@ -5,6 +5,7 @@ import type { GithubPrSummary } from '../../types/githubIssues'
 import { formatRelativeDate } from '../../utils/time'
 import { buildPrUrl } from '../../utils/githubUrls'
 import { useTranslation } from '../../common/i18n'
+import { ModalPortal } from '../shared/ModalPortal'
 import { TextInput } from '../ui'
 import { Button } from '../ui/Button'
 
@@ -62,13 +63,14 @@ export function LinkPrModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 bg-bg-primary/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
-      <div
-        className="bg-bg-secondary border border-border-default rounded-lg w-full max-w-lg mx-4 flex flex-col"
-        style={{ maxHeight: '70vh' }}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalPortal>
+      <div className="fixed inset-0 bg-bg-primary/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
+        <div
+          className="bg-bg-secondary border border-border-default rounded-lg w-full max-w-lg mx-4 flex flex-col"
+          style={{ maxHeight: '70vh' }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
         <div className="p-4 border-b border-border-default">
           <h2 className="text-lg font-semibold text-text-primary mb-3">{t.linkPrModal.title}</h2>
 
@@ -165,7 +167,8 @@ export function LinkPrModal({
             {t.linkPrModal.cancel}
           </Button>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }
