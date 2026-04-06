@@ -19,7 +19,7 @@ const resolveThemeId = (themeId: ThemeId, prefersDark: boolean): ResolvedTheme =
 }
 
 const isThemeId = (value: unknown): value is ThemeId =>
-  value === 'dark' || value === 'light' || value === 'tokyonight' || value === 'gruvbox' || value === 'catppuccin' || value === 'catppuccin-macchiato' || value === 'everforest' || value === 'ayu' || value === 'kanagawa' || value === 'darcula' || value === 'system'
+  value === 'dark' || value === 'light' || value === 'tokyonight' || value === 'gruvbox' || value === 'catppuccin' || value === 'catppuccin-macchiato' || value === 'everforest' || value === 'ayu' || value === 'kanagawa' || value === 'darcula' || value === 'islands-dark' || value === 'system'
 
 export const resolvedThemeAtom = atom<ResolvedTheme>((get) =>
   resolveThemeId(get(themeIdAtom), get(systemPrefersDarkAtom))

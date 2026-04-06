@@ -1,6 +1,6 @@
 import type { ITheme } from '@xterm/xterm'
 import { ResolvedTheme } from './types'
-import { ayuTheme, darkTheme, lightTheme, tokyonightTheme, gruvboxTheme, catppuccinTheme, catppuccinMacchiatoTheme, everforestTheme, kanagawaTheme, darculaTheme } from './presets'
+import { ayuTheme, darkTheme, lightTheme, tokyonightTheme, gruvboxTheme, catppuccinTheme, catppuccinMacchiatoTheme, everforestTheme, kanagawaTheme, darculaTheme, islandsDarkTheme } from './presets'
 
 function getCssVariable(name: string): string | undefined {
   if (typeof document === 'undefined') return undefined
@@ -30,6 +30,8 @@ function getTerminalColors(themeId: ResolvedTheme) {
       return kanagawaTheme.colors.terminal
     case 'darcula':
       return darculaTheme.colors.terminal
+    case 'islands-dark':
+      return islandsDarkTheme.colors.terminal
     case 'light':
       return lightTheme.colors.terminal
     default:

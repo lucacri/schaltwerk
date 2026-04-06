@@ -1,0 +1,525 @@
+/* ==========================================================================
+   Islands Dark Theme
+   Based on JetBrains Islands Dark (2025.2+) – the new default look for
+   IntelliJ-based IDEs. Neutral charcoal backgrounds, muted blue-gray text,
+   and warm syntax accents (orange keywords, green strings, teal numbers).
+   ========================================================================== */
+[data-theme="islands-dark"] {
+  /* Color Scheme for native widgets */
+  --color-scheme: dark;
+
+  /* Background Colors
+     Islands Dark layering: canvas (#0e0e12) → surface (#181a1d) → elevated (#2b2d30) → active (#43464a)
+     Based on bwya77/vscode-dark-islands with contrast-boosted layer separation. */
+  --color-bg-primary: #181a1d;
+  --color-bg-primary-rgb: 24 26 29;
+  --color-bg-secondary: #0e0e12;
+  --color-bg-secondary-rgb: 14 14 18;
+  --color-bg-tertiary: #272a2e;
+  --color-bg-tertiary-rgb: 39 42 46;
+  --color-bg-elevated: #2f3236;
+  --color-bg-elevated-rgb: 47 50 54;
+  --color-bg-hover: #2a2d31;
+  --color-bg-hover-rgb: 42 45 49;
+  --color-bg-active: #43464a;
+  --color-bg-active-rgb: 67 70 74;
+  --color-bg-selected: rgba(45, 67, 120, 0.5);
+  --color-bg-selected-rgb: 45 67 120;
+
+  /* Panel aliases */
+  --color-panel: var(--color-bg-primary);
+  --color-panel-rgb: var(--color-bg-primary-rgb);
+  --color-panel-alt: var(--color-bg-tertiary);
+  --color-panel-alt-rgb: var(--color-bg-tertiary-rgb);
+
+  /* Text Colors */
+  --color-text-primary: #c4c6cc;
+  --color-text-primary-rgb: 196 198 204;
+  --color-text-secondary: #a8abb4;
+  --color-text-secondary-rgb: 168 171 180;
+  --color-text-tertiary: #8f939b;
+  --color-text-tertiary-rgb: 143 147 155;
+  --color-text-muted: #757980;
+  --color-text-muted-rgb: 117 121 128;
+  --color-text-inverse: #0e0e12;
+  --color-text-inverse-rgb: 14 14 18;
+
+  /* Border Colors */
+  --color-border-default: #484b4f;
+  --color-border-default-rgb: 72 75 79;
+  --color-border-subtle: #383b3f;
+  --color-border-subtle-rgb: 56 59 63;
+  --color-border-strong: #5a5e62;
+  --color-border-strong-rgb: 90 94 98;
+  --color-border-focus: #548af7;
+  --color-border-focus-rgb: 84 138 247;
+
+  /* Form controls */
+  --control-bg: var(--color-bg-primary);
+  --control-bg-hover: var(--color-bg-hover);
+  --control-border: var(--color-border-default);
+  --control-border-focus: var(--color-border-focus);
+  --control-border-error: var(--color-accent-red);
+
+  /* Accent Colors – JetBrains Islands palette */
+  --color-accent-blue: #548af7;
+  --color-accent-blue-rgb: 84 138 247;
+  --color-accent-blue-light: #759cf3;
+  --color-accent-blue-dark: #3574f0;
+  --color-accent-blue-bg: rgba(84, 138, 247, 0.12);
+  --color-accent-blue-border: rgba(84, 138, 247, 0.5);
+
+  --color-accent-green: #6aab73;
+  --color-accent-green-rgb: 106 171 115;
+  --color-accent-green-light: #82c48a;
+  --color-accent-green-dark: #52885a;
+  --color-accent-green-bg: rgba(106, 171, 115, 0.12);
+  --color-accent-green-border: rgba(106, 171, 115, 0.5);
+
+  --color-accent-amber: #be8f38;
+  --color-accent-amber-rgb: 190 143 56;
+  --color-accent-amber-light: #d4a74e;
+  --color-accent-amber-dark: #9a742d;
+  --color-accent-amber-bg: rgba(190, 143, 56, 0.12);
+  --color-accent-amber-border: rgba(190, 143, 56, 0.5);
+
+  --color-accent-red: #f75464;
+  --color-accent-red-rgb: 247 84 100;
+  --color-accent-red-light: #f97a87;
+  --color-accent-red-dark: #c54350;
+  --color-accent-red-bg: rgba(247, 84, 100, 0.12);
+  --color-accent-red-border: rgba(247, 84, 100, 0.5);
+
+  --color-accent-violet: #b07cd8;
+  --color-accent-violet-rgb: 176 124 216;
+  --color-accent-violet-light: #c49ae5;
+  --color-accent-violet-dark: #8e63ad;
+  --color-accent-violet-bg: rgba(176, 124, 216, 0.12);
+  --color-accent-violet-border: rgba(176, 124, 216, 0.5);
+
+  --color-accent-purple: #c77dbb;
+  --color-accent-purple-rgb: 199 125 187;
+  --color-accent-purple-light: #d99acf;
+  --color-accent-purple-dark: #a06496;
+  --color-accent-purple-bg: rgba(199, 125, 187, 0.12);
+  --color-accent-purple-border: rgba(199, 125, 187, 0.5);
+
+  --color-accent-magenta: #c77dbb;
+  --color-accent-magenta-rgb: 199 125 187;
+  --color-accent-magenta-light: #d99acf;
+  --color-accent-magenta-dark: #a06496;
+  --color-accent-magenta-bg: rgba(199, 125, 187, 0.12);
+  --color-accent-magenta-border: rgba(199, 125, 187, 0.5);
+
+  --color-accent-yellow: #bbb529;
+  --color-accent-yellow-rgb: 187 181 41;
+  --color-accent-yellow-light: #d0ca45;
+  --color-accent-yellow-dark: #969120;
+  --color-accent-yellow-bg: rgba(187, 181, 41, 0.12);
+  --color-accent-yellow-border: rgba(187, 181, 41, 0.5);
+
+  --color-accent-cyan: #2aacb8;
+  --color-accent-cyan-rgb: 42 172 184;
+  --color-accent-cyan-light: #4ac4cf;
+  --color-accent-cyan-dark: #228a93;
+  --color-accent-cyan-bg: rgba(42, 172, 184, 0.12);
+  --color-accent-cyan-border: rgba(42, 172, 184, 0.5);
+
+  /* Button text colors on accent backgrounds */
+  --color-accent-blue-text: #ffffff;
+  --color-accent-amber-text: #000000;
+  --color-accent-cyan-text: #000000;
+  --color-accent-green-text: #000000;
+  --color-accent-red-text: #ffffff;
+
+  --color-accent-copilot: #b07cd8;
+  --color-accent-copilot-rgb: 176 124 216;
+  --color-accent-copilot-light: #c49ae5;
+  --color-accent-copilot-dark: #8e63ad;
+  --color-accent-copilot-bg: rgba(176, 124, 216, 0.12);
+  --color-accent-copilot-border: rgba(176, 124, 216, 0.5);
+
+  /* Extended Tailwind-Compatible Palettes – Blue (JetBrains blue) */
+  --color-blue-50: #e8effd;
+  --color-blue-50-rgb: 232 239 253;
+  --color-blue-100: #c5d6fa;
+  --color-blue-100-rgb: 197 214 250;
+  --color-blue-200: #9db9f6;
+  --color-blue-200-rgb: 157 185 246;
+  --color-blue-300: #759cf3;
+  --color-blue-300-rgb: 117 156 243;
+  --color-blue-400: #548af7;
+  --color-blue-400-rgb: 84 138 247;
+  --color-blue-500: #3574f0;
+  --color-blue-500-rgb: 53 116 240;
+  --color-blue-600: #2b5fc2;
+  --color-blue-600-rgb: 43 95 194;
+  --color-blue-700: #224a94;
+  --color-blue-700-rgb: 34 74 148;
+  --color-blue-800: #183566;
+  --color-blue-800-rgb: 24 53 102;
+  --color-blue-900: #0f2038;
+  --color-blue-900-rgb: 15 32 56;
+  --color-blue-950: #091420;
+  --color-blue-950-rgb: 9 20 32;
+
+  /* Green scale – IDE green (strings) */
+  --color-green-50: #edf5ee;
+  --color-green-50-rgb: 237 245 238;
+  --color-green-100: #cfe6d2;
+  --color-green-100-rgb: 207 230 210;
+  --color-green-200: #aed5b3;
+  --color-green-200-rgb: 174 213 179;
+  --color-green-300: #8ec49a;
+  --color-green-300-rgb: 142 196 154;
+  --color-green-400: #82c48a;
+  --color-green-400-rgb: 130 196 138;
+  --color-green-500: #6aab73;
+  --color-green-500-rgb: 106 171 115;
+  --color-green-600: #52885a;
+  --color-green-600-rgb: 82 136 90;
+  --color-green-700: #3d6643;
+  --color-green-700-rgb: 61 102 67;
+  --color-green-800: #28442d;
+  --color-green-800-rgb: 40 68 45;
+  --color-green-900: #152316;
+  --color-green-900-rgb: 21 35 22;
+  --color-green-950: #0b140c;
+  --color-green-950-rgb: 11 20 12;
+
+  /* Amber scale – IDE orange (keywords) */
+  --color-amber-50: #f8f0e5;
+  --color-amber-50-rgb: 248 240 229;
+  --color-amber-100: #eddcbe;
+  --color-amber-100-rgb: 237 220 190;
+  --color-amber-200: #e2c896;
+  --color-amber-200-rgb: 226 200 150;
+  --color-amber-300: #d4a74e;
+  --color-amber-300-rgb: 212 167 78;
+  --color-amber-400: #cf8e6d;
+  --color-amber-400-rgb: 207 142 109;
+  --color-amber-500: #be8f38;
+  --color-amber-500-rgb: 190 143 56;
+  --color-amber-600: #9a742d;
+  --color-amber-600-rgb: 154 116 45;
+  --color-amber-700: #765923;
+  --color-amber-700-rgb: 118 89 35;
+  --color-amber-800: #523e18;
+  --color-amber-800-rgb: 82 62 24;
+  --color-amber-900: #2e230e;
+  --color-amber-900-rgb: 46 35 14;
+  --color-amber-950: #1a1408;
+  --color-amber-950-rgb: 26 20 8;
+
+  /* Red scale – IDE error red */
+  --color-red-50: #fee9eb;
+  --color-red-50-rgb: 254 233 235;
+  --color-red-100: #fcc8cd;
+  --color-red-100-rgb: 252 200 205;
+  --color-red-200: #faa1a9;
+  --color-red-200-rgb: 250 161 169;
+  --color-red-300: #f97a87;
+  --color-red-300-rgb: 249 122 135;
+  --color-red-400: #f86776;
+  --color-red-400-rgb: 248 103 118;
+  --color-red-500: #f75464;
+  --color-red-500-rgb: 247 84 100;
+  --color-red-600: #c54350;
+  --color-red-600-rgb: 197 67 80;
+  --color-red-700: #94323c;
+  --color-red-700-rgb: 148 50 60;
+  --color-red-800: #622228;
+  --color-red-800-rgb: 98 34 40;
+  --color-red-900: #311114;
+  --color-red-900-rgb: 49 17 20;
+  --color-red-950: #1c0a0b;
+  --color-red-950-rgb: 28 10 11;
+
+  /* Yellow scale – IDE decorators / annotations */
+  --color-yellow-50: #f6f5e4;
+  --color-yellow-50-rgb: 246 245 228;
+  --color-yellow-100: #eae8c0;
+  --color-yellow-100-rgb: 234 232 192;
+  --color-yellow-200: #dedb98;
+  --color-yellow-200-rgb: 222 219 152;
+  --color-yellow-300: #d0ca45;
+  --color-yellow-300-rgb: 208 202 69;
+  --color-yellow-400: #c6c037;
+  --color-yellow-400-rgb: 198 192 55;
+  --color-yellow-500: #bbb529;
+  --color-yellow-500-rgb: 187 181 41;
+  --color-yellow-600: #969120;
+  --color-yellow-600-rgb: 150 145 32;
+  --color-yellow-700: #716d18;
+  --color-yellow-700-rgb: 113 109 24;
+  --color-yellow-800: #4c4910;
+  --color-yellow-800-rgb: 76 73 16;
+  --color-yellow-900: #272508;
+  --color-yellow-900-rgb: 39 37 8;
+
+  /* Cyan scale – IDE numbers / types */
+  --color-cyan-50: #e6f6f7;
+  --color-cyan-50-rgb: 230 246 247;
+  --color-cyan-100: #bfeaec;
+  --color-cyan-100-rgb: 191 234 236;
+  --color-cyan-200: #94dde0;
+  --color-cyan-200-rgb: 148 221 224;
+  --color-cyan-300: #4ac4cf;
+  --color-cyan-300-rgb: 74 196 207;
+  --color-cyan-400: #38b8c4;
+  --color-cyan-400-rgb: 56 184 196;
+  --color-cyan-500: #2aacb8;
+  --color-cyan-500-rgb: 42 172 184;
+  --color-cyan-600: #228a93;
+  --color-cyan-600-rgb: 34 138 147;
+  --color-cyan-700: #1a686e;
+  --color-cyan-700-rgb: 26 104 110;
+  --color-cyan-800: #124649;
+  --color-cyan-800-rgb: 18 70 73;
+  --color-cyan-900: #0a2425;
+  --color-cyan-900-rgb: 10 36 37;
+  --color-cyan-950: #051415;
+  --color-cyan-950-rgb: 5 20 21;
+
+  /* Purple scale – IDE constants / magenta */
+  --color-purple-50: #f3edf9;
+  --color-purple-50-rgb: 243 237 249;
+  --color-purple-100: #e0d0f0;
+  --color-purple-100-rgb: 224 208 240;
+  --color-purple-200: #cdb3e7;
+  --color-purple-200-rgb: 205 179 231;
+  --color-purple-300: #c49ae5;
+  --color-purple-300-rgb: 196 154 229;
+  --color-purple-400: #bb8cde;
+  --color-purple-400-rgb: 187 140 222;
+  --color-purple-500: #b07cd8;
+  --color-purple-500-rgb: 176 124 216;
+  --color-purple-600: #8e63ad;
+  --color-purple-600-rgb: 142 99 173;
+  --color-purple-700: #6b4a82;
+  --color-purple-700-rgb: 107 74 130;
+  --color-purple-800: #483257;
+  --color-purple-800-rgb: 72 50 87;
+  --color-purple-900: #251a2c;
+  --color-purple-900-rgb: 37 26 44;
+  --color-purple-950: #150e1a;
+  --color-purple-950-rgb: 21 14 26;
+
+  /* Violet scale – same as purple */
+  --color-violet-50: #f3edf9;
+  --color-violet-50-rgb: 243 237 249;
+  --color-violet-100: #e0d0f0;
+  --color-violet-100-rgb: 224 208 240;
+  --color-violet-200: #cdb3e7;
+  --color-violet-200-rgb: 205 179 231;
+  --color-violet-300: #c49ae5;
+  --color-violet-300-rgb: 196 154 229;
+  --color-violet-400: #bb8cde;
+  --color-violet-400-rgb: 187 140 222;
+  --color-violet-500: #b07cd8;
+  --color-violet-500-rgb: 176 124 216;
+  --color-violet-600: #8e63ad;
+  --color-violet-600-rgb: 142 99 173;
+  --color-violet-700: #6b4a82;
+  --color-violet-700-rgb: 107 74 130;
+  --color-violet-800: #483257;
+  --color-violet-800-rgb: 72 50 87;
+  --color-violet-900: #251a2c;
+  --color-violet-900-rgb: 37 26 44;
+  --color-violet-950: #150e1a;
+  --color-violet-950-rgb: 21 14 26;
+
+  /* Status Colors */
+  --color-status-info: var(--color-accent-blue);
+  --color-status-info-rgb: var(--color-accent-blue-rgb);
+  --color-status-success: var(--color-accent-green);
+  --color-status-success-rgb: var(--color-accent-green-rgb);
+  --color-status-warning: var(--color-accent-amber);
+  --color-status-warning-rgb: var(--color-accent-amber-rgb);
+  --color-status-error: var(--color-accent-red);
+  --color-status-error-rgb: var(--color-accent-red-rgb);
+
+  /* Diff Colors */
+  --color-diff-added-base: #2a3b2d;
+  --color-diff-removed-base: #4c2529;
+  --color-diff-modified-base: #2d3a5c;
+
+  --color-diff-added-bg: rgba(42, 59, 45, 0.35);
+  --color-diff-removed-bg: rgba(76, 37, 41, 0.35);
+  --color-diff-modified-bg: rgba(45, 58, 92, 0.35);
+
+  --color-diff-added-text-bg: rgba(42, 59, 45, 0.5);
+  --color-diff-removed-text-bg: rgba(76, 37, 41, 0.5);
+
+  --color-diff-added-gutter: rgba(42, 59, 45, 0.6);
+  --color-diff-removed-gutter: rgba(76, 37, 41, 0.6);
+
+  --color-diff-added-text: #6aab73;
+  --color-diff-removed-text: #f75464;
+  --color-diff-modified-text: #548af7;
+
+  /* Scrollbar Colors */
+  --color-scrollbar-track: rgba(14, 14, 18, 0.3);
+  --color-scrollbar-thumb: rgba(72, 75, 79, 0.5);
+  --color-scrollbar-thumb-hover: rgba(90, 94, 98, 0.7);
+
+  /* Selection Colors */
+  --color-selection-bg: rgba(45, 67, 120, 0.5);
+
+  /* Overlay Colors */
+  --color-overlay-backdrop: rgba(0, 0, 0, 0.6);
+  --color-overlay-strong: rgba(0, 0, 0, 0.8);
+  --color-overlay-light: rgba(255, 255, 255, 0.06);
+  --color-overlay-dark: rgba(0, 0, 0, 0.3);
+
+  /* Graph Colors */
+  --color-graph-reference-default: #6aab73;
+  --color-graph-reference-remote: #b07cd8;
+  --color-graph-reference-base: #be8f38;
+  --color-graph-reference-tag: #2aacb8;
+
+  /* Surface Colors */
+  --color-surface-modal: #272a2e;
+  --color-surface-modal-rgb: 39 42 46;
+
+  /* Editor Colors */
+  --color-editor-background: #181a1d;
+  --color-editor-background-rgb: 24 26 29;
+  --color-editor-text: #c4c6cc;
+  --color-editor-caret: #d0d2d8;
+  --color-editor-gutter-text: #555962;
+  --color-editor-gutter-active-text: #a8abb4;
+  --color-editor-active-line: rgba(42, 45, 49, 0.6);
+  --color-editor-inline-code-bg: rgba(60, 63, 68, 0.8);
+  --color-editor-code-block-bg: rgba(20, 20, 24, 0.5);
+  --color-editor-blockquote-border: #484b4f;
+  --color-editor-line-rule: #484b4f;
+  --color-editor-strikethrough: #8f939b;
+  --color-editor-selection: rgba(45, 67, 120, 0.5);
+  --color-editor-selection-focused: rgba(45, 67, 120, 0.7);
+  --color-editor-selection-alt: rgba(255, 255, 255, 0.04);
+  --color-editor-placeholder-border: #43454a;
+
+  /* Syntax Colors – JetBrains default scheme */
+  --color-syntax-default: #c4c6cc;
+  --color-syntax-comment: #7a7e85;
+  --color-syntax-variable: #c4c6cc;
+  --color-syntax-number: #2aacb8;
+  --color-syntax-type: #56a8f5;
+  --color-syntax-keyword: #cf8e6d;
+  --color-syntax-string: #6aab73;
+  --color-syntax-function: #56a8f5;
+  --color-syntax-operator: #c4c6cc;
+  --color-syntax-punctuation: #c4c6cc;
+  --color-syntax-tag: #cf8e6d;
+  --color-syntax-attribute: #c77dbb;
+  --color-syntax-selector: #cf8e6d;
+  --color-syntax-property: #c77dbb;
+  --color-syntax-bracket: #c4c6cc;
+  --color-syntax-class: #56a8f5;
+  --color-syntax-constant: #c77dbb;
+  --color-syntax-decorator: #bbb529;
+  --color-syntax-regex: #42c3d4;
+  --color-syntax-escape: #cf8e6d;
+  --color-syntax-emphasis: #cf8e6d;
+  --color-syntax-highlight: #c4c6cc;
+
+  /* Gray Scale – neutral charcoal */
+  --color-gray-50: #e0e2e6;
+  --color-gray-50-rgb: 224 226 230;
+  --color-gray-100: #c4c6cc;
+  --color-gray-100-rgb: 196 198 204;
+  --color-gray-200: #a8abb4;
+  --color-gray-200-rgb: 168 171 180;
+  --color-gray-300: #8f939b;
+  --color-gray-300-rgb: 143 147 155;
+  --color-gray-400: #757980;
+  --color-gray-400-rgb: 117 121 128;
+  --color-gray-500: #5e6268;
+  --color-gray-500-rgb: 94 98 104;
+  --color-gray-500-alt: #5e6268;
+  --color-gray-500-alt-rgb: 94 98 104;
+  --color-gray-600: #4b4f54;
+  --color-gray-600-rgb: 75 79 84;
+  --color-gray-700: #43464a;
+  --color-gray-700-rgb: 67 70 74;
+  --color-gray-800: #383b3f;
+  --color-gray-800-rgb: 56 59 63;
+  --color-gray-900: #181a1d;
+  --color-gray-900-rgb: 24 26 29;
+  --color-gray-950: #0e0e12;
+  --color-gray-950-rgb: 14 14 18;
+
+  --color-white: #ffffff;
+  --color-white-rgb: 255 255 255;
+
+  /* Tab Colors */
+  --color-tab-inactive-bg: transparent;
+  --color-tab-inactive-text: #8f939b;
+  --color-tab-inactive-hover-bg: rgba(42, 45, 49, 0.5);
+  --color-tab-inactive-hover-text: #a8abb4;
+  --color-tab-active-bg: rgba(24, 26, 29, 0.8);
+  --color-tab-active-text: #c4c6cc;
+  --color-tab-active-indicator: #548af7;
+  --color-tab-close-bg: transparent;
+  --color-tab-close-hover-bg: rgba(75, 79, 84, 0.6);
+  --color-tab-close-color: #6a6e74;
+  --color-tab-close-hover-color: #c4c6cc;
+  --color-tab-badge-bg: #f75464;
+  --color-tab-badge-text: #ffffff;
+  --color-tab-running-badge-bg: #3574f0;
+  --color-tab-running-badge-text: #e8effd;
+  --color-tab-running-indicator: #548af7;
+  --color-tab-running-glow: rgba(84, 138, 247, 0.3);
+
+  /* Tab Focus Colors */
+  --color-tab-focus-inactive-text: #548af7;
+  --color-tab-focus-inactive-hover-bg: rgba(84, 138, 247, 0.15);
+  --color-tab-focus-inactive-hover-text: #759cf3;
+  --color-tab-focus-active-bg: rgba(84, 138, 247, 0.25);
+  --color-tab-focus-active-text: #759cf3;
+
+  /* Icon Button Colors */
+  --icon-button-default-bg: #272a2e;
+  --icon-button-default-hover-bg: #43464a;
+  --icon-button-default-text: #c4c6cc;
+  --icon-button-default-border: transparent;
+  --icon-button-default-hover-border: transparent;
+  --icon-button-success-bg: #1e3323;
+  --icon-button-success-hover-bg: #28442d;
+  --icon-button-success-text: #6aab73;
+  --icon-button-success-border: transparent;
+  --icon-button-success-hover-border: transparent;
+  --icon-button-danger-bg: #3d1418;
+  --icon-button-danger-hover-bg: #622228;
+  --icon-button-danger-text: #f97a87;
+  --icon-button-danger-border: transparent;
+  --icon-button-danger-hover-border: transparent;
+  --icon-button-warning-bg: #332a14;
+  --icon-button-warning-hover-bg: #523e18;
+  --icon-button-warning-text: #be8f38;
+  --icon-button-warning-border: transparent;
+  --icon-button-warning-hover-border: transparent;
+
+  /* Terminal Colors – from bwya77/vscode-dark-islands + patricioarmesto */
+  --color-terminal-bg: #181a1d;
+  --color-terminal-fg: #c4c6cc;
+  --color-terminal-cursor: #c4c6cc;
+  --color-terminal-selection: #373b39;
+  --color-terminal-black: #181a1d;
+  --color-terminal-red: #f75464;
+  --color-terminal-green: #73b00a;
+  --color-terminal-yellow: #e8a33e;
+  --color-terminal-blue: #548af7;
+  --color-terminal-magenta: #c77dbb;
+  --color-terminal-cyan: #2aacb8;
+  --color-terminal-white: #c4c6cc;
+  --color-terminal-bright-black: #757980;
+  --color-terminal-bright-red: #f9667a;
+  --color-terminal-bright-green: #8ccf15;
+  --color-terminal-bright-yellow: #f0b95e;
+  --color-terminal-bright-blue: #7cacf8;
+  --color-terminal-bright-magenta: #d79fd2;
+  --color-terminal-bright-cyan: #42c6d2;
+  --color-terminal-bright-white: #d4d5d9;
+}

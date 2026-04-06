@@ -127,6 +127,18 @@ const themeOptions: ThemeOption[] = [
     },
   },
   {
+    id: 'islands-dark',
+    label: 'Islands Dark',
+    description: 'JetBrains modern dark theme (2025+)',
+    experimental: true,
+    colors: {
+      bg: '#181a1d',
+      bgSecondary: '#0e0e12',
+      text: '#c4c6cc',
+      accent: '#548af7',
+    },
+  },
+  {
     id: 'light',
     label: 'Light',
     description: 'Light theme for bright environments',
@@ -169,7 +181,7 @@ function ThemePreviewCard({
       type="button"
       onClick={onClick}
       aria-pressed={isSelected}
-      className={`flex flex-col rounded-lg transition-all overflow-hidden ${isSelected ? 'settings-binary-item-selected border-2' : 'settings-binary-item hover:bg-bg-hover'}`}
+      className={`flex flex-col rounded-lg transition-all overflow-hidden ${isSelected ? 'settings-binary-item-selected' : 'settings-binary-item hover:bg-bg-hover'}`}
       style={{ width: '140px' }}
     >
       <div
