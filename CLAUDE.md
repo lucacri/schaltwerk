@@ -22,6 +22,14 @@ Tauri-based desktop app for managing AI coding sessions using git worktrees. Eac
 ❌ WRONG: `cd /inferred/path && command`
 ✅ RIGHT: `command` (in current directory)
 
+## Lucode Workflows
+
+- Lucode-owned reusable workflows live in `.agents/skills/<name>/SKILL.md`.
+- When a task matches one of those workflows, load the shared skill first instead of reinventing the steps.
+- The MCP fallback registry is `lucode://skills`, and individual workflow bodies are available at `lucode://skills/<name>`.
+- The currently published Lucode workflow is `consolidate`.
+- Claude also ships wrapper files under `claude-plugin/`, and OpenCode exposes an optional slash command wrapper under `.opencode/commands/`, but the shared skill plus MCP resources are the cross-agent source of truth.
+
 ## System Architecture
 
 ### Core Concepts

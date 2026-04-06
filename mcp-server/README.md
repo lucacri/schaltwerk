@@ -163,6 +163,10 @@ The MCP server also exposes resources you can read:
 - `lucode://sessions` - All active sessions
 - `lucode://sessions/reviewed` - Only reviewed sessions
 - `lucode://sessions/new` - Only new (unreviewed) sessions
+- `lucode://skills` - Available Lucode workflows and native wrapper locations
+- `lucode://skills/consolidate` - Canonical consolidation workflow instructions
+
+Lucode also publishes a shared repo-scoped skill under `.agents/skills/consolidate/SKILL.md` for agents that support native skill loading, plus optional wrappers under `claude-plugin/` and `.opencode/commands/`.
 
 ## Development
 

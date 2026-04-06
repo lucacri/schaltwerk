@@ -254,5 +254,14 @@ Access session data programmatically:
 - `lucode://sessions` - Full session list with metadata
 - `lucode://sessions/reviewed` - Only reviewed sessions
 - `lucode://sessions/new` - Only unreviewed sessions
+- `lucode://skills` - Workflow registry with native agent entrypoints
+- `lucode://skills/consolidate` - Canonical consolidation workflow instructions
 
 Use these resources to build custom workflows and monitoring.
+
+## Cross-Agent Workflow Discovery
+
+- Prefer the shared Lucode skill files under `.agents/skills/` when your agent supports repo-scoped skills.
+- For Claude-specific UX, the repo also publishes wrapper files under `claude-plugin/`.
+- For OpenCode slash-command UX, the repo also publishes wrappers under `.opencode/commands/`.
+- If your agent has no native Lucode wrapper support, read `lucode://skills` first and then load the specific workflow resource you need.

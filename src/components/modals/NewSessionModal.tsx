@@ -91,6 +91,7 @@ interface Props {
         prNumber?: number
         prUrl?: string
         epicId?: string | null
+        versionGroupId?: string
         isConsolidation?: boolean
         consolidationSourceIds?: string[]
     }) => void | Promise<void>
@@ -126,6 +127,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [epicId, setEpicId] = useState<string | null>(null)
     const [isConsolidation, setIsConsolidation] = useState(false)
     const [consolidationSourceIds, setConsolidationSourceIds] = useState<string[]>([])
+    const [versionGroupId, setVersionGroupId] = useState<string | undefined>(undefined)
     const [prefillPrNumber, setPrefillPrNumber] = useState<number | null>(null)
     const [prefillPrUrl, setPrefillPrUrl] = useState<string | null>(null)
     const [prefillIssueNumber, setPrefillIssueNumber] = useState<number | null>(null)
@@ -676,6 +678,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 skipPermissions: createAsDraft ? skipPermissions : (usePreset ? undefined : skipPermissions),
                 autonomyEnabled: createAsDraft ? undefined : (usePreset ? undefined : effectiveAutonomyEnabled),
                 epicId,
+                versionGroupId,
                 ...issueInfo,
                 ...prInfo,
                 ...(isConsolidation ? { isConsolidation: true, consolidationSourceIds } : {}),
@@ -712,7 +715,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setValidationError(errorMessage)
             setCreating(false)
         }
-    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, selectedPresetId, agentPresetsList, prefillPrNumber, prefillPrUrl, prefillIssueNumber, prefillIssueUrl])
+    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, versionGroupId, selectedPresetId, agentPresetsList, prefillPrNumber, prefillPrUrl, prefillIssueNumber, prefillIssueUrl])
 
     // Keep ref in sync immediately on render to avoid stale closures in tests
     createRef.current = () => { void handleCreate() }
@@ -973,6 +976,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 setEpicId(null)
                 setIsConsolidation(false)
                 setConsolidationSourceIds([])
+                setVersionGroupId(undefined)
                 setPrefillPrNumber(null)
                 setPrefillPrUrl(null)
                 setPrefillIssueNumber(null)
@@ -1076,6 +1080,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setShowVersionMenu(false)
             setIsConsolidation(false)
             setConsolidationSourceIds([])
+            setVersionGroupId(undefined)
             setPrefillPrNumber(null)
             setPrefillPrUrl(null)
             setPrefillIssueNumber(null)
@@ -1151,6 +1156,9 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                  logger.info('[NewSessionModal] Running from existing spec - forcing createAsDraft to false')
                  setCreateAsDraft(false)
              }
+            if (detail.versionGroupId) {
+                setVersionGroupId(detail.versionGroupId)
+            }
             if (detail.isConsolidation) {
                 setIsConsolidation(true)
             }
@@ -1193,6 +1201,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setIsPrefillPending(true)
             setIsConsolidation(false)
             setConsolidationSourceIds([])
+            setVersionGroupId(undefined)
         }
         
         const cleanupPrefill = listenUiEvent(UiEvent.NewSessionPrefill, prefillHandler)

@@ -12,6 +12,7 @@ import {
   CallToolRequest,
 } from "@modelcontextprotocol/sdk/types.js"
 import { LucodeBridge, Session, MergeModeOption, PrFeedbackPayload } from "./lucode-bridge.js"
+import { listLucodeWorkflows, readLucodeWorkflowMarkdown } from "./lucode-workflows.js"
 import { toolOutputSchemas } from "./schemas.js"
 
 const DEFAULT_AGENT = 'claude'
@@ -1843,8 +1844,21 @@ ${cancelLine}`
 })
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  const workflowResources = listLucodeWorkflows().map(workflow => ({
+    uri: workflow.resource_uri,
+    name: workflow.title,
+    description: workflow.description,
+    mimeType: 'text/markdown',
+  }))
+
   return {
     resources: [
+      {
+        uri: "lucode://skills",
+        name: "Lucode Workflows",
+        description: "Registry of Lucode workflow resources and native agent entrypoints",
+        mimeType: "application/json"
+      },
       {
         uri: "lucode://sessions",
         name: "Lucode Sessions",
@@ -1886,7 +1900,8 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
         name: "Diff Chunk",
         description: "Diff chunk; add query ?path=<file>&session=<name>&cursor=<c>&line_limit=<n>",
         mimeType: "application/json"
-      }
+      },
+      ...workflowResources,
     ]
   }
 })
@@ -1906,6 +1921,11 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request: { params: { 
     }
 
     switch (uri) {
+      case "lucode://skills": {
+        content = JSON.stringify(listLucodeWorkflows(), null, 2)
+        break
+      }
+
       case "lucode://sessions": {
         const sessions = await bridge.listSessions()
         content = JSON.stringify(sessions, null, 2)
@@ -1967,6 +1987,29 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request: { params: { 
       }
 
       default: {
+        const workflowMatch = uri.match(/^lucode:\/\/skills\/(.+)$/)
+        if (workflowMatch) {
+          const workflowName = workflowMatch[1]
+
+          let workflowMarkdown: string
+          try {
+            workflowMarkdown = readLucodeWorkflowMarkdown(workflowName)
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            throw new McpError(ErrorCode.InvalidRequest, errorMessage)
+          }
+
+          return {
+            contents: [
+              {
+                uri,
+                mimeType: "text/markdown",
+                text: workflowMarkdown
+              }
+            ]
+          }
+        }
+
         // Check if it's a specific spec content request
         const draftMatch = uri.match(/^lucode:\/\/specs\/(.+)$/)
         if (draftMatch) {
@@ -2003,6 +2046,10 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request: { params: { 
       ]
     }
   } catch (error: unknown) {
+    if (error instanceof McpError) {
+      throw error
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error)
     throw new McpError(ErrorCode.InternalError, `Resource read failed: ${errorMessage}`)
   }

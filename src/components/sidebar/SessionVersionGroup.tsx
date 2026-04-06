@@ -140,13 +140,15 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     v => selection.kind === 'session' && selection.payload === v.session.info.session_id
   )
   const hasSelectedVersion = !!selectedVersionInGroup
+  const hasConsolidationVersion = group.versions.some(v => v.session.info.is_consolidation)
+  const sourceVersions = group.versions.filter(v => !v.session.info.is_consolidation)
 
   const hasMultipleVersions = group.versions.length >= 2
-  const runningOrReviewedCount = group.versions.filter(v => {
+  const runningOrReviewedCount = sourceVersions.filter(v => {
     const state = v.session.info.session_state
     return state === 'running' || state === 'reviewed'
   }).length
-  const canConsolidate = runningOrReviewedCount >= 2
+  const canConsolidate = !hasConsolidationVersion && runningOrReviewedCount >= 2
   const hasRunning = group.versions.some(v => v.session.info.session_state === 'running')
   const maxTagLength = Math.max(
     ...group.versions.map(v => {

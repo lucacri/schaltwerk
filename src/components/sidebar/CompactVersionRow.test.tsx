@@ -198,4 +198,19 @@ describe('CompactVersionRow', () => {
 
     expect(screen.getByText('v2 · kilocode')).toBeInTheDocument()
   })
+
+  it('renders consolidation sessions with a merge badge instead of a duplicate version label', () => {
+    renderRow({
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          is_consolidation: true,
+        },
+      },
+    })
+
+    expect(screen.getByText('merge · claude')).toBeInTheDocument()
+    expect(screen.queryByText('v2 · claude')).toBeNull()
+  })
 })

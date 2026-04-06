@@ -179,6 +179,48 @@ describe('SessionVersionGroup status summary', () => {
     expect(onConsolidate).toHaveBeenCalledTimes(1)
   })
 
+  it('disables consolidate button when the group already contains a consolidation session', () => {
+    const onConsolidate = vi.fn()
+    const consolidatedGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'running' }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'reviewed' }),
+        createVersion({
+          id: 'feature-A-consolidation',
+          sessionState: 'running',
+        }),
+      ].map((version, index) => index === 2
+        ? {
+            ...version,
+            session: {
+              ...version.session,
+              info: {
+                ...version.session.info,
+                is_consolidation: true,
+              },
+            },
+          }
+        : version),
+    }
+
+    const { getByTestId } = render(
+      <SessionVersionGroup
+        group={consolidatedGroup}
+        selection={{ kind: 'session', payload: 'unrelated' }}
+        startIndex={0}
+        onConsolidate={onConsolidate}
+        {...requiredCallbacks}
+      />
+    )
+
+    const button = getByTestId('consolidate-versions-button')
+    expect(button).toBeDisabled()
+
+    fireEvent.click(button)
+    expect(onConsolidate).not.toHaveBeenCalled()
+  })
+
   it('shows terminate-all button only when running sessions exist', () => {
     const onTerminateAll = vi.fn()
 

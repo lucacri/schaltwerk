@@ -65,8 +65,22 @@ const getServer = () => {
 const callTool = async (name: string, args: Record<string, unknown> = {}) => {
   const { CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
   const server = getServer()
-  const handler = server.handlers.get(CallToolRequestSchema)
+  const handler = server.handlers.get(CallToolRequestSchema)!
   return handler({ params: { name, arguments: args } })
+}
+
+const listResources = async () => {
+  const { ListResourcesRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
+  const server = getServer()
+  const handler = server.handlers.get(ListResourcesRequestSchema)!
+  return handler()
+}
+
+const readResource = async (uri: string) => {
+  const { ReadResourceRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
+  const server = getServer()
+  const handler = server.handlers.get(ReadResourceRequestSchema)!
+  return handler({ params: { uri } })
 }
 
 const mockProjectPath = '/tmp/mock-project-tool-handlers'
@@ -575,6 +589,49 @@ describe('MCP tool handler logic', () => {
 
     it('rejects missing session_name', async () => {
       await expect(callTool('lucode_get_pr_feedback', {})).rejects.toThrow("'session_name' is required")
+    })
+  })
+
+  describe('skill resources', () => {
+    it('lists Lucode skill resources for workflow discovery', async () => {
+      const result = await listResources()
+
+      expect(result.resources).toEqual(expect.arrayContaining([
+        expect.objectContaining({ uri: 'lucode://skills' }),
+        expect.objectContaining({ uri: 'lucode://skills/consolidate' }),
+      ]))
+    })
+
+    it('reads the Lucode skill registry resource', async () => {
+      const result = await readResource('lucode://skills')
+      const json = result.contents.find((content: any) => content.mimeType === 'application/json')
+
+      expect(json).toBeDefined()
+      expect(JSON.parse(json.text)).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          name: 'consolidate',
+          native_entrypoints: expect.objectContaining({
+            shared: '.agents/skills/consolidate/SKILL.md',
+            codex: '.codex/skills/consolidate/SKILL.md',
+            opencode: '.opencode/commands/consolidate.md',
+          }),
+        }),
+      ]))
+    })
+
+    it('reads the consolidate skill markdown resource', async () => {
+      const result = await readResource('lucode://skills/consolidate')
+      const markdown = result.contents.find((content: any) => content.mimeType === 'text/markdown')
+
+      expect(markdown).toBeDefined()
+      expect(markdown.text).toContain('lucode_promote')
+      expect(markdown.text).not.toContain('/lucode:consolidate')
+    })
+
+    it('rejects unknown Lucode workflow resources as invalid requests', async () => {
+      await expect(readResource('lucode://skills/missing-workflow')).rejects.toMatchObject({
+        code: 'INVALID_REQUEST',
+      })
     })
   })
 

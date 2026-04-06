@@ -184,6 +184,7 @@ type OnCreatePayload = {
   epicId?: string | null
   isConsolidation?: boolean
   consolidationSourceIds?: string[]
+  versionGroupId?: string
 }
 
 type OnCreateFn = (data: OnCreatePayload) => Promise<void>
@@ -1723,6 +1724,56 @@ describe('validatePanelPercentage', () => {
     invokeMock.mockImplementation(defaultInvokeImpl)
   })
 
+  it('forwards an explicit version group id for consolidation session creation', async () => {
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    const modalCall = newSessionModalMock.mock.calls.at(-1)
+    expect(modalCall).toBeTruthy()
+    const modalProps = modalCall![0] as { onCreate: OnCreateFn }
+
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        expect(args).toEqual(expect.objectContaining({
+          isConsolidation: true,
+          consolidationSourceIds: ['session-a', 'session-b'],
+          versionGroupId: 'group-123',
+        }))
+
+        return buildRawSession('feature-consolidation')
+      }
+
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await modalProps.onCreate({
+      name: 'feature-consolidation',
+      prompt: 'Consolidate these sessions',
+      baseBranch: 'main',
+      agentType: 'claude',
+      isConsolidation: true,
+      consolidationSourceIds: ['session-a', 'session-b'],
+      versionGroupId: 'group-123',
+    })
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      TauriCommands.SchaltwerkCoreCreateSession,
+      expect.objectContaining({
+        isConsolidation: true,
+        consolidationSourceIds: ['session-a', 'session-b'],
+        versionGroupId: 'group-123',
+      })
+    )
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
   it('opens modal with prefilled PR session data on contextual action', async () => {
     mockState.isGitRepo = true
     await renderApp()
@@ -1922,6 +1973,69 @@ describe('validatePanelPercentage', () => {
       lockName: true,
       prNumber: 256,
       prUrl: 'https://github.com/example/repo/pull/256',
+    }))
+
+    cleanup()
+  })
+
+  it('prefills consolidation sessions with the source version group id', async () => {
+    mockState.isGitRepo = true
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    newSessionModalMock.mockClear()
+
+    let prefillDetail: Record<string, unknown> | undefined
+    const cleanup = listenUiEvent(UiEvent.NewSessionPrefill, (detail) => {
+      prefillDetail = detail as unknown as Record<string, unknown>
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.ConsolidateVersionGroup, {
+        baseName: 'feature-auth',
+        baseBranch: 'main',
+        versionGroupId: 'group-789',
+        epicId: 'epic-1',
+        sessions: [
+          {
+            id: 'session-1',
+            name: 'feature-auth_v1',
+            branch: 'lucode/feature-auth_v1',
+            worktreePath: '/tmp/feature-auth_v1',
+          },
+          {
+            id: 'session-2',
+            name: 'feature-auth_v2',
+            branch: 'lucode/feature-auth_v2',
+            worktreePath: '/tmp/feature-auth_v2',
+          },
+        ],
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      const props = newSessionModalMock.mock.calls.at(-1)?.[0] as { open: boolean; initialIsDraft: boolean }
+      expect(props.open).toBe(true)
+      expect(props.initialIsDraft).toBe(false)
+    })
+
+    await act(async () => {
+      await new Promise(resolve => requestAnimationFrame(resolve))
+    })
+
+    expect(prefillDetail).toEqual(expect.objectContaining({
+      name: 'feature-auth-consolidation',
+      baseBranch: 'main',
+      epicId: 'epic-1',
+      isConsolidation: true,
+      consolidationSourceIds: ['session-1', 'session-2'],
+      versionGroupId: 'group-789',
     }))
 
     cleanup()

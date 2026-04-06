@@ -107,6 +107,7 @@ export interface NewSessionPrefillDetail {
   name?: string
   taskContent?: string
   baseBranch?: string
+  versionGroupId?: string
   lockName?: boolean
   fromDraft?: boolean
   originalSpecName?: string

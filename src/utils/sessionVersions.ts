@@ -67,6 +67,7 @@ export function groupSessionsByVersion(sessions: EnrichedSession[]): SessionVers
   for (const session of sessions) {
     const sessionName = session.info.session_id
     const displayName = session.info.display_name
+
     const hasDbGroup = !!session.info.version_group_id
     const groupKey = hasDbGroup ? session.info.version_group_id! : getBaseSessionName(sessionName)
     const versionNumber = session.info.version_number ?? parseVersionFromSessionName(sessionName)

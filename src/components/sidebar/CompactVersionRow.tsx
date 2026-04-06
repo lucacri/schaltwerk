@@ -116,6 +116,11 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   const commitsAheadCount = s.commits_ahead_count ?? 0
   const agentType = s.original_agent_type as SessionInfo['original_agent_type']
   const agentKey = (agentType || '').toLowerCase()
+  const versionLabel = s.is_consolidation
+    ? `merge · ${agentKey}`
+    : s.version_number
+      ? `v${s.version_number} · ${agentKey}`
+      : agentKey
 
   const agentColor = getAgentColorKey(agentKey)
   const colorScheme = getAgentColorScheme(agentColor)
@@ -338,7 +343,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                       className="w-1 h-1 rounded-full"
                       style={{ backgroundColor: colorScheme.DEFAULT }}
                     />
-                    {s.version_number ? `v${s.version_number} · ${agentKey}` : agentKey}
+                    {versionLabel}
                   </span>
                 )}
                 {showDirtyIndicator ? (

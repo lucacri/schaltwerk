@@ -13,15 +13,15 @@ Sessions to review:
 {sessionList}
 
 Instructions:
-1. Read the diff for each session branch (git diff main...{branch})
-2. Compare the approaches taken by each agent
-3. Choose the best base implementation — you MUST apply changes into
-   one of the existing versioned session worktrees listed above
-4. Incorporate any valuable improvements from the other versions
-5. Run the project's test suite to verify everything passes
-6. Create a single squashed commit with the consolidated result
-7. Call lucode_promote on the chosen session — this cleans up siblings
-   automatically. Do NOT work in a separate consolidation session."#
+0. Load the Lucode consolidate workflow from your native Lucode wrapper if available, or read the MCP resource lucode://skills/consolidate before making consolidation decisions
+1. Lucode already created this dedicated consolidation session and linked it to the source version group
+2. Read the diff for each session branch (git diff main...{branch})
+3. Compare the approaches taken by each agent
+4. Apply the best base implementation into your current consolidation session branch
+5. Incorporate any valuable improvements from the other versions
+6. Run the project's test suite to verify everything passes
+7. Create a single squashed commit with the consolidated result
+8. Call lucode_promote on the current consolidation session — this cleans up the source versions automatically."#
         .to_string()
 }
 
@@ -65,14 +65,16 @@ pub fn default_autonomy_prompt_template() -> String {
 
 Use the full superpowers workflow autonomously -- no human interaction required.
 
-- Brainstorm (/superpowers:brainstorming) before implementation to validate the approach
-- Plan (/superpowers:writing-plans) to break down the work into steps
-- TDD (/superpowers:test-driven-development) -- write tests first, then implement
-- Execute (/superpowers:executing-plans) the plan with review checkpoints
-- Verify (/superpowers:verification-before-completion) -- run the project's test suite and confirm all green before claiming done
-- Code review (/superpowers:requesting-code-review) when implementation is complete
+- Brainstorm with the `brainstorming` skill/workflow before implementation to validate the approach
+- Plan with `writing-plans` to break down the work into steps
+- Use `test-driven-development` -- write tests first, then implement
+- Execute with `executing-plans` when the plan is ready
+- Verify with `verification-before-completion` -- run the project's test suite and confirm all green before claiming done
+- Request code review with `requesting-code-review` when implementation is complete
 
-If you have questions or uncertainty during any step, do not ask the user -- research the codebase yourself or use /mart-panda:consult:quick to get AI advice. Resolve ambiguity autonomously.
+If your platform supports skills, load them by name. Otherwise, read the matching workflow instructions from the repo before continuing.
+
+If you have questions or uncertainty during any step, do not ask the user -- research the codebase yourself or use any available consultation or research tool to resolve ambiguity autonomously.
 
 Complete the work by creating a squashed commit"#
         .to_string()

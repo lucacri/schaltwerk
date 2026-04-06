@@ -361,6 +361,22 @@ fn sort_sessions_for_promotion(sessions: &mut [Session]) {
 fn find_promotion_siblings(manager: &SessionManager, session: &Session) -> anyhow::Result<Vec<Session>> {
     let all_sessions = manager.list_sessions()?;
 
+    if session.is_consolidation && let Some(source_ids) = session.consolidation_sources.as_ref() {
+        let mut siblings = all_sessions
+            .iter()
+            .filter(|candidate| {
+                candidate.status == SessionStatus::Active
+                    && source_ids.iter().any(|source_id| source_id == &candidate.id)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if !siblings.is_empty() {
+            sort_sessions_for_promotion(&mut siblings);
+            return Ok(siblings);
+        }
+    }
+
     let mut siblings = if let Some(group_id) = session.version_group_id.as_deref() {
         all_sessions
             .iter()
@@ -1494,6 +1510,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn promote_session_logic_uses_consolidation_sources_without_version_group_id() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let v1 = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, None, Some(1))
+            .expect("create v1");
+        let v2 = manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, None, Some(2))
+            .expect("create v2");
+        manager
+            .create_session_with_agent(lucode::domains::sessions::service::SessionCreationParams {
+                name: "feature-consolidation",
+                prompt: None,
+                base_branch: None,
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: None,
+                version_number: None,
+                epic_id: None,
+                agent_type: None,
+                skip_permissions: None,
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+            })
+            .expect("create consolidation session");
+
+        let outcome = execute_session_promotion(
+            &manager,
+            "feature-consolidation",
+            "Merged the best ideas from both source sessions",
+            || Ok(()),
+            |_| std::future::ready(Ok(())),
+        )
+        .await
+        .expect("promotion should succeed");
+
+        assert_eq!(outcome.status, StatusCode::OK);
+        assert_eq!(outcome.response.siblings_cancelled, vec![v1.name, v2.name]);
+    }
+
+    #[tokio::test]
     async fn promote_session_logic_rejects_session_without_siblings() {
         let (_tmp, repo_path) = init_test_repo();
         let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
@@ -2165,6 +2226,28 @@ async fn create_session(
     let agent_type = payload["agent_type"].as_str().map(|s| s.to_string());
     let skip_permissions = payload["skip_permissions"].as_bool();
     let epic_id = payload["epic_id"].as_str().map(|s| s.to_string());
+    let version_group_id = payload["versionGroupId"]
+        .as_str()
+        .or_else(|| payload["version_group_id"].as_str())
+        .map(|s| s.to_string());
+    let version_number = payload["versionNumber"]
+        .as_i64()
+        .or_else(|| payload["version_number"].as_i64())
+        .map(|n| n as i32);
+    let is_consolidation = payload["isConsolidation"]
+        .as_bool()
+        .or_else(|| payload["is_consolidation"].as_bool())
+        .unwrap_or(false);
+    let consolidation_source_ids = payload["consolidationSourceIds"]
+        .as_array()
+        .or_else(|| payload["consolidation_source_ids"].as_array())
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|value| value.as_str().map(|s| s.to_string()))
+                .collect::<Vec<_>>()
+        })
+        .filter(|values| !values.is_empty());
     let issue_number = payload["issueNumber"]
         .as_i64()
         .or_else(|| payload["issue_number"].as_i64());
@@ -2206,14 +2289,14 @@ async fn create_session(
         use_existing_branch,
         sync_with_origin: use_existing_branch,
         was_auto_generated,
-        version_group_id: None,
-        version_number: None,
+        version_group_id: version_group_id.as_deref(),
+        version_number,
         epic_id: epic_id.as_deref(),
         agent_type: agent_type.as_deref(),
         skip_permissions,
         pr_number,
-        is_consolidation: false,
-        consolidation_source_ids: None,
+        is_consolidation,
+        consolidation_source_ids,
     };
 
     match manager.create_session_with_agent(params) {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriCommands } from '../../common/tauriCommands'
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
-import { Sidebar } from './Sidebar'
+import { Sidebar, buildConsolidationGroupDetail } from './Sidebar'
 import { TestProviders } from '../../tests/test-utils'
 import * as uiEvents from '../../common/uiEvents'
 import { UiEvent, type SessionActionDetail } from '../../common/uiEvents'
@@ -41,7 +41,7 @@ describe('Sidebar status indicators and actions', () => {
       if (cmd === TauriCommands.TerminalExists) return false
       if (cmd === TauriCommands.CreateTerminal) return true
       if (cmd === TauriCommands.GetProjectSessionsSettings) {
-        return { filter_mode: 'running', sort_mode: 'name' }
+        return { filter_mode: 'all', sort_mode: 'name' }
       }
       if (cmd === TauriCommands.SetProjectSessionsSettings) {
         return undefined
@@ -214,6 +214,55 @@ describe('Sidebar status indicators and actions', () => {
     await waitFor(() => {
       expect(eventSpy).toHaveBeenCalled()
     })
+  })
+
+  it('uses the name-based group id when consolidating sessions without a stored version group id', () => {
+    const detail = buildConsolidationGroupDetail({
+      id: 'feature',
+      baseName: 'feature',
+      isVersionGroup: true,
+      versions: [
+        {
+          versionNumber: 1,
+          session: {
+            info: {
+              session_id: 'feature_v1',
+              branch: 'para/feature_v1',
+              worktree_path: '/p/feature_v1',
+              base_branch: 'main',
+              status: 'active',
+              is_current: false,
+              session_type: 'worktree',
+              ready_to_merge: false,
+              session_state: 'running',
+            },
+            terminals: [],
+          },
+        },
+        {
+          versionNumber: 2,
+          session: {
+            info: {
+              session_id: 'feature_v2',
+              branch: 'para/feature_v2',
+              worktree_path: '/p/feature_v2',
+              base_branch: 'main',
+              status: 'active',
+              is_current: false,
+              session_type: 'worktree',
+              ready_to_merge: true,
+              session_state: 'reviewed',
+            },
+            terminals: [],
+          },
+        },
+      ],
+    })
+
+    expect(detail).toEqual(expect.objectContaining({
+      baseName: 'feature',
+      versionGroupId: 'feature',
+    }))
   })
 
   it('emits delete-spec session action when clicking delete on a spec', async () => {

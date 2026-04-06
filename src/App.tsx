@@ -1626,7 +1626,7 @@ function AppContent() {
   useEffect(() => {
     return listenUiEvent(UiEvent.ConsolidateVersionGroup, (detail: ConsolidateVersionGroupDetail) => {
       void (async () => {
-        const { baseName, baseBranch, epicId: groupEpicId, sessions } = detail
+        const { baseName, baseBranch, versionGroupId, epicId: groupEpicId, sessions } = detail
 
         const sessionList = sessions.map(s => {
           const stats = s.diffStats
@@ -1649,6 +1649,7 @@ function AppContent() {
             name: `${baseName}-consolidation`,
             taskContent: prompt,
             baseBranch,
+            versionGroupId,
             lockName: false,
             isConsolidation: true,
             epicId: groupEpicId,
@@ -1809,6 +1810,7 @@ function AppContent() {
     prNumber?: number
     prUrl?: string
     epicId?: string | null
+    versionGroupId?: string
     isConsolidation?: boolean
     consolidationSourceIds?: string[]
     }) => {
@@ -1865,7 +1867,8 @@ function AppContent() {
           // Create all versions first
           const createdSessions: Array<{ name: string; agentType: string | null | undefined }> = []
           // Generate a stable group id for DB linkage
-          const versionGroupId = (globalThis.crypto && 'randomUUID' in globalThis.crypto) ? (globalThis.crypto as Crypto & { randomUUID(): string }).randomUUID() : `${baseName}-${Date.now()}`
+          const versionGroupId = data.versionGroupId
+            ?? ((globalThis.crypto && 'randomUUID' in globalThis.crypto) ? (globalThis.crypto as Crypto & { randomUUID(): string }).randomUUID() : `${baseName}-${Date.now()}`)
           for (let i = 1; i <= count; i++) {
             // All versions get _v{N} suffix when creating multiple
             const versionName = count === 1 ? baseName : `${baseName}_v${i}`

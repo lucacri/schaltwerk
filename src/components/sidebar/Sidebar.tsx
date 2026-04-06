@@ -116,6 +116,35 @@ const epicForVersionGroup = (group: SessionVersionGroupType): Epic | null => {
     return epics[0] ?? null
 }
 
+export const buildConsolidationGroupDetail = (group: SessionVersionGroupType) => {
+    const sourceVersions = group.versions.filter(version => !version.session.info.is_consolidation)
+    const firstSession = sourceVersions[0]?.session?.info
+    if (!firstSession) {
+        return null
+    }
+
+    const groupEpicId = sourceVersions.find(version => version.session.info.epic?.id)?.session.info.epic?.id ?? null
+
+    return {
+        baseName: group.baseName,
+        baseBranch: firstSession.base_branch,
+        versionGroupId: firstSession.version_group_id ?? group.id,
+        epicId: groupEpicId,
+        sessions: sourceVersions.map(version => ({
+            id: version.session.info.session_id,
+            name: version.session.info.session_id,
+            branch: version.session.info.branch,
+            worktreePath: version.session.info.worktree_path,
+            agentType: version.session.info.original_agent_type ?? undefined,
+            diffStats: version.session.info.diff_stats ? {
+                files_changed: version.session.info.diff_stats.files_changed,
+                additions: version.session.info.diff_stats.additions,
+                deletions: version.session.info.diff_stats.deletions,
+            } : undefined,
+        })),
+    }
+}
+
 const groupVersionGroupsByEpic = (sessionGroups: SessionVersionGroupType[]): EpicGroupingResult => {
     const groupsByEpicId = new Map<string, EpicVersionGroup>()
     const ungroupedGroups: SessionVersionGroupType[] = []
@@ -1970,27 +1999,10 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                         onRename={handleRenameSession}
                                         onLinkPr={(sessionId, prNumber, prUrl) => { void handleLinkPr(sessionId, prNumber, prUrl) }}
                                         onConsolidate={(group) => {
-                                            const firstSession = group.versions[0]?.session?.info
-                                            if (!firstSession) return
-                                            const groupEpicId = group.versions.find(v => v.session.info.epic?.id)?.session.info.epic?.id ?? null
-                                            emitUiEvent(UiEvent.ConsolidateVersionGroup, {
-                                                baseName: group.baseName,
-                                                baseBranch: firstSession.base_branch,
-                                                versionGroupId: firstSession.version_group_id ?? '',
-                                                epicId: groupEpicId,
-                                                sessions: group.versions.map(v => ({
-                                                    id: v.session.info.session_id,
-                                                    name: v.session.info.session_id,
-                                                    branch: v.session.info.branch,
-                                                    worktreePath: v.session.info.worktree_path,
-                                                    agentType: v.session.info.original_agent_type ?? undefined,
-                                                    diffStats: v.session.info.diff_stats ? {
-                                                        files_changed: v.session.info.diff_stats.files_changed,
-                                                        additions: v.session.info.diff_stats.additions,
-                                                        deletions: v.session.info.diff_stats.deletions,
-                                                    } : undefined,
-                                                })),
-                                            })
+                                            const detail = buildConsolidationGroupDetail(group)
+                                            if (detail) {
+                                                emitUiEvent(UiEvent.ConsolidateVersionGroup, detail)
+                                            }
                                         }}
                                         onTerminateAll={(group) => {
                                             const runningSessions = group.versions
