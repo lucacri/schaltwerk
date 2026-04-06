@@ -45,6 +45,7 @@ export const TauriCommands = {
   ForgeApprovePr: 'forge_approve_pr',
   ForgeMergePr: 'forge_merge_pr',
   ForgeCommentOnPr: 'forge_comment_on_pr',
+  ForgeProxyImage: 'forge_proxy_image',
   CreateNewProject: 'create_new_project',
   CreateRunTerminal: 'create_run_terminal',
   CreateTerminal: 'create_terminal',

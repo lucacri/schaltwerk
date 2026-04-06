@@ -65,6 +65,27 @@ impl std::error::Error for GitlabCliError {
     }
 }
 
+fn normalize_gitlab_markdown_assets(text: &str, hostname: &str, project_path: &str) -> String {
+    if text.is_empty() {
+        return String::new();
+    }
+
+    let trimmed_project = project_path.trim_matches('/');
+    let uploads_base = format!("https://{hostname}/{trimmed_project}/-/uploads/");
+    let replacements = [
+        ("(/uploads/", format!("({uploads_base}")),
+        ("(/-/uploads/", format!("({uploads_base}")),
+        ("\"/uploads/", format!("\"{uploads_base}")),
+        ("\"/-/uploads/", format!("\"{uploads_base}")),
+    ];
+
+    let mut output = text.to_string();
+    for (needle, replacement) in replacements {
+        output = output.replace(needle, &replacement);
+    }
+    output
+}
+
 impl From<serde_json::Error> for GitlabCliError {
     fn from(value: serde_json::Error) -> Self {
         GitlabCliError::Json(value)
@@ -364,6 +385,36 @@ impl<R: CommandRunner> GitlabCli<R> {
         })
     }
 
+    pub fn get_auth_token(
+        &self,
+        hostname: Option<&str>,
+    ) -> Result<String, GitlabCliError> {
+        let mut args_vec = vec!["auth".to_string(), "token".to_string()];
+        if let Some(host) = hostname {
+            args_vec.push("--hostname".to_string());
+            args_vec.push(host.to_string());
+        }
+
+        let env = [("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, None, &env)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        let token = output.stdout.trim().to_string();
+        if token.is_empty() {
+            return Err(GitlabCliError::InvalidOutput(
+                "glab auth token returned empty output".to_string(),
+            ));
+        }
+        Ok(token)
+    }
+
     pub fn search_issues(
         &self,
         project_path: &Path,
@@ -475,7 +526,7 @@ impl<R: CommandRunner> GitlabCli<R> {
         }
 
         let clean_output = strip_ansi_codes(&output.stdout);
-        let details: GitlabIssueDetails =
+        let mut details: GitlabIssueDetails =
             serde_json::from_str(clean_output.trim()).map_err(|err| {
                 log::error!(
                     "[GitlabCli] Failed to parse issue detail response: {err}; raw={}",
@@ -486,6 +537,15 @@ impl<R: CommandRunner> GitlabCli<R> {
                         .to_string(),
                 )
             })?;
+
+        let host = hostname.unwrap_or("gitlab.com");
+        if let Some(description) = details.description.take() {
+            details.description =
+                Some(normalize_gitlab_markdown_assets(&description, host, gitlab_project));
+        }
+        for note in &mut details.notes {
+            note.body = normalize_gitlab_markdown_assets(&note.body, host, gitlab_project);
+        }
 
         Ok(details)
     }
@@ -601,7 +661,7 @@ impl<R: CommandRunner> GitlabCli<R> {
         }
 
         let clean_output = strip_ansi_codes(&output.stdout);
-        let details: GitlabMrDetails =
+        let mut details: GitlabMrDetails =
             serde_json::from_str(clean_output.trim()).map_err(|err| {
                 log::error!(
                     "[GitlabCli] Failed to parse MR detail response: {err}; raw={}",
@@ -612,6 +672,15 @@ impl<R: CommandRunner> GitlabCli<R> {
                         .to_string(),
                 )
             })?;
+
+        let host = hostname.unwrap_or("gitlab.com");
+        if let Some(description) = details.description.take() {
+            details.description =
+                Some(normalize_gitlab_markdown_assets(&description, host, gitlab_project));
+        }
+        for note in &mut details.notes {
+            note.body = normalize_gitlab_markdown_assets(&note.body, host, gitlab_project);
+        }
 
         Ok(details)
     }
@@ -2953,5 +3022,75 @@ mod tests {
 
         let result = ensure_git_remote(&runner, Path::new("/tmp/repo"));
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn get_auth_token_returns_token_on_success() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: "glpat-xxxxxxxxxxxxxxxxxxxx\n".to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+        let token = cli.get_auth_token(Some("gitlab.example.com")).unwrap();
+        assert_eq!(token, "glpat-xxxxxxxxxxxxxxxxxxxx");
+    }
+
+    #[test]
+    fn get_auth_token_returns_error_on_failure() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(1),
+            stdout: String::new(),
+            stderr: "no token found".to_string(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+        let result = cli.get_auth_token(Some("gitlab.example.com"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn get_auth_token_returns_error_on_empty_output() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: "\n".to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+        let result = cli.get_auth_token(None);
+        assert!(result.is_err());
+        match result {
+            Err(GitlabCliError::InvalidOutput(msg)) => assert!(msg.contains("empty")),
+            other => panic!("Expected InvalidOutput error, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn normalize_gitlab_markdown_rewrites_relative_uploads() {
+        let text = "![diagram](/uploads/hash/file.png)";
+        let normalized = normalize_gitlab_markdown_assets(text, "gitlab.com", "group/project");
+        assert!(normalized.contains("https://gitlab.com/group/project/-/uploads/hash/file.png"));
+    }
+
+    #[test]
+    fn normalize_gitlab_markdown_rewrites_dash_uploads() {
+        let text = "![diagram](/-/uploads/hash/file.png)";
+        let normalized = normalize_gitlab_markdown_assets(text, "gitlab.com", "group/project");
+        assert!(normalized.contains("https://gitlab.com/group/project/-/uploads/hash/file.png"));
+    }
+
+    #[test]
+    fn normalize_gitlab_markdown_keeps_non_gitlab_links() {
+        let text = "![diagram](https://example.com/image.png)";
+        let normalized = normalize_gitlab_markdown_assets(text, "gitlab.com", "group/project");
+        assert_eq!(normalized, text);
+    }
+
+    #[test]
+    fn normalize_gitlab_markdown_handles_empty_input() {
+        let normalized = normalize_gitlab_markdown_assets("", "gitlab.com", "group/project");
+        assert_eq!(normalized, "");
     }
 }

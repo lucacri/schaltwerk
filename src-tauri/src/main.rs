@@ -1236,6 +1236,7 @@ fn main() {
             forge_approve_pr,
             forge_merge_pr,
             forge_comment_on_pr,
+            forge_proxy_image,
             // GitLab commands (TODO: remove after frontend migration to forge_* commands)
             gitlab_get_status,
             gitlab_search_issues,

@@ -14,6 +14,8 @@ use lucode::services::{log_diagnostics, ConnectionVerdict};
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::services::MergeMode;
 use lucode::shared::session_metadata_gateway::SessionMetadataGateway;
+use base64::Engine;
+use lucode::domains::git::service::GitlabCli;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
@@ -501,6 +503,66 @@ pub async fn forge_comment_on_pr(
             error!("Forge PR comment failed: {err}");
             Err(handle_connection_failure(&app, err, hostname_hint, None))
         }
+    }
+}
+
+#[tauri::command]
+pub async fn forge_proxy_image(
+    image_url: String,
+    forge_type: String,
+    hostname: Option<String>,
+) -> Result<String, String> {
+    if forge_type != "gitlab" {
+        return Err("Image proxy only supported for GitLab".into());
+    }
+
+    let cli = GitlabCli::new();
+    let token = cli
+        .get_auth_token(hostname.as_deref())
+        .map_err(|e| format!("Failed to get GitLab token: {e}"))?;
+
+    log::debug!("[forge_proxy_image] Fetching image: {image_url}");
+
+    let output = std::process::Command::new("curl")
+        .args([
+            "-sS",
+            "-L",
+            "--max-time",
+            "15",
+            "-H",
+            &format!("PRIVATE-TOKEN: {token}"),
+            &image_url,
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run curl: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        log::error!("[forge_proxy_image] curl failed: {stderr}");
+        return Err(format!("Image fetch failed: {stderr}"));
+    }
+
+    if output.stdout.is_empty() {
+        return Err("Image fetch returned empty response".into());
+    }
+
+    let content_type = infer_image_content_type(&image_url);
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&output.stdout);
+    Ok(format!("data:{content_type};base64,{b64}"))
+}
+
+fn infer_image_content_type(url: &str) -> &str {
+    let lower = url.to_lowercase();
+    if lower.ends_with(".png") {
+        "image/png"
+    } else if lower.ends_with(".gif") {
+        "image/gif"
+    } else if lower.ends_with(".svg") {
+        "image/svg+xml"
+    } else if lower.ends_with(".webp") {
+        "image/webp"
+    } else {
+        "image/jpeg"
     }
 }
 

@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { VscArrowLeft, VscLinkExternal, VscCheck, VscGitMerge, VscComment, VscChevronDown, VscChevronRight } from 'react-icons/vsc'
-import type { ForgePrDetails, ForgePipelineJob, ForgeType } from '../../types/forgeTypes'
+import type { ForgePrDetails, ForgePipelineJob, ForgeType, ForgeSourceConfig } from '../../types/forgeTypes'
 import { useTranslation } from '../../common/i18n'
 import { TauriCommands } from '../../common/tauriCommands'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
-import { MarkdownRenderer } from '../specs/MarkdownRenderer'
+import { MarkdownRenderer, type ForgeContext } from '../specs/MarkdownRenderer'
 import { Checkbox, Textarea } from '../ui'
 import { ForgeLabelChip } from './ForgeLabelChip'
 import { PipelineStatusBadge } from './PipelineStatusBadge'
@@ -17,6 +17,7 @@ interface ForgePrDetailProps {
   onBack: () => void
   sourceLabel?: string
   forgeType: ForgeType
+  source?: ForgeSourceConfig
   onRefreshPipeline?: () => Promise<void>
   onApprove?: () => Promise<void>
   onMerge?: (squash: boolean, deleteBranch: boolean) => Promise<void>
@@ -244,6 +245,7 @@ export function ForgePrDetail({
   onBack,
   sourceLabel,
   forgeType,
+  source,
   onApprove,
   onMerge,
   onComment,
@@ -251,6 +253,12 @@ export function ForgePrDetail({
 }: ForgePrDetailProps) {
   const { t } = useTranslation()
   const { summary, providerData } = details
+
+  const forgeContext: ForgeContext | undefined = source ? {
+    forgeType,
+    hostname: source.hostname,
+    projectIdentifier: source.projectIdentifier,
+  } : undefined
   const filteredComments = details.reviewComments.filter(c => c.body && c.body.trim().length > 0)
 
   const [showCommentInput, setShowCommentInput] = useState(false)
@@ -623,7 +631,7 @@ export function ForgePrDetail({
           <div className="mb-4">
             <SectionLabel>{t.forgePrTab.description}</SectionLabel>
             <div style={markdownContainerStyle}>
-              <MarkdownRenderer content={details.body} />
+              <MarkdownRenderer content={details.body} forgeContext={forgeContext} />
             </div>
           </div>
         )}
@@ -674,7 +682,7 @@ export function ForgePrDetail({
                     )}
                   </div>
                   <div style={{ overflow: 'hidden', wordBreak: 'break-word' }}>
-                    <MarkdownRenderer content={comment.body} />
+                    <MarkdownRenderer content={comment.body} forgeContext={forgeContext} />
                   </div>
                 </div>
               ))}

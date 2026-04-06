@@ -270,6 +270,7 @@ export function ForgePrsTab() {
         onBack={handleBack}
         sourceLabel={selectedSource?.label}
         forgeType={forge.forgeType}
+        source={selectedSource}
         onApprove={handleApprove}
         onMerge={handleMerge}
         onComment={handleComment}

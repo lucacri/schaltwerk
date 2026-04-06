@@ -200,6 +200,7 @@ export function ForgeIssuesTab() {
         onBack={handleBack}
         sourceLabel={selectedSource?.label}
         forgeType={forge.forgeType}
+        source={selectedSource}
       />
     )
   }

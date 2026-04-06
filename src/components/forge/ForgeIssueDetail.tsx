@@ -1,12 +1,12 @@
 import { invoke } from '@tauri-apps/api/core'
 import { VscArrowLeft, VscLinkExternal } from 'react-icons/vsc'
-import type { ForgeIssueDetails, ForgeType } from '../../types/forgeTypes'
+import type { ForgeIssueDetails, ForgeType, ForgeSourceConfig } from '../../types/forgeTypes'
 import { useTranslation } from '../../common/i18n'
 import { TauriCommands } from '../../common/tauriCommands'
 import { theme } from '../../common/theme'
 import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
-import { MarkdownRenderer } from '../specs/MarkdownRenderer'
+import { MarkdownRenderer, type ForgeContext } from '../specs/MarkdownRenderer'
 import { ForgeLabelChip } from './ForgeLabelChip'
 import { ContextualActionButton } from './ContextualActionButton'
 
@@ -19,6 +19,7 @@ interface ForgeIssueDetailProps {
   onBack: () => void
   sourceLabel?: string
   forgeType: ForgeType
+  source?: ForgeSourceConfig
 }
 
 function StateBadge({ state }: { state: string }) {
@@ -55,9 +56,15 @@ const markdownContainerStyle = {
   wordBreak: 'break-word' as const,
 }
 
-export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType }: ForgeIssueDetailProps) {
+export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType, source }: ForgeIssueDetailProps) {
   const { t } = useTranslation()
   const { summary, body, comments } = details
+
+  const forgeContext: ForgeContext | undefined = source ? {
+    forgeType,
+    hostname: source.hostname,
+    projectIdentifier: source.projectIdentifier,
+  } : undefined
   const validComments = comments.filter(c => c.body && c.body.trim().length > 0)
 
   const handleOpenInBrowser = () => {
@@ -176,7 +183,7 @@ export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType }: Fo
               {t.forgeIssueTab.description}
             </div>
             <div style={markdownContainerStyle}>
-              <MarkdownRenderer content={body} />
+              <MarkdownRenderer content={body} forgeContext={forgeContext} />
             </div>
           </div>
         )}
@@ -234,7 +241,7 @@ export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType }: Fo
                     )}
                   </div>
                   <div style={{ overflow: 'hidden', wordBreak: 'break-word' }}>
-                    <MarkdownRenderer content={comment.body} />
+                    <MarkdownRenderer content={comment.body} forgeContext={forgeContext} />
                   </div>
                 </div>
               ))}

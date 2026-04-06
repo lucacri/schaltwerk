@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { invoke } from '@tauri-apps/api/core'
@@ -7,10 +7,18 @@ import { TauriCommands } from '../../common/tauriCommands'
 import { logger } from '../../utils/logger'
 import { useOptionalToast } from '../../common/toast/ToastProvider'
 import { useTranslation } from '../../common/i18n'
+import type { ForgeType } from '../../types/forgeTypes'
+
+export interface ForgeContext {
+  forgeType: ForgeType
+  hostname?: string
+  projectIdentifier?: string
+}
 
 interface MarkdownRendererProps {
   content: string
   className?: string
+  forgeContext?: ForgeContext
 }
 
 const LinkComponent = memo(function LinkComponent({ href, children }: { href?: string; children: React.ReactNode }) {
@@ -45,6 +53,78 @@ const LinkComponent = memo(function LinkComponent({ href, children }: { href?: s
     </a>
   )
 })
+
+const imageCache = new Map<string, string>()
+
+function GitLabImage({ src, alt, forgeContext }: { src?: string; alt?: string; forgeContext: ForgeContext }) {
+  const [imageSrc, setImageSrc] = useState<string | null>(null)
+  const [error, setError] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!src || !src.startsWith('http')) {
+      setImageSrc(src ?? null)
+      setLoading(false)
+      return
+    }
+
+    const cached = imageCache.get(src)
+    if (cached) {
+      setImageSrc(cached)
+      setLoading(false)
+      return
+    }
+
+    let disposed = false
+    invoke<string>(TauriCommands.ForgeProxyImage, {
+      imageUrl: src,
+      forgeType: forgeContext.forgeType,
+      hostname: forgeContext.hostname ?? null,
+    })
+      .then(dataUrl => {
+        imageCache.set(src, dataUrl)
+        if (!disposed) {
+          setImageSrc(dataUrl)
+          setLoading(false)
+        }
+      })
+      .catch(err => {
+        logger.warn('[MarkdownRenderer] Failed to proxy GitLab image', { src, error: err })
+        if (!disposed) {
+          setImageSrc(src)
+          setLoading(false)
+          setError(true)
+        }
+      })
+
+    return () => { disposed = true }
+  }, [src, forgeContext])
+
+  if (loading) {
+    return (
+      <span style={{
+        display: 'inline-block',
+        width: 200,
+        height: 100,
+        backgroundColor: 'var(--color-bg-elevated)',
+        borderRadius: 4,
+        border: '1px solid var(--color-border-subtle)',
+      }} />
+    )
+  }
+
+  return (
+    <img
+      src={imageSrc ?? src}
+      alt={alt ?? ''}
+      style={{
+        maxWidth: '100%',
+        borderRadius: 4,
+      }}
+      data-proxy-error={error || undefined}
+    />
+  )
+}
 
 const customComponents: Partial<Components> = {
   h1: ({ children }) => (
@@ -273,8 +353,21 @@ const customComponents: Partial<Components> = {
 
 export const MarkdownRenderer = memo(function MarkdownRenderer({
   content,
-  className = ''
+  className = '',
+  forgeContext,
 }: MarkdownRendererProps) {
+  const components = useMemo(() => {
+    if (!forgeContext || forgeContext.forgeType !== 'gitlab') {
+      return customComponents
+    }
+    return {
+      ...customComponents,
+      img: ({ src, alt }: { src?: string; alt?: string }) => (
+        <GitLabImage src={src} alt={alt} forgeContext={forgeContext} />
+      ),
+    }
+  }, [forgeContext])
+
   return (
     <div
       className={`markdown-renderer markdown-github-light ${className}`}
@@ -290,7 +383,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        components={customComponents}
+        components={components}
       >
         {content}
       </ReactMarkdown>
