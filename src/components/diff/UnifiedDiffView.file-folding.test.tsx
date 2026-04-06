@@ -165,7 +165,7 @@ describe('UnifiedDiffView file folding', () => {
     expect(store.get(expandedFilesAtom)).toEqual(new Set())
   })
 
-  it('auto-expands pre-selected file from filePath prop', async () => {
+  it('auto-expands preselected file from filePath prop', async () => {
     const { store } = renderModal('src/second.ts')
 
     const secondHeader = await screen.findByRole('button', { name: 'Toggle src/second.ts diff' })
