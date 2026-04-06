@@ -27,6 +27,7 @@ export const STYLE_GUIDE_THEMES: Array<{ value: ResolvedTheme; label: string }> 
   { value: 'ayu', label: 'Ayu' },
   { value: 'kanagawa', label: 'Kanagawa' },
   { value: 'darcula', label: 'Darcula' },
+  { value: 'islands-dark', label: 'Islands Dark' },
 ]
 
 export const STYLE_GUIDE_AGENT_VARIANTS: AgentVariant[] = [
@@ -225,7 +226,7 @@ export function resolveStyleGuideThemeId(value: ThemeId | ResolvedTheme): Resolv
 
 export function resolveInitialStyleGuideTheme(): ThemeId {
   if (typeof window === 'undefined') {
-    return 'dark'
+    return 'darcula'
   }
 
   const params = new URLSearchParams(window.location.search)
@@ -239,7 +240,7 @@ export function resolveInitialStyleGuideTheme(): ThemeId {
     return fromStorage
   }
 
-  return 'dark'
+  return 'darcula'
 }
 
 export function applyStyleGuideTheme(theme: ResolvedTheme) {

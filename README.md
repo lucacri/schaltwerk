@@ -155,8 +155,11 @@ just release         # Create new release (patch/minor/major)
 # Or stick with plain package-manager/cargo commands
 bun run test         # or: npm run test
 bun run tauri:dev    # or: npm run tauri:dev
+bun run style-guide  # or: npm run style-guide
 bun run tauri:build  # or: npm run tauri:build
 ```
+
+`bun run style-guide` opens the browser-only UI gallery at `http://localhost:1420/style-guide.html`, which uses mocked Tauri responses so you can iterate on Lucode UI without launching the desktop shell.
 
 GitHub Actions builds and updates the Homebrew tap automatically.
 

@@ -11,7 +11,8 @@ Thanks for your interest in helping build Lucode! We appreciate contributions of
 1. Fork and clone the repository (macOS only).
 2. Install dependencies with `bun install` (or `npm install` if you prefer).
 3. Launch the desktop app locally with `bun run tauri:dev` (or `npm run tauri:dev`).
-4. Use the [docs](https://lucode.mintlify.app) for architecture, session flow, and agent management details.
+4. For browser-only UI iteration, run `bun run style-guide` (or `npm run style-guide`) to open the mocked gallery at `http://localhost:1420/style-guide.html`.
+5. Use the [docs](https://lucode.mintlify.app) for architecture, session flow, and agent management details.
 
 ## Project Practices
 Use the pointers below as a checklist—apply what fits your contribution so everything stays consistent.

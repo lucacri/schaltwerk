@@ -38,7 +38,11 @@ describe('ThemeSettings', () => {
   it('marks the active theme as selected', () => {
     renderThemeSettings()
 
-    expect(screen.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true')
+    const darkButton = screen.getByRole('button', { name: 'Dark' })
+
+    expect(darkButton).toHaveAttribute('aria-pressed', 'true')
+    expect(darkButton).toHaveClass('settings-binary-item-selected')
+    expect(darkButton).not.toHaveClass('border-2')
   })
 
   it('updates selection when a theme is chosen', async () => {

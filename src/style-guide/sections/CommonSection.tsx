@@ -74,6 +74,9 @@ function InlineOverlayPreview({ children }: { children: React.ReactNode }) {
 }
 
 export function CommonSection() {
+  const [resetPreviewVisible, setResetPreviewVisible] = useState(false)
+  const [discardPreviewVisible, setDiscardPreviewVisible] = useState(false)
+
   return (
     <section className="space-y-4" aria-labelledby="style-guide-common-components">
       <div className="rounded-2xl border border-border-subtle bg-bg-secondary p-5">
@@ -116,7 +119,13 @@ export function CommonSection() {
           <ComponentCard title="ConfirmResetDialog">
             <ExampleSurface label="Inline Slate Preview">
               <InlineOverlayPreview>
-                <ConfirmResetDialog open onConfirm={() => {}} onCancel={() => {}} />
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-caption text-text-muted">Open the reset dialog preview only when you want to inspect the live modal treatment.</div>
+                  <Button size="sm" onClick={() => setResetPreviewVisible((current) => !current)}>
+                    {resetPreviewVisible ? 'Hide Reset Dialog Preview' : 'Show Reset Dialog Preview'}
+                  </Button>
+                </div>
+                {resetPreviewVisible ? <ConfirmResetDialog open onConfirm={() => setResetPreviewVisible(false)} onCancel={() => setResetPreviewVisible(false)} /> : null}
               </InlineOverlayPreview>
             </ExampleSurface>
           </ComponentCard>
@@ -124,7 +133,20 @@ export function CommonSection() {
           <ComponentCard title="ConfirmDiscardDialog">
             <ExampleSurface label="Inline Slate Preview">
               <InlineOverlayPreview>
-                <ConfirmDiscardDialog open filePath="src/style-guide/StyleGuide.tsx" onConfirm={() => {}} onCancel={() => {}} />
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="text-caption text-text-muted">Open the discard dialog preview only when you want to inspect the live modal treatment.</div>
+                  <Button size="sm" onClick={() => setDiscardPreviewVisible((current) => !current)}>
+                    {discardPreviewVisible ? 'Hide Discard Dialog Preview' : 'Show Discard Dialog Preview'}
+                  </Button>
+                </div>
+                {discardPreviewVisible ? (
+                  <ConfirmDiscardDialog
+                    open
+                    filePath="src/style-guide/StyleGuide.tsx"
+                    onConfirm={() => setDiscardPreviewVisible(false)}
+                    onCancel={() => setDiscardPreviewVisible(false)}
+                  />
+                ) : null}
               </InlineOverlayPreview>
             </ExampleSurface>
           </ComponentCard>

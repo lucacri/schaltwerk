@@ -1,10 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-const withOpacityValue = (variable) => ({ opacityValue }) => {
-  if (opacityValue === undefined || opacityValue === null) {
-    return `rgb(var(${variable}) / 1)`
-  }
-  return `rgb(var(${variable}) / ${opacityValue})`
-}
+const withOpacityValue = (variable) => `rgb(var(${variable}) / <alpha-value>)`
 
 const createScale = (prefix, shades) =>
   shades.reduce((scale, shade) => {

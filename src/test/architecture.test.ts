@@ -539,11 +539,11 @@ describe('Theme Consistency Architecture', () => {
   }, ARCH_RULE_TIMEOUT);
 
   it('should have a theme preset for each resolved theme', async () => {
-    const { darkTheme, lightTheme, tokyonightTheme, catppuccinTheme, catppuccinMacchiatoTheme, everforestTheme, ayuTheme, kanagawaTheme, darculaTheme } = await import('../common/themes/presets');
+    const { darkTheme, lightTheme, tokyonightTheme, catppuccinTheme, catppuccinMacchiatoTheme, everforestTheme, ayuTheme, kanagawaTheme, darculaTheme, islandsDarkTheme } = await import('../common/themes/presets');
     const { buildTerminalTheme } = await import('../common/themes/terminalTheme');
 
-    const resolvedThemes = ['dark', 'light', 'tokyonight', 'catppuccin', 'catppuccin-macchiato', 'everforest', 'ayu', 'kanagawa', 'darcula'] as const;
-    const presets = { dark: darkTheme, light: lightTheme, tokyonight: tokyonightTheme, catppuccin: catppuccinTheme, 'catppuccin-macchiato': catppuccinMacchiatoTheme, everforest: everforestTheme, ayu: ayuTheme, kanagawa: kanagawaTheme, darcula: darculaTheme };
+    const resolvedThemes = ['dark', 'light', 'tokyonight', 'catppuccin', 'catppuccin-macchiato', 'everforest', 'ayu', 'kanagawa', 'darcula', 'islands-dark'] as const;
+    const presets = { dark: darkTheme, light: lightTheme, tokyonight: tokyonightTheme, catppuccin: catppuccinTheme, 'catppuccin-macchiato': catppuccinMacchiatoTheme, everforest: everforestTheme, ayu: ayuTheme, kanagawa: kanagawaTheme, darcula: darculaTheme, 'islands-dark': islandsDarkTheme };
 
     const missingPresets: string[] = [];
     const missingTerminalSupport: string[] = [];

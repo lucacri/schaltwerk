@@ -53,6 +53,7 @@ describe('StyleGuide', () => {
     )
 
     expect(screen.getByRole('heading', { name: 'Standalone Style Guide' })).toBeInTheDocument()
+    expect(screen.getByText(/bun run style-guide/)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Primitives' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Common Components' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Settings Panels' })).toBeInTheDocument()
@@ -60,6 +61,10 @@ describe('StyleGuide', () => {
     expect(screen.getByRole('heading', { name: 'Color And Border Reference' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show ConfirmModal Preview' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show Link PR Preview' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show Reset Dialog Preview' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show Discard Dialog Preview' })).toBeInTheDocument()
+    expect(screen.queryByText('Reset Session Worktree')).not.toBeInTheDocument()
+    expect(screen.queryByText('Discard File Changes')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Show ConfirmModal Preview' }))
     await user.click(screen.getByRole('button', { name: 'Show Link PR Preview' }))
@@ -128,6 +133,28 @@ describe('StyleGuide', () => {
     await waitFor(() => {
       expect(document.documentElement.dataset.theme).toBe('light')
       expect(screen.getByText('Resolved token values for the active light theme.')).toBeInTheDocument()
+    })
+  })
+
+  it('switches to Darcula from the style guide header selector', async () => {
+    const store = createStore()
+    const user = userEvent.setup()
+
+    await store.set(initializeThemeActionAtom)
+
+    render(
+      <Provider store={store}>
+        <StyleGuide />
+      </Provider>,
+    )
+
+    await user.click(screen.getByRole('combobox', { name: 'Theme' }))
+    await user.click(screen.getByRole('option', { name: 'Darcula' }))
+
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe('darcula')
+      expect(localStorage.getItem('lucode-style-guide-theme')).toBe('darcula')
+      expect(screen.getByRole('combobox', { name: 'Theme' })).toHaveTextContent('Darcula')
     })
   })
 })

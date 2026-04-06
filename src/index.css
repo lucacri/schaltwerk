@@ -1,6 +1,7 @@
 @import './styles/theme.css';
 @import './styles/vscode-dark-theme.css';
 @import "tailwindcss";
+@config "../tailwind.config.js";
 
 /* Terminal font sizes are defined in theme.css */
 

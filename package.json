@@ -16,7 +16,7 @@
   "homepage": "https://github.com/lucacri/lucode#readme",
   "scripts": {
     "dev": "vite",
-    "playground": "vite --config vite.playground.config.ts",
+    "style-guide": "vite --open /style-guide.html?theme=darcula",
     "build": "mkdir -p node_modules/.cache && tsc --noEmit --skipLibCheck && vite build",
     "preview": "vite preview",
     "tauri": "tauri",

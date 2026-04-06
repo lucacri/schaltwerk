@@ -54,7 +54,7 @@ export function StyleGuide() {
             <div className="space-y-1">
               <h1 className="text-heading-large font-semibold text-text-primary">Standalone Style Guide</h1>
               <p className="max-w-3xl text-body text-text-secondary">
-                Browser-only gallery for fast theme and component iteration under `bun run dev`.
+                Browser-only gallery for fast theme and component iteration under `bun run style-guide`. The theme switcher and settings panels are live; the primitive cards are visual references.
               </p>
             </div>
           </div>
