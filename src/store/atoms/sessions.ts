@@ -684,6 +684,7 @@ async function applySessionsSnapshot(
         return resolved
     })
     previousSessionsSnapshot = resolved
+    set(activeSessionsHydratedFromCacheStateAtom, options.reason === 'cache-hydrate')
 
     syncMergeStatuses(set, resolved)
     autoStartRunningSessions(get, set, resolved, {
@@ -699,6 +700,12 @@ async function applySessionsSnapshot(
         projectSessionsSnapshotCache.set(projectPath, resolved)
         projectSessionStatesCache.set(projectPath, new Map(stateMap))
         updateSessionProjectIndex(projectPath, resolved)
+        if (options.reason !== 'cache-hydrate') {
+            for (const session of resolved) {
+                updateCrossProjectAttention(projectPath, session.info.session_id, session.info.attention_required === true)
+            }
+        }
+        setCrossProjectCounts(set, projectPath, recomputeCrossProjectCounts(projectPath))
     }
 }
 
@@ -787,7 +794,7 @@ function parseSessionsRefreshedPayload(payload: unknown): { projectPath: string 
     return { projectPath: null, sessions: [] }
 }
 
-function syncSnapshotsFromAtom(get: Getter) {
+function syncSnapshotsFromAtom(get: Getter, set?: Setter) {
     const current = get(allSessionsAtom)
     previousSessionsSnapshot = current
     const stateMap = buildStateMap(current)
@@ -799,6 +806,9 @@ function syncSnapshotsFromAtom(get: Getter) {
         projectSessionsSnapshotCache.set(projectPath, stripped)
         projectSessionStatesCache.set(projectPath, new Map(stateMap))
         updateSessionProjectIndex(projectPath, current)
+        if (set) {
+            setCrossProjectCounts(set, projectPath, recomputeCrossProjectCounts(projectPath))
+        }
     }
 }
 
@@ -885,6 +895,7 @@ type ProjectKey = string | null
 const expectedSessionsByProject = new Map<ProjectKey, Map<string, ExpectedSession>>()
 const sessionProjectIndex = new Map<string, string>()
 const crossProjectAttention = new Map<string, Map<string, boolean>>()
+const activeSessionsHydratedFromCacheStateAtom = atom(false)
 let activeSessionsProjectPath: string | null = null
 
 function getExpectedSessionsForProject(projectPath: ProjectKey, create = false): Map<string, ExpectedSession> | undefined {
@@ -905,6 +916,7 @@ export function __getSessionsEventHandlerForTest(event: SchaltEvent): ((payload:
 export const autoCancelAfterMergeAtom = atom((get) => get(autoCancelAfterMergeStateAtom))
 export const autoCancelAfterPrAtom = atom((get) => get(autoCancelAfterPrStateAtom))
 export const sessionsLoadingAtom = atom((get) => get(loadingStateAtom))
+export const activeSessionsHydratedFromCacheAtom = atom((get) => get(activeSessionsHydratedFromCacheStateAtom))
 export const hydrateProjectSessionsForSwitchActionAtom = atom(
     null,
     (get, set, projectPath: string | null) => {
@@ -917,6 +929,7 @@ export const hydrateProjectSessionsForSwitchActionAtom = atom(
 
         if (!projectPath) {
             set(allSessionsAtom, [])
+            set(activeSessionsHydratedFromCacheStateAtom, false)
             previousSessionsSnapshot = []
             previousSessionStates = new Map()
             activeSessionsProjectPath = null
@@ -929,6 +942,7 @@ export const hydrateProjectSessionsForSwitchActionAtom = atom(
         const stateMap = projectSessionStatesCache.get(projectPath) ?? buildStateMap(strippedSnapshot)
 
         set(allSessionsAtom, strippedSnapshot)
+        set(activeSessionsHydratedFromCacheStateAtom, strippedSnapshot.length > 0)
         previousSessionsSnapshot = [...strippedSnapshot]
         previousSessionStates = new Map(stateMap)
         activeSessionsProjectPath = projectPath
@@ -1127,6 +1141,7 @@ export const refreshSessionsActionAtom = atom(
         if (!projectPath) {
             await releaseRemovedSessions(get, set, previousSessionsSnapshot, [])
             set(allSessionsAtom, [])
+            set(activeSessionsHydratedFromCacheStateAtom, false)
             set(mergeStatusesStateAtom, new Map())
             set(mergeInFlightStateAtom, new Map())
             set(pendingStartupsAtom, new Map())
@@ -1588,7 +1603,7 @@ export const initializeSessionsEventsActionAtom = atom(
                     },
                 }
             }))
-            syncSnapshotsFromAtom(get)
+            syncSnapshotsFromAtom(get, set)
         })
 
         await register(SchaltEvent.TerminalAttention, (payload) => {
@@ -1625,7 +1640,10 @@ export const initializeSessionsEventsActionAtom = atom(
                     }
                     return updated
                 })
-                syncSnapshotsFromAtom(get)
+                syncSnapshotsFromAtom(get, set)
+                if (activeProject) {
+                    setCrossProjectCounts(set, activeProject, recomputeCrossProjectCounts(activeProject))
+                }
                 return
             }
 
@@ -1688,7 +1706,7 @@ export const initializeSessionsEventsActionAtom = atom(
                     },
                 }
             }))
-            syncSnapshotsFromAtom(get)
+            syncSnapshotsFromAtom(get, set)
 
             set(mergeStatusesStateAtom, (prev) => {
                 const next = new Map(prev)
@@ -1782,7 +1800,7 @@ export const initializeSessionsEventsActionAtom = atom(
                 return [enriched, ...prev]
             })
 
-            syncSnapshotsFromAtom(get)
+            syncSnapshotsFromAtom(get, set)
 
             const addedSession = get(allSessionsAtom).find(session => session.info.session_id === event.session_name)
             if (addedSession) {
@@ -1790,7 +1808,7 @@ export const initializeSessionsEventsActionAtom = atom(
                     reason: 'session-added',
                     previousStates: previousStatesSnapshot,
                 })
-                syncSnapshotsFromAtom(get)
+                syncSnapshotsFromAtom(get, set)
             }
         })
 
@@ -1808,7 +1826,7 @@ export const initializeSessionsEventsActionAtom = atom(
                     },
                 }
             }))
-            syncSnapshotsFromAtom(get)
+            syncSnapshotsFromAtom(get, set)
         })
 
         await register(SchaltEvent.SessionRemoved, (payload) => {
@@ -1858,7 +1876,7 @@ export const initializeSessionsEventsActionAtom = atom(
             }
 
             previousSessionStates.delete(event.session_name)
-            syncSnapshotsFromAtom(get)
+            syncSnapshotsFromAtom(get, set)
         })
 
         sessionsEventsCleanup = () => {

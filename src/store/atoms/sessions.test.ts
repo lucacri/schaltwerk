@@ -116,6 +116,8 @@ import {
     cleanupProjectSessionsCacheActionAtom,
     expectSessionActionAtom,
     crossProjectCountsAtom,
+    hydrateProjectSessionsForSwitchActionAtom,
+    activeSessionsHydratedFromCacheAtom,
 } from './sessions'
 import { projectPathAtom } from './project'
 import { listenEvent as listenEventMock } from '../../common/eventSystem'
@@ -1558,6 +1560,56 @@ describe('sessions atoms', () => {
 
         const counts = store.get(crossProjectCountsAtom)
         expect(counts['/projects/alpha']).toEqual({ attention: 1, running: 1 })
+    })
+
+    it('recomputes crossProjectCountsAtom for cache-hydrated active projects after session mutations', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                const activeProject = store.get(projectPathAtom)
+                if (activeProject === '/projects/alpha') {
+                    return [
+                        createSession({ session_id: 'alpha-running', worktree_path: '/tmp/alpha-running' }),
+                        createSession({
+                            session_id: 'alpha-attention',
+                            worktree_path: '/tmp/alpha-attention',
+                            attention_required: true,
+                        }),
+                    ]
+                }
+                if (activeProject === '/projects/beta') {
+                    return [createSession({ session_id: 'beta-session', worktree_path: '/tmp/beta' })]
+                }
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        store.set(projectPathAtom, '/projects/alpha')
+        store.set(hydrateProjectSessionsForSwitchActionAtom, '/projects/alpha')
+
+        expect(store.get(activeSessionsHydratedFromCacheAtom)).toBe(true)
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 1, running: 1 })
+
+        listeners['schaltwerk:session-added']?.({
+            session_name: 'alpha-new',
+            branch: 'feature/alpha-new',
+            worktree_path: '/tmp/alpha-new',
+            parent_branch: 'main',
+        })
+
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 1, running: 2 })
     })
 
     it('snapshots outgoing project counts on switch and excludes reviewed sessions', async () => {

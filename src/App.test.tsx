@@ -627,6 +627,106 @@ describe('App.tsx', () => {
     })
   })
 
+  it('keeps running badge counts consistent for active and inactive project tabs when attention is required', async () => {
+    mockState.isGitRepo = true
+    const invokeMock = await getInvokeMock()
+    let activeProjectForSessions: string | null = null
+    const alphaSessions = [
+      {
+        info: {
+          session_id: 'alpha-running',
+          status: 'active',
+          session_state: 'running',
+        },
+      },
+      {
+        info: {
+          session_id: 'alpha-attention',
+          status: 'active',
+          session_state: 'running',
+          attention_required: true,
+        },
+      },
+    ]
+
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.InitializeProject) {
+        activeProjectForSessions = typeof args?.path === 'string' ? args.path : null
+        return null
+      }
+      if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+        if (activeProjectForSessions === '/Users/me/project-a') {
+          return alphaSessions
+        }
+        if (activeProjectForSessions === '/Users/me/project-b') {
+          return [
+            {
+              info: {
+                session_id: 'beta-running',
+                status: 'active',
+                session_state: 'running',
+              },
+            },
+          ]
+        }
+        return []
+      }
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await renderApp()
+
+    const firstHomeProps = homeScreenPropsMock.mock.calls.at(-1)?.[0] as
+      | { onOpenProject: (path: string) => void }
+      | undefined
+    expect(firstHomeProps).toBeTruthy()
+
+    await act(async () => {
+      firstHomeProps?.onOpenProject('/Users/me/project-a')
+    })
+
+    await waitFor(() => {
+      const latestTopBar = topBarPropsMock.mock.calls.at(-1)?.[0] as
+        | { tabs?: Array<{ projectPath?: string; runningCount?: number }>; activeTabPath?: string | null }
+        | undefined
+      expect(latestTopBar?.tabs?.length).toBe(1)
+      expect(latestTopBar?.activeTabPath).toBe('/Users/me/project-a')
+      expect(latestTopBar?.tabs?.find(tab => tab.projectPath === '/Users/me/project-a')?.runningCount).toBe(1)
+    })
+
+    await clickElement(screen.getByLabelText('Home'))
+
+    const secondHomeProps = homeScreenPropsMock.mock.calls.at(-1)?.[0] as
+      | { onOpenProject: (path: string) => void }
+      | undefined
+    expect(secondHomeProps).toBeTruthy()
+
+    await act(async () => {
+      secondHomeProps?.onOpenProject('/Users/me/project-b')
+    })
+
+    await waitFor(() => {
+      const latestTopBar = topBarPropsMock.mock.calls.at(-1)?.[0] as
+        | { tabs?: Array<{ projectPath?: string; runningCount?: number }>; activeTabPath?: string | null }
+        | undefined
+      expect(latestTopBar?.tabs?.length).toBe(2)
+      expect(latestTopBar?.activeTabPath).toBe('/Users/me/project-b')
+      expect(latestTopBar?.tabs?.find(tab => tab.projectPath === '/Users/me/project-a')?.runningCount).toBe(1)
+    })
+
+    await act(async () => {
+      await clickElement(screen.getByTestId('tab-/Users/me/project-a'))
+    })
+
+    await waitFor(() => {
+      const latestTopBar = topBarPropsMock.mock.calls.at(-1)?.[0] as
+        | { tabs?: Array<{ projectPath?: string; runningCount?: number }>; activeTabPath?: string | null }
+        | undefined
+      expect(latestTopBar?.activeTabPath).toBe('/Users/me/project-a')
+      expect(latestTopBar?.tabs?.find(tab => tab.projectPath === '/Users/me/project-a')?.runningCount).toBe(1)
+    })
+  })
+
   it('handles startup errors without crashing (logs error and stays on Home)', async () => {
     const invokeMock = await getInvokeMock()
     // Make get_current_directory throw inside App startup effect

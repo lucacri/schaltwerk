@@ -57,6 +57,7 @@ import {
   refreshSessionsActionAtom,
   expectSessionActionAtom,
   crossProjectCountsAtom,
+  activeSessionsHydratedFromCacheAtom,
 } from './store/atoms/sessions'
 import {
   leftPanelCollapsedAtom,
@@ -170,6 +171,7 @@ function AppContent() {
   const [attentionCounts, setAttentionCounts] = useState<Record<string, number>>({})
   const [runningCounts, setRunningCounts] = useState<Record<string, number>>({})
   const crossProjectCounts = useAtomValue(crossProjectCountsAtom)
+  const activeSessionsHydratedFromCache = useAtomValue(activeSessionsHydratedFromCacheAtom)
   const [showCliMissingModal, setShowCliMissingModal] = useState(false)
   const [cliModalEverShown, setCliModalEverShown] = useState(false)
   const store = useStore()
@@ -867,12 +869,15 @@ function AppContent() {
 
   useEffect(() => {
     if (!projectPath) return
-    const count = countLogicalRunningSessions(allSessions)
+    const cachedRunningCount = crossProjectCounts[projectPath]?.running
+    const count = activeSessionsHydratedFromCache && cachedRunningCount != null
+      ? cachedRunningCount
+      : countLogicalRunningSessions(allSessions, session => session.info.attention_required === true)
     setRunningCounts(prev => {
       if (prev[projectPath] === count) return prev
       return { ...prev, [projectPath]: count }
     })
-  }, [allSessions, projectPath])
+  }, [activeSessionsHydratedFromCache, allSessions, crossProjectCounts, projectPath])
 
   const shouldBlockSessionModal = useCallback(
     (reason: string) => {
@@ -2206,6 +2211,7 @@ function AppContent() {
   }, [switchProject])
 
   const tabsWithAttention = useMemo(() => projectTabs.map(tab => {
+    const cross = crossProjectCounts[tab.projectPath]
     if (tab.projectPath === projectPath) {
       return {
         ...tab,
@@ -2213,7 +2219,6 @@ function AppContent() {
         runningCount: runningCounts[tab.projectPath] ?? 0,
       }
     }
-    const cross = crossProjectCounts[tab.projectPath]
     return {
       ...tab,
       attentionCount: cross?.attention ?? attentionCounts[tab.projectPath] ?? 0,

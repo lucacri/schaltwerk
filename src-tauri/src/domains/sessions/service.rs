@@ -699,16 +699,8 @@ mod service_unified_tests {
             "resume should be gated off on first start"
         );
         assert!(
-            first_shell.contains("--prompt"),
-            "first start should include --prompt CLI flag when resume is gated"
-        );
-        assert!(
-            first_shell.contains("test prompt"),
-            "first start should embed prompt text in shell command"
-        );
-        assert!(
-            cmd_first.initial_command.is_none(),
-            "prompt should be in CLI args, not initial_command"
+            cmd_first.initial_command.as_deref() == Some("test prompt"),
+            "first start should use initial prompt when resume is gated"
         );
 
         let refreshed = manager
