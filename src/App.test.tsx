@@ -1073,6 +1073,251 @@ describe('validatePanelPercentage', () => {
     expect(validatePanelPercentage('invalid', 75)).toBe(75)
   })
 
+  it('closes the new-session modal before backend session creation resolves', async () => {
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    const modalCall = newSessionModalMock.mock.calls.at(-1)
+    expect(modalCall).toBeTruthy()
+    const modalProps = modalCall![0] as { onCreate: OnCreateFn }
+
+    let resolveCreate: ((value: RawSession | null) => void) | undefined
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        return await new Promise(resolve => {
+          resolveCreate = resolve as (value: RawSession | null) => void
+        })
+      }
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    const createPromise = modalProps.onCreate({
+      name: 'fast-close',
+      prompt: 'ship it',
+      baseBranch: 'main',
+      versionCount: 1,
+      agentType: 'claude',
+      isSpec: false,
+      userEditedName: true,
+    })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      const latestCall = newSessionModalMock.mock.calls.at(-1)
+      expect(latestCall).toBeTruthy()
+      expect((latestCall![0] as { open: boolean }).open).toBe(false)
+    })
+
+    await act(async () => {
+      resolveCreate?.(buildRawSession(String('fast-close')))
+    })
+    await createPromise
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
+  it('shows a toast when session creation fails after the modal closes', async () => {
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    const modalCall = newSessionModalMock.mock.calls.at(-1)
+    expect(modalCall).toBeTruthy()
+    const modalProps = modalCall![0] as { onCreate: OnCreateFn }
+
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        throw new Error('backend exploded')
+      }
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    const createResultPromise = modalProps.onCreate({
+      name: 'broken-session',
+      prompt: 'ship it',
+      baseBranch: 'main',
+      versionCount: 1,
+      agentType: 'claude',
+      isSpec: false,
+      userEditedName: true,
+    }).then(
+      () => ({ status: 'resolved' as const }),
+      error => ({ status: 'rejected' as const, error }),
+    )
+
+    await waitFor(() => {
+      const latestCall = newSessionModalMock.mock.calls.at(-1)
+      expect(latestCall).toBeTruthy()
+      expect((latestCall![0] as { open: boolean }).open).toBe(false)
+    })
+
+    const createResult = await createResultPromise
+    expect(createResult.status).toBe('rejected')
+    if (createResult.status !== 'rejected') {
+      throw new Error('Expected session creation to reject')
+    }
+    expect(createResult.error).toBeInstanceOf(Error)
+    expect(createResult.error.message).toBe('backend exploded')
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to create session')).toBeInTheDocument()
+      expect(screen.getByText('backend exploded')).toBeInTheDocument()
+    })
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
+  it('closes the new session modal before version-group rename finishes', async () => {
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.NewSessionRequest)
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      const latest = newSessionModalMock.mock.calls.at(-1)?.[0] as { open: boolean } | undefined
+      expect(latest?.open).toBe(true)
+    })
+
+    const modalCall = newSessionModalMock.mock.calls.at(-1)
+    expect(modalCall).toBeTruthy()
+    const modalProps = modalCall![0] as { onCreate: OnCreateFn }
+
+    const invokeMock = await getInvokeMock()
+
+    let releaseRenamePromise: (() => void) | undefined
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        return {
+          name: String(args?.name ?? 'feature'),
+          branch: `${args?.baseBranch ?? 'main'}/${args?.name ?? 'feature'}`,
+          parent_branch: args?.baseBranch ?? 'main',
+          worktree_path: `/tmp/${args?.name ?? 'feature'}`,
+          version_number: Number(args?.versionNumber ?? 1),
+        }
+      }
+
+      if (cmd === TauriCommands.SchaltwerkCoreRenameVersionGroup) {
+        return await new Promise<void>((resolve) => {
+          releaseRenamePromise = () => resolve()
+        })
+      }
+
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    const createPromise = modalProps.onCreate({
+      name: 'feature',
+      prompt: 'Ship the change',
+      baseBranch: 'main',
+      versionCount: 2,
+      agentType: 'claude',
+      isSpec: false,
+      userEditedName: false,
+    })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      const latest = newSessionModalMock.mock.calls.at(-1)?.[0] as { open: boolean } | undefined
+      expect(latest?.open).toBe(false)
+    })
+
+    expect(releaseRenamePromise).toBeTruthy()
+
+    if (releaseRenamePromise) {
+      releaseRenamePromise()
+    }
+    await createPromise
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
+  it('does not reject session creation when version-group rename fails', async () => {
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.NewSessionRequest)
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      const latest = newSessionModalMock.mock.calls.at(-1)?.[0] as { open: boolean } | undefined
+      expect(latest?.open).toBe(true)
+    })
+
+    const modalCall = newSessionModalMock.mock.calls.at(-1)
+    expect(modalCall).toBeTruthy()
+    const modalProps = modalCall![0] as { onCreate: OnCreateFn }
+
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        return {
+          name: String(args?.name ?? 'feature'),
+          branch: `${args?.baseBranch ?? 'main'}/${args?.name ?? 'feature'}`,
+          parent_branch: args?.baseBranch ?? 'main',
+          worktree_path: `/tmp/${args?.name ?? 'feature'}`,
+          version_number: Number(args?.versionNumber ?? 1),
+        }
+      }
+
+      if (cmd === TauriCommands.SchaltwerkCoreRenameVersionGroup) {
+        throw new Error('rename failed')
+      }
+
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    const createPromise = modalProps.onCreate({
+      name: 'feature',
+      prompt: 'Ship the change',
+      baseBranch: 'main',
+      versionCount: 2,
+      agentType: 'claude',
+      isSpec: false,
+      userEditedName: false,
+    })
+
+    await expect(createPromise).resolves.toBeUndefined()
+
+    await waitFor(() => {
+      const latest = newSessionModalMock.mock.calls.at(-1)?.[0] as { open: boolean } | undefined
+      expect(latest?.open).toBe(false)
+    })
+
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
   it('starts each created version using the actual names returned by the backend', async () => {
     await renderApp()
 
@@ -1461,6 +1706,92 @@ describe('validatePanelPercentage', () => {
       expect(enqueueSpy).toHaveBeenCalledWith('draft-one', 'claude')
     } finally {
       useSessionsSpy.mockRestore()
+      invokeMock.mockImplementation(defaultInvokeImpl)
+    }
+  })
+
+  it('keeps the modal open while creating a session from an existing spec', async () => {
+    const invokeMock = await getInvokeMock()
+    const isoNow = new Date().toISOString()
+    const specSession = {
+      info: {
+        session_id: 'draft-keep-open',
+        display_name: 'Draft Keep Open',
+        branch: 'specs/draft-keep-open',
+        worktree_path: '',
+        base_branch: 'main',
+        parent_branch: 'main',
+        status: 'spec',
+        session_state: 'spec' as const,
+        created_at: isoNow,
+        ready_to_merge: false,
+        has_uncommitted_changes: false,
+        has_conflicts: false,
+        is_current: false,
+        session_type: 'worktree' as const,
+      },
+      status: undefined,
+      terminals: [],
+    }
+
+    let resolveCreate: ((value: RawSession | null) => void) | undefined
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+        return [specSession]
+      }
+      if (cmd === TauriCommands.SchaltwerkCoreCreateSession) {
+        return await new Promise(resolve => {
+          resolveCreate = resolve as (value: RawSession | null) => void
+        })
+      }
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    try {
+      await renderApp()
+
+      await clickElement(screen.getByTestId('open-project'))
+      await waitFor(() => {
+        expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+      })
+
+      await act(async () => {
+        emitUiEvent(UiEvent.StartAgentFromSpec, { name: 'draft-keep-open' })
+      })
+
+      await waitFor(() => {
+        expect(newSessionModalMock).toHaveBeenCalled()
+      })
+
+      const modalCall = newSessionModalMock.mock.calls.at(-1)
+      expect(modalCall).toBeTruthy()
+      const modalProps = modalCall![0] as { onCreate: OnCreateFn }
+
+      const createPromise = modalProps.onCreate({
+        name: 'draft-keep-open',
+        prompt: '# Spec draft',
+        baseBranch: 'main',
+        versionCount: 1,
+        agentType: 'claude',
+        isSpec: false,
+        userEditedName: true,
+      })
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      await waitFor(() => {
+        const latestCall = newSessionModalMock.mock.calls.at(-1)
+        expect(latestCall).toBeTruthy()
+        expect((latestCall![0] as { open: boolean }).open).toBe(true)
+      })
+
+      await act(async () => {
+        resolveCreate?.(buildRawSession('draft-keep-open'))
+      })
+      await createPromise
+    } finally {
       invokeMock.mockImplementation(defaultInvokeImpl)
     }
   })

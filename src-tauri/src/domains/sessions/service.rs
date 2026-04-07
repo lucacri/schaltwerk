@@ -2283,7 +2283,7 @@ impl SessionManager {
         let finalizer = SessionFinalizer::new(&self.db_manager, &self.cache_manager);
         let finalization_config = FinalizationConfig {
             session: session.clone(),
-            compute_git_stats: true,
+            compute_git_stats: false,
             update_activity: true,
         };
 
