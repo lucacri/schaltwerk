@@ -261,20 +261,24 @@ pub fn create_worktree_from_pr(
     pr_number: i64,
     branch_name: &str,
     worktree_path: &Path,
+    forge_type: super::repository::ForgeType,
 ) -> Result<()> {
     log::info!(
-        "Creating worktree from PR #{} as branch '{}' at {}",
+        "Creating worktree from PR #{} as branch '{}' at {} (forge: {:?})",
         pr_number,
         branch_name,
-        worktree_path.display()
+        worktree_path.display(),
+        forge_type,
     );
 
     if let Some(parent) = worktree_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
 
+    let fetch_ref = forge_type.pr_fetch_ref(pr_number);
+
     let output = std::process::Command::new("git")
-        .args(["fetch", "origin", &format!("pull/{pr_number}/head")])
+        .args(["fetch", "origin", &fetch_ref])
         .current_dir(repo_path)
         .output()
         .map_err(|e| anyhow!("Failed to execute git fetch: {e}"))?;

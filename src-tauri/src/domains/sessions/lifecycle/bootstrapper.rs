@@ -50,11 +50,14 @@ impl<'a> WorktreeBootstrapper<'a> {
 
             info!("Creating worktree from PR #{pr_number} with branch '{final_branch}'");
 
+            let forge_type = git::detect_forge(self.repo_path);
+
             git::create_worktree_from_pr(
                 self.repo_path,
                 pr_number,
                 &final_branch,
                 config.worktree_path,
+                forge_type,
             )
             .with_context(|| format!("Failed to create worktree from PR #{pr_number}"))?;
 

@@ -12,6 +12,15 @@ pub enum ForgeType {
     Unknown,
 }
 
+impl ForgeType {
+    pub fn pr_fetch_ref(&self, pr_number: i64) -> String {
+        match self {
+            ForgeType::GitLab => format!("merge-requests/{pr_number}/head"),
+            ForgeType::GitHub | ForgeType::Unknown => format!("pull/{pr_number}/head"),
+        }
+    }
+}
+
 pub fn detect_forge(repo_path: &Path) -> ForgeType {
     let repo = match Repository::open(repo_path) {
         Ok(r) => r,
@@ -612,5 +621,20 @@ mod tests {
     fn test_detect_forge_not_a_repo() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         assert_eq!(detect_forge(temp_dir.path()), ForgeType::Unknown);
+    }
+
+    #[test]
+    fn pr_fetch_ref_github() {
+        assert_eq!(ForgeType::GitHub.pr_fetch_ref(42), "pull/42/head");
+    }
+
+    #[test]
+    fn pr_fetch_ref_gitlab() {
+        assert_eq!(ForgeType::GitLab.pr_fetch_ref(381), "merge-requests/381/head");
+    }
+
+    #[test]
+    fn pr_fetch_ref_unknown_falls_back_to_github() {
+        assert_eq!(ForgeType::Unknown.pr_fetch_ref(1), "pull/1/head");
     }
 }
