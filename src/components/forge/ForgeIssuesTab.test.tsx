@@ -397,6 +397,61 @@ describe('ForgeIssuesTab', () => {
     })
   })
 
+  it('renders author in issue row', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([
+      makeSummary({ id: '10', title: 'Test issue', author: 'alice' }),
+    ])
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        searchIssues,
+        sources: [testSource],
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/by @alice/)).toBeTruthy()
+    })
+  })
+
+  it('renders assignees in issue row', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([
+      makeSummary({ id: '11', title: 'Assigned issue', assignees: ['bob', 'carol'] }),
+    ])
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        searchIssues,
+        sources: [testSource],
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText(/@bob, @carol/)).toBeTruthy()
+    })
+  })
+
+  it('hides author segment when author is missing', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([
+      makeSummary({ id: '12', title: 'No author', author: undefined }),
+    ])
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        searchIssues,
+        sources: [testSource],
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('No author')).toBeTruthy()
+    })
+    expect(screen.queryByText(/by @/)).toBeNull()
+  })
+
   it('refresh button re-triggers search', async () => {
     const searchIssues = vi.fn().mockResolvedValue([makeSummary()])
 

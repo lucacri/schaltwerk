@@ -78,6 +78,16 @@ function IssueRow({
             {t.forgeIssueTab.updated.replace('{time}', formatRelativeDate(issue.updatedAt))}
           </span>
         )}
+        {issue.author && (
+          <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>
+            · {t.forgeIssueTab.openedBy.replace('{author}', `@${issue.author}`)}
+          </span>
+        )}
+        {issue.assignees && issue.assignees.length > 0 && (
+          <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>
+            · @{issue.assignees.join(', @')}
+          </span>
+        )}
       </div>
       <div
         className="truncate"
