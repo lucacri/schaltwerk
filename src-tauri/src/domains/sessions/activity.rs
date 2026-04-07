@@ -139,6 +139,7 @@ impl<E: EventEmitter> ActivityTracker<E> {
                     let payload = SessionGitStatsUpdated {
                         session_id: session.id.clone(),
                         session_name: session.name.clone(),
+                        project_path: session.repository_path.to_string_lossy().to_string(),
                         files_changed: stats.files_changed,
                         lines_added: stats.lines_added,
                         lines_removed: stats.lines_removed,
@@ -239,6 +240,7 @@ pub struct SessionActivityUpdated {
 pub struct SessionGitStatsUpdated {
     pub session_id: String,
     pub session_name: String,
+    pub project_path: String,
     pub files_changed: u32,
     pub lines_added: u32,
     pub lines_removed: u32,
@@ -347,6 +349,7 @@ mod tests {
         let stats_payload = SessionGitStatsUpdated {
             session_id: "session1".to_string(),
             session_name: "feature".to_string(),
+            project_path: "/tmp/project".to_string(),
             files_changed: 5,
             lines_added: 100,
             lines_removed: 20,
@@ -382,6 +385,7 @@ mod tests {
         let payload = SessionGitStatsUpdated {
             session_id: "session-456".to_string(),
             session_name: "bug-fix".to_string(),
+            project_path: "/tmp/project".to_string(),
             files_changed: 3,
             lines_added: 45,
             lines_removed: 12,

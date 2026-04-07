@@ -4,7 +4,7 @@ import { TauriCommands } from '../../common/tauriCommands'
 import { useToast } from '../../common/toast/ToastProvider'
 import { useTranslation } from '../../common/i18n'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
-import type { ChangedFile, SessionsRefreshedEventPayload } from '../../common/events'
+import { matchesProjectScope, type ChangedFile, type SessionsRefreshedEventPayload } from '../../common/events'
 import { logger } from '../../utils/logger'
 import type { DiffResponse } from '../../types/diff'
 import { writeClipboard } from '../../utils/clipboard'
@@ -256,6 +256,7 @@ export function CopyContextBar({ sessionName }: CopyContextBarProps) {
     const registerFileChanges = async () => {
       try {
         const unlisten = await listenEvent(SchaltEvent.FileChanges, (payload) => {
+          if (!matchesProjectScope(payload.project_path, projectPath)) return
           if (disposed || payload.session_name !== sessionName) return
           setChangedFiles(payload.changed_files ?? [])
           const hasDiff = (payload.changed_files ?? []).length > 0

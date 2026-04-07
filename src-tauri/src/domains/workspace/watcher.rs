@@ -23,6 +23,7 @@ use git2::{Oid, Repository};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileChangeEvent {
     pub session_name: String,
+    pub project_path: String,
     pub changed_files: Vec<ChangedFile>,
     pub change_summary: ChangeSummary,
     pub branch_info: BranchInfo,
@@ -112,10 +113,19 @@ fn short_oid(repo: &Repository, oid: Oid) -> String {
     oid.to_string().chars().take(7).collect()
 }
 
+fn orchestrator_watcher_key(repo_path: &Path) -> String {
+    format!("{ORCHESTRATOR_WATCHER_KEY}::{}", repo_path.to_string_lossy())
+}
+
+fn session_watcher_key(repo_path: &Path, session_name: &str) -> String {
+    format!("{session_name}::{}", repo_path.to_string_lossy())
+}
+
 impl FileWatcher {
     pub fn new(
         session_name: String,
         worktree_path: PathBuf,
+        project_path: PathBuf,
         base_branch: String,
         app_handle: AppHandle,
     ) -> Result<Self, String> {
@@ -149,6 +159,7 @@ impl FileWatcher {
                         if let Err(e) = Self::handle_file_changes(
                             &session_name_clone,
                             &worktree_path_clone,
+                            &project_path,
                             &base_branch_clone,
                             &app_handle_clone,
                             events,
@@ -238,6 +249,7 @@ impl FileWatcher {
     async fn handle_file_changes(
         session_name: &str,
         worktree_path: &Path,
+        project_path: &Path,
         base_branch: &str,
         app_handle: &AppHandle,
         events: Vec<notify_debouncer_mini::DebouncedEvent>,
@@ -306,6 +318,7 @@ impl FileWatcher {
 
         let file_change_event = FileChangeEvent {
             session_name: session_name.to_string(),
+            project_path: project_path.to_string_lossy().to_string(),
             changed_files,
             change_summary,
             branch_info,
@@ -378,6 +391,7 @@ impl FileWatcher {
                 let payload = SessionGitStatsUpdated {
                     session_id: session_name.to_string(), // UI uses session_name; keep id same for payload
                     session_name: session_name.to_string(),
+                    project_path: project_path.to_string_lossy().to_string(),
                     files_changed: stats.files_changed,
                     lines_added: stats.lines_added,
                     lines_removed: stats.lines_removed,
@@ -687,11 +701,13 @@ impl FileWatcherManager {
         &self,
         session_name: String,
         worktree_path: PathBuf,
+        project_path: PathBuf,
         base_branch: String,
     ) -> Result<(), String> {
         let mut watchers = self.watchers.lock().await;
+        let watcher_key = session_watcher_key(&project_path, &session_name);
 
-        if watchers.contains_key(&session_name) {
+        if watchers.contains_key(&watcher_key) {
             debug!("Already watching session {session_name}");
             return Ok(());
         }
@@ -699,19 +715,25 @@ impl FileWatcherManager {
         let watcher = FileWatcher::new(
             session_name.clone(),
             worktree_path,
+            project_path,
             base_branch,
             self.app_handle.clone(),
         )?;
 
-        watchers.insert(session_name.clone(), watcher);
+        watchers.insert(watcher_key, watcher);
         info!("Started file watching for session {session_name}");
         Ok(())
     }
 
-    pub async fn stop_watching_session(&self, session_name: &str) -> Result<(), String> {
+    pub async fn stop_watching_session(
+        &self,
+        repo_path: &Path,
+        session_name: &str,
+    ) -> Result<(), String> {
         let mut watchers = self.watchers.lock().await;
+        let watcher_key = session_watcher_key(repo_path, session_name);
 
-        if let Some(_watcher) = watchers.remove(session_name) {
+        if let Some(_watcher) = watchers.remove(&watcher_key) {
             info!("Stopped file watching for session {session_name}");
         } else {
             debug!("Session {session_name} was not being watched");
@@ -727,13 +749,14 @@ impl FileWatcherManager {
         info!("Stopped {count} file watchers");
     }
 
-    pub async fn is_watching(&self, session_name: &str) -> bool {
+    pub async fn is_watching_session(&self, repo_path: &Path, session_name: &str) -> bool {
         let watchers = self.watchers.lock().await;
-        if session_name == ORCHESTRATOR_SESSION_NAME {
-            watchers.contains_key(ORCHESTRATOR_WATCHER_KEY)
-        } else {
-            watchers.contains_key(session_name)
-        }
+        watchers.contains_key(&session_watcher_key(repo_path, session_name))
+    }
+
+    pub async fn is_watching_orchestrator(&self, repo_path: &Path) -> bool {
+        let watchers = self.watchers.lock().await;
+        watchers.contains_key(&orchestrator_watcher_key(repo_path))
     }
 
     pub async fn get_active_watchers(&self) -> Vec<String> {
@@ -747,8 +770,9 @@ impl FileWatcherManager {
         base_branch: String,
     ) -> Result<(), String> {
         let mut watchers = self.watchers.lock().await;
+        let watcher_key = orchestrator_watcher_key(&repo_path);
 
-        if watchers.contains_key(ORCHESTRATOR_WATCHER_KEY) {
+        if watchers.contains_key(&watcher_key) {
             debug!("Already watching orchestrator repository");
             return Ok(());
         }
@@ -756,11 +780,12 @@ impl FileWatcherManager {
         let watcher = FileWatcher::new(
             ORCHESTRATOR_SESSION_NAME.to_string(),
             repo_path.clone(),
+            repo_path.clone(),
             base_branch,
             self.app_handle.clone(),
         )?;
 
-        watchers.insert(ORCHESTRATOR_WATCHER_KEY.to_string(), watcher);
+        watchers.insert(watcher_key, watcher);
         info!("Started orchestrator file watcher");
 
         // Ensure the initial index reflects the current branch state.
@@ -768,10 +793,11 @@ impl FileWatcherManager {
         Ok(())
     }
 
-    pub async fn stop_watching_orchestrator(&self) -> Result<(), String> {
+    pub async fn stop_watching_orchestrator(&self, repo_path: &Path) -> Result<(), String> {
         let mut watchers = self.watchers.lock().await;
+        let watcher_key = orchestrator_watcher_key(repo_path);
 
-        if watchers.remove(ORCHESTRATOR_WATCHER_KEY).is_some() {
+        if watchers.remove(&watcher_key).is_some() {
             info!("Stopped orchestrator file watcher");
         } else {
             debug!("No orchestrator file watcher to stop");
@@ -1001,6 +1027,7 @@ mod tests {
     fn test_file_change_event_serialization() {
         let event = FileChangeEvent {
             session_name: "test-session".to_string(),
+            project_path: "/tmp/project".to_string(),
             changed_files: vec![
                 ChangedFile::new("src/main.rs".to_string(), "modified".to_string()),
                 ChangedFile::new("Cargo.toml".to_string(), "added".to_string()),
@@ -1472,6 +1499,25 @@ mod tests {
         );
     }
 
+    #[test]
+    fn orchestrator_watcher_key_is_repo_scoped() {
+        let alpha = Path::new("/projects/alpha");
+        let beta = Path::new("/projects/beta");
+
+        assert_ne!(orchestrator_watcher_key(alpha), orchestrator_watcher_key(beta));
+    }
+
+    #[test]
+    fn session_watcher_key_is_repo_scoped() {
+        let alpha = Path::new("/projects/alpha");
+        let beta = Path::new("/projects/beta");
+
+        assert_ne!(
+            session_watcher_key(alpha, "shared-session"),
+            session_watcher_key(beta, "shared-session")
+        );
+    }
+
     // Note: FileWatcherManager tests require a real Tauri AppHandle and are better
     // suited for integration tests rather than unit tests. The manager functionality
     // is tested indirectly through the FileWatcher tests.
@@ -1481,6 +1527,7 @@ mod tests {
         // Test that our data structures are reasonably sized
         let event = FileChangeEvent {
             session_name: "test".to_string(),
+            project_path: "/tmp/project".to_string(),
             changed_files: Vec::new(),
             change_summary: ChangeSummary {
                 files_changed: 0,
@@ -1508,6 +1555,7 @@ mod tests {
         // Test with larger data
         let event_with_files = FileChangeEvent {
             session_name: "large-session".to_string(),
+            project_path: "/tmp/project".to_string(),
             changed_files: (0..100)
                 .map(|i| ChangedFile::new(format!("file{}.txt", i), "modified".to_string()))
                 .collect(),
@@ -1650,6 +1698,7 @@ mod tests {
     fn test_file_change_event_with_empty_files() {
         let event = FileChangeEvent {
             session_name: "test".to_string(),
+            project_path: "/tmp/project".to_string(),
             changed_files: vec![], // Empty file list
             change_summary: ChangeSummary {
                 files_changed: 0,
@@ -1689,6 +1738,7 @@ mod tests {
 
         let event = FileChangeEvent {
             session_name: "large-session".to_string(),
+            project_path: "/tmp/project".to_string(),
             changed_files,
             change_summary: ChangeSummary {
                 files_changed: 1000,

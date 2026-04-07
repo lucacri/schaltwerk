@@ -716,6 +716,7 @@ pub async fn merge_session_with_events(
                     let payload = lucode::domains::sessions::activity::SessionGitStatsUpdated {
                         session_id: session.id.clone(),
                         session_name: session.name.clone(),
+                        project_path: session.repository_path.to_string_lossy().to_string(),
                         files_changed: stats.files_changed,
                         lines_added: stats.lines_added,
                         lines_removed: stats.lines_removed,
@@ -2577,6 +2578,7 @@ pub async fn schaltwerk_core_mark_session_ready(
         let payload = lucode::domains::sessions::activity::SessionGitStatsUpdated {
             session_id: session.id.clone(),
             session_name: session.name.clone(),
+            project_path: session.repository_path.to_string_lossy().to_string(),
             files_changed: stats.files_changed,
             lines_added: stats.lines_added,
             lines_removed: stats.lines_removed,

@@ -209,7 +209,7 @@ describe('UnifiedDiffModal sidebar stability', () => {
     })
 
     await waitFor(() => {
-      expect(vi.mocked(diffPreloader.getChangedFiles)).toHaveBeenCalledWith('demo')
+      expect(vi.mocked(diffPreloader.getChangedFiles)).toHaveBeenCalledWith('demo', null)
     })
 
     const initialCallsForA = loadFileDiffMock.mock.calls.filter(
@@ -231,7 +231,7 @@ describe('UnifiedDiffModal sidebar stability', () => {
     })
 
     await waitFor(() => {
-      expect(vi.mocked(diffPreloader.invalidate)).toHaveBeenCalledWith('demo')
+      expect(vi.mocked(diffPreloader.invalidate)).toHaveBeenCalledWith('demo', '/test/project')
     })
 
     await waitFor(() => {

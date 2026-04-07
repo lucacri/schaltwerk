@@ -526,13 +526,13 @@ async fn start_file_watcher(session_name: String) -> Result<(), SchaltError> {
             });
     }
 
-    let session_manager = {
+    let (session_manager, project_path) = {
         let core = get_core_read()
             .await
             .map_err(|e| SchaltError::DatabaseError {
                 message: e.to_string(),
             })?;
-        core.session_manager()
+        (core.session_manager(), core.repo_path.clone())
     };
 
     let sessions =
@@ -562,6 +562,7 @@ async fn start_file_watcher(session_name: String) -> Result<(), SchaltError> {
         .start_watching_session(
             session_name,
             worktree_path.clone(),
+            project_path,
             session.info.base_branch,
         )
         .await
@@ -577,14 +578,22 @@ async fn stop_file_watcher(session_name: String) -> Result<(), SchaltError> {
                 key: "file_watcher_manager".to_string(),
                 message: e,
             })?;
+    let repo_path = {
+        let core = get_core_read()
+            .await
+            .map_err(|e| SchaltError::DatabaseError {
+                message: e.to_string(),
+            })?;
+        core.repo_path.clone()
+    };
     if session_name == "orchestrator" {
         return watcher_manager
-            .stop_watching_orchestrator()
+            .stop_watching_orchestrator(repo_path.as_path())
             .await
-            .map_err(|e| SchaltError::io("stop_watching_orchestrator", "orchestrator", e));
+            .map_err(|e| SchaltError::io("stop_watching_orchestrator", repo_path.to_string_lossy(), e));
     }
     watcher_manager
-        .stop_watching_session(&session_name)
+        .stop_watching_session(repo_path.as_path(), &session_name)
         .await
         .map_err(|e| SchaltError::io("stop_watching_session", &session_name, e))
 }
@@ -598,7 +607,21 @@ async fn is_file_watcher_active(session_name: String) -> Result<bool, SchaltErro
                 key: "file_watcher_manager".to_string(),
                 message: e,
             })?;
-    Ok(watcher_manager.is_watching(&session_name).await)
+    let repo_path = {
+        let core = get_core_read()
+            .await
+            .map_err(|e| SchaltError::DatabaseError {
+                message: e.to_string(),
+            })?;
+        core.repo_path.clone()
+    };
+    if session_name == "orchestrator" {
+        return Ok(watcher_manager.is_watching_orchestrator(repo_path.as_path()).await);
+    }
+
+    Ok(watcher_manager
+        .is_watching_session(repo_path.as_path(), &session_name)
+        .await)
 }
 
 #[tauri::command]

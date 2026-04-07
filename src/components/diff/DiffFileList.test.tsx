@@ -485,6 +485,73 @@ describe('DiffFileList', () => {
     mockInvoke.mockImplementation(defaultInvokeImplementation)
   })
 
+  it('ignores orchestrator FileChanges events from another project', async () => {
+    const mockInvoke = await getInvokeMock()
+    mockInvoke.mockImplementation(async (cmd: string, _args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.GetOrchestratorWorkingChanges) {
+        return [
+          createMockChangedFile({ path: 'alpha.ts', change_type: 'modified' }),
+        ]
+      }
+      if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
+      return defaultInvokeImplementation(cmd, _args)
+    })
+
+    type FileChangesPayload = {
+      session_name: string
+      project_path?: string
+      changed_files: MockChangedFile[]
+      branch_info: {
+        current_branch: string
+        base_branch: string
+        base_commit: string
+        head_commit: string
+      }
+    }
+
+    let fileChangesHandler: ((payload: FileChangesPayload) => void) | null = null
+
+    const listenSpy = vi.spyOn(eventSystemModule, 'listenEvent').mockImplementation(async (event, handler) => {
+      if (event === eventSystemModule.SchaltEvent.FileChanges) {
+        fileChangesHandler = handler as (payload: FileChangesPayload) => void
+      }
+      return () => {}
+    })
+
+    render(
+      <Wrapper projectPath="/projects/alpha">
+        <DiffFileList onFileSelect={() => {}} isCommander={true} />
+      </Wrapper>
+    )
+
+    expect(await screen.findByText('alpha.ts')).toBeInTheDocument()
+    expect(fileChangesHandler).toBeTruthy()
+
+    await act(async () => {
+      fileChangesHandler?.({
+        session_name: 'orchestrator',
+        project_path: '/projects/beta',
+        changed_files: [
+          createMockChangedFile({ path: 'beta.ts', change_type: 'modified', additions: 1 }),
+        ],
+        branch_info: {
+          current_branch: 'main',
+          base_branch: 'Working Directory',
+          base_commit: 'HEAD',
+          head_commit: 'Working',
+        },
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('alpha.ts')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('beta.ts')).not.toBeInTheDocument()
+
+    listenSpy.mockRestore()
+    mockInvoke.mockImplementation(defaultInvokeImplementation)
+  })
+
   it('reloads orchestrator changes when SessionGitStats event arrives', async () => {
     const mockInvoke = await getInvokeMock()
     let orchestratorResponse: 'initial' | 'updated' = 'initial'
@@ -537,6 +604,61 @@ describe('DiffFileList', () => {
       expect(screen.getByText('updated.ts')).toBeInTheDocument()
     })
     expect(screen.queryByText('initial.ts')).not.toBeInTheDocument()
+
+    listenSpy.mockRestore()
+    mockInvoke.mockImplementation(defaultInvokeImplementation)
+  })
+
+  it('ignores orchestrator SessionGitStats events from another project', async () => {
+    const mockInvoke = await getInvokeMock()
+    let getOrchestratorCalls = 0
+
+    mockInvoke.mockImplementation(async (cmd: string, _args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.GetOrchestratorWorkingChanges) {
+        getOrchestratorCalls += 1
+        return [
+          createMockChangedFile({ path: 'alpha.ts', change_type: 'modified' }),
+        ]
+      }
+      if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
+      return defaultInvokeImplementation(cmd, _args)
+    })
+
+    let sessionGitStatsHandler: ((payload: SessionGitStatsUpdated & { project_path?: string }) => void) | null = null
+
+    const listenSpy = vi.spyOn(eventSystemModule, 'listenEvent').mockImplementation(async (event, handler) => {
+      if (event === eventSystemModule.SchaltEvent.SessionGitStats) {
+        sessionGitStatsHandler = handler as (payload: SessionGitStatsUpdated & { project_path?: string }) => void
+      }
+      return () => {}
+    })
+
+    render(
+      <Wrapper projectPath="/projects/alpha">
+        <DiffFileList onFileSelect={() => {}} isCommander={true} />
+      </Wrapper>
+    )
+
+    expect(await screen.findByText('alpha.ts')).toBeInTheDocument()
+    expect(getOrchestratorCalls).toBe(1)
+    expect(sessionGitStatsHandler).toBeTruthy()
+
+    await act(async () => {
+      sessionGitStatsHandler?.({
+        session_id: 'orchestrator',
+        session_name: 'orchestrator',
+        project_path: '/projects/beta',
+        files_changed: 1,
+        lines_added: 1,
+        lines_removed: 0,
+        has_uncommitted: true,
+      })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('alpha.ts')).toBeInTheDocument()
+    })
+    expect(getOrchestratorCalls).toBe(1)
 
     listenSpy.mockRestore()
     mockInvoke.mockImplementation(defaultInvokeImplementation)

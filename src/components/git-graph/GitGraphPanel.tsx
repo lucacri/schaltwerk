@@ -15,7 +15,7 @@ import { useToast } from '../../common/toast/ToastProvider'
 import { useTranslation } from '../../common/i18n'
 import { writeClipboard } from '../../utils/clipboard'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
-import type { EventPayloadMap } from '../../common/events'
+import { matchesProjectScope, type EventPayloadMap } from '../../common/events'
 import { useGitHistory } from '../../store/atoms/gitHistory'
 import { ORCHESTRATOR_SESSION_NAME } from '../../constants/sessions'
 import { useAtomValue } from 'jotai'
@@ -506,6 +506,10 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
 
   const handleFileChanges = useCallback(
     (payload: EventPayloadMap[SchaltEvent.FileChanges]) => {
+      if (!matchesProjectScope(payload?.project_path, projectPath)) {
+        return
+      }
+
       const targetSession = sessionName ?? ORCHESTRATOR_SESSION_NAME
       const eventSession = payload?.session_name
       const nextHead = payload?.branch_info?.head_commit?.trim()
@@ -564,7 +568,7 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
       })
       enqueueRefreshHead(nextHead)
     },
-    [repoPath, enqueueRefreshHead, sessionName, headsMatch, queuePendingHead]
+    [repoPath, projectPath, enqueueRefreshHead, sessionName, headsMatch, queuePendingHead]
   )
 
   useEffect(() => {

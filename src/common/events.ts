@@ -55,6 +55,7 @@ export interface SessionActivityUpdated {
 export interface SessionGitStatsUpdated {
   session_id: string
   session_name: string
+  project_path?: string
   files_changed: number
   lines_added: number
   lines_removed: number
@@ -233,6 +234,14 @@ export interface SessionsRefreshedEventPayload {
   sessions: EnrichedSession[]
 }
 
+export const matchesProjectScope = (
+  eventProjectPath: string | null | undefined,
+  currentProjectPath: string | null | undefined,
+): boolean => {
+  if (!eventProjectPath || !currentProjectPath) return true
+  return eventProjectPath === currentProjectPath
+}
+
 export interface SelectionPayload {
   kind: 'session' | 'orchestrator'
   payload?: string
@@ -272,6 +281,7 @@ export type EventPayloadMap = {
   [SchaltEvent.OpenHome]: string
   [SchaltEvent.FileChanges]: {
     session_name: string
+    project_path?: string
     changed_files: ChangedFile[]
     branch_info: BranchInfo
   }

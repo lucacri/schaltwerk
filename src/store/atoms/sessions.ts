@@ -9,7 +9,7 @@ import { SessionState, type SessionInfo } from '../../types/session'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
 import { projectPathAtom } from './project'
 import { setSelectionFilterModeActionAtom, clearTerminalTrackingActionAtom } from './selection'
-import type { GitOperationFailedPayload, GitOperationPayload, SessionsRefreshedEventPayload } from '../../common/events'
+import { matchesProjectScope, type GitOperationFailedPayload, type GitOperationPayload, type SessionsRefreshedEventPayload } from '../../common/events'
 import { hasInflight, singleflight } from '../../utils/singleflight'
 import { stableSessionTerminalId, isTopTerminalId } from '../../common/terminalIdentity'
 import { emitUiEvent, UiEvent } from '../../common/uiEvents'
@@ -1657,6 +1657,7 @@ export const initializeSessionsEventsActionAtom = atom(
         await register(SchaltEvent.SessionGitStats, (payload) => {
             const event = payload as {
                 session_name: string
+                project_path?: string
                 files_changed?: number
                 lines_added?: number
                 lines_removed?: number
@@ -1668,6 +1669,11 @@ export const initializeSessionsEventsActionAtom = atom(
                 merge_has_conflicts?: boolean
                 merge_is_up_to_date?: boolean
                 merge_conflicting_paths?: string[] | null
+            }
+
+            const activeProject = get(projectPathAtom)
+            if (!matchesProjectScope(event.project_path, activeProject)) {
+                return
             }
 
             if (!hasSessionInActiveProject(event.session_name)) {

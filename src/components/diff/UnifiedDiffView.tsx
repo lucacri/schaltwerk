@@ -83,8 +83,9 @@ import {
   restoreSidebarScroll,
   type SidebarScrollSnapshot,
 } from "./sidebarScroll";
-import type { BranchInfo } from "../../common/events";
+import { matchesProjectScope, type BranchInfo } from "../../common/events";
 import { diffPreloader } from "../../domains/diff/preloader";
+import { projectPathAtom } from "../../store/atoms/project";
 
 interface UnifiedDiffViewProps {
   filePath: string | null;
@@ -110,7 +111,12 @@ export const shouldHandleFileChange = (
   eventSession: string | null | undefined,
   isCommander: boolean,
   sessionName: string | null,
+  eventProjectPath?: string | null,
+  activeProjectPath?: string | null,
 ) => {
+  if (!matchesProjectScope(eventProjectPath, activeProjectPath)) {
+    return false;
+  }
   const targetSession = isCommander ? ORCHESTRATOR_SESSION_NAME : sessionName;
   if (!targetSession) return false;
   return eventSession === targetSession;
@@ -153,6 +159,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
   const { config: keyboardShortcutConfig } = useKeyboardShortcutsConfig();
   const platform = useMemo(() => detectPlatformSafe(), []);
   const themeId = useAtomValue(resolvedThemeAtom) as SchaltwerkThemeId;
+  const currentProjectPath = useAtomValue(projectPathAtom);
   const lineSelection = useLineSelection();
   const lineSelectionRef = useRef(lineSelection);
   lineSelectionRef.current = lineSelection;
@@ -942,7 +949,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
 
     try {
       const target = isCommanderView() ? ORCHESTRATOR_SESSION_NAME : sessionName;
-      const preloadedFiles = target ? diffPreloader.getChangedFiles(target) : null;
+      const preloadedFiles = target ? diffPreloader.getChangedFiles(target, currentProjectPath) : null;
       const changedFiles = preloadedFiles ?? (isCommanderView()
         ? await fetchOrchestratorChangedFiles()
         : await fetchSessionChangedFiles());
@@ -994,7 +1001,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         const targetFile = changedFiles[nextSelectedIndex];
         if (targetFile) {
           try {
-            const preloadedDiff = target ? diffPreloader.getFileDiff(target, targetFile.path) : null;
+            const preloadedDiff = target ? diffPreloader.getFileDiff(target, targetFile.path, currentProjectPath) : null;
             const primary = preloadedDiff ?? await loadDiffForFile(
               sessionName,
               targetFile,
@@ -1079,14 +1086,14 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
           selection.kind === "orchestrator"
             ? ORCHESTRATOR_SESSION_NAME
             : sessionName;
-        if (target) diffPreloader.invalidate(target);
+        if (target) diffPreloader.invalidate(target, currentProjectPath);
 
         await loadChangedFiles();
       } catch (err) {
         logger.error("Failed to discard file changes", err);
       }
     },
-    [mode, selection.kind, sessionName, loadChangedFiles],
+    [mode, selection.kind, sessionName, currentProjectPath, loadChangedFiles],
   );
 
   useEffect(() => {
@@ -1216,7 +1223,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
                 historyLoadedRef.current.add(path);
               }
             } else {
-              const preloadedDiff = sessionName ? diffPreloader.getFileDiff(sessionName, path) : null;
+              const preloadedDiff = sessionName ? diffPreloader.getFileDiff(sessionName, path, currentProjectPath) : null;
               diff = preloadedDiff ?? await loadDiffForFile(sessionName, file, diffLayout);
             }
 
@@ -1844,7 +1851,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
             return { path, diff };
           }
 
-          const preloadedDiff = sessionName ? diffPreloader.getFileDiff(sessionName, path) : null;
+          const preloadedDiff = sessionName ? diffPreloader.getFileDiff(sessionName, path, currentProjectPath) : null;
           const diff = preloadedDiff ?? await loadDiffForFile(sessionName, file, diffLayout);
           return { path, diff };
         } catch (e) {
@@ -2204,6 +2211,8 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
           event.session_name,
           isCommanderView(),
           sessionName,
+          event.project_path ?? null,
+          currentProjectPath,
         )
       )
         return;
@@ -2222,7 +2231,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         headCommit: branchPayload.head_commit,
       });
       setFiles(event.changed_files);
-      if (event.session_name) diffPreloader.invalidate(event.session_name);
+      if (event.session_name) diffPreloader.invalidate(event.session_name, currentProjectPath);
       setAllFileDiffs(new Map());
 
       void loadChangedFilesGuarded();
@@ -2262,6 +2271,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
     mode,
     sessionName,
     isCommanderView,
+    currentProjectPath,
     loadChangedFilesGuarded,
     viewMode,
     captureScrollAnchor,

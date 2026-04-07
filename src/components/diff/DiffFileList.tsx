@@ -11,7 +11,7 @@ import { UiEvent, emitUiEvent, listenUiEvent } from '../../common/uiEvents'
 import { AnimatedText } from '../common/AnimatedText'
 import { ConfirmResetDialog } from '../common/ConfirmResetDialog'
 import { ConfirmDiscardDialog } from '../common/ConfirmDiscardDialog'
-import type { ChangedFile } from '../../common/events'
+import { matchesProjectScope, type ChangedFile } from '../../common/events'
 import { DiffChangeBadges } from './DiffChangeBadges'
 import { ORCHESTRATOR_SESSION_NAME } from '../../constants/sessions'
 import { useAtom, useAtomValue } from 'jotai'
@@ -698,6 +698,9 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
       // Always set up event listener (even if watcher failed, in case it recovers)
       try {
         eventUnlisten = await listenEvent(SchaltEvent.FileChanges, (event) => {
+          if (!matchesProjectScope(event.project_path, projectPathRef.current)) {
+            return
+          }
           // CRITICAL: Only update if this event is for the currently selected session
           const { sessionNameOverride: currentOverride, selection: currentSelection, isCommander: currentCommander, compareMode: currentCompareMode } = currentPropsRef.current
           const currentlySelectedSession = currentOverride ?? (currentSelection.kind === 'session' ? currentSelection.payload : null)
@@ -760,6 +763,7 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
         void (async () => {
           try {
             const unlisten = await listenEvent(SchaltEvent.SessionGitStats, (event) => {
+              if (!matchesProjectScope(event.project_path, projectPathRef.current)) return
               if (event.session_name !== ORCHESTRATOR_SESSION_NAME) return
               const { selection: currentSelection, isCommander: currentCommander } = currentPropsRef.current
               const commanderSelected = currentCommander && currentSelection.kind === 'orchestrator'
@@ -780,6 +784,7 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
       if (currentSession && !currentIsCommander) {
         try {
           dirtyStatsUnlisten = await listenEvent(SchaltEvent.SessionGitStats, (event) => {
+            if (!matchesProjectScope(event.project_path, projectPathRef.current)) return
             if (event.session_name !== currentSession) return
             void loadDirtyFiles()
           })

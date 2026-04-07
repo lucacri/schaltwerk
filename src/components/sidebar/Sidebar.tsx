@@ -9,7 +9,7 @@ import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useFocus } from '../../contexts/FocusContext'
 import { UnlistenFn } from '@tauri-apps/api/event'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
-import { EventPayloadMap, GitOperationPayload, OpenGitlabMrModalPayload, OpenMergeModalPayload, OpenPrModalPayload } from '../../common/events'
+import { EventPayloadMap, GitOperationPayload, OpenGitlabMrModalPayload, OpenMergeModalPayload, OpenPrModalPayload, matchesProjectScope } from '../../common/events'
 import { useSelection } from '../../hooks/useSelection'
 import { clearTerminalStartedTracking } from '../terminal/Terminal'
 import { useSessions } from '../../hooks/useSessions'
@@ -226,7 +226,12 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const [isMarkReadyCoolingDown, setIsMarkReadyCoolingDown] = useState(false)
     const markReadyCooldownRef = useRef(false)
     const markReadyCooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const projectPathRef = useRef(projectPath)
     const MARK_READY_COOLDOWN_MS = 250
+
+    useEffect(() => {
+        projectPathRef.current = projectPath
+    }, [projectPath])
 
     const engageMarkReadyCooldown = useCallback((reason: string) => {
         if (!markReadyCooldownRef.current) {
@@ -900,6 +905,9 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
 
             try {
                 const unlisten = await listenEvent(SchaltEvent.FileChanges, event => {
+                    if (!matchesProjectScope(event.project_path, projectPathRef.current)) {
+                        return
+                    }
                     if (event.session_name === ORCHESTRATOR_SESSION_NAME) {
                         setOrchestratorBranch(event.branch_info.current_branch || 'HEAD')
                     }
