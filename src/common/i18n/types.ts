@@ -1324,6 +1324,8 @@ export interface Translations {
     errorDetails: string
     refreshing: string
     refresh: string
+    openedBy: string
+    assignedTo: string
   }
   forgePrTab: {
     searchPlaceholder: string

@@ -1313,7 +1313,9 @@
     "retry": "Retry",
     "errorDetails": "Details",
     "refreshing": "Refreshing\u2026",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "openedBy": "by {author}",
+    "assignedTo": "assigned to {assignees}"
   },
   "forgePrTab": {
     "searchPlaceholder": "Search pull requests...",

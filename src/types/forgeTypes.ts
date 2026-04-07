@@ -32,6 +32,7 @@ export interface ForgeIssueSummary {
   state: string
   updatedAt?: string
   author?: string
+  assignees?: string[]
   labels: ForgeLabel[]
   url?: string
 }
