@@ -1553,6 +1553,7 @@ impl<R: CommandRunner> ForgeProvider for GitlabCli<R> {
                 state: i.state,
                 updated_at: Some(i.updated_at),
                 author: i.author.map(|a| a.username),
+                assignees: vec![],
                 labels: i
                     .labels
                     .into_iter()
@@ -1592,6 +1593,7 @@ impl<R: CommandRunner> ForgeProvider for GitlabCli<R> {
                 state: details.state,
                 updated_at: None,
                 author: details.author.map(|a| a.username),
+                assignees: vec![],
                 labels: details
                     .labels
                     .into_iter()

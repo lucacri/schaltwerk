@@ -2536,6 +2536,7 @@ impl<R: CommandRunner> ForgeProvider for GitHubCli<R> {
                 state: i.state,
                 updated_at: Some(i.updated_at),
                 author: i.author_login,
+                assignees: vec![],
                 labels: i
                     .labels
                     .into_iter()
@@ -2573,6 +2574,7 @@ impl<R: CommandRunner> ForgeProvider for GitHubCli<R> {
                 state: String::new(),
                 updated_at: None,
                 author: None,
+                assignees: vec![],
                 labels: details
                     .labels
                     .into_iter()

@@ -38,6 +38,7 @@ pub struct ForgeIssueSummary {
     pub state: String,
     pub updated_at: Option<String>,
     pub author: Option<String>,
+    pub assignees: Vec<String>,
     pub labels: Vec<ForgeLabel>,
     pub url: Option<String>,
 }
