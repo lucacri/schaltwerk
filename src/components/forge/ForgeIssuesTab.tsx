@@ -23,10 +23,12 @@ function IssueRow({
   issue,
   onSelect,
   showSource,
+  currentUserLogin,
 }: {
   issue: ForgeIssueSummary
   onSelect: (issue: ForgeIssueSummary) => void
   showSource?: boolean
+  currentUserLogin?: string
 }) {
   const { t } = useTranslation()
   const open = isOpen(issue.state)
@@ -85,7 +87,15 @@ function IssueRow({
         )}
         {issue.assignees && issue.assignees.length > 0 && (
           <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>
-            · @{issue.assignees.join(', @')}
+            ·{' '}
+            {issue.assignees.map((assignee, idx) => (
+              <span key={assignee}>
+                {idx > 0 && ', '}
+                <span style={currentUserLogin && assignee === currentUserLogin ? { color: 'var(--color-accent-blue)', fontWeight: 600 } : undefined}>
+                  @{assignee}
+                </span>
+              </span>
+            ))}
           </span>
         )}
       </div>
@@ -211,6 +221,7 @@ export function ForgeIssuesTab() {
         sourceLabel={selectedSource?.label}
         forgeType={forge.forgeType}
         source={selectedSource}
+        currentUserLogin={forge.status?.userLogin ?? undefined}
       />
     )
   }
@@ -317,6 +328,7 @@ export function ForgeIssuesTab() {
               issue={issue}
               onSelect={handleSelect}
               showSource={multiSource}
+              currentUserLogin={forge.status?.userLogin ?? undefined}
             />
           ))
         )}

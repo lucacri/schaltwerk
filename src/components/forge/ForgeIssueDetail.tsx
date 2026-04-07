@@ -20,6 +20,7 @@ interface ForgeIssueDetailProps {
   sourceLabel?: string
   forgeType: ForgeType
   source?: ForgeSourceConfig
+  currentUserLogin?: string
 }
 
 function StateBadge({ state }: { state: string }) {
@@ -56,7 +57,7 @@ const markdownContainerStyle = {
   wordBreak: 'break-word' as const,
 }
 
-export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType, source }: ForgeIssueDetailProps) {
+export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType, source, currentUserLogin }: ForgeIssueDetailProps) {
   const { t } = useTranslation()
   const { summary, body, comments } = details
 
@@ -178,7 +179,15 @@ export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType, sour
               <>
                 {summary.author && <span>·</span>}
                 <span>
-                  {t.forgeIssueTab.assignedTo.replace('{assignees}', `@${summary.assignees.join(', @')}`)}
+                  {t.forgeIssueTab.assignedTo.replace('{assignees}', '')}{' '}
+                  {summary.assignees.map((assignee, idx) => (
+                    <span key={assignee}>
+                      {idx > 0 && ', '}
+                      <span style={currentUserLogin && assignee === currentUserLogin ? { color: 'var(--color-accent-blue)', fontWeight: 600 } : undefined}>
+                        @{assignee}
+                      </span>
+                    </span>
+                  ))}
                 </span>
               </>
             )}

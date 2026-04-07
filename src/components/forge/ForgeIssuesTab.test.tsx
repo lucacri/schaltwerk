@@ -429,8 +429,35 @@ describe('ForgeIssuesTab', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText(/@bob, @carol/)).toBeTruthy()
+      expect(screen.getByText('@bob')).toBeTruthy()
+      expect(screen.getByText('@carol')).toBeTruthy()
     })
+  })
+
+  it('highlights current user assignee with accent color', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([
+      makeSummary({ id: '13', title: 'My issue', assignees: ['bob', 'octocat', 'carol'] }),
+    ])
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        searchIssues,
+        sources: [testSource],
+        status: { forgeType: 'github', installed: true, authenticated: true, userLogin: 'octocat' },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('@octocat')).toBeTruthy()
+    })
+
+    const highlighted = screen.getByText('@octocat')
+    expect(highlighted.style.color).toBe('var(--color-accent-blue)')
+    expect(highlighted.style.fontWeight).toBe('600')
+
+    const bob = screen.getByText('@bob')
+    expect(bob.style.color).not.toBe('var(--color-accent-blue)')
   })
 
   it('hides author segment when author is missing', async () => {

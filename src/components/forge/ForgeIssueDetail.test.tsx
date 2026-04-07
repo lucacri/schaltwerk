@@ -238,7 +238,26 @@ describe('ForgeIssueDetail', () => {
       { forgeOverrides: { hasRepository: true } }
     )
 
-    expect(screen.getByText(/assigned to @bob, @carol/)).toBeTruthy()
+    expect(screen.getByText(/assigned to/)).toBeTruthy()
+    expect(screen.getByText('@bob')).toBeTruthy()
+    expect(screen.getByText('@carol')).toBeTruthy()
+  })
+
+  it('highlights current user assignee with accent color', () => {
+    const details = makeDetails()
+    details.summary.assignees = ['bob', 'octocat', 'carol']
+
+    renderWithProviders(
+      <ForgeIssueDetail details={details} onBack={onBack} forgeType="github" currentUserLogin="octocat" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    const highlighted = screen.getByText('@octocat')
+    expect(highlighted.style.color).toBe('var(--color-accent-blue)')
+    expect(highlighted.style.fontWeight).toBe('600')
+
+    const bob = screen.getByText('@bob')
+    expect(bob.style.color).not.toBe('var(--color-accent-blue)')
   })
 
   it('hides assigned-to segment when no assignees', () => {
