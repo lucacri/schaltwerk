@@ -32,6 +32,10 @@ export default defineConfig(({ command }) => ({
   build: {
     minify: 'esbuild',
     rollupOptions: {
+      onwarn(warning, warn) {
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.message.includes('"use client"')) return
+        warn(warning)
+      },
       input: {
         main: resolve(__dirname, 'index.html'),
         'style-guide': resolve(__dirname, 'style-guide.html'),
