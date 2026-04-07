@@ -122,6 +122,7 @@ export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType, sour
             'issue.title': summary.title ?? '',
             'issue.description': body ?? '',
             'issue.author': summary.author ?? '',
+            'issue.assignees': summary.assignees?.join(', ') ?? '',
             'issue.labels': summary.labels.map(l => l.name).join(', '),
             'issue.url': summary.url ?? '',
           }}
@@ -159,6 +160,36 @@ export function ForgeIssueDetail({ details, onBack, sourceLabel, forgeType, sour
         >
           #{summary.id} {summary.title}
         </h3>
+
+        {(summary.author || (summary.assignees && summary.assignees.length > 0) || summary.updatedAt) && (
+          <div
+            className="flex flex-wrap items-center gap-1 mb-2"
+            style={{
+              fontSize: theme.fontSize.caption,
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            {summary.author && (
+              <span>
+                {t.forgeIssueTab.openedBy.replace('{author}', `@${summary.author}`)}
+              </span>
+            )}
+            {summary.assignees && summary.assignees.length > 0 && (
+              <>
+                {summary.author && <span>·</span>}
+                <span>
+                  {t.forgeIssueTab.assignedTo.replace('{assignees}', `@${summary.assignees.join(', @')}`)}
+                </span>
+              </>
+            )}
+            {summary.updatedAt && (
+              <>
+                {(summary.author || (summary.assignees && summary.assignees.length > 0)) && <span>·</span>}
+                <span>{t.forgeIssueTab.updated.replace('{time}', formatRelativeDate(summary.updatedAt))}</span>
+              </>
+            )}
+          </div>
+        )}
 
         {summary.labels.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">

@@ -220,6 +220,39 @@ describe('ForgeIssueDetail', () => {
     )
   })
 
+  it('renders metadata line with author', () => {
+    renderWithProviders(
+      <ForgeIssueDetail details={makeDetails()} onBack={onBack} forgeType="github" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    expect(screen.getByText(/by @alice/)).toBeTruthy()
+  })
+
+  it('renders metadata line with assignees', () => {
+    const details = makeDetails()
+    details.summary.assignees = ['bob', 'carol']
+
+    renderWithProviders(
+      <ForgeIssueDetail details={details} onBack={onBack} forgeType="github" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    expect(screen.getByText(/assigned to @bob, @carol/)).toBeTruthy()
+  })
+
+  it('hides assigned-to segment when no assignees', () => {
+    const details = makeDetails()
+    details.summary.assignees = []
+
+    renderWithProviders(
+      <ForgeIssueDetail details={details} onBack={onBack} forgeType="github" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    expect(screen.queryByText(/assigned to/)).toBeNull()
+  })
+
   it('shows sourceLabel badge when provided', () => {
     renderWithProviders(
       <ForgeIssueDetail details={makeDetails()} onBack={onBack} forgeType="gitlab" sourceLabel="my-project" />,
