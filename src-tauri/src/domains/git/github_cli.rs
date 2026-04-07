@@ -88,6 +88,7 @@ pub struct GitHubIssueSummary {
     pub state: String,
     pub updated_at: String,
     pub author_login: Option<String>,
+    pub assignee_logins: Vec<String>,
     pub labels: Vec<GitHubIssueLabel>,
     pub url: String,
 }
@@ -573,7 +574,7 @@ impl<R: CommandRunner> GitHubCli<R> {
             "issue".to_string(),
             "list".to_string(),
             "--json".to_string(),
-            "number,title,state,updatedAt,author,labels,url".to_string(),
+            "number,title,state,updatedAt,author,assignees,labels,url".to_string(),
             "--limit".to_string(),
             constrained_limit.to_string(),
         ];
@@ -629,6 +630,7 @@ impl<R: CommandRunner> GitHubCli<R> {
                 state: issue.state,
                 updated_at: issue.updated_at,
                 author_login: issue.author.and_then(|actor| actor.login),
+                assignee_logins: issue.assignees.into_iter().filter_map(|a| a.login).collect(),
                 labels: issue
                     .labels
                     .into_iter()
@@ -2120,6 +2122,8 @@ struct IssueListResponse {
     updated_at: String,
     author: Option<IssueActor>,
     #[serde(default)]
+    assignees: Vec<IssueActor>,
+    #[serde(default)]
     labels: Vec<IssueLabel>,
     url: String,
 }
@@ -2536,7 +2540,7 @@ impl<R: CommandRunner> ForgeProvider for GitHubCli<R> {
                 state: i.state,
                 updated_at: Some(i.updated_at),
                 author: i.author_login,
-                assignees: vec![],
+                assignees: i.assignee_logins,
                 labels: i
                     .labels
                     .into_iter()
@@ -3025,6 +3029,29 @@ mod tests {
         );
         assert!(args.contains(&"--repo".to_string()));
         assert!(args.contains(&"example/repo".to_string()));
+    }
+
+    #[test]
+    fn search_issues_parses_assignees() {
+        let runner = MockRunner::default();
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: r#"[{"number":99,"title":"Assigned issue","state":"OPEN","updatedAt":"2024-03-01T00:00:00Z","author":{"login":"alice"},"assignees":[{"login":"bob"},{"login":"carol"}],"labels":[],"url":"https://github.com/example/repo/issues/99"}]"#.to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitHubCli::with_runner(runner);
+
+        let temp = TempDir::new().unwrap();
+        let repo_path = temp.path();
+        let repo = git2::Repository::init(repo_path).unwrap();
+        repo.remote("origin", "https://github.com/example/repo").unwrap();
+
+        let results = cli
+            .search_issues(repo_path, "", 50, Some("example/repo"))
+            .expect("issue search results");
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].assignee_logins, vec!["bob", "carol"]);
     }
 
     #[test]
