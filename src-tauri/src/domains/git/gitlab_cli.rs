@@ -122,6 +122,8 @@ pub struct GitlabIssueSummary {
     pub updated_at: String,
     pub author: Option<GitlabUser>,
     #[serde(default)]
+    pub assignees: Vec<GitlabUser>,
+    #[serde(default)]
     pub labels: Vec<String>,
     pub web_url: String,
 }
@@ -136,6 +138,8 @@ pub struct GitlabIssueDetails {
     pub labels: Vec<String>,
     pub state: String,
     pub author: Option<GitlabUser>,
+    #[serde(default)]
+    pub assignees: Vec<GitlabUser>,
     #[serde(default)]
     pub notes: Vec<GitlabNote>,
 }
@@ -1553,7 +1557,7 @@ impl<R: CommandRunner> ForgeProvider for GitlabCli<R> {
                 state: i.state,
                 updated_at: Some(i.updated_at),
                 author: i.author.map(|a| a.username),
-                assignees: vec![],
+                assignees: i.assignees.iter().map(|a| a.username.clone()).collect(),
                 labels: i
                     .labels
                     .into_iter()
@@ -1593,7 +1597,7 @@ impl<R: CommandRunner> ForgeProvider for GitlabCli<R> {
                 state: details.state,
                 updated_at: None,
                 author: details.author.map(|a| a.username),
-                assignees: vec![],
+                assignees: details.assignees.iter().map(|a| a.username.clone()).collect(),
                 labels: details
                     .labels
                     .into_iter()
@@ -2206,6 +2210,41 @@ mod tests {
         assert_eq!(issues[0].labels, vec!["bug", "high-priority"]);
         assert_eq!(issues[1].iid, 43);
         assert_eq!(issues[1].labels.len(), 0);
+    }
+
+    #[test]
+    fn search_issues_parses_assignees() {
+        let runner = MockRunner::default();
+        let json = r#"[
+            {
+                "iid": 50,
+                "title": "Assigned issue",
+                "state": "opened",
+                "updated_at": "2024-02-01T00:00:00Z",
+                "author": {"username": "alice", "name": "Alice"},
+                "assignees": [
+                    {"username": "bob", "name": "Bob"},
+                    {"username": "carol", "name": "Carol"}
+                ],
+                "labels": [],
+                "web_url": "https://gitlab.com/group/project/-/issues/50"
+            }
+        ]"#;
+        runner.push_response(Ok(CommandOutput {
+            status: Some(0),
+            stdout: json.to_string(),
+            stderr: String::new(),
+        }));
+        let cli = GitlabCli::with_runner(runner);
+
+        let issues = cli
+            .search_issues(Path::new("/tmp/repo"), "", 10, "group/project", None)
+            .unwrap();
+
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].assignees.len(), 2);
+        assert_eq!(issues[0].assignees[0].username, "bob");
+        assert_eq!(issues[0].assignees[1].username, "carol");
     }
 
     #[test]
