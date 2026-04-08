@@ -252,16 +252,7 @@ impl SessionDbManager {
     pub fn update_session_state(&self, session_id: &str, state: SessionState) -> Result<()> {
         self.db
             .update_session_state(session_id, state)
-            .map_err(|e| anyhow!("Failed to update session state: {e}"))?;
-
-        if let Ok(session) = self.db.get_session_by_id(session_id) {
-            crate::domains::sessions::cache::invalidate_spec_content(
-                &self.repo_path,
-                &session.name,
-            );
-        }
-
-        Ok(())
+            .map_err(|e| anyhow!("Failed to update session state: {e}"))
     }
 
     pub fn update_session_ready_to_merge(&self, session_id: &str, ready: bool) -> Result<()> {
