@@ -1,8 +1,9 @@
 import { useState, useCallback, useMemo } from 'react'
+import { useEnabledAgents } from '../../hooks/useEnabledAgents'
 import { useContextualActions } from '../../hooks/useContextualActions'
 import { useAgentVariants } from '../../hooks/useAgentVariants'
 import { useAgentPresets } from '../../hooks/useAgentPresets'
-import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
+import { NON_TERMINAL_AGENTS, filterEnabledAgents, type AgentType, type EnabledAgents } from '../../types/session'
 import { generateId } from '../../common/generateId'
 import type { ContextualAction, ContextualActionContext, ContextualActionMode } from '../../types/contextualAction'
 import { PR_TEMPLATE_VARIABLES, ISSUE_TEMPLATE_VARIABLES } from '../../types/contextualAction'
@@ -21,9 +22,11 @@ function createEmptyAction(): ContextualAction {
 
 interface ContextualActionsSettingsProps {
     onNotification?: (message: string, type: 'success' | 'error') => void
+    enabledAgents?: EnabledAgents
 }
 
-export function ContextualActionsSettings({ onNotification }: ContextualActionsSettingsProps) {
+export function ContextualActionsSettings({ onNotification, enabledAgents }: ContextualActionsSettingsProps) {
+    const { filterAgents } = useEnabledAgents()
     const { actions, saveActions, resetToDefaults } = useContextualActions()
     const { variants } = useAgentVariants()
     const { presets } = useAgentPresets()
@@ -32,6 +35,11 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
 
     const currentActions = editingActions ?? actions
     const hasUnsavedChanges = editingActions !== null
+    const visibleAgentTypes = enabledAgents
+        ? filterEnabledAgents(NON_TERMINAL_AGENTS, enabledAgents)
+        : filterAgents(NON_TERMINAL_AGENTS)
+    const visibleVariants = variants.filter(variant => visibleAgentTypes.includes(variant.agentType))
+    const visiblePresets = presets.filter(preset => preset.slots.every(slot => visibleAgentTypes.includes(slot.agentType)))
 
     const handleAdd = useCallback(() => {
         const newAction = createEmptyAction()
@@ -93,17 +101,17 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
         const options: { value: string; label: string }[] = [
             { value: '', label: 'Default (Claude)' },
         ]
-        NON_TERMINAL_AGENTS.forEach(agent => {
+        visibleAgentTypes.forEach(agent => {
             options.push({ value: `agent:${agent}`, label: agent })
         })
-        variants.forEach(v => {
+        visibleVariants.forEach(v => {
             options.push({ value: `variant:${v.id}`, label: `${v.name} (variant)` })
         })
-        presets.forEach(p => {
+        visiblePresets.forEach(p => {
             options.push({ value: `preset:${p.id}`, label: `${p.name} (preset)` })
         })
         return options
-    }, [variants, presets])
+    }, [visibleAgentTypes, visiblePresets, visibleVariants])
 
     const getAgentSourceValue = useCallback((action: ContextualAction): string => {
         if (action.presetId) return `preset:${action.presetId}`
@@ -111,6 +119,26 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
         if (action.agentType) return `agent:${action.agentType}`
         return ''
     }, [])
+
+    const getAgentSourceOptions = useCallback((action: ContextualAction) => {
+        const currentValue = getAgentSourceValue(action)
+        if (!currentValue || agentSourceOptions.some(option => option.value === currentValue)) {
+            return agentSourceOptions
+        }
+
+        const currentLabel = action.agentType
+            ? action.agentType
+            : action.variantId
+                ? `${action.variantId} (variant)`
+                : action.presetId
+                    ? `${action.presetId} (preset)`
+                    : currentValue
+
+        return [
+            { value: currentValue, label: currentLabel },
+            ...agentSourceOptions,
+        ]
+    }, [agentSourceOptions, getAgentSourceValue])
 
     const handleAgentSourceChange = useCallback((id: string, value: string) => {
         if (value.startsWith('preset:')) {
@@ -229,11 +257,12 @@ export function ContextualActionsSettings({ onNotification }: ContextualActionsS
 
                                 <div>
                                     <Label className="block mb-1">Agent / Variant / Preset</Label>
-                                    <Select
-                                        value={getAgentSourceValue(action)}
-                                        onChange={value => handleAgentSourceChange(action.id, value)}
-                                        options={agentSourceOptions}
-                                    />
+                                            <Select
+                                                aria-label="Agent Source"
+                                                value={getAgentSourceValue(action)}
+                                                onChange={value => handleAgentSourceChange(action.id, value)}
+                                                options={getAgentSourceOptions(action)}
+                                            />
                                 </div>
 
                                 <div>

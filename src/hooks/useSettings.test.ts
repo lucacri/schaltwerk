@@ -5,6 +5,7 @@ import { useSettings, AgentType } from './useSettings'
 import { invoke, InvokeArgs } from '@tauri-apps/api/core'
 import { KeyboardShortcutAction, KeyboardShortcutConfig, defaultShortcutConfig } from '../keyboardShortcuts/config'
 import { logger } from '../utils/logger'
+import { type EnabledAgents } from '../types/session'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn()
@@ -244,6 +245,59 @@ describe('useSettings', () => {
       })
 
       expect(prefs.codex).toEqual({ model: '', reasoningEffort: '' })
+    })
+  })
+
+  describe('loadEnabledAgents', () => {
+    it('loads enabled-agent settings and merges missing values with defaults', async () => {
+      const { result } = renderHook(() => useSettings())
+
+      mockInvoke.mockResolvedValue({ gemini: false, qwen: false })
+
+      const enabledAgents = await act(async () => {
+        return await result.current.loadEnabledAgents()
+      })
+
+      expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.GetEnabledAgents)
+      expect(enabledAgents).toEqual({
+        claude: true,
+        copilot: true,
+        opencode: true,
+        gemini: false,
+        codex: true,
+        droid: true,
+        qwen: false,
+        amp: true,
+        kilocode: true,
+        terminal: true,
+      })
+    })
+  })
+
+  describe('saveEnabledAgents', () => {
+    it('saves enabled-agent settings through the dedicated tauri command', async () => {
+      const { result } = renderHook(() => useSettings())
+
+      const enabledAgents: EnabledAgents = {
+        claude: true,
+        copilot: false,
+        opencode: true,
+        gemini: false,
+        codex: true,
+        droid: true,
+        qwen: true,
+        amp: true,
+        kilocode: false,
+        terminal: true,
+      }
+
+      await act(async () => {
+        await result.current.saveEnabledAgents(enabledAgents)
+      })
+
+      expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SetEnabledAgents, {
+        enabledAgents,
+      })
     })
   })
 

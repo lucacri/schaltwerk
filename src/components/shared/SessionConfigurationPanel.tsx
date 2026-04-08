@@ -40,6 +40,7 @@ interface SessionConfigurationPanelProps {
     hideAgentType?: boolean
     ignorePersistedAgentType?: boolean
     agentControlsDisabled?: boolean
+    allowedAgents?: readonly AgentType[]
     branchError?: string
 }
 
@@ -78,6 +79,7 @@ export function SessionConfigurationPanel({
     hideAgentType = false,
     ignorePersistedAgentType = false,
     agentControlsDisabled = false,
+    allowedAgents,
     branchError
 }: SessionConfigurationPanelProps) {
     const { t } = useTranslation()
@@ -111,6 +113,10 @@ export function SessionConfigurationPanel({
     const saveSkipPermissionsRef = useRef(saveSkipPermissions)
     const prevInitialBaseBranchRef = useRef(initialBaseBranch)
     const agentSelectionDisabled = agentControlsDisabled
+    const selectableAgents = useMemo(
+        () => (allowedAgents && allowedAgents.length > 0 ? [...allowedAgents] : [...AGENT_TYPES]),
+        [allowedAgents]
+    )
 
     useEffect(() => { onBaseBranchChangeRef.current = onBaseBranchChange }, [onBaseBranchChange])
     useEffect(() => { onAgentTypeChangeRef.current = onAgentTypeChange }, [onAgentTypeChange])
@@ -159,8 +165,10 @@ export function SessionConfigurationPanel({
                 storedAgentTypeString && AGENT_TYPES.includes(storedAgentTypeString as AgentType)
                     ? (storedAgentTypeString as AgentType)
                     : 'claude'
+            const fallbackAgent = selectableAgents[0] ?? 'claude'
+            const sanitizedType = selectableAgents.includes(normalizedType) ? normalizedType : fallbackAgent
 
-            const supportsSkip = AGENT_SUPPORTS_SKIP_PERMISSIONS[normalizedType]
+            const supportsSkip = AGENT_SUPPORTS_SKIP_PERMISSIONS[sanitizedType]
             const normalizedSkip = supportsSkip ? storedSkipPerms : false
 
             if (!skipPermissionsTouchedRef.current && !initialSkipPermissionsRef.current) {
@@ -177,12 +185,12 @@ export function SessionConfigurationPanel({
             }
 
             if (!ignorePersistedAgentType && !agentTypeTouchedRef.current && initialAgentTypeRef.current === 'claude') {
-                setAgentType(normalizedType)
-                onAgentTypeChangeRef.current?.(normalizedType)
+                setAgentType(sanitizedType)
+                onAgentTypeChangeRef.current?.(sanitizedType)
 
-                if (storedAgentTypeString !== normalizedType) {
+                if (storedAgentTypeString !== sanitizedType) {
                     try {
-                        await saveAgentTypeRef.current?.(normalizedType)
+                        await saveAgentTypeRef.current?.(sanitizedType)
                     } catch (err) {
                         logger.warn('Failed to persist normalized agent type:', err)
                     }
@@ -198,7 +206,7 @@ export function SessionConfigurationPanel({
         } finally {
             setLoadingBranches(false)
         }
-    }, [ignorePersistedAgentType])
+    }, [ignorePersistedAgentType, selectableAgents])
 
     useEffect(() => {
         void loadConfiguration()
@@ -313,11 +321,27 @@ export function SessionConfigurationPanel({
 
     useEffect(() => {
         if (initialAgentType && initialAgentType !== agentType) {
-            initialAgentTypeRef.current = initialAgentType
+            const fallbackAgent = selectableAgents[0] ?? 'claude'
+            const sanitizedType = selectableAgents.includes(initialAgentType) ? initialAgentType : fallbackAgent
+            initialAgentTypeRef.current = sanitizedType
             agentTypeTouchedRef.current = false
-            setAgentType(initialAgentType)
+            setAgentType(sanitizedType)
         }
-    }, [initialAgentType, agentType])
+    }, [initialAgentType, agentType, selectableAgents])
+
+    useEffect(() => {
+        if (selectableAgents.includes(agentType)) {
+            return
+        }
+
+        const fallbackAgent = selectableAgents[0] ?? 'claude'
+        setAgentType(fallbackAgent)
+        onAgentTypeChangeRef.current?.(fallbackAgent)
+        if (!AGENT_SUPPORTS_SKIP_PERMISSIONS[fallbackAgent]) {
+            setSkipPermissions(false)
+            onSkipPermissionsChangeRef.current?.(false)
+        }
+    }, [agentType, selectableAgents])
 
     useEffect(() => {
         if (initialUseExistingBranch !== useExistingBranch) {
@@ -369,13 +393,14 @@ export function SessionConfigurationPanel({
                             value={agentType}
                             onChange={(type) => { void handleAgentTypeChange(type) }}
                             disabled={disabled}
-                        agentSelectionDisabled={agentSelectionDisabled}
-                        skipPermissions={skipPermissions}
-                        onSkipPermissionsChange={(enabled) => { void handleSkipPermissionsChange(enabled) }}
-                        autonomyEnabled={autonomyEnabled}
-                        onAutonomyChange={handleAutonomyChange}
-                        showShortcutHint={shouldShowShortcutHint}
-                    />
+                            agentSelectionDisabled={agentSelectionDisabled}
+                            skipPermissions={skipPermissions}
+                            onSkipPermissionsChange={(enabled) => { void handleSkipPermissionsChange(enabled) }}
+                            autonomyEnabled={autonomyEnabled}
+                            onAutonomyChange={handleAutonomyChange}
+                            showShortcutHint={shouldShowShortcutHint}
+                            allowedAgents={selectableAgents}
+                        />
                     </div>
                 </div>
             </div>
@@ -471,6 +496,7 @@ export function SessionConfigurationPanel({
                     autonomyEnabled={autonomyEnabled}
                     onAutonomyChange={handleAutonomyChange}
                     showShortcutHint={shouldShowShortcutHint}
+                    allowedAgents={selectableAgents}
                 />
                 {agentType === 'codex' && effectiveCodexModelOptions && onCodexModelChange && (
                     <CodexModelSelector

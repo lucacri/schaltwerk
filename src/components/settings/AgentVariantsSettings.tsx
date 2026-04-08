@@ -1,37 +1,51 @@
 import { useState, useCallback } from 'react'
+import { useEnabledAgents } from '../../hooks/useEnabledAgents'
 import { useAgentVariants } from '../../hooks/useAgentVariants'
-import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
+import { NON_TERMINAL_AGENTS, filterEnabledAgents, type AgentType, type EnabledAgents } from '../../types/session'
 import { generateId } from '../../common/generateId'
 import type { AgentVariant } from '../../types/agentVariant'
 import { Button, FormGroup, Label, SectionHeader, Select, TextInput, Textarea } from '../ui'
 
-function createEmptyVariant(): AgentVariant {
+function createEmptyVariant(defaultAgentType: AgentType): AgentVariant {
     return {
         id: generateId('variant'),
         name: '',
-        agentType: 'claude',
+        agentType: defaultAgentType,
         isBuiltIn: false,
     }
 }
 
 interface AgentVariantsSettingsProps {
     onNotification?: (message: string, type: 'success' | 'error') => void
+    enabledAgents?: EnabledAgents
 }
 
-export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsProps) {
+export function AgentVariantsSettings({ onNotification, enabledAgents }: AgentVariantsSettingsProps) {
+    const { filterAgents } = useEnabledAgents()
     const { variants, saveVariants } = useAgentVariants()
     const [editingVariants, setEditingVariants] = useState<AgentVariant[] | null>(null)
     const [expandedId, setExpandedId] = useState<string | null>(null)
 
     const currentVariants = editingVariants ?? variants
     const hasUnsavedChanges = editingVariants !== null
+    const visibleAgentTypes = enabledAgents
+        ? filterEnabledAgents(NON_TERMINAL_AGENTS, enabledAgents)
+        : filterAgents(NON_TERMINAL_AGENTS)
+    const defaultAgentType = visibleAgentTypes[0] ?? 'claude'
+
+    const getAgentOptions = useCallback((current: AgentType) => {
+        const agentTypes = visibleAgentTypes.includes(current)
+            ? visibleAgentTypes
+            : [current, ...visibleAgentTypes]
+        return agentTypes.map(agent => ({ value: agent, label: agent }))
+    }, [visibleAgentTypes])
 
     const handleAdd = useCallback(() => {
-        const newVariant = createEmptyVariant()
+        const newVariant = createEmptyVariant(defaultAgentType)
         const updated = [...currentVariants, newVariant]
         setEditingVariants(updated)
         setExpandedId(newVariant.id)
-    }, [currentVariants])
+    }, [currentVariants, defaultAgentType])
 
     const handleRemove = useCallback((id: string) => {
         setEditingVariants(currentVariants.filter(v => v.id !== id))
@@ -166,7 +180,7 @@ export function AgentVariantsSettings({ onNotification }: AgentVariantsSettingsP
                                         <Select
                                             value={variant.agentType}
                                             onChange={value => handleUpdate(variant.id, { agentType: value as AgentType })}
-                                            options={NON_TERMINAL_AGENTS.map(agent => ({ value: agent, label: agent }))}
+                                            options={getAgentOptions(variant.agentType)}
                                         />
                                     </FormGroup>
                                 </div>

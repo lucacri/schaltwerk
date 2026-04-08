@@ -10,7 +10,13 @@ import {
     normalizeShortcutConfig,
     PartialKeyboardShortcutConfig,
 } from '../keyboardShortcuts/config'
-import { AgentType, AGENT_TYPES, createAgentRecord } from '../types/session'
+import {
+    AgentType,
+    AGENT_TYPES,
+    EnabledAgents,
+    createAgentRecord,
+    mergeEnabledAgents,
+} from '../types/session'
 
 export type { AgentType }
 export type AttentionNotificationMode = 'off' | 'dock' | 'system' | 'both'
@@ -27,6 +33,7 @@ export interface AgentPreferenceConfig {
 }
 
 type AgentPreferenceState = Record<AgentType, AgentPreferenceConfig>
+type PartialEnabledAgents = Partial<EnabledAgents>
 
 interface ProjectSettings {
     setupScript: string
@@ -131,6 +138,10 @@ export const useSettings = () => {
                 }
             }
         }
+    }, [])
+
+    const saveEnabledAgents = useCallback(async (enabledAgents: EnabledAgents): Promise<void> => {
+        await invoke(TauriCommands.SetEnabledAgents, { enabledAgents })
     }, [])
     
     const saveProjectSettings = useCallback(async (projectSettings: ProjectSettings): Promise<void> => {
@@ -315,6 +326,16 @@ export const useSettings = () => {
 
         return loaded
     }, [])
+
+    const loadEnabledAgents = useCallback(async (): Promise<EnabledAgents> => {
+        try {
+            const enabledAgents = await invoke<PartialEnabledAgents | null>(TauriCommands.GetEnabledAgents)
+            return mergeEnabledAgents(enabledAgents)
+        } catch (error) {
+            logger.error('Failed to load enabled agents:', error)
+            return mergeEnabledAgents()
+        }
+    }, [])
     
     const loadProjectSettings = useCallback(async (): Promise<ProjectSettings> => {
         try {
@@ -423,6 +444,7 @@ export const useSettings = () => {
         saving,
         saveAllSettings,
         saveAgentSettings,
+        saveEnabledAgents,
         saveProjectSettings,
         saveTerminalSettings,
         saveSessionPreferences,
@@ -430,6 +452,7 @@ export const useSettings = () => {
         loadEnvVars,
         loadCliArgs,
         loadAgentPreferences,
+        loadEnabledAgents,
         loadProjectSettings,
         loadTerminalSettings,
         loadSessionPreferences,

@@ -345,6 +345,8 @@ export interface Translations {
       customized: string
     }
     agentConfiguration: {
+      enabledAgents: string
+      enabledAgentsDesc: string
       autonomyTemplate: string
       autonomyTemplateDesc: string
       autonomyTemplateHint: string

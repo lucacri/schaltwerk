@@ -343,6 +343,8 @@
       "customized": "Customized"
     },
     "agentConfiguration": {
+      "enabledAgents": "Enabled Agents",
+      "enabledAgentsDesc": "Choose which agents appear in launch dropdowns and multi-agent pickers.",
       "autonomyTemplate": "Autonomy prompt template",
       "autonomyTemplateDesc": "This text is appended to the initial prompt when Full autonomous is enabled for a session launch.",
       "autonomyTemplateHint": "Shared across agents in v1. Reset restores the default autonomy instruction block."

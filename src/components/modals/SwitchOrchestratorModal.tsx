@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ModelSelector } from '../inputs/ModelSelector'
 import { useClaudeSession } from '../../hooks/useClaudeSession'
+import { useEnabledAgents } from '../../hooks/useEnabledAgents'
 import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../../types/session'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
@@ -42,12 +43,14 @@ export function SwitchOrchestratorModal({
     getAgentType,
     getSkipPermissions,
   } = useClaudeSession()
+  const { filterAgents, loading: enabledAgentsLoading } = useEnabledAgents()
   const switchRef = useRef<() => void>(() => {})
 
   const derivedScope: 'orchestrator' | 'session' =
     scope ?? (targetSessionId ? 'session' : 'orchestrator')
   const isOrchestrator = derivedScope === 'orchestrator'
-  const allowedAgents = isOrchestrator ? ORCHESTRATOR_ALLOWED_AGENTS : SESSION_ALLOWED_AGENTS
+  const allowedAgents = filterAgents(isOrchestrator ? ORCHESTRATOR_ALLOWED_AGENTS : SESSION_ALLOWED_AGENTS)
+  const selectableAgents = allowedAgents.length > 0 ? allowedAgents : [DEFAULT_AGENT]
   const title = isOrchestrator ? t.switchAgentModal.titleOrchestrator : t.switchAgentModal.titleSession
   const warningBody = isOrchestrator
     ? t.switchAgentModal.warningOrchestrator
@@ -59,7 +62,7 @@ export function SwitchOrchestratorModal({
     : t.switchAgentModal.helperSession
 
   const handleSwitch = async () => {
-    if (switching) return
+    if (switching || enabledAgentsLoading) return
 
     setSwitching(true)
     try {
@@ -80,8 +83,8 @@ export function SwitchOrchestratorModal({
 
     if (initialAgentType !== undefined) {
       const normalized = AGENT_TYPES.includes(initialAgentType) ? initialAgentType : DEFAULT_AGENT
-      const fallbackAgent = allowedAgents[0] ?? DEFAULT_AGENT
-      const sanitized = allowedAgents.includes(normalized) ? normalized : fallbackAgent
+      const fallbackAgent = selectableAgents[0] ?? DEFAULT_AGENT
+      const sanitized = selectableAgents.includes(normalized) ? normalized : fallbackAgent
       setAgentType(sanitized)
       const supports = AGENT_SUPPORTS_SKIP_PERMISSIONS[sanitized]
       setSkipPermissions(supports ? Boolean(initialSkipPermissions) : false)
@@ -98,8 +101,8 @@ export function SwitchOrchestratorModal({
         const normalized = AGENT_TYPES.includes(type as AgentType)
           ? (type as AgentType)
           : DEFAULT_AGENT
-        const fallbackAgent = allowedAgents[0] ?? DEFAULT_AGENT
-        const sanitized = allowedAgents.includes(normalized) ? normalized : fallbackAgent
+        const fallbackAgent = selectableAgents[0] ?? DEFAULT_AGENT
+        const sanitized = selectableAgents.includes(normalized) ? normalized : fallbackAgent
         setAgentType(sanitized)
         const supports = AGENT_SUPPORTS_SKIP_PERMISSIONS[sanitized]
         setSkipPermissions(supports ? Boolean(skip) : false)
@@ -111,7 +114,7 @@ export function SwitchOrchestratorModal({
     open,
     initialAgentType,
     initialSkipPermissions,
-    allowedAgents,
+    selectableAgents,
     isOrchestrator,
     getAgentType,
     getSkipPermissions,
@@ -168,11 +171,11 @@ export function SwitchOrchestratorModal({
             <ModelSelector
               value={agentType}
               onChange={setAgentType}
-              disabled={switching}
+              disabled={switching || enabledAgentsLoading}
               skipPermissions={skipPermissions}
               onSkipPermissionsChange={(value) => setSkipPermissions(value)}
               onDropdownOpenChange={setIsModelSelectorOpen}
-              allowedAgents={allowedAgents}
+              allowedAgents={selectableAgents}
             />
             <p className="text-xs text-text-tertiary mt-2">{helperText}</p>
           </div>
@@ -181,7 +184,7 @@ export function SwitchOrchestratorModal({
         <div className="px-4 py-3 border-t border-border-subtle flex justify-end gap-2">
           <button
             onClick={onClose}
-            disabled={switching}
+            disabled={switching || enabledAgentsLoading}
             className="px-3 py-1.5 bg-bg-elevated hover:bg-bg-hover disabled:bg-bg-elevated disabled:opacity-50 rounded group relative"
             title={t.switchAgentModal.cancelEsc}
           >
@@ -190,7 +193,7 @@ export function SwitchOrchestratorModal({
           </button>
           <button
             onClick={() => { void handleSwitch() }}
-            disabled={switching}
+            disabled={switching || enabledAgentsLoading}
             className="px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed rounded text-text-inverse group relative inline-flex items-center gap-2 bg-accent-blue hover:bg-[var(--color-accent-blue-dark)]"
             title={t.switchAgentModal.switchAgentEnter}
           >

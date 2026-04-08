@@ -20,7 +20,7 @@ import { FontPicker } from './FontPicker'
 import { GithubProjectIntegrationCard } from '../settings/GithubProjectIntegrationCard'
 import { GitlabProjectIntegrationCard } from '../settings/GitlabProjectIntegrationCard'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
-import { AGENT_TYPES, createAgentRecord } from '../../types/session'
+import { AGENT_TYPES, createAgentRecord, createDefaultEnabledAgents, type EnabledAgents } from '../../types/session'
 import { DEFAULT_AGENT } from '../../constants/agents'
 import { displayNameForAgent } from '../shared/agentDefaults'
 import {
@@ -54,6 +54,7 @@ import {
 } from '../../common/generationPrompts'
 import { DEFAULT_AUTONOMY_PROMPT_TEMPLATE } from '../../common/autonomyPrompt'
 import { loadContextualActionsAtom } from '../../store/atoms/contextualActions'
+import { setEnabledAgentsAtom } from '../../store/atoms/enabledAgents'
 
 const shortcutArraysEqual = (a: string[] = [], b: string[] = []) => {
     if (a.length !== b.length) return false
@@ -501,6 +502,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const [agentPreferences, setAgentPreferences] = useState<Record<AgentType, AgentPreferenceConfig>>(() =>
         createAgentRecord(_agent => ({ model: '', reasoningEffort: '' }))
     )
+    const [enabledAgents, setEnabledAgents] = useState<EnabledAgents>(() => createDefaultEnabledAgents())
     const [binaryConfigs, setBinaryConfigs] = useState<Record<AgentType, AgentBinaryConfig>>(() =>
         createAgentRecord((agent) => ({
             agent_name: agent,
@@ -525,6 +527,10 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
 
     const [selectedSpec, setSelectedSpec] = useState<{ name: string; content: string } | null>(null)
     const applicationCategories = useMemo(() => CATEGORIES.filter(category => category.scope === 'application'), [])
+    const environmentAgentTabs = useMemo(
+        () => AGENT_TYPES.filter(agent => enabledAgents[agent]),
+        [enabledAgents]
+    )
     const projectCategories = useMemo(() => {
         if (!projectAvailable) return []
         return PROJECT_CATEGORY_ORDER.map(id => CATEGORIES.find(category => category.id === id)).filter(
@@ -537,9 +543,11 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         loading,
         saving,
         saveAllSettings,
+        saveEnabledAgents,
         loadEnvVars,
         loadCliArgs,
         loadAgentPreferences = async () => createAgentRecord<AgentPreferenceConfig>(() => ({ model: '', reasoningEffort: '' })),
+        loadEnabledAgents,
         loadProjectSettings,
         loadTerminalSettings,
         loadSessionPreferences,
@@ -548,6 +556,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         saveKeyboardShortcuts,
         loadInstalledFonts
     } = useSettings()
+    const setStoredEnabledAgents = useSetAtom(setEnabledAgentsAtom)
     
     const {
         actionButtons,
@@ -762,10 +771,11 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     
     const loadAllSettings = useCallback(async () => {
         // Load application-level settings (always available)
-        const [loadedEnvVars, loadedCliArgs, loadedAgentPrefs, loadedSessionPreferences, loadedShortcuts] = await Promise.all([
+        const [loadedEnvVars, loadedCliArgs, loadedAgentPrefs, loadedEnabledAgents, loadedSessionPreferences, loadedShortcuts] = await Promise.all([
             loadEnvVars(),
             loadCliArgs(),
             loadAgentPreferences(),
+            loadEnabledAgents(),
             loadSessionPreferences(),
             loadKeyboardShortcuts(),
         ])
@@ -867,6 +877,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         setDefaultGenerationPrompts(loadedDefaultPrompts)
         setAutonomyPromptTemplate(loadedAutonomyPromptTemplate)
         setDefaultAutonomyPromptTemplate(loadedDefaultAutonomyPromptTemplate)
+        setEnabledAgents(loadedEnabledAgents)
         setShowCustomPrompts((Object.keys(loadedGenerationPrompts) as GenerationPromptKey[]).some(key => {
             return (loadedGenerationPrompts[key] ?? '').trim() !== (loadedDefaultPrompts[key] ?? '').trim()
         }))
@@ -878,7 +889,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         applyShortcutOverrides(normalizedShortcuts)
         
         void loadBinaryConfigs()
-    }, [loadEnvVars, loadCliArgs, loadAgentPreferences, loadSessionPreferences, loadKeyboardShortcuts, loadProjectSettings, loadTerminalSettings, loadRunScript, loadMergePreferences, loadBinaryConfigs, applyShortcutOverrides])
+    }, [loadEnvVars, loadCliArgs, loadAgentPreferences, loadEnabledAgents, loadSessionPreferences, loadKeyboardShortcuts, loadProjectSettings, loadTerminalSettings, loadRunScript, loadMergePreferences, loadBinaryConfigs, applyShortcutOverrides])
 
     useEffect(() => {
         if (!open) return
@@ -945,6 +956,14 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
             // no includeUnstagedOnSquash toggle anymore
         }
     }, [hasUnsavedChanges])
+
+    useEffect(() => {
+        if (environmentAgentTabs.length === 0 || environmentAgentTabs.includes(activeAgentTab)) {
+            return
+        }
+
+        setActiveAgentTab(environmentAgentTabs[0])
+    }, [activeAgentTab, environmentAgentTabs])
 
     useEffect(() => {
         if (!shortcutRecording) return
@@ -1145,6 +1164,15 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         }
 
         const result = await saveAllSettings(envVars, cliArgs, agentPreferences, projectSettings, terminalSettings, sessionPreferences, mergePreferences)
+
+        try {
+            await saveEnabledAgents(enabledAgents)
+            setStoredEnabledAgents(enabledAgents)
+            result.savedSettings.push('enabled agents')
+        } catch (error) {
+            logger.error('Failed to save enabled agents:', error)
+            result.failedSettings.push('enabled agents')
+        }
 
         if (devErrorToastsEnabled !== initialDevErrorToastsEnabled) {
             try {
@@ -1694,13 +1722,49 @@ fi`}
         }))
     }
 
+    const handleEnabledAgentChange = (agent: AgentType, checked: boolean) => {
+        if (!checked && agent !== 'terminal') {
+            const enabledNonTerminalCount = AGENT_TYPES.filter(
+                candidate => candidate !== 'terminal' && enabledAgents[candidate]
+            ).length
+            if (enabledNonTerminalCount <= 1 && enabledAgents[agent]) {
+                return
+            }
+        }
+
+        setEnabledAgents(prev => ({
+            ...prev,
+            [agent]: checked,
+        }))
+    }
+
+    const renderEnabledAgentsSettings = () => (
+        <div className="space-y-4">
+            <SectionHeader
+                title={t.settings.agentConfiguration.enabledAgents}
+                description={t.settings.agentConfiguration.enabledAgentsDesc}
+                className="border-b-0 pb-0"
+            />
+            <div className="grid gap-3 md:grid-cols-2">
+                {AGENT_TYPES.map(agent => (
+                    <Checkbox
+                        key={agent}
+                        checked={enabledAgents[agent]}
+                        onChange={checked => handleEnabledAgentChange(agent, checked)}
+                        label={displayNameForAgent(agent)}
+                    />
+                ))}
+            </div>
+        </div>
+    )
+
     if (!open) return null
 
     const renderEnvironmentSettings = () => (
         <div className="flex flex-col h-full">
             <div className="border-b border-border-default">
                 <div className="flex">
-                    {AGENT_TYPES.map(agent => (
+                    {environmentAgentTabs.map(agent => (
                         <button
                             key={agent}
                             onClick={() => setActiveAgentTab(agent)}
@@ -2947,10 +3011,11 @@ fi`}
                     <div className="flex flex-col h-full">
                         <div className="flex-1 overflow-y-auto p-6">
                             <div className="space-y-8">
+                                {renderEnabledAgentsSettings()}
                                 {renderAutonomyTemplateSettings()}
-                                <AgentVariantsSettings onNotification={showNotification} />
-                                <AgentPresetsSettings onNotification={showNotification} />
-                                <ContextualActionsSettings onNotification={showNotification} />
+                                <AgentVariantsSettings onNotification={showNotification} enabledAgents={enabledAgents} />
+                                <AgentPresetsSettings onNotification={showNotification} enabledAgents={enabledAgents} />
+                                <ContextualActionsSettings onNotification={showNotification} enabledAgents={enabledAgents} />
                             </div>
                         </div>
                     </div>

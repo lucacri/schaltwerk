@@ -1,4 +1,6 @@
-use crate::domains::settings::{AgentPreference, Settings, SettingsRepository, SettingsService};
+use crate::domains::settings::{
+    AgentPreference, EnabledAgents, Settings, SettingsRepository, SettingsService,
+};
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
@@ -156,7 +158,9 @@ impl SettingsManager {
     }
 
     pub fn set_language(&mut self, language: &str) -> Result<(), String> {
-        self.service.set_language(language).map_err(|e| e.to_string())
+        self.service
+            .set_language(language)
+            .map_err(|e| e.to_string())
     }
 
     pub fn get_agent_cli_args(&self, agent_type: &str) -> String {
@@ -194,6 +198,16 @@ impl SettingsManager {
     ) -> Result<(), String> {
         self.service
             .set_agent_preferences(agent_type, preferences)
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn get_enabled_agents(&self) -> EnabledAgents {
+        self.service.get_enabled_agents()
+    }
+
+    pub fn set_enabled_agents(&mut self, enabled_agents: EnabledAgents) -> Result<(), String> {
+        self.service
+            .set_enabled_agents(enabled_agents)
             .map_err(|e| e.to_string())
     }
 

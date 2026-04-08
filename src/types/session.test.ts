@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS, createAgentRecord } from './session'
+import {
+  AGENT_TYPES,
+  AGENT_SUPPORTS_SKIP_PERMISSIONS,
+  createAgentRecord,
+  createDefaultEnabledAgents,
+  filterEnabledAgents,
+  mergeEnabledAgents,
+} from './session'
 
 describe('session agent constants', () => {
   it('exposes the supported agents in a stable order', () => {
@@ -29,5 +36,54 @@ describe('session agent constants', () => {
     expect(Object.keys(AGENT_SUPPORTS_SKIP_PERMISSIONS)).toEqual(AGENT_TYPES)
     expect(AGENT_SUPPORTS_SKIP_PERMISSIONS.copilot).toBe(true)
     expect(AGENT_SUPPORTS_SKIP_PERMISSIONS.kilocode).toBe(false)
+  })
+
+  it('enables every agent by default', () => {
+    expect(createDefaultEnabledAgents()).toEqual({
+      claude: true,
+      copilot: true,
+      opencode: true,
+      gemini: true,
+      codex: true,
+      droid: true,
+      qwen: true,
+      amp: true,
+      kilocode: true,
+      terminal: true,
+    })
+  })
+
+  it('merges partial enabled-agent state with enabled defaults', () => {
+    expect(mergeEnabledAgents({ gemini: false, qwen: false })).toEqual({
+      claude: true,
+      copilot: true,
+      opencode: true,
+      gemini: false,
+      codex: true,
+      droid: true,
+      qwen: false,
+      amp: true,
+      kilocode: true,
+      terminal: true,
+    })
+  })
+
+  it('filters disabled agents while preserving order', () => {
+    expect(
+      filterEnabledAgents(AGENT_TYPES, {
+        gemini: false,
+        codex: false,
+        terminal: true,
+      })
+    ).toEqual([
+      'claude',
+      'copilot',
+      'opencode',
+      'droid',
+      'qwen',
+      'amp',
+      'kilocode',
+      'terminal',
+    ])
   })
 })

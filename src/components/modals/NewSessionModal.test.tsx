@@ -130,6 +130,15 @@ vi.mock('../../hooks/useAgentAvailability', () => ({
   useAgentAvailability: (options?: unknown) => useAgentAvailabilityMock(options),
 }))
 
+const useEnabledAgentsMock = vi.fn(() => ({
+  filterAgents: (agents: string[]) => agents,
+  loading: false,
+}))
+
+vi.mock('../../hooks/useEnabledAgents', () => ({
+  useEnabledAgents: () => useEnabledAgentsMock(),
+}))
+
 vi.mock('../../utils/dockerNames', () => ({
   generateDockerStyleName: () => 'eager_cosmos'
 }))
@@ -238,6 +247,11 @@ describe('NewSessionModal', () => {
     mockGetAgentType.mockResolvedValue('claude')
     mockSetAgentType.mockClear()
     useAgentAvailabilityMock.mockClear()
+    useEnabledAgentsMock.mockReset()
+    useEnabledAgentsMock.mockReturnValue({
+      filterAgents: (agents: string[]) => agents,
+      loading: false,
+    })
     mockAgentPresets.mockReset()
     mockAgentPresets.mockReturnValue({
       presets: [],
@@ -1533,6 +1547,79 @@ describe('NewSessionModal', () => {
       await waitFor(() => {
         expect(screen.getByRole('tab', { name: 'Agent' })).toHaveAttribute('aria-selected', 'true')
       })
+    })
+  })
+
+  describe('preset and variant dropdowns', () => {
+    const testPresets = [
+      { id: 'preset-1', name: 'Full Stack', slots: [{ agentType: 'claude' }, { agentType: 'codex' }], isBuiltIn: false },
+      { id: 'preset-2', name: 'Solo', slots: [{ agentType: 'claude' }], isBuiltIn: false },
+    ]
+    const testVariants = [
+      { id: 'variant-1', name: 'Fast Claude', agentType: 'claude', model: 'sonnet' },
+      { id: 'variant-2', name: 'Fast Codex', agentType: 'codex', model: 'o3' },
+    ]
+
+    it('filters disabled agents from the main agent selector', async () => {
+      useEnabledAgentsMock.mockReturnValue({
+        filterAgents: (agents: string[]) => agents.filter(agent => agent !== 'codex' && agent !== 'gemini'),
+        loading: false,
+      })
+      openModal()
+
+      const agentButton = await screen.findByRole('button', { name: /Claude/i })
+      fireEvent.click(agentButton)
+
+      expect(await screen.findByText('GitHub Copilot')).toBeInTheDocument()
+      expect(screen.queryByText('Codex')).not.toBeInTheDocument()
+      expect(screen.queryByText('Gemini')).not.toBeInTheDocument()
+    })
+
+    it('hides presets that include disabled agents', async () => {
+      useEnabledAgentsMock.mockReturnValue({
+        filterAgents: (agents: string[]) => agents.filter(agent => agent !== 'codex'),
+        loading: false,
+      })
+      mockAgentPresets.mockReturnValue({
+        presets: testPresets,
+        loading: false,
+        error: null,
+        savePresets: vi.fn().mockResolvedValue(true),
+        reloadPresets: vi.fn().mockResolvedValue(undefined),
+      })
+      openModal()
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: 'Preset' })).toBeInTheDocument()
+      })
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Preset' }))
+      const presetButton = await screen.findByText('No preset')
+      fireEvent.click(presetButton)
+
+      expect(screen.getByText('Solo (1 agents)')).toBeInTheDocument()
+      expect(screen.queryByText('Full Stack (2 agents)')).not.toBeInTheDocument()
+    })
+
+    it('hides variants whose agent is disabled', async () => {
+      useEnabledAgentsMock.mockReturnValue({
+        filterAgents: (agents: string[]) => agents.filter(agent => agent !== 'codex'),
+        loading: false,
+      })
+      mockAgentVariants.mockReturnValue({
+        variants: testVariants,
+        loading: false,
+        error: null,
+        saveVariants: vi.fn().mockResolvedValue(true),
+        reloadVariants: vi.fn().mockResolvedValue(undefined),
+      })
+      openModal()
+
+      const variantButton = await screen.findByText('No variant (use defaults)')
+      fireEvent.click(variantButton)
+
+      expect(screen.getByText('Fast Claude (claude / sonnet)')).toBeInTheDocument()
+      expect(screen.queryByText('Fast Codex (codex / o3)')).not.toBeInTheDocument()
     })
   })
 

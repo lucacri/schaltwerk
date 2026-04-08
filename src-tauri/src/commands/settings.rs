@@ -8,7 +8,8 @@ use lucode::schaltwerk_core::db_project_config::{
 };
 use lucode::services::{
     AgentPreference, AgentPreset, AgentVariant, ContextualAction, DiffViewPreferences,
-    McpServerConfig, SessionPreferences, TerminalSettings, TerminalUIPreferences,
+    EnabledAgents, McpServerConfig, SessionPreferences, TerminalSettings,
+    TerminalUIPreferences,
 };
 use tauri::AppHandle;
 
@@ -152,6 +153,26 @@ pub async fn set_agent_preferences(
             log::error!("Failed to save agent preferences for '{agent_type}': {e}");
             e
         })
+}
+
+#[tauri::command]
+pub async fn get_enabled_agents(app: AppHandle) -> Result<EnabledAgents, String> {
+    let settings_manager = get_settings_manager(&app).await?;
+    let manager = settings_manager.lock().await;
+    Ok(manager.get_enabled_agents())
+}
+
+#[tauri::command]
+pub async fn set_enabled_agents(
+    app: AppHandle,
+    enabled_agents: EnabledAgents,
+) -> Result<(), String> {
+    let settings_manager = get_settings_manager(&app).await?;
+    let mut manager = settings_manager.lock().await;
+    manager.set_enabled_agents(enabled_agents).map_err(|e| {
+        log::error!("Failed to save enabled agents: {e}");
+        e
+    })
 }
 
 #[tauri::command]

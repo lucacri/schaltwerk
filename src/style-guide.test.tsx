@@ -53,7 +53,7 @@ describe('style-guide.tsx entry', () => {
       invoke: expect.any(Function),
       transformCallback: expect.any(Function),
     })
-    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(document.documentElement.dataset.theme).toBe('darcula')
     expect(document.documentElement.style.getPropertyValue('color-scheme')).toBe('dark')
   })
 

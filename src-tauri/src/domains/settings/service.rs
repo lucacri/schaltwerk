@@ -290,6 +290,18 @@ impl SettingsService {
         self.save()
     }
 
+    pub fn get_enabled_agents(&self) -> EnabledAgents {
+        self.settings.enabled_agents.clone()
+    }
+
+    pub fn set_enabled_agents(
+        &mut self,
+        enabled_agents: EnabledAgents,
+    ) -> Result<(), SettingsServiceError> {
+        self.settings.enabled_agents = enabled_agents;
+        self.save()
+    }
+
     pub fn set_agent_initial_command(
         &mut self,
         agent_type: &str,
@@ -663,6 +675,30 @@ mod tests {
 
         assert!(service.set_auto_update_enabled(true).is_ok());
         assert!(repo_handle.snapshot().updater.auto_update_enabled);
+    }
+
+    #[test]
+    fn enabled_agents_default_to_true_and_persist_updates() {
+        let repo = InMemoryRepository::default();
+        let repo_handle = repo.clone();
+        let mut service = SettingsService::new(Box::new(repo));
+
+        assert_eq!(service.get_enabled_agents(), EnabledAgents::default());
+
+        let updated = EnabledAgents {
+            gemini: false,
+            kilocode: false,
+            ..EnabledAgents::default()
+        };
+
+        service
+            .set_enabled_agents(updated.clone())
+            .expect("should persist enabled agents");
+
+        assert_eq!(service.get_enabled_agents(), updated);
+        assert_eq!(repo_handle.snapshot().enabled_agents.gemini, false);
+        assert_eq!(repo_handle.snapshot().enabled_agents.kilocode, false);
+        assert_eq!(repo_handle.snapshot().enabled_agents.claude, true);
     }
 
     #[test]

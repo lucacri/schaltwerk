@@ -76,6 +76,47 @@ pub struct AgentPreference {
     pub reasoning_effort: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct EnabledAgents {
+    #[serde(default = "default_true")]
+    pub claude: bool,
+    #[serde(default = "default_true")]
+    pub copilot: bool,
+    #[serde(default = "default_true")]
+    pub opencode: bool,
+    #[serde(default = "default_true")]
+    pub gemini: bool,
+    #[serde(default = "default_true")]
+    pub codex: bool,
+    #[serde(default = "default_true")]
+    pub droid: bool,
+    #[serde(default = "default_true")]
+    pub qwen: bool,
+    #[serde(default = "default_true")]
+    pub amp: bool,
+    #[serde(default = "default_true")]
+    pub kilocode: bool,
+    #[serde(default = "default_true")]
+    pub terminal: bool,
+}
+
+impl Default for EnabledAgents {
+    fn default() -> Self {
+        Self {
+            claude: true,
+            copilot: true,
+            opencode: true,
+            gemini: true,
+            codex: true,
+            droid: true,
+            qwen: true,
+            amp: true,
+            kilocode: true,
+            terminal: true,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct AgentPreferences {
     #[serde(default)]
@@ -407,6 +448,8 @@ pub struct Settings {
     pub agent_initial_commands: AgentInitialCommands,
     #[serde(default)]
     pub agent_preferences: AgentPreferences,
+    #[serde(default)]
+    pub enabled_agents: EnabledAgents,
     pub terminal_ui: TerminalUIPreferences,
     pub terminal: TerminalSettings,
     #[serde(default)]
@@ -451,6 +494,7 @@ impl Default for Settings {
             agent_cli_args: AgentCliArgs::default(),
             agent_initial_commands: AgentInitialCommands::default(),
             agent_preferences: AgentPreferences::default(),
+            enabled_agents: EnabledAgents::default(),
             terminal_ui: TerminalUIPreferences::default(),
             terminal: TerminalSettings::default(),
             font_sizes: FontSizes::default(),

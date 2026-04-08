@@ -1450,6 +1450,8 @@ fn main() {
             set_agent_cli_args,
             get_agent_preferences,
             set_agent_preferences,
+            get_enabled_agents,
+            set_enabled_agents,
             get_agent_initial_command,
             set_agent_initial_command,
             get_terminal_ui_preferences,

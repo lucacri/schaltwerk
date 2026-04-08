@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { ModelSelector } from '../inputs/ModelSelector'
+import { useEnabledAgents } from '../../hooks/useEnabledAgents'
 import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../../types/session'
 import { useTranslation } from '../../common/i18n'
 import { ModalPortal } from '../shared/ModalPortal'
@@ -26,14 +27,17 @@ export function CustomAgentModal({
     initialSkipPermissions,
 }: Props) {
     const { t } = useTranslation()
+    const { filterAgents, loading: enabledAgentsLoading } = useEnabledAgents()
     const [agentType, setAgentType] = useState<AgentType>(DEFAULT_AGENT)
     const [skipPermissions, setSkipPermissions] = useState(false)
     const [isSelecting, setIsSelecting] = useState(false)
     const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false)
     const selectRef = useRef<() => void>(() => {})
+    const allowedAgents = filterAgents(ALLOWED_AGENTS)
+    const selectableAgents = allowedAgents.length > 0 ? allowedAgents : [DEFAULT_AGENT]
 
     const handleSelect = async () => {
-        if (isSelecting) return
+        if (isSelecting || enabledAgentsLoading) return
 
         setIsSelecting(true)
         try {
@@ -53,16 +57,16 @@ export function CustomAgentModal({
 
         if (initialAgentType !== undefined) {
             const normalized = AGENT_TYPES.includes(initialAgentType) ? initialAgentType : DEFAULT_AGENT
-            const fallbackAgent = ALLOWED_AGENTS[0] ?? DEFAULT_AGENT
-            const sanitized = ALLOWED_AGENTS.includes(normalized) ? normalized : fallbackAgent
+            const fallbackAgent = selectableAgents[0] ?? DEFAULT_AGENT
+            const sanitized = selectableAgents.includes(normalized) ? normalized : fallbackAgent
             setAgentType(sanitized)
             const supports = AGENT_SUPPORTS_SKIP_PERMISSIONS[sanitized]
             setSkipPermissions(supports ? Boolean(initialSkipPermissions) : false)
         } else {
-            setAgentType(DEFAULT_AGENT)
+            setAgentType(selectableAgents[0] ?? DEFAULT_AGENT)
             setSkipPermissions(false)
         }
-    }, [open, initialAgentType, initialSkipPermissions])
+    }, [open, initialAgentType, initialSkipPermissions, selectableAgents])
 
     useEffect(() => {
         if (!open) return
@@ -103,11 +107,11 @@ export function CustomAgentModal({
                         <ModelSelector
                             value={agentType}
                             onChange={setAgentType}
-                            disabled={isSelecting}
+                            disabled={isSelecting || enabledAgentsLoading}
                             skipPermissions={skipPermissions}
                             onSkipPermissionsChange={(value) => setSkipPermissions(value)}
                             onDropdownOpenChange={setIsModelSelectorOpen}
-                            allowedAgents={ALLOWED_AGENTS}
+                            allowedAgents={selectableAgents}
                         />
                         <p className="text-xs text-text-tertiary mt-2">
                             {t.customAgentModal.helperText}
@@ -118,7 +122,7 @@ export function CustomAgentModal({
                 <div className="px-4 py-3 border-t border-border-subtle flex justify-end gap-2">
                     <Button
                         onClick={onClose}
-                        disabled={isSelecting}
+                        disabled={isSelecting || enabledAgentsLoading}
                         title={t.customAgentModal.cancelEsc}
                     >
                         {t.customAgentModal.cancel}
@@ -126,7 +130,7 @@ export function CustomAgentModal({
                     </Button>
                     <Button
                         onClick={() => { void handleSelect() }}
-                        disabled={isSelecting}
+                        disabled={isSelecting || enabledAgentsLoading}
                         loading={isSelecting}
                         variant="primary"
                         title={t.customAgentModal.addTabEnter}

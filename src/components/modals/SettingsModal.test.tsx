@@ -190,27 +190,54 @@ vi.mock('../../hooks/useActionButtons', () => ({
 
 const createEmptyEnvVars = () => ({
   claude: [],
+  copilot: [],
   opencode: [],
   gemini: [],
   codex: [],
+  droid: [],
+  qwen: [],
+  amp: [],
+  kilocode: [],
+  terminal: [],
 })
 
 const createEmptyCliArgs = () => ({
   claude: '',
+  copilot: '',
   opencode: '',
   gemini: '',
   codex: '',
+  droid: '',
+  qwen: '',
+  amp: '',
+  kilocode: '',
+  terminal: '',
 })
 
 const createEmptyPreferences = () => ({
   claude: { model: '', reasoningEffort: '' },
+  copilot: { model: '', reasoningEffort: '' },
   opencode: { model: '', reasoningEffort: '' },
   gemini: { model: '', reasoningEffort: '' },
   codex: { model: '', reasoningEffort: '' },
   droid: { model: '', reasoningEffort: '' },
   qwen: { model: '', reasoningEffort: '' },
   amp: { model: '', reasoningEffort: '' },
+  kilocode: { model: '', reasoningEffort: '' },
   terminal: { model: '', reasoningEffort: '' },
+})
+
+const createDefaultEnabledAgents = () => ({
+  claude: true,
+  copilot: true,
+  opencode: true,
+  gemini: true,
+  codex: true,
+  droid: true,
+  qwen: true,
+  amp: true,
+  kilocode: true,
+  terminal: true,
 })
 
 const createDefaultUseSettingsValue = () => ({
@@ -220,6 +247,7 @@ const createDefaultUseSettingsValue = () => ({
   loadEnvVars: vi.fn().mockResolvedValue(createEmptyEnvVars()),
   loadCliArgs: vi.fn().mockResolvedValue(createEmptyCliArgs()),
   loadAgentPreferences: vi.fn().mockResolvedValue(createEmptyPreferences()),
+  loadEnabledAgents: vi.fn().mockResolvedValue(createDefaultEnabledAgents()),
   loadProjectSettings: vi.fn().mockResolvedValue({ setupScript: '', branchPrefix: 'schaltwerk', worktreeBaseDirectory: '', environmentVariables: [] }),
   loadTerminalSettings: vi.fn().mockResolvedValue({ shell: null, shellArgs: [], fontFamily: null }),
   loadSessionPreferences: vi.fn().mockResolvedValue({
@@ -231,6 +259,7 @@ const createDefaultUseSettingsValue = () => ({
   loadMergePreferences: vi.fn().mockResolvedValue({ autoCancelAfterMerge: true }),
   loadKeyboardShortcuts: vi.fn().mockResolvedValue(defaultShortcutConfig),
   saveKeyboardShortcuts: vi.fn().mockResolvedValue(undefined),
+  saveEnabledAgents: vi.fn().mockResolvedValue(undefined),
   loadInstalledFonts: vi.fn().mockResolvedValue([]),
 })
 
@@ -931,6 +960,49 @@ describe('SettingsModal AI Generation custom prompts', () => {
 })
 
 describe('SettingsModal shared control wiring', () => {
+  it('renders enabled-agent checkboxes from persisted settings', async () => {
+    const settingsValue = createDefaultUseSettingsValue()
+    settingsValue.loadEnabledAgents.mockResolvedValue({
+      ...createDefaultEnabledAgents(),
+      gemini: false,
+    })
+    useSettingsMock.mockReturnValue(settingsValue)
+
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="agentConfiguration" onClose={() => {}} />
+    )
+
+    expect(await screen.findByText('Enabled Agents')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Claude' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Gemini' })).not.toBeChecked()
+  })
+
+  it('shows only enabled agent tabs in environment settings', async () => {
+    const settingsValue = createDefaultUseSettingsValue()
+    settingsValue.loadEnabledAgents.mockResolvedValue({
+      claude: true,
+      copilot: false,
+      opencode: false,
+      gemini: false,
+      codex: true,
+      droid: false,
+      qwen: false,
+      amp: false,
+      kilocode: false,
+      terminal: true,
+    })
+    useSettingsMock.mockReturnValue(settingsValue)
+
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="environment" onClose={() => {}} />
+    )
+
+    expect(await screen.findByRole('button', { name: 'Claude' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Codex' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Gemini' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Qwen' })).not.toBeInTheDocument()
+  })
+
   it('associates environment labels with their inputs', async () => {
     renderWithProviders(
       <SettingsModal open={true} initialTab="environment" onClose={() => {}} />

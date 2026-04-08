@@ -1,16 +1,17 @@
 import { useState, useCallback } from 'react'
+import { useEnabledAgents } from '../../hooks/useEnabledAgents'
 import { useAgentPresets } from '../../hooks/useAgentPresets'
 import { useAgentVariants } from '../../hooks/useAgentVariants'
-import { NON_TERMINAL_AGENTS, type AgentType } from '../../types/session'
+import { NON_TERMINAL_AGENTS, filterEnabledAgents, type AgentType, type EnabledAgents } from '../../types/session'
 import { generateId } from '../../common/generateId'
 import type { AgentPreset, AgentPresetSlot } from '../../types/agentPreset'
 import { Button, Checkbox, FormGroup, Label, SectionHeader, Select, TextInput } from '../ui'
 
-function createEmptyPreset(): AgentPreset {
+function createEmptyPreset(defaultAgentType: AgentType): AgentPreset {
     return {
         id: generateId('preset'),
         name: '',
-        slots: [{ agentType: 'claude' }],
+        slots: [{ agentType: defaultAgentType }],
         isBuiltIn: false,
     }
 }
@@ -28,9 +29,11 @@ function slotSummary(slots: AgentPresetSlot[]): string {
 
 interface AgentPresetsSettingsProps {
     onNotification?: (message: string, type: 'success' | 'error') => void
+    enabledAgents?: EnabledAgents
 }
 
-export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsProps) {
+export function AgentPresetsSettings({ onNotification, enabledAgents }: AgentPresetsSettingsProps) {
+    const { filterAgents } = useEnabledAgents()
     const { presets, savePresets } = useAgentPresets()
     const { variants } = useAgentVariants()
     const [editingPresets, setEditingPresets] = useState<AgentPreset[] | null>(null)
@@ -38,13 +41,25 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
 
     const currentPresets = editingPresets ?? presets
     const hasUnsavedChanges = editingPresets !== null
+    const visibleAgentTypes = enabledAgents
+        ? filterEnabledAgents(NON_TERMINAL_AGENTS, enabledAgents)
+        : filterAgents(NON_TERMINAL_AGENTS)
+    const visibleVariants = variants.filter(variant => visibleAgentTypes.includes(variant.agentType))
+    const defaultAgentType = visibleAgentTypes[0] ?? 'claude'
+
+    const getAgentOptions = useCallback((current: AgentType) => {
+        const agentTypes = visibleAgentTypes.includes(current)
+            ? visibleAgentTypes
+            : [current, ...visibleAgentTypes]
+        return agentTypes.map(agent => ({ value: agent, label: agent }))
+    }, [visibleAgentTypes])
 
     const handleAdd = useCallback(() => {
-        const newPreset = createEmptyPreset()
+        const newPreset = createEmptyPreset(defaultAgentType)
         const updated = [...currentPresets, newPreset]
         setEditingPresets(updated)
         setExpandedId(newPreset.id)
-    }, [currentPresets])
+    }, [currentPresets, defaultAgentType])
 
     const handleRemove = useCallback((id: string) => {
         setEditingPresets(currentPresets.filter(p => p.id !== id))
@@ -67,8 +82,8 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
     const handleSlotAdd = useCallback((presetId: string) => {
         const preset = currentPresets.find(p => p.id === presetId)
         if (!preset) return
-        handleUpdate(presetId, { slots: [...preset.slots, { agentType: 'claude' }] })
-    }, [currentPresets, handleUpdate])
+        handleUpdate(presetId, { slots: [...preset.slots, { agentType: defaultAgentType }] })
+    }, [currentPresets, defaultAgentType, handleUpdate])
 
     const handleSlotRemove = useCallback((presetId: string, slotIndex: number) => {
         const preset = currentPresets.find(p => p.id === presetId)
@@ -193,8 +208,8 @@ export function AgentPresetsSettings({ onNotification }: AgentPresetsSettingsPro
                                                         }
                                                     }}
                                                     options={[
-                                                        ...NON_TERMINAL_AGENTS.map(agent => ({ value: agent, label: agent })),
-                                                        ...variants.map(v => ({ value: `variant:${v.id}`, label: `${v.name} (${v.agentType})` })),
+                                                        ...getAgentOptions(slot.agentType),
+                                                        ...visibleVariants.map(v => ({ value: `variant:${v.id}`, label: `${v.name} (${v.agentType})` })),
                                                     ]}
                                                     className="flex-1"
                                                 />

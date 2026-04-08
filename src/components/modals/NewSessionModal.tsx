@@ -14,6 +14,7 @@ import { useModal } from '../../contexts/ModalContext'
 import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS, createAgentRecord } from '../../types/session'
 import { UiEvent, listenUiEvent, NewSessionPrefillDetail } from '../../common/uiEvents'
 import { useAgentAvailability } from '../../hooks/useAgentAvailability'
+import { useEnabledAgents } from '../../hooks/useEnabledAgents'
 import {
     AgentCliArgsState,
     AgentEnvVar,
@@ -103,6 +104,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const { t } = useTranslation()
     const { registerModal, unregisterModal } = useModal()
     const { isAvailable } = useAgentAvailability({ autoLoad: open })
+    const { filterAgents, loading: enabledAgentsLoading } = useEnabledAgents()
     const { epics, ensureLoaded: ensureEpicsLoaded } = useEpics()
     const { variants: agentVariantsList } = useAgentVariants()
     const { presets: agentPresetsList } = useAgentPresets()
@@ -182,17 +184,39 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         () => (multiAgentMode ? normalizeAllocations(multiAgentAllocations) : []),
         [multiAgentMode, multiAgentAllocations]
     )
+    const visibleSessionAgents = useMemo<AgentType[]>(
+        () => {
+            const filtered = filterAgents(AGENT_TYPES)
+            return filtered.length > 0 ? filtered : ['claude']
+        },
+        [filterAgents]
+    )
+    const visibleMultiAgentTypes = useMemo<AgentType[]>(
+        () => {
+            const filtered = filterAgents(MULTI_AGENT_TYPES)
+            return filtered.length > 0 ? filtered : ['claude']
+        },
+        [filterAgents]
+    )
+    const visibleAgentVariants = useMemo(
+        () => agentVariantsList.filter(variant => visibleSessionAgents.includes(variant.agentType)),
+        [agentVariantsList, visibleSessionAgents]
+    )
+    const visibleAgentPresets = useMemo(
+        () => agentPresetsList.filter(preset => preset.slots.every(slot => visibleMultiAgentTypes.includes(slot.agentType))),
+        [agentPresetsList, visibleMultiAgentTypes]
+    )
     const totalMultiAgentCount = multiAgentMode ? normalizedAgentTypes.length : 0
     const multiAgentSummaryLabel = useMemo(() => {
         const parts: string[] = []
-        MULTI_AGENT_TYPES.forEach(agent => {
+        visibleMultiAgentTypes.forEach(agent => {
             const count = multiAgentAllocations[agent]
             if (count && count > 0) {
                 parts.push(`${count}x ${displayNameForAgent(agent)}`)
             }
         })
         return parts.length > 0 ? parts.join(', ') : t.newSessionModal.multipleAgents
-    }, [multiAgentAllocations])
+    }, [multiAgentAllocations, t.newSessionModal.multipleAgents, visibleMultiAgentTypes])
     const resetMultiAgentSelections = useCallback(() => {
         setMultiAgentMode(false)
         setMultiAgentAllocations({})
@@ -610,7 +634,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setCreating(true)
 
             const selectedPreset = presetTabActive && selectedPresetId
-                ? agentPresetsList.find(p => p.id === selectedPresetId)
+                ? visibleAgentPresets.find(p => p.id === selectedPresetId)
                 : null
             const presetAgentSlots = selectedPreset
                 ? selectedPreset.slots.map(slot => ({
@@ -715,7 +739,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setValidationError(errorMessage)
             setCreating(false)
         }
-    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, versionGroupId, selectedPresetId, agentPresetsList, prefillPrNumber, prefillPrUrl, prefillIssueNumber, prefillIssueUrl])
+    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, versionGroupId, selectedPresetId, visibleAgentPresets, prefillPrNumber, prefillPrUrl, prefillIssueNumber, prefillIssueUrl])
 
     // Keep ref in sync immediately on render to avoid stale closures in tests
     createRef.current = () => { void handleCreate() }
@@ -1174,12 +1198,14 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 }
             }
             if (detail.variantId) {
-                const variant = agentVariantsList.find(v => v.id === detail.variantId)
+                const variant = visibleAgentVariants.find(v => v.id === detail.variantId)
                 if (variant) handleVariantSelect(variant)
             }
             if (detail.presetId) {
-                setSelectedPresetId(detail.presetId)
-                setPresetTabActive(true)
+                if (visibleAgentPresets.some(preset => preset.id === detail.presetId)) {
+                    setSelectedPresetId(detail.presetId)
+                    setPresetTabActive(true)
+                }
             }
             if (detail.prNumber != null) {
                 setPrefillPrNumber(detail.prNumber)
@@ -1210,7 +1236,30 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             cleanupPrefill()
             cleanupPending()
         }
-    }, [agentVariantsList, handleVariantSelect])
+    }, [handleVariantSelect, visibleAgentPresets, visibleAgentVariants])
+
+    useEffect(() => {
+        if (selectedVariantId && !visibleAgentVariants.some(variant => variant.id === selectedVariantId)) {
+            setSelectedVariantId(null)
+        }
+    }, [selectedVariantId, visibleAgentVariants])
+
+    useEffect(() => {
+        if (selectedPresetId && !visibleAgentPresets.some(preset => preset.id === selectedPresetId)) {
+            setSelectedPresetId(null)
+            setPresetTabActive(false)
+        }
+    }, [selectedPresetId, visibleAgentPresets])
+
+    useEffect(() => {
+        setMultiAgentAllocations(prev => {
+            const filteredEntries = Object.entries(prev).filter(([agent]) => visibleMultiAgentTypes.includes(agent as AgentType))
+            if (filteredEntries.length === Object.keys(prev).length) {
+                return prev
+            }
+            return Object.fromEntries(filteredEntries) as MultiAgentAllocations
+        })
+    }, [visibleMultiAgentTypes])
 
     useEffect(() => {
         if (!open) return
@@ -1244,7 +1293,11 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                     e.stopImmediatePropagation()
                 }
 
-                const availableAgents = AGENT_TYPES.filter(agent => agent === 'terminal' || isAvailable(agent))
+                if (enabledAgentsLoading) {
+                    return
+                }
+
+                const availableAgents = visibleSessionAgents.filter(agent => agent === 'terminal' || isAvailable(agent))
                 if (availableAgents.length === 0) return
 
                 const currentIndex = availableAgents.indexOf(agentType)
@@ -1307,13 +1360,13 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             window.removeEventListener('keydown', handleKeyDown, true)
             window.removeEventListener('schaltwerk:new-session:set-spec', setDraftHandler)
         }
-    }, [open, onClose, agentType, handleAgentTypeChange, handleAgentPreferenceChange, isAvailable, codexModelIds, codexCatalog, defaultCodexModelId])
+    }, [open, onClose, agentType, handleAgentTypeChange, handleAgentPreferenceChange, isAvailable, codexModelIds, codexCatalog, defaultCodexModelId, enabledAgentsLoading, visibleSessionAgents])
 
     if (!open) return null
 
     const canStartAgent = multiAgentMode
-        ? normalizedAgentTypes.length > 0 && normalizedAgentTypes.every(selectedAgent => selectedAgent === 'terminal' || isAvailable(selectedAgent))
-        : agentType === 'terminal' || isAvailable(agentType)
+        ? !enabledAgentsLoading && normalizedAgentTypes.length > 0 && normalizedAgentTypes.every(selectedAgent => selectedAgent === 'terminal' || isAvailable(selectedAgent))
+        : !enabledAgentsLoading && (agentType === 'terminal' || isAvailable(agentType))
     const hasSpecContent =
         promptSource === 'github_issue'
             ? Boolean(githubIssueSelection?.prompt.trim())
@@ -1327,6 +1380,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         !name.trim() ||
         (!createAsDraft && !baseBranch) ||
         creating ||
+        enabledAgentsLoading ||
         githubIssueLoading ||
         githubPrLoading ||
         (createAsDraft && !hasSpecContent) ||
@@ -1364,10 +1418,10 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
 
     const footer = (
         <>
-            {!createAsDraft && agentType !== 'terminal' && multiAgentMode && (
+            {!createAsDraft && agentType !== 'terminal' && multiAgentMode && !enabledAgentsLoading && (
                 <MultiAgentAllocationDropdown
                     allocations={multiAgentAllocations}
-                    selectableAgents={MULTI_AGENT_TYPES}
+                    selectableAgents={visibleMultiAgentTypes}
                     totalCount={totalMultiAgentCount}
                     maxCount={MAX_VERSION_COUNT}
                     summaryLabel={multiAgentSummaryLabel}
@@ -1376,7 +1430,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                     onChangeCount={handleAgentCountChange}
                 />
             )}
-            {!createAsDraft && agentType !== 'terminal' && (
+            {!createAsDraft && agentType !== 'terminal' && !enabledAgentsLoading && (
                 <Dropdown
                   open={showVersionMenu}
                   onOpenChange={setShowVersionMenu}
@@ -1821,10 +1875,11 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                 onCodexReasoningChange={(effort) => handleAgentPreferenceChange('codex', 'reasoningEffort', effort)}
                                 sessionName={name}
                                 ignorePersistedAgentType={ignorePersistedAgentType}
-                                agentControlsDisabled={multiAgentMode}
+                                agentControlsDisabled={multiAgentMode || enabledAgentsLoading}
+                                allowedAgents={visibleSessionAgents}
                                 branchError={branchError}
                             />
-                            {agentPresetsList.length > 0 && (
+                            {visibleAgentPresets.length > 0 && (
                                 <div className="flex rounded border overflow-hidden mt-2" style={{ borderColor: 'var(--color-border-default)' }} role="tablist">
                                     <button
                                         type="button"
@@ -1869,7 +1924,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                         onOpenChange={setPresetDropdownOpen}
                                         items={[
                                             { key: '', label: t.newSessionModal.noPreset ?? 'No preset' },
-                                            ...agentPresetsList.map(p => ({
+                                            ...visibleAgentPresets.map(p => ({
                                                 key: p.id,
                                                 label: `${p.name} (${p.slots.length} agents)`,
                                             })),
@@ -1897,7 +1952,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                                 }}
                                             >
                                                 <span>{selectedPresetId
-                                                    ? agentPresetsList.find(p => p.id === selectedPresetId)?.name ?? 'Preset'
+                                                    ? visibleAgentPresets.find(p => p.id === selectedPresetId)?.name ?? 'Preset'
                                                     : (t.newSessionModal.noPreset ?? 'No preset')}</span>
                                                 <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"
                                                      style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms ease' }}>
@@ -1908,7 +1963,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                     </Dropdown>
                                 </div>
                             )}
-                            {agentVariantsList.length > 0 && !selectedPresetId && !presetTabActive && (
+                            {visibleAgentVariants.length > 0 && !selectedPresetId && !presetTabActive && (
                                 <div className="mt-2">
                                     <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
                                         {t.newSessionModal.variant ?? 'Variant'}
@@ -1918,7 +1973,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                         onOpenChange={setVariantDropdownOpen}
                                         items={[
                                             { key: '', label: t.newSessionModal.noVariant ?? 'No variant (use defaults)' },
-                                            ...agentVariantsList.map(v => ({
+                                            ...visibleAgentVariants.map(v => ({
                                                 key: v.id,
                                                 label: `${v.name} (${v.agentType}${v.model ? ` / ${v.model}` : ''})`,
                                             })),
@@ -1929,7 +1984,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                             if (!key) {
                                                 handleVariantSelect(null)
                                             } else {
-                                                const variant = agentVariantsList.find(v => v.id === key)
+                                                const variant = visibleAgentVariants.find(v => v.id === key)
                                                 if (variant) handleVariantSelect(variant)
                                             }
                                         }}
@@ -1946,7 +2001,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                                 }}
                                             >
                                                 <span>{selectedVariantId
-                                                    ? agentVariantsList.find(v => v.id === selectedVariantId)?.name ?? 'Variant'
+                                                    ? visibleAgentVariants.find(v => v.id === selectedVariantId)?.name ?? 'Variant'
                                                     : (t.newSessionModal.noVariant ?? 'No variant (use defaults)')}</span>
                                                 <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"
                                                      style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms ease' }}>

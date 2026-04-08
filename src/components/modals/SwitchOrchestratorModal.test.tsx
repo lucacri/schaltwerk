@@ -7,6 +7,7 @@ const mockGetOrchestratorAgentType = vi.fn().mockResolvedValue('opencode')
 const mockGetOrchestratorSkipPermissions = vi.fn().mockResolvedValue(false)
 const mockGetAgentType = vi.fn().mockResolvedValue('claude')
 const mockGetSkipPermissions = vi.fn().mockResolvedValue(false)
+const filterAgentsMock = vi.fn((agents: string[]) => agents)
 
 // Mock useClaudeSession to control behavior and avoid tauri calls
 vi.mock('../../hooks/useClaudeSession', () => {
@@ -42,6 +43,13 @@ vi.mock('../../hooks/useAgentAvailability', () => ({
   }
 }))
 
+vi.mock('../../hooks/useEnabledAgents', () => ({
+  useEnabledAgents: () => ({
+    filterAgents: filterAgentsMock,
+    loading: false,
+  }),
+}))
+
 function openModal(overrides: Partial<React.ComponentProps<typeof SwitchOrchestratorModal>> = {}) {
   const onClose = vi.fn()
   const onSwitch = vi.fn().mockResolvedValue(undefined)
@@ -68,6 +76,8 @@ describe('SwitchOrchestratorModal', () => {
   })
   beforeEach(() => {
     vi.useRealTimers()
+    filterAgentsMock.mockClear()
+    filterAgentsMock.mockImplementation((agents: string[]) => agents)
     mockGetOrchestratorAgentType.mockResolvedValue('opencode')
     mockGetOrchestratorSkipPermissions.mockResolvedValue(false)
     mockGetAgentType.mockResolvedValue('claude')
@@ -206,6 +216,19 @@ describe('SwitchOrchestratorModal', () => {
 
     expect(screen.queryByRole('button', { name: /Terminal Only/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /terminal/i })).not.toBeInTheDocument()
+  })
+
+  it('hides agents disabled in enabled-agent settings', async () => {
+    filterAgentsMock.mockImplementation((agents: string[]) => agents.filter(agent => agent !== 'gemini'))
+
+    openModal()
+    await waitFor(() => screen.getByRole('button', { name: /opencode/i }))
+
+    await userEvent.click(screen.getByRole('button', { name: /opencode/i }))
+
+    expect(filterAgentsMock).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Gemini' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Claude' })).toBeInTheDocument()
   })
 
   it('uses session-specific configuration when scope=session', async () => {

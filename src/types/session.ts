@@ -12,6 +12,8 @@ export const AGENT_TYPES = [
 ] as const
 export type AgentType = (typeof AGENT_TYPES)[number]
 
+export type EnabledAgents = Record<AgentType, boolean>
+
 export const NON_TERMINAL_AGENTS = AGENT_TYPES.filter(a => a !== 'terminal')
 
 export const TUI_BASED_AGENTS: readonly AgentType[] = ['kilocode', 'claude', 'opencode'] as const
@@ -39,6 +41,25 @@ export function createAgentRecord<T>(factory: (agent: AgentType) => T): Record<A
         acc[agent] = factory(agent)
         return acc
     }, {} as Record<AgentType, T>)
+}
+
+export function createDefaultEnabledAgents(): EnabledAgents {
+    return createAgentRecord(() => true)
+}
+
+export function mergeEnabledAgents(enabledAgents?: Partial<EnabledAgents> | null): EnabledAgents {
+    return {
+        ...createDefaultEnabledAgents(),
+        ...(enabledAgents ?? {}),
+    }
+}
+
+export function filterEnabledAgents(
+    agents: readonly AgentType[],
+    enabledAgents?: Partial<EnabledAgents> | null,
+): AgentType[] {
+    const merged = mergeEnabledAgents(enabledAgents)
+    return agents.filter(agent => merged[agent])
 }
 
 export enum SessionState {
