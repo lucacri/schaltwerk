@@ -14,7 +14,6 @@ import { useModal } from '../../contexts/ModalContext'
 import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS, createAgentRecord } from '../../types/session'
 import { UiEvent, listenUiEvent, NewSessionPrefillDetail } from '../../common/uiEvents'
 import { useAgentAvailability } from '../../hooks/useAgentAvailability'
-import { useEnabledAgents } from '../../hooks/useEnabledAgents'
 import {
     AgentCliArgsState,
     AgentEnvVar,
@@ -36,9 +35,12 @@ import { loadCodexModelCatalog, CodexModelCatalog } from '../../services/codexMo
 import { EpicSelect } from '../shared/EpicSelect'
 import { useAgentVariants } from '../../hooks/useAgentVariants'
 import { useAgentPresets } from '../../hooks/useAgentPresets'
+import { useFavorites } from '../../hooks/useFavorites'
 import type { AgentVariant } from '../../types/agentVariant'
 import type { AgentLaunchSlot } from '../../types/agentLaunch'
 import { useEpics } from '../../hooks/useEpics'
+import { FavoriteCard } from '../shared/FavoriteCard'
+import { CustomizeAccordion } from '../shared/CustomizeAccordion'
 import {
     MAX_VERSION_COUNT,
     MULTI_AGENT_TYPES,
@@ -58,8 +60,59 @@ interface AgentPreferenceState {
     reasoningEffort?: string
 }
 
+interface FavoriteConfigSnapshot {
+    createAsDraft: boolean
+    baseBranch: string
+    customBranch: string
+    useExistingBranch: boolean
+    agentType: AgentType
+    skipPermissions: boolean
+    autonomyEnabled: boolean
+    versionCount: number
+    multiAgentMode: boolean
+    multiAgentAllocations: MultiAgentAllocations
+    selectedVariantId: string | null
+    selectedPresetId: string | null
+    presetTabActive: boolean
+    agentEnvVars: AgentEnvVarState
+    agentCliArgs: AgentCliArgsState
+    agentPreferences: Record<AgentType, AgentPreferenceState>
+}
+
 const createEmptyPreferenceState = () =>
     createAgentRecord<AgentPreferenceState>(() => ({ model: '', reasoningEffort: '' }))
+
+const favoriteConfigSignature = (config: FavoriteConfigSnapshot): string => JSON.stringify(config)
+
+function favoriteAccentColor(agentType: AgentType | null): string {
+    switch (agentType) {
+        case 'claude':
+            return 'var(--color-accent-blue)'
+        case 'codex':
+            return 'var(--color-accent-violet)'
+        case 'gemini':
+            return 'var(--color-accent-amber)'
+        case 'copilot':
+            return 'var(--color-accent-copilot)'
+        case 'droid':
+            return 'var(--color-accent-green)'
+        case 'qwen':
+            return 'var(--color-accent-purple)'
+        case 'amp':
+            return 'var(--color-accent-magenta)'
+        case 'kilocode':
+            return 'var(--color-accent-red)'
+        case 'terminal':
+            return 'var(--color-border-strong)'
+        case 'opencode':
+        default:
+            return 'var(--color-accent-cyan)'
+    }
+}
+
+function favoriteShortcutLabel(index: number): string {
+    return `⌘${index + 1}`
+}
 
 function isBranchValidationError(errorMessage: string): boolean {
     return errorMessage.includes('Branch') || errorMessage.includes('worktree')
@@ -104,10 +157,10 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const { t } = useTranslation()
     const { registerModal, unregisterModal } = useModal()
     const { isAvailable } = useAgentAvailability({ autoLoad: open })
-    const { filterAgents, loading: enabledAgentsLoading } = useEnabledAgents()
     const { epics, ensureLoaded: ensureEpicsLoaded } = useEpics()
     const { variants: agentVariantsList } = useAgentVariants()
     const { presets: agentPresetsList } = useAgentPresets()
+    const { favorites, favoriteOrderLoaded } = useFavorites()
     const githubIntegration = useGithubIntegrationContext()
     const [name, setName] = useState(() => generateDockerStyleName())
     const [, setWasEdited] = useState(false)
@@ -147,7 +200,11 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [presetTabActive, setPresetTabActive] = useState(false)
     const [presetDropdownOpen, setPresetDropdownOpen] = useState(false)
     const [variantDropdownOpen, setVariantDropdownOpen] = useState(false)
+    const [selectedFavoriteId, setSelectedFavoriteId] = useState<string | null>(null)
+    const [customizeExpanded, setCustomizeExpanded] = useState(true)
+    const [favoriteBaseline, setFavoriteBaseline] = useState<FavoriteConfigSnapshot | null>(null)
     const [ignorePersistedAgentType, setIgnorePersistedAgentType] = useState(false)
+    const [persistedDefaultsLoaded, setPersistedDefaultsLoaded] = useState(false)
     const [promptSource, setPromptSource] = useState<'custom' | 'github_issue' | 'github_pull_request'>('custom')
     const [manualPromptDraft, setManualPromptDraft] = useState(cachedPrompt)
     const [githubIssueSelection, setGithubIssueSelection] = useState<GithubIssueSelectionResult | null>(null)
@@ -173,6 +230,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const githubPromptReady = githubIntegration.canCreatePr && !githubIntegration.loading
     const preferencesInitializedRef = useRef(false)
     const agentPreferencesRef = useRef(agentPreferences)
+    const manualFavoriteConfigRef = useRef<FavoriteConfigSnapshot | null>(null)
+    const favoriteSelectionInitializedRef = useRef(false)
     const [codexCatalog, setCodexCatalog] = useState<CodexModelCatalog>(() => ({
         models: FALLBACK_CODEX_MODELS,
         defaultModelId: FALLBACK_CODEX_MODELS[0]?.id ?? ''
@@ -184,43 +243,207 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         () => (multiAgentMode ? normalizeAllocations(multiAgentAllocations) : []),
         [multiAgentMode, multiAgentAllocations]
     )
-    const visibleSessionAgents = useMemo<AgentType[]>(
-        () => {
-            const filtered = filterAgents(AGENT_TYPES)
-            return filtered.length > 0 ? filtered : ['claude']
-        },
-        [filterAgents]
-    )
-    const visibleMultiAgentTypes = useMemo<AgentType[]>(
-        () => {
-            const filtered = filterAgents(MULTI_AGENT_TYPES)
-            return filtered.length > 0 ? filtered : ['claude']
-        },
-        [filterAgents]
-    )
-    const visibleAgentVariants = useMemo(
-        () => agentVariantsList.filter(variant => visibleSessionAgents.includes(variant.agentType)),
-        [agentVariantsList, visibleSessionAgents]
-    )
-    const visibleAgentPresets = useMemo(
-        () => agentPresetsList.filter(preset => preset.slots.every(slot => visibleMultiAgentTypes.includes(slot.agentType))),
-        [agentPresetsList, visibleMultiAgentTypes]
-    )
     const totalMultiAgentCount = multiAgentMode ? normalizedAgentTypes.length : 0
     const multiAgentSummaryLabel = useMemo(() => {
         const parts: string[] = []
-        visibleMultiAgentTypes.forEach(agent => {
+        MULTI_AGENT_TYPES.forEach(agent => {
             const count = multiAgentAllocations[agent]
             if (count && count > 0) {
                 parts.push(`${count}x ${displayNameForAgent(agent)}`)
             }
         })
         return parts.length > 0 ? parts.join(', ') : t.newSessionModal.multipleAgents
-    }, [multiAgentAllocations, t.newSessionModal.multipleAgents, visibleMultiAgentTypes])
+    }, [multiAgentAllocations])
+    const favoriteMap = useMemo(() => new Map(favorites.map(favorite => [favorite.id, favorite])), [favorites])
     const resetMultiAgentSelections = useCallback(() => {
         setMultiAgentMode(false)
         setMultiAgentAllocations({})
     }, [])
+    const currentFavoriteConfig = useMemo<FavoriteConfigSnapshot>(() => ({
+        createAsDraft,
+        baseBranch,
+        customBranch,
+        useExistingBranch,
+        agentType,
+        skipPermissions,
+        autonomyEnabled,
+        versionCount,
+        multiAgentMode,
+        multiAgentAllocations,
+        selectedVariantId,
+        selectedPresetId,
+        presetTabActive,
+        agentEnvVars,
+        agentCliArgs,
+        agentPreferences,
+    }), [
+        createAsDraft,
+        baseBranch,
+        customBranch,
+        useExistingBranch,
+        agentType,
+        skipPermissions,
+        autonomyEnabled,
+        versionCount,
+        multiAgentMode,
+        multiAgentAllocations,
+        selectedVariantId,
+        selectedPresetId,
+        presetTabActive,
+        agentEnvVars,
+        agentCliArgs,
+        agentPreferences,
+    ])
+    const favoriteModified = useMemo(() => (
+        selectedFavoriteId !== null
+        && favoriteBaseline !== null
+        && favoriteConfigSignature(currentFavoriteConfig) !== favoriteConfigSignature(favoriteBaseline)
+    ), [currentFavoriteConfig, favoriteBaseline, selectedFavoriteId])
+
+    const applyFavoriteConfigSnapshot = useCallback((config: FavoriteConfigSnapshot) => {
+        setCreateAsDraft(config.createAsDraft)
+        setBaseBranch(config.baseBranch)
+        setCustomBranch(config.customBranch)
+        setUseExistingBranch(config.useExistingBranch)
+        setAgentType(config.agentType)
+        setSkipPermissions(config.skipPermissions)
+        setAutonomyEnabled(config.autonomyEnabled)
+        setVersionCount(config.versionCount)
+        setMultiAgentMode(config.multiAgentMode)
+        setMultiAgentAllocations(config.multiAgentAllocations)
+        setSelectedVariantId(config.selectedVariantId)
+        setSelectedPresetId(config.selectedPresetId)
+        setPresetTabActive(config.presetTabActive)
+        setAgentEnvVars(config.agentEnvVars)
+        setAgentCliArgs(config.agentCliArgs)
+        setAgentPreferences(config.agentPreferences)
+        setIgnorePersistedAgentType(true)
+        lastAgentTypeRef.current = config.agentType
+        hasAgentOverrideRef.current = true
+        if (AGENT_SUPPORTS_SKIP_PERMISSIONS[config.agentType]) {
+            lastSupportedSkipPermissionsRef.current = config.skipPermissions
+        }
+    }, [])
+
+    const buildVariantFavoriteConfig = useCallback((config: FavoriteConfigSnapshot, variant: AgentVariant): FavoriteConfigSnapshot => {
+        return {
+            ...config,
+            agentType: variant.agentType,
+            selectedVariantId: variant.id,
+            selectedPresetId: null,
+            presetTabActive: false,
+            multiAgentMode: false,
+            multiAgentAllocations: {},
+            agentCliArgs: {
+                ...config.agentCliArgs,
+                [variant.agentType]: variant.cliArgs?.join(' ') ?? '',
+            },
+            agentEnvVars: {
+                ...config.agentEnvVars,
+                [variant.agentType]: Object.entries(variant.envVars ?? {}).map(([key, value]) => ({ key, value })),
+            },
+            agentPreferences: {
+                ...config.agentPreferences,
+                [variant.agentType]: {
+                    model: variant.model ?? '',
+                    reasoningEffort: variant.reasoningEffort ?? '',
+                },
+            },
+        }
+    }, [])
+
+    const buildPresetFavoriteConfig = useCallback((config: FavoriteConfigSnapshot, presetId: string): FavoriteConfigSnapshot | null => {
+        const preset = agentPresetsList.find(item => item.id === presetId)
+        if (!preset) {
+            return null
+        }
+
+        const primarySlot = preset.slots[0]
+        const primaryAgentType = (primarySlot?.agentType as AgentType | undefined) ?? config.agentType
+        let nextConfig: FavoriteConfigSnapshot = {
+            ...config,
+            agentType: primaryAgentType,
+            skipPermissions: primarySlot?.skipPermissions ?? config.skipPermissions,
+            autonomyEnabled: primarySlot?.autonomyEnabled ?? config.autonomyEnabled,
+            versionCount: Math.max(1, preset.slots.length),
+            multiAgentMode: false,
+            multiAgentAllocations: {},
+            selectedVariantId: null,
+            selectedPresetId: preset.id,
+            presetTabActive: true,
+            agentCliArgs: { ...config.agentCliArgs },
+            agentEnvVars: { ...config.agentEnvVars },
+            agentPreferences: { ...config.agentPreferences },
+        }
+
+        preset.slots.forEach(slot => {
+            const variant = slot.variantId ? agentVariantsList.find(item => item.id === slot.variantId) : null
+            if (!variant) {
+                return
+            }
+            nextConfig = {
+                ...nextConfig,
+                agentCliArgs: {
+                    ...nextConfig.agentCliArgs,
+                    [slot.agentType]: variant.cliArgs?.join(' ') ?? '',
+                },
+                agentEnvVars: {
+                    ...nextConfig.agentEnvVars,
+                    [slot.agentType]: Object.entries(variant.envVars ?? {}).map(([key, value]) => ({ key, value })),
+                },
+                agentPreferences: {
+                    ...nextConfig.agentPreferences,
+                    [slot.agentType]: {
+                        model: variant.model ?? '',
+                        reasoningEffort: variant.reasoningEffort ?? '',
+                    },
+                },
+            }
+        })
+
+        return nextConfig
+    }, [agentPresetsList, agentVariantsList])
+
+    const selectFavorite = useCallback((favoriteId: string) => {
+        const favorite = favoriteMap.get(favoriteId)
+        if (!favorite || favorite.disabled) {
+            return
+        }
+
+        if (selectedFavoriteId === favoriteId) {
+            setSelectedFavoriteId(null)
+            setFavoriteBaseline(null)
+            if (manualFavoriteConfigRef.current) {
+                applyFavoriteConfigSnapshot(manualFavoriteConfigRef.current)
+            }
+            setCustomizeExpanded(true)
+            return
+        }
+
+        if (selectedFavoriteId === null) {
+            manualFavoriteConfigRef.current = currentFavoriteConfig
+        }
+
+        const nextConfig = favorite.kind === 'variant'
+            ? buildVariantFavoriteConfig(currentFavoriteConfig, favorite.variant!)
+            : buildPresetFavoriteConfig(currentFavoriteConfig, favorite.id)
+
+        if (!nextConfig) {
+            return
+        }
+
+        applyFavoriteConfigSnapshot(nextConfig)
+        setSelectedFavoriteId(favorite.id)
+        setFavoriteBaseline(nextConfig)
+        setCustomizeExpanded(false)
+    }, [
+        applyFavoriteConfigSnapshot,
+        buildPresetFavoriteConfig,
+        buildVariantFavoriteConfig,
+        currentFavoriteConfig,
+        favoriteMap,
+        selectedFavoriteId,
+    ])
 
     const handleVariantSelect = useCallback((variant: AgentVariant | null) => {
         if (!variant) {
@@ -634,7 +857,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setCreating(true)
 
             const selectedPreset = presetTabActive && selectedPresetId
-                ? visibleAgentPresets.find(p => p.id === selectedPresetId)
+                ? agentPresetsList.find(p => p.id === selectedPresetId)
                 : null
             const presetAgentSlots = selectedPreset
                 ? selectedPreset.slots.map(slot => ({
@@ -739,7 +962,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setValidationError(errorMessage)
             setCreating(false)
         }
-    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, versionGroupId, selectedPresetId, visibleAgentPresets, prefillPrNumber, prefillPrUrl, prefillIssueNumber, prefillIssueUrl])
+    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, versionGroupId, selectedPresetId, agentPresetsList, prefillPrNumber, prefillPrUrl, prefillIssueNumber, prefillIssueUrl])
 
     // Keep ref in sync immediately on render to avoid stale closures in tests
     createRef.current = () => { void handleCreate() }
@@ -980,9 +1203,15 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                     noPrefillAndWasntOpen: !isPrefillPending && !hasPrefillData && !wasOpenRef.current,
                     initialIsDraftChanged
                 })
+                setPersistedDefaultsLoaded(false)
                 setName(gen)
                 setWasEdited(false)
                 wasEditedRef.current = false
+                setSelectedFavoriteId(null)
+                setFavoriteBaseline(null)
+                setCustomizeExpanded(true)
+                manualFavoriteConfigRef.current = null
+                favoriteSelectionInitializedRef.current = false
                 setPromptSource('custom')
                 setGithubIssueSelection(null)
                 setGithubPrSelection(null)
@@ -1031,6 +1260,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                             })}`)
                         }
                         setSkipPermissions(skipPermissions)
+                        setPersistedDefaultsLoaded(true)
                         logger.info('[NewSessionModal] Initialized config from persisted state:', { baseBranch, agentType, skipPermissions })
                     })
                     .catch(e => {
@@ -1042,6 +1272,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                             lastAgentTypeRef.current = 'claude'
                         }
                         setSkipPermissions(false)
+                        setPersistedDefaultsLoaded(true)
                     })
             } else {
                 if (openedThisRender || initialIsDraftChanged) {
@@ -1050,6 +1281,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 // Still need to reset some state
                 setValidationError('')
                 setCreating(false)
+                setPersistedDefaultsLoaded(true)
             }
             
             wasOpenRef.current = true
@@ -1105,6 +1337,10 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setIsConsolidation(false)
             setConsolidationSourceIds([])
             setVersionGroupId(undefined)
+            setSelectedFavoriteId(null)
+            setFavoriteBaseline(null)
+            setCustomizeExpanded(true)
+            setPersistedDefaultsLoaded(false)
             setPrefillPrNumber(null)
             setPrefillPrUrl(null)
             setPrefillIssueNumber(null)
@@ -1116,6 +1352,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setAgentEnvVars(createEmptyEnvVarState())
             setAgentCliArgs(createEmptyCliArgsState())
             setAgentConfigLoading(false)
+            manualFavoriteConfigRef.current = null
+            favoriteSelectionInitializedRef.current = false
             wasOpenRef.current = false
             lastInitialIsDraftRef.current = undefined
             hasFocusedDuringOpenRef.current = false
@@ -1132,6 +1370,54 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         if (!open) return
         void ensureProjectFiles()
     }, [open, ensureProjectFiles])
+
+    useEffect(() => {
+        if (!open || favoriteSelectionInitializedRef.current) {
+            return
+        }
+        if (!persistedDefaultsLoaded || agentConfigLoading || !favoriteOrderLoaded) {
+            return
+        }
+        if (hasPrefillData && (selectedVariantId || selectedPresetId)) {
+            favoriteSelectionInitializedRef.current = true
+            setCustomizeExpanded(true)
+            return
+        }
+        if (favorites.length === 0) {
+            favoriteSelectionInitializedRef.current = true
+            setCustomizeExpanded(true)
+            return
+        }
+
+        const firstEnabledFavorite = favorites.find(favorite => !favorite.disabled)
+        favoriteSelectionInitializedRef.current = true
+        if (firstEnabledFavorite) {
+            selectFavorite(firstEnabledFavorite.id)
+        } else {
+            setCustomizeExpanded(true)
+        }
+    }, [
+        agentConfigLoading,
+        favorites,
+        favoriteOrderLoaded,
+        hasPrefillData,
+        open,
+        persistedDefaultsLoaded,
+        selectFavorite,
+        selectedPresetId,
+        selectedVariantId,
+    ])
+
+    useEffect(() => {
+        if (!open || !selectedFavoriteId) {
+            return
+        }
+        if (!favoriteMap.has(selectedFavoriteId)) {
+            setSelectedFavoriteId(null)
+            setFavoriteBaseline(null)
+            setCustomizeExpanded(true)
+        }
+    }, [favoriteMap, open, selectedFavoriteId])
 
     // Register prefill event listener immediately, not dependent on open state
     // This ensures we can catch events that are dispatched right when the modal opens
@@ -1198,14 +1484,12 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 }
             }
             if (detail.variantId) {
-                const variant = visibleAgentVariants.find(v => v.id === detail.variantId)
+                const variant = agentVariantsList.find(v => v.id === detail.variantId)
                 if (variant) handleVariantSelect(variant)
             }
             if (detail.presetId) {
-                if (visibleAgentPresets.some(preset => preset.id === detail.presetId)) {
-                    setSelectedPresetId(detail.presetId)
-                    setPresetTabActive(true)
-                }
+                setSelectedPresetId(detail.presetId)
+                setPresetTabActive(true)
             }
             if (detail.prNumber != null) {
                 setPrefillPrNumber(detail.prNumber)
@@ -1236,30 +1520,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             cleanupPrefill()
             cleanupPending()
         }
-    }, [handleVariantSelect, visibleAgentPresets, visibleAgentVariants])
-
-    useEffect(() => {
-        if (selectedVariantId && !visibleAgentVariants.some(variant => variant.id === selectedVariantId)) {
-            setSelectedVariantId(null)
-        }
-    }, [selectedVariantId, visibleAgentVariants])
-
-    useEffect(() => {
-        if (selectedPresetId && !visibleAgentPresets.some(preset => preset.id === selectedPresetId)) {
-            setSelectedPresetId(null)
-            setPresetTabActive(false)
-        }
-    }, [selectedPresetId, visibleAgentPresets])
-
-    useEffect(() => {
-        setMultiAgentAllocations(prev => {
-            const filteredEntries = Object.entries(prev).filter(([agent]) => visibleMultiAgentTypes.includes(agent as AgentType))
-            if (filteredEntries.length === Object.keys(prev).length) {
-                return prev
-            }
-            return Object.fromEntries(filteredEntries) as MultiAgentAllocations
-        })
-    }, [visibleMultiAgentTypes])
+    }, [agentVariantsList, handleVariantSelect])
 
     useEffect(() => {
         if (!open) return
@@ -1275,6 +1536,18 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                     e.stopImmediatePropagation()
                 }
                 onClose()
+            } else if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && /^[1-9]$/.test(e.key)) {
+                e.preventDefault()
+                e.stopPropagation()
+                if (typeof e.stopImmediatePropagation === 'function') {
+                    e.stopImmediatePropagation()
+                }
+
+                const favoriteIndex = Number.parseInt(e.key, 10) - 1
+                const favorite = favorites[favoriteIndex]
+                if (favorite && !favorite.disabled && selectedFavoriteId !== favorite.id) {
+                    selectFavorite(favorite.id)
+                }
             } else if (e.key === 'k' && e.metaKey && e.shiftKey) {
                 e.preventDefault()
                 e.stopPropagation()
@@ -1293,11 +1566,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                     e.stopImmediatePropagation()
                 }
 
-                if (enabledAgentsLoading) {
-                    return
-                }
-
-                const availableAgents = visibleSessionAgents.filter(agent => agent === 'terminal' || isAvailable(agent))
+                const availableAgents = AGENT_TYPES.filter(agent => agent === 'terminal' || isAvailable(agent))
                 if (availableAgents.length === 0) return
 
                 const currentIndex = availableAgents.indexOf(agentType)
@@ -1360,13 +1629,13 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             window.removeEventListener('keydown', handleKeyDown, true)
             window.removeEventListener('schaltwerk:new-session:set-spec', setDraftHandler)
         }
-    }, [open, onClose, agentType, handleAgentTypeChange, handleAgentPreferenceChange, isAvailable, codexModelIds, codexCatalog, defaultCodexModelId, enabledAgentsLoading, visibleSessionAgents])
+    }, [open, onClose, agentType, handleAgentTypeChange, handleAgentPreferenceChange, isAvailable, codexModelIds, codexCatalog, defaultCodexModelId, favorites, selectFavorite, selectedFavoriteId])
 
     if (!open) return null
 
     const canStartAgent = multiAgentMode
-        ? !enabledAgentsLoading && normalizedAgentTypes.length > 0 && normalizedAgentTypes.every(selectedAgent => selectedAgent === 'terminal' || isAvailable(selectedAgent))
-        : !enabledAgentsLoading && (agentType === 'terminal' || isAvailable(agentType))
+        ? normalizedAgentTypes.length > 0 && normalizedAgentTypes.every(selectedAgent => selectedAgent === 'terminal' || isAvailable(selectedAgent))
+        : agentType === 'terminal' || isAvailable(agentType)
     const hasSpecContent =
         promptSource === 'github_issue'
             ? Boolean(githubIssueSelection?.prompt.trim())
@@ -1380,7 +1649,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         !name.trim() ||
         (!createAsDraft && !baseBranch) ||
         creating ||
-        enabledAgentsLoading ||
         githubIssueLoading ||
         githubPrLoading ||
         (createAsDraft && !hasSpecContent) ||
@@ -1416,12 +1684,22 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         return t.newSessionModal.tooltips.startAgent
     }
 
+    const favoriteTooltip = (agentTypes: AgentType[], disabled: boolean) => {
+        if (!disabled) {
+            return undefined
+        }
+        if (agentTypes.length === 1) {
+            return t.newSessionModal.tooltips.agentNotInstalled.replace('{agent}', agentTypes[0])
+        }
+        return t.newSessionModal.tooltips.agentsNotInstalled
+    }
+
     const footer = (
         <>
-            {!createAsDraft && agentType !== 'terminal' && multiAgentMode && !enabledAgentsLoading && (
+            {!createAsDraft && agentType !== 'terminal' && multiAgentMode && (
                 <MultiAgentAllocationDropdown
                     allocations={multiAgentAllocations}
-                    selectableAgents={visibleMultiAgentTypes}
+                    selectableAgents={MULTI_AGENT_TYPES}
                     totalCount={totalMultiAgentCount}
                     maxCount={MAX_VERSION_COUNT}
                     summaryLabel={multiAgentSummaryLabel}
@@ -1430,7 +1708,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                     onChangeCount={handleAgentCountChange}
                 />
             )}
-            {!createAsDraft && agentType !== 'terminal' && !enabledAgentsLoading && (
+            {!createAsDraft && agentType !== 'terminal' && (
                 <Dropdown
                   open={showVersionMenu}
                   onOpenChange={setShowVersionMenu}
@@ -1588,17 +1866,34 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
 	                        />
 	                    </div>
 	                    </div>
-	
-	                    <Checkbox
-                            checked={createAsDraft}
-                            onChange={checked => {
-                                setCreateAsDraft(checked)
-                                if (validationError) {
-                                    setValidationError('')
-                                }
-                            }}
-                            label={t.newSessionModal.createAsSpec}
-                        />
+
+                    <div className="flex flex-col gap-2">
+                        {favorites.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <div className="flex gap-3 pb-1">
+                                    {favorites.map((favorite, index) => (
+                                        <FavoriteCard
+                                            key={favorite.id}
+                                            title={favorite.name}
+                                            shortcut={index < 9 ? favoriteShortcutLabel(index) : ''}
+                                            summary={favorite.summary}
+                                            accentColor={favoriteAccentColor(favorite.agentType)}
+                                            selected={selectedFavoriteId === favorite.id}
+                                            modified={selectedFavoriteId === favorite.id && favoriteModified}
+                                            modifiedLabel={t.newSessionModal.modified}
+                                            disabled={favorite.disabled}
+                                            tooltip={favoriteTooltip(favorite.agentTypes, favorite.disabled)}
+                                            onClick={() => selectFavorite(favorite.id)}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                                {t.newSessionModal.favoritesHint}
+                            </p>
+                        )}
+                    </div>
 
                     <div className="flex flex-col flex-1 min-h-0">
                         <div className="flex items-center justify-between mb-2">
@@ -1839,204 +2134,222 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                         </div>
                     )}
 
-                    {!createAsDraft && (
-                        <>
-                            <SessionConfigurationPanel
-                                variant="modal"
-                                layout="branch-row"
-                                hideAgentType={presetTabActive}
-                                onBaseBranchChange={handleBranchChange}
-                                onAgentTypeChange={handleAgentTypeChange}
-                                onSkipPermissionsChange={handleSkipPermissionsChange}
-                                onAutonomyChange={setAutonomyEnabled}
-                                onCustomBranchChange={(branch) => {
-                                    setCustomBranch(branch)
+                    <CustomizeAccordion
+                        title={t.newSessionModal.customize}
+                        expanded={customizeExpanded}
+                        onToggle={() => setCustomizeExpanded(prev => !prev)}
+                    >
+                        <div className="flex flex-col gap-4">
+                            <Checkbox
+                                checked={createAsDraft}
+                                onChange={checked => {
+                                    setCreateAsDraft(checked)
                                     if (validationError) {
                                         setValidationError('')
                                     }
                                 }}
-                                onUseExistingBranchChange={(useExisting) => {
-                                    setUseExistingBranch(useExisting)
-                                    if (validationError) {
-                                        setValidationError('')
-                                    }
-                                }}
-                                initialBaseBranch={baseBranch}
-                                initialAgentType={agentType}
-                                initialSkipPermissions={skipPermissions}
-                                initialAutonomyEnabled={autonomyEnabled}
-                                initialCustomBranch={customBranch}
-                                initialUseExistingBranch={useExistingBranch}
-                                codexModel={agentPreferences.codex?.model}
-                                codexModelOptions={codexModelIds}
-                                codexModels={codexCatalog.models}
-                                onCodexModelChange={(model) => handleAgentPreferenceChange('codex', 'model', model)}
-                                codexReasoningEffort={agentPreferences.codex?.reasoningEffort}
-                                onCodexReasoningChange={(effort) => handleAgentPreferenceChange('codex', 'reasoningEffort', effort)}
-                                sessionName={name}
-                                ignorePersistedAgentType={ignorePersistedAgentType}
-                                agentControlsDisabled={multiAgentMode || enabledAgentsLoading}
-                                allowedAgents={visibleSessionAgents}
-                                branchError={branchError}
+                                label={t.newSessionModal.createAsSpec}
                             />
-                            {visibleAgentPresets.length > 0 && (
-                                <div className="flex rounded border overflow-hidden mt-2" style={{ borderColor: 'var(--color-border-default)' }} role="tablist">
-                                    <button
-                                        type="button"
-                                        role="tab"
-                                        aria-selected={!presetTabActive}
-                                        className="flex-1 px-3 py-1.5 text-sm cursor-pointer transition-colors"
-                                        style={{
-                                            backgroundColor: !presetTabActive ? 'var(--color-bg-elevated)' : 'transparent',
-                                            color: !presetTabActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                                            fontWeight: !presetTabActive ? 500 : 400,
-                                        }}
-                                        onClick={() => {
-                                            setPresetTabActive(false)
-                                            setSelectedPresetId(null)
-                                            resetMultiAgentSelections()
-                                        }}
-                                    >
-                                        {t.sessionConfig.agent}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        role="tab"
-                                        aria-selected={presetTabActive}
-                                        className="flex-1 px-3 py-1.5 text-sm cursor-pointer transition-colors"
-                                        style={{
-                                            backgroundColor: presetTabActive ? 'var(--color-bg-elevated)' : 'transparent',
-                                            color: presetTabActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                                            fontWeight: presetTabActive ? 500 : 400,
-                                        }}
-                                        onClick={() => {
-                                            setPresetTabActive(true)
-                                        }}
-                                    >
-                                        {t.newSessionModal.preset ?? 'Preset'}
-                                    </button>
-                                </div>
-                            )}
-                            {presetTabActive && (
-                                <div className="mt-1">
-                                    <Dropdown
-                                        open={presetDropdownOpen}
-                                        onOpenChange={setPresetDropdownOpen}
-                                        items={[
-                                            { key: '', label: t.newSessionModal.noPreset ?? 'No preset' },
-                                            ...visibleAgentPresets.map(p => ({
-                                                key: p.id,
-                                                label: `${p.name} (${p.slots.length} agents)`,
-                                            })),
-                                        ]}
-                                        selectedKey={selectedPresetId ?? ''}
-                                        align="stretch"
-                                        onSelect={(key) => {
-                                            const id = key || null
-                                            setSelectedPresetId(id)
-                                            if (id) {
-                                                setSelectedVariantId(null)
-                                                resetMultiAgentSelections()
+
+                            {!createAsDraft && (
+                                <>
+                                    <SessionConfigurationPanel
+                                        variant="modal"
+                                        layout="branch-row"
+                                        hideAgentType={presetTabActive}
+                                        onBaseBranchChange={handleBranchChange}
+                                        onAgentTypeChange={handleAgentTypeChange}
+                                        onSkipPermissionsChange={handleSkipPermissionsChange}
+                                        onAutonomyChange={setAutonomyEnabled}
+                                        onCustomBranchChange={(branch) => {
+                                            setCustomBranch(branch)
+                                            if (validationError) {
+                                                setValidationError('')
                                             }
                                         }}
-                                    >
-                                        {({ open, toggle }) => (
-                                            <button
-                                                type="button"
-                                                onClick={toggle}
-                                                className="w-full px-3 py-1.5 text-sm rounded border flex items-center justify-between cursor-pointer hover:opacity-80"
-                                                style={{
-                                                    backgroundColor: 'var(--color-bg-elevated)',
-                                                    borderColor: 'var(--color-border-default)',
-                                                    color: 'var(--color-text-primary)',
-                                                }}
-                                            >
-                                                <span>{selectedPresetId
-                                                    ? visibleAgentPresets.find(p => p.id === selectedPresetId)?.name ?? 'Preset'
-                                                    : (t.newSessionModal.noPreset ?? 'No preset')}</span>
-                                                <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"
-                                                     style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms ease' }}>
-                                                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
-                                                </svg>
-                                            </button>
-                                        )}
-                                    </Dropdown>
-                                </div>
-                            )}
-                            {visibleAgentVariants.length > 0 && !selectedPresetId && !presetTabActive && (
-                                <div className="mt-2">
-                                    <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-                                        {t.newSessionModal.variant ?? 'Variant'}
-                                    </label>
-                                    <Dropdown
-                                        open={variantDropdownOpen}
-                                        onOpenChange={setVariantDropdownOpen}
-                                        items={[
-                                            { key: '', label: t.newSessionModal.noVariant ?? 'No variant (use defaults)' },
-                                            ...visibleAgentVariants.map(v => ({
-                                                key: v.id,
-                                                label: `${v.name} (${v.agentType}${v.model ? ` / ${v.model}` : ''})`,
-                                            })),
-                                        ]}
-                                        selectedKey={selectedVariantId ?? ''}
-                                        align="stretch"
-                                        onSelect={(key) => {
-                                            if (!key) {
-                                                handleVariantSelect(null)
-                                            } else {
-                                                const variant = visibleAgentVariants.find(v => v.id === key)
-                                                if (variant) handleVariantSelect(variant)
+                                        onUseExistingBranchChange={(useExisting) => {
+                                            setUseExistingBranch(useExisting)
+                                            if (validationError) {
+                                                setValidationError('')
                                             }
                                         }}
-                                    >
-                                        {({ open, toggle }) => (
+                                        initialBaseBranch={baseBranch}
+                                        initialAgentType={agentType}
+                                        initialSkipPermissions={skipPermissions}
+                                        initialAutonomyEnabled={autonomyEnabled}
+                                        initialCustomBranch={customBranch}
+                                        initialUseExistingBranch={useExistingBranch}
+                                        codexModel={agentPreferences.codex?.model}
+                                        codexModelOptions={codexModelIds}
+                                        codexModels={codexCatalog.models}
+                                        onCodexModelChange={(model) => handleAgentPreferenceChange('codex', 'model', model)}
+                                        codexReasoningEffort={agentPreferences.codex?.reasoningEffort}
+                                        onCodexReasoningChange={(effort) => handleAgentPreferenceChange('codex', 'reasoningEffort', effort)}
+                                        sessionName={name}
+                                        ignorePersistedAgentType={ignorePersistedAgentType}
+                                        agentControlsDisabled={multiAgentMode}
+                                        branchError={branchError}
+                                    />
+                                    {agentPresetsList.length > 0 && (
+                                        <div className="flex rounded border overflow-hidden mt-2" style={{ borderColor: 'var(--color-border-default)' }} role="tablist">
                                             <button
                                                 type="button"
-                                                onClick={toggle}
-                                                className="w-full px-3 py-1.5 text-sm rounded border flex items-center justify-between cursor-pointer hover:opacity-80"
+                                                role="tab"
+                                                aria-selected={!presetTabActive}
+                                                className="flex-1 px-3 py-1.5 text-sm cursor-pointer transition-colors"
                                                 style={{
-                                                    backgroundColor: 'var(--color-bg-elevated)',
-                                                    borderColor: 'var(--color-border-default)',
-                                                    color: 'var(--color-text-primary)',
+                                                    backgroundColor: !presetTabActive ? 'var(--color-bg-elevated)' : 'transparent',
+                                                    color: !presetTabActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                                                    fontWeight: !presetTabActive ? 500 : 400,
+                                                }}
+                                                onClick={() => {
+                                                    setPresetTabActive(false)
+                                                    setSelectedPresetId(null)
+                                                    resetMultiAgentSelections()
                                                 }}
                                             >
-                                                <span>{selectedVariantId
-                                                    ? visibleAgentVariants.find(v => v.id === selectedVariantId)?.name ?? 'Variant'
-                                                    : (t.newSessionModal.noVariant ?? 'No variant (use defaults)')}</span>
-                                                <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"
-                                                     style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms ease' }}>
-                                                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
-                                                </svg>
+                                                {t.sessionConfig.agent}
                                             </button>
-                                        )}
-                                    </Dropdown>
-                                </div>
+                                            <button
+                                                type="button"
+                                                role="tab"
+                                                aria-selected={presetTabActive}
+                                                className="flex-1 px-3 py-1.5 text-sm cursor-pointer transition-colors"
+                                                style={{
+                                                    backgroundColor: presetTabActive ? 'var(--color-bg-elevated)' : 'transparent',
+                                                    color: presetTabActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                                                    fontWeight: presetTabActive ? 500 : 400,
+                                                }}
+                                                onClick={() => {
+                                                    setPresetTabActive(true)
+                                                }}
+                                            >
+                                                {t.newSessionModal.preset ?? 'Preset'}
+                                            </button>
+                                        </div>
+                                    )}
+                                    {presetTabActive && (
+                                        <div className="mt-1">
+                                            <Dropdown
+                                                open={presetDropdownOpen}
+                                                onOpenChange={setPresetDropdownOpen}
+                                                items={[
+                                                    { key: '', label: t.newSessionModal.noPreset ?? 'No preset' },
+                                                    ...agentPresetsList.map(p => ({
+                                                        key: p.id,
+                                                        label: `${p.name} (${p.slots.length} agents)`,
+                                                    })),
+                                                ]}
+                                                selectedKey={selectedPresetId ?? ''}
+                                                align="stretch"
+                                                onSelect={(key) => {
+                                                    const id = key || null
+                                                    setSelectedPresetId(id)
+                                                    if (id) {
+                                                        setSelectedVariantId(null)
+                                                        resetMultiAgentSelections()
+                                                    }
+                                                }}
+                                            >
+                                                {({ open, toggle }) => (
+                                                    <button
+                                                        type="button"
+                                                        onClick={toggle}
+                                                        className="w-full px-3 py-1.5 text-sm rounded border flex items-center justify-between cursor-pointer hover:opacity-80"
+                                                        style={{
+                                                            backgroundColor: 'var(--color-bg-elevated)',
+                                                            borderColor: 'var(--color-border-default)',
+                                                            color: 'var(--color-text-primary)',
+                                                        }}
+                                                    >
+                                                        <span>{selectedPresetId
+                                                            ? agentPresetsList.find(p => p.id === selectedPresetId)?.name ?? 'Preset'
+                                                            : (t.newSessionModal.noPreset ?? 'No preset')}</span>
+                                                        <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"
+                                                             style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms ease' }}>
+                                                            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                            </Dropdown>
+                                        </div>
+                                    )}
+                                    {agentVariantsList.length > 0 && !selectedPresetId && !presetTabActive && (
+                                        <div className="mt-2">
+                                            <label className="block text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                                {t.newSessionModal.variant ?? 'Variant'}
+                                            </label>
+                                            <Dropdown
+                                                open={variantDropdownOpen}
+                                                onOpenChange={setVariantDropdownOpen}
+                                                items={[
+                                                    { key: '', label: t.newSessionModal.noVariant ?? 'No variant (use defaults)' },
+                                                    ...agentVariantsList.map(v => ({
+                                                        key: v.id,
+                                                        label: `${v.name} (${v.agentType}${v.model ? ` / ${v.model}` : ''})`,
+                                                    })),
+                                                ]}
+                                                selectedKey={selectedVariantId ?? ''}
+                                                align="stretch"
+                                                onSelect={(key) => {
+                                                    if (!key) {
+                                                        handleVariantSelect(null)
+                                                    } else {
+                                                        const variant = agentVariantsList.find(v => v.id === key)
+                                                        if (variant) handleVariantSelect(variant)
+                                                    }
+                                                }}
+                                            >
+                                                {({ open, toggle }) => (
+                                                    <button
+                                                        type="button"
+                                                        onClick={toggle}
+                                                        className="w-full px-3 py-1.5 text-sm rounded border flex items-center justify-between cursor-pointer hover:opacity-80"
+                                                        style={{
+                                                            backgroundColor: 'var(--color-bg-elevated)',
+                                                            borderColor: 'var(--color-border-default)',
+                                                            color: 'var(--color-text-primary)',
+                                                        }}
+                                                    >
+                                                        <span>{selectedVariantId
+                                                            ? agentVariantsList.find(v => v.id === selectedVariantId)?.name ?? 'Variant'
+                                                            : (t.newSessionModal.noVariant ?? 'No variant (use defaults)')}</span>
+                                                        <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"
+                                                             style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms ease' }}>
+                                                            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                )}
+                                            </Dropdown>
+                                        </div>
+                                    )}
+                                    <AgentDefaultsSection
+                                        agentType={agentType}
+                                        cliArgs={agentCliArgs[agentType] || ''}
+                                        onCliArgsChange={handleCliArgsChange}
+                                        envVars={agentEnvVars[agentType]}
+                                        onEnvVarChange={handleEnvVarChange}
+                                        onAddEnvVar={handleAddEnvVar}
+                                        onRemoveEnvVar={handleRemoveEnvVar}
+                                        loading={agentConfigLoading}
+                                    />
+                                    {agentType === 'terminal' && (
+                                        <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-3 flex items-start gap-2">
+                                            <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <div className="text-sm text-blue-200">
+                                                <p className="font-medium mb-1">{t.newSessionModal.terminalOnlyMode}</p>
+                                                <p className="text-xs text-blue-300">
+                                                    {t.newSessionModal.terminalOnlyHint}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
                             )}
-                            <AgentDefaultsSection
-                                agentType={agentType}
-                                cliArgs={agentCliArgs[agentType] || ''}
-                                onCliArgsChange={handleCliArgsChange}
-                                envVars={agentEnvVars[agentType]}
-                                onEnvVarChange={handleEnvVarChange}
-                                onAddEnvVar={handleAddEnvVar}
-                                onRemoveEnvVar={handleRemoveEnvVar}
-                                loading={agentConfigLoading}
-                            />
-                            {agentType === 'terminal' && (
-                                <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-3 flex items-start gap-2">
-                                    <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <div className="text-sm text-blue-200">
-                                        <p className="font-medium mb-1">{t.newSessionModal.terminalOnlyMode}</p>
-                                        <p className="text-xs text-blue-300">
-                                            {t.newSessionModal.terminalOnlyHint}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                        </>
-                    )}
+                        </div>
+                    </CustomizeAccordion>
                 </div>
         </ResizableModal>
     )

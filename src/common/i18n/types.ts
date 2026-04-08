@@ -722,6 +722,9 @@ export interface Translations {
     prSelectHint: string
     enterSpecContent: string
     describeAgent: string
+    customize: string
+    favoritesHint: string
+    modified: string
     variant: string
     noVariant: string
     preset: string

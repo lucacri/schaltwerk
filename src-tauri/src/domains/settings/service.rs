@@ -617,6 +617,18 @@ impl SettingsService {
         self.save()
     }
 
+    pub fn get_favorite_order(&self) -> Vec<String> {
+        self.settings.favorite_order.clone()
+    }
+
+    pub fn set_favorite_order(
+        &mut self,
+        favorite_order: Vec<String>,
+    ) -> Result<(), SettingsServiceError> {
+        self.settings.favorite_order = favorite_order;
+        self.save()
+    }
+
     pub fn get_restore_open_projects(&self) -> bool {
         self.settings.restore_open_projects
     }
@@ -1279,6 +1291,27 @@ mod tests {
         assert_eq!(loaded[0].name, "The Trio");
         assert_eq!(loaded[0].slots.len(), 2);
         assert_eq!(repo_handle.snapshot().agent_presets, presets);
+    }
+
+    #[test]
+    fn favorite_order_roundtrip() {
+        let repo = InMemoryRepository::default();
+        let repo_handle = repo.clone();
+        let mut service = SettingsService::new(Box::new(repo));
+
+        let favorite_order = vec![
+            "variant-claude-opus".to_string(),
+            "preset-review-duo".to_string(),
+            "variant-codex-fast".to_string(),
+        ];
+
+        service
+            .set_favorite_order(favorite_order.clone())
+            .expect("should save favorite order");
+
+        let loaded = service.get_favorite_order();
+        assert_eq!(loaded, favorite_order);
+        assert_eq!(repo_handle.snapshot().favorite_order, favorite_order);
     }
 
     #[test]

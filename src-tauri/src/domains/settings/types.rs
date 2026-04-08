@@ -484,6 +484,8 @@ pub struct Settings {
     #[serde(default)]
     pub agent_presets: Vec<AgentPreset>,
     #[serde(default)]
+    pub favorite_order: Vec<String>,
+    #[serde(default)]
     pub contextual_actions: Vec<ContextualAction>,
 }
 
@@ -514,6 +516,7 @@ impl Default for Settings {
             restore_open_projects: default_true(),
             agent_variants: Vec::new(),
             agent_presets: Vec::new(),
+            favorite_order: Vec::new(),
             contextual_actions: Vec::new(),
         }
     }

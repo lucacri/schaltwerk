@@ -417,6 +417,16 @@ impl SettingsManager {
             .map_err(|e| e.to_string())
     }
 
+    pub fn get_favorite_order(&self) -> Vec<String> {
+        self.service.get_favorite_order()
+    }
+
+    pub fn set_favorite_order(&mut self, favorite_order: Vec<String>) -> Result<(), String> {
+        self.service
+            .set_favorite_order(favorite_order)
+            .map_err(|e| e.to_string())
+    }
+
     pub fn get_restore_open_projects(&self) -> bool {
         self.service.get_restore_open_projects()
     }

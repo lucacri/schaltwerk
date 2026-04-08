@@ -839,6 +839,23 @@ pub async fn set_agent_variants(
     manager.set_agent_variants(variants)
 }
 
+#[tauri::command]
+pub async fn get_favorite_order(app: AppHandle) -> Result<Vec<String>, String> {
+    let settings_manager = get_settings_manager(&app).await?;
+    let manager = settings_manager.lock().await;
+    Ok(manager.get_favorite_order())
+}
+
+#[tauri::command]
+pub async fn set_favorite_order(
+    app: AppHandle,
+    favorite_order: Vec<String>,
+) -> Result<(), String> {
+    let settings_manager = get_settings_manager(&app).await?;
+    let mut manager = settings_manager.lock().await;
+    manager.set_favorite_order(favorite_order)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

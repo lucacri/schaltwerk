@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockedFunction } from 'vitest'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { render, screen, fireEvent, waitFor, cleanup, within, act } from '@testing-library/react'
+import { Provider as JotaiProvider, createStore } from 'jotai'
 import { NewSessionModal } from './NewSessionModal'
 import { ModalProvider } from '../../contexts/ModalContext'
 import { UiEvent, emitUiEvent } from '../../common/uiEvents'
@@ -114,37 +115,53 @@ vi.mock('../../hooks/useClaudeSession', () => ({
   })
 }))
 
-const useAgentAvailabilityMock = vi.fn((_options?: unknown) => ({
-  availability: {},
-  isAvailable: () => true,
-  getRecommendedPath: () => '/mock/path',
-  getInstallationMethod: () => 'mock',
-  loading: false,
-  refreshAvailability: vi.fn(),
-  refreshSingleAgent: vi.fn(),
-  clearCache: vi.fn(),
-  forceRefresh: vi.fn(),
-}))
+function createAgentAvailabilityResult() {
+  return {
+    availability: {},
+    isAvailable: (_agent: string): boolean => true,
+    getRecommendedPath: (_agent: string): string | null => '/mock/path',
+    getInstallationMethod: (_agent: string): string | null => 'mock',
+    loading: false,
+    refreshAvailability: vi.fn(),
+    refreshSingleAgent: vi.fn(),
+    clearCache: vi.fn(),
+    forceRefresh: vi.fn(),
+  }
+}
+
+type MockAgentAvailabilityResult = ReturnType<typeof createAgentAvailabilityResult>
+type MockAgentAvailabilityHook = (_options?: unknown) => MockAgentAvailabilityResult
+
+const useAgentAvailabilityMock: MockedFunction<MockAgentAvailabilityHook> = vi.fn(
+  (_options?: unknown) => createAgentAvailabilityResult()
+)
 
 vi.mock('../../hooks/useAgentAvailability', () => ({
   useAgentAvailability: (options?: unknown) => useAgentAvailabilityMock(options),
-}))
-
-const useEnabledAgentsMock = vi.fn(() => ({
-  filterAgents: (agents: string[]) => agents,
-  loading: false,
-}))
-
-vi.mock('../../hooks/useEnabledAgents', () => ({
-  useEnabledAgents: () => useEnabledAgentsMock(),
 }))
 
 vi.mock('../../utils/dockerNames', () => ({
   generateDockerStyleName: () => 'eager_cosmos'
 }))
 
-const mockAgentPresets = vi.fn(() => ({
-  presets: [] as Array<{ id: string; name: string; slots: Array<{ agentType: string; skipPermissions?: boolean; autonomyEnabled?: boolean }>; isBuiltIn: boolean }>,
+const mockAgentPresets = vi.fn((): {
+  presets: Array<{
+    id: string
+    name: string
+    slots: Array<{
+      agentType: string
+      variantId?: string
+      skipPermissions?: boolean
+      autonomyEnabled?: boolean
+    }>
+    isBuiltIn: boolean
+  }>
+  loading: boolean
+  error: string | null
+  savePresets: (presets: Array<unknown>) => Promise<boolean>
+  reloadPresets: () => Promise<void>
+} => ({
+  presets: [],
   loading: false,
   error: null,
   savePresets: vi.fn().mockResolvedValue(true),
@@ -155,8 +172,23 @@ vi.mock('../../hooks/useAgentPresets', () => ({
   useAgentPresets: () => mockAgentPresets(),
 }))
 
-const mockAgentVariants = vi.fn(() => ({
-  variants: [] as Array<{ id: string; name: string; agentType: string; model?: string }>,
+const mockAgentVariants = vi.fn((): {
+  variants: Array<{
+    id: string
+    name: string
+    agentType: string
+    model?: string
+    reasoningEffort?: string
+    cliArgs?: string[]
+    envVars?: Record<string, string>
+    isBuiltIn?: boolean
+  }>
+  loading: boolean
+  error: string | null
+  saveVariants: (variants: Array<unknown>) => Promise<boolean>
+  reloadVariants: () => Promise<void>
+} => ({
+  variants: [],
   loading: false,
   error: null,
   saveVariants: vi.fn().mockResolvedValue(true),
@@ -183,8 +215,11 @@ const defaultInvokeImplementation = (cmd: string) => {
       return Promise.resolve({})
     case TauriCommands.GetAgentCliArgs:
       return Promise.resolve('')
+    case TauriCommands.GetFavoriteOrder:
+      return Promise.resolve([])
     case TauriCommands.SetAgentEnvVars:
     case TauriCommands.SetAgentCliArgs:
+    case TauriCommands.SetFavoriteOrder:
       return Promise.resolve()
     case TauriCommands.SchaltwerkCoreListProjectFiles:
       return Promise.resolve(['README.md', 'src/index.ts'])
@@ -206,8 +241,51 @@ const invokeMock = invoke as MockedFunction<(cmd: string, args?: unknown) => Pro
 function openModal() {
   const onClose = vi.fn()
   const onCreate = vi.fn()
-  render(<ModalProvider><NewSessionModal open={true} onClose={onClose} onCreate={onCreate} /></ModalProvider>)
+  renderWithProviders(
+    <NewSessionModal open={true} onClose={onClose} onCreate={onCreate} />
+  )
   return { onClose, onCreate }
+}
+
+function renderWithProviders(ui: ReactNode, store = createStore()) {
+  return render(
+    <JotaiProvider store={store}>
+      <ModalProvider>
+        {ui}
+      </ModalProvider>
+    </JotaiProvider>
+  )
+}
+
+function getFavoriteCard(name: RegExp | string): HTMLButtonElement {
+  const favoriteCard = screen
+    .getAllByRole('button', { name })
+    .find(button => button.hasAttribute('aria-pressed'))
+
+  if (!favoriteCard) {
+    throw new Error(`Favorite card not found for ${String(name)}`)
+  }
+
+  return favoriteCard as HTMLButtonElement
+}
+
+async function expandCustomizeIfNeeded() {
+  const customizeButton = await screen.findByRole('button', { name: /Customize/i })
+  if (customizeButton.getAttribute('aria-expanded') !== 'true') {
+    fireEvent.click(customizeButton)
+  }
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /Customize/i })).toHaveAttribute('aria-expanded', 'true')
+  })
+}
+
+async function exitFavoriteMode(cardName: RegExp) {
+  const favoriteCard = getFavoriteCard(cardName)
+  await waitFor(() => {
+    expect(getFavoriteCard(cardName)).toHaveAttribute('aria-pressed', 'true')
+  })
+  fireEvent.click(favoriteCard)
+  await expandCustomizeIfNeeded()
 }
 
 function getTaskEditorContent(): string {
@@ -246,11 +324,15 @@ describe('NewSessionModal', () => {
     mockGetAgentType.mockClear()
     mockGetAgentType.mockResolvedValue('claude')
     mockSetAgentType.mockClear()
-    useAgentAvailabilityMock.mockClear()
-    useEnabledAgentsMock.mockReset()
-    useEnabledAgentsMock.mockReturnValue({
-      filterAgents: (agents: string[]) => agents,
+    useAgentAvailabilityMock.mockReset()
+    useAgentAvailabilityMock.mockImplementation((_options?: unknown) => createAgentAvailabilityResult())
+    mockAgentVariants.mockReset()
+    mockAgentVariants.mockReturnValue({
+      variants: [],
       loading: false,
+      error: null,
+      saveVariants: vi.fn().mockResolvedValue(true),
+      reloadVariants: vi.fn().mockResolvedValue(undefined),
     })
     mockAgentPresets.mockReset()
     mockAgentPresets.mockReturnValue({
@@ -586,7 +668,9 @@ describe('NewSessionModal', () => {
     })
 
     const onCreate = vi.fn()
-    render(<ModalProvider><NewSessionModal open={true} onClose={vi.fn()} onCreate={onCreate} /></ModalProvider>)
+    renderWithProviders(<NewSessionModal open={true} onClose={vi.fn()} onCreate={onCreate} />)
+
+    await exitFavoriteMode(/Autonomy Duo/i)
 
     const presetTab = await screen.findByRole('tab', { name: /Preset/i })
     fireEvent.click(presetTab)
@@ -594,7 +678,7 @@ describe('NewSessionModal', () => {
     const presetDropdown = await screen.findByRole('button', { name: /No preset/i })
     fireEvent.click(presetDropdown)
 
-    const presetOption = await screen.findByRole('button', { name: /Autonomy Duo/i })
+    const presetOption = await screen.findByRole('button', { name: /Autonomy Duo \(2 agents\)/i })
     fireEvent.click(presetOption)
 
     fireEvent.click(screen.getByRole('button', { name: /Start Agent/i }))
@@ -1373,6 +1457,8 @@ describe('NewSessionModal', () => {
       })
       openModal()
 
+      await exitFavoriteMode(/Full Stack/i)
+
       await waitFor(() => {
         expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument()
         expect(screen.getByRole('tab', { name: 'Preset' })).toBeInTheDocument()
@@ -1412,6 +1498,8 @@ describe('NewSessionModal', () => {
       })
       openModal()
 
+      await exitFavoriteMode(/Full Stack/i)
+
       await waitFor(() => {
         expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument()
       })
@@ -1443,6 +1531,8 @@ describe('NewSessionModal', () => {
         reloadPresets: vi.fn().mockResolvedValue(undefined),
       })
       const { onCreate } = openModal()
+
+      await exitFavoriteMode(/Full Stack/i)
 
       await waitFor(() => {
         expect(screen.getByRole('tab', { name: 'Preset' })).toBeInTheDocument()
@@ -1530,6 +1620,8 @@ describe('NewSessionModal', () => {
       })
       openModal()
 
+      await exitFavoriteMode(/Full Stack/i)
+
       await waitFor(() => {
         expect(screen.getByRole('tab', { name: 'Agent' })).toBeInTheDocument()
       })
@@ -1550,76 +1642,135 @@ describe('NewSessionModal', () => {
     })
   })
 
-  describe('preset and variant dropdowns', () => {
-    const testPresets = [
-      { id: 'preset-1', name: 'Full Stack', slots: [{ agentType: 'claude' }, { agentType: 'codex' }], isBuiltIn: false },
-      { id: 'preset-2', name: 'Solo', slots: [{ agentType: 'claude' }], isBuiltIn: false },
-    ]
-    const testVariants = [
-      { id: 'variant-1', name: 'Fast Claude', agentType: 'claude', model: 'sonnet' },
-      { id: 'variant-2', name: 'Fast Codex', agentType: 'codex', model: 'o3' },
-    ]
-
-    it('filters disabled agents from the main agent selector', async () => {
-      useEnabledAgentsMock.mockReturnValue({
-        filterAgents: (agents: string[]) => agents.filter(agent => agent !== 'codex' && agent !== 'gemini'),
-        loading: false,
-      })
-      openModal()
-
-      const agentButton = await screen.findByRole('button', { name: /Claude/i })
-      fireEvent.click(agentButton)
-
-      expect(await screen.findByText('GitHub Copilot')).toBeInTheDocument()
-      expect(screen.queryByText('Codex')).not.toBeInTheDocument()
-      expect(screen.queryByText('Gemini')).not.toBeInTheDocument()
-    })
-
-    it('hides presets that include disabled agents', async () => {
-      useEnabledAgentsMock.mockReturnValue({
-        filterAgents: (agents: string[]) => agents.filter(agent => agent !== 'codex'),
-        loading: false,
-      })
-      mockAgentPresets.mockReturnValue({
-        presets: testPresets,
-        loading: false,
-        error: null,
-        savePresets: vi.fn().mockResolvedValue(true),
-        reloadPresets: vi.fn().mockResolvedValue(undefined),
-      })
-      openModal()
-
-      await waitFor(() => {
-        expect(screen.getByRole('tab', { name: 'Preset' })).toBeInTheDocument()
-      })
-
-      fireEvent.click(screen.getByRole('tab', { name: 'Preset' }))
-      const presetButton = await screen.findByText('No preset')
-      fireEvent.click(presetButton)
-
-      expect(screen.getByText('Solo (1 agents)')).toBeInTheDocument()
-      expect(screen.queryByText('Full Stack (2 agents)')).not.toBeInTheDocument()
-    })
-
-    it('hides variants whose agent is disabled', async () => {
-      useEnabledAgentsMock.mockReturnValue({
-        filterAgents: (agents: string[]) => agents.filter(agent => agent !== 'codex'),
-        loading: false,
-      })
+  describe('favorites-first redesign', () => {
+    it('auto-selects the first favorite and collapses customize by default', async () => {
       mockAgentVariants.mockReturnValue({
-        variants: testVariants,
+        variants: [
+          { id: 'variant-codex-fast', name: 'Codex Fast', agentType: 'codex', model: 'gpt-5.4', reasoningEffort: 'high', isBuiltIn: false },
+          { id: 'variant-claude-opus', name: 'Claude Opus', agentType: 'claude', model: 'opus', isBuiltIn: false },
+        ],
         loading: false,
         error: null,
         saveVariants: vi.fn().mockResolvedValue(true),
         reloadVariants: vi.fn().mockResolvedValue(undefined),
       })
+      invokeMock.mockImplementation((cmd: string) => {
+        if (cmd === TauriCommands.GetFavoriteOrder) {
+          return Promise.resolve(['variant-codex-fast', 'variant-claude-opus'])
+        }
+        return defaultInvokeImplementation(cmd)
+      })
+
       openModal()
 
-      const variantButton = await screen.findByText('No variant (use defaults)')
-      fireEvent.click(variantButton)
+      const favoriteCard = getFavoriteCard(/Codex Fast/i)
+      if (favoriteCard.getAttribute('aria-pressed') !== 'true') {
+        fireEvent.click(favoriteCard)
+      }
 
-      expect(screen.getByText('Fast Claude (claude / sonnet)')).toBeInTheDocument()
-      expect(screen.queryByText('Fast Codex (codex / o3)')).not.toBeInTheDocument()
+      await waitFor(() => {
+        expect(getFavoriteCard(/Codex Fast/i)).toHaveAttribute('aria-pressed', 'true')
+      })
+
+      expect(screen.getByRole('button', { name: /Customize/i })).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    it('expands customize and shows a hint when no favorites exist', async () => {
+      openModal()
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Customize/i })).toHaveAttribute('aria-expanded', 'true')
+      })
+
+      expect(screen.getByText(/Set up favorites in Settings for quick access/i)).toBeInTheDocument()
+    })
+
+    it('handles cmd number shortcuts inside the modal and skips disabled favorites', async () => {
+      mockAgentVariants.mockReturnValue({
+        variants: [
+          { id: 'variant-codex-fast', name: 'Codex Fast', agentType: 'codex', model: 'gpt-5.4', isBuiltIn: false },
+          { id: 'variant-claude-opus', name: 'Claude Opus', agentType: 'claude', model: 'opus', isBuiltIn: false },
+        ],
+        loading: false,
+        error: null,
+        saveVariants: vi.fn().mockResolvedValue(true),
+        reloadVariants: vi.fn().mockResolvedValue(undefined),
+      })
+      useAgentAvailabilityMock.mockReturnValue({
+        availability: {},
+        isAvailable: (agent: string) => agent !== 'codex',
+        getRecommendedPath: () => '/mock/path',
+        getInstallationMethod: () => 'mock',
+        loading: false,
+        refreshAvailability: vi.fn(),
+        refreshSingleAgent: vi.fn(),
+        clearCache: vi.fn(),
+        forceRefresh: vi.fn(),
+      })
+      invokeMock.mockImplementation((cmd: string) => {
+        if (cmd === TauriCommands.GetFavoriteOrder) {
+          return Promise.resolve(['variant-codex-fast', 'variant-claude-opus'])
+        }
+        return defaultInvokeImplementation(cmd)
+      })
+
+      openModal()
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Claude Opus/i })).toHaveAttribute('aria-pressed', 'true')
+      })
+
+      const backgroundListener = vi.fn()
+      window.addEventListener('keydown', backgroundListener, true)
+
+      fireEvent.keyDown(window, { key: '1', metaKey: true })
+      expect(screen.getByRole('button', { name: /Claude Opus/i })).toHaveAttribute('aria-pressed', 'true')
+
+      fireEvent.keyDown(window, { key: '2', metaKey: true })
+      expect(screen.getByRole('button', { name: /Claude Opus/i })).toHaveAttribute('aria-pressed', 'true')
+      expect(backgroundListener).not.toHaveBeenCalled()
+
+      window.removeEventListener('keydown', backgroundListener, true)
+    })
+
+    it('shows a modified badge after favorite-backed config changes and deselects back to manual mode', async () => {
+      mockAgentVariants.mockReturnValue({
+        variants: [
+          { id: 'variant-codex-fast', name: 'Codex Fast', agentType: 'codex', model: 'gpt-5.4', reasoningEffort: 'high', isBuiltIn: false },
+          { id: 'variant-claude-opus', name: 'Claude Opus', agentType: 'claude', model: 'opus', isBuiltIn: false },
+        ],
+        loading: false,
+        error: null,
+        saveVariants: vi.fn().mockResolvedValue(true),
+        reloadVariants: vi.fn().mockResolvedValue(undefined),
+      })
+      invokeMock.mockImplementation((cmd: string) => {
+        if (cmd === TauriCommands.GetFavoriteOrder) {
+          return Promise.resolve(['variant-codex-fast', 'variant-claude-opus'])
+        }
+        return defaultInvokeImplementation(cmd)
+      })
+
+      openModal()
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Codex Fast/i)).toHaveAttribute('aria-pressed', 'true')
+      }, { timeout: 3000 })
+
+      fireEvent.click(screen.getByRole('button', { name: /Customize/i }))
+      fireEvent.click(screen.getByLabelText(/Create as spec/i))
+
+      await waitFor(() => {
+        expect(screen.getByText(/modified/i)).toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      fireEvent.click(getFavoriteCard(/Codex Fast/i))
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Codex Fast/i)).toHaveAttribute('aria-pressed', 'false')
+      }, { timeout: 3000 })
+
+      expect(screen.getByRole('button', { name: /Customize/i })).toHaveAttribute('aria-expanded', 'true')
     })
   })
 

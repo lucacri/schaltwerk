@@ -1522,6 +1522,8 @@ fn main() {
             set_agent_variants,
             get_agent_presets,
             set_agent_presets,
+            get_favorite_order,
+            set_favorite_order,
             get_contextual_actions,
             set_contextual_actions,
             reset_contextual_actions_to_defaults
