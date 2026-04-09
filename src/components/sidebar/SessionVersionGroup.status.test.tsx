@@ -1,4 +1,4 @@
-import { render, fireEvent } from '@testing-library/react'
+import { render, fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { SessionVersionGroup } from './SessionVersionGroup'
 import type { SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
@@ -12,8 +12,23 @@ vi.mock('./SessionCard', () => ({
 }))
 
 vi.mock('./CompactVersionRow', () => ({
-  CompactVersionRow: ({ session }: { session: EnrichedSession }) => (
-    <div data-testid="compact-version-row">{session.info.session_id}</div>
+  CompactVersionRow: ({
+    session,
+    hideTreeConnector,
+    siblings,
+  }: {
+    session: EnrichedSession
+    hideTreeConnector?: boolean
+    siblings?: EnrichedSession['info'][]
+  }) => (
+    <div
+      data-testid="compact-version-row"
+      data-session-id={session.info.session_id}
+      data-hide-tree-connector={hideTreeConnector ? 'true' : 'false'}
+      data-sibling-count={siblings?.length ?? 0}
+    >
+      {session.info.session_id}
+    </div>
   )
 }))
 
@@ -354,5 +369,83 @@ describe('SessionVersionGroup status summary', () => {
     )
 
     expect(getByText('Task one')).toBeInTheDocument()
+  })
+
+  it('renders consolidation rows outside the source tree with a dedicated container', () => {
+    const consolidatedGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'running' }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'reviewed' }),
+        {
+          ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={consolidatedGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const sourceTree = screen.getByTestId('version-group-source-tree')
+    const consolidationContainer = screen.getByTestId('version-group-consolidation')
+
+    expect(screen.getByTestId('version-group-consolidation-divider')).toBeInTheDocument()
+    expect(within(sourceTree).getAllByTestId('compact-version-row')).toHaveLength(2)
+    expect(within(consolidationContainer).getByTestId('compact-version-row')).toHaveAttribute('data-session-id', 'feature-A-merge')
+    expect(within(consolidationContainer).getByTestId('compact-version-row')).toHaveAttribute('data-hide-tree-connector', 'true')
+  })
+
+  it('keeps source versions inside the tree connector layout', () => {
+    const consolidatedGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'running' }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'reviewed' }),
+        {
+          ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={consolidatedGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const sourceRows = within(screen.getByTestId('version-group-source-tree')).getAllByTestId('compact-version-row')
+    expect(sourceRows).toHaveLength(2)
+    sourceRows.forEach(row => expect(row).toHaveAttribute('data-hide-tree-connector', 'false'))
   })
 })

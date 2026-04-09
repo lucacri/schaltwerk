@@ -39,6 +39,8 @@ interface CompactVersionRowProps {
   mergeStatus?: MergeStatus
   isMarkReadyDisabled?: boolean
   isBusy?: boolean
+  siblings?: SessionInfo[]
+  hideTreeConnector?: boolean
   onHover?: (sessionId: string | null) => void
   isHighlighted?: boolean
   isConsolidationSourceHighlighted?: boolean
@@ -61,6 +63,8 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   mergeStatus = 'idle',
   isMarkReadyDisabled = false,
   isBusy = false,
+  siblings,
+  hideTreeConnector = false,
   onHover,
   isHighlighted = false,
   isConsolidationSourceHighlighted = false,
@@ -102,6 +106,21 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
 
   const agentColor = getAgentColorKey(agentKey)
   const colorScheme = getAgentColorScheme(agentColor)
+  const consolidationSources = s.is_consolidation
+    ? s.consolidation_sources?.map((sourceId, index) => {
+        const source = siblings?.find(sibling => sibling.session_id === sourceId)
+        const sourceAgent = source?.original_agent_type || 'terminal'
+        const sourceAgentKey = sourceAgent.toLowerCase()
+        return {
+          sourceId,
+          title: source
+            ? `${sourceAgentKey}${source?.version_number ? ` (v${source.version_number})` : ''}`
+            : `Session ${sourceId}`,
+          colorScheme: getAgentColorScheme(getAgentColorKey(sourceAgentKey)),
+          zIndex: 10 - index,
+        }
+      }) ?? []
+    : []
 
   const surface = getSessionCardSurfaceClasses({
     sessionState,
@@ -223,25 +242,31 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
 
   return (
     <div className="relative">
-      <div
-        className={clsx(
-          'absolute -left-4 top-1/2 w-4 h-px',
-          isConsolidationSourceHighlighted
-            ? 'border-t border-dashed border-[rgba(var(--color-border-strong-rgb),0.8)]'
-            : 'bg-[rgba(var(--color-border-strong-rgb),0.5)]',
-        )}
-      />
-      <div
-        className={clsx(
-          'absolute top-1/2 w-2 h-2 rounded-full border',
-          isSelected
-            ? 'bg-[var(--color-accent-cyan)] border-[var(--color-accent-cyan-border)]'
-            : isConsolidationSourceHighlighted
-              ? 'bg-[var(--color-accent-purple)] border-[var(--color-accent-purple-border)]'
-              : 'bg-[var(--color-bg-hover)] border-[var(--color-border-strong)]',
-        )}
-        style={{ left: '-14px', transform: 'translate(-50%, -50%)' }}
-      />
+      {!hideTreeConnector && (
+        <>
+          <div
+            data-testid="compact-row-tree-connector-line"
+            className={clsx(
+              'absolute -left-4 top-1/2 w-4 h-px',
+              isConsolidationSourceHighlighted
+                ? 'border-t border-dashed border-[rgba(var(--color-border-strong-rgb),0.8)]'
+                : 'bg-[rgba(var(--color-border-strong-rgb),0.5)]',
+            )}
+          />
+          <div
+            data-testid="compact-row-tree-connector-dot"
+            className={clsx(
+              'absolute top-1/2 w-2 h-2 rounded-full border',
+              isSelected
+                ? 'bg-[var(--color-accent-cyan)] border-[var(--color-accent-cyan-border)]'
+                : isConsolidationSourceHighlighted
+                  ? 'bg-[var(--color-accent-purple)] border-[var(--color-accent-purple-border)]'
+                  : 'bg-[var(--color-bg-hover)] border-[var(--color-border-strong)]',
+            )}
+            style={{ left: '-14px', transform: 'translate(-50%, -50%)' }}
+          />
+        </>
+      )}
 
       <div
         role="button"
@@ -349,6 +374,30 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
             )}
             {metadataBadges}
           </div>
+
+          {consolidationSources.length > 0 && (
+            <div
+              data-testid="compact-row-consolidation-sources"
+              className="flex items-center gap-1.5 pl-0.5"
+              style={sessionText.meta}
+            >
+              <span style={{ color: 'var(--color-text-muted)' }}>←</span>
+              <div className="flex items-center -space-x-1">
+                {consolidationSources.map(source => (
+                  <div
+                    key={source.sourceId}
+                    data-testid="compact-row-consolidation-source-dot"
+                    className="flex items-center justify-center w-4 h-4 rounded-full border border-[var(--color-bg-primary)]"
+                    style={{
+                      backgroundColor: source.colorScheme.DEFAULT,
+                      zIndex: source.zIndex,
+                    }}
+                    title={source.title}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           {isSelected && (
             <div data-testid="compact-row-actions" className="flex justify-end" onClick={(event) => event.stopPropagation()}>

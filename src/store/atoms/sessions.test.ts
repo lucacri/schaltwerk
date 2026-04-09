@@ -1546,6 +1546,51 @@ describe('sessions atoms', () => {
         expect(sessionBRestartCalls).toHaveLength(0)
     })
 
+    it('hydrates consolidation metadata from SessionAdded', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd, _args) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                return []
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreGetSession) {
+                return {
+                    name: 'session-merge',
+                    branch: 'schaltwerk/session-merge',
+                    worktree_path: '/tmp/session-merge',
+                }
+            }
+            return undefined
+        })
+
+        store.set(projectPathAtom, '/project')
+        await store.set(initializeSessionsEventsActionAtom)
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:session-added']?.({
+            session_name: 'session-merge',
+            branch: 'schaltwerk/session-merge',
+            worktree_path: '/tmp/session-merge',
+            parent_branch: 'main',
+            agent_type: 'claude',
+            is_consolidation: true,
+            consolidation_sources: ['feature_v1', 'feature_v2'],
+            created_at: '2024-01-01T00:05:00.000Z',
+            last_modified: '2024-01-01T00:05:00.000Z',
+        })
+
+        await vi.waitFor(() => {
+            expect(store.get(allSessionsAtom).some(session => session.info.session_id === 'session-merge')).toBe(true)
+        })
+
+        const session = store.get(allSessionsAtom).find(candidate => candidate.info.session_id === 'session-merge')
+        expect(session?.info.is_consolidation).toBe(true)
+        expect(session?.info.consolidation_sources).toEqual(['feature_v1', 'feature_v2'])
+    })
+
     it('clears terminal start state when SessionRemoved fires to allow session recreation with same name', async () => {
         const { invoke } = await import('@tauri-apps/api/core')
 

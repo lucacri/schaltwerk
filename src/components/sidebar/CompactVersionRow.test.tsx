@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { renderWithProviders } from '../../tests/test-utils'
 import { CompactVersionRow } from './CompactVersionRow'
@@ -228,5 +228,56 @@ describe('CompactVersionRow', () => {
 
     expect(screen.getByText('merge · claude')).toBeInTheDocument()
     expect(screen.queryByText('v2 · claude')).toBeNull()
+  })
+
+  it('renders the tree connector by default', () => {
+    renderRow()
+
+    expect(screen.getByTestId('compact-row-tree-connector-line')).toBeInTheDocument()
+    expect(screen.getByTestId('compact-row-tree-connector-dot')).toBeInTheDocument()
+  })
+
+  it('hides the tree connector when requested', () => {
+    renderRow({ hideTreeConnector: true })
+
+    expect(screen.queryByTestId('compact-row-tree-connector-line')).toBeNull()
+    expect(screen.queryByTestId('compact-row-tree-connector-dot')).toBeNull()
+  })
+
+  it('renders consolidation source indicators when source metadata exists', () => {
+    renderRow({
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          is_consolidation: true,
+          consolidation_sources: ['feature_v1', 'feature_v3'],
+        },
+      },
+      siblings: [
+        {
+          ...baseInfo,
+          session_id: 'feature_v1',
+          display_name: 'feature_v1',
+          version_number: 1,
+          original_agent_type: 'codex',
+        },
+        {
+          ...baseInfo,
+          session_id: 'feature_v3',
+          display_name: 'feature_v3',
+          version_number: 3,
+          original_agent_type: 'gemini',
+        },
+      ],
+    })
+
+    const sources = screen.getByTestId('compact-row-consolidation-sources')
+    expect(within(sources).getByText('←')).toBeInTheDocument()
+
+    const dots = within(sources).getAllByTestId('compact-row-consolidation-source-dot')
+    expect(dots).toHaveLength(2)
+    expect(dots[0]).toHaveAttribute('title', 'codex (v1)')
+    expect(dots[1]).toHaveAttribute('title', 'gemini (v3)')
   })
 })

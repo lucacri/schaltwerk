@@ -1122,6 +1122,10 @@ pub async fn schaltwerk_core_create_session(
         skip_permissions: Option<bool>,
         #[serde(skip_serializing_if = "Option::is_none")]
         agent_type: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        is_consolidation: Option<bool>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        consolidation_sources: Option<Vec<String>>,
     }
     let _ = emit_event(
         &app,
@@ -1136,6 +1140,8 @@ pub async fn schaltwerk_core_create_session(
             epic,
             agent_type: session.original_agent_type.clone(),
             skip_permissions: session.original_skip_permissions,
+            is_consolidation: session.is_consolidation.then_some(true),
+            consolidation_sources: session.consolidation_sources.clone(),
         },
     );
 

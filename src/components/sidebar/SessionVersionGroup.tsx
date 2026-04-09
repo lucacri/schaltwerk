@@ -90,7 +90,10 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   )
   const hasSelectedVersion = !!selectedVersionInGroup
   const hasConsolidationVersion = group.versions.some(v => v.session.info.is_consolidation)
+  const consolidationVersion = group.versions.find(v => v.session.info.is_consolidation)
   const sourceVersions = group.versions.filter(v => !v.session.info.is_consolidation)
+  const siblingInfos = group.versions.map(v => v.session.info)
+  const hoveredSession = group.versions.find(v => v.session.info.session_id === hoveredSessionId)?.session.info
 
   const hasMultipleVersions = group.versions.length >= 2
   const runningOrReviewedCount = sourceVersions.filter(v => {
@@ -103,7 +106,11 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     ...group.versions.map(v => {
       const agent = (v.session.info.original_agent_type || '').toLowerCase()
       const vNum = v.session.info.version_number
-      const text = vNum ? `v${vNum} · ${agent}` : agent
+      const text = v.session.info.is_consolidation
+        ? `merge · ${agent}`
+        : vNum
+          ? `v${vNum} · ${agent}`
+          : agent
       return text.length
     })
   )
@@ -111,6 +118,53 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   const groupDescription = group.versions
     .map(version => (version.session.info.current_task || version.session.info.spec_content || '').trim())
     .find(Boolean) || undefined
+  const renderVersionRow = (
+    version: SessionVersionGroupType['versions'][number],
+    versionIndex: number,
+    hideTreeConnector = false,
+  ) => {
+    const isSelected = (selection.kind === 'session' && selection.payload === version.session.info.session_id) ||
+      (isInSpecMode === true && isSpec(version.session.info) && currentSpecId === version.session.info.session_id)
+    const willBeDeleted = isPreviewingDeletion && hasSelectedVersion && !isSelected
+    const isConsolidationSourceHighlighted = hoveredSession?.is_consolidation
+      ? hoveredSession.consolidation_sources?.includes(version.session.info.session_id)
+      : false
+    const isHighlighted = (version.session.info.is_consolidation && version.session.info.consolidation_sources?.includes(hoveredSessionId || ''))
+      || hoveredSessionId === version.session.info.session_id
+
+    return (
+      <CompactVersionRow
+        key={version.session.info.session_id}
+        session={version.session}
+        index={startIndex + versionIndex}
+        isSelected={isSelected}
+        tagMinWidth={tagMinWidth}
+        hasFollowUpMessage={hasFollowUpMessage(version.session.info.session_id)}
+        showPromoteIcon={isSelected}
+        willBeDeleted={willBeDeleted}
+        isPromotionPreview={isPreviewingDeletion && isSelected}
+        onPromoteVersion={() => {
+          if (onSelectBestVersion) {
+            onSelectBestVersion(group.baseName, version.session.info.session_id)
+          }
+        }}
+        onPromoteVersionHover={() => setIsPreviewingDeletion(true)}
+        onPromoteVersionHoverEnd={() => setIsPreviewingDeletion(false)}
+        isResetting={resettingSelection?.kind === 'session'
+          && resettingSelection.payload === version.session.info.session_id}
+        isRunning={isSessionRunning?.(version.session.info.session_id) || false}
+        disableMerge={isMergeDisabled?.(version.session.info.session_id) || false}
+        mergeStatus={getMergeStatus?.(version.session.info.session_id) ?? 'idle'}
+        isMarkReadyDisabled={isMarkReadyDisabled}
+        isBusy={isSessionBusy?.(version.session.info.session_id) ?? false}
+        siblings={siblingInfos}
+        hideTreeConnector={hideTreeConnector}
+        onHover={setHoveredSessionId}
+        isHighlighted={isHighlighted}
+        isConsolidationSourceHighlighted={Boolean(isConsolidationSourceHighlighted)}
+      />
+    )
+  }
 
   return (
     <div className="mb-2 relative">
@@ -254,54 +308,37 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
 
         {isExpanded && (
           <div className="p-2 pt-2">
-            <div className="relative pl-6">
-              <div className="absolute left-2 top-2 bottom-2 w-px bg-[rgba(var(--color-border-strong-rgb),0.5)]" />
+            {sourceVersions.length > 0 && (
+              <div className="relative pl-6" data-testid="version-group-source-tree">
+                <div className="absolute left-2 top-2 bottom-2 w-px bg-[rgba(var(--color-border-strong-rgb),0.5)]" />
 
-              <div className="space-y-2">
-                {group.versions.map((version, versionIndex) => {
-                  const isSelected = (selection.kind === 'session' && selection.payload === version.session.info.session_id) ||
-                    (isInSpecMode === true && isSpec(version.session.info) && currentSpecId === version.session.info.session_id)
-                  const willBeDeleted = isPreviewingDeletion && hasSelectedVersion && !isSelected
-                  const hoveredSession = group.versions.find(v => v.session.info.session_id === hoveredSessionId)?.session.info
-                  const isConsolidationSourceHighlighted = hoveredSession?.is_consolidation
-                    ? hoveredSession.consolidation_sources?.includes(version.session.info.session_id)
-                    : false
-                  const isHighlighted = (version.session.info.is_consolidation && version.session.info.consolidation_sources?.includes(hoveredSessionId || ''))
-                    || hoveredSessionId === version.session.info.session_id
-
-                  return (
-                    <CompactVersionRow
-                      key={version.session.info.session_id}
-                      session={version.session}
-                      index={startIndex + versionIndex}
-                      isSelected={isSelected}
-                      tagMinWidth={tagMinWidth}
-                      hasFollowUpMessage={hasFollowUpMessage(version.session.info.session_id)}
-                      showPromoteIcon={isSelected}
-                      willBeDeleted={willBeDeleted}
-                      isPromotionPreview={isPreviewingDeletion && isSelected}
-                      onPromoteVersion={() => {
-                        if (onSelectBestVersion) {
-                          onSelectBestVersion(group.baseName, version.session.info.session_id)
-                        }
-                      }}
-                      onPromoteVersionHover={() => setIsPreviewingDeletion(true)}
-                      onPromoteVersionHoverEnd={() => setIsPreviewingDeletion(false)}
-                      isResetting={resettingSelection?.kind === 'session'
-                        && resettingSelection.payload === version.session.info.session_id}
-                      isRunning={isSessionRunning?.(version.session.info.session_id) || false}
-                      disableMerge={isMergeDisabled?.(version.session.info.session_id) || false}
-                      mergeStatus={getMergeStatus?.(version.session.info.session_id) ?? 'idle'}
-                      isMarkReadyDisabled={isMarkReadyDisabled}
-                      isBusy={isSessionBusy?.(version.session.info.session_id) ?? false}
-                      onHover={setHoveredSessionId}
-                      isHighlighted={isHighlighted}
-                      isConsolidationSourceHighlighted={Boolean(isConsolidationSourceHighlighted)}
-                    />
-                  )
-                })}
+                <div className="space-y-2">
+                  {sourceVersions.map((version, versionIndex) => renderVersionRow(version, versionIndex))}
+                </div>
               </div>
-            </div>
+            )}
+
+            {consolidationVersion && (
+              <div className={clsx(sourceVersions.length > 0 && 'mt-3')}>
+                {sourceVersions.length > 0 && (
+                  <div
+                    data-testid="version-group-consolidation-divider"
+                    className="mx-1 mb-3 border-t"
+                    style={{ borderTopColor: 'rgb(var(--color-accent-purple-rgb) / 0.3)' }}
+                  />
+                )}
+                <div
+                  data-testid="version-group-consolidation"
+                  className="rounded-md pl-3"
+                  style={{
+                    borderLeft: '3px solid var(--color-accent-purple)',
+                    backgroundColor: 'rgb(var(--color-accent-purple-rgb) / 0.05)',
+                  }}
+                >
+                  {renderVersionRow(consolidationVersion, sourceVersions.length, true)}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

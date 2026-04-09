@@ -1777,6 +1777,8 @@ export const initializeSessionsEventsActionAtom = atom(
                 last_modified?: string
                 epic?: Epic
                 agent_type?: string
+                is_consolidation?: boolean
+                consolidation_sources?: string[]
                 skip_permissions?: boolean
             }
 
@@ -1815,6 +1817,8 @@ export const initializeSessionsEventsActionAtom = atom(
                     is_blocked: undefined,
                     original_agent_type: agentTypeFromEvent ?? pendingStartup?.agentType,
                     original_skip_permissions: event.skip_permissions,
+                    is_consolidation: event.is_consolidation ?? false,
+                    consolidation_sources: event.consolidation_sources ?? undefined,
                     diff_stats: undefined,
                     ready_to_merge: false,
                 }

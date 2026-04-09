@@ -261,6 +261,8 @@ export type EventPayloadMap = {
     epic?: Epic
     agent_type?: string
     skip_permissions?: boolean
+    is_consolidation?: boolean
+    consolidation_sources?: string[]
   }
   [SchaltEvent.SessionRemoved]: { session_name: string }
   [SchaltEvent.ArchiveUpdated]: { repo: string, count: number }

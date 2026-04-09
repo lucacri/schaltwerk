@@ -745,6 +745,10 @@ async fn start_webhook_server(app: tauri::AppHandle) -> bool {
                             parent_branch: String,
                             created_at: String,
                             last_modified: Option<String>,
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            is_consolidation: Option<bool>,
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            consolidation_sources: Option<Vec<String>>,
                         }
 
                         let session_payload = SessionAddedPayload {
@@ -773,6 +777,20 @@ async fn start_webhook_server(app: tauri::AppHandle) -> bool {
                                 .get("last_modified")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string()),
+                            is_consolidation: payload
+                                .get("is_consolidation")
+                                .and_then(|v| v.as_bool())
+                                .or_else(|| payload.get("isConsolidation").and_then(|v| v.as_bool())),
+                            consolidation_sources: payload
+                                .get("consolidation_sources")
+                                .or_else(|| payload.get("consolidationSources"))
+                                .and_then(|v| v.as_array())
+                                .map(|values| {
+                                    values
+                                        .iter()
+                                        .filter_map(|value| value.as_str().map(str::to_owned))
+                                        .collect()
+                                }),
                         };
 
                         if let Err(e) =
