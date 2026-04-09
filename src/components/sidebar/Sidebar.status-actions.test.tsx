@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { TauriCommands } from '../../common/tauriCommands'
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react'
 import { Sidebar, buildConsolidationGroupDetail } from './Sidebar'
 import { TestProviders } from '../../tests/test-utils'
 import * as uiEvents from '../../common/uiEvents'
@@ -15,6 +15,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { EnrichedSession } from '../../types/session'
 import { listen } from '@tauri-apps/api/event'
 import type { Event as TauriEvent } from '@tauri-apps/api/event'
+import { __getSessionsEventHandlerForTest } from '../../store/atoms/sessions'
+import { SchaltEvent } from '../../common/events'
 
 
 
@@ -443,6 +445,15 @@ describe('Sidebar status indicators and actions', () => {
 
     const confirmButton = screen.getByRole('button', { name: /Convert to Spec/ })
     fireEvent.click(confirmButton)
+
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreConvertSessionToDraft, expect.anything())
+    })
+
+    const sessionsHandler = __getSessionsEventHandlerForTest(SchaltEvent.SessionsRefreshed)
+    await act(async () => {
+      sessionsHandler?.({})
+    })
 
     // Switch to spec filter to see the converted session
     fireEvent.click(screen.getByTitle('Show spec agents'))

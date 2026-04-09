@@ -2393,6 +2393,7 @@ pub async fn schaltwerk_core_set_agent_type(agent_type: String) -> Result<(), St
 
 #[tauri::command]
 pub async fn schaltwerk_core_set_session_agent_type(
+    app: tauri::AppHandle,
     session_name: String,
     agent_type: String,
 ) -> Result<(), String> {
@@ -2427,6 +2428,8 @@ pub async fn schaltwerk_core_set_session_agent_type(
         session.id
     );
 
+    events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SessionLifecycle);
+
     Ok(())
 }
 
@@ -2439,11 +2442,18 @@ pub async fn schaltwerk_core_get_agent_type() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn schaltwerk_core_set_orchestrator_agent_type(agent_type: String) -> Result<(), String> {
+pub async fn schaltwerk_core_set_orchestrator_agent_type(
+    app: tauri::AppHandle,
+    agent_type: String,
+) -> Result<(), String> {
     let core = get_core_write().await?;
     core.db
         .set_orchestrator_agent_type(&agent_type)
-        .map_err(|e| format!("Failed to set orchestrator agent type: {e}"))
+        .map_err(|e| format!("Failed to set orchestrator agent type: {e}"))?;
+
+    events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SessionLifecycle);
+
+    Ok(())
 }
 
 #[tauri::command]
