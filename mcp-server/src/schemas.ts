@@ -229,6 +229,7 @@ const presetDraftStartSchema = {
 export const toolOutputSchemas = {
   lucode_create: {
     $schema: draft2020,
+    type: 'object',
     oneOf: [
       {
         type: 'object',
@@ -502,6 +503,7 @@ export const toolOutputSchemas = {
 
   lucode_draft_start: {
     $schema: draft2020,
+    type: 'object',
     oneOf: [
       {
         type: 'object',
