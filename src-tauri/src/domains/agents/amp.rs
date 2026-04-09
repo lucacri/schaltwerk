@@ -1,9 +1,10 @@
 use super::format_binary_invocation;
+use notify::{EventKind, RecursiveMode, Watcher};
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
 use std::time::SystemTime;
-use tokio::time::sleep;
 
 #[derive(Debug, Clone, Default)]
 pub struct AmpConfig {
@@ -102,7 +103,8 @@ pub fn find_amp_session(_path: &Path) -> Option<String> {
 }
 
 /// Asynchronously watches for a new Amp thread to be created in ~/.local/share/amp/threads/
-/// Returns the thread ID of the newly created thread, or None if timeout is reached
+/// Returns the thread ID of the newly created thread, or None if timeout is reached.
+/// Uses the `notify` crate (FSEvents on macOS, inotify on Linux) instead of polling.
 pub async fn watch_amp_thread_creation(timeout_secs: u64) -> Option<String> {
     let home = dirs::home_dir()?;
     let threads_dir = home.join(".local/share/amp/threads");
@@ -115,47 +117,65 @@ pub async fn watch_amp_thread_creation(timeout_secs: u64) -> Option<String> {
         return None;
     }
 
-    fn get_existing_threads(dir: &Path) -> Option<Vec<String>> {
-        fs::read_dir(dir).ok().map(|entries| {
-            entries
-                .flatten()
-                .filter_map(|entry| {
-                    let path = entry.path();
-                    if path.extension().map(|ext| ext == "json").unwrap_or(false) {
-                        path.file_stem()
-                            .and_then(|stem| stem.to_str())
-                            .map(|s| s.to_string())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
+    let initial_threads: HashSet<String> = fs::read_dir(&threads_dir)
+        .ok()?
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "json") {
+                path.file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .map(|s| s.to_string())
+            } else {
+                None
+            }
         })
-    }
+        .collect();
 
-    let initial_threads = get_existing_threads(&threads_dir)?;
     log::debug!("Amp thread watcher: Initial threads: {initial_threads:?}");
 
-    let deadline = std::time::Instant::now() + Duration::from_secs(timeout_secs);
+    let (tx, mut rx) = tokio::sync::mpsc::channel(16);
 
-    loop {
-        if let Some(current_threads) = get_existing_threads(&threads_dir) {
-            for thread_id in current_threads {
-                if !initial_threads.contains(&thread_id) {
-                    log::info!("Amp thread watcher: Detected new thread: {thread_id}");
-                    return Some(thread_id);
+    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
+        if let Ok(event) = res
+            && matches!(event.kind, EventKind::Create(_))
+        {
+            let _ = tx.blocking_send(event);
+        }
+    })
+    .ok()?;
+
+    watcher
+        .watch(&threads_dir, RecursiveMode::NonRecursive)
+        .ok()?;
+
+    let timeout = Duration::from_secs(timeout_secs);
+    let result = tokio::time::timeout(timeout, async {
+        while let Some(event) = rx.recv().await {
+            for path in &event.paths {
+                if path.extension().is_none_or(|ext| ext != "json") {
+                    continue;
+                }
+                if let Some(name) = path.file_stem().and_then(|n| n.to_str())
+                    && !initial_threads.contains(name)
+                {
+                    log::info!("Amp thread watcher: Detected new thread: {name}");
+                    return Some(name.to_string());
                 }
             }
         }
+        None
+    })
+    .await;
 
-        if std::time::Instant::now() >= deadline {
+    match result {
+        Ok(thread_id) => thread_id,
+        Err(_) => {
             log::warn!(
                 "Amp thread watcher: Timeout ({timeout_secs} secs) reached without detecting new thread"
             );
-            return None;
+            None
         }
-
-        sleep(Duration::from_millis(100)).await;
     }
 }
 
@@ -215,6 +235,7 @@ mod tests {
     use crate::utils::env_adapter::EnvAdapter;
     use serial_test::serial;
     use std::path::Path;
+    use tokio::time::sleep;
 
     #[test]
     fn test_new_session_with_prompt() {
@@ -389,5 +410,61 @@ mod tests {
         }
 
         assert_eq!(result, Some("T-new-thread-id".to_string()));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_watch_amp_thread_creation_timeout_returns_none() {
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+        let threads_dir = temp.path().join(".local/share/amp/threads");
+        std::fs::create_dir_all(&threads_dir).unwrap();
+
+        let original_home = std::env::var("HOME").ok();
+        EnvAdapter::set_var("HOME", &temp.path().to_string_lossy());
+
+        let result = watch_amp_thread_creation(1).await;
+
+        if let Some(home) = original_home {
+            EnvAdapter::set_var("HOME", &home);
+        } else {
+            EnvAdapter::remove_var("HOME");
+        }
+
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_watch_amp_thread_creation_ignores_non_json_files() {
+        use std::fs::File;
+        use std::io::Write;
+        use tempfile::TempDir;
+
+        let temp = TempDir::new().unwrap();
+        let threads_dir = temp.path().join(".local/share/amp/threads");
+        std::fs::create_dir_all(&threads_dir).unwrap();
+
+        let threads_dir_clone = threads_dir.clone();
+        tokio::spawn(async move {
+            sleep(Duration::from_millis(200)).await;
+            let non_json = threads_dir_clone.join("T-should-ignore.txt");
+            let mut f = File::create(non_json).unwrap();
+            f.write_all(b"not json").unwrap();
+        });
+
+        let original_home = std::env::var("HOME").ok();
+        EnvAdapter::set_var("HOME", &temp.path().to_string_lossy());
+
+        let result = watch_amp_thread_creation(2).await;
+
+        if let Some(home) = original_home {
+            EnvAdapter::set_var("HOME", &home);
+        } else {
+            EnvAdapter::remove_var("HOME");
+        }
+
+        assert_eq!(result, None);
     }
 }
