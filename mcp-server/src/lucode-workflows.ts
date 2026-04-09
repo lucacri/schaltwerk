@@ -69,7 +69,13 @@ Use the current consolidation session branch as the destination branch.
 3. Pick the strongest branch as the conceptual base, then apply its best ideas into the current consolidation session branch. Remember which source session was the base — its session ID becomes the \`winner_session_id\` you pass to \`lucode_promote\`.
 4. Incorporate any valuable improvements from the remaining branches.
 5. Run the project's verification commands.
-6. Call \`lucode_promote\` with:
+6. **Rebase the consolidation branch onto the latest trunk before promoting.** Rebasing now prevents a later merge attempt from hitting conflicts that would otherwise require a fresh agent run to resolve — at a point where the consolidation context is gone.
+   1. From inside the consolidation session worktree, fetch the latest trunk. Prefer the tracked remote (\`git fetch origin main\`); if no remote tracking branch exists, fall back to the local \`main\`.
+   2. Rebase the current consolidation branch onto \`origin/main\` (\`git rebase origin/main\`), or onto local \`main\` (\`git rebase main\`) if no remote is tracked.
+   3. If the rebase is clean, re-run the project's verification commands. They must pass before proceeding to promote.
+   4. If the rebase produces conflicts, resolve them in the worktree using the full context of what was just consolidated from every sibling branch. Use \`git add\` for resolved paths, then \`git rebase --continue\`. Repeat until the rebase finishes. After a clean finish, re-run the project's verification commands. They must pass before proceeding to promote.
+   5. Do not call \`lucode_promote\` until the rebase is clean **and** verification is green on the rebased branch.
+7. Call \`lucode_promote\` with:
    - \`session_name\`: the current consolidation session name
    - \`reason\`: a concise explanation of why this version won and what it absorbed from siblings
    - \`winner_session_id\`: the session ID of the source version you chose as the strongest base (take it from the session list that was injected into your prompt)
