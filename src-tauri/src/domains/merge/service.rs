@@ -63,23 +63,6 @@ impl MergeService {
         Self { db, repo_path }
     }
 
-    fn assess_context(&self, context: &SessionMergeContext) -> Result<MergeState> {
-        let repo = Repository::open(&context.repo_path).with_context(|| {
-            format!(
-                "Failed to open git repository at {}",
-                context.repo_path.display()
-            )
-        })?;
-
-        compute_merge_state(
-            &repo,
-            context.session_oid,
-            context.parent_oid,
-            &context.session_branch,
-            &context.parent_branch,
-        )
-    }
-
     pub fn session_manager(&self) -> SessionManager {
         SessionManager::new(self.db.clone(), self.repo_path.clone())
     }
@@ -204,14 +187,12 @@ impl MergeService {
     }
 
     pub fn preview(&self, session_name: &str) -> Result<MergePreview> {
-        let context = self.prepare_context(session_name)?;
+        let (context, repo) = self.prepare_context(session_name)?;
         let default_message = format!(
             "Merge session {} into {}",
             context.session_name, context.parent_branch
         );
 
-        // Compose human-readable commands for the UI preview only. The merge implementation
-        // uses libgit2 directly; these commands are never executed by the backend.
         let squash_commands = vec![
             format!("git rebase {}", context.parent_branch),
             format!("git reset --soft {}", context.parent_branch),
@@ -226,9 +207,14 @@ impl MergeService {
             ),
         ];
 
-        let assessment = self.assess_context(&context)?;
+        let assessment = compute_merge_state(
+            &repo,
+            context.session_oid,
+            context.parent_oid,
+            &context.session_branch,
+            &context.parent_branch,
+        )?;
 
-        let repo = Repository::open(&context.repo_path)?;
         let commits_ahead_count =
             count_commits_ahead(&repo, context.session_oid, context.parent_oid)?;
         let commits = collect_commits_ahead(&repo, context.session_oid, context.parent_oid, COMMIT_LIST_LIMIT)?;
@@ -333,8 +319,14 @@ impl MergeService {
         mode: MergeMode,
         commit_message: Option<String>,
     ) -> Result<MergeOutcome> {
-        let context = self.prepare_context(session_name)?;
-        let assessment = self.assess_context(&context)?;
+        let (context, repo) = self.prepare_context(session_name)?;
+        let assessment = compute_merge_state(
+            &repo,
+            context.session_oid,
+            context.parent_oid,
+            &context.session_branch,
+            &context.parent_branch,
+        )?;
 
         if assessment.has_conflicts {
             let hint = if assessment.conflicting_paths.is_empty() {
@@ -362,7 +354,8 @@ impl MergeService {
             ));
         }
 
-        self.ensure_parent_branch_clean(&context)?;
+        self.ensure_parent_branch_clean(&repo, &context)?;
+        drop(repo);
 
         let commit_message = match mode {
             MergeMode::Squash => {
@@ -417,8 +410,7 @@ impl MergeService {
         Ok(outcome)
     }
 
-    fn ensure_parent_branch_clean(&self, context: &SessionMergeContext) -> Result<()> {
-        let repo = Repository::open(&context.repo_path)?;
+    fn ensure_parent_branch_clean(&self, repo: &Repository, context: &SessionMergeContext) -> Result<()> {
         let head = match repo.head() {
             Ok(head) => head,
             Err(_) => return Ok(()),
@@ -472,7 +464,7 @@ impl MergeService {
         Ok(())
     }
 
-    fn prepare_context(&self, session_name: &str) -> Result<SessionMergeContext> {
+    fn prepare_context(&self, session_name: &str) -> Result<(SessionMergeContext, Repository)> {
         let manager = self.session_manager();
         let session = manager
             .get_session(session_name)
@@ -546,24 +538,28 @@ impl MergeService {
             }
         };
 
-        let parent_ref = find_branch(&repo, &resolved_parent).with_context(|| {
-            format!("Parent branch '{resolved_parent}' not found for session '{session_name}'")
-        })?;
-        let parent_oid = parent_ref
-            .get()
-            .target()
-            .ok_or_else(|| anyhow!("Parent branch '{resolved_parent}' has no target"))?;
+        let (session_oid, parent_oid) = {
+            let parent_ref = find_branch(&repo, &resolved_parent).with_context(|| {
+                format!("Parent branch '{resolved_parent}' not found for session '{session_name}'")
+            })?;
+            let parent_oid = parent_ref
+                .get()
+                .target()
+                .ok_or_else(|| anyhow!("Parent branch '{resolved_parent}' has no target"))?;
 
-        let branch = &session.branch;
-        let session_ref = find_branch(&repo, branch).with_context(|| {
-            format!("Session branch '{branch}' not found for session '{session_name}'")
-        })?;
-        let session_oid = session_ref
-            .get()
-            .target()
-            .ok_or_else(|| anyhow!("Session branch '{branch}' has no target"))?;
+            let branch = &session.branch;
+            let session_ref = find_branch(&repo, branch).with_context(|| {
+                format!("Session branch '{branch}' not found for session '{session_name}'")
+            })?;
+            let session_oid = session_ref
+                .get()
+                .target()
+                .ok_or_else(|| anyhow!("Session branch '{branch}' has no target"))?;
 
-        Ok(SessionMergeContext {
+            (session_oid, parent_oid)
+        };
+
+        Ok((SessionMergeContext {
             session_name: session.name,
             repo_path: session.repository_path,
             worktree_path: session.worktree_path,
@@ -571,7 +567,7 @@ impl MergeService {
             parent_branch: resolved_parent,
             session_oid,
             parent_oid,
-        })
+        }, repo))
     }
 
     async fn perform_merge(
