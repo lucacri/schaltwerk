@@ -1,9 +1,49 @@
 use crate::domains::attention::get_session_attention_state;
 use crate::domains::sessions::entity::EnrichedSession;
+use crate::domains::sessions::{
+    GitEnrichmentTask, apply_git_enrichment, compute_git_for_session,
+};
 use crate::project_manager::ProjectManager;
 use crate::schaltwerk_core::SchaltwerkCore;
 use async_trait::async_trait;
 use std::sync::Arc;
+
+pub async fn compute_git_enrichment_parallel(
+    tasks: Vec<GitEnrichmentTask>,
+) -> Vec<crate::domains::sessions::service::GitEnrichmentResult> {
+    if tasks.is_empty() {
+        return Vec::new();
+    }
+
+    let handles: Vec<_> = tasks
+        .into_iter()
+        .map(|task| {
+            tokio::task::spawn_blocking(move || compute_git_for_session(&task))
+        })
+        .collect();
+
+    let mut results = Vec::with_capacity(handles.len());
+    for handle in handles {
+        match handle.await {
+            Ok(result) => results.push(result),
+            Err(err) => {
+                log::error!("Git enrichment task panicked: {err}");
+            }
+        }
+    }
+    results
+}
+
+pub async fn enrich_sessions_with_parallel_git(
+    sessions: &mut [EnrichedSession],
+    tasks: Vec<GitEnrichmentTask>,
+) {
+    if tasks.is_empty() {
+        return;
+    }
+    let results = compute_git_enrichment_parallel(tasks).await;
+    apply_git_enrichment(sessions, results);
+}
 
 #[async_trait]
 pub trait SessionsBackend: Send + Sync {
@@ -98,39 +138,37 @@ impl SessionsBackend for ProjectSessionsBackend {
         let start = std::time::Instant::now();
         log::debug!("ProjectSessionsBackend list_enriched_sessions start call_id={call_id}");
 
-        let core = self.get_core().await?;
-        let core_wait = std::time::Instant::now();
-        let core = core.read().await;
-        let core_ready = core_wait.elapsed().as_millis();
-        if core_ready > 200 {
-            log::warn!(
-                "ProjectSessionsBackend call_id={call_id} core read lock wait={core_ready}ms"
-            );
-        } else {
-            log::debug!(
-                "ProjectSessionsBackend call_id={call_id} core read lock wait={core_ready}ms"
-            );
-        }
+        let (mut sessions, git_tasks) = {
+            let core = self.get_core().await?;
+            let core_wait = std::time::Instant::now();
+            let core = core.read().await;
+            let core_ready = core_wait.elapsed().as_millis();
+            if core_ready > 200 {
+                log::warn!(
+                    "ProjectSessionsBackend call_id={call_id} core read lock wait={core_ready}ms"
+                );
+            } else {
+                log::debug!(
+                    "ProjectSessionsBackend call_id={call_id} core read lock wait={core_ready}ms"
+                );
+            }
 
-        let manager = core.session_manager();
-        let result = manager
-            .list_enriched_sessions()
-            .map_err(|err| err.to_string());
+            let manager = core.session_manager();
+            manager
+                .list_enriched_sessions_base()
+                .map_err(|err| err.to_string())?
+        };
 
-        match &result {
-            Ok(list) => log::debug!(
-                "ProjectSessionsBackend call_id={call_id} done count={} elapsed={}ms",
-                list.len(),
-                start.elapsed().as_millis()
-            ),
-            Err(err) => log::error!(
-                "ProjectSessionsBackend call_id={call_id} error elapsed={}ms err={}",
-                start.elapsed().as_millis(),
-                err
-            ),
-        }
+        let git_results = compute_git_enrichment_parallel(git_tasks).await;
+        apply_git_enrichment(&mut sessions, git_results);
 
-        result
+        log::debug!(
+            "ProjectSessionsBackend call_id={call_id} done count={} elapsed={}ms",
+            sessions.len(),
+            start.elapsed().as_millis()
+        );
+
+        Ok(sessions)
     }
 }
 

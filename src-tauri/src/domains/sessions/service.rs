@@ -97,6 +97,76 @@ pub struct SessionCancellationInfo {
     pub repo_path: PathBuf,
 }
 
+pub struct GitEnrichmentTask {
+    pub index: usize,
+    pub worktree_path: PathBuf,
+    pub parent_branch: String,
+    pub branch: String,
+    pub session_id: String,
+    pub session_name: String,
+}
+
+pub struct GitEnrichmentResult {
+    pub index: usize,
+    pub git_stats: Option<GitStats>,
+    pub has_conflicts: Option<bool>,
+    pub commits_ahead_count: Option<u32>,
+}
+
+pub fn compute_git_for_session(task: &GitEnrichmentTask) -> GitEnrichmentResult {
+    let computed_stats = git::calculate_git_stats_fast(&task.worktree_path, &task.parent_branch)
+        .ok()
+        .map(|mut s| {
+            s.session_id = task.session_id.clone();
+            s
+        });
+
+    let has_conflicts = match git::has_conflicts(&task.worktree_path) {
+        Ok(value) => Some(value),
+        Err(err) => {
+            log::warn!(
+                "Conflict detection failed for '{}': {err}",
+                task.session_name
+            );
+            Some(false)
+        }
+    };
+
+    let commits_ahead_count =
+        compute_commits_ahead_count(&task.worktree_path, &task.branch, &task.parent_branch);
+
+    GitEnrichmentResult {
+        index: task.index,
+        git_stats: computed_stats,
+        has_conflicts,
+        commits_ahead_count,
+    }
+}
+
+pub fn apply_git_enrichment(
+    sessions: &mut [EnrichedSession],
+    results: Vec<GitEnrichmentResult>,
+) {
+    for result in results {
+        let session = &mut sessions[result.index];
+        if let Some(stats) = &result.git_stats {
+            session.info.has_uncommitted_changes = Some(stats.has_uncommitted);
+            session.info.dirty_files_count = Some(stats.dirty_files_count);
+            session.info.diff_stats = Some(DiffStats {
+                files_changed: stats.files_changed as usize,
+                additions: stats.lines_added as usize,
+                deletions: stats.lines_removed as usize,
+                insertions: stats.lines_added as usize,
+            });
+            if stats.has_uncommitted {
+                session.info.status = SessionStatusType::Dirty;
+            }
+        }
+        session.info.has_conflicts = result.has_conflicts;
+        session.info.commits_ahead_count = result.commits_ahead_count;
+    }
+}
+
 pub struct SessionCreationParams<'a> {
     pub name: &'a str,
     pub prompt: Option<&'a str>,
@@ -138,8 +208,8 @@ use crate::{
     domains::sessions::db_sessions::SessionMethods,
     domains::sessions::entity::ArchivedSpec,
     domains::sessions::entity::{
-        DiffStats, EnrichedSession, Epic, FilterMode, Session, SessionInfo, SessionState,
-        SessionStatus, SessionStatusType, SessionType, SortMode, Spec,
+        DiffStats, EnrichedSession, Epic, FilterMode, GitStats, Session, SessionInfo,
+        SessionState, SessionStatus, SessionStatusType, SessionType, SortMode, Spec,
     },
     domains::sessions::repository::SessionDbManager,
     domains::sessions::utils::SessionUtils,
@@ -2528,9 +2598,11 @@ impl SessionManager {
         self.utils.cleanup_orphaned_worktrees()
     }
 
-    pub fn list_enriched_sessions(&self) -> Result<Vec<EnrichedSession>> {
+    pub fn list_enriched_sessions_base(
+        &self,
+    ) -> Result<(Vec<EnrichedSession>, Vec<GitEnrichmentTask>)> {
         let start_time = std::time::Instant::now();
-        log::info!("[SES] list_enriched_sessions start");
+        log::info!("[SES] list_enriched_sessions_base start");
 
         let sessions_start = std::time::Instant::now();
         let sessions = self.db_manager.list_sessions()?;
@@ -2574,17 +2646,10 @@ impl SessionManager {
             sessions.len().saturating_sub(spec_count)
         );
 
-        let db_time = std::time::Duration::from_millis(
-            (sessions_elapsed + specs_elapsed + epics_elapsed) as u64,
-        );
-
-        // Fetch global defaults once to avoid per-row DB hits
         let default_agent_type = self.db_manager.get_agent_type().ok();
 
         let mut enriched = Vec::new();
-        let mut git_stats_total_time = std::time::Duration::ZERO;
-        let mut worktree_check_time = std::time::Duration::ZERO;
-        let mut session_count = 0;
+        let mut git_tasks = Vec::new();
 
         let default_base_branch = self
             .resolve_parent_branch(None)
@@ -2649,22 +2714,8 @@ impl SessionManager {
                 continue;
             }
 
-            session_count += 1;
-            let session_start = std::time::Instant::now();
-            log::debug!(
-                "list_enriched_sessions: session={} stage=process_start status={:?} state={:?}",
-                session.name,
-                session.status,
-                session.session_state
-            );
-
             let is_spec_session = session.session_state == SessionState::Spec;
             if is_spec_session {
-                log::debug!(
-                    "list_enriched_sessions: session={} stage=spec skip_enrichment=true",
-                    session.name
-                );
-                // Specs do not require git stats or worktree checks; return lightweight metadata
                 let info = SessionInfo {
                     session_id: session.name.clone(),
                     display_name: session.display_name.clone(),
@@ -2716,95 +2767,18 @@ impl SessionManager {
                 continue;
             }
 
-            log::debug!(
-                "Processing session '{}': status={:?}, session_state={:?}",
-                session.name,
-                session.status,
-                session.session_state
-            );
-
-            // Check if worktree exists for running/reviewed sessions
-            let worktree_check_start = std::time::Instant::now();
-            log::debug!(
-                "list_enriched_sessions: session={} stage=worktree_check:start path={}",
-                session.name,
-                session.worktree_path.display()
-            );
             let worktree_exists = session.worktree_path.exists();
-            let worktree_elapsed = worktree_check_start.elapsed();
-            worktree_check_time += worktree_elapsed;
-            log::debug!(
-                "list_enriched_sessions: session={} stage=worktree_check:done exists={} elapsed={}ms",
-                session.name,
-                worktree_exists,
-                worktree_elapsed.as_millis()
-            );
 
             if !worktree_exists && !cfg!(test) {
                 log::warn!(
-                    "list_enriched_sessions: worktree missing for '{}' (status={:?}, state={:?}) at {}",
+                    "list_enriched_sessions_base: worktree missing for '{}' at {}",
                     session.name,
-                    session.status,
-                    session.session_state,
                     session.worktree_path.display()
                 );
             }
 
-            let (git_stats, has_conflicts) = if worktree_exists {
-                let git_stats_start = std::time::Instant::now();
-                let computed_stats = git::calculate_git_stats_fast(
-                    &session.worktree_path,
-                    &session.parent_branch,
-                )
-                .ok()
-                .map(|mut s| {
-                    s.session_id = session.id.clone();
-                    s
-                });
-                git_stats_total_time += git_stats_start.elapsed();
-
-                let has_conflicts = match git::has_conflicts(&session.worktree_path) {
-                    Ok(value) => value,
-                    Err(err) => {
-                        log::warn!(
-                            "Conflict detection failed for '{}': {err}",
-                            session.name
-                        );
-                        false
-                    }
-                };
-
-                (computed_stats, Some(has_conflicts))
-            } else {
-                (None, None)
-            };
-
-            let has_uncommitted = git_stats
-                .as_ref()
-                .map(|s| s.has_uncommitted)
-                .unwrap_or(false);
-            let dirty_files_count = git_stats.as_ref().map(|s| s.dirty_files_count);
-            let commits_ahead_count = if worktree_exists {
-                compute_commits_ahead_count(
-                    &session.worktree_path,
-                    &session.branch,
-                    &session.parent_branch,
-                )
-            } else {
-                None
-            };
-
-            let diff_stats = git_stats.as_ref().map(|stats| DiffStats {
-                files_changed: stats.files_changed as usize,
-                additions: stats.lines_added as usize,
-                deletions: stats.lines_removed as usize,
-                insertions: stats.lines_added as usize,
-            });
-
             let status_type = if !worktree_exists && !cfg!(test) {
                 SessionStatusType::Missing
-            } else if has_uncommitted {
-                SessionStatusType::Dirty
             } else {
                 match session.status {
                     SessionStatus::Active => SessionStatusType::Active,
@@ -2827,6 +2801,8 @@ impl SessionManager {
                 .clone()
                 .or_else(|| default_agent_type.clone());
 
+            let current_index = enriched.len();
+
             let info = SessionInfo {
                 session_id: session.name.clone(),
                 display_name: session.display_name.clone(),
@@ -2843,16 +2819,16 @@ impl SessionManager {
                 status: status_type,
                 created_at: Some(session.created_at),
                 last_modified: session.last_activity,
-                has_uncommitted_changes: Some(has_uncommitted),
-                dirty_files_count,
-                commits_ahead_count,
-                has_conflicts,
+                has_uncommitted_changes: Some(false),
+                dirty_files_count: None,
+                commits_ahead_count: None,
+                has_conflicts: None,
                 is_current: false,
                 session_type: SessionType::Worktree,
                 container_status: None,
                 original_agent_type: original_agent_type.or_else(|| default_agent_type.clone()),
                 current_task: session.initial_prompt.clone(),
-                diff_stats: diff_stats.clone(),
+                diff_stats: None,
                 ready_to_merge: session.ready_to_merge,
                 spec_content: session.spec_content.clone(),
                 session_state,
@@ -2877,29 +2853,46 @@ impl SessionManager {
                 attention_required: None,
             });
 
-            let session_elapsed = session_start.elapsed();
-            if session_elapsed.as_millis() > 50 {
-                log::debug!(
-                    "Session '{}' processing took {}ms",
-                    session.name,
-                    session_elapsed.as_millis()
-                );
+            if worktree_exists {
+                git_tasks.push(GitEnrichmentTask {
+                    index: current_index,
+                    worktree_path: session.worktree_path.clone(),
+                    parent_branch: session.parent_branch.clone(),
+                    branch: session.branch.clone(),
+                    session_id: session.id.clone(),
+                    session_name: session.name.clone(),
+                });
             }
         }
 
+        let elapsed = start_time.elapsed();
+        log::info!(
+            "[SES] list_enriched_sessions_base done: {} sessions, {} git tasks, {}ms",
+            enriched.len(),
+            git_tasks.len(),
+            elapsed.as_millis()
+        );
+
+        Ok((enriched, git_tasks))
+    }
+
+    pub fn list_enriched_sessions(&self) -> Result<Vec<EnrichedSession>> {
+        let start_time = std::time::Instant::now();
+        let (mut enriched, git_tasks) = self.list_enriched_sessions_base()?;
+
+        let git_start = std::time::Instant::now();
+        let results: Vec<GitEnrichmentResult> =
+            git_tasks.iter().map(compute_git_for_session).collect();
+        let git_elapsed = git_start.elapsed();
+
+        apply_git_enrichment(&mut enriched, results);
+
         let total_elapsed = start_time.elapsed();
         log::info!(
-            "list_enriched_sessions: Returning {} enriched sessions (total: {}ms, db: {}ms, git_stats: {}ms, worktree_checks: {}ms, avg per session: {}ms)",
+            "list_enriched_sessions: {} sessions (total: {}ms, git_stats: {}ms)",
             enriched.len(),
             total_elapsed.as_millis(),
-            db_time.as_millis(),
-            git_stats_total_time.as_millis(),
-            worktree_check_time.as_millis(),
-            if session_count > 0 {
-                total_elapsed.as_millis() / session_count as u128
-            } else {
-                0
-            }
+            git_elapsed.as_millis(),
         );
 
         if total_elapsed.as_millis() > 500 {
