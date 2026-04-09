@@ -573,6 +573,11 @@ export const setSelectionActionAtom = atom(
 
       if (!unchanged) {
         set(selectionAtom, enrichedSelection)
+        void invoke(TauriCommands.SetVisibleSession, {
+          sessionName: enrichedSelection.kind === 'session' ? enrichedSelection.payload ?? null : null,
+        }).catch((err: unknown) => {
+          logger.debug('Failed to set visible session', err)
+        })
       }
 
       if (unchanged && !effectiveForceRecreate && !missingTop && !missingBottom) {

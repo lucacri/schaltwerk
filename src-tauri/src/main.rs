@@ -630,6 +630,11 @@ async fn get_active_file_watchers() -> Result<Vec<String>, String> {
     Ok(watcher_manager.get_active_watchers().await)
 }
 
+#[tauri::command]
+fn set_visible_session(session_name: Option<String>) {
+    lucode::domains::workspace::watcher::set_visible_session(session_name);
+}
+
 use http_body_util::BodyExt;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -1506,6 +1511,7 @@ fn main() {
             stop_file_watcher,
             is_file_watcher_active,
             get_active_file_watchers,
+            set_visible_session,
             // MCP configuration commands
             get_mcp_status,
             configure_mcp_for_project,

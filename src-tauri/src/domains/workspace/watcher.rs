@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::{Arc, Mutex as StdMutex, OnceLock, RwLock};
 use std::time::{Duration, Instant};
 
 use crate::infrastructure::events::{SchaltEvent, emit_event};
@@ -19,6 +19,54 @@ use crate::domains::git::service as git;
 use crate::shared::merge_snapshot_gateway::MergeSnapshotGateway;
 use crate::shared::session_metadata_gateway::{ChangedFile, SessionGitStatsUpdated};
 use git2::{Oid, Repository};
+
+const WATCHER_GIT_STATS_INTERVAL: Duration = Duration::from_secs(3);
+
+static WATCHER_THROTTLE: OnceLock<StdMutex<HashMap<PathBuf, Instant>>> = OnceLock::new();
+
+fn watcher_throttle() -> &'static StdMutex<HashMap<PathBuf, Instant>> {
+    WATCHER_THROTTLE.get_or_init(|| StdMutex::new(HashMap::new()))
+}
+
+fn should_compute_stats(worktree_path: &Path) -> bool {
+    let mut map = watcher_throttle().lock().expect("throttle lock poisoned");
+    let now = Instant::now();
+    if let Some(last) = map.get(worktree_path)
+        && now.duration_since(*last) < WATCHER_GIT_STATS_INTERVAL
+    {
+        return false;
+    }
+    map.insert(worktree_path.to_path_buf(), now);
+    true
+}
+
+static VISIBLE_SESSION: OnceLock<RwLock<Option<String>>> = OnceLock::new();
+
+fn visible_session_state() -> &'static RwLock<Option<String>> {
+    VISIBLE_SESSION.get_or_init(|| RwLock::new(None))
+}
+
+pub fn set_visible_session(session_name: Option<String>) {
+    let mut guard = visible_session_state()
+        .write()
+        .expect("visible session lock poisoned");
+    *guard = session_name;
+}
+
+fn is_session_visible(session_name: &str) -> bool {
+    let guard = visible_session_state()
+        .read()
+        .expect("visible session lock poisoned");
+    match guard.as_deref() {
+        Some(name) => name == session_name,
+        None => true,
+    }
+}
+
+pub fn force_stats_recompute(worktree_path: &Path) {
+    let mut map = watcher_throttle().lock().expect("throttle lock poisoned");
+    map.remove(worktree_path);
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileChangeEvent {
@@ -305,10 +353,13 @@ impl FileWatcher {
             changed_files.len()
         );
 
-        let change_summary =
-            Self::compute_change_summary(&changed_files, worktree_path, base_branch).await?;
+        let repo = git2::Repository::open(worktree_path)
+            .map_err(|e| format!("Failed to open repository: {e}"))?;
 
-        let branch_info = Self::get_branch_info(worktree_path, base_branch).await?;
+        let change_summary =
+            Self::compute_change_summary(&changed_files, &repo)?;
+
+        let branch_info = Self::get_branch_info(&repo, base_branch)?;
         let session_branch_name = branch_info.current_branch.clone();
 
         let timestamp = std::time::SystemTime::now()
@@ -325,6 +376,82 @@ impl FileWatcher {
             timestamp,
         };
 
+        let mut stats_payload = None;
+        if is_session_visible(session_name) && should_compute_stats(worktree_path) {
+            crate::domains::git::stats::invalidate_stats_cache_for(worktree_path, base_branch);
+            match git::calculate_git_stats_fast(worktree_path, base_branch) {
+                Ok(stats) => {
+                    let has_conflicts = match git::has_conflicts(worktree_path) {
+                        Ok(value) => value,
+                        Err(err) => {
+                            log::warn!(
+                                "Watcher conflict detection failed for {session_name}: {err}"
+                            );
+                            false
+                        }
+                    };
+                    let (merge_snapshot, commits_ahead_count) = (|| {
+                        let session_oid = repo.head().ok().and_then(|h| h.target())?;
+                        let parent_obj = repo.revparse_single(base_branch).ok()?;
+                        let parent_oid = parent_obj.peel_to_commit().ok()?.id();
+                        let merge_snapshot = MergeSnapshotGateway::compute(
+                            &repo,
+                            session_oid,
+                            parent_oid,
+                            &session_branch_name,
+                            base_branch,
+                        )
+                        .map_err(|err| {
+                            log::debug!(
+                                "Watcher merge assessment failed for {session_name}: {err}"
+                            );
+                        })
+                        .ok()?;
+                        let commits_ahead_count =
+                            crate::domains::merge::service::count_commits_ahead(
+                                &repo,
+                                session_oid,
+                                parent_oid,
+                            )
+                            .ok();
+                        Some((merge_snapshot, commits_ahead_count))
+                    })()
+                    .unwrap_or((Default::default(), None));
+                    let sample =
+                        match crate::domains::git::operations::uncommitted_sample_paths(
+                            worktree_path,
+                            5,
+                        ) {
+                            Ok(v) if !v.is_empty() => Some(v),
+                            _ => None,
+                        };
+                    stats_payload = Some(SessionGitStatsUpdated {
+                        session_id: session_name.to_string(),
+                        session_name: session_name.to_string(),
+                        project_path: project_path.to_string_lossy().to_string(),
+                        files_changed: stats.files_changed,
+                        lines_added: stats.lines_added,
+                        lines_removed: stats.lines_removed,
+                        has_uncommitted: stats.has_uncommitted,
+                        dirty_files_count: Some(stats.dirty_files_count),
+                        commits_ahead_count,
+                        has_conflicts,
+                        top_uncommitted_paths: sample,
+                        merge_has_conflicts: merge_snapshot.merge_has_conflicts,
+                        merge_conflicting_paths: merge_snapshot.merge_conflicting_paths,
+                        merge_is_up_to_date: merge_snapshot.merge_is_up_to_date,
+                    });
+                }
+                Err(e) => {
+                    log::debug!("Watcher git stats fast failed for {session_name}: {e}");
+                }
+            }
+        } else {
+            trace!("Watcher throttled git stats for {session_name}");
+        }
+
+        drop(repo);
+
         debug!(
             "Emitting file change event for session {} with {} files",
             session_name,
@@ -334,6 +461,18 @@ impl FileWatcher {
         emit_event(app_handle, SchaltEvent::FileChanges, &file_change_event)
             .map_err(|e| format!("Failed to emit file change event: {e}"))?;
 
+        if let Some(payload) = stats_payload {
+            let _ = emit_event(app_handle, SchaltEvent::SessionGitStats, &payload);
+            debug!(
+                "Watcher emitted SessionGitStats for {}: files={} +{} -{} has_uncommitted={}",
+                session_name,
+                payload.files_changed,
+                payload.lines_added,
+                payload.lines_removed,
+                payload.has_uncommitted
+            );
+        }
+
         trigger_orchestrator_index_refresh_if_needed(
             session_name,
             saw_index,
@@ -342,82 +481,6 @@ impl FileWatcher {
             file_change_event.changed_files.len(),
             worktree_path,
         );
-
-        crate::domains::git::stats::invalidate_stats_cache_for(worktree_path, base_branch);
-        match git::calculate_git_stats_fast(worktree_path, base_branch) {
-            Ok(stats) => {
-                let has_conflicts = match git::has_conflicts(worktree_path) {
-                    Ok(value) => value,
-                    Err(err) => {
-                        log::warn!("Watcher conflict detection failed for {session_name}: {err}");
-                        false
-                    }
-                };
-                let (merge_snapshot, commits_ahead_count) = Repository::open(worktree_path)
-                    .ok()
-                    .and_then(|repo| {
-                        let session_oid = repo.head().ok().and_then(|h| h.target())?;
-                        let parent_obj = repo.revparse_single(base_branch).ok()?;
-                        let parent_oid = parent_obj.peel_to_commit().ok()?.id();
-                        let branch_name = session_branch_name.clone();
-                        let merge_snapshot = MergeSnapshotGateway::compute(
-                            &repo,
-                            session_oid,
-                            parent_oid,
-                            &branch_name,
-                            base_branch,
-                        )
-                        .map_err(|err| {
-                            log::debug!("Watcher merge assessment failed for {session_name}: {err}");
-                        })
-                        .ok()?;
-                        let commits_ahead_count = crate::domains::merge::service::count_commits_ahead(
-                            &repo,
-                            session_oid,
-                            parent_oid,
-                        )
-                        .ok();
-                        Some((merge_snapshot, commits_ahead_count))
-                    })
-                    .unwrap_or((Default::default(), None));
-                // Collect a small sample of uncommitted paths to help frontend tooltips
-                let sample = match crate::domains::git::operations::uncommitted_sample_paths(
-                    worktree_path,
-                    5,
-                ) {
-                    Ok(v) if !v.is_empty() => Some(v),
-                    _ => None,
-                };
-                let payload = SessionGitStatsUpdated {
-                    session_id: session_name.to_string(), // UI uses session_name; keep id same for payload
-                    session_name: session_name.to_string(),
-                    project_path: project_path.to_string_lossy().to_string(),
-                    files_changed: stats.files_changed,
-                    lines_added: stats.lines_added,
-                    lines_removed: stats.lines_removed,
-                    has_uncommitted: stats.has_uncommitted,
-                    dirty_files_count: Some(stats.dirty_files_count),
-                    commits_ahead_count,
-                    has_conflicts,
-                    top_uncommitted_paths: sample,
-                    merge_has_conflicts: merge_snapshot.merge_has_conflicts,
-                    merge_conflicting_paths: merge_snapshot.merge_conflicting_paths,
-                    merge_is_up_to_date: merge_snapshot.merge_is_up_to_date,
-                };
-                let _ = emit_event(app_handle, SchaltEvent::SessionGitStats, &payload);
-                debug!(
-                    "Watcher emitted SessionGitStats for {}: files={} +{} -{} has_uncommitted={}",
-                    session_name,
-                    payload.files_changed,
-                    payload.lines_added,
-                    payload.lines_removed,
-                    payload.has_uncommitted
-                );
-            }
-            Err(e) => {
-                log::debug!("Watcher git stats fast failed for {session_name}: {e}");
-            }
-        }
 
         Ok(())
     }
@@ -449,29 +512,12 @@ impl FileWatcher {
         }
     }
 
-    async fn compute_change_summary(
+    fn compute_change_summary(
         changed_files: &[ChangedFile],
-        worktree_path: &Path,
-        _base_branch: &str,
+        repo: &Repository,
     ) -> Result<ChangeSummary, String> {
         let files_changed = changed_files.len() as u32;
 
-        // Use libgit2 to determine staged/unstaged and line stats
-        // If not a git repo, return graceful defaults
-        let repo = match git2::Repository::open(worktree_path) {
-            Ok(r) => r,
-            Err(_) => {
-                return Ok(ChangeSummary {
-                    files_changed,
-                    lines_added: 0,
-                    lines_removed: 0,
-                    has_staged: false,
-                    has_unstaged: false,
-                });
-            }
-        };
-
-        // Parse status to detect staged/unstaged
         let statuses = repo
             .statuses(None)
             .map_err(|e| format!("Failed to get repository status: {e}"))?;
@@ -539,46 +585,38 @@ impl FileWatcher {
         })
     }
 
-    async fn get_branch_info(
-        worktree_path: &Path,
+    fn get_branch_info(
+        repo: &Repository,
         base_branch: &str,
     ) -> Result<BranchInfo, String> {
-        let (current_branch, base_commit, head_commit) = match git2::Repository::open(worktree_path)
-        {
-            Ok(repo) => {
-                let mut cur = repo
-                    .head()
-                    .ok()
-                    .and_then(|h| h.shorthand().map(|s| s.to_string()))
-                    .unwrap_or_else(|| "HEAD".to_string());
-                if cur.is_empty() {
-                    cur = "HEAD".to_string();
-                }
+        let mut current_branch = repo
+            .head()
+            .ok()
+            .and_then(|h| h.shorthand().map(|s| s.to_string()))
+            .unwrap_or_else(|| "HEAD".to_string());
+        if current_branch.is_empty() {
+            current_branch = "HEAD".to_string();
+        }
 
-                let head_oid = repo.head().ok().and_then(|h| h.target());
-                let base_branch_oid = repo
-                    .revparse_single(base_branch)
-                    .ok()
-                    .and_then(|o| o.peel_to_commit().ok())
-                    .map(|c| c.id());
+        let head_oid = repo.head().ok().and_then(|h| h.target());
+        let base_branch_oid = repo
+            .revparse_single(base_branch)
+            .ok()
+            .and_then(|o| o.peel_to_commit().ok())
+            .map(|c| c.id());
 
-                let base = match (head_oid, base_branch_oid) {
-                    (Some(head), Some(base_tip)) => {
-                        let merge_base_oid = repo.merge_base(head, base_tip).unwrap_or(base_tip);
-                        short_oid(&repo, merge_base_oid)
-                    }
-                    (_, Some(base_tip)) => short_oid(&repo, base_tip),
-                    _ => String::new(),
-                };
-
-                let head = head_oid
-                    .map(|oid| short_oid(&repo, oid))
-                    .unwrap_or_default();
-
-                (cur, base, head)
+        let base_commit = match (head_oid, base_branch_oid) {
+            (Some(head), Some(base_tip)) => {
+                let merge_base_oid = repo.merge_base(head, base_tip).unwrap_or(base_tip);
+                short_oid(repo, merge_base_oid)
             }
-            Err(_) => ("HEAD".to_string(), "".to_string(), "".to_string()),
+            (_, Some(base_tip)) => short_oid(repo, base_tip),
+            _ => String::new(),
         };
+
+        let head_commit = head_oid
+            .map(|oid| short_oid(repo, oid))
+            .unwrap_or_default();
 
         Ok(BranchInfo {
             current_branch,
@@ -829,7 +867,7 @@ mod tests {
     use super::*;
     use std::fs;
     use std::process::Command;
-    use std::sync::{Arc, Mutex as StdMutex};
+    use std::sync::Arc;
     use tempfile::TempDir;
 
     fn create_test_git_repo(temp_dir: &TempDir) -> PathBuf {
@@ -1024,6 +1062,35 @@ mod tests {
     }
 
     #[test]
+    fn test_should_compute_stats_throttle() {
+        let path = Path::new("/tmp/throttle-test-unique");
+        assert!(should_compute_stats(path));
+        assert!(!should_compute_stats(path));
+
+        let other = Path::new("/tmp/throttle-test-other");
+        assert!(should_compute_stats(other));
+    }
+
+    #[test]
+    fn test_is_session_visible() {
+        set_visible_session(Some("active-session".to_string()));
+        assert!(is_session_visible("active-session"));
+        assert!(!is_session_visible("other-session"));
+
+        set_visible_session(None);
+        assert!(is_session_visible("any-session"));
+    }
+
+    #[test]
+    fn test_force_stats_recompute() {
+        let path = Path::new("/tmp/force-recompute-test");
+        assert!(should_compute_stats(path));
+        assert!(!should_compute_stats(path));
+        force_stats_recompute(path);
+        assert!(should_compute_stats(path));
+    }
+
+    #[test]
     fn test_file_change_event_serialization() {
         let event = FileChangeEvent {
             session_name: "test-session".to_string(),
@@ -1099,12 +1166,13 @@ mod tests {
         assert_eq!(branch_info.head_commit, "e5f6g7h8");
     }
 
-    #[tokio::test]
-    async fn test_branch_info_extraction_success() {
+    #[test]
+    fn test_branch_info_extraction_success() {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = create_test_git_repo(&temp_dir);
+        let repo = Repository::open(&repo_path).unwrap();
 
-        let result = FileWatcher::get_branch_info(&repo_path, "main").await;
+        let result = FileWatcher::get_branch_info(&repo, "main");
         assert!(
             result.is_ok(),
             "Should extract branch info successfully: {:?}",
@@ -1114,7 +1182,6 @@ mod tests {
         let branch_info = result.unwrap();
         assert_eq!(branch_info.base_branch, "main");
 
-        // Current branch should be either "main" or "HEAD" depending on git version
         assert!(
             branch_info.current_branch == "main"
                 || branch_info.current_branch == "HEAD"
@@ -1130,26 +1197,23 @@ mod tests {
             "Head commit should not be empty"
         );
 
-        // Base and head commits should be the same for a new repo
         assert_eq!(
             branch_info.base_commit, branch_info.head_commit,
             "In a new repo, base and head commits should be the same"
         );
     }
 
-    #[tokio::test]
-    async fn test_branch_info_extraction_with_feature_branch() {
+    #[test]
+    fn test_branch_info_extraction_with_feature_branch() {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = create_test_git_repo(&temp_dir);
 
-        // Create and switch to a feature branch
         Command::new("git")
             .args(["checkout", "-b", "feature-test"])
             .current_dir(&repo_path)
             .output()
             .expect("Failed to create feature branch");
 
-        // Make a commit on the feature branch
         fs::write(repo_path.join("feature.txt"), "feature content").unwrap();
         Command::new("git")
             .args(["add", "feature.txt"])
@@ -1163,7 +1227,8 @@ mod tests {
             .output()
             .expect("Failed to commit feature");
 
-        let result = FileWatcher::get_branch_info(&repo_path, "main").await;
+        let repo = Repository::open(&repo_path).unwrap();
+        let result = FileWatcher::get_branch_info(&repo, "main");
         assert!(
             result.is_ok(),
             "Should extract branch info from feature branch"
@@ -1175,43 +1240,21 @@ mod tests {
         assert!(!branch_info.base_commit.is_empty());
         assert!(!branch_info.head_commit.is_empty());
 
-        // Base and head commits should be different now
         assert_ne!(
             branch_info.base_commit, branch_info.head_commit,
             "Base and head commits should differ when on feature branch with commits"
         );
     }
 
-    #[tokio::test]
-    async fn test_branch_info_extraction_error_handling() {
-        let temp_dir = TempDir::new().unwrap();
-        let non_repo_path = temp_dir.path().join("not-a-repo");
-
-        fs::create_dir(&non_repo_path).unwrap();
-
-        let result = FileWatcher::get_branch_info(&non_repo_path, "main").await;
-        // The function might succeed even for non-git directories by using fallback values
-        // What matters is that it doesn't panic and returns a valid result
-        assert!(
-            result.is_ok(),
-            "Should handle non-git directory gracefully: {:?}",
-            result.err()
-        );
-        let branch_info = result.unwrap();
-        // In a non-git directory, it should use fallback values
-        assert_eq!(branch_info.base_branch, "main");
-        // Current branch might be "HEAD" as fallback
-        assert!(branch_info.current_branch == "HEAD" || !branch_info.current_branch.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_compute_change_summary_with_no_changes() {
+    #[test]
+    fn test_compute_change_summary_with_no_changes() {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = create_test_git_repo(&temp_dir);
+        let repo = Repository::open(&repo_path).unwrap();
 
         let changed_files: Vec<ChangedFile> = vec![];
 
-        let result = FileWatcher::compute_change_summary(&changed_files, &repo_path, "main").await;
+        let result = FileWatcher::compute_change_summary(&changed_files, &repo);
         assert!(
             result.is_ok(),
             "Should compute summary with no changes: {:?}",
@@ -1226,12 +1269,11 @@ mod tests {
         assert!(!summary.has_unstaged);
     }
 
-    #[tokio::test]
-    async fn test_compute_change_summary_with_staged_changes() {
+    #[test]
+    fn test_compute_change_summary_with_staged_changes() {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = create_test_git_repo(&temp_dir);
 
-        // Create a new file and stage it
         fs::write(
             repo_path.join("staged.txt"),
             "line 1\nline 2\nline 3\nline 4\nline 5",
@@ -1244,12 +1286,13 @@ mod tests {
             .output()
             .expect("Failed to stage file");
 
+        let repo = Repository::open(&repo_path).unwrap();
         let changed_files = vec![ChangedFile::new(
             "staged.txt".to_string(),
             "added".to_string(),
         )];
 
-        let result = FileWatcher::compute_change_summary(&changed_files, &repo_path, "HEAD").await;
+        let result = FileWatcher::compute_change_summary(&changed_files, &repo);
         assert!(
             result.is_ok(),
             "Should compute summary with staged changes: {:?}",
@@ -1268,24 +1311,24 @@ mod tests {
         assert_eq!(summary.lines_removed, 0);
     }
 
-    #[tokio::test]
-    async fn test_compute_change_summary_with_unstaged_changes() {
+    #[test]
+    fn test_compute_change_summary_with_unstaged_changes() {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = create_test_git_repo(&temp_dir);
 
-        // Modify existing file (creates unstaged changes)
         fs::write(
             repo_path.join("initial.txt"),
             "modified content\nline 2\nline 3",
         )
         .unwrap();
 
+        let repo = Repository::open(&repo_path).unwrap();
         let changed_files = vec![ChangedFile::new(
             "initial.txt".to_string(),
             "modified".to_string(),
         )];
 
-        let result = FileWatcher::compute_change_summary(&changed_files, &repo_path, "HEAD").await;
+        let result = FileWatcher::compute_change_summary(&changed_files, &repo);
         assert!(
             result.is_ok(),
             "Should compute summary with unstaged changes: {:?}",
@@ -1296,16 +1339,13 @@ mod tests {
         assert_eq!(summary.files_changed, 1);
         assert!(!summary.has_staged);
         assert!(summary.has_unstaged);
-        // Lines added/removed depend on the actual diff
-        // Note: These are unsigned integers so they're always >= 0
     }
 
-    #[tokio::test]
-    async fn test_compute_change_summary_with_mixed_changes() {
+    #[test]
+    fn test_compute_change_summary_with_mixed_changes() {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = create_test_git_repo(&temp_dir);
 
-        // Create staged file
         fs::write(repo_path.join("staged.txt"), "staged content").unwrap();
         Command::new("git")
             .args(["add", "staged.txt"])
@@ -1313,15 +1353,15 @@ mod tests {
             .output()
             .expect("Failed to stage file");
 
-        // Create unstaged modification
         fs::write(repo_path.join("initial.txt"), "unstaged modification").unwrap();
 
+        let repo = Repository::open(&repo_path).unwrap();
         let changed_files = vec![
             ChangedFile::new("staged.txt".to_string(), "added".to_string()),
             ChangedFile::new("initial.txt".to_string(), "modified".to_string()),
         ];
 
-        let result = FileWatcher::compute_change_summary(&changed_files, &repo_path, "HEAD").await;
+        let result = FileWatcher::compute_change_summary(&changed_files, &repo);
         assert!(
             result.is_ok(),
             "Should compute summary with mixed changes: {:?}",
@@ -1332,33 +1372,6 @@ mod tests {
         assert_eq!(summary.files_changed, 2);
         assert!(summary.has_staged);
         assert!(summary.has_unstaged);
-    }
-
-    #[tokio::test]
-    async fn test_compute_change_summary_error_handling() {
-        let temp_dir = TempDir::new().unwrap();
-        let non_repo_path = temp_dir.path().join("not-a-repo");
-        fs::create_dir(&non_repo_path).unwrap();
-
-        let changed_files = vec![ChangedFile::new(
-            "test.txt".to_string(),
-            "modified".to_string(),
-        )];
-
-        let result =
-            FileWatcher::compute_change_summary(&changed_files, &non_repo_path, "main").await;
-        // The function might succeed even for non-git directories, returning empty results
-        // What matters is that it doesn't panic and returns a valid result
-        assert!(
-            result.is_ok(),
-            "Should handle non-git directory gracefully: {:?}",
-            result.err()
-        );
-        let summary = result.unwrap();
-        // In a non-git directory, we should get 0 changes
-        assert_eq!(summary.files_changed, 1); // Still counts the input files
-        assert_eq!(summary.lines_added, 0);
-        assert_eq!(summary.lines_removed, 0);
     }
 
     #[test]
@@ -1630,12 +1643,11 @@ mod tests {
         )));
     }
 
-    #[tokio::test]
-    async fn test_change_summary_with_deleted_files() {
+    #[test]
+    fn test_change_summary_with_deleted_files() {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = create_test_git_repo(&temp_dir);
 
-        // Delete a file
         fs::remove_file(repo_path.join("initial.txt")).unwrap();
 
         Command::new("git")
@@ -1644,12 +1656,13 @@ mod tests {
             .output()
             .expect("Failed to stage deletion");
 
+        let repo = Repository::open(&repo_path).unwrap();
         let changed_files = vec![ChangedFile::new(
             "initial.txt".to_string(),
             "deleted".to_string(),
         )];
 
-        let result = FileWatcher::compute_change_summary(&changed_files, &repo_path, "HEAD").await;
+        let result = FileWatcher::compute_change_summary(&changed_files, &repo);
         assert!(
             result.is_ok(),
             "Should handle deleted files: {:?}",
@@ -1660,28 +1673,27 @@ mod tests {
         assert_eq!(summary.files_changed, 1);
         assert!(summary.has_staged);
         assert!(!summary.has_unstaged);
-        // Lines removed should be at least 1 (the original content)
         assert!(summary.lines_removed >= 1);
     }
 
-    #[tokio::test]
-    async fn test_change_summary_with_renamed_files() {
+    #[test]
+    fn test_change_summary_with_renamed_files() {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = create_test_git_repo(&temp_dir);
 
-        // Rename a file using git mv
         Command::new("git")
             .args(["mv", "initial.txt", "renamed.txt"])
             .current_dir(&repo_path)
             .output()
             .expect("Failed to rename file");
 
+        let repo = Repository::open(&repo_path).unwrap();
         let changed_files = vec![
             ChangedFile::new("initial.txt".to_string(), "deleted".to_string()),
             ChangedFile::new("renamed.txt".to_string(), "added".to_string()),
         ];
 
-        let result = FileWatcher::compute_change_summary(&changed_files, &repo_path, "HEAD").await;
+        let result = FileWatcher::compute_change_summary(&changed_files, &repo);
         assert!(
             result.is_ok(),
             "Should handle renamed files: {:?}",
@@ -1689,7 +1701,7 @@ mod tests {
         );
 
         let summary = result.unwrap();
-        assert_eq!(summary.files_changed, 2); // Both delete and add are counted
+        assert_eq!(summary.files_changed, 2);
         assert!(summary.has_staged);
         assert!(!summary.has_unstaged);
     }
@@ -1777,12 +1789,11 @@ mod tests {
         assert_eq!(added_count, 500);
     }
 
-    #[tokio::test]
-    async fn test_compute_change_summary_with_binary_files() {
+    #[test]
+    fn test_compute_change_summary_with_binary_files() {
         let temp_dir = TempDir::new().unwrap();
         let repo_path = create_test_git_repo(&temp_dir);
 
-        // Create a binary file (simulate with non-UTF8 content)
         let binary_content = vec![0u8, 1, 2, 255, 254, 253];
         fs::write(repo_path.join("binary.bin"), binary_content).unwrap();
 
@@ -1792,12 +1803,13 @@ mod tests {
             .output()
             .expect("Failed to stage binary file");
 
+        let repo = Repository::open(&repo_path).unwrap();
         let changed_files = vec![ChangedFile::new(
             "binary.bin".to_string(),
             "added".to_string(),
         )];
 
-        let result = FileWatcher::compute_change_summary(&changed_files, &repo_path, "HEAD").await;
+        let result = FileWatcher::compute_change_summary(&changed_files, &repo);
         assert!(
             result.is_ok(),
             "Should handle binary files: {:?}",
@@ -1807,8 +1819,6 @@ mod tests {
         let summary = result.unwrap();
         assert_eq!(summary.files_changed, 1);
         assert!(summary.has_staged);
-        // Binary files typically show as "-" in git diff --numstat
-        // So lines_added and lines_removed might be 0
     }
 
     #[test]
