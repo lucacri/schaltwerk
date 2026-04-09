@@ -10,6 +10,7 @@ use std::cell::RefCell;
 use std::future::Future;
 use std::path::PathBuf;
 use url::form_urlencoded;
+use uuid::Uuid;
 
 use crate::commands::github::{
     CreateSessionPrArgs, GitHubPrFeedbackPayload, github_create_session_pr_impl,
@@ -31,7 +32,7 @@ use lucode::domains::git::service::{ForgeType, detect_forge};
 use lucode::domains::sessions::{apply_git_enrichment, compute_git_for_session};
 use lucode::domains::merge::MergeMode;
 use lucode::domains::sessions::entity::{Session, SessionStatus, Spec};
-use lucode::domains::settings::setup_script::SetupScriptService;
+use lucode::domains::settings::{AgentPreset, setup_script::SetupScriptService};
 use lucode::infrastructure::database::Database;
 use lucode::infrastructure::database::SpecMethods;
 use lucode::infrastructure::database::db_project_config::ProjectConfigMethods;
@@ -309,6 +310,357 @@ fn json_response(status: StatusCode, json: String) -> Response<String> {
 fn json_error_response(status: StatusCode, message: String) -> Response<String> {
     let body = serde_json::json!({ "error": message }).to_string();
     json_response(status, body)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedPresetSlot {
+    agent_type: String,
+    skip_permissions: Option<bool>,
+    autonomy_enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedPreset {
+    id: String,
+    name: String,
+    slots: Vec<ResolvedPresetSlot>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct PresetLaunchOptions<'a> {
+    base_branch: Option<&'a str>,
+    custom_branch: Option<&'a str>,
+    use_existing_branch: bool,
+    epic_id: Option<&'a str>,
+    issue_number: Option<i64>,
+    issue_url: Option<&'a str>,
+    pr_number: Option<i64>,
+    pr_url: Option<&'a str>,
+    version_group_id: Option<&'a str>,
+    is_consolidation: bool,
+    consolidation_source_ids: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+struct PresetLaunchMetadata {
+    id: String,
+    name: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+struct PresetLaunchSessionSummary {
+    name: String,
+    branch: String,
+    agent_type: String,
+    version_number: i32,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+struct PresetLaunchResponse {
+    mode: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_spec: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    archived_spec: Option<bool>,
+    preset: PresetLaunchMetadata,
+    version_group_id: String,
+    sessions: Vec<PresetLaunchSessionSummary>,
+}
+
+#[derive(Debug, Clone)]
+struct PresetLaunchSettings {
+    presets: Vec<AgentPreset>,
+    autonomy_prompt_template: String,
+}
+
+fn resolve_preset(selector: &str, presets: &[AgentPreset]) -> Result<ResolvedPreset, String> {
+    let normalized = selector.trim();
+    if normalized.is_empty() {
+        return Err("Preset selector cannot be empty".to_string());
+    }
+
+    let preset = presets
+        .iter()
+        .find(|preset| preset.id == normalized)
+        .or_else(|| {
+            presets
+                .iter()
+                .find(|preset| preset.name.eq_ignore_ascii_case(normalized))
+        })
+        .ok_or_else(|| format!("Unknown preset '{normalized}'"))?;
+
+    if preset.slots.is_empty() {
+        return Err(format!("Preset '{}' has zero slots", preset.name));
+    }
+
+    Ok(ResolvedPreset {
+        id: preset.id.clone(),
+        name: preset.name.clone(),
+        slots: preset
+            .slots
+            .iter()
+            .map(|slot| ResolvedPresetSlot {
+                agent_type: slot.agent_type.clone(),
+                skip_permissions: slot.skip_permissions,
+                autonomy_enabled: slot.autonomy_enabled.unwrap_or(false),
+            })
+            .collect(),
+    })
+}
+
+fn validate_preset_request_conflicts(
+    preset: Option<&str>,
+    agent_type: Option<&str>,
+    skip_permissions: Option<bool>,
+) -> Result<(), String> {
+    if preset.is_some() && (agent_type.is_some() || skip_permissions.is_some()) {
+        return Err(
+            "'preset' is mutually exclusive with 'agent_type' and 'skip_permissions'".to_string(),
+        );
+    }
+
+    Ok(())
+}
+
+fn build_preset_launch_response(
+    preset: &ResolvedPreset,
+    version_group_id: String,
+    sessions: Vec<Session>,
+) -> PresetLaunchResponse {
+    let summaries = sessions
+        .into_iter()
+        .enumerate()
+        .map(|(index, session)| PresetLaunchSessionSummary {
+            name: session.name,
+            branch: session.branch,
+            agent_type: session
+                .original_agent_type
+                .unwrap_or_else(|| preset.slots[index].agent_type.clone()),
+            version_number: session.version_number.unwrap_or((index + 1) as i32),
+        })
+        .collect();
+
+    PresetLaunchResponse {
+        mode: "preset".to_string(),
+        source_spec: None,
+        archived_spec: None,
+        preset: PresetLaunchMetadata {
+            id: preset.id.clone(),
+            name: preset.name.clone(),
+        },
+        version_group_id,
+        sessions: summaries,
+    }
+}
+
+async fn rollback_created_preset_sessions(
+    manager: &SessionManager,
+    db: &Database,
+    session_names: &[String],
+) -> Vec<String> {
+    let mut failures = Vec::new();
+
+    for name in session_names.iter().rev() {
+        let session = match manager.get_session(name) {
+            Ok(session) => session,
+            Err(err) => {
+                failures.push(format!("{name}: failed to load session for rollback: {err}"));
+                continue;
+            }
+        };
+
+        if let Err(err) = manager.fast_cancel_session(name).await {
+            failures.push(format!("{name}: {err}"));
+            continue;
+        }
+
+        if let Err(err) = db.delete_session(&session.id) {
+            failures.push(format!("{name}: failed to delete rolled back session: {err}"));
+        }
+    }
+
+    failures
+}
+
+fn persist_session_metadata(
+    db: &Database,
+    session_id: &str,
+    issue_number: Option<i64>,
+    issue_url: Option<&str>,
+    pr_number: Option<i64>,
+    pr_url: Option<&str>,
+) -> Result<(), String> {
+    if (issue_number.is_some() || issue_url.is_some())
+        && let Err(err) = db.update_session_issue_info(session_id, issue_number, issue_url)
+    {
+        return Err(format!("Failed to persist issue metadata: {err}"));
+    }
+
+    if (pr_number.is_some() || pr_url.is_some())
+        && let Err(err) = db.update_session_pr_info(session_id, pr_number, pr_url)
+    {
+        return Err(format!("Failed to persist PR metadata: {err}"));
+    }
+
+    Ok(())
+}
+
+async fn create_sessions_from_preset_launch(
+    manager: &SessionManager,
+    db: &Database,
+    name: &str,
+    prompt: Option<&str>,
+    preset: &ResolvedPreset,
+    options: &PresetLaunchOptions<'_>,
+    autonomy_prompt_template: &str,
+) -> Result<PresetLaunchResponse, String> {
+    use lucode::domains::sessions::service::SessionCreationParams;
+
+    let version_group_id = options
+        .version_group_id
+        .map(ToString::to_string)
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
+    let total_slots = preset.slots.len();
+    let mut created_sessions = Vec::new();
+    let mut created_session_names = Vec::new();
+
+    for (index, slot) in preset.slots.iter().enumerate() {
+        let version_number = (index + 1) as i32;
+        let session_name = if total_slots == 1 {
+            name.to_string()
+        } else {
+            format!("{name}_v{version_number}")
+        };
+        let expanded_prompt = lucode::domains::sessions::autonomy::build_initial_prompt(
+            prompt,
+            slot.autonomy_enabled,
+            autonomy_prompt_template,
+        );
+        let params = SessionCreationParams {
+            name: &session_name,
+            prompt: expanded_prompt.as_deref(),
+            base_branch: options.base_branch,
+            custom_branch: options.custom_branch,
+            use_existing_branch: options.use_existing_branch,
+            sync_with_origin: options.use_existing_branch,
+            was_auto_generated: false,
+            version_group_id: Some(version_group_id.as_str()),
+            version_number: Some(version_number),
+            epic_id: options.epic_id,
+            agent_type: Some(slot.agent_type.as_str()),
+            skip_permissions: slot.skip_permissions,
+            pr_number: options.pr_number,
+            is_consolidation: options.is_consolidation,
+            consolidation_source_ids: options.consolidation_source_ids.clone(),
+        };
+
+        let session = match manager.create_session_with_agent(params) {
+            Ok(session) => session,
+            Err(err) => {
+                let rollback_failures =
+                    rollback_created_preset_sessions(manager, db, &created_session_names).await;
+                let rollback_suffix = if rollback_failures.is_empty() {
+                    String::new()
+                } else {
+                    format!(" Rollback failures: {}", rollback_failures.join(", "))
+                };
+                return Err(format!("Failed to create preset session '{session_name}': {err}.{rollback_suffix}"));
+            }
+        };
+
+        if let Err(err) = persist_session_metadata(
+            db,
+            &session.id,
+            options.issue_number,
+            options.issue_url,
+            options.pr_number,
+            options.pr_url,
+        ) {
+            created_session_names.push(session.name.clone());
+            let rollback_failures =
+                rollback_created_preset_sessions(manager, db, &created_session_names).await;
+            let rollback_suffix = if rollback_failures.is_empty() {
+                String::new()
+            } else {
+                format!(" Rollback failures: {}", rollback_failures.join(", "))
+            };
+            return Err(format!("{err}.{rollback_suffix}"));
+        }
+
+        created_session_names.push(session.name.clone());
+        created_sessions.push(session);
+    }
+
+    Ok(build_preset_launch_response(
+        preset,
+        version_group_id,
+        created_sessions,
+    ))
+}
+
+async fn start_spec_with_preset_launch(
+    manager: &SessionManager,
+    db: &Database,
+    spec_name: &str,
+    preset: &ResolvedPreset,
+    options: &PresetLaunchOptions<'_>,
+    autonomy_prompt_template: &str,
+) -> Result<PresetLaunchResponse, String> {
+    let spec = manager
+        .get_spec(spec_name)
+        .map_err(|err| format!("Spec '{spec_name}' not found: {err}"))?;
+    let launch_options = PresetLaunchOptions {
+        epic_id: spec.epic_id.as_deref().or(options.epic_id),
+        ..options.clone()
+    };
+    let mut response = create_sessions_from_preset_launch(
+        manager,
+        db,
+        &spec.name,
+        Some(spec.content.as_str()),
+        preset,
+        &launch_options,
+        autonomy_prompt_template,
+    )
+    .await?;
+
+    if let Err(err) = manager.archive_spec_session(&spec.name) {
+        let created_session_names = response
+            .sessions
+            .iter()
+            .map(|session| session.name.clone())
+            .collect::<Vec<_>>();
+        let rollback_failures =
+            rollback_created_preset_sessions(manager, db, &created_session_names).await;
+        let rollback_suffix = if rollback_failures.is_empty() {
+            String::new()
+        } else {
+            format!(" Rollback failures: {}", rollback_failures.join(", "))
+        };
+        return Err(format!(
+            "Failed to archive source spec '{}': {err}.{rollback_suffix}",
+            spec.name
+        ));
+    }
+
+    response.source_spec = Some(spec.name);
+    response.archived_spec = Some(true);
+    Ok(response)
+}
+
+async fn load_preset_launch_settings(
+    app: &tauri::AppHandle,
+) -> Result<PresetLaunchSettings, String> {
+    let settings_manager = crate::get_settings_manager(app).await?;
+    let manager = settings_manager.lock().await;
+    let generation_settings = manager.get_generation_settings();
+
+    Ok(PresetLaunchSettings {
+        presets: manager.get_agent_presets(),
+        autonomy_prompt_template: generation_settings
+            .autonomy_prompt_template
+            .unwrap_or_else(lucode::domains::settings::default_autonomy_prompt_template),
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -999,6 +1351,7 @@ mod tests {
     use chrono::Utc;
     use git2::Repository;
     use hyper::HeaderMap;
+    use lucode::domains::settings::{AgentPreset, AgentPresetSlot};
     use lucode::schaltwerk_core::Database;
     use std::cell::RefCell;
     use std::path::Path;
@@ -1056,6 +1409,347 @@ mod tests {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
+    }
+
+    fn make_preset_slot(
+        agent_type: &str,
+        skip_permissions: Option<bool>,
+        autonomy_enabled: Option<bool>,
+    ) -> AgentPresetSlot {
+        AgentPresetSlot {
+            agent_type: agent_type.to_string(),
+            variant_id: Some(format!("{agent_type}-variant")),
+            skip_permissions,
+            autonomy_enabled,
+        }
+    }
+
+    fn make_preset(id: &str, name: &str, slots: Vec<AgentPresetSlot>) -> AgentPreset {
+        AgentPreset {
+            id: id.to_string(),
+            name: name.to_string(),
+            slots,
+            is_built_in: false,
+        }
+    }
+
+    fn create_branch(repo_path: &Path, branch_name: &str) {
+        let repo = Repository::open(repo_path).expect("open repo");
+        let commit = repo
+            .head()
+            .expect("head")
+            .peel_to_commit()
+            .expect("commit");
+        repo.branch(branch_name, &commit, false)
+            .expect("create branch");
+    }
+
+    #[test]
+    fn resolve_preset_matches_exact_id() {
+        let preset = make_preset(
+            "preset-smarts",
+            "Smarts",
+            vec![make_preset_slot("claude", Some(true), Some(true))],
+        );
+
+        let resolved = resolve_preset("preset-smarts", &[preset]).expect("preset resolves");
+
+        assert_eq!(resolved.id, "preset-smarts");
+        assert_eq!(resolved.name, "Smarts");
+        assert_eq!(resolved.slots.len(), 1);
+        assert_eq!(resolved.slots[0].agent_type, "claude");
+        assert_eq!(resolved.slots[0].skip_permissions, Some(true));
+        assert!(resolved.slots[0].autonomy_enabled);
+    }
+
+    #[test]
+    fn resolve_preset_matches_name_case_insensitively() {
+        let preset = make_preset(
+            "preset-smarts",
+            "Smarts",
+            vec![make_preset_slot("codex", Some(false), None)],
+        );
+
+        let resolved = resolve_preset("sMaRtS", &[preset]).expect("preset resolves");
+
+        assert_eq!(resolved.id, "preset-smarts");
+        assert_eq!(resolved.name, "Smarts");
+        assert_eq!(resolved.slots[0].agent_type, "codex");
+        assert_eq!(resolved.slots[0].skip_permissions, Some(false));
+        assert!(!resolved.slots[0].autonomy_enabled);
+    }
+
+    #[test]
+    fn resolve_preset_rejects_unknown_selector() {
+        let err = resolve_preset(
+            "missing",
+            &[make_preset(
+                "preset-smarts",
+                "Smarts",
+                vec![make_preset_slot("claude", None, None)],
+            )],
+        )
+        .expect_err("unknown preset should fail");
+
+        assert!(err.contains("missing"));
+    }
+
+    #[test]
+    fn resolve_preset_rejects_zero_slots() {
+        let err = resolve_preset("preset-empty", &[make_preset("preset-empty", "Empty", vec![])])
+            .expect_err("empty preset should fail");
+
+        assert!(err.contains("zero slots"));
+    }
+
+    #[test]
+    fn resolve_preset_rejects_empty_selector() {
+        let presets = vec![make_preset(
+            "preset-smarts",
+            "Smarts",
+            vec![make_preset_slot("claude", None, None)],
+        )];
+        let err = resolve_preset("   ", &presets).expect_err("empty selector should fail");
+        assert!(err.contains("empty"));
+    }
+
+    #[test]
+    fn resolve_preset_id_match_takes_precedence_over_name_match() {
+        let presets = vec![
+            make_preset(
+                "Smarts",
+                "First",
+                vec![make_preset_slot("claude", None, None)],
+            ),
+            make_preset(
+                "preset-2",
+                "Smarts",
+                vec![make_preset_slot("codex", None, None)],
+            ),
+        ];
+        let resolved =
+            resolve_preset("Smarts", &presets).expect("id match should beat name match");
+        assert_eq!(resolved.id, "Smarts");
+        assert_eq!(resolved.slots[0].agent_type, "claude");
+    }
+
+    #[test]
+    fn validate_preset_request_conflicts_rejects_agent_or_skip_permissions() {
+        let err = validate_preset_request_conflicts(
+            Some("Smarts"),
+            Some("claude"),
+            Some(true),
+        )
+        .expect_err("preset conflicts should fail");
+
+        assert!(err.contains("mutually exclusive"));
+    }
+
+    #[tokio::test]
+    async fn create_sessions_from_preset_launch_returns_ordered_version_group_sessions() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let preset = ResolvedPreset {
+            id: "preset-smarts".to_string(),
+            name: "Smarts".to_string(),
+            slots: vec![
+                ResolvedPresetSlot {
+                    agent_type: "claude".to_string(),
+                    skip_permissions: Some(true),
+                    autonomy_enabled: false,
+                },
+                ResolvedPresetSlot {
+                    agent_type: "codex".to_string(),
+                    skip_permissions: Some(false),
+                    autonomy_enabled: false,
+                },
+            ],
+        };
+
+        let response = create_sessions_from_preset_launch(
+            &manager,
+            &db,
+            "feature",
+            Some("Ship the feature"),
+            &preset,
+            &PresetLaunchOptions::default(),
+            "Autonomy template",
+        )
+        .await
+        .expect("preset launch should succeed");
+
+        assert_eq!(response.mode, "preset");
+        assert_eq!(response.preset.id, "preset-smarts");
+        assert_eq!(response.sessions.len(), 2);
+        assert_eq!(response.sessions[0].name, "feature_v1");
+        assert_eq!(response.sessions[0].agent_type, "claude");
+        assert_eq!(response.sessions[0].version_number, 1);
+        assert_eq!(response.sessions[1].name, "feature_v2");
+        assert_eq!(response.sessions[1].agent_type, "codex");
+        assert_eq!(response.sessions[1].version_number, 2);
+        assert!(!response.version_group_id.is_empty());
+
+        let first = manager.get_session("feature_v1").expect("first session");
+        let second = manager.get_session("feature_v2").expect("second session");
+        assert_eq!(
+            first.version_group_id.as_deref(),
+            Some(response.version_group_id.as_str())
+        );
+        assert_eq!(
+            second.version_group_id.as_deref(),
+            Some(response.version_group_id.as_str())
+        );
+        assert_eq!(first.version_number, Some(1));
+        assert_eq!(second.version_number, Some(2));
+    }
+
+    #[tokio::test]
+    async fn create_sessions_from_preset_launch_expands_autonomy_prompt() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let prompt = "Implement release notes support";
+        let autonomy_template = "## Agent Instructions\nShip it";
+        let preset = ResolvedPreset {
+            id: "preset-smarts".to_string(),
+            name: "Smarts".to_string(),
+            slots: vec![ResolvedPresetSlot {
+                agent_type: "claude".to_string(),
+                skip_permissions: Some(true),
+                autonomy_enabled: true,
+            }],
+        };
+
+        let response = create_sessions_from_preset_launch(
+            &manager,
+            &db,
+            "smart-launch",
+            Some(prompt),
+            &preset,
+            &PresetLaunchOptions::default(),
+            autonomy_template,
+        )
+        .await
+        .expect("preset launch should succeed");
+
+        let created = manager
+            .get_session(&response.sessions[0].name)
+            .expect("created session");
+        let expected = lucode::domains::sessions::autonomy::build_initial_prompt(
+            Some(prompt),
+            true,
+            autonomy_template,
+        );
+        assert_eq!(created.initial_prompt, expected);
+    }
+
+    #[tokio::test]
+    async fn start_spec_with_preset_launch_creates_sessions_and_archives_spec() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let epic = manager
+            .create_epic("preset-epic", Some("#00ff00"))
+            .expect("create epic");
+        manager
+            .create_spec_session_with_agent(
+                "preset-spec",
+                "Spec-driven prompt",
+                None,
+                None,
+                Some(&epic.id),
+            )
+            .expect("create spec");
+        let preset = ResolvedPreset {
+            id: "preset-smarts".to_string(),
+            name: "Smarts".to_string(),
+            slots: vec![ResolvedPresetSlot {
+                agent_type: "codex".to_string(),
+                skip_permissions: Some(true),
+                autonomy_enabled: false,
+            }],
+        };
+
+        let response = start_spec_with_preset_launch(
+            &manager,
+            &db,
+            "preset-spec",
+            &preset,
+            &PresetLaunchOptions::default(),
+            "Autonomy template",
+        )
+        .await
+        .expect("preset start should succeed");
+
+        assert_eq!(response.mode, "preset");
+        assert_eq!(response.source_spec.as_deref(), Some("preset-spec"));
+        assert_eq!(response.archived_spec, Some(true));
+        assert_eq!(response.sessions.len(), 1);
+        let created_name = response.sessions[0].name.clone();
+        let created = manager
+            .get_session(&created_name)
+            .expect("created session");
+        assert_eq!(created.epic_id.as_deref(), Some(epic.id.as_str()));
+        assert!(manager.get_spec("preset-spec").is_err());
+        assert_eq!(
+            manager
+                .list_archived_specs()
+                .expect("archived specs")
+                .iter()
+                .filter(|spec| spec.session_name == "preset-spec")
+                .count(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn start_spec_with_preset_launch_rolls_back_partial_failure_and_keeps_spec_active() {
+        let (_tmp, repo_path) = init_test_repo();
+        create_branch(&repo_path, "existing-feature");
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        manager
+            .create_spec_session("rollback-spec", "Spec rollback prompt")
+            .expect("create spec");
+        let preset = ResolvedPreset {
+            id: "preset-smarts".to_string(),
+            name: "Smarts".to_string(),
+            slots: vec![
+                ResolvedPresetSlot {
+                    agent_type: "claude".to_string(),
+                    skip_permissions: Some(true),
+                    autonomy_enabled: false,
+                },
+                ResolvedPresetSlot {
+                    agent_type: "codex".to_string(),
+                    skip_permissions: Some(false),
+                    autonomy_enabled: false,
+                },
+            ],
+        };
+
+        let options = PresetLaunchOptions {
+            custom_branch: Some("existing-feature"),
+            use_existing_branch: true,
+            ..PresetLaunchOptions::default()
+        };
+
+        let err = start_spec_with_preset_launch(
+            &manager,
+            &db,
+            "rollback-spec",
+            &preset,
+            &options,
+            "Autonomy template",
+        )
+        .await
+        .expect_err("second slot should fail and trigger rollback");
+
+        assert!(err.contains("existing-feature"));
+        assert!(manager.get_spec("rollback-spec").is_ok());
+        assert!(manager.get_session("rollback-spec_v1").is_err());
+        assert!(manager.list_archived_specs().expect("archived specs").is_empty());
     }
 
     #[test]
@@ -2373,6 +3067,13 @@ async fn create_draft(
         }
     };
 
+    if payload["preset"].as_str().is_some() {
+        return Ok(json_error_response(
+            StatusCode::BAD_REQUEST,
+            "'preset' is not supported when creating specs".to_string(),
+        ));
+    }
+
     let name = match payload["name"].as_str() {
         Some(n) => n,
         None => {
@@ -2687,9 +3388,18 @@ async fn start_spec_session(
     let skip_permissions = payload["skip_permissions"].as_bool();
     let version_group_id = payload["version_group_id"].as_str().map(|s| s.to_string());
     let version_number = payload["version_number"].as_i64().map(|n| n as i32);
+    let preset = payload["preset"].as_str().map(|s| s.to_string());
 
-    let manager = match get_core_write().await {
-        Ok(core) => core.session_manager(),
+    if let Err(message) = validate_preset_request_conflicts(
+        preset.as_deref(),
+        agent_type,
+        skip_permissions,
+    ) {
+        return Ok(json_error_response(StatusCode::BAD_REQUEST, message));
+    }
+
+    let core = match get_core_write().await {
+        Ok(core) => core,
         Err(e) => {
             error!("Failed to get lucode core: {e}");
             return Ok(error_response(
@@ -2698,6 +3408,59 @@ async fn start_spec_session(
             ));
         }
     };
+    let manager = core.session_manager();
+
+    if let Some(preset_selector) = preset.as_deref() {
+        let settings = match load_preset_launch_settings(&app).await {
+            Ok(settings) => settings,
+            Err(err) => {
+                error!("Failed to load preset launch settings: {err}");
+                return Ok(error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Internal error: {err}"),
+                ));
+            }
+        };
+        let resolved_preset = match resolve_preset(preset_selector, &settings.presets) {
+            Ok(preset) => preset,
+            Err(err) => return Ok(json_error_response(StatusCode::BAD_REQUEST, err)),
+        };
+        let options = PresetLaunchOptions {
+            base_branch: base_branch.as_deref(),
+            version_group_id: version_group_id.as_deref(),
+            ..PresetLaunchOptions::default()
+        };
+
+        return match start_spec_with_preset_launch(
+            &manager,
+            &core.db,
+            name,
+            &resolved_preset,
+            &options,
+            &settings.autonomy_prompt_template,
+        )
+        .await
+        {
+            Ok(response) => {
+                info!("Started preset-backed spec session via API: {name}");
+                request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
+                match serde_json::to_string(&response) {
+                    Ok(json) => Ok(json_response(StatusCode::OK, json)),
+                    Err(err) => Ok(json_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to serialize preset launch response: {err}"),
+                    )),
+                }
+            }
+            Err(err) => {
+                error!("Failed to start preset-backed spec session: {err}");
+                Ok(error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to start spec: {err}"),
+                ))
+            }
+        };
+    }
 
     // Use the manager method that encapsulates all configuration and session starting logic
     match manager.start_spec_session_with_config(
@@ -2805,6 +3568,7 @@ async fn create_session(
         .as_i64()
         .or_else(|| payload["version_number"].as_i64())
         .map(|n| n as i32);
+    let preset = payload["preset"].as_str().map(|s| s.to_string());
     let is_consolidation = payload["isConsolidation"]
         .as_bool()
         .or_else(|| payload["is_consolidation"].as_bool())
@@ -2834,6 +3598,14 @@ async fn create_session(
         .or_else(|| payload["pr_url"].as_str())
         .map(|s| s.to_string());
 
+    if let Err(message) = validate_preset_request_conflicts(
+        preset.as_deref(),
+        agent_type.as_deref(),
+        skip_permissions,
+    ) {
+        return Ok(json_error_response(StatusCode::BAD_REQUEST, message));
+    }
+
     let core = match get_core_write().await {
         Ok(core) => core,
         Err(e) => {
@@ -2845,6 +3617,67 @@ async fn create_session(
         }
     };
     let manager = core.session_manager();
+
+    if let Some(preset_selector) = preset.as_deref() {
+        let settings = match load_preset_launch_settings(&app).await {
+            Ok(settings) => settings,
+            Err(err) => {
+                error!("Failed to load preset launch settings: {err}");
+                return Ok(error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Internal error: {err}"),
+                ));
+            }
+        };
+        let resolved_preset = match resolve_preset(preset_selector, &settings.presets) {
+            Ok(preset) => preset,
+            Err(err) => return Ok(json_error_response(StatusCode::BAD_REQUEST, err)),
+        };
+        let options = PresetLaunchOptions {
+            base_branch: base_branch.as_deref(),
+            custom_branch: custom_branch.as_deref(),
+            use_existing_branch,
+            epic_id: epic_id.as_deref(),
+            issue_number,
+            issue_url: issue_url.as_deref(),
+            pr_number,
+            pr_url: pr_url.as_deref(),
+            version_group_id: version_group_id.as_deref(),
+            is_consolidation,
+            consolidation_source_ids: consolidation_source_ids.clone(),
+        };
+
+        return match create_sessions_from_preset_launch(
+            &manager,
+            &core.db,
+            name,
+            prompt.as_deref(),
+            &resolved_preset,
+            &options,
+            &settings.autonomy_prompt_template,
+        )
+        .await
+        {
+            Ok(response) => {
+                info!("Created preset-backed session via API: {name}");
+                request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
+                match serde_json::to_string(&response) {
+                    Ok(json) => Ok(json_response(StatusCode::CREATED, json)),
+                    Err(err) => Ok(json_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to serialize preset launch response: {err}"),
+                    )),
+                }
+            }
+            Err(err) => {
+                error!("Failed to create preset-backed session: {err}");
+                Ok(error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to create session: {err}"),
+                ))
+            }
+        };
+    }
 
     let looks_docker_style = name.contains('_') && name.split('_').count() == 2;
     let was_user_edited = user_edited_name.unwrap_or(false);
@@ -2872,28 +3705,18 @@ async fn create_session(
 
     match manager.create_session_with_agent(params) {
         Ok(session) => {
-            if (issue_number.is_some() || issue_url.is_some())
-                && let Err(e) = core.db.update_session_issue_info(
-                    &session.id,
-                    issue_number,
-                    issue_url.as_deref(),
-                )
-            {
-                error!("Failed to persist issue metadata for created session: {e}");
+            if let Err(err) = persist_session_metadata(
+                &core.db,
+                &session.id,
+                issue_number,
+                issue_url.as_deref(),
+                pr_number,
+                pr_url.as_deref(),
+            ) {
+                error!("{err}");
                 return Ok(error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to persist issue metadata: {e}"),
-                ));
-            }
-            if (pr_number.is_some() || pr_url.is_some())
-                && let Err(e) =
-                    core.db
-                        .update_session_pr_info(&session.id, pr_number, pr_url.as_deref())
-            {
-                error!("Failed to persist PR metadata for created session: {e}");
-                return Ok(error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to persist PR metadata: {e}"),
+                    err,
                 ));
             }
             info!("Created session via API: {name}");

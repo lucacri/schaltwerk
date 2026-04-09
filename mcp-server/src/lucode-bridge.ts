@@ -51,8 +51,39 @@ export interface SpecContent {
   updated_at: string
 }
 
+export interface PresetLaunchSession {
+  name: string
+  branch: string
+  agent_type: string
+  version_number: number
+}
+
+export interface PresetLaunchResult {
+  mode: 'preset'
+  preset: {
+    id: string
+    name: string
+  }
+  version_group_id: string
+  sessions: PresetLaunchSession[]
+}
+
+export interface PresetDraftStartResult extends PresetLaunchResult {
+  source_spec: string
+  archived_spec: boolean
+}
+
 interface SpecSummaryResponse {
   specs: SpecSummary[]
+}
+
+const isPresetLaunchResult = (value: unknown): value is PresetLaunchResult => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Partial<PresetLaunchResult>
+  return candidate.mode === 'preset' && Array.isArray(candidate.sessions)
 }
 
 interface GitStatusResult {
@@ -604,7 +635,7 @@ export class LucodeBridge {
     return epic
   }
 
-  async createSession(name: string, prompt?: string, baseBranch?: string, useExistingBranch?: boolean, agentType?: string, skipPermissions?: boolean, epicId?: string, projectPath?: string): Promise<Session> {
+  async createSession(name: string, prompt?: string, baseBranch?: string, useExistingBranch?: boolean, agentType?: string, skipPermissions?: boolean, epicId?: string, projectPath?: string, preset?: string): Promise<Session | PresetLaunchResult> {
     try {
       const response = await this.fetchWithAutoPort('/api/sessions', {
         method: 'POST',
@@ -621,19 +652,24 @@ export class LucodeBridge {
           agent_type: agentType,
           skip_permissions: skipPermissions,
           user_edited_name: false,
-          epic_id: epicId
+          epic_id: epicId,
+          preset,
         })
       })
 
-      if (!response.ok) {
-        throw new Error(`Failed to create session: ${response.statusText}`)
+      const payload = await this.parseJsonResponse<Session | PresetLaunchResult>(response, 'session creation')
+      if (!payload) {
+        throw new Error('Create session response payload missing')
       }
 
-      const session = await response.json() as Session
+      if (isPresetLaunchResult(payload)) {
+        await this.notifyPresetSessionsAdded(payload, projectPath)
+        return payload
+      }
 
-      await this.notifySessionAdded(session, projectPath)
+      await this.notifySessionAdded(payload, projectPath)
 
-      return session
+      return payload
     } catch (error) {
       console.error('Failed to create session via API:', error)
       throw error
@@ -1072,6 +1108,15 @@ export class LucodeBridge {
     }
   }
 
+  private async notifyPresetSessionsAdded(result: PresetLaunchResult, projectPath?: string): Promise<void> {
+    for (const createdSession of result.sessions) {
+      const session = await this.getSession(createdSession.name, projectPath)
+      if (session) {
+        await this.notifySessionAdded(session, projectPath)
+      }
+    }
+  }
+
   private async notifyDraftCreated(session: Session, projectPath?: string): Promise<void> {
     try {
       const payload = {
@@ -1186,7 +1231,7 @@ export class LucodeBridge {
     }
   }
 
-  async startDraftSession(sessionName: string, agentType?: string, skipPermissions?: boolean, baseBranch?: string, projectPath?: string): Promise<void> {
+  async startDraftSession(sessionName: string, agentType?: string, skipPermissions?: boolean, baseBranch?: string, projectPath?: string, preset?: string): Promise<void | PresetDraftStartResult> {
     try {
       const response = await this.fetchWithAutoPort(`/api/specs/${encodeURIComponent(sessionName)}/start`, {
         method: 'POST',
@@ -1197,12 +1242,29 @@ export class LucodeBridge {
         body: JSON.stringify({
           agent_type: agentType,
           skip_permissions: skipPermissions,
-          base_branch: baseBranch
+          base_branch: baseBranch,
+          preset,
         })
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to start spec session: ${response.statusText}`)
+        const rawBody = await response.text()
+        const message = this.extractErrorMessage(rawBody)
+        throw new Error(`Failed to start spec session: ${response.status} ${response.statusText}${message ? ` - ${message}` : ''}`)
+      }
+
+      const rawBody = await response.text()
+      if (rawBody && rawBody !== 'OK') {
+        try {
+          const payload = JSON.parse(rawBody) as PresetDraftStartResult
+          if (isPresetLaunchResult(payload)) {
+            await this.notifyPresetSessionsAdded(payload, projectPath)
+            return payload
+          }
+        } catch (error) {
+          console.error('Failed to parse draft start response:', error)
+          throw new Error('Failed to parse draft start response as JSON')
+        }
       }
 
       const updatedSession = await this.getSession(sessionName, projectPath)

@@ -322,4 +322,37 @@ describe('MCP output schemas', () => {
 
     expect(validate(invalid)).toBeFalse()
   })
+
+  it('accepts preset launch output for lucode_create', () => {
+    const schema = toolOutputSchemas.lucode_create as any
+    const validate = ajv.compile(schema)
+    const payload = {
+      mode: 'preset',
+      preset: { id: 'preset-smarts', name: 'Smarts' },
+      version_group_id: 'group-1',
+      sessions: [
+        { name: 'feature_v1', branch: 'lucode/feature_v1', agent_type: 'claude', version_number: 1 },
+        { name: 'feature_v2', branch: 'lucode/feature_v2', agent_type: 'codex', version_number: 2 },
+      ],
+    }
+
+    expect(validate(payload)).toBeTrue()
+  })
+
+  it('accepts preset launch output for lucode_draft_start', () => {
+    const schema = toolOutputSchemas.lucode_draft_start as any
+    const validate = ajv.compile(schema)
+    const payload = {
+      mode: 'preset',
+      source_spec: 'mcp-preset-support',
+      archived_spec: true,
+      preset: { id: 'preset-smarts', name: 'Smarts' },
+      version_group_id: 'group-9',
+      sessions: [
+        { name: 'mcp-preset-support_v1', branch: 'lucode/mcp-preset-support_v1', agent_type: 'claude', version_number: 1 },
+      ],
+    }
+
+    expect(validate(payload)).toBeTrue()
+  })
 })

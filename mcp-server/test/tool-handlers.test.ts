@@ -69,6 +69,13 @@ const callTool = async (name: string, args: Record<string, unknown> = {}) => {
   return handler({ params: { name, arguments: args } })
 }
 
+const listTools = async () => {
+  const { ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
+  const server = getServer()
+  const handler = server.handlers.get(ListToolsRequestSchema)!
+  return handler()
+}
+
 const listResources = async () => {
   const { ListResourcesRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
   const server = getServer()
@@ -87,6 +94,15 @@ const mockProjectPath = '/tmp/mock-project-tool-handlers'
 
 const cancelSessionMock = mock(() => Promise.resolve())
 const convertToSpecMock = mock(() => Promise.resolve())
+const createSessionMock = mock(() =>
+  Promise.resolve({
+    name: 'feature',
+    branch: 'lucode/feature',
+    worktree_path: `${mockProjectPath}/.lucode/worktrees/feature`,
+    parent_branch: 'main',
+    ready_to_merge: false,
+  })
+)
 const createEpicMock = mock(() => Promise.resolve({ id: 'epic-1', name: 'Test Epic', color: '#FF0000' }))
 const deleteDraftSessionMock = mock(() => Promise.resolve())
 const executeProjectRunScriptMock = mock(() =>
@@ -135,6 +151,7 @@ const sendFollowUpMessageMock = mock(() => Promise.resolve())
 const setWorktreeBaseDirectoryMock = mock(() =>
   Promise.resolve({ worktree_base_directory: '/new/path', has_custom_directory: true })
 )
+const startDraftSessionMock = mock(() => Promise.resolve())
 const getPrFeedbackMock = mock(() =>
   Promise.resolve({
     state: 'OPEN',
@@ -185,6 +202,7 @@ describe('MCP tool handler logic', () => {
     const methodMocks: Record<string, Function> = {
       cancelSession: cancelSessionMock,
       convertToSpec: convertToSpecMock,
+      createSession: createSessionMock,
       createEpic: createEpicMock,
       deleteDraftSession: deleteDraftSessionMock,
       executeProjectRunScript: executeProjectRunScriptMock,
@@ -199,6 +217,7 @@ describe('MCP tool handler logic', () => {
       markSessionReviewed: markSessionReviewedMock,
       promoteSession: promoteSessionMock,
       sendFollowUpMessage: sendFollowUpMessageMock,
+      startDraftSession: startDraftSessionMock,
       setWorktreeBaseDirectory: setWorktreeBaseDirectoryMock,
       unlinkSessionFromPr: unlinkSessionFromPrMock,
       getPrFeedback: getPrFeedbackMock,
@@ -215,6 +234,7 @@ describe('MCP tool handler logic', () => {
   beforeEach(() => {
     cancelSessionMock.mockClear()
     convertToSpecMock.mockClear()
+    createSessionMock.mockClear()
     createEpicMock.mockClear()
     deleteDraftSessionMock.mockClear()
     executeProjectRunScriptMock.mockClear()
@@ -229,6 +249,7 @@ describe('MCP tool handler logic', () => {
     markSessionReviewedMock.mockClear()
     promoteSessionMock.mockClear()
     sendFollowUpMessageMock.mockClear()
+    startDraftSessionMock.mockClear()
     setWorktreeBaseDirectoryMock.mockClear()
     unlinkSessionFromPrMock.mockClear()
     getPrFeedbackMock.mockClear()
@@ -262,6 +283,94 @@ describe('MCP tool handler logic', () => {
       cancelSessionMock.mockRejectedValueOnce(new Error('SAFETY CHECK FAILED'))
 
       await expect(callTool('lucode_cancel', { session_name: 'dirty' })).rejects.toThrow('SAFETY CHECK FAILED')
+    })
+  })
+
+  describe('preset-aware tools', () => {
+    it('advertises preset input for lucode_create and lucode_draft_start', async () => {
+      const response = await listTools()
+      const createTool = response.tools.find((tool: any) => tool.name === 'lucode_create')
+      const draftStartTool = response.tools.find((tool: any) => tool.name === 'lucode_draft_start')
+
+      expect(createTool?.inputSchema?.properties?.preset?.type).toBe('string')
+      expect(draftStartTool?.inputSchema?.properties?.preset?.type).toBe('string')
+    })
+
+    it('returns a preset envelope for lucode_create when preset is used', async () => {
+      createSessionMock.mockResolvedValueOnce({
+        mode: 'preset',
+        preset: { id: 'preset-smarts', name: 'Smarts' },
+        version_group_id: 'group-1',
+        sessions: [
+          { name: 'feature_v1', branch: 'lucode/feature_v1', agent_type: 'claude', version_number: 1 },
+          { name: 'feature_v2', branch: 'lucode/feature_v2', agent_type: 'codex', version_number: 2 },
+        ],
+      })
+
+      const result = await callTool('lucode_create', {
+        name: 'feature',
+        prompt: 'Ship it',
+        preset: 'Smarts',
+      })
+
+      expect(createSessionMock).toHaveBeenCalledTimes(1)
+      expect(result.structuredContent?.mode).toBe('preset')
+      expect(result.structuredContent?.preset?.name).toBe('Smarts')
+      expect(result.structuredContent?.sessions?.[1]?.agent_type).toBe('codex')
+    })
+
+    it('rejects preset for lucode_create when is_draft is true', async () => {
+      await expect(
+        callTool('lucode_create', {
+          name: 'feature',
+          prompt: 'Ship it',
+          is_draft: true,
+          preset: 'Smarts',
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    })
+
+    it('returns a preset envelope for lucode_draft_start when preset is used', async () => {
+      startDraftSessionMock.mockResolvedValueOnce({
+        mode: 'preset',
+        source_spec: 'mcp-preset-support',
+        archived_spec: true,
+        preset: { id: 'preset-smarts', name: 'Smarts' },
+        version_group_id: 'group-9',
+        sessions: [
+          { name: 'mcp-preset-support_v1', branch: 'lucode/mcp-preset-support_v1', agent_type: 'claude', version_number: 1 },
+        ],
+      })
+
+      const result = await callTool('lucode_draft_start', {
+        session_name: 'mcp-preset-support',
+        preset: 'Smarts',
+      })
+
+      expect(startDraftSessionMock).toHaveBeenCalledTimes(1)
+      expect(result.structuredContent?.mode).toBe('preset')
+      expect(result.structuredContent?.source_spec).toBe('mcp-preset-support')
+      expect(result.structuredContent?.archived_spec).toBeTrue()
+    })
+
+    it('rejects preset mixed with agent_type for lucode_draft_start', async () => {
+      await expect(
+        callTool('lucode_draft_start', {
+          session_name: 'mcp-preset-support',
+          preset: 'Smarts',
+          agent_type: 'claude',
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    })
+
+    it('rejects preset for lucode_spec_create', async () => {
+      await expect(
+        callTool('lucode_spec_create', {
+          name: 'planning-spec',
+          content: 'Plan content',
+          preset: 'Smarts',
+        })
+      ).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
     })
   })
 

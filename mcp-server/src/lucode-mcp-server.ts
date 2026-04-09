@@ -11,7 +11,7 @@ import {
   McpError,
   CallToolRequest,
 } from "@modelcontextprotocol/sdk/types.js"
-import { LucodeBridge, Session, MergeModeOption, PrFeedbackPayload } from "./lucode-bridge.js"
+import { LucodeBridge, Session, MergeModeOption, PrFeedbackPayload, PresetDraftStartResult, PresetLaunchResult } from "./lucode-bridge.js"
 import { listLucodeWorkflows, readLucodeWorkflowMarkdown } from "./lucode-workflows.js"
 import { toolOutputSchemas } from "./schemas.js"
 
@@ -27,6 +27,7 @@ interface LucodeStartArgs {
   is_draft?: boolean
   draft_content?: string
   epic_id?: string
+  preset?: string
 }
 
 interface LucodeCancelArgs {
@@ -49,6 +50,7 @@ interface LucodeSpecCreateArgs {
   content?: string
   base_branch?: string
   epic_id?: string
+  preset?: string
 }
 
 interface LucodeCreateEpicArgs {
@@ -67,6 +69,7 @@ interface LucodeDraftStartArgs {
   agent_type?: 'claude' | 'opencode' | 'gemini' | 'codex' | 'qwen' | 'droid' | 'amp' | 'kilocode'
   skip_permissions?: boolean
   base_branch?: string
+  preset?: string
 }
 
 interface LucodeDraftListArgs {
@@ -192,6 +195,15 @@ function buildStructuredResponse(
   return includeStructured
     ? { structuredContent: structured, content: contentEntries }
     : { content: contentEntries }
+}
+
+const isPresetLaunchResult = (value: unknown): value is PresetLaunchResult => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const candidate = value as Partial<PresetLaunchResult>
+  return candidate.mode === 'preset' && Array.isArray(candidate.sessions)
 }
 
 type SpecDocumentPayload = {
@@ -386,6 +398,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             epic_id: {
               type: "string",
               description: "Optional epic ID to assign the session to"
+            },
+            preset: {
+              type: "string",
+              description: "Preset id or name to expand into one or more launch slots. Mutually exclusive with agent_type and skip_permissions."
             }
           },
           required: ["name", "prompt"]
@@ -689,6 +705,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             base_branch: {
               type: "string",
               description: "Override base branch if needed"
+            },
+            preset: {
+              type: "string",
+              description: "Preset id or name to expand into one or more launch slots. Mutually exclusive with agent_type and skip_permissions."
             }
           },
           required: ["session_name"]
@@ -1142,6 +1162,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       case "lucode_create": {
         const createArgs = args as LucodeStartArgs
 
+        if (createArgs.preset && createArgs.is_draft) {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            "'preset' is not supported when invoking lucode_create with is_draft=true."
+          )
+        }
+
+        if (createArgs.preset && (createArgs.agent_type || createArgs.skip_permissions !== undefined)) {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            "'preset' is mutually exclusive with 'agent_type' and 'skip_permissions'."
+          )
+        }
+
         if (createArgs.is_draft) {
           const session = await bridge.createSpecSession(
             createArgs.name || `draft_${Date.now()}`,
@@ -1181,8 +1215,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
             createArgs.agent_type,
             createArgs.skip_permissions,
             createArgs.epic_id,
-            projectPath
+            projectPath,
+            createArgs.preset
           )
+
+          if (isPresetLaunchResult(session)) {
+            const summary = `Preset '${session.preset.name}' launched ${session.sessions.length} session(s) (version_group_id: ${session.version_group_id}):
+${session.sessions
+  .map(
+    (created) =>
+      `- ${created.name} (agent: ${created.agent_type}, branch: ${created.branch}, version: ${created.version_number})`
+  )
+  .join('\n')}`
+            response = buildStructuredResponse(session, { summaryText: summary })
+            break
+          }
 
           const structured = {
             type: "session",
@@ -1369,6 +1416,13 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       case "lucode_spec_create": {
         const specCreateArgs = args as LucodeSpecCreateArgs
 
+        if (specCreateArgs.preset) {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            "'preset' is not supported for spec creation; apply a preset via lucode_draft_start when the spec is ready to launch."
+          )
+        }
+
         const session = await bridge.createSpecSession(
           specCreateArgs.name || `spec_${Date.now()}`,
           specCreateArgs.content,
@@ -1431,13 +1485,37 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       case "lucode_draft_start": {
         const draftStartArgs = args as unknown as LucodeDraftStartArgs
 
-        await bridge.startDraftSession(
+        if (draftStartArgs.preset && (draftStartArgs.agent_type || draftStartArgs.skip_permissions !== undefined)) {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            "'preset' is mutually exclusive with 'agent_type' and 'skip_permissions'."
+          )
+        }
+
+        const startResult = await bridge.startDraftSession(
           draftStartArgs.session_name,
           draftStartArgs.agent_type,
           draftStartArgs.skip_permissions,
           draftStartArgs.base_branch,
-          projectPath
+          projectPath,
+          draftStartArgs.preset
         )
+
+        if (startResult && isPresetLaunchResult(startResult)) {
+          const presetStart = startResult as PresetDraftStartResult
+          const archiveStatus = presetStart.archived_spec
+            ? ' (source spec archived)'
+            : ' (⚠ source spec archival failed — spec still active)'
+          const summary = `Preset '${presetStart.preset.name}' started ${presetStart.sessions.length} session(s) from spec '${presetStart.source_spec}'${archiveStatus} (version_group_id: ${presetStart.version_group_id}):
+${presetStart.sessions
+  .map(
+    (created) =>
+      `- ${created.name} (agent: ${created.agent_type}, branch: ${created.branch}, version: ${created.version_number})`
+  )
+  .join('\n')}`
+          response = buildStructuredResponse(presetStart, { summaryText: summary })
+          break
+        }
 
         const structured = {
           session: draftStartArgs.session_name,
@@ -1855,6 +1933,9 @@ ${cancelLine}`
 
     return response
   } catch (error: unknown) {
+    if (error instanceof McpError) {
+      throw error
+    }
     const errorMessage = error instanceof Error ? error.message : String(error)
     throw new McpError(ErrorCode.InternalError, `Tool execution failed: ${errorMessage}`)
   }

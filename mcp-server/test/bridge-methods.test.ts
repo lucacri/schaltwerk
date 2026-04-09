@@ -118,6 +118,78 @@ describe('LucodeBridge untested methods', () => {
     })
   })
 
+  describe('createSession', () => {
+    it('returns preset launch envelopes and notifies each created session', async () => {
+      const presetLaunch = {
+        mode: 'preset',
+        preset: { id: 'preset-smarts', name: 'Smarts' },
+        version_group_id: 'group-1',
+        sessions: [
+          { name: 'feature_v1', branch: 'lucode/feature_v1', agent_type: 'claude', version_number: 1 },
+          { name: 'feature_v2', branch: 'lucode/feature_v2', agent_type: 'codex', version_number: 2 },
+        ],
+      }
+      const firstSession = {
+        id: 'session-1',
+        name: 'feature_v1',
+        branch: 'lucode/feature_v1',
+        parent_branch: 'main',
+        worktree_path: '/tmp/wt/feature_v1',
+        status: 'active',
+        created_at: Date.now(),
+        updated_at: Date.now(),
+        ready_to_merge: false,
+        pending_name_generation: false,
+        was_auto_generated: false,
+      }
+      const secondSession = {
+        id: 'session-2',
+        name: 'feature_v2',
+        branch: 'lucode/feature_v2',
+        parent_branch: 'main',
+        worktree_path: '/tmp/wt/feature_v2',
+        status: 'active',
+        created_at: Date.now(),
+        updated_at: Date.now(),
+        ready_to_merge: false,
+        pending_name_generation: false,
+        was_auto_generated: false,
+      }
+
+      fetchMock
+        .mockResolvedValueOnce(createResponse(presetLaunch))
+        .mockResolvedValueOnce(createResponse(firstSession))
+        .mockResolvedValueOnce(createResponse({}))
+        .mockResolvedValueOnce(createResponse(secondSession))
+        .mockResolvedValueOnce(createResponse({}))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.createSession(
+        'feature',
+        'Ship it',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'Smarts',
+      )
+
+      expect(result).toEqual(presetLaunch)
+      const [, init] = fetchMock.mock.calls[0]
+      expect(JSON.parse(String(init?.body))).toEqual({
+        name: 'feature',
+        prompt: 'Ship it',
+        user_edited_name: false,
+        preset: 'Smarts',
+      })
+      expect(fetchMock.mock.calls).toHaveLength(5)
+      expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/api/sessions/feature_v1')
+      expect(String(fetchMock.mock.calls[3]?.[0])).toContain('/api/sessions/feature_v2')
+    })
+  })
+
   describe('getPrFeedback', () => {
     it('fetches PR feedback for a session', async () => {
       const payload = {
@@ -230,6 +302,56 @@ describe('LucodeBridge untested methods', () => {
 
       const bridge = new LucodeBridge()
       await expect(bridge.createEpic('test')).rejects.toThrow('Create epic response payload missing')
+    })
+  })
+
+  describe('startDraftSession', () => {
+    it('returns preset start envelopes and notifies each created session', async () => {
+      const presetLaunch = {
+        mode: 'preset',
+        source_spec: 'mcp-preset-support',
+        archived_spec: true,
+        preset: { id: 'preset-smarts', name: 'Smarts' },
+        version_group_id: 'group-9',
+        sessions: [
+          { name: 'mcp-preset-support_v1', branch: 'lucode/mcp-preset-support_v1', agent_type: 'claude', version_number: 1 },
+        ],
+      }
+      const createdSession = {
+        id: 'session-1',
+        name: 'mcp-preset-support_v1',
+        branch: 'lucode/mcp-preset-support_v1',
+        parent_branch: 'main',
+        worktree_path: '/tmp/wt/mcp-preset-support_v1',
+        status: 'active',
+        created_at: Date.now(),
+        updated_at: Date.now(),
+        ready_to_merge: false,
+        pending_name_generation: false,
+        was_auto_generated: false,
+      }
+
+      fetchMock
+        .mockResolvedValueOnce(createResponse(presetLaunch))
+        .mockResolvedValueOnce(createResponse(createdSession))
+        .mockResolvedValueOnce(createResponse({}))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.startDraftSession(
+        'mcp-preset-support',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'Smarts',
+      )
+
+      expect(result).toEqual(presetLaunch)
+      const [, init] = fetchMock.mock.calls[0]
+      expect(JSON.parse(String(init?.body))).toEqual({
+        preset: 'Smarts',
+      })
+      expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/api/sessions/mcp-preset-support_v1')
     })
   })
 

@@ -172,30 +172,89 @@ const prFeedbackThreadSchema = {
   additionalProperties: false,
 } as const
 
+const presetLaunchMetadataSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+  },
+  required: ['id', 'name'],
+  additionalProperties: false,
+} as const
+
+const presetLaunchSessionSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    branch: { type: 'string' },
+    agent_type: { type: 'string' },
+    version_number: { type: 'number' },
+  },
+  required: ['name', 'branch', 'agent_type', 'version_number'],
+  additionalProperties: false,
+} as const
+
+const presetLaunchSchema = {
+  type: 'object',
+  properties: {
+    mode: { const: 'preset' },
+    preset: presetLaunchMetadataSchema,
+    version_group_id: { type: 'string' },
+    sessions: {
+      type: 'array',
+      items: presetLaunchSessionSchema,
+    },
+  },
+  required: ['mode', 'preset', 'version_group_id', 'sessions'],
+  additionalProperties: false,
+} as const
+
+const presetDraftStartSchema = {
+  type: 'object',
+  properties: {
+    mode: { const: 'preset' },
+    source_spec: { type: 'string' },
+    archived_spec: { type: 'boolean' },
+    preset: presetLaunchMetadataSchema,
+    version_group_id: { type: 'string' },
+    sessions: {
+      type: 'array',
+      items: presetLaunchSessionSchema,
+    },
+  },
+  required: ['mode', 'source_spec', 'archived_spec', 'preset', 'version_group_id', 'sessions'],
+  additionalProperties: false,
+} as const
+
 export const toolOutputSchemas = {
   lucode_create: {
     $schema: draft2020,
-    type: 'object',
-    properties: {
-      type: { enum: ['session', 'spec'] },
-      status: { const: 'created' },
-      session: {
+    oneOf: [
+      {
         type: 'object',
         properties: {
-          name: { type: 'string' },
-          branch: { type: 'string' },
-          worktree_path: nullableString,
-          parent_branch: nullableString,
-          agent_type: nullableString,
-          ready_to_merge: nullableBoolean,
-          content_length: nullableNumber,
+          type: { enum: ['session', 'spec'] },
+          status: { const: 'created' },
+          session: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              branch: { type: 'string' },
+              worktree_path: nullableString,
+              parent_branch: nullableString,
+              agent_type: nullableString,
+              ready_to_merge: nullableBoolean,
+              content_length: nullableNumber,
+            },
+            required: ['name', 'branch'],
+            additionalProperties: true,
+          },
         },
-        required: ['name', 'branch'],
-        additionalProperties: true,
+        required: ['type', 'status', 'session'],
+        additionalProperties: false,
       },
-    },
-    required: ['type', 'status', 'session'],
-    additionalProperties: false,
+      presetLaunchSchema,
+    ],
   },
 
   lucode_list: {
@@ -443,16 +502,21 @@ export const toolOutputSchemas = {
 
   lucode_draft_start: {
     $schema: draft2020,
-    type: 'object',
-    properties: {
-      session: { type: 'string' },
-      started: { type: 'boolean' },
-      agent_type: nullableString,
-      skip_permissions: { type: 'boolean' },
-      base_branch: nullableString,
-    },
-    required: ['session', 'started'],
-    additionalProperties: false,
+    oneOf: [
+      {
+        type: 'object',
+        properties: {
+          session: { type: 'string' },
+          started: { type: 'boolean' },
+          agent_type: nullableString,
+          skip_permissions: { type: 'boolean' },
+          base_branch: nullableString,
+        },
+        required: ['session', 'started'],
+        additionalProperties: false,
+      },
+      presetDraftStartSchema,
+    ],
   },
 
   lucode_draft_list: {
