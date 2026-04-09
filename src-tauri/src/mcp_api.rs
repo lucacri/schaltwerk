@@ -28,6 +28,7 @@ use crate::{
 };
 use lucode::domains::attention::get_session_attention_state;
 use lucode::domains::git::service::{ForgeType, detect_forge};
+use lucode::domains::sessions::{apply_git_enrichment, compute_git_for_session};
 use lucode::domains::merge::MergeMode;
 use lucode::domains::sessions::entity::{Session, SessionStatus, Spec};
 use lucode::domains::settings::setup_script::SetupScriptService;
@@ -2361,8 +2362,17 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
         filter_state = Some(SessionState::Spec);
     }
 
-    let manager = match get_core_write().await {
-        Ok(core) => core.session_manager(),
+    let (base_sessions, git_tasks) = match get_core_read().await {
+        Ok(core) => match core.session_manager().list_enriched_sessions_base() {
+            Ok(result) => result,
+            Err(e) => {
+                error!("Failed to list sessions: {e}");
+                return Ok(error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to list sessions: {e}"),
+                ));
+            }
+        },
         Err(e) => {
             error!("Failed to get para core: {e}");
             return Ok(error_response(
@@ -2372,49 +2382,60 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
         }
     };
 
-    match manager.list_enriched_sessions() {
-        Ok(mut sessions) => {
-            // Apply filtering if requested
-            if let Some(state) = filter_state {
-                sessions.retain(|s| match state {
-                    SessionState::Reviewed => s.info.ready_to_merge,
-                    SessionState::Running => {
-                        !s.info.ready_to_merge && s.info.session_state == SessionState::Running
-                    }
-                    SessionState::Processing => {
-                        !s.info.ready_to_merge && s.info.session_state == SessionState::Processing
-                    }
-                    SessionState::Spec => s.info.session_state == SessionState::Spec,
-                });
-            }
+    {
+        let mut sessions = base_sessions;
 
-            // Attach runtime attention state from the in-memory registry
-            if let Some(registry) = get_session_attention_state() {
-                match registry.try_lock() {
-                    Ok(guard) => {
-                        for session in &mut sessions {
-                            session.attention_required = guard.get(&session.info.session_id);
-                        }
-                    }
-                    Err(_) => {
-                        debug!("Attention registry lock contention, skipping attention state");
+        if !git_tasks.is_empty() {
+            let handles: Vec<_> = git_tasks
+                .into_iter()
+                .map(|task| {
+                    tokio::task::spawn_blocking(move || compute_git_for_session(&task))
+                })
+                .collect();
+
+            let mut results = Vec::with_capacity(handles.len());
+            for handle in handles {
+                match handle.await {
+                    Ok(result) => results.push(result),
+                    Err(err) => {
+                        error!("Git enrichment task panicked: {err}");
                     }
                 }
             }
+            apply_git_enrichment(&mut sessions, results);
+        }
 
-            let json = serde_json::to_string(&sessions).unwrap_or_else(|e| {
-                error!("Failed to serialize sessions: {e}");
-                "[]".to_string()
+        if let Some(state) = filter_state {
+            sessions.retain(|s| match state {
+                SessionState::Reviewed => s.info.ready_to_merge,
+                SessionState::Running => {
+                    !s.info.ready_to_merge && s.info.session_state == SessionState::Running
+                }
+                SessionState::Processing => {
+                    !s.info.ready_to_merge && s.info.session_state == SessionState::Processing
+                }
+                SessionState::Spec => s.info.session_state == SessionState::Spec,
             });
-            Ok(json_response(StatusCode::OK, json))
         }
-        Err(e) => {
-            error!("Failed to list sessions: {e}");
-            Ok(error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to list sessions: {e}"),
-            ))
+
+        if let Some(registry) = get_session_attention_state() {
+            match registry.try_lock() {
+                Ok(guard) => {
+                    for session in &mut sessions {
+                        session.attention_required = guard.get(&session.info.session_id);
+                    }
+                }
+                Err(_) => {
+                    debug!("Attention registry lock contention, skipping attention state");
+                }
+            }
         }
+
+        let json = serde_json::to_string(&sessions).unwrap_or_else(|e| {
+            error!("Failed to serialize sessions: {e}");
+            "[]".to_string()
+        });
+        Ok(json_response(StatusCode::OK, json))
     }
 }
 

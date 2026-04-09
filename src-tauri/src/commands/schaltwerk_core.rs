@@ -2952,7 +2952,7 @@ pub async fn schaltwerk_core_list_sessions_by_state(state: String) -> Result<Vec
         .parse::<SessionState>()
         .map_err(|e| format!("Invalid session state: {e}"))?;
 
-    let core = get_core_write().await?;
+    let core = get_core_read().await?;
     let manager = core.session_manager();
 
     manager

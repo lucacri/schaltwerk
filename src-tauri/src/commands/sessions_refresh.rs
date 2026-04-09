@@ -12,6 +12,7 @@ use crate::{
 };
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::services::power::sync_running_sessions;
+use lucode::services::sessions::enrich_sessions_with_parallel_git;
 use lucode::services::{EnrichedSession, SessionState};
 use serde::Serialize;
 
@@ -189,12 +190,18 @@ impl RefreshHub {
     }
 
     async fn snapshot(&self) -> Result<(String, Vec<EnrichedSession>)> {
-        let manager = {
-            let core = get_core_read().await.map_err(|e| anyhow!(e))?;
-            core.session_manager()
-        };
         let snap_start = Instant::now();
-        let sessions = manager.list_enriched_sessions()?;
+
+        let (mut sessions, git_tasks) = {
+            let manager = {
+                let core = get_core_read().await.map_err(|e| anyhow!(e))?;
+                core.session_manager()
+            };
+            manager.list_enriched_sessions_base()?
+        };
+
+        enrich_sessions_with_parallel_git(&mut sessions, git_tasks).await;
+
         let snap_elapsed = snap_start.elapsed().as_millis();
         if snap_elapsed > 400 {
             log::warn!(
