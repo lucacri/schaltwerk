@@ -189,7 +189,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         setFilterMode,
         setSearchQuery,
         setIsSearchVisible,
-        reloadSessions,
         optimisticallyConvertSessionToSpec,
         mergeDialogState,
         openMergeDialog,
@@ -447,13 +446,12 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             } else {
                 pushToast({ tone: 'success', title: t.toasts.prCreated, description: t.toasts.prCreatedBranch.replace('{branch}', result.branch) })
             }
-            await reloadSessions()
         } catch (error) {
             logger.error('Failed to create PR', error)
             const message = error instanceof Error ? error.message : String(error)
             setPrDialogState(prev => ({ ...prev, status: 'ready', error: message }))
         }
-    }, [prDialogState, autoCancelAfterPr, handleClosePrModal, reloadSessions, pushToast])
+    }, [prDialogState, autoCancelAfterPr, handleClosePrModal, pushToast])
 
     const { handlePrShortcut } = useSessionPrShortcut({
         onOpenModal: handleOpenPrModal,
@@ -627,10 +625,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             unsubscribe?.()
         }
     }, []);
-
-    const reloadSessionsAndRefreshIdle = useCallback(async () => {
-        await reloadSessions()
-    }, [reloadSessions]);
 
     const createSafeUnlistener = useCallback((fn: UnlistenFn): UnlistenFn => {
         let called = false
@@ -1037,12 +1031,11 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             await invoke(TauriCommands.SchaltwerkCoreMarkSessionReady, {
                 name: sessionId
             })
-            await reloadSessionsAndRefreshIdle()
         } catch (error) {
             logger.error('Failed to mark session as reviewed:', error)
             alert(`Failed to mark session as reviewed: ${error}`)
         }
-    }, [reloadSessionsAndRefreshIdle])
+    }, [])
 
     const handleRenameSession = useCallback(async (sessionId: string, newName: string) => {
         try {
@@ -1084,11 +1077,10 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 prNumber,
                 prUrl
             })
-            await reloadSessionsAndRefreshIdle()
         } catch (error) {
             logger.error('Failed to link session to PR:', error)
         }
-    }, [reloadSessionsAndRefreshIdle])
+    }, [])
 
     const triggerMarkReady = useCallback(async (sessionId: string) => {
         if (markReadyCooldownRef.current) {
@@ -1125,7 +1117,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             engageMarkReadyCooldown('unmark-ready-trigger')
             try {
                 await invoke(TauriCommands.SchaltwerkCoreUnmarkSessionReady, { name: sessionInfo.session_id })
-                await reloadSessionsAndRefreshIdle()
             } catch (error) {
                 logger.error('Failed to unmark reviewed session via keyboard:', error)
             } finally {
@@ -1144,7 +1135,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         selection,
         allSessions,
         triggerMarkReady,
-        reloadSessionsAndRefreshIdle,
         engageMarkReadyCooldown,
         scheduleMarkReadyCooldownRelease
     ])
@@ -1192,7 +1182,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
 
     const executeVersionPromotion = async (targetGroup: SessionVersionGroupType, selectedSessionId: string) => {
         try {
-            await selectBestVersionAndCleanup(targetGroup, selectedSessionId, invoke, reloadSessionsAndRefreshIdle)
+            await selectBestVersionAndCleanup(targetGroup, selectedSessionId, invoke)
         } catch (error) {
             logger.error('Failed to select best version:', error)
             alert(`Failed to select best version: ${error}`)
@@ -2153,20 +2143,17 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                     if (convertToSpecModal.sessionName) {
                         optimisticallyConvertSessionToSpec(convertToSpecModal.sessionName)
                     }
-                    void (async () => {
-                        await reloadSessionsAndRefreshIdle()
-                        if (newSpecName) {
-                            await setSelection(
-                                {
-                                    kind: 'session',
-                                    payload: newSpecName,
-                                    sessionState: 'spec',
-                                },
-                                true,
-                                true,
-                            )
-                        }
-                    })()
+                    if (newSpecName) {
+                        void setSelection(
+                            {
+                                kind: 'session',
+                                payload: newSpecName,
+                                sessionState: 'spec',
+                            },
+                            true,
+                            true,
+                        )
+                    }
                 }}
             />
             <PromoteVersionConfirmation
@@ -2231,8 +2218,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                         : selection
 
                     await switchModel(agentType, skipPermissions, targetSelection, terminals, clearTerminalTracking, clearTerminalStartedTracking, switchOrchestratorModal.initialAgentType)
-
-                    await reloadSessionsAndRefreshIdle()
 
                     setSwitchOrchestratorModal({ open: false })
                     setSwitchModelSessionId(null)

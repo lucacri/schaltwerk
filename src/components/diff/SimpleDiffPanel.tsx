@@ -81,7 +81,7 @@ export function SimpleDiffPanel({
   const { formatReviewForPrompt, getConfirmationMessage } = useReviewComments()
   const { selection, setSelection, terminals } = useSelection()
   const { setFocusForSession, setCurrentFocus } = useFocus()
-  const { sessions, reloadSessions } = useSessions()
+  const { sessions } = useSessions()
   const { getOrchestratorAgentType } = useClaudeSession()
   const { fetchingComments, fetchAndPasteToTerminal } = usePrComments()
   const testProps: { 'data-testid': string } = { 'data-testid': 'diff-panel' }
@@ -224,13 +224,12 @@ const handleToggleInlinePreference = useCallback((event: ChangeEvent<HTMLInputEl
         prNumber: prNum,
         prUrl: prUrlValue
       })
-      await reloadSessions()
       pushToast({ tone: 'success', title: t.toasts.prLinked, description: t.toasts.prLinkedDesc.replace('{prNum}', String(prNum)) })
     } catch (error) {
       logger.error('Failed to link session to PR:', error)
       pushToast({ tone: 'error', title: t.toasts.prLinkFailed, description: String(error) })
     }
-  }, [sessionName, reloadSessions, pushToast])
+  }, [sessionName, pushToast])
 
   const handleUnlinkPr = useCallback(async () => {
     if (!sessionName || !prNumber) return
@@ -238,13 +237,12 @@ const handleToggleInlinePreference = useCallback((event: ChangeEvent<HTMLInputEl
       await invoke(TauriCommands.SchaltwerkCoreUnlinkSessionFromPr, {
         name: sessionName
       })
-      await reloadSessions()
       pushToast({ tone: 'success', title: t.toasts.prUnlinked, description: t.toasts.prUnlinkedDesc.replace('{prNumber}', String(prNumber)) })
     } catch (error) {
       logger.error('Failed to unlink PR from session:', error)
       pushToast({ tone: 'error', title: t.toasts.prUnlinkFailed, description: String(error) })
     }
-  }, [sessionName, prNumber, reloadSessions, pushToast])
+  }, [sessionName, prNumber, pushToast])
 
   const handleFetchAndPasteComments = useCallback(async () => {
     if (!prNumber) return

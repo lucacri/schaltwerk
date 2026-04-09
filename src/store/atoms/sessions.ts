@@ -1512,7 +1512,6 @@ export const initializeSessionsEventsActionAtom = atom(
                 void (async () => {
                     try {
                         await invoke(TauriCommands.SchaltwerkCoreCancelSession, { name: sessionName })
-                        await set(reloadSessionsActionAtom)
                     } catch (error) {
                         logger.error(`Failed to auto-cancel session after merge: ${sessionName}`, error)
                         if (pushToastHandler) {

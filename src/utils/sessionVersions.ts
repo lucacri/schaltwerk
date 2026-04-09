@@ -198,7 +198,6 @@ export async function selectBestVersionAndCleanup(
   versionGroup: SessionVersionGroup,
   selectedSessionId: string,
   invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
-  reloadSessions: () => Promise<void>
 ): Promise<void> {
   if (!versionGroup.isVersionGroup) {
     throw new Error('Cannot select best version from a non-version group')
@@ -212,19 +211,15 @@ export async function selectBestVersionAndCleanup(
 
   try {
     // Cancel all other versions (not the selected one)
-    const versionsToCancel = versionGroup.versions.filter(v => 
+    const versionsToCancel = versionGroup.versions.filter(v =>
       v.session.info.session_id !== selectedSessionId
     )
-    
+
     for (const version of versionsToCancel) {
-      await invoke(TauriCommands.SchaltwerkCoreCancelSession, { 
-        name: version.session.info.session_id 
+      await invoke(TauriCommands.SchaltwerkCoreCancelSession, {
+        name: version.session.info.session_id
       })
     }
-
-    // Reload sessions to reflect all changes
-    await reloadSessions()
-    
   } catch (error) {
     logger.error('Error during version cleanup:', error)
     throw new Error('Failed to cleanup session versions: ' + (error as Error).message)
