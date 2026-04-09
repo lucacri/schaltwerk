@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tauri::AppHandle;
 use tokio::sync::{Mutex, RwLock, broadcast, mpsc};
-use tokio::time::{Instant as TokioInstant, sleep};
+use tokio::time::Instant as TokioInstant;
 
 const DEFAULT_MAX_BUFFER_SIZE: usize = 512 * 1024;
 const AGENT_MAX_BUFFER_SIZE: usize = 512 * 1024;
@@ -74,6 +74,18 @@ struct InitialCommandState {
     dispatch_after: Option<Instant>,
 }
 
+const PROMPT_PATTERNS: &[&[u8]] = &[b"$ ", b"% ", b"\xe2\x9d\xaf "];
+const ENTER_REPLAY_TIMEOUT_MS: u64 = 2000;
+const PROMPT_SCAN_TAIL_BYTES: usize = 256;
+
+fn buffer_tail_contains_prompt(buffer: &[u8]) -> bool {
+    let start = buffer.len().saturating_sub(PROMPT_SCAN_TAIL_BYTES);
+    let tail = &buffer[start..];
+    PROMPT_PATTERNS
+        .iter()
+        .any(|pattern| contains_subsequence(tail, pattern))
+}
+
 fn contains_subsequence(haystack: &[u8], needle: &[u8]) -> bool {
     if needle.is_empty() {
         return true;
@@ -91,6 +103,8 @@ fn contains_subsequence(haystack: &[u8], needle: &[u8]) -> bool {
 async fn maybe_dispatch_initial_command(
     initial_commands: &Arc<Mutex<HashMap<String, InitialCommandState>>>,
     pty_writers: &Arc<Mutex<HashMap<String, Box<dyn Write + Send>>>>,
+    terminals: &Arc<RwLock<HashMap<String, TerminalState>>>,
+    output_event_sender: &Arc<broadcast::Sender<(String, u64)>>,
     coalescing_state: &CoalescingState,
     terminal_id: &str,
     chunk: &[u8],
@@ -143,7 +157,7 @@ async fn maybe_dispatch_initial_command(
         }
         drop(writers_guard);
 
-        schedule_enter_replay(pty_writers, terminal_id);
+        schedule_enter_replay(pty_writers, terminals, output_event_sender, terminal_id);
 
         let handle_guard = coalescing_state.app_handle.lock().await;
         if let Some(handle) = handle_guard.as_ref() {
@@ -618,6 +632,8 @@ impl LocalPtyAdapter {
             maybe_dispatch_initial_command(
                 &reader_state.initial_commands,
                 &reader_state.pty_writers,
+                &reader_state.terminals,
+                &reader_state.output_event_sender,
                 &reader_state.coalescing_state,
                 id,
                 &sanitized,
@@ -718,6 +734,8 @@ impl LocalPtyAdapter {
     fn schedule_initial_command_dispatch(&self, terminal_id: String, deadline: Instant) {
         let initial_commands = Arc::clone(&self.initial_commands);
         let pty_writers = Arc::clone(&self.pty_writers);
+        let terminals = Arc::clone(&self.terminals);
+        let output_event_sender = Arc::clone(&self.output_event_sender);
         let coalescing_state = self.coalescing_state.clone();
 
         tokio::spawn(async move {
@@ -729,6 +747,8 @@ impl LocalPtyAdapter {
             maybe_dispatch_initial_command(
                 &initial_commands,
                 &pty_writers,
+                &terminals,
+                &output_event_sender,
                 &coalescing_state,
                 &terminal_id,
                 &[],
@@ -740,14 +760,42 @@ impl LocalPtyAdapter {
 
 fn schedule_enter_replay(
     pty_writers: &Arc<Mutex<HashMap<String, Box<dyn Write + Send>>>>,
+    terminals: &Arc<RwLock<HashMap<String, TerminalState>>>,
+    output_event_sender: &Arc<broadcast::Sender<(String, u64)>>,
     terminal_id: &str,
 ) {
-    const ENTER_REPLAY_DELAY_MS: u64 = 900;
     let id = terminal_id.to_string();
     let writers = Arc::clone(pty_writers);
+    let terminals = Arc::clone(terminals);
+    let mut receiver = output_event_sender.subscribe();
 
     tokio::spawn(async move {
-        sleep(Duration::from_millis(ENTER_REPLAY_DELAY_MS)).await;
+        let deadline = TokioInstant::now() + Duration::from_millis(ENTER_REPLAY_TIMEOUT_MS);
+
+        let detected = tokio::time::timeout_at(deadline, async {
+            loop {
+                match receiver.recv().await {
+                    Ok((tid, _)) if tid == id => {
+                        let terms = terminals.read().await;
+                        if let Some(state) = terms.get(&id)
+                            && buffer_tail_contains_prompt(&state.buffer)
+                        {
+                            return;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Closed) => return,
+                    _ => {}
+                }
+            }
+        })
+        .await;
+
+        let reason = if detected.is_ok() {
+            "prompt detected"
+        } else {
+            "timeout"
+        };
+        debug!("Replaying enter key for terminal {id} ({reason})");
 
         let mut guard = writers.lock().await;
         if let Some(writer) = guard.get_mut(&id) {
@@ -1778,5 +1826,45 @@ mod tests {
         let snapshot = adapter.snapshot(&id, Some(from_seq)).await.unwrap();
         assert_eq!(snapshot.data.len(), (seq - from_seq) as usize);
         assert!(snapshot.data.len() > MAX_HYDRATION_SNAPSHOT_BYTES);
+    }
+
+    #[test]
+    fn prompt_detection_dollar_sign() {
+        assert!(buffer_tail_contains_prompt(b"user@host:~/dir$ "));
+    }
+
+    #[test]
+    fn prompt_detection_percent_sign() {
+        assert!(buffer_tail_contains_prompt(b"user@host ~/dir% "));
+    }
+
+    #[test]
+    fn prompt_detection_chevron() {
+        assert!(buffer_tail_contains_prompt("~/dir❯ ".as_bytes()));
+    }
+
+    #[test]
+    fn prompt_detection_no_match() {
+        assert!(!buffer_tail_contains_prompt(b"Loading modules..."));
+    }
+
+    #[test]
+    fn prompt_detection_only_scans_tail() {
+        let mut buf = vec![0u8; 512];
+        buf[10] = b'$';
+        buf[11] = b' ';
+        assert!(!buffer_tail_contains_prompt(&buf));
+    }
+
+    #[test]
+    fn prompt_detection_within_tail() {
+        let mut buf = vec![b'x'; 300];
+        buf.extend_from_slice(b"user@host:~$ ");
+        assert!(buffer_tail_contains_prompt(&buf));
+    }
+
+    #[test]
+    fn prompt_detection_empty_buffer() {
+        assert!(!buffer_tail_contains_prompt(b""));
     }
 }
