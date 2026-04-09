@@ -2490,21 +2490,18 @@ impl SessionManager {
     }
 
     pub fn link_session_to_pr(&self, name: &str, pr_number: i64, pr_url: &str) -> Result<()> {
-        let session = self.db_manager.get_session_by_name(name)?;
         self.db_manager
-            .update_session_pr_info(&session.id, Some(pr_number), Some(pr_url))
+            .update_session_pr_info_by_name(name, Some(pr_number), Some(pr_url))
     }
 
     pub fn update_session_promotion_reason(&self, name: &str, reason: Option<&str>) -> Result<()> {
-        let session = self.db_manager.get_session_by_name(name)?;
         self.db_manager
-            .update_session_promotion_reason(&session.id, reason)
+            .update_session_promotion_reason_by_name(name, reason)
     }
 
     pub fn unlink_session_from_pr(&self, name: &str) -> Result<()> {
-        let session = self.db_manager.get_session_by_name(name)?;
         self.db_manager
-            .update_session_pr_info(&session.id, None, None)
+            .update_session_pr_info_by_name(name, None, None)
     }
 
     pub fn get_spec(&self, name: &str) -> Result<Spec> {
@@ -3712,10 +3709,8 @@ impl SessionManager {
     }
 
     pub fn set_session_ready_flag(&self, session_name: &str, ready: bool) -> Result<()> {
-        let session = self.db_manager.get_session_by_name(session_name)?;
         self.db_manager
-            .update_session_ready_to_merge(&session.id, ready)?;
-        Ok(())
+            .update_session_ready_to_merge_by_name(session_name, ready)
     }
 
     // When a follow-up message arrives for a reviewed session, it should move back to running.

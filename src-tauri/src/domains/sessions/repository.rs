@@ -270,6 +270,12 @@ impl SessionDbManager {
             .map_err(|e| anyhow!("Failed to update session ready_to_merge: {e}"))
     }
 
+    pub fn update_session_ready_to_merge_by_name(&self, name: &str, ready: bool) -> Result<()> {
+        self.db
+            .update_session_ready_to_merge_by_name(&self.repo_path, name, ready)
+            .map_err(|e| anyhow!("Failed to update session ready_to_merge: {e}"))
+    }
+
     pub fn update_session_pr_info(
         &self,
         session_id: &str,
@@ -278,6 +284,17 @@ impl SessionDbManager {
     ) -> Result<()> {
         self.db
             .update_session_pr_info(session_id, pr_number, pr_url)
+            .map_err(|e| anyhow!("Failed to update session PR info: {e}"))
+    }
+
+    pub fn update_session_pr_info_by_name(
+        &self,
+        name: &str,
+        pr_number: Option<i64>,
+        pr_url: Option<&str>,
+    ) -> Result<()> {
+        self.db
+            .update_session_pr_info_by_name(&self.repo_path, name, pr_number, pr_url)
             .map_err(|e| anyhow!("Failed to update session PR info: {e}"))
     }
 
@@ -460,6 +477,16 @@ impl SessionDbManager {
     ) -> Result<()> {
         self.db
             .update_session_promotion_reason(session_id, reason)
+            .map_err(|e| anyhow!("Failed to update promotion reason: {e}"))
+    }
+
+    pub fn update_session_promotion_reason_by_name(
+        &self,
+        name: &str,
+        reason: Option<&str>,
+    ) -> Result<()> {
+        self.db
+            .update_session_promotion_reason_by_name(&self.repo_path, name, reason)
             .map_err(|e| anyhow!("Failed to update promotion reason: {e}"))
     }
 

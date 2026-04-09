@@ -70,6 +70,25 @@ pub trait SessionMethods {
         issue_url: Option<&str>,
     ) -> Result<()>;
     fn update_session_promotion_reason(&self, id: &str, reason: Option<&str>) -> Result<()>;
+    fn update_session_pr_info_by_name(
+        &self,
+        repo_path: &Path,
+        name: &str,
+        pr_number: Option<i64>,
+        pr_url: Option<&str>,
+    ) -> Result<()>;
+    fn update_session_promotion_reason_by_name(
+        &self,
+        repo_path: &Path,
+        name: &str,
+        reason: Option<&str>,
+    ) -> Result<()>;
+    fn update_session_ready_to_merge_by_name(
+        &self,
+        repo_path: &Path,
+        name: &str,
+        ready: bool,
+    ) -> Result<()>;
 }
 
 const SQLITE_MAX_VARIABLE_NUMBER: usize = 999;
@@ -938,6 +957,49 @@ impl SessionMethods for Database {
         conn.execute(
             "UPDATE sessions SET promotion_reason = ?1, updated_at = ?2 WHERE id = ?3",
             params![reason, Utc::now().timestamp(), id],
+        )?;
+        Ok(())
+    }
+
+    fn update_session_pr_info_by_name(
+        &self,
+        repo_path: &Path,
+        name: &str,
+        pr_number: Option<i64>,
+        pr_url: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE sessions SET pr_number = ?1, pr_url = ?2, updated_at = ?3 WHERE repository_path = ?4 AND name = ?5",
+            params![pr_number, pr_url, Utc::now().timestamp(), repo_path.to_string_lossy(), name],
+        )?;
+        Ok(())
+    }
+
+    fn update_session_promotion_reason_by_name(
+        &self,
+        repo_path: &Path,
+        name: &str,
+        reason: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE sessions SET promotion_reason = ?1, updated_at = ?2 WHERE repository_path = ?3 AND name = ?4",
+            params![reason, Utc::now().timestamp(), repo_path.to_string_lossy(), name],
+        )?;
+        Ok(())
+    }
+
+    fn update_session_ready_to_merge_by_name(
+        &self,
+        repo_path: &Path,
+        name: &str,
+        ready: bool,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE sessions SET ready_to_merge = ?1, updated_at = ?2 WHERE repository_path = ?3 AND name = ?4",
+            params![ready, Utc::now().timestamp(), repo_path.to_string_lossy(), name],
         )?;
         Ok(())
     }
