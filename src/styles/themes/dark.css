@@ -80,6 +80,11 @@
   --color-accent-red-bg: rgba(239, 68, 68, 0.1);
   --color-accent-red-border: rgba(239, 68, 68, 0.5);
 
+  /* Row Tints */
+  --color-row-tint-red: rgba(var(--color-accent-red-rgb), 0.1);
+  --color-row-tint-blue: rgba(var(--color-accent-blue-rgb), 0.1);
+  --color-row-tint-amber: rgba(var(--color-accent-amber-rgb), 0.1);
+
   --color-accent-violet: #8b5cf6;
   --color-accent-violet-rgb: 139 92 246;
   --color-accent-violet-light: #a78bfa;

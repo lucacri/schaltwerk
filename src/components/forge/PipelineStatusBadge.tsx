@@ -1,67 +1,74 @@
+import type { CSSProperties } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useTranslation } from '../../common/i18n'
 import { TauriCommands } from '../../common/tauriCommands'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
+import { getPipelineStatusVisual, type PipelineStatusVisual } from './pipelineStatusVisual'
 
 interface PipelineStatusBadgeProps {
   status: string
   url?: string
 }
 
-function getStatusStyle(status: string): { color: string; label: string; key: string } {
-  switch (status) {
-    case 'success':
-      return { color: 'var(--color-accent-green)', label: '', key: 'pipelineSuccess' }
-    case 'failed':
-      return { color: 'var(--color-accent-red)', label: '', key: 'pipelineFailed' }
-    case 'running':
-      return { color: 'var(--color-accent-blue)', label: '', key: 'pipelineRunning' }
-    case 'pending':
-    case 'created':
-    case 'waiting_for_resource':
-    case 'preparing':
-      return { color: 'var(--color-accent-amber)', label: '', key: 'pipelinePending' }
-    case 'canceled':
-      return { color: 'var(--color-text-muted)', label: '', key: 'pipelineCanceled' }
-    case 'manual':
-      return { color: 'var(--color-accent-amber)', label: '', key: 'pipelineManual' }
-    default:
-      return { color: 'var(--color-text-muted)', label: status, key: '' }
+function buildBadgeStyle(visual: PipelineStatusVisual): CSSProperties {
+  const base: CSSProperties = {
+    fontSize: theme.fontSize.caption,
+    color: visual.pillText,
+    lineHeight: theme.lineHeight.badge,
+  }
+
+  if (visual.tier === 1) {
+    return {
+      ...base,
+      fontWeight: 600,
+      backgroundColor: visual.pillBg ?? 'transparent',
+      border: `1px solid ${visual.pillBorder ?? 'transparent'}`,
+      borderRadius: 9999,
+      padding: '2px 10px',
+    }
+  }
+
+  if (visual.tier === 2) {
+    return {
+      ...base,
+      fontWeight: 500,
+      backgroundColor: 'transparent',
+      border: `1px solid ${visual.pillBorder ?? 'transparent'}`,
+      borderRadius: 9999,
+      padding: '2px 10px',
+    }
+  }
+
+  return {
+    ...base,
+    fontWeight: 500,
   }
 }
 
 export function PipelineStatusBadge({ status, url }: PipelineStatusBadgeProps) {
   const { t } = useTranslation()
-  const style = getStatusStyle(status)
+  const visual = getPipelineStatusVisual(status)
 
-  const label = style.key
-    ? (t.forgePrTab as Record<string, string>)[style.key] ?? status
-    : style.label
-
-  const isRunning = status === 'running'
+  const label = visual.labelKey
+    ? (t.forgePrTab as Record<string, string>)[visual.labelKey] ?? status
+    : visual.fallbackLabel
 
   const badge = (
-    <span
-      className="inline-flex items-center gap-1"
-      style={{
-        fontSize: theme.fontSize.caption,
-        fontWeight: 500,
-        color: style.color,
-        lineHeight: theme.lineHeight.badge,
-      }}
-    >
-      <span
-        style={{
-          display: 'inline-block',
-          width: 6,
-          height: 6,
-          borderRadius: 9999,
-          backgroundColor: style.color,
-          flexShrink: 0,
-          ...(isRunning ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}),
-        }}
-      />
+    <span className="inline-flex items-center gap-1" style={buildBadgeStyle(visual)}>
+      {visual.showLeadingDot && (
+        <span
+          data-testid="pipeline-leading-dot"
+          style={{
+            display: 'inline-block',
+            width: 6,
+            height: 6,
+            borderRadius: 9999,
+            backgroundColor: visual.pillText,
+            flexShrink: 0,
+          }}
+        />
+      )}
       {label}
     </span>
   )

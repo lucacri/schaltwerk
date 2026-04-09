@@ -9,6 +9,7 @@ import { ForgeDetailErrorView } from './ForgeDetailErrorView'
 import { ForgePrDetail } from './ForgePrDetail'
 import { ForgeLabelChip } from './ForgeLabelChip'
 import { PipelineStatusBadge } from './PipelineStatusBadge'
+import { getPipelineStatusVisual } from './pipelineStatusVisual'
 import { useTranslation } from '../../common/i18n'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
@@ -62,6 +63,9 @@ function PrRow({
 }) {
   const { t } = useTranslation()
   const displayLabels = pr.labels.slice(0, 3)
+  const rowTint = pipelineStatus
+    ? getPipelineStatusVisual(pipelineStatus.status).rowTintVar ?? 'transparent'
+    : 'transparent'
 
   return (
     <button
@@ -69,12 +73,12 @@ function PrRow({
       className="w-full text-left px-3 py-2 flex flex-col gap-1"
       style={{
         borderBottom: '1px solid var(--color-border-default)',
-        backgroundColor: 'transparent',
+        backgroundColor: rowTint,
         cursor: 'pointer',
       }}
       onClick={() => onSelect(pr)}
       onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = rowTint }}
     >
       <div className="flex items-center gap-2">
         <PrStateBadgeInline state={pr.state} />

@@ -522,6 +522,29 @@ describe('ForgePrDetail', () => {
       expect(screen.getByText('Passed')).toBeTruthy()
     })
 
+    it('does not apply PR row tint styles in detail view', () => {
+      const details = makeDetails({
+        summary: { ...makeDetails().summary, state: 'opened' },
+        providerData: gitlabProvider({ pipelineStatus: 'failed' }),
+      })
+
+      const { container } = renderWithProviders(
+        <ForgePrDetail details={details} onBack={onBack} forgeType="gitlab" />,
+        { forgeOverrides: { hasRepository: true } }
+      )
+
+      expect(screen.getByText('Failed')).toBeTruthy()
+
+      const tintedElements = Array.from(container.querySelectorAll<HTMLElement>('[style]')).filter((element) => {
+        const style = element.getAttribute('style') ?? ''
+        return style.includes('var(--color-row-tint-red)')
+          || style.includes('var(--color-row-tint-blue)')
+          || style.includes('var(--color-row-tint-amber)')
+      })
+
+      expect(tintedElements).toHaveLength(0)
+    })
+
     it('shows reviewers list when present', () => {
       const details = makeDetails({
         providerData: gitlabProvider({ reviewers: ['reviewer1', 'reviewer2'] }),

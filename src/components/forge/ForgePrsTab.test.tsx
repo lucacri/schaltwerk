@@ -2,7 +2,57 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { ForgePrsTab } from './ForgePrsTab'
 import { renderWithProviders } from '../../tests/test-utils'
-import type { ForgePrSummary, ForgePrDetails, ForgeSourceConfig } from '../../types/forgeTypes'
+import type { ForgePrSummary, ForgePrDetails, ForgeSourceConfig, ForgePipelineStatus } from '../../types/forgeTypes'
+
+const gitlabSource: ForgeSourceConfig = {
+  projectIdentifier: 'group/project',
+  hostname: 'gitlab.example.com',
+  label: 'GitLab',
+  forgeType: 'gitlab',
+}
+
+function makePipeline(status: string): ForgePipelineStatus {
+  return { id: 1, status, url: 'https://gitlab.example.com/pipeline/1' }
+}
+
+async function renderRowWithPipelineStatus(status: string): Promise<HTMLElement> {
+  const searchPrs = vi.fn().mockResolvedValue([
+    {
+      id: '1',
+      title: 'PR with pipeline',
+      state: 'OPEN',
+      author: 'alice',
+      labels: [],
+      sourceBranch: 'feature/x',
+      targetBranch: 'main',
+      url: 'https://gitlab.example.com/group/project/-/merge_requests/1',
+    },
+  ])
+  const getPipelineStatus = vi.fn().mockResolvedValue(makePipeline(status))
+
+  renderWithProviders(<ForgePrsTab />, {
+    forgeOverrides: {
+      forgeType: 'gitlab',
+      hasSources: true,
+      sources: [gitlabSource],
+      searchPrs,
+      getPipelineStatus,
+    },
+  })
+
+  await waitFor(() => {
+    expect(getPipelineStatus).toHaveBeenCalled()
+  })
+
+  await waitFor(() => {
+    expect(screen.getByText('PR with pipeline')).toBeTruthy()
+  })
+
+  const titleEl = screen.getByText('PR with pipeline')
+  const row = titleEl.closest('button')
+  if (!row) throw new Error('Could not find PR row')
+  return row as HTMLElement
+}
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -457,6 +507,76 @@ describe('ForgePrsTab', () => {
 
     await waitFor(() => {
       expect(searchPrs).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('Row tint by pipeline status', () => {
+    it('tints failed PR row with row-tint-red', async () => {
+      const row = await renderRowWithPipelineStatus('failed')
+      await waitFor(() => {
+        expect(row.style.backgroundColor).toBe('var(--color-row-tint-red)')
+      })
+    })
+
+    it('tints running PR row with row-tint-blue', async () => {
+      const row = await renderRowWithPipelineStatus('running')
+      await waitFor(() => {
+        expect(row.style.backgroundColor).toBe('var(--color-row-tint-blue)')
+      })
+    })
+
+    it('tints manual PR row with row-tint-amber', async () => {
+      const row = await renderRowWithPipelineStatus('manual')
+      await waitFor(() => {
+        expect(row.style.backgroundColor).toBe('var(--color-row-tint-amber)')
+      })
+    })
+
+    it('does not tint a successful PR row (transparent)', async () => {
+      const row = await renderRowWithPipelineStatus('success')
+      await waitFor(() => {
+        expect(screen.getByText('Passed')).toBeTruthy()
+      })
+      expect(row.style.backgroundColor).toBe('transparent')
+    })
+
+    it('mouse-leave on a failed row restores the red tint, not transparent (regression guard)', async () => {
+      const row = await renderRowWithPipelineStatus('failed')
+      await waitFor(() => {
+        expect(row.style.backgroundColor).toBe('var(--color-row-tint-red)')
+      })
+
+      fireEvent.mouseEnter(row)
+      expect(row.style.backgroundColor).toBe('var(--color-bg-hover)')
+
+      fireEvent.mouseLeave(row)
+      expect(row.style.backgroundColor).toBe('var(--color-row-tint-red)')
+    })
+
+    it('row with no pipeline data renders transparent and shows no badge', async () => {
+      const searchPrs = vi.fn().mockResolvedValue([
+        makePrSummary({ id: '1', title: 'No pipeline PR' }),
+      ])
+
+      renderWithProviders(<ForgePrsTab />, {
+        forgeOverrides: {
+          forgeType: 'github',
+          hasSources: true,
+          sources: [testSource],
+          searchPrs,
+        },
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText('No pipeline PR')).toBeTruthy()
+      })
+
+      const titleEl = screen.getByText('No pipeline PR')
+      const row = titleEl.closest('button') as HTMLElement
+      expect(row.style.backgroundColor).toBe('transparent')
+      expect(screen.queryByText('Passed')).toBeNull()
+      expect(screen.queryByText('Failed')).toBeNull()
+      expect(screen.queryByText('Running')).toBeNull()
     })
   })
 })

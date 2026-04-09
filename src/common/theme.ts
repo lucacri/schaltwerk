@@ -212,6 +212,12 @@ export const theme = {
       modal: '#1a1a1a',
     },
 
+    row: {
+      tintRed: 'var(--color-row-tint-red)',
+      tintBlue: 'var(--color-row-tint-blue)',
+      tintAmber: 'var(--color-row-tint-amber)',
+    },
+
     editor: {
       background: '#0b1220',
       text: '#e2e8f0',
