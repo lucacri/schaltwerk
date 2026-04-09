@@ -25,8 +25,8 @@ pub use super::operations::{
     is_valid_session_name,
 };
 pub use super::stats::{
-    calculate_git_stats_fast, get_changed_files, get_changed_files_with_mode,
-    has_remote_tracking_branch, DiffCompareMode,
+    calculate_git_stats_fast, calculate_git_stats_fast_with_repo, get_changed_files,
+    get_changed_files_with_mode, has_remote_tracking_branch, DiffCompareMode,
 };
 
 pub use super::forge::{

@@ -95,17 +95,6 @@ impl<E: EventEmitter> ActivityTracker<E> {
                 Ok(mut stats) => {
                     stats.session_id = session.id.clone();
 
-                    let has_conflicts = match git::has_conflicts(&session.worktree_path) {
-                        Ok(value) => value,
-                        Err(err) => {
-                            log::warn!(
-                                "Failed to detect conflicts for {}: {err}",
-                                session.name
-                            );
-                            false
-                        }
-                    };
-
                     let merge_snapshot = shared_repo
                         .and_then(|repo| {
                             let session_oid = MergeSnapshotGateway::resolve_branch_oid(
@@ -146,7 +135,7 @@ impl<E: EventEmitter> ActivityTracker<E> {
                         has_uncommitted: stats.has_uncommitted,
                         dirty_files_count: Some(stats.dirty_files_count),
                         commits_ahead_count: None,
-                        has_conflicts,
+                        has_conflicts: stats.has_conflicts,
                         top_uncommitted_paths: None,
                         merge_has_conflicts: merge_snapshot.merge_has_conflicts,
                         merge_conflicting_paths: merge_snapshot.merge_conflicting_paths,

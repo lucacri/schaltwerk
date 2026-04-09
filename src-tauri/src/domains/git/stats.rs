@@ -244,14 +244,21 @@ fn is_internal_tooling_path(path: &str) -> bool {
 }
 
 pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Result<GitStats> {
+    // IMPORTANT: Open the worktree repo directly. Using `discover` may return
+    // the parent repository and yield incorrect status for worktrees.
+    let repo = Repository::open(worktree_path)?;
+    calculate_git_stats_fast_with_repo(&repo, worktree_path, parent_branch)
+}
+
+pub fn calculate_git_stats_fast_with_repo(
+    repo: &Repository,
+    worktree_path: &Path,
+    parent_branch: &str,
+) -> Result<GitStats> {
     #[cfg(test)]
     increment_git_stats_call_count();
 
     let start_time = std::time::Instant::now();
-    // IMPORTANT: Open the worktree repo directly. Using `discover` may return
-    // the parent repository and yield incorrect status for worktrees.
-    let repo = Repository::open(worktree_path)?;
-    let repo_discover_time = start_time.elapsed();
 
     let head_oid = repo.head().ok().and_then(|h| h.target());
     let head_commit = head_oid.and_then(|oid| repo.find_commit(oid).ok());
@@ -591,10 +598,9 @@ pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Re
     let total_time = start_time.elapsed();
     if total_time.as_millis() > 100 {
         log::warn!(
-            "Git stats calculation took {}ms for {} (repo_discover: {}ms, insertions: {}, deletions: {})",
+            "Git stats calculation took {}ms for {} (insertions: {}, deletions: {})",
             total_time.as_millis(),
             worktree_path.display(),
-            repo_discover_time.as_millis(),
             insertions,
             deletions
         );

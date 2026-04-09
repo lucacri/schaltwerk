@@ -705,10 +705,6 @@ pub async fn merge_session_with_events(
                         &session.parent_branch,
                     )
                 {
-                    let has_conflicts =
-                        lucode::domains::git::operations::has_conflicts(&session.worktree_path)
-                            .unwrap_or(false);
-
                     let preview = service.preview_with_worktree(name).ok();
                     let mut merge_snapshot = MergeStateSnapshot::from_preview(preview.as_ref());
                     merge_snapshot.merge_has_conflicts = Some(true);
@@ -723,7 +719,7 @@ pub async fn merge_session_with_events(
                         has_uncommitted: stats.has_uncommitted,
                         dirty_files_count: Some(stats.dirty_files_count),
                         commits_ahead_count: preview.as_ref().map(|value| value.commits_ahead_count),
-                        has_conflicts,
+                        has_conflicts: stats.has_conflicts,
                         top_uncommitted_paths: None,
                         merge_has_conflicts: merge_snapshot.merge_has_conflicts,
                         merge_conflicting_paths: merge_snapshot.merge_conflicting_paths,
@@ -2576,10 +2572,6 @@ pub async fn schaltwerk_core_mark_session_ready(
             &session.parent_branch,
         )
     {
-        let has_conflicts =
-            lucode::domains::git::operations::has_conflicts(&session.worktree_path)
-                .unwrap_or(false);
-
         let merge_service = MergeService::new(core.db.clone(), core.repo_path.clone());
         let merge_preview = merge_service.preview(&name).ok();
 
@@ -2595,7 +2587,7 @@ pub async fn schaltwerk_core_mark_session_ready(
             has_uncommitted: stats.has_uncommitted,
             dirty_files_count: Some(stats.dirty_files_count),
             commits_ahead_count: merge_preview.as_ref().map(|value| value.commits_ahead_count),
-            has_conflicts,
+            has_conflicts: stats.has_conflicts,
             top_uncommitted_paths: None,
             merge_has_conflicts: merge_snapshot.merge_has_conflicts,
             merge_conflicting_paths: merge_snapshot.merge_conflicting_paths,
