@@ -461,8 +461,14 @@ impl TerminalManager {
         self.backend.write_immediate(&id, &payload).await?;
 
         if needs_delayed_submit {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            self.backend.write_immediate(&id, b"\r").await?;
+            let backend = Arc::clone(&self.backend);
+            let submit_id = id.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                if let Err(e) = backend.write_immediate(&submit_id, b"\r").await {
+                    warn!("Failed to send delayed submit for terminal {submit_id}: {e}");
+                }
+            });
         }
 
         if let Some(app_handle) = self.app_handle.read().await.as_ref() {
