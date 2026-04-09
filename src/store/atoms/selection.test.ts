@@ -26,7 +26,7 @@ import {
 import { projectPathAtom } from './project'
 import { TauriCommands } from '../../common/tauriCommands'
 import { FilterMode } from '../../types/sessionFilters'
-import { stableSessionTerminalId } from '../../common/terminalIdentity'
+import { specOrchestratorTerminalId, stableSessionTerminalId } from '../../common/terminalIdentity'
 import { SessionState, type EnrichedSession } from '../../types/session'
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -102,12 +102,31 @@ function createRawSession(overrides: Partial<Record<string, unknown>> = {}) {
   const defaultStatus = requestedState === 'spec' ? 'spec' : 'running'
   const defaultWorktree = requestedState === 'spec' ? null : `/tmp/worktrees/${name}`
   return {
+    id: typeof overrides.id === 'string' ? overrides.id : `${name}-stable-id`,
     name,
     session_state: requestedState,
     status: defaultStatus,
     ready_to_merge: false,
     worktree_path: defaultWorktree,
     branch: 'schaltwerk/session-1',
+    ...overrides,
+  }
+}
+
+function createRawSpec(overrides: Partial<Record<string, unknown>> = {}) {
+  const name = typeof overrides.name === 'string' ? overrides.name : 'draft-1'
+  return {
+    id: typeof overrides.id === 'string' ? overrides.id : `${name}-stable-id`,
+    name,
+    display_name: typeof overrides.display_name === 'string' ? overrides.display_name : name,
+    repository_path: '/projects/alpha',
+    repository_name: 'alpha',
+    content: '# Draft',
+    stage: 'draft',
+    attention_required: false,
+    clarification_started: false,
+    created_at: '2024-01-01T00:00:00.000Z',
+    updated_at: '2024-01-01T00:00:00.000Z',
     ...overrides,
   }
 }
@@ -181,6 +200,10 @@ describe('selection atoms', () => {
           return response
         }
         return createRawSession({ name: typedArgs?.name })
+      }
+      if (cmd === TauriCommands.SchaltwerkCoreGetSpec) {
+        const typedArgs = args as Record<string, unknown> | undefined
+        return createRawSpec({ name: typedArgs?.name })
       }
       if (cmd === TauriCommands.PathExists) {
         if (typeof nextPathExistsResult === 'boolean') {
@@ -293,7 +316,7 @@ describe('selection atoms', () => {
     })
   })
 
-  it('skips terminal allocation for specs and creates on running transition without recreation', async () => {
+  it('allocates only a top orchestrator terminal for specs using the stable spec id', async () => {
     await withNodeEnv('development', async () => {
       const backend = await import('../../terminal/transport/backend')
 
@@ -303,33 +326,34 @@ describe('selection atoms', () => {
       vi.mocked(backend.closeTerminalBackend).mockClear()
 
       nextSessionResponse = createRawSession({
+        id: 'spec-stable-1',
         name: 'spec-1',
         session_state: 'spec',
         status: 'spec',
         worktree_path: null,
+        spec_stage: 'draft',
       })
 
       await store.set(setSelectionActionAtom, {
-        selection: { kind: 'session', payload: 'spec-1', sessionState: 'spec' },
+        selection: { kind: 'session', payload: 'spec-1' },
       })
 
-      expect(store.get(terminalsAtom)).toEqual({ top: '', bottomBase: '', workingDirectory: '' })
-      expect(vi.mocked(backend.createTerminalBackend)).not.toHaveBeenCalled()
-      expect(vi.mocked(backend.closeTerminalBackend)).not.toHaveBeenCalled()
-
-      await store.set(setSelectionActionAtom, {
-        selection: {
-          kind: 'session',
-          payload: 'spec-1',
-          sessionState: 'running',
-          worktreePath: '/tmp/worktrees/spec-1',
-        },
+      expect(store.get(selectionValueAtom)).toMatchObject({
+        kind: 'session',
+        payload: 'spec-1',
+        sessionState: 'spec',
+        stableId: 'spec-stable-1',
       })
-
-      const terminals = store.get(terminalsAtom)
-      expect(terminals.workingDirectory).toBe('/tmp/worktrees/spec-1')
-      expect(terminals.top).toMatch(/^session-spec-1~[0-9a-f]{8}-top$/)
-      expect(vi.mocked(backend.createTerminalBackend)).toHaveBeenCalledTimes(2)
+      expect(store.get(terminalsAtom)).toEqual({
+        top: specOrchestratorTerminalId('spec-stable-1'),
+        bottomBase: '',
+        workingDirectory: '/projects/alpha',
+      })
+      expect(vi.mocked(backend.createTerminalBackend)).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(backend.createTerminalBackend)).toHaveBeenCalledWith({
+        id: specOrchestratorTerminalId('spec-stable-1'),
+        cwd: '/projects/alpha',
+      })
       expect(vi.mocked(backend.closeTerminalBackend)).not.toHaveBeenCalled()
     })
   })

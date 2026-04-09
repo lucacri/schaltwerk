@@ -3,6 +3,7 @@ use crate::domains::sessions::entity::EnrichedSession;
 use crate::domains::sessions::{
     GitEnrichmentTask, apply_git_enrichment, compute_git_for_session,
 };
+use crate::infrastructure::database::SpecMethods;
 use crate::project_manager::ProjectManager;
 use crate::schaltwerk_core::SchaltwerkCore;
 use async_trait::async_trait;
@@ -80,7 +81,9 @@ impl<B: SessionsBackend> SessionsServiceImpl<B> {
             match registry.try_lock() {
                 Ok(guard) => {
                     for session in &mut sessions {
-                        session.attention_required = guard.get(&session.info.session_id);
+                        if let Some(attention_required) = guard.get(&session.info.session_id) {
+                            session.attention_required = Some(attention_required);
+                        }
                     }
                 }
                 Err(_) => {
@@ -138,7 +141,7 @@ impl SessionsBackend for ProjectSessionsBackend {
         let start = std::time::Instant::now();
         log::debug!("ProjectSessionsBackend list_enriched_sessions start call_id={call_id}");
 
-        let (mut sessions, git_tasks) = {
+        let (mut sessions, git_tasks, db) = {
             let core = self.get_core().await?;
             let core_wait = std::time::Instant::now();
             let core = core.read().await;
@@ -154,13 +157,55 @@ impl SessionsBackend for ProjectSessionsBackend {
             }
 
             let manager = core.session_manager();
-            manager
+            let (sessions, git_tasks) = manager
                 .list_enriched_sessions_base()
-                .map_err(|err| err.to_string())?
+                .map_err(|err| err.to_string())?;
+            (sessions, git_tasks, core.db.clone())
         };
 
         let git_results = compute_git_enrichment_parallel(git_tasks).await;
         apply_git_enrichment(&mut sessions, git_results);
+
+        if let Some(registry) = get_session_attention_state() {
+            match registry.try_lock() {
+                Ok(guard) => {
+                    let mut spec_attention_updates = Vec::new();
+
+                    for session in &mut sessions {
+                        let previous_attention = session.attention_required;
+                        let Some(attention_required) = guard.get(&session.info.session_id) else {
+                            continue;
+                        };
+
+                        session.attention_required = Some(attention_required);
+
+                        if session.info.session_state == crate::domains::sessions::entity::SessionState::Spec
+                            && previous_attention != Some(attention_required)
+                            && let Some(stable_id) = session.info.stable_id.as_deref()
+                        {
+                            spec_attention_updates.push((stable_id.to_string(), attention_required));
+                        }
+                    }
+
+                    drop(guard);
+
+                    for (stable_id, attention_required) in spec_attention_updates {
+                        if let Err(err) =
+                            db.update_spec_attention_required(&stable_id, attention_required)
+                        {
+                            log::warn!(
+                                "Failed to persist spec attention for stable_id={stable_id}: {err}"
+                            );
+                        }
+                    }
+                }
+                Err(_) => {
+                    log::debug!(
+                        "ProjectSessionsBackend skipped attention hydration due to lock contention"
+                    );
+                }
+            }
+        }
 
         log::debug!(
             "ProjectSessionsBackend call_id={call_id} done count={} elapsed={}ms",
@@ -210,6 +255,7 @@ mod tests {
         EnrichedSession {
             info: SessionInfo {
                 session_id: name.to_string(),
+                stable_id: Some(format!("{name}-stable")),
                 display_name: None,
                 version_group_id: None,
                 version_number: None,
@@ -233,6 +279,7 @@ mod tests {
                 diff_stats: None,
                 ready_to_merge: false,
                 spec_content: None,
+                spec_stage: None,
                 session_state: SessionState::Running,
                 issue_number: None,
                 issue_url: None,

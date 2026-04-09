@@ -1,5 +1,5 @@
 use super::connection::Database;
-use crate::domains::sessions::entity::Spec;
+use crate::domains::sessions::entity::{Spec, SpecStage};
 use crate::infrastructure::database::timestamps::utc_from_epoch_seconds_lossy;
 use anyhow::Result;
 use chrono::Utc;
@@ -14,6 +14,13 @@ pub trait SpecMethods {
     fn update_spec_content(&self, id: &str, content: &str) -> Result<()>;
     fn update_spec_display_name(&self, id: &str, display_name: &str) -> Result<()>;
     fn update_spec_epic_id(&self, id: &str, epic_id: Option<&str>) -> Result<()>;
+    fn update_spec_stage(&self, id: &str, stage: SpecStage) -> Result<()>;
+    fn update_spec_attention_required(&self, id: &str, attention_required: bool) -> Result<()>;
+    fn update_spec_clarification_started(
+        &self,
+        id: &str,
+        clarification_started: bool,
+    ) -> Result<()>;
     fn update_spec_issue_info(
         &self,
         id: &str,
@@ -37,8 +44,9 @@ impl SpecMethods for Database {
                 id, name, display_name,
                 epic_id, issue_number, issue_url, pr_number, pr_url,
                 repository_path, repository_name, content,
+                stage, attention_required, clarification_started,
                 created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 spec.id,
                 spec.name,
@@ -51,6 +59,9 @@ impl SpecMethods for Database {
                 spec.repository_path.to_string_lossy(),
                 spec.repository_name,
                 spec.content,
+                spec.stage.as_str(),
+                spec.attention_required,
+                spec.clarification_started,
                 spec.created_at.timestamp(),
                 spec.updated_at.timestamp(),
             ],
@@ -65,6 +76,7 @@ impl SpecMethods for Database {
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
                     repository_path, repository_name, content,
+                    stage, attention_required, clarification_started,
                     created_at, updated_at
              FROM specs
              WHERE repository_path = ?1 AND name = ?2",
@@ -80,6 +92,7 @@ impl SpecMethods for Database {
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
                     repository_path, repository_name, content,
+                    stage, attention_required, clarification_started,
                     created_at, updated_at
              FROM specs
              WHERE id = ?1",
@@ -94,6 +107,7 @@ impl SpecMethods for Database {
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
                     repository_path, repository_name, content,
+                    stage, attention_required, clarification_started,
                     created_at, updated_at
              FROM specs
              WHERE repository_path = ?1
@@ -136,6 +150,43 @@ impl SpecMethods for Database {
              SET epic_id = ?1, updated_at = ?2
              WHERE id = ?3",
             params![epic_id, Utc::now().timestamp(), id],
+        )?;
+        Ok(())
+    }
+
+    fn update_spec_stage(&self, id: &str, stage: SpecStage) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE specs
+             SET stage = ?1, updated_at = ?2
+             WHERE id = ?3",
+            params![stage.as_str(), Utc::now().timestamp(), id],
+        )?;
+        Ok(())
+    }
+
+    fn update_spec_attention_required(&self, id: &str, attention_required: bool) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE specs
+             SET attention_required = ?1, updated_at = ?2
+             WHERE id = ?3",
+            params![attention_required, Utc::now().timestamp(), id],
+        )?;
+        Ok(())
+    }
+
+    fn update_spec_clarification_started(
+        &self,
+        id: &str,
+        clarification_started: bool,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE specs
+             SET clarification_started = ?1, updated_at = ?2
+             WHERE id = ?3",
+            params![clarification_started, Utc::now().timestamp(), id],
         )?;
         Ok(())
     }
@@ -192,12 +243,18 @@ fn row_to_spec(row: &Row<'_>) -> rusqlite::Result<Spec> {
         repository_path: PathBuf::from(row.get::<_, String>(8)?),
         repository_name: row.get(9)?,
         content: row.get(10)?,
+        stage: row
+            .get::<_, String>(11)?
+            .parse()
+            .map_err(|err: String| rusqlite::Error::FromSqlConversionFailure(11, rusqlite::types::Type::Text, Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, err))))?,
+        attention_required: row.get(12)?,
+        clarification_started: row.get(13)?,
         created_at: {
-            let ts: i64 = row.get(11)?;
+            let ts: i64 = row.get(14)?;
             utc_from_epoch_seconds_lossy(ts)
         },
         updated_at: {
-            let ts: i64 = row.get(12)?;
+            let ts: i64 = row.get(15)?;
             utc_from_epoch_seconds_lossy(ts)
         },
     })
@@ -228,6 +285,9 @@ mod tests {
             repository_path: PathBuf::from(repo_path),
             repository_name: "test-repo".to_string(),
             content: "spec content".to_string(),
+            stage: SpecStage::Draft,
+            attention_required: false,
+            clarification_started: false,
             created_at: now,
             updated_at: now,
         }
@@ -256,6 +316,22 @@ mod tests {
             .get_spec_by_name(Path::new("/repo"), "named-spec")
             .unwrap();
         assert_eq!(fetched.id, "s2");
+    }
+
+    #[test]
+    fn updates_stage_attention_and_clarification_flags() {
+        let db = create_test_database();
+        let spec = make_spec("s3", "clarify-me", "/repo");
+        db.create_spec(&spec).unwrap();
+
+        db.update_spec_stage("s3", SpecStage::Clarified).unwrap();
+        db.update_spec_attention_required("s3", true).unwrap();
+        db.update_spec_clarification_started("s3", true).unwrap();
+
+        let fetched = db.get_spec_by_id("s3").unwrap();
+        assert_eq!(fetched.stage, SpecStage::Clarified);
+        assert!(fetched.attention_required);
+        assert!(fetched.clarification_started);
     }
 
     #[test]
@@ -390,6 +466,9 @@ mod tests {
             repository_path: PathBuf::from("/repo"),
             repository_name: "test-repo".to_string(),
             content: "content".to_string(),
+            stage: SpecStage::Draft,
+            attention_required: false,
+            clarification_started: false,
             created_at: now,
             updated_at: now,
         };

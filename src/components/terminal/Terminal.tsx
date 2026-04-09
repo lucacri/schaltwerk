@@ -12,7 +12,7 @@ import { Terminal as XTerm, type IDisposable } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
 import { invoke } from '@tauri-apps/api/core'
-import { startOrchestratorTop, startSessionTop, AGENT_START_TIMEOUT_MESSAGE } from '../../common/agentSpawn'
+import { startOrchestratorTop, startSessionTop, startSpecOrchestratorTop, AGENT_START_TIMEOUT_MESSAGE } from '../../common/agentSpawn'
 import { schedulePtyResize } from '../../common/ptyResizeScheduler'
 import { isTopTerminalId, sessionTerminalBase } from '../../common/terminalIdentity'
 import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
@@ -104,6 +104,7 @@ export interface TerminalProps {
     terminalId: string;
     className?: string;
     sessionName?: string;
+    specOrchestratorSessionName?: string;
     isCommander?: boolean;
     agentType?: string;
     readOnly?: boolean;
@@ -137,7 +138,7 @@ const isPathWithinBase = (basePath: string, candidatePath: string) => {
     return candidateNormalized === baseNormalized || candidateNormalized.startsWith(baseWithSlash);
 };
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalId, className = '', sessionName, isCommander = false, agentType, readOnly = false, onTerminalClick, onReady, inputFilter, workingDirectory, previewKey, autoPreviewConfig }, ref) => {
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalId, className = '', sessionName, specOrchestratorSessionName, isCommander = false, agentType, readOnly = false, onTerminalClick, onReady, inputFilter, workingDirectory, previewKey, autoPreviewConfig }, ref) => {
     const { addEventListener, addResizeObserver } = useCleanupRegistry();
     const { resolveEditorAppId } = useOpenInEditor({ sessionNameOverride: sessionName ?? null, isCommander })
     const { isAnyModalOpen } = useModal();
@@ -862,6 +863,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         setAgentLoading(true);
         sessionStorage.removeItem(`schaltwerk:agent-stopped:${terminalId}`);
         clearTerminalStartedTracking([terminalId]);
+        const isSpecOrchestratorTop = Boolean(specOrchestratorSessionName && terminalId.endsWith('-top'))
 
              try {
                  // Provide initial size to avoid early overflow (apply guard)
@@ -879,7 +881,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                      logger.warn(`[Terminal ${terminalId}] Failed to measure before restart:`, e);
                  }
 
-             if (isCommander || (terminalId.includes('orchestrator') && terminalId.endsWith('-top'))) {
+             if (isSpecOrchestratorTop && specOrchestratorSessionName) {
+                 await startSpecOrchestratorTop({ terminalId, specName: specOrchestratorSessionName, measured, agentType });
+             } else if (isCommander || (terminalId.includes('orchestrator') && terminalId.endsWith('-top'))) {
                  await startOrchestratorTop({ terminalId, measured });
              } else if (sessionName) {
                  await startSessionTop({ sessionName, topId: terminalId, measured, agentType });
@@ -893,7 +897,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
              setAgentLoading(false);
              setRestartInFlight(false);
          }
-     }, [agentType, isAgentTopTerminal, isCommander, sessionName, terminalId]);
+     }, [agentType, isAgentTopTerminal, isCommander, sessionName, specOrchestratorSessionName, terminalId]);
 
     useImperativeHandle(ref, () => ({
         focus: () => {
@@ -1944,8 +1948,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         if (isTerminalStartingOrStarted(terminalId)) return;
         if (agentStopped) return;
 
-        const isOrchestratorTop = isCommander || (terminalId.includes('orchestrator') && terminalId.endsWith('-top'));
-        if (!isOrchestratorTop) return;
+        const isSpecOrchestratorTop = Boolean(specOrchestratorSessionName && terminalId.endsWith('-top'));
+        const isProjectOrchestratorTop = !isSpecOrchestratorTop && (isCommander || (terminalId.includes('orchestrator') && terminalId.endsWith('-top')));
+        if (!isProjectOrchestratorTop && !isSpecOrchestratorTop) return;
 
         const start = async () => {
             if (startingTerminals.current.get(terminalId)) {
@@ -1967,8 +1972,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                 } catch (e) {
                     logger.warn(`[Terminal ${terminalId}] Failed to measure size before orchestrator start:`, e);
                 }
-                logger.info(`[Terminal ${terminalId}] Auto-starting Claude orchestrator at ${new Date().toISOString()}`);
-                await startOrchestratorTop({ terminalId, measured });
+                logger.info(`[Terminal ${terminalId}] Auto-starting orchestrator at ${new Date().toISOString()}`);
+                if (isSpecOrchestratorTop && specOrchestratorSessionName) {
+                    await startSpecOrchestratorTop({ terminalId, specName: specOrchestratorSessionName, measured, agentType });
+                } else {
+                    await startOrchestratorTop({ terminalId, measured });
+                }
                 terminalEverStartedRef.current = true;
                 safeTerminalFocusImmediate(() => {
                     terminal.current?.focus();
@@ -2011,7 +2020,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         return () => {
             cancelled = true;
         };
-    }, [agentType, hydrated, terminalId, isCommander, isAnyModalOpen, agentStopped]);
+    }, [agentType, hydrated, terminalId, isCommander, isAnyModalOpen, agentStopped, specOrchestratorSessionName]);
 
     useEffect(() => {
         if (!terminal.current || !resolvedFontFamily) {

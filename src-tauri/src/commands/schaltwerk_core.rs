@@ -130,6 +130,71 @@ async fn get_agent_env_and_cli_args_async(
     }
 }
 
+async fn load_cached_agent_binary_paths() -> std::collections::HashMap<String, String> {
+    if let Some(settings_manager) = SETTINGS_MANAGER.get() {
+        let settings = settings_manager.lock().await;
+        let mut paths = std::collections::HashMap::new();
+
+        for agent in [
+            "claude", "copilot", "codex", "opencode", "gemini", "droid", "qwen", "amp",
+            "kilocode",
+        ] {
+            match settings.get_effective_binary_path(agent) {
+                Ok(path) => {
+                    log::trace!("Cached binary path for {agent}: {path}");
+                    paths.insert(agent.to_string(), path);
+                }
+                Err(e) => log::warn!("Failed to get cached binary path for {agent}: {e}"),
+            }
+        }
+        paths
+    } else {
+        std::collections::HashMap::new()
+    }
+}
+
+fn build_spec_clarification_prompt(spec: &lucode::domains::sessions::entity::Spec) -> String {
+    let title = spec.display_name.as_deref().unwrap_or(&spec.name);
+    format!(
+        "You are the clarification agent for the Lucode spec \"{title}\".\n\nYour job is to turn the draft into a clarified problem definition that is ready for implementation handoff.\n\nRules:\n- Stay at the clarification/problem-definition level.\n- Ask clarifying questions when needed.\n- Inspect the codebase for context when useful.\n- Rewrite the spec content only through Lucode MCP tools such as `lucode_spec_read`, `lucode_draft_update`, `lucode_spec_set_stage`, and `lucode_spec_set_attention`.\n- Structure the rewritten spec with `## Problem` and `## Goal`. Add sections like `## Constraints`, `## Out of Scope`, or `## Decisions` only when they help clarify the request.\n- When you are blocked on missing user input, call `lucode_spec_set_attention` with `attention_required: true` and leave concrete questions in the spec.\n- After the user responds and you are unblocked, call `lucode_spec_set_attention` with `attention_required: false`.\n- When the spec is clear, call `lucode_spec_set_stage` with stage `clarified`.\n- If the spec needs more clarification later, call `lucode_spec_set_stage` with stage `draft`.\n- Do not produce implementation steps, file lists, function signatures, code stubs, or solution plans.\n\nCurrent spec draft:\n\n{content}",
+        content = spec.content
+    )
+}
+
+#[cfg(test)]
+mod spec_clarification_prompt_tests {
+    use super::build_spec_clarification_prompt;
+    use chrono::Utc;
+    use std::path::PathBuf;
+
+    #[test]
+    fn prompt_mentions_attention_tool_and_problem_goal_sections() {
+        let now = Utc::now();
+        let prompt = build_spec_clarification_prompt(&lucode::domains::sessions::entity::Spec {
+            id: "spec-1".to_string(),
+            name: "alpha".to_string(),
+            display_name: Some("Alpha".to_string()),
+            epic_id: None,
+            issue_number: None,
+            issue_url: None,
+            pr_number: None,
+            pr_url: None,
+            repository_path: PathBuf::from("/tmp/repo"),
+            repository_name: "repo".to_string(),
+            content: "rough draft".to_string(),
+            created_at: now,
+            updated_at: now,
+            stage: lucode::domains::sessions::entity::SpecStage::Draft,
+            attention_required: false,
+            clarification_started: false,
+        });
+
+        assert!(prompt.contains("lucode_spec_set_attention"));
+        assert!(prompt.contains("## Problem"));
+        assert!(prompt.contains("## Goal"));
+    }
+}
+
 async fn resolve_generation_agent_and_args(
     fallback_agent: &str,
 ) -> (
@@ -2251,25 +2316,7 @@ pub async fn schaltwerk_core_start_claude_orchestrator(
         .ok()
         .flatten();
 
-    let binary_paths = if let Some(settings_manager) = SETTINGS_MANAGER.get() {
-        let settings = settings_manager.lock().await;
-        let mut paths = std::collections::HashMap::new();
-
-        for agent in [
-            "claude", "copilot", "codex", "opencode", "gemini", "droid", "qwen", "amp", "kilocode",
-        ] {
-            match settings.get_effective_binary_path(agent) {
-                Ok(path) => {
-                    log::trace!("Cached binary path for {agent}: {path}");
-                    paths.insert(agent.to_string(), path);
-                }
-                Err(e) => log::warn!("Failed to get cached binary path for {agent}: {e}"),
-            }
-        }
-        paths
-    } else {
-        std::collections::HashMap::new()
-    };
+    let binary_paths = load_cached_agent_binary_paths().await;
 
     let command_spec = if fresh_session.unwrap_or(false) {
         manager
@@ -2338,6 +2385,88 @@ pub async fn schaltwerk_core_start_claude_orchestrator(
                     terminal_id: &terminal_id,
                     error: err.as_str(),
                 },
+            );
+            if let Ok(manager) = get_terminal_manager().await
+                && let Err(close_err) = manager.close_terminal(terminal_id.clone()).await
+            {
+                log::warn!(
+                    "[AGENT_LAUNCH_TRACE] Failed to close terminal {terminal_id} after launch failure: {close_err}"
+                );
+            }
+            Err(err)
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_start_spec_orchestrator(
+    app: tauri::AppHandle,
+    terminal_id: String,
+    spec_name: String,
+    cols: Option<u16>,
+    rows: Option<u16>,
+    agent_type: Option<String>,
+) -> Result<String, String> {
+    let agent_label = agent_type.as_deref().unwrap_or("claude");
+    log::info!(
+        "[AGENT_LAUNCH_TRACE] Starting {agent_label} for spec orchestrator '{spec_name}' in terminal: {terminal_id}"
+    );
+
+    let core = get_core_read().await.map_err(|e| {
+        log::error!("Failed to get schaltwerk_core for spec orchestrator: {e}");
+        format!("Failed to initialize spec orchestrator: {e}")
+    })?;
+
+    let db = core.db.clone();
+    let repo_path = core.repo_path.clone();
+    let manager = core.session_manager();
+    let spec = manager
+        .get_spec(&spec_name)
+        .map_err(|e| format!("Failed to load spec '{spec_name}': {e}"))?;
+    let binary_paths = load_cached_agent_binary_paths().await;
+
+    let initial_prompt = if spec.clarification_started {
+        None
+    } else {
+        Some(build_spec_clarification_prompt(&spec))
+    };
+
+    let command_spec = manager
+        .start_agent_in_orchestrator(&binary_paths, agent_type.as_deref(), initial_prompt.as_deref())
+        .map_err(|e| {
+            log::error!("Failed to build spec orchestrator command: {e}");
+            format!("Failed to start {agent_label} for spec '{spec_name}': {e}")
+        })?;
+
+    drop(core);
+
+    let launch_result = agent_launcher::launch_in_terminal(
+        terminal_id.clone(),
+        command_spec,
+        &db,
+        repo_path.as_path(),
+        cols,
+        rows,
+        true,
+    )
+    .await;
+
+    match launch_result {
+        Ok(_) => {
+            if !spec.clarification_started
+                && let Err(err) = db.update_spec_clarification_started(&spec.id, true)
+            {
+                log::warn!(
+                    "Failed to persist clarification_started for spec '{}': {err}",
+                    spec.name
+                );
+            }
+            emit_terminal_agent_started(&app, &terminal_id, Some(&spec.name));
+            Ok("spec-orchestrator-started".to_string())
+        }
+        Err(err) => {
+            log::error!(
+                "[AGENT_LAUNCH_TRACE] Spec orchestrator launch failed for {terminal_id}: {err}"
             );
             if let Ok(manager) = get_terminal_manager().await
                 && let Err(close_err) = manager.close_terminal(terminal_id.clone()).await
@@ -2756,6 +2885,60 @@ pub async fn schaltwerk_core_update_spec_content(
         .update_spec_content(&name, &content)
         .map_err(|e| format!("Failed to update spec content: {e}"))?;
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_set_spec_stage(
+    app: tauri::AppHandle,
+    name: String,
+    stage: String,
+) -> Result<(), String> {
+    log::info!("Updating spec stage: {name} -> {stage}");
+
+    let parsed_stage = match stage.as_str() {
+        "draft" => lucode::domains::sessions::entity::SpecStage::Draft,
+        "clarified" => lucode::domains::sessions::entity::SpecStage::Clarified,
+        _ => return Err(format!("Invalid spec stage: {stage}")),
+    };
+
+    let core = get_core_write().await?;
+    let manager = core.session_manager();
+    let spec = manager
+        .get_spec(&name)
+        .map_err(|e| format!("Failed to load spec '{name}': {e}"))?;
+
+    core.db
+        .update_spec_stage(&spec.id, parsed_stage)
+        .map_err(|e| format!("Failed to update spec stage: {e}"))?;
+
+    events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SpecSync);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_set_spec_attention_required(
+    app: tauri::AppHandle,
+    name: String,
+    attention_required: bool,
+) -> Result<(), String> {
+    log::info!("Updating spec attention requirement: {name} -> {attention_required}");
+
+    let core = get_core_write().await?;
+    let manager = core.session_manager();
+    let spec = manager
+        .get_spec(&name)
+        .map_err(|e| format!("Failed to load spec '{name}': {e}"))?;
+
+    core.db
+        .update_spec_attention_required(&spec.id, attention_required)
+        .map_err(|e| format!("Failed to update spec attention: {e}"))?;
+
+    if !attention_required {
+        clear_session_attention_state(name);
+    }
+
+    events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SpecSync);
     Ok(())
 }
 

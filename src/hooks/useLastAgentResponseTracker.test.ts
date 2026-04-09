@@ -5,7 +5,7 @@ import { createElement, type ReactNode } from 'react'
 import { terminalOutputManager } from '../terminal/stream/terminalOutputManager'
 import { allSessionsAtom } from '../store/atoms/sessions'
 import { lastAgentResponseMapAtom, agentResponseTickAtom } from '../store/atoms/lastAgentResponse'
-import { sessionTerminalGroup } from '../common/terminalIdentity'
+import { sessionTerminalGroup, specOrchestratorTerminalId } from '../common/terminalIdentity'
 import type { EnrichedSession } from '../types/session'
 import { useLastAgentResponseTracker } from './useLastAgentResponseTracker'
 
@@ -34,6 +34,7 @@ function createSession(
   return {
     info: {
       session_id: overrides.session_id ?? 'test-session',
+      stable_id: overrides.stable_id ?? `${overrides.session_id ?? 'test-session'}-stable-id`,
       branch: overrides.branch ?? 'feature',
       worktree_path: overrides.worktree_path ?? '/tmp/test',
       base_branch: overrides.base_branch ?? 'main',
@@ -82,15 +83,18 @@ describe('useLastAgentResponseTracker', () => {
     expect(mockAddListener).toHaveBeenCalledWith(betaTopId, expect.any(Function))
   })
 
-  it('does NOT register listeners for spec sessions', () => {
+  it('registers listeners for spec clarification terminals', () => {
     const sessions = [
-      createSession({ session_id: 'spec-session', session_state: 'spec' }),
+      createSession({ session_id: 'spec-session', stable_id: 'spec-stable', session_state: 'spec' }),
     ]
     store.set(allSessionsAtom, sessions)
 
     renderHook(() => useLastAgentResponseTracker(), { wrapper: createWrapper() })
 
-    expect(mockAddListener).not.toHaveBeenCalled()
+    expect(mockAddListener).toHaveBeenCalledWith(
+      specOrchestratorTerminalId('spec-stable'),
+      expect.any(Function),
+    )
   })
 
   it('registers listeners for reviewed sessions (they still have terminals)', () => {

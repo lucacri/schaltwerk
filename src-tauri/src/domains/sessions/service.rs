@@ -217,7 +217,7 @@ use crate::{
     domains::sessions::entity::ArchivedSpec,
     domains::sessions::entity::{
         DiffStats, EnrichedSession, Epic, FilterMode, GitStats, Session, SessionInfo,
-        SessionState, SessionStatus, SessionStatusType, SessionType, SortMode, Spec,
+        SessionState, SessionStatus, SessionStatusType, SessionType, SortMode, Spec, SpecStage,
     },
     domains::sessions::repository::SessionDbManager,
     domains::sessions::utils::SessionUtils,
@@ -2673,6 +2673,7 @@ impl SessionManager {
 
             let info = SessionInfo {
                 session_id: spec.name.clone(),
+                stable_id: Some(spec.id.clone()),
                 display_name: spec.display_name.clone(),
                 version_group_id: None,
                 version_number: None,
@@ -2699,6 +2700,7 @@ impl SessionManager {
                 diff_stats: None,
                 ready_to_merge: false,
                 spec_content: Some(spec.content.clone()),
+                spec_stage: Some(spec.stage.clone()),
                 session_state: SessionState::Spec,
                 issue_number: spec.issue_number,
                 issue_url: spec.issue_url.clone(),
@@ -2713,7 +2715,7 @@ impl SessionManager {
                 info,
                 status: None,
                 terminals: Vec::new(),
-                attention_required: None,
+                attention_required: Some(spec.attention_required),
             });
         }
 
@@ -2726,6 +2728,7 @@ impl SessionManager {
             if is_spec_session {
                 let info = SessionInfo {
                     session_id: session.name.clone(),
+                    stable_id: Some(session.id.clone()),
                     display_name: session.display_name.clone(),
                     version_group_id: session.version_group_id.clone(),
                     version_number: session.version_number,
@@ -2755,6 +2758,7 @@ impl SessionManager {
                     diff_stats: None,
                     ready_to_merge: session.ready_to_merge,
                     spec_content: session.spec_content.clone(),
+                    spec_stage: Some(SpecStage::Draft),
                     session_state: session.session_state.clone(),
                     issue_number: session.issue_number,
                     issue_url: session.issue_url.clone(),
@@ -2811,9 +2815,10 @@ impl SessionManager {
 
             let current_index = enriched.len();
 
-            let info = SessionInfo {
-                session_id: session.name.clone(),
-                display_name: session.display_name.clone(),
+                let info = SessionInfo {
+                    session_id: session.name.clone(),
+                    stable_id: Some(session.id.clone()),
+                    display_name: session.display_name.clone(),
                 version_group_id: session.version_group_id.clone(),
                 version_number: session.version_number,
                 epic: session
@@ -2837,9 +2842,10 @@ impl SessionManager {
                 original_agent_type: original_agent_type.or_else(|| default_agent_type.clone()),
                 current_task: session.initial_prompt.clone(),
                 diff_stats: None,
-                ready_to_merge: session.ready_to_merge,
-                spec_content: session.spec_content.clone(),
-                session_state,
+                    ready_to_merge: session.ready_to_merge,
+                    spec_content: session.spec_content.clone(),
+                    spec_stage: None,
+                    session_state,
                 issue_number: session.issue_number,
                 issue_url: session.issue_url.clone(),
                 pr_number: session.pr_number,
@@ -3809,6 +3815,9 @@ impl SessionManager {
             repository_path: self.repo_path.clone(),
             repository_name: repo_name,
             content: spec_content.to_string(),
+            stage: SpecStage::Draft,
+            attention_required: false,
+            clarification_started: false,
             created_at: now,
             updated_at: now,
         };

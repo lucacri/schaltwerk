@@ -5,7 +5,7 @@ type SetAtomFunction = <Value, Result>(
   value: Value,
 ) => Result
 import { invoke } from '@tauri-apps/api/core'
-import { sessionTerminalGroup } from '../../common/terminalIdentity'
+import { sessionTerminalGroup, specOrchestratorTerminalId } from '../../common/terminalIdentity'
 import { hasTerminalInstance, removeTerminalInstance } from '../../terminal/registry/terminalRegistry'
 import { TauriCommands } from '../../common/tauriCommands'
 import { emitUiEvent, listenUiEvent, UiEvent } from '../../common/uiEvents'
@@ -14,7 +14,7 @@ import { createTerminalBackend, closeTerminalBackend } from '../../terminal/tran
 import { clearTerminalStartedTracking } from '../../components/terminal/Terminal'
 import { logger } from '../../utils/logger'
 import { startSwitchPhaseProfile } from '../../terminal/profiling/switchProfiler'
-import type { RawSession } from '../../types/session'
+import type { RawSession, RawSpec } from '../../types/session'
 import { FilterMode } from '../../types/sessionFilters'
 import { projectPathAtom } from './project'
 import { hydrateProjectSessionsForSwitchActionAtom } from './sessions'
@@ -22,6 +22,7 @@ import { hydrateProjectSessionsForSwitchActionAtom } from './sessions'
 export interface Selection {
   kind: 'session' | 'orchestrator'
   payload?: string
+  stableId?: string
   worktreePath?: string
   sessionState?: 'spec' | 'processing' | 'running' | 'reviewed'
   projectPath?: string | null
@@ -37,6 +38,7 @@ type NormalizedSessionState = NonNullable<Selection['sessionState']>
 
 interface SessionSnapshot {
   sessionId: string
+  stableId?: string
   sessionState: NormalizedSessionState
   worktreePath?: string
   branch?: string
@@ -132,7 +134,16 @@ function computeTerminals(selection: Selection, projectPath: string | null): Ter
     }
   }
 
-  if (selection.kind === 'session' && (selection.sessionState === 'spec' || selection.sessionState === 'processing')) {
+  if (selection.kind === 'session' && selection.sessionState === 'spec') {
+    const stableId = selection.stableId ?? selection.payload ?? 'unknown'
+    return {
+      top: specOrchestratorTerminalId(stableId),
+      bottomBase: '',
+      workingDirectory: projectPath ?? '',
+    }
+  }
+
+  if (selection.kind === 'session' && selection.sessionState === 'processing') {
     return {
       top: '',
       bottomBase: '',
@@ -152,6 +163,13 @@ function computeTerminals(selection: Selection, projectPath: string | null): Ter
   }
 }
 
+function stableIdChangeMatters(
+  currentState?: Selection['sessionState'],
+  nextState?: Selection['sessionState'],
+): boolean {
+  return currentState === 'spec' || nextState === 'spec'
+}
+
 function selectionEquals(a: Selection, b: Selection): boolean {
   if (a.kind !== b.kind) {
     return false
@@ -162,8 +180,11 @@ function selectionEquals(a: Selection, b: Selection): boolean {
   if (b.kind !== 'session') {
     return false
   }
+  const stableIdsEqual = !stableIdChangeMatters(a.sessionState, b.sessionState)
+    || (a.stableId ?? null) === (b.stableId ?? null)
   return (
     (a.payload ?? null) === (b.payload ?? null) &&
+    stableIdsEqual &&
     (a.sessionState ?? null) === (b.sessionState ?? null) &&
     (a.worktreePath ?? null) === (b.worktreePath ?? null) &&
     (a.projectPath ?? null) === (b.projectPath ?? null)
@@ -234,10 +255,19 @@ function normalizeSessionState(state?: string | null, status?: string, readyToMe
 function snapshotFromRawSession(raw: RawSession): SessionSnapshot {
   return {
     sessionId: raw.name,
+    stableId: raw.id,
     sessionState: normalizeSessionState(raw.session_state, raw.status, raw.ready_to_merge),
     worktreePath: raw.worktree_path ?? undefined,
     branch: raw.branch ?? undefined,
     readyToMerge: raw.ready_to_merge ?? undefined,
+  }
+}
+
+function snapshotFromRawSpec(raw: RawSpec): SessionSnapshot {
+  return {
+    sessionId: raw.name,
+    stableId: raw.id,
+    sessionState: 'spec',
   }
 }
 
@@ -297,20 +327,41 @@ export const getSessionSnapshotActionAtom = atom(
     }
 
     const fetchPromise = (async () => {
+      let sessionError: unknown = null
+
       try {
         const raw = await invoke<RawSession>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionId })
-        if (!raw) {
-          return null
+        if (raw) {
+          const snapshot = snapshotFromRawSession(raw)
+          sessionSnapshotsCache.set(cacheKey, snapshot)
+          return snapshot
         }
-        const snapshot = snapshotFromRawSession(raw)
-        sessionSnapshotsCache.set(cacheKey, snapshot)
-        return snapshot
       } catch (error) {
-        logger.warn('[selection] Failed to fetch session snapshot', error)
-        return null
+        sessionError = error
+        logger.debug('[selection] Session snapshot lookup failed, trying spec snapshot', {
+          sessionId,
+          error,
+        })
+      }
+
+      try {
+        const rawSpec = await invoke<RawSpec>(TauriCommands.SchaltwerkCoreGetSpec, { name: sessionId })
+        if (rawSpec) {
+          const snapshot = snapshotFromRawSpec(rawSpec)
+          sessionSnapshotsCache.set(cacheKey, snapshot)
+          return snapshot
+        }
+      } catch (specError) {
+        logger.warn('[selection] Failed to fetch session/spec snapshot', {
+          sessionId,
+          sessionError,
+          specError,
+        })
       } finally {
         sessionFetchPromises.delete(cacheKey)
       }
+
+      return null
     })()
 
     sessionFetchPromises.set(cacheKey, fetchPromise)
@@ -323,6 +374,9 @@ function selectionCacheKey(selection: Selection, projectPath?: string | null): s
     return `orchestrator:${projectPath ?? 'none'}`
   }
   const scopedProject = projectPath ?? selection.projectPath ?? 'none'
+  if (selection.sessionState === 'spec' && selection.stableId) {
+    return `session:${scopedProject}:spec:${selection.stableId}`
+  }
   return `session:${scopedProject}:${selection.payload ?? 'unknown'}`
 }
 
@@ -398,7 +452,10 @@ async function validateOrchestratorTerminalCreation(cwd: string | undefined): Pr
 
 async function evaluateTerminalCreation(selection: Selection, terminals: TerminalSet): Promise<TerminalCreationDecision> {
   if (selection.kind === 'session') {
-    if (selection.sessionState === 'spec' || selection.sessionState === 'processing') {
+    if (selection.sessionState === 'spec') {
+      return validateOrchestratorTerminalCreation(terminals.workingDirectory)
+    }
+    if (selection.sessionState === 'processing') {
       return { shouldCreateTerminals: false, cleanupMissingWorktree: false }
     }
     return validateSessionTerminalCreation(selection, terminals.workingDirectory)
@@ -526,12 +583,15 @@ export const setSelectionActionAtom = atom(
       const shouldRemember = (remember ?? true) && Boolean(rememberTargetProject)
       let rememberApplied = false
       if (selection.kind === 'session' && selection.payload) {
-        const needsSnapshot = !selection.worktreePath || !selection.sessionState
+        const needsSnapshot = !selection.sessionState
+          || (selection.sessionState === 'spec' && !selection.stableId)
+          || (selection.sessionState !== 'spec' && !selection.worktreePath)
         if (needsSnapshot) {
           const snapshot = await set(getSessionSnapshotActionAtom, { sessionId: selection.payload })
           if (snapshot) {
             resolvedSelection = {
               ...selection,
+              stableId: snapshot.stableId,
               worktreePath: snapshot.worktreePath,
               sessionState: snapshot.sessionState,
             }
@@ -541,6 +601,18 @@ export const setSelectionActionAtom = atom(
 
       const assignedProjectPath = rememberTargetProject ?? projectPath ?? null
       const enrichedSelection = withProjectPath(resolvedSelection, assignedProjectPath)
+
+      if (
+        current.kind === 'session'
+        && current.sessionState === 'spec'
+        && current.stableId
+        && enrichedSelection.kind === 'session'
+        && enrichedSelection.payload === current.payload
+        && enrichedSelection.sessionState
+        && enrichedSelection.sessionState !== 'spec'
+      ) {
+        await set(clearTerminalTrackingActionAtom, [specOrchestratorTerminalId(current.stableId)])
+      }
 
       const rememberSelectionIfNeeded = () => {
         if (!shouldRemember || rememberApplied || !rememberTargetProject) {
@@ -554,7 +626,7 @@ export const setSelectionActionAtom = atom(
       const cacheKey = selectionCacheKey(enrichedSelection, projectPath)
       const pendingRecreate = selectionsNeedingRecreate.has(cacheKey)
       const trackedTopCwd = terminalWorkingDirectory.get(terminals.top)
-      const trackedBottomCwd = terminalWorkingDirectory.get(terminals.bottomBase)
+      const trackedBottomCwd = terminals.bottomBase ? terminalWorkingDirectory.get(terminals.bottomBase) : undefined
       const workingDirectoryChanged = Boolean(
         terminals.workingDirectory &&
         ((trackedTopCwd && trackedTopCwd !== terminals.workingDirectory) ||
@@ -566,8 +638,8 @@ export const setSelectionActionAtom = atom(
         tracked = new Set<string>()
         terminalsCache.set(cacheKey, tracked)
       }
-      let missingTop = !tracked.has(terminals.top)
-      let missingBottom = !tracked.has(terminals.bottomBase)
+      let missingTop = terminals.top ? !tracked.has(terminals.top) : false
+      let missingBottom = terminals.bottomBase ? !tracked.has(terminals.bottomBase) : false
 
       const unchanged = !forceRecreate && selectionEquals(current, enrichedSelection)
 
@@ -597,14 +669,22 @@ export const setSelectionActionAtom = atom(
 
       if (shouldTouchTerminals) {
         if (shouldCreateTerminals) {
-          await Promise.all([
-            ensureTerminal(terminals.top, terminals.workingDirectory, tracked, effectiveForceRecreate, cacheKey),
-            ensureTerminal(terminals.bottomBase, terminals.workingDirectory, tracked, effectiveForceRecreate, cacheKey),
-          ])
+          const createTasks: Promise<void>[] = []
+          if (terminals.top) {
+            createTasks.push(
+              ensureTerminal(terminals.top, terminals.workingDirectory, tracked, effectiveForceRecreate, cacheKey),
+            )
+          }
+          if (terminals.bottomBase) {
+            createTasks.push(
+              ensureTerminal(terminals.bottomBase, terminals.workingDirectory, tracked, effectiveForceRecreate, cacheKey),
+            )
+          }
+          await Promise.all(createTasks)
         }
 
         if (cleanupTerminalsDueToMissingWorktree) {
-          await set(clearTerminalTrackingActionAtom, [terminals.top, terminals.bottomBase])
+          await set(clearTerminalTrackingActionAtom, [terminals.top, terminals.bottomBase].filter(Boolean))
           selectionsNeedingRecreate.add(cacheKey)
           effectiveForceRecreate = true
           missingTop = true
@@ -632,8 +712,9 @@ export const setSelectionActionAtom = atom(
 export const clearTerminalTrackingActionAtom = atom(
   null,
   async (_get, _set, terminalIds: string[]): Promise<void> => {
+    const ids = terminalIds.filter(Boolean)
     try {
-      for (const id of terminalIds) {
+      for (const id of ids) {
         try {
           await closeTerminalBackend(id)
         } catch (error) {
@@ -666,7 +747,7 @@ export const clearTerminalTrackingActionAtom = atom(
       }
     } finally {
       try {
-        clearTerminalStartedTracking(terminalIds)
+        clearTerminalStartedTracking(ids)
       } catch (error) {
         logger.warn('[selection] Failed to clear terminal started tracking during cleanup', { error })
       }
@@ -749,22 +830,30 @@ async function handleSessionStateUpdate(
   }
 }
 
-function findSpecReplacement(sessionsPayload: unknown[], previousId: string): { id: string; worktreePath?: string } | null {
+function findSpecReplacement(sessionsPayload: unknown[], previousId: string): { id: string; stableId?: string; worktreePath?: string } | null {
   const normalizedPrev = previousId.trim()
   const candidates = sessionsPayload
-    .map(item => (item as { info?: { session_id?: string; session_state?: string | null; status?: string; worktree_path?: string } })?.info)
-    .filter(info => info && normalizeSessionState(info.session_state, info.status) === 'spec') as Array<{ session_id?: string; worktree_path?: string }>
+    .map(item => (item as { info?: { session_id?: string; stable_id?: string; session_state?: string | null; status?: string; worktree_path?: string } })?.info)
+    .filter(info => info && normalizeSessionState(info.session_state, info.status) === 'spec') as Array<{ session_id?: string; stable_id?: string; worktree_path?: string }>
 
   if (!candidates.length) return null
 
   const exact = candidates.find(info => info.session_id === normalizedPrev)
   if (exact?.session_id) {
-    return { id: exact.session_id, worktreePath: exact.worktree_path ?? undefined }
+    return {
+      id: exact.session_id,
+      stableId: exact.stable_id ?? undefined,
+      worktreePath: exact.worktree_path ?? undefined,
+    }
   }
 
   const prefixed = candidates.find(info => info.session_id?.startsWith(`${normalizedPrev}-`))
   if (prefixed?.session_id) {
-    return { id: prefixed.session_id, worktreePath: prefixed.worktree_path ?? undefined }
+    return {
+      id: prefixed.session_id,
+      stableId: prefixed.stable_id ?? undefined,
+      worktreePath: prefixed.worktree_path ?? undefined,
+    }
   }
 
   return null
@@ -829,6 +918,7 @@ export const setProjectPathActionAtom = atom(
         const sanitized: Selection = {
           kind: 'session',
           payload: remembered.payload,
+          stableId: snapshot.stableId ?? remembered.stableId,
           sessionState,
           worktreePath,
         }
@@ -906,6 +996,7 @@ export const initializeSelectionEventsActionAtom = atom(
             if (snapshot) {
               target = {
                 ...value,
+                stableId: snapshot.stableId,
                 worktreePath: snapshot.worktreePath,
                 sessionState: snapshot.sessionState,
               }
@@ -999,6 +1090,7 @@ export const initializeSelectionEventsActionAtom = atom(
           ? {
               kind: 'session',
               payload: replacement.id,
+              stableId: replacement.stableId,
               sessionState: 'spec',
               worktreePath: replacement.worktreePath,
               projectPath: activeProjectPath ?? undefined,
@@ -1021,13 +1113,20 @@ export const initializeSelectionEventsActionAtom = atom(
         return
       }
 
-      if (latest.worktreePath === snapshot.worktreePath && latest.sessionState === snapshot.sessionState) {
+      const stableIdChanged = stableIdChangeMatters(latest.sessionState, snapshot.sessionState)
+        && (latest.stableId ?? null) !== (snapshot.stableId ?? null)
+      if (
+        !stableIdChanged
+        && latest.worktreePath === snapshot.worktreePath
+        && latest.sessionState === snapshot.sessionState
+      ) {
         return
       }
 
       await set(setSelectionActionAtom, {
         selection: {
           ...latest,
+          stableId: snapshot.stableId ?? latest.stableId,
           worktreePath: snapshot.worktreePath,
           sessionState: snapshot.sessionState,
         },
@@ -1070,9 +1169,19 @@ export const initializeSelectionEventsActionAtom = atom(
         if (latest.kind !== 'session' || latest.payload !== sessionId) {
           return
         }
+        const stableIdChanged = stableIdChangeMatters(latest.sessionState, snapshot.sessionState)
+          && (latest.stableId ?? null) !== (snapshot.stableId ?? null)
+        if (
+          !stableIdChanged
+          && latest.worktreePath === snapshot.worktreePath
+          && latest.sessionState === snapshot.sessionState
+        ) {
+          return
+        }
         await set(setSelectionActionAtom, {
           selection: {
             ...latest,
+            stableId: snapshot.stableId ?? latest.stableId,
             worktreePath: snapshot.worktreePath,
             sessionState: snapshot.sessionState,
           },

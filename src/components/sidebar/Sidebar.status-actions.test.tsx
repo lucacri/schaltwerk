@@ -170,7 +170,7 @@ describe('Sidebar status indicators and actions', () => {
     emitSpy.mockClear()
 
     const refineButton = within(screen.getByText('Spec Alpha').closest('[role="button"]') as HTMLElement)
-      .getByLabelText(/Refine spec/i)
+      .getByLabelText(/Clarify spec/i)
     fireEvent.click(refineButton)
 
     await waitFor(() => {
@@ -179,21 +179,14 @@ describe('Sidebar status indicators and actions', () => {
           event === uiEvents.UiEvent.SelectionChanged &&
           typeof detail === 'object' &&
           detail !== null &&
-          (detail as { kind?: string }).kind === 'orchestrator',
+          (detail as { kind?: string; payload?: string; sessionState?: string }).kind === 'session' &&
+          (detail as { kind?: string; payload?: string; sessionState?: string }).payload === 'spec-alpha' &&
+          (detail as { kind?: string; payload?: string; sessionState?: string }).sessionState === 'spec',
       )
       expect(selectionChange).toBeDefined()
     })
-
-    await waitFor(() => {
-      const orchestratorBtn = screen.getByLabelText(/Select orchestrator/i)
-      expect(orchestratorBtn.className).toContain('session-ring-blue')
-    })
-
-    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.OpenSpecInOrchestrator, { sessionName: 'spec-alpha' })
-    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.RefineSpecInNewTab, {
-      sessionName: 'spec-alpha',
-      displayName: 'Spec Alpha',
-    })
+    expect(emitSpy).not.toHaveBeenCalledWith(uiEvents.UiEvent.OpenSpecInOrchestrator, expect.anything())
+    expect(emitSpy).not.toHaveBeenCalledWith(uiEvents.UiEvent.RefineSpecInNewTab, expect.anything())
   })
 
   it('dispatches cancel event with correct details', async () => {

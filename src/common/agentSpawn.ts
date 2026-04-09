@@ -260,3 +260,72 @@ export async function startOrchestratorTop(params: {
     throw e
   }
 }
+
+export async function startSpecOrchestratorTop(params: {
+  terminalId: string
+  specName: string
+  measured?: { cols?: number | null; rows?: number | null }
+  agentType?: string
+}) {
+  const {
+    terminalId,
+    specName,
+    measured,
+    agentType: requestedAgentType,
+  } = params
+
+  if (hasInflight(terminalId) || isTerminalStartingOrStarted(terminalId)) return
+
+  const agentType = requestedAgentType ?? DEFAULT_AGENT
+  const lifecycleBase = { terminalId, sessionName: specName, agentType }
+  const { cols, rows } = computeSpawnSize({ topId: terminalId, measured })
+  const timeoutMs = determineStartTimeoutMs(agentType)
+  const command = TauriCommands.SchaltwerkCoreStartSpecOrchestrator
+
+  markTerminalStarting(terminalId)
+  const spawnedAt = Date.now()
+  recordAgentLifecycle({ ...lifecycleBase, state: 'spawned', whenMs: spawnedAt })
+  emitUiEvent(UiEvent.AgentLifecycle, { ...lifecycleBase, state: 'spawned', occurredAtMs: spawnedAt })
+
+  try {
+    await singleflight(terminalId, async () => {
+      try {
+        await withAgentStartTimeout(
+          invoke(command, {
+            terminalId,
+            specName,
+            cols,
+            rows,
+            ...(requestedAgentType ? { agentType: requestedAgentType } : {}),
+          }),
+          timeoutMs,
+          { id: terminalId, command }
+        )
+        const readyAt = Date.now()
+        recordAgentLifecycle({ ...lifecycleBase, state: 'ready', whenMs: readyAt })
+        emitUiEvent(UiEvent.AgentLifecycle, { ...lifecycleBase, state: 'ready', occurredAtMs: readyAt })
+      } catch (error) {
+        const failedAt = Date.now()
+        const message = getErrorMessage(error)
+        recordAgentLifecycle({ ...lifecycleBase, state: 'failed', whenMs: failedAt, reason: message })
+        emitUiEvent(UiEvent.AgentLifecycle, {
+          ...lifecycleBase,
+          state: 'failed',
+          occurredAtMs: failedAt,
+          reason: message,
+        })
+        throw error
+      }
+    })
+  } catch (e) {
+    try {
+      clearTerminalStartState([terminalId])
+    } catch (cleanupErr) {
+      logger.debug(
+        `[agentSpawn] Failed to clear terminal start state during spec orchestrator error cleanup for ${terminalId}`,
+        cleanupErr
+      )
+    }
+    throw e
+  }
+}

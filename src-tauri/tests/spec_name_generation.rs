@@ -3,7 +3,7 @@
 
 use chrono::Utc;
 use lucode::domains::agents::naming::{NameGenerationArgs, generate_spec_display_name};
-use lucode::domains::sessions::entity::Spec;
+use lucode::domains::sessions::entity::{Spec, SpecStage};
 use lucode::infrastructure::database::Database;
 use lucode::infrastructure::database::SpecMethods;
 use std::fs;
@@ -30,6 +30,9 @@ async fn spec_name_generation_updates_spec_display_name() {
         repository_path: repo_path.clone(),
         repository_name: "repo".to_string(),
         content: "Build the docs for the API".to_string(),
+        stage: SpecStage::Draft,
+        attention_required: false,
+        clarification_started: false,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };

@@ -75,7 +75,7 @@ export function getSessionCardSurfaceClasses({
   sessionState,
   isSelected,
   isReviewedState: _isReviewedState,
-  isRunning: _isRunning,
+  isRunning,
   isIdle,
   hasFollowUpMessage,
   willBeDeleted,
@@ -97,7 +97,7 @@ export function getSessionCardSurfaceClasses({
     className = clsx(className, "ring-2 ring-[var(--color-accent-purple-border)] z-10")
   }
 
-  if (sessionState === "running") {
+  if (sessionState === "running" || (sessionState === "spec" && isRunning)) {
     style['--session-card-border'] = 'var(--color-border-subtle)'
     style['--session-card-bg'] = 'rgb(var(--color-bg-elevated-rgb) / 0.5)'
     style['--session-card-hover-bg'] = 'rgb(var(--color-bg-hover-rgb) / 0.5)'
@@ -335,9 +335,9 @@ export const SessionCard = memo<SessionCardProps>(
         style={surface.style}
         aria-label={getAccessibilityLabel(isSelected, index)}
       >
-        {sessionState !== "spec" && (() => {
+        {(sessionState !== "spec" || isRunning) && (() => {
           const isIdle = !!s.attention_required
-          const isActivelyRunning = !isIdle && sessionState === "running" && !isReadyToMerge
+          const isActivelyRunning = !isIdle && (sessionState === "running" || isRunning) && !isReadyToMerge
           const stripColor = isIdle
             ? "var(--color-accent-yellow)"
             : isActivelyRunning
@@ -388,6 +388,19 @@ export const SessionCard = memo<SessionCardProps>(
                   sessionName
                 )}
               </div>
+            {sessionState === "spec" && s.spec_stage && (
+              <span
+                className="flex-shrink-0"
+                style={{
+                  ...sessionText.badge,
+                  color: s.spec_stage === "clarified"
+                    ? "var(--color-accent-green-light)"
+                    : "var(--color-accent-yellow-light)",
+                }}
+              >
+                {s.spec_stage === "clarified" ? "Clarified" : "Draft"}
+              </span>
+            )}
             {s.attention_required && (
               <span
                 className="flex-shrink-0"

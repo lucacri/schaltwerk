@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, waitFor, act, screen } from '@testing-library/react'
+import { render, waitFor, act, screen, fireEvent } from '@testing-library/react'
 import { TauriCommands } from '../../common/tauriCommands'
-import * as uiEvents from '../../common/uiEvents'
 
 const mockFocusEnd = vi.fn()
+const updateSessionSpecContentMock = vi.hoisted(() => vi.fn())
 
 interface SpecContentMock {
   content: string
@@ -16,6 +16,8 @@ let specContentMock: SpecContentMock = {
   displayName: 'test-spec',
   hasData: true
 }
+
+let sessionsMock: Array<{ info: { session_id: string; spec_stage?: 'draft' | 'clarified'; epic?: null } }> = []
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(), UnlistenFn: vi.fn() }))
@@ -33,6 +35,13 @@ vi.mock('../../hooks/useProjectFileIndex', () => ({
 
 vi.mock('../../hooks/useSpecContent', () => ({
   useSpecContent: () => specContentMock
+}))
+
+vi.mock('../../hooks/useSessions', () => ({
+  useSessions: () => ({
+    sessions: sessionsMock,
+    updateSessionSpecContent: updateSessionSpecContentMock,
+  }),
 }))
 
 vi.mock('./MarkdownEditor', async () => {
@@ -73,7 +82,9 @@ describe('SpecEditor keyboard shortcuts', () => {
       displayName: 'test-spec',
       hasData: true
     }
+    sessionsMock = []
     Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (Macintosh)', configurable: true })
+    updateSessionSpecContentMock.mockReset()
 
     vi.mocked(invoke).mockImplementation(async (cmd) => {
       if (cmd === TauriCommands.SchaltwerkCoreGetSessionAgentContent) {
@@ -106,27 +117,60 @@ describe('SpecEditor keyboard shortcuts', () => {
     vi.restoreAllMocks()
   })
 
-  it('emits refine event when clicking refine button', async () => {
-    const emitSpy = vi.spyOn(uiEvents, 'emitUiEvent')
-    specContentMock.displayName = 'Auth System'
-
+  it('shows the current draft stage and no longer renders the old refine button', async () => {
     render(
       <TestProviders>
         <SpecEditor sessionName="refine-session" />
       </TestProviders>
     )
 
-    const refineButton = await screen.findByRole('button', { name: 'Refine' })
-    expect(refineButton).toHaveAttribute('title', 'Refine spec: Auth System (refine-session)')
+    await screen.findByText('draft')
+    expect(screen.queryByRole('button', { name: 'Refine' })).toBeNull()
+  })
 
-    await act(async () => {
-      refineButton.click()
+  it('marks a draft spec clarified from the editor', async () => {
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="draft-spec" />
+      </TestProviders>
+    )
+
+    const button = await screen.findByRole('button', { name: /mark clarified/i })
+    fireEvent.click(button)
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetSpecStage, {
+        name: 'draft-spec',
+        stage: 'clarified',
+      })
     })
+  })
 
-    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.OpenSpecInOrchestrator, { sessionName: 'refine-session' })
-    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.RefineSpecInNewTab, {
-      sessionName: 'refine-session',
-      displayName: 'Auth System',
+  it('moves a clarified spec back to draft from the editor', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'clarified-spec',
+          spec_stage: 'clarified',
+          epic: null,
+        },
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="clarified-spec" />
+      </TestProviders>
+    )
+
+    const button = await screen.findByRole('button', { name: /move to draft/i })
+    fireEvent.click(button)
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetSpecStage, {
+        name: 'clarified-spec',
+        stage: 'draft',
+      })
     })
   })
 

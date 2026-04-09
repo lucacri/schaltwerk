@@ -10,6 +10,7 @@ import type { MockTauriInvokeArgs } from '../../types/testing'
 import type { RawSession } from '../../types/session'
 import { invoke } from '@tauri-apps/api/core'
 import { useSelection } from '../../hooks/useSelection'
+import { specOrchestratorTerminalId } from '../../common/terminalIdentity'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn()
@@ -30,6 +31,12 @@ vi.mock('./TerminalTabs', () => ({
 vi.mock('./RunTerminal', () => ({
   RunTerminal: ({ sessionName }: { sessionName?: string }) => (
     <div data-testid={`run-terminal-${sessionName ?? 'orchestrator'}`} />
+  )
+}))
+
+vi.mock('../specs/SpecEditor', () => ({
+  SpecEditor: ({ sessionName }: { sessionName: string }) => (
+    <div data-testid="spec-editor">{sessionName}</div>
   )
 }))
 
@@ -75,6 +82,7 @@ function toRaw(session: MockSession): RawSession {
     pending_name_generation: false,
     was_auto_generated: false,
     session_state: state,
+    spec_stage: session.info.spec_stage,
   }
 }
 
@@ -91,7 +99,7 @@ function SelectionDriver({ onReady }: { onReady: (controller: { setSelection: Re
   return null
 }
 
-describe('TerminalGrid spec fallback when backend metadata missing', () => {
+describe('TerminalGrid spec selection layout', () => {
   let controller: { setSelection: ReturnType<typeof useSelection>['setSelection'] } | null = null
 
   beforeEach(() => {
@@ -141,7 +149,12 @@ describe('TerminalGrid spec fallback when backend metadata missing', () => {
     })
   })
 
-  it('should keep showing spec placeholder when selection lacks metadata', async () => {
+  it('renders the spec editor beside a dedicated clarification terminal', async () => {
+    const spec = mockEnrichedSession('spec-2', 'spec', false)
+    spec.info.stable_id = 'spec-2-stable-id'
+    spec.info.spec_stage = 'draft'
+    setSessionData([spec])
+
     render(
       <TestProviders>
         <SelectionDriver onReady={(c) => { controller = c }} />
@@ -154,19 +167,22 @@ describe('TerminalGrid spec fallback when backend metadata missing', () => {
     }, { timeout: 10000 })
 
     await act(async () => {
-      await controller!.setSelection({ kind: 'session', payload: 'spec-2', sessionState: 'spec' }, false, true)
+      await controller!.setSelection({
+        kind: 'session',
+        payload: 'spec-2',
+        sessionState: 'spec',
+        stableId: 'spec-2-stable-id',
+      }, false, true)
     })
 
     await waitFor(() => {
-      expect(screen.getByTestId('spec-placeholder')).toHaveTextContent('spec-2')
+      expect(screen.getByTestId('spec-editor')).toHaveTextContent('spec-2')
     }, { timeout: 10000 })
 
-    await act(async () => {
-      await controller!.setSelection({ kind: 'session', payload: 'spec-3', sessionState: 'running' }, false, true)
-    })
-
-    await waitFor(() => {
-      expect(screen.getByTestId('spec-placeholder')).toHaveTextContent('spec-3')
-    }, { timeout: 10000 })
+    expect(screen.queryByTestId('spec-placeholder')).toBeNull()
+    expect(
+      screen.getByTestId(`terminal-${specOrchestratorTerminalId('spec-2-stable-id')}`)
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId('run-terminal-spec-2')).toBeNull()
   })
 })

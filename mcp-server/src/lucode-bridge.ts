@@ -36,9 +36,12 @@ export interface Epic {
   color?: string | null
 }
 
+export type SpecStage = 'draft' | 'clarified'
+
 export interface SpecSummary {
   session_id: string
   display_name?: string
+  stage: SpecStage
   content_length: number
   updated_at: string
 }
@@ -46,8 +49,21 @@ export interface SpecSummary {
 export interface SpecContent {
   session_id: string
   display_name?: string
+  stage: SpecStage
   content: string
   content_length: number
+  updated_at: string
+}
+
+export interface SpecStageUpdateResult {
+  session_id: string
+  stage: SpecStage
+  updated_at: string
+}
+
+export interface SpecAttentionUpdateResult {
+  session_id: string
+  attention_required: boolean
   updated_at: string
 }
 
@@ -1348,6 +1364,50 @@ export class LucodeBridge {
     })
 
     return this.parseJsonResponse<SpecContent>(response, 'spec content')
+  }
+
+  async setSpecStage(sessionName: string, stage: SpecStage, projectPath?: string): Promise<SpecStageUpdateResult> {
+    if (!sessionName || sessionName.trim().length === 0) {
+      throw new Error('sessionName is required to update a spec stage')
+    }
+
+    const response = await this.fetchWithAutoPort(`/api/specs/${encodeURIComponent(sessionName)}/stage`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getProjectHeaders(projectPath)
+      },
+      body: JSON.stringify({ stage })
+    })
+
+    const payload = await this.parseJsonResponse<SpecStageUpdateResult>(response, 'spec stage update')
+    if (!payload) {
+      throw new Error('Spec stage update payload missing')
+    }
+
+    return payload
+  }
+
+  async setSpecAttention(sessionName: string, attentionRequired: boolean, projectPath?: string): Promise<SpecAttentionUpdateResult> {
+    if (!sessionName || sessionName.trim().length === 0) {
+      throw new Error('sessionName is required to update spec attention')
+    }
+
+    const response = await this.fetchWithAutoPort(`/api/specs/${encodeURIComponent(sessionName)}/attention`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getProjectHeaders(projectPath)
+      },
+      body: JSON.stringify({ attention_required: attentionRequired })
+    })
+
+    const payload = await this.parseJsonResponse<SpecAttentionUpdateResult>(response, 'spec attention update')
+    if (!payload) {
+      throw new Error('Spec attention update payload missing')
+    }
+
+    return payload
   }
 
   async listSessionsByState(filter?: 'all' | 'active' | 'spec' | 'reviewed', projectPath?: string): Promise<Session[]> {

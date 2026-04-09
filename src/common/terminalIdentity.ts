@@ -70,6 +70,11 @@ export function stableSessionTerminalId(name: string | null | undefined, suffix:
   return `${base}-${suffix}`
 }
 
+export function specOrchestratorTerminalId(specId: string | null | undefined): string {
+  const base = sessionTerminalBase(specId)
+  return `spec-orchestrator-${base}-top`
+}
+
 export function sessionTerminalGroup(name: string | null | undefined): {
   base: string
   top: string

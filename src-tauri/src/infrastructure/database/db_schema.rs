@@ -145,6 +145,9 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             repository_path TEXT NOT NULL,
             repository_name TEXT NOT NULL,
             content TEXT NOT NULL,
+            stage TEXT NOT NULL DEFAULT 'draft',
+            attention_required BOOLEAN NOT NULL DEFAULT FALSE,
+            clarification_started BOOLEAN NOT NULL DEFAULT FALSE,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
             UNIQUE(repository_path, name)
@@ -355,14 +358,41 @@ fn apply_specs_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     let _ = conn.execute("ALTER TABLE specs ADD COLUMN issue_url TEXT", []);
     let _ = conn.execute("ALTER TABLE specs ADD COLUMN pr_number INTEGER", []);
     let _ = conn.execute("ALTER TABLE specs ADD COLUMN pr_url TEXT", []);
+    let _ = conn.execute(
+        "ALTER TABLE specs ADD COLUMN stage TEXT NOT NULL DEFAULT 'draft'",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE specs ADD COLUMN attention_required BOOLEAN NOT NULL DEFAULT FALSE",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE specs ADD COLUMN clarification_started BOOLEAN NOT NULL DEFAULT FALSE",
+        [],
+    );
+    let _ = conn.execute(
+        "UPDATE specs SET stage = 'draft' WHERE stage IS NULL OR stage = ''",
+        [],
+    );
+    let _ = conn.execute(
+        "UPDATE specs SET attention_required = FALSE WHERE attention_required IS NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "UPDATE specs SET clarification_started = FALSE WHERE clarification_started IS NULL",
+        [],
+    );
 
     let tx = conn.unchecked_transaction()?;
 
     tx.execute(
-        "INSERT INTO specs (id, name, display_name, epic_id, issue_number, issue_url, pr_number, pr_url, repository_path, repository_name, content, created_at, updated_at)
+        "INSERT INTO specs (id, name, display_name, epic_id, issue_number, issue_url, pr_number, pr_url, repository_path, repository_name, content, stage, attention_required, clarification_started, created_at, updated_at)
          SELECT s.id, s.name, s.display_name, s.epic_id, s.issue_number, s.issue_url, s.pr_number, s.pr_url,
                 s.repository_path, s.repository_name,
                 COALESCE(s.spec_content, s.initial_prompt, ''),
+                'draft',
+                FALSE,
+                FALSE,
                 s.created_at, s.updated_at
          FROM sessions s
          WHERE s.session_state = 'spec'

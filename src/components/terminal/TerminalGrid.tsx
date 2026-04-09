@@ -5,7 +5,7 @@ import { AgentTabBar } from './AgentTabBar'
 import { TerminalTabs, TerminalTabsHandle } from './TerminalTabs'
 import { RunTerminal, RunTerminalHandle } from './RunTerminal'
 import { UnifiedBottomBar } from './UnifiedBottomBar'
-import { SpecPlaceholder } from '../specs/SpecPlaceholder'
+import { SpecEditor } from '../specs/SpecEditor'
 import TerminalErrorBoundary from '../TerminalErrorBoundary'
 import Split from 'react-split'
 import { useSelection } from '../../hooks/useSelection'
@@ -107,6 +107,12 @@ const TerminalGridComponent = () => {
         const session = sessions.find(s => s.info.session_id === selection.payload)
         return Boolean(session?.info && (session.info as { original_skip_permissions?: boolean }).original_skip_permissions)
     }, [selection, sessions])
+    const selectedSpec = useMemo(
+        () => selection.kind === 'session' && selection.payload
+            ? sessions.find(session => session.info.session_id === selection.payload) ?? null
+            : null,
+        [selection, sessions],
+    )
 
     // Get dynamic shortcut for Focus Claude
     const focusClaudeShortcut = useShortcutDisplay(KeyboardShortcutAction.FocusClaude)
@@ -1464,11 +1470,60 @@ const TerminalGridComponent = () => {
     }, [dispatchOpencodeFinalResize]);
 
     if (selectionIsSpec) {
+        const specName = selection.payload ?? ''
         return (
             <div className="h-full relative px-0 py-2">
-                <div className="bg-panel rounded border border-border-subtle overflow-hidden min-h-0 h-full">
-                    <SpecPlaceholder />
-                </div>
+                <Split
+                    className="h-full w-full flex"
+                    direction="horizontal"
+                    sizes={[48, 52]}
+                    minSize={[320, 320]}
+                    gutterSize={SPLIT_GUTTER_SIZE}
+                >
+                    <div className="bg-panel rounded border border-border-subtle overflow-hidden min-h-0 h-full">
+                        <SpecEditor
+                            sessionName={specName}
+                            onStart={() => {
+                                emitUiEvent(UiEvent.StartAgentFromSpec, { name: specName })
+                            }}
+                        />
+                    </div>
+                    <div
+                        className="bg-panel rounded overflow-hidden min-h-0 flex flex-col border-2"
+                        style={{ borderColor: 'var(--color-border-subtle)' }}
+                    >
+                        <div
+                            className="h-10 px-4 border-b flex items-center"
+                            style={{
+                                color: 'var(--color-text-tertiary)',
+                                borderBottomColor: 'var(--color-border-default)',
+                            }}
+                        >
+                            Clarification Agent
+                        </div>
+                        <div
+                            className="h-[2px] flex-shrink-0"
+                            style={{ background: 'linear-gradient(to right, transparent, rgba(var(--color-border-strong-rgb), 0.302), transparent)' }}
+                        />
+                        <div className="flex-1 min-h-0">
+                            {shouldRenderTerminals && terminals.top && (
+                                <TerminalErrorBoundary terminalId={terminals.top}>
+                                    <Terminal
+                                        key={`spec-top-terminal-${terminalKey}-${terminals.top}`}
+                                        ref={claudeTerminalRef}
+                                        terminalId={terminals.top}
+                                        className="h-full w-full"
+                                        sessionName={specName}
+                                        specOrchestratorSessionName={specName}
+                                        agentType={selectedSpec?.info.original_agent_type ?? agentType}
+                                        onTerminalClick={handleClaudeSessionClick}
+                                        workingDirectory={effectiveWorkingDirectory}
+                                    />
+                                </TerminalErrorBoundary>
+                            )}
+                        </div>
+                    </div>
+                </Split>
             </div>
         )
     }

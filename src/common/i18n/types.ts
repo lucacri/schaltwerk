@@ -919,6 +919,8 @@ export interface Translations {
     editMarkdown: string
     preview: string
     edit: string
+    markClarified: string
+    moveToDraft: string
     addComments: string
     comment: string
     exitReviewMode: string

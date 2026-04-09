@@ -122,6 +122,11 @@ pub fn terminal_id_for_orchestrator_top(project_path: &std::path::Path) -> Strin
     format!("orchestrator-{sanitized}-{fragment}-top")
 }
 
+pub fn terminal_id_for_spec_orchestrator_top(spec_id: &str) -> String {
+    let base = session_terminal_base(spec_id);
+    format!("spec-orchestrator-{base}-top")
+}
+
 pub fn previous_tilde_hashed_terminal_id_for_session_top(name: &str) -> String {
     format!("{}-top", session_terminal_base_v1(name))
 }
@@ -252,6 +257,9 @@ mod tests {
         assert!(is_session_top_terminal_id(&indexed_top));
 
         assert!(is_session_top_terminal_id("orchestrator-main-top"));
+        assert!(is_session_top_terminal_id(
+            &terminal_id_for_spec_orchestrator_top("spec-123")
+        ));
         assert!(!is_session_top_terminal_id("orchestrator-main-bottom"));
         assert!(!is_session_top_terminal_id("run-terminal-main"));
         assert!(!is_session_top_terminal_id("run-terminal-top-0"));

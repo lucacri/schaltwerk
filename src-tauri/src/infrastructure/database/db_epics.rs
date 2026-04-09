@@ -271,6 +271,9 @@ mod tests {
             repository_path: PathBuf::from("/repo"),
             repository_name: "repo".to_string(),
             content: "content".to_string(),
+            stage: crate::domains::sessions::entity::SpecStage::Draft,
+            attention_required: false,
+            clarification_started: false,
             created_at: now,
             updated_at: now,
         };

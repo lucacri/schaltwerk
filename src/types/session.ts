@@ -69,6 +69,8 @@ export enum SessionState {
     Reviewed = 'reviewed'
 }
 
+export type SpecStage = 'draft' | 'clarified'
+
 export interface Epic {
     id: string
     name: string
@@ -77,6 +79,7 @@ export interface Epic {
 
 export interface SessionInfo {
     session_id: string
+    stable_id?: string
     display_name?: string
     version_group_id?: string
     version_number?: number
@@ -106,6 +109,7 @@ export interface SessionInfo {
     is_blocked?: boolean
     ready_to_merge?: boolean
     spec_content?: string
+    spec_stage?: SpecStage
     original_agent_type?: AgentType
     original_skip_permissions?: boolean | null
     diff_stats?: DiffStats
@@ -167,6 +171,7 @@ export interface RawSession {
     pending_name_generation: boolean
     was_auto_generated: boolean
     spec_content?: string
+    spec_stage?: SpecStage
     session_state: 'spec' | 'processing' | 'running' | 'reviewed'
     git_stats?: {
         files_changed: number
@@ -182,4 +187,18 @@ export interface RawSession {
     consolidation_sources?: string[]
     promotion_reason?: string | null
     promotionReason?: string | null
+}
+
+export interface RawSpec {
+    id: string
+    name: string
+    display_name?: string
+    repository_path: string
+    repository_name: string
+    content: string
+    stage: SpecStage
+    attention_required: boolean
+    clarification_started: boolean
+    created_at: string
+    updated_at: string
 }

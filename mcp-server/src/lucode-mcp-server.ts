@@ -11,7 +11,7 @@ import {
   McpError,
   CallToolRequest,
 } from "@modelcontextprotocol/sdk/types.js"
-import { LucodeBridge, Session, MergeModeOption, PrFeedbackPayload, PresetDraftStartResult, PresetLaunchResult } from "./lucode-bridge.js"
+import { LucodeBridge, Session, MergeModeOption, PrFeedbackPayload, PresetDraftStartResult, PresetLaunchResult, SpecAttentionUpdateResult, SpecStage, SpecStageUpdateResult } from "./lucode-bridge.js"
 import { listLucodeWorkflows, readLucodeWorkflowMarkdown } from "./lucode-workflows.js"
 import { toolOutputSchemas } from "./schemas.js"
 
@@ -209,6 +209,7 @@ const isPresetLaunchResult = (value: unknown): value is PresetLaunchResult => {
 type SpecDocumentPayload = {
   session_id: string
   display_name?: string | null
+  stage: SpecStage
   content: string
   content_length: number
   updated_at: string
@@ -217,9 +218,13 @@ type SpecDocumentPayload = {
 type SpecSummaryPayload = {
   session_id: string
   display_name?: string | null
+  stage: SpecStage
   content_length: number
   updated_at: string
 }
+
+type SpecStagePayload = SpecStageUpdateResult
+type SpecAttentionPayload = SpecAttentionUpdateResult
 
 type SessionSpecPayload = {
   session_id: string
@@ -276,6 +281,7 @@ type DiffChunkPayload = {
 const sanitizeSpecDocument = (payload: SpecDocumentPayload) => ({
   session_id: payload.session_id,
   display_name: payload.display_name ?? undefined,
+  stage: payload.stage,
   content: payload.content,
   content_length: payload.content_length,
   updated_at: payload.updated_at
@@ -284,8 +290,21 @@ const sanitizeSpecDocument = (payload: SpecDocumentPayload) => ({
 const sanitizeSpecSummary = (payload: SpecSummaryPayload) => ({
   session_id: payload.session_id,
   display_name: payload.display_name ?? undefined,
+  stage: payload.stage,
   content_length: payload.content_length,
   updated_at: payload.updated_at
+})
+
+const sanitizeSpecStage = (payload: SpecStagePayload) => ({
+  session_id: payload.session_id,
+  stage: payload.stage,
+  updated_at: payload.updated_at,
+})
+
+const sanitizeSpecAttention = (payload: SpecAttentionPayload) => ({
+  session_id: payload.session_id,
+  attention_required: payload.attention_required,
+  updated_at: payload.updated_at,
 })
 
 const sanitizeSessionSpec = (payload: SessionSpecPayload) => ({
@@ -596,6 +615,47 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false
         },
         outputSchema: toolOutputSchemas.lucode_spec_read
+      },
+      {
+        name: "lucode_spec_set_stage",
+        description: `Set a spec's clarification stage to either draft or clarified. Use this to mark a problem statement as ready for implementation handoff or move it back into clarification.`,
+        inputSchema: {
+          type: "object",
+          properties: {
+            session_name: {
+              type: "string",
+              description: "Name of the spec session to update"
+            },
+            stage: {
+              type: "string",
+              enum: ["draft", "clarified"],
+              description: "Target clarification stage"
+            }
+          },
+          required: ["session_name", "stage"],
+          additionalProperties: false
+        },
+        outputSchema: toolOutputSchemas.lucode_spec_set_stage
+      },
+      {
+        name: "lucode_spec_set_attention",
+        description: `Mark whether a spec needs user attention. Set true when you are blocked waiting for user input; set false after the user has responded.`,
+        inputSchema: {
+          type: "object",
+          properties: {
+            session_name: {
+              type: "string",
+              description: "Name of the spec session to update"
+            },
+            attention_required: {
+              type: "boolean",
+              description: "Whether the spec currently needs user attention"
+            }
+          },
+          required: ["session_name", "attention_required"],
+          additionalProperties: false
+        },
+        outputSchema: toolOutputSchemas.lucode_spec_set_attention
       },
       {
         name: "lucode_diff_summary",
@@ -1059,6 +1119,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const payload = sanitizeSpecDocument(specDoc)
         response = buildStructuredResponse(payload, {
           summaryText: `Spec '${specArgs.session}' loaded`,
+          jsonFirst: true
+        })
+        break
+      }
+
+      case "lucode_spec_set_stage": {
+        const specArgs = args as { session_name?: string; stage?: SpecStage }
+        if (!specArgs.session_name || specArgs.session_name.trim().length === 0) {
+          throw new McpError(ErrorCode.InvalidParams, "'session_name' is required when invoking lucode_spec_set_stage.")
+        }
+        if (!specArgs.stage) {
+          throw new McpError(ErrorCode.InvalidParams, "'stage' is required when invoking lucode_spec_set_stage.")
+        }
+
+        const updated = await bridge.setSpecStage(specArgs.session_name, specArgs.stage, projectPath)
+        const payload = sanitizeSpecStage(updated)
+        response = buildStructuredResponse(payload, {
+          summaryText: `Spec '${specArgs.session_name}' moved to ${specArgs.stage}`,
+          jsonFirst: true
+        })
+        break
+      }
+
+      case "lucode_spec_set_attention": {
+        const attentionArgs = args as { session_name?: string; attention_required?: boolean }
+        if (!attentionArgs.session_name || attentionArgs.session_name.trim().length === 0) {
+          throw new McpError(ErrorCode.InvalidParams, "'session_name' is required when invoking lucode_spec_set_attention.")
+        }
+        if (typeof attentionArgs.attention_required !== 'boolean') {
+          throw new McpError(ErrorCode.InvalidParams, "'attention_required' is required when invoking lucode_spec_set_attention.")
+        }
+
+        const updated = await bridge.setSpecAttention(
+          attentionArgs.session_name,
+          attentionArgs.attention_required,
+          projectPath,
+        )
+        const payload = sanitizeSpecAttention(updated)
+        response = buildStructuredResponse(payload, {
+          summaryText: `Spec '${attentionArgs.session_name}' attention_required set to ${attentionArgs.attention_required}`,
           jsonFirst: true
         })
         break

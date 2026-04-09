@@ -131,8 +131,39 @@ pub struct Spec {
     pub repository_path: PathBuf,
     pub repository_name: String,
     pub content: String,
+    pub stage: SpecStage,
+    pub attention_required: bool,
+    pub clarification_started: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SpecStage {
+    Draft,
+    Clarified,
+}
+
+impl SpecStage {
+    pub fn as_str(&self) -> &str {
+        match self {
+            SpecStage::Draft => "draft",
+            SpecStage::Clarified => "clarified",
+        }
+    }
+}
+
+impl FromStr for SpecStage {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "draft" => Ok(SpecStage::Draft),
+            "clarified" => Ok(SpecStage::Clarified),
+            _ => Err(format!("Invalid spec stage: {s}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -281,6 +312,8 @@ pub struct DiffStats {
 pub struct SessionInfo {
     pub session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub stable_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version_group_id: Option<String>,
@@ -318,6 +351,8 @@ pub struct SessionInfo {
     pub ready_to_merge: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spec_stage: Option<SpecStage>,
     pub session_state: SessionState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub issue_number: Option<i64>,

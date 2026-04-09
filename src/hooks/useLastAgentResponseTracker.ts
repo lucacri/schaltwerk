@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { allSessionsAtom } from '../store/atoms/sessions'
 import { updateLastAgentResponseActionAtom, agentResponseTickAtom, cleanupStaleSessionsActionAtom } from '../store/atoms/lastAgentResponse'
-import { sessionTerminalGroup } from '../common/terminalIdentity'
+import { sessionTerminalGroup, specOrchestratorTerminalId } from '../common/terminalIdentity'
 import { terminalOutputManager } from '../terminal/stream/terminalOutputManager'
 
 const TICK_INTERVAL_MS = 30_000
@@ -18,13 +18,11 @@ export function useLastAgentResponseTracker(): void {
     const activeSessionIds = new Set<string>()
 
     for (const session of sessions) {
-      if (session.info.session_state === 'spec') {
-        continue
-      }
-
       const sessionName = session.info.session_id
       activeSessionIds.add(sessionName)
-      const topId = sessionTerminalGroup(sessionName).top
+      const topId = session.info.session_state === 'spec'
+        ? specOrchestratorTerminalId(session.info.stable_id ?? sessionName)
+        : sessionTerminalGroup(sessionName).top
       const callback = (): void => {
         updateTimestamp(sessionName)
       }

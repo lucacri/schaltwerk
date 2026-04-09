@@ -39,7 +39,7 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
   const sessionState = info.session_state
   const stateLabel = mapSessionUiState(info)
   const isIdle = Boolean((info as SessionInfo & { attention_required?: boolean }).attention_required)
-  const isRunningState = stateLabel === 'running' && !isIdle
+  const isRunningState = (stateLabel === 'running' || isRunning) && !isIdle
   const accessibleState = isIdle ? 'idle' : stateLabel
   const shortcuts = useMultipleShortcutDisplays([
     KeyboardShortcutAction.SwitchToSession1,

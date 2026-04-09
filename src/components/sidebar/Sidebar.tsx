@@ -36,7 +36,6 @@ import { IconButton } from '../common/IconButton'
 import { ProgressIndicator } from '../common/ProgressIndicator'
 import { logger } from '../../utils/logger'
 import { UiEvent, emitUiEvent, listenUiEvent } from '../../common/uiEvents'
-import { runSpecRefineWithOrchestrator } from '../../utils/specRefine'
 import { AGENT_TYPES, AgentType, EnrichedSession, type Epic } from '../../types/session'
 import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationContext'
 import { useRun } from '../../contexts/RunContext'
@@ -1328,21 +1327,24 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         void handlePrShortcut()
     }, [forge, selection, github.canCreatePr, handlePrShortcut, handleOpenGitlabMrModal])
 
-    const runRefineSpecFlow = useCallback((sessionId: string, displayName?: string) => {
-        void runSpecRefineWithOrchestrator({
-            sessionId,
-            displayName,
-            selectOrchestrator: () => setSelection({ kind: 'orchestrator' }, false, true),
-            logContext: '[Sidebar]',
-        })
-    }, [setSelection])
+    const runRefineSpecFlow = useCallback((sessionId: string) => {
+        void (async () => {
+            try {
+                await setSelection({ kind: 'session', payload: sessionId, sessionState: 'spec' }, false, true)
+                setFocusForSession(sessionId, 'claude')
+                setCurrentFocus('claude')
+            } catch (error) {
+                logger.warn('[Sidebar] Failed to open spec clarification workspace', { sessionId, error })
+            }
+        })()
+    }, [setCurrentFocus, setFocusForSession, setSelection])
 
     const handleRefineSpecShortcut = useCallback(() => {
         if (isAnyModalOpen()) return
         if (selection.kind !== 'session' || !selection.payload) return
         const session = sessions.find(s => s.info.session_id === selection.payload)
         if (!session || !isSpec(session.info)) return
-        runRefineSpecFlow(selection.payload, getSessionDisplayName(session.info))
+        runRefineSpecFlow(selection.payload)
     }, [isAnyModalOpen, selection, sessions, runRefineSpecFlow])
 
     useKeyboardShortcuts({
@@ -1601,9 +1603,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             }
         },
         onRefineSpec: (sessionId) => {
-            const target = sessions.find(s => s.info.session_id === sessionId)
-            const displayName = target ? getSessionDisplayName(target.info) : undefined
-            runRefineSpecFlow(sessionId, displayName)
+            runRefineSpecFlow(sessionId)
         },
         onDeleteSpec: (sessionId) => {
             const session = sessions.find(s => s.info.session_id === sessionId)

@@ -229,6 +229,33 @@ describe('SessionCard running tag', () => {
   })
 })
 
+describe('SessionCard spec stage badges', () => {
+  it('shows the clarified badge for spec sessions', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              session_state: 'spec',
+              status: 'spec',
+              spec_stage: 'clarified',
+              worktree_path: '',
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByText('Clarified')).toBeInTheDocument()
+  })
+})
+
 describe('SessionCard metadata badges', () => {
   it('shows issue and PR badges for running sessions before diff stats', () => {
     renderWithProviders(

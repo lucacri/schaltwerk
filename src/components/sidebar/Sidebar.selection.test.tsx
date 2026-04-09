@@ -8,6 +8,7 @@ import { mockEnrichedSession } from '../../test-utils/sessionMocks'
 import { TauriCommands } from '../../common/tauriCommands'
 import { SchaltEvent } from '../../common/eventSystem'
 import { MockTauriInvokeArgs } from '../../types/testing';
+import type { EnrichedSession } from '../../types/session';
 import { SessionState } from '../../types/session';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -38,13 +39,7 @@ vi.mock('@tauri-apps/api/event', () => ({
   })
 }))
 
-interface TestSession {
-  info: {
-    session_id: string;
-    session_state: string;
-    ready_to_merge: boolean;
-  };
-}
+type TestSession = EnrichedSession
 
 describe('Reviewed session cancellation focus preservation', () => {
   let currentSessions: TestSession[] = []

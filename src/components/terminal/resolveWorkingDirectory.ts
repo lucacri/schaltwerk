@@ -12,6 +12,10 @@ export function resolveWorkingDirectory(
     return fallback
   }
 
+  if (selection.sessionState === 'spec') {
+    return fallback
+  }
+
   if (selection.worktreePath && selection.worktreePath.length > 0) {
     return selection.worktreePath
   }

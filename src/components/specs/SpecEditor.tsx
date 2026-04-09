@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
-import { VscCopy, VscPlay, VscEye, VscEdit, VscBeaker, VscComment } from 'react-icons/vsc'
+import { VscCopy, VscPlay, VscEye, VscEdit, VscComment } from 'react-icons/vsc'
 import { AnimatedText } from '../common/AnimatedText'
 import { logger } from '../../utils/logger'
 import { MarkdownEditor, type MarkdownEditorRef } from './MarkdownEditor'
@@ -14,7 +14,6 @@ import { MarkdownRenderer } from './MarkdownRenderer'
 import { useSelection } from '../../hooks/useSelection'
 import { useSessions } from '../../hooks/useSessions'
 import { useEpics } from '../../hooks/useEpics'
-import { buildSpecRefineReference, runSpecRefineWithOrchestrator } from '../../utils/specRefine'
 import { theme } from '../../common/theme'
 import { Textarea } from '../ui'
 import { typography } from '../../common/typography'
@@ -64,6 +63,11 @@ const specText = {
     ...typography.caption,
     color: 'var(--color-accent-red-light)',
   },
+  stageBadge: {
+    ...typography.caption,
+    lineHeight: theme.lineHeight.compact,
+    fontWeight: 600,
+  },
 }
 
 interface Props {
@@ -98,7 +102,9 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
   const [viewMode, setViewMode] = useAtom(specEditorViewModeAtomFamily(sessionName))
   const markSessionSaved = useSetAtom(markSpecEditorSessionSavedAtom)
   const setSavedContent = useSetAtom(specEditorSavedContentAtomFamily(sessionName))
-  const selectedEpic = useMemo(() => sessions.find(session => session.info.session_id === sessionName)?.info.epic ?? null, [sessions, sessionName])
+  const selectedSession = useMemo(() => sessions.find(session => session.info.session_id === sessionName) ?? null, [sessions, sessionName])
+  const selectedEpic = selectedSession?.info.epic ?? null
+  const specStage = selectedSession?.info.spec_stage ?? 'draft'
 
   const [reviewComments, setReviewComments] = useState<SpecReviewComment[]>([])
   const [showCommentForm, setShowCommentForm] = useState(false)
@@ -258,14 +264,15 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
     }
   }, [onStart])
 
-  const handleRefine = useCallback(async () => {
-    await runSpecRefineWithOrchestrator({
-      sessionId: sessionName,
-      displayName,
-      selectOrchestrator: () => setSelection({ kind: 'orchestrator' }, false, true),
-      logContext: '[SpecEditor]',
-    })
-  }, [displayName, sessionName, setSelection])
+  const handleSetStage = useCallback(async (stage: 'draft' | 'clarified') => {
+    try {
+      setError(null)
+      await invoke(TauriCommands.SchaltwerkCoreSetSpecStage, { name: sessionName, stage })
+    } catch (e) {
+      logger.error('[SpecEditor] Failed to update spec stage', e)
+      setError(String(e))
+    }
+  }, [sessionName])
 
   const handleEnterReviewMode = useCallback(() => {
     setReviewComments([])
@@ -472,21 +479,19 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
               💾
             </span>
           )}
+          <span
+            className="px-1.5 py-0.5 rounded border"
+            style={{
+              ...specText.stageBadge,
+              color: specStage === 'clarified' ? 'var(--color-accent-green-light)' : 'var(--color-accent-yellow-light)',
+              backgroundColor: specStage === 'clarified' ? 'var(--color-accent-green-bg)' : 'var(--color-accent-yellow-bg)',
+              borderColor: specStage === 'clarified' ? 'var(--color-accent-green-border)' : 'var(--color-accent-yellow-border)',
+            }}
+          >
+            {specStage}
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => { void handleRefine() }}
-            className="px-2 py-1 rounded flex items-center gap-1 hover:opacity-90"
-            style={{
-              ...specText.toolbarButton,
-              backgroundColor: 'var(--color-accent-blue)',
-              color: 'var(--color-text-inverse)'
-            }}
-            title={buildSpecRefineReference(sessionName, displayName)}
-          >
-            <VscBeaker />
-            {t.specEditor.refine}
-          </button>
           {viewMode !== 'review' ? (
             <>
               <button
@@ -514,6 +519,25 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
                 <VscComment />
                 {t.specEditor.comment}
               </button>
+              {specStage === 'clarified' ? (
+                <button
+                  onClick={() => { void handleSetStage('draft') }}
+                  className="px-2 py-1 rounded bg-bg-hover hover:bg-bg-hover text-text-primary flex items-center gap-1"
+                  style={specText.toolbarButton}
+                  title={t.specEditor.moveToDraft}
+                >
+                  {t.specEditor.moveToDraft}
+                </button>
+              ) : (
+                <button
+                  onClick={() => { void handleSetStage('clarified') }}
+                  className="px-2 py-1 rounded bg-bg-hover hover:bg-bg-hover text-text-primary flex items-center gap-1"
+                  style={specText.toolbarButton}
+                  title={t.specEditor.markClarified}
+                >
+                  {t.specEditor.markClarified}
+                </button>
+              )}
             </>
           ) : (
             <button

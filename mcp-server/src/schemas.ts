@@ -5,6 +5,7 @@ const nullableIsoDateTime = { anyOf: [isoDateTime, { type: 'null' }] } as const
 const nullableString = { type: ['string', 'null'] } as const
 const nullableBoolean = { type: ['boolean', 'null'] } as const
 const nullableNumber = { type: ['number', 'null'] } as const
+const specStageEnum = ['draft', 'clarified'] as const
 
 const epicSchema = {
   type: 'object',
@@ -63,10 +64,11 @@ const specSummarySchema = {
   properties: {
     session_id: { type: 'string' },
     display_name: { type: 'string' },
+    stage: { enum: specStageEnum },
     content_length: { type: 'number' },
     updated_at: isoDateTime,
   },
-  required: ['session_id', 'content_length', 'updated_at'],
+  required: ['session_id', 'stage', 'content_length', 'updated_at'],
   additionalProperties: false,
 } as const
 
@@ -75,11 +77,34 @@ const specDocumentSchema = {
   properties: {
     session_id: { type: 'string' },
     display_name: { type: 'string' },
+    stage: { enum: specStageEnum },
     content: { type: 'string' },
     content_length: { type: 'number' },
     updated_at: isoDateTime,
   },
-  required: ['session_id', 'content', 'content_length', 'updated_at'],
+  required: ['session_id', 'stage', 'content', 'content_length', 'updated_at'],
+  additionalProperties: false,
+} as const
+
+const specStageUpdateSchema = {
+  type: 'object',
+  properties: {
+    session_id: { type: 'string' },
+    stage: { enum: specStageEnum },
+    updated_at: isoDateTime,
+  },
+  required: ['session_id', 'stage', 'updated_at'],
+  additionalProperties: false,
+} as const
+
+const specAttentionUpdateSchema = {
+  type: 'object',
+  properties: {
+    session_id: { type: 'string' },
+    attention_required: { type: 'boolean' },
+    updated_at: isoDateTime,
+  },
+  required: ['session_id', 'attention_required', 'updated_at'],
   additionalProperties: false,
 } as const
 
@@ -392,6 +417,16 @@ export const toolOutputSchemas = {
   lucode_spec_read: {
     $schema: draft2020,
     ...specDocumentSchema,
+  },
+
+  lucode_spec_set_stage: {
+    $schema: draft2020,
+    ...specStageUpdateSchema,
+  },
+
+  lucode_spec_set_attention: {
+    $schema: draft2020,
+    ...specAttentionUpdateSchema,
   },
 
   lucode_diff_summary: {

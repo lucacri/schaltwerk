@@ -111,7 +111,8 @@ import { AGENT_START_TIMEOUT_MESSAGE } from './common/agentSpawn'
 import { beginSplitDrag, endSplitDrag } from './utils/splitDragCoordinator'
 import { useOptionalToast } from './common/toast/ToastProvider'
 import { AppUpdateResultPayload, ForgeConnectionIssuePayload } from './common/events'
-import { RawSession, AGENT_SUPPORTS_SKIP_PERMISSIONS, AgentType, SessionState } from './types/session'
+import { RawSession, RawSpec, AGENT_SUPPORTS_SKIP_PERMISSIONS, AgentType, SessionState } from './types/session'
+import { specOrchestratorTerminalId } from './common/terminalIdentity'
 import {
   refreshKeepAwakeStateActionAtom,
   registerKeepAwakeEventListenerActionAtom,
@@ -138,7 +139,8 @@ interface OpenTabsState {
 import { FocusSync } from './components/FocusSync'
 
 function AppContent() {
-  const { selection } = useSelection()
+  const { selection, clearTerminalTracking } = useSelection()
+  const selectionIsSpec = selection.kind === 'session' && selection.sessionState === 'spec'
   const projectPath = useAtomValue(projectPathAtom)
   const projectTabs = useAtomValue(projectTabsAtom)
   const projectSwitchStatus = useAtomValue(projectSwitchStatusAtom)
@@ -1747,6 +1749,30 @@ function AppContent() {
   }, [fetchSessionForPrefill, shouldBlockSessionModal])
 
 
+  const cleanupSpecOrchestratorByName = useCallback(async (specName: string) => {
+    let stableId =
+      selection.kind === 'session'
+      && selection.sessionState === 'spec'
+      && selection.payload === specName
+        ? selection.stableId ?? null
+        : null
+
+    if (!stableId) {
+      try {
+        const spec = await invoke<RawSpec>(TauriCommands.SchaltwerkCoreGetSpec, { name: specName })
+        stableId = spec?.id ?? null
+      } catch (error) {
+        logger.warn('[App] Failed to load spec before orchestrator cleanup:', { specName, error })
+      }
+    }
+
+    if (!stableId) {
+      return
+    }
+
+    await clearTerminalTracking([specOrchestratorTerminalId(stableId)])
+  }, [clearTerminalTracking, selection])
+
   const handleDeleteSpec = async () => {
     if (!currentSession) return
 
@@ -1754,6 +1780,7 @@ function AppContent() {
     beginSessionMutation(sessionName, 'remove')
     try {
       setIsCancelling(true)
+      await cleanupSpecOrchestratorByName(sessionName)
       await invoke(TauriCommands.SchaltwerkCoreArchiveSpecSession, { name: sessionName })
       setDeleteSpecModalOpen(false)
       // No manual selection here; SessionRemoved + SessionsRefreshed will drive next focus
@@ -1869,6 +1896,9 @@ function AppContent() {
           const useAgentSlots = Boolean(data.agentSlots && data.agentSlots.length > 0)
           const useAgentTypes = Boolean(data.agentTypes && data.agentTypes.length > 0)
           const postCreateTasks: Array<Promise<void>> = []
+          if (startFromDraftName) {
+            await cleanupSpecOrchestratorByName(startFromDraftName)
+          }
           const count = useAgentSlots
             ? (data.agentSlots?.length ?? 1)
             : useAgentTypes
@@ -2526,7 +2556,7 @@ function AppContent() {
                 <div className="relative h-full">
                   {/* Unified session ring around center + right (Claude, Terminal, Diff) */}
                   <div id="work-ring" className="absolute inset-2 rounded-xl pointer-events-none" />
-                  {isRightCollapsed ? (
+                  {isRightCollapsed || selectionIsSpec ? (
                     // When collapsed, render only the terminal grid at full width
                     <main className="h-full w-full" style={{ backgroundColor: 'var(--color-bg-primary)' }} data-testid="terminal-grid">
                       <ErrorBoundary name="TerminalGrid">

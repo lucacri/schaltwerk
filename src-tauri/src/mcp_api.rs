@@ -31,7 +31,8 @@ use lucode::domains::attention::get_session_attention_state;
 use lucode::domains::git::service::{ForgeType, detect_forge};
 use lucode::domains::sessions::{apply_git_enrichment, compute_git_for_session};
 use lucode::domains::merge::MergeMode;
-use lucode::domains::sessions::entity::{Session, SessionStatus, Spec};
+use lucode::domains::sessions::entity::{Session, SessionStatus, Spec, SpecStage};
+use lucode::infrastructure::attention_bridge::clear_session_attention_state;
 use lucode::domains::settings::{AgentPreset, setup_script::SetupScriptService};
 use lucode::infrastructure::database::Database;
 use lucode::infrastructure::database::SpecMethods;
@@ -88,11 +89,31 @@ async fn handle_mcp_request_inner(
         (&Method::POST, "/api/specs") => create_draft(req, app).await,
         (&Method::GET, "/api/specs") => list_drafts().await,
         (&Method::GET, "/api/specs/summary") => list_spec_summaries().await,
-        (&Method::GET, path) if path.starts_with("/api/specs/") && !path.ends_with("/start") => {
+        (&Method::PATCH, path) if path.starts_with("/api/specs/") && path.ends_with("/stage") => {
+            let name = extract_draft_name_for_action(path, "/stage");
+            update_spec_stage(req, &name, app).await
+        }
+        (&Method::PATCH, path)
+            if path.starts_with("/api/specs/") && path.ends_with("/attention") =>
+        {
+            let name = extract_draft_name_for_action(path, "/attention");
+            update_spec_attention(req, &name, app).await
+        }
+        (&Method::GET, path)
+            if path.starts_with("/api/specs/")
+                && !path.ends_with("/start")
+                && !path.ends_with("/stage")
+                && !path.ends_with("/attention") =>
+        {
             let name = extract_draft_name(path, "/api/specs/");
             get_spec_content(&name).await
         }
-        (&Method::PATCH, path) if path.starts_with("/api/specs/") && !path.ends_with("/start") => {
+        (&Method::PATCH, path)
+            if path.starts_with("/api/specs/")
+                && !path.ends_with("/start")
+                && !path.ends_with("/stage")
+                && !path.ends_with("/attention") =>
+        {
             let name = extract_draft_name(path, "/api/specs/");
             update_spec_content(req, &name, app).await
         }
@@ -220,6 +241,14 @@ fn extract_draft_name_for_start(path: &str) -> String {
     let prefix = "/api/specs/";
     let suffix = "/start";
     let name = &path[prefix.len()..path.len() - suffix.len()];
+    urlencoding::decode(name)
+        .unwrap_or(std::borrow::Cow::Borrowed(name))
+        .to_string()
+}
+
+fn extract_draft_name_for_action(path: &str, action: &str) -> String {
+    let prefix = "/api/specs/";
+    let name = &path[prefix.len()..path.len() - action.len()];
     urlencoding::decode(name)
         .unwrap_or(std::borrow::Cow::Borrowed(name))
         .to_string()
@@ -1406,6 +1435,9 @@ mod tests {
             repository_path: PathBuf::from("/tmp/mock"),
             repository_name: "mock".to_string(),
             content: content.unwrap_or_default().to_string(),
+            stage: SpecStage::Draft,
+            attention_required: false,
+            clarification_started: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }
@@ -3156,6 +3188,7 @@ struct SpecSummaryResponse {
 struct SpecSummary {
     session_id: String,
     display_name: Option<String>,
+    stage: SpecStage,
     content_length: usize,
     updated_at: String,
 }
@@ -3164,8 +3197,23 @@ struct SpecSummary {
 struct SpecContentResponse {
     session_id: String,
     display_name: Option<String>,
+    stage: SpecStage,
     content: String,
     content_length: usize,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct SpecStageResponse {
+    session_id: String,
+    stage: SpecStage,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct SpecAttentionResponse {
+    session_id: String,
+    attention_required: bool,
     updated_at: String,
 }
 
@@ -3175,6 +3223,7 @@ impl SpecSummary {
         Self {
             session_id: spec.name.clone(),
             display_name: spec.display_name.clone(),
+            stage: spec.stage.clone(),
             content_length,
             updated_at: spec.updated_at.to_rfc3339(),
         }
@@ -3188,8 +3237,29 @@ impl SpecContentResponse {
         Self {
             session_id: spec.name.clone(),
             display_name: spec.display_name.clone(),
+            stage: spec.stage.clone(),
             content,
             content_length,
+            updated_at: spec.updated_at.to_rfc3339(),
+        }
+    }
+}
+
+impl SpecStageResponse {
+    fn from_spec(spec: &Spec) -> Self {
+        Self {
+            session_id: spec.name.clone(),
+            stage: spec.stage.clone(),
+            updated_at: spec.updated_at.to_rfc3339(),
+        }
+    }
+}
+
+impl SpecAttentionResponse {
+    fn from_spec(spec: &Spec) -> Self {
+        Self {
+            session_id: spec.name.clone(),
+            attention_required: spec.attention_required,
             updated_at: spec.updated_at.to_rfc3339(),
         }
     }
@@ -3362,6 +3432,170 @@ async fn update_spec_content(
                 format!("Failed to update spec: {e}"),
             ))
         }
+    }
+}
+
+async fn update_spec_stage(
+    req: Request<Incoming>,
+    name: &str,
+    app: tauri::AppHandle,
+) -> Result<Response<String>, hyper::Error> {
+    #[derive(Debug, Deserialize)]
+    struct UpdateSpecStageRequest {
+        stage: String,
+    }
+
+    let body = req.into_body();
+    let body_bytes = body.collect().await?.to_bytes();
+    let payload: UpdateSpecStageRequest = match serde_json::from_slice(&body_bytes) {
+        Ok(payload) => payload,
+        Err(err) => {
+            error!("Failed to parse spec stage update request: {err}");
+            return Ok(error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Invalid JSON: {err}"),
+            ));
+        }
+    };
+
+    let stage: SpecStage = match payload.stage.parse() {
+        Ok(stage) => stage,
+        Err(err) => {
+            return Ok(error_response(StatusCode::BAD_REQUEST, err));
+        }
+    };
+
+    let core = match get_core_write().await {
+        Ok(core) => core,
+        Err(err) => {
+            error!("Failed to get lucode core for spec stage update: {err}");
+            return Ok(error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Internal error: {err}"),
+            ));
+        }
+    };
+
+    let manager = core.session_manager();
+    let spec = match manager.get_spec(name) {
+        Ok(spec) => spec,
+        Err(err) => {
+            return Ok(json_error_response(
+                StatusCode::NOT_FOUND,
+                format!("Spec '{name}' not found: {err}"),
+            ));
+        }
+    };
+
+    if let Err(err) = core.db.update_spec_stage(&spec.id, stage) {
+        error!("Failed to persist spec stage for '{name}': {err}");
+        return Ok(error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to update spec stage: {err}"),
+        ));
+    }
+
+    let updated = match manager.get_spec(name) {
+        Ok(spec) => spec,
+        Err(err) => {
+            error!("Spec stage updated for '{name}' but reload failed: {err}");
+            return Ok(error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to reload updated spec: {err}"),
+            ));
+        }
+    };
+
+    request_sessions_refresh(&app, SessionsRefreshReason::SpecSync);
+
+    match serde_json::to_string(&SpecStageResponse::from_spec(&updated)) {
+        Ok(json) => Ok(json_response(StatusCode::OK, json)),
+        Err(err) => Ok(json_error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to serialize spec stage response: {err}"),
+        )),
+    }
+}
+
+async fn update_spec_attention(
+    req: Request<Incoming>,
+    name: &str,
+    app: tauri::AppHandle,
+) -> Result<Response<String>, hyper::Error> {
+    #[derive(Debug, Deserialize)]
+    struct UpdateSpecAttentionRequest {
+        attention_required: bool,
+    }
+
+    let body = req.into_body();
+    let body_bytes = body.collect().await?.to_bytes();
+    let payload: UpdateSpecAttentionRequest = match serde_json::from_slice(&body_bytes) {
+        Ok(payload) => payload,
+        Err(err) => {
+            error!("Failed to parse spec attention update request: {err}");
+            return Ok(error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Invalid JSON: {err}"),
+            ));
+        }
+    };
+
+    let core = match get_core_write().await {
+        Ok(core) => core,
+        Err(err) => {
+            error!("Failed to get lucode core for spec attention update: {err}");
+            return Ok(error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Internal error: {err}"),
+            ));
+        }
+    };
+
+    let manager = core.session_manager();
+    let spec = match manager.get_spec(name) {
+        Ok(spec) => spec,
+        Err(err) => {
+            return Ok(json_error_response(
+                StatusCode::NOT_FOUND,
+                format!("Spec '{name}' not found: {err}"),
+            ));
+        }
+    };
+
+    if let Err(err) = core
+        .db
+        .update_spec_attention_required(&spec.id, payload.attention_required)
+    {
+        error!("Failed to persist spec attention for '{name}': {err}");
+        return Ok(error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to update spec attention: {err}"),
+        ));
+    }
+
+    if !payload.attention_required {
+        clear_session_attention_state(name.to_string());
+    }
+
+    let updated = match manager.get_spec(name) {
+        Ok(spec) => spec,
+        Err(err) => {
+            error!("Spec attention updated for '{name}' but reload failed: {err}");
+            return Ok(error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to reload updated spec: {err}"),
+            ));
+        }
+    };
+
+    request_sessions_refresh(&app, SessionsRefreshReason::SpecSync);
+
+    match serde_json::to_string(&SpecAttentionResponse::from_spec(&updated)) {
+        Ok(json) => Ok(json_response(StatusCode::OK, json)),
+        Err(err) => Ok(json_error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to serialize spec attention response: {err}"),
+        )),
     }
 }
 
@@ -3755,9 +3989,9 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
         filter_state = Some(SessionState::Spec);
     }
 
-    let (base_sessions, git_tasks) = match get_core_read().await {
+    let (base_sessions, git_tasks, db) = match get_core_read().await {
         Ok(core) => match core.session_manager().list_enriched_sessions_base() {
-            Ok(result) => result,
+            Ok((sessions, git_tasks)) => (sessions, git_tasks, core.db.clone()),
             Err(e) => {
                 error!("Failed to list sessions: {e}");
                 return Ok(error_response(
@@ -3814,8 +4048,30 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
         if let Some(registry) = get_session_attention_state() {
             match registry.try_lock() {
                 Ok(guard) => {
+                    let mut spec_attention_updates = Vec::new();
                     for session in &mut sessions {
-                        session.attention_required = guard.get(&session.info.session_id);
+                        let previous_attention = session.attention_required;
+                        let Some(attention_required) = guard.get(&session.info.session_id) else {
+                            continue;
+                        };
+                        session.attention_required = Some(attention_required);
+                        if session.info.session_state == SessionState::Spec
+                            && previous_attention != Some(attention_required)
+                            && let Some(stable_id) = session.info.stable_id.as_deref()
+                        {
+                            spec_attention_updates.push((stable_id.to_string(), attention_required));
+                        }
+                    }
+                    drop(guard);
+
+                    for (stable_id, attention_required) in spec_attention_updates {
+                        if let Err(err) =
+                            db.update_spec_attention_required(&stable_id, attention_required)
+                        {
+                            warn!(
+                                "Failed to persist spec attention for stable_id={stable_id}: {err}"
+                            );
+                        }
                     }
                 }
                 Err(_) => {

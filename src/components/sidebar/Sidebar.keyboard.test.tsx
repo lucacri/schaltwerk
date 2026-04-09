@@ -185,21 +185,14 @@ describe('Sidebar keyboard navigation basic', () => {
           event === uiEvents.UiEvent.SelectionChanged &&
           typeof detail === 'object' &&
           detail !== null &&
-          (detail as { kind?: string }).kind === 'orchestrator',
+          (detail as { kind?: string; payload?: string; sessionState?: string }).kind === 'session' &&
+          (detail as { kind?: string; payload?: string; sessionState?: string }).payload === 'spec-session' &&
+          (detail as { kind?: string; payload?: string; sessionState?: string }).sessionState === 'spec',
       )
       expect(selectionChange).toBeDefined()
     })
-
-    await waitFor(() => {
-      const orchestratorBtn = screen.getByLabelText(/Select orchestrator/i)
-      expect(orchestratorBtn.className).toContain('session-ring-blue')
-    })
-
-    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.OpenSpecInOrchestrator, { sessionName: 'spec-session' })
-    expect(emitSpy).toHaveBeenCalledWith(uiEvents.UiEvent.RefineSpecInNewTab, {
-      sessionName: 'spec-session',
-      displayName: 'Spec Draft',
-    })
+    expect(emitSpy).not.toHaveBeenCalledWith(uiEvents.UiEvent.OpenSpecInOrchestrator, expect.anything())
+    expect(emitSpy).not.toHaveBeenCalledWith(uiEvents.UiEvent.RefineSpecInNewTab, expect.anything())
   })
 
   it('prevents marking spec sessions as reviewed', async () => {
