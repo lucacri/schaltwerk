@@ -729,6 +729,10 @@ export interface Translations {
     noVariant: string
     preset: string
     noPreset: string
+    quickModeSpec: string
+    quickModeSpecSummary: string
+    quickModeCustom: string
+    quickModeCustomSummary: string
     unifiedSearch: {
       title: string
       branchesTab: string

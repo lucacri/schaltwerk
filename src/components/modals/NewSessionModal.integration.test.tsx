@@ -546,9 +546,8 @@ describe('NewSessionModal Integration with SessionConfigurationPanel', () => {
         )
 
         await waitFor(() => {
-            // Should have the checkbox checked for draft mode
-            const checkbox = screen.getByLabelText(/Create as spec/)
-            expect(checkbox).toBeChecked()
+            // Spec mode is reflected by the modal title
+            expect(screen.getByText('Create new spec')).toBeInTheDocument()
         })
 
         // Configuration panel should not be present for draft creation
@@ -558,7 +557,7 @@ describe('NewSessionModal Integration with SessionConfigurationPanel', () => {
     test('toggles SessionConfigurationPanel visibility when draft mode changes', async () => {
         const onClose = vi.fn()
         const onCreate = vi.fn()
-        
+
         const { rerender } = render(
             <TestProviders>
                 <NewSessionModal
@@ -575,8 +574,7 @@ describe('NewSessionModal Integration with SessionConfigurationPanel', () => {
             expect(screen.getByTestId('session-config-panel')).toBeInTheDocument()
         })
 
-        const checkbox = screen.getByLabelText(/Create as spec/)
-        expect(checkbox).not.toBeChecked()
+        expect(screen.getByText('Start new agent')).toBeInTheDocument()
 
         // Re-render with draft mode
         rerender(
@@ -590,12 +588,11 @@ describe('NewSessionModal Integration with SessionConfigurationPanel', () => {
             </TestProviders>
         )
 
-        // Wait for checkbox to be checked and panel to be hidden
+        // Wait for the modal title to flip to spec mode and panel to disappear
         await waitFor(() => {
-            const checkbox = screen.getByLabelText(/Create as spec/)
-            expect(checkbox).toBeChecked()
+            expect(screen.getByText('Create new spec')).toBeInTheDocument()
         })
-        
+
         await waitFor(() => {
             expect(screen.queryByTestId('session-config-panel')).not.toBeInTheDocument()
         })
@@ -612,12 +609,11 @@ describe('NewSessionModal Integration with SessionConfigurationPanel', () => {
             </TestProviders>
         )
 
-        // Wait for checkbox to be unchecked and panel to be visible
+        // Wait for the modal title to flip back and the panel to reappear
         await waitFor(() => {
-            const checkbox = screen.getByLabelText(/Create as spec/)
-            expect(checkbox).not.toBeChecked()
+            expect(screen.getByText('Start new agent')).toBeInTheDocument()
         })
-        
+
         await waitFor(() => {
             expect(screen.getByTestId('session-config-panel')).toBeInTheDocument()
         })

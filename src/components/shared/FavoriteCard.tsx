@@ -3,7 +3,7 @@ import { typography } from '../../common/typography'
 
 interface FavoriteCardProps {
     title: string
-    shortcut: string
+    shortcut?: string
     summary: string
     accentColor: string
     selected?: boolean
@@ -61,18 +61,20 @@ export function FavoriteCard({
                     >
                         {title}
                     </span>
-                    <kbd
-                        className="shrink-0 rounded px-1.5 py-0.5"
-                        style={{
-                            ...typography.caption,
-                            backgroundColor: 'var(--color-bg-elevated)',
-                            color: 'var(--color-text-secondary)',
-                            border: '1px solid var(--color-border-subtle)',
-                            fontFamily: theme.fontFamily.mono,
-                        }}
-                    >
-                        {shortcut}
-                    </kbd>
+                    {shortcut ? (
+                        <kbd
+                            className="shrink-0 rounded px-1.5 py-0.5"
+                            style={{
+                                ...typography.caption,
+                                backgroundColor: 'var(--color-bg-elevated)',
+                                color: 'var(--color-text-secondary)',
+                                border: '1px solid var(--color-border-subtle)',
+                                fontFamily: theme.fontFamily.mono,
+                            }}
+                        >
+                            {shortcut}
+                        </kbd>
+                    ) : null}
                 </span>
                 <span className="flex items-center gap-2">
                     <span

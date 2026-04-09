@@ -727,6 +727,10 @@
     "noVariant": "No variant (use defaults)",
     "preset": "Preset",
     "noPreset": "No preset",
+    "quickModeSpec": "Spec",
+    "quickModeSpecSummary": "Draft only — no agent runs",
+    "quickModeCustom": "Custom",
+    "quickModeCustomSummary": "Full configuration",
     "unifiedSearch": {
       "title": "Search",
       "branchesTab": "Branches",

@@ -727,6 +727,10 @@
     "noVariant": "无变体（使用默认值）",
     "preset": "预设",
     "noPreset": "无预设",
+    "quickModeSpec": "草稿",
+    "quickModeSpecSummary": "仅创建草稿，不启动代理",
+    "quickModeCustom": "自定义",
+    "quickModeCustomSummary": "完整配置",
     "unifiedSearch": {
       "title": "搜索",
       "branchesTab": "分支",

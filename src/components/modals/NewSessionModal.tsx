@@ -27,7 +27,7 @@ import { useProjectFileIndex } from '../../hooks/useProjectFileIndex'
 import { MarkdownEditor, type MarkdownEditorRef } from '../specs/MarkdownEditor'
 import { ResizableModal } from '../shared/ResizableModal'
 import { UnifiedSearchModal } from './UnifiedSearchModal'
-import { Checkbox, FormGroup, TextInput } from '../ui'
+import { FormGroup, TextInput } from '../ui'
 import type { GithubIssueSelectionResult, GithubPrSelectionResult } from '../../types/githubIssues'
 import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationContext'
 import { FALLBACK_CODEX_MODELS, getCodexModelMetadata } from '../../common/codexModels'
@@ -52,6 +52,14 @@ import {
 } from './MultiAgentAllocationDropdown'
 
 const SESSION_NAME_ALLOWED_PATTERN = /^[\p{L}\p{M}\p{N}_\- ]+$/u
+
+export const SPEC_FAVORITE_ID = '__schaltwerk_spec__'
+export const CUSTOM_FAVORITE_ID = '__schaltwerk_custom__'
+const QUICK_MODE_IDS: ReadonlySet<string> = new Set([SPEC_FAVORITE_ID, CUSTOM_FAVORITE_ID])
+
+function isQuickModeId(id: string | null): boolean {
+    return id !== null && QUICK_MODE_IDS.has(id)
+}
 
 type AgentPreferenceField = 'model' | 'reasoningEffort'
 
@@ -404,24 +412,65 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         return nextConfig
     }, [agentPresetsList, agentVariantsList])
 
-    const selectFavorite = useCallback((favoriteId: string) => {
-        const favorite = favoriteMap.get(favoriteId)
-        if (!favorite || favorite.disabled) {
-            return
-        }
-
-        if (selectedFavoriteId === favoriteId) {
-            setSelectedFavoriteId(null)
-            setFavoriteBaseline(null)
-            if (manualFavoriteConfigRef.current) {
-                applyFavoriteConfigSnapshot(manualFavoriteConfigRef.current)
+    const selectQuickMode = useCallback((modeId: typeof SPEC_FAVORITE_ID | typeof CUSTOM_FAVORITE_ID) => {
+        favoriteSelectionInitializedRef.current = true
+        if (modeId === SPEC_FAVORITE_ID) {
+            if (selectedFavoriteId === null) {
+                manualFavoriteConfigRef.current = currentFavoriteConfig
             }
-            setCustomizeExpanded(true)
+            setCreateAsDraft(true)
+            setSelectedPresetId(null)
+            setSelectedVariantId(null)
+            setPresetTabActive(false)
+            resetMultiAgentSelections()
+            setSelectedFavoriteId(SPEC_FAVORITE_ID)
+            setFavoriteBaseline(null)
+            setCustomizeExpanded(false)
+            if (validationError) {
+                setValidationError('')
+            }
             return
         }
 
         if (selectedFavoriteId === null) {
             manualFavoriteConfigRef.current = currentFavoriteConfig
+        } else if (selectedFavoriteId !== CUSTOM_FAVORITE_ID && manualFavoriteConfigRef.current) {
+            applyFavoriteConfigSnapshot(manualFavoriteConfigRef.current)
+        }
+        setCreateAsDraft(false)
+        setSelectedPresetId(null)
+        setSelectedVariantId(null)
+        setPresetTabActive(false)
+        resetMultiAgentSelections()
+        setSelectedFavoriteId(CUSTOM_FAVORITE_ID)
+        setFavoriteBaseline(null)
+        setCustomizeExpanded(true)
+        if (validationError) {
+            setValidationError('')
+        }
+    }, [
+        applyFavoriteConfigSnapshot,
+        currentFavoriteConfig,
+        resetMultiAgentSelections,
+        selectedFavoriteId,
+        validationError,
+    ])
+
+    const selectFavorite = useCallback((favoriteId: string) => {
+        const favorite = favoriteMap.get(favoriteId)
+        if (!favorite || favorite.disabled) {
+            return
+        }
+        favoriteSelectionInitializedRef.current = true
+
+        if (selectedFavoriteId === favoriteId) {
+            selectQuickMode(CUSTOM_FAVORITE_ID)
+            return
+        }
+
+        if (selectedFavoriteId === null || isQuickModeId(selectedFavoriteId)) {
+            const baselineSource = manualFavoriteConfigRef.current ?? currentFavoriteConfig
+            manualFavoriteConfigRef.current = baselineSource
         }
 
         const nextConfig = favorite.kind === 'variant'
@@ -442,6 +491,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         buildVariantFavoriteConfig,
         currentFavoriteConfig,
         favoriteMap,
+        selectQuickMode,
         selectedFavoriteId,
     ])
 
@@ -1380,30 +1430,32 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         }
         if (hasPrefillData && (selectedVariantId || selectedPresetId)) {
             favoriteSelectionInitializedRef.current = true
-            setCustomizeExpanded(true)
+            selectQuickMode(CUSTOM_FAVORITE_ID)
             return
         }
-        if (favorites.length === 0) {
-            favoriteSelectionInitializedRef.current = true
-            setCustomizeExpanded(true)
+        favoriteSelectionInitializedRef.current = true
+
+        if (initialIsDraft) {
+            selectQuickMode(SPEC_FAVORITE_ID)
             return
         }
 
         const firstEnabledFavorite = favorites.find(favorite => !favorite.disabled)
-        favoriteSelectionInitializedRef.current = true
         if (firstEnabledFavorite) {
             selectFavorite(firstEnabledFavorite.id)
         } else {
-            setCustomizeExpanded(true)
+            selectQuickMode(CUSTOM_FAVORITE_ID)
         }
     }, [
         agentConfigLoading,
         favorites,
         favoriteOrderLoaded,
         hasPrefillData,
+        initialIsDraft,
         open,
         persistedDefaultsLoaded,
         selectFavorite,
+        selectQuickMode,
         selectedPresetId,
         selectedVariantId,
     ])
@@ -1412,12 +1464,13 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         if (!open || !selectedFavoriteId) {
             return
         }
-        if (!favoriteMap.has(selectedFavoriteId)) {
-            setSelectedFavoriteId(null)
-            setFavoriteBaseline(null)
-            setCustomizeExpanded(true)
+        if (isQuickModeId(selectedFavoriteId)) {
+            return
         }
-    }, [favoriteMap, open, selectedFavoriteId])
+        if (!favoriteMap.has(selectedFavoriteId)) {
+            selectQuickMode(CUSTOM_FAVORITE_ID)
+        }
+    }, [favoriteMap, open, selectedFavoriteId, selectQuickMode])
 
     // Register prefill event listener immediately, not dependent on open state
     // This ensures we can catch events that are dispatched right when the modal opens
@@ -1543,10 +1596,23 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                     e.stopImmediatePropagation()
                 }
 
-                const favoriteIndex = Number.parseInt(e.key, 10) - 1
-                const favorite = favorites[favoriteIndex]
-                if (favorite && !favorite.disabled && selectedFavoriteId !== favorite.id) {
-                    selectFavorite(favorite.id)
+                const targetIndex = Number.parseInt(e.key, 10) - 1
+                if (targetIndex === 0) {
+                    if (selectedFavoriteId !== SPEC_FAVORITE_ID) {
+                        selectQuickMode(SPEC_FAVORITE_ID)
+                    }
+                    return
+                }
+                const favoriteIndex = targetIndex - 1
+                if (favoriteIndex < favorites.length) {
+                    const favorite = favorites[favoriteIndex]
+                    if (favorite && !favorite.disabled && selectedFavoriteId !== favorite.id) {
+                        selectFavorite(favorite.id)
+                    }
+                    return
+                }
+                if (favoriteIndex === favorites.length && selectedFavoriteId !== CUSTOM_FAVORITE_ID) {
+                    selectQuickMode(CUSTOM_FAVORITE_ID)
                 }
             } else if (e.key === 'k' && e.metaKey && e.shiftKey) {
                 e.preventDefault()
@@ -1629,7 +1695,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             window.removeEventListener('keydown', handleKeyDown, true)
             window.removeEventListener('schaltwerk:new-session:set-spec', setDraftHandler)
         }
-    }, [open, onClose, agentType, handleAgentTypeChange, handleAgentPreferenceChange, isAvailable, codexModelIds, codexCatalog, defaultCodexModelId, favorites, selectFavorite, selectedFavoriteId])
+    }, [open, onClose, agentType, handleAgentTypeChange, handleAgentPreferenceChange, isAvailable, codexModelIds, codexCatalog, defaultCodexModelId, favorites, selectFavorite, selectQuickMode, selectedFavoriteId])
 
     if (!open) return null
 
@@ -1694,9 +1760,13 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         return t.newSessionModal.tooltips.agentsNotInstalled
     }
 
+    const isSpecMode = selectedFavoriteId === SPEC_FAVORITE_ID
+    const isFavoriteMode = selectedFavoriteId !== null && !isQuickModeId(selectedFavoriteId)
+    const showVersionControls = !createAsDraft && agentType !== 'terminal' && !isFavoriteMode
+
     const footer = (
         <>
-            {!createAsDraft && agentType !== 'terminal' && multiAgentMode && (
+            {showVersionControls && multiAgentMode && (
                 <MultiAgentAllocationDropdown
                     allocations={multiAgentAllocations}
                     selectableAgents={MULTI_AGENT_TYPES}
@@ -1708,7 +1778,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                     onChangeCount={handleAgentCountChange}
                 />
             )}
-            {!createAsDraft && agentType !== 'terminal' && (
+            {showVersionControls && (
                 <Dropdown
                   open={showVersionMenu}
                   onOpenChange={setShowVersionMenu}
@@ -1868,14 +1938,24 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
 	                    </div>
 
                     <div className="flex flex-col gap-2">
-                        {favorites.length > 0 ? (
-                            <div className="overflow-x-auto">
-                                <div className="flex gap-3 pb-1">
-                                    {favorites.map((favorite, index) => (
+                        <div className="overflow-x-auto">
+                            <div className="flex gap-3 pb-1">
+                                <FavoriteCard
+                                    key={SPEC_FAVORITE_ID}
+                                    title={t.newSessionModal.quickModeSpec}
+                                    shortcut={favoriteShortcutLabel(0)}
+                                    summary={t.newSessionModal.quickModeSpecSummary}
+                                    accentColor="var(--color-accent-amber)"
+                                    selected={selectedFavoriteId === SPEC_FAVORITE_ID}
+                                    onClick={() => selectQuickMode(SPEC_FAVORITE_ID)}
+                                />
+                                {favorites.map((favorite, index) => {
+                                    const shortcutIndex = index + 1
+                                    return (
                                         <FavoriteCard
                                             key={favorite.id}
                                             title={favorite.name}
-                                            shortcut={index < 9 ? favoriteShortcutLabel(index) : ''}
+                                            shortcut={shortcutIndex < 9 ? favoriteShortcutLabel(shortcutIndex) : ''}
                                             summary={favorite.summary}
                                             accentColor={favoriteAccentColor(favorite.agentType)}
                                             selected={selectedFavoriteId === favorite.id}
@@ -1885,14 +1965,19 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                             tooltip={favoriteTooltip(favorite.agentTypes, favorite.disabled)}
                                             onClick={() => selectFavorite(favorite.id)}
                                         />
-                                    ))}
-                                </div>
+                                    )
+                                })}
+                                <FavoriteCard
+                                    key={CUSTOM_FAVORITE_ID}
+                                    title={t.newSessionModal.quickModeCustom}
+                                    shortcut={favorites.length + 1 < 9 ? favoriteShortcutLabel(favorites.length + 1) : ''}
+                                    summary={t.newSessionModal.quickModeCustomSummary}
+                                    accentColor="var(--color-border-strong)"
+                                    selected={selectedFavoriteId === CUSTOM_FAVORITE_ID}
+                                    onClick={() => selectQuickMode(CUSTOM_FAVORITE_ID)}
+                                />
                             </div>
-                        ) : (
-                            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                                {t.newSessionModal.favoritesHint}
-                            </p>
-                        )}
+                        </div>
                     </div>
 
                     <div className="flex flex-col flex-1 min-h-0">
@@ -2134,23 +2219,13 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                         </div>
                     )}
 
+                    {!isSpecMode && (
                     <CustomizeAccordion
                         title={t.newSessionModal.customize}
                         expanded={customizeExpanded}
                         onToggle={() => setCustomizeExpanded(prev => !prev)}
                     >
                         <div className="flex flex-col gap-4">
-                            <Checkbox
-                                checked={createAsDraft}
-                                onChange={checked => {
-                                    setCreateAsDraft(checked)
-                                    if (validationError) {
-                                        setValidationError('')
-                                    }
-                                }}
-                                label={t.newSessionModal.createAsSpec}
-                            />
-
                             {!createAsDraft && (
                                 <>
                                     <SessionConfigurationPanel
@@ -2350,6 +2425,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                             )}
                         </div>
                     </CustomizeAccordion>
+                    )}
                 </div>
         </ResizableModal>
     )

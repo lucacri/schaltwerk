@@ -2,6 +2,17 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Quick Spec / Custom Mode in NewSessionModal
+
+The favorites row in the New Session modal now hosts two fixed cards:
+
+- **Spec** (always first) — switches the modal into spec-creation mode in one click. Hides Customize, branch, and agent selection. The footer button becomes "Create Spec".
+- **Custom** (always last) — restores the full configuration UI, including the parallel-versions / multi-agent dropdown next to Cancel.
+
+The "Create as spec" checkbox inside Customize is removed (its job is now owned by the Spec card). The parallel-versions dropdown is hidden whenever a real preset/variant favorite is selected, since presets already define their own slot count.
+
+`⌘1` always picks the Spec card; the user's real favorites shift to `⌘2`–`⌘N`; the next index after the last favorite picks Custom.
+
 ## Consolidation Sessions
 
 Adds a "consolidation" session type for reviewing and reconciling code from multiple parallel agent sessions in a version group.

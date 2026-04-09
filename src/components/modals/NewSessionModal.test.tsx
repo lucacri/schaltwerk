@@ -473,30 +473,27 @@ describe('NewSessionModal', () => {
     expect(call.userEditedName).toBe(false)
   })
 
-  it('responds to spec-mode event by checking Create as spec', async () => {
+  it('responds to spec-mode event by switching to spec mode', async () => {
     render(<ModalProvider><NewSessionModal open={true} onClose={() => {}} onCreate={vi.fn()} /></ModalProvider>)
-    
+
     // Wait for modal to be fully initialized
     await waitFor(() => {
-      expect(screen.getByLabelText(/Create as spec/i)).toBeInTheDocument()
+      expect(screen.getByText('Start new agent')).toBeInTheDocument()
     })
-    
-    const checkbox = screen.getByLabelText(/Create as spec/i) as HTMLInputElement
-    expect(checkbox.checked).toBe(false)
-    
+
     // First, dispatch prefill-pending event to prevent the useLayoutEffect from resetting state
     await emitSessionEvent(UiEvent.NewSessionPrefillPending)
-    
+
     // Now dispatch the set-spec event
     await act(async () => {
       window.dispatchEvent(new Event('schaltwerk:new-session:set-spec'))
     })
-    
-    // Verify checkbox is checked
+
+    // Verify the modal switched to spec mode (title and footer button reflect it)
     await waitFor(() => {
-      const updatedCheckbox = screen.getByLabelText(/Create as spec/i) as HTMLInputElement
-      expect(updatedCheckbox.checked).toBe(true)
+      expect(screen.getByText('Create new spec')).toBeInTheDocument()
     })
+    expect(screen.getByTitle(/Create spec/i)).toBeInTheDocument()
   })
 
   it('prefills spec content when schaltwerk:new-session:prefill event is dispatched', async () => {
@@ -1017,8 +1014,7 @@ describe('NewSessionModal', () => {
 
     // Wait for modal to be initialized in spec mode
     await waitFor(() => {
-      const checkbox = screen.getByLabelText(/Create as spec/)
-      expect(checkbox).toBeChecked()
+      expect(screen.getByText('Create new spec')).toBeInTheDocument()
     })
 
     // Version selector should not be present for specs
@@ -1112,7 +1108,7 @@ describe('NewSessionModal', () => {
 
   it('shows correct labels and placeholders when starting agent from spec', async () => {
     render(<ModalProvider><NewSessionModal open={true} onClose={() => {}} onCreate={vi.fn()} /></ModalProvider>)
-    
+
     // Dispatch the prefill event to simulate starting from a spec
     const draftContent = '# My Spec\n\nThis is the spec content.'
     await emitSessionEvent(UiEvent.NewSessionPrefill, {
@@ -1120,18 +1116,18 @@ describe('NewSessionModal', () => {
       taskContent: draftContent,
       fromDraft: true, // This should make createAsDraft false (starting agent from spec)
     })
-    
+
     // Check that the label is "Initial prompt (optional)" when starting agent from spec
     expect(screen.getByText('Initial prompt (optional)')).toBeInTheDocument()
-    
+
     // Check that the editor contains the spec content
     const content = getTaskEditorContent()
     expect(content).toContain('# My Spec')
     expect(content).toContain('This is the spec content.')
-    
-    // Check that "Create as spec" checkbox is unchecked
-    const checkbox = screen.getByLabelText(/Create as spec/i) as HTMLInputElement
-    expect(checkbox.checked).toBe(false)
+
+    // Modal title should still be "Start new agent" (not "Create new spec")
+    expect(screen.getByText('Start new agent')).toBeInTheDocument()
+    expect(screen.queryByText('Create new spec')).not.toBeInTheDocument()
   })
 
   it('replaces spaces with underscores in the final name', async () => {
@@ -1675,14 +1671,14 @@ describe('NewSessionModal', () => {
       expect(screen.getByRole('button', { name: /Customize/i })).toHaveAttribute('aria-expanded', 'false')
     })
 
-    it('expands customize and shows a hint when no favorites exist', async () => {
+    it('selects the Custom card and expands customize when no favorites exist', async () => {
       openModal()
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Customize/i })).toHaveAttribute('aria-expanded', 'true')
+        expect(getFavoriteCard(/^Custom\b/)).toHaveAttribute('aria-pressed', 'true')
       })
 
-      expect(screen.getByText(/Set up favorites in Settings for quick access/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Customize/i })).toHaveAttribute('aria-expanded', 'true')
     })
 
     it('handles cmd number shortcuts inside the modal and skips disabled favorites', async () => {
@@ -1716,19 +1712,22 @@ describe('NewSessionModal', () => {
 
       openModal()
 
+      // Cmd-shortcut layout (with Codex disabled): 1=Spec, 2=Codex(disabled), 3=Claude Opus, 4=Custom
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Claude Opus/i })).toHaveAttribute('aria-pressed', 'true')
+        expect(getFavoriteCard(/Claude Opus/i)).toHaveAttribute('aria-pressed', 'true')
       })
 
       const backgroundListener = vi.fn()
       window.addEventListener('keydown', backgroundListener, true)
 
-      fireEvent.keyDown(window, { key: '1', metaKey: true })
-      expect(screen.getByRole('button', { name: /Claude Opus/i })).toHaveAttribute('aria-pressed', 'true')
-
+      // Cmd+2 targets the disabled Codex Fast — should be a no-op
       fireEvent.keyDown(window, { key: '2', metaKey: true })
-      expect(screen.getByRole('button', { name: /Claude Opus/i })).toHaveAttribute('aria-pressed', 'true')
+      expect(getFavoriteCard(/Claude Opus/i)).toHaveAttribute('aria-pressed', 'true')
       expect(backgroundListener).not.toHaveBeenCalled()
+
+      // Cmd+3 targets Claude Opus (already selected) — also a no-op
+      fireEvent.keyDown(window, { key: '3', metaKey: true })
+      expect(getFavoriteCard(/Claude Opus/i)).toHaveAttribute('aria-pressed', 'true')
 
       window.removeEventListener('keydown', backgroundListener, true)
     })
@@ -1757,20 +1756,121 @@ describe('NewSessionModal', () => {
         expect(getFavoriteCard(/Codex Fast/i)).toHaveAttribute('aria-pressed', 'true')
       }, { timeout: 3000 })
 
+      // Toggle skip-permissions inside Customize to dirty the favorite-backed config
       fireEvent.click(screen.getByRole('button', { name: /Customize/i }))
-      fireEvent.click(screen.getByLabelText(/Create as spec/i))
+      const skipToggle = await screen.findByRole('button', { name: /Skip permissions/i })
+      fireEvent.click(skipToggle)
 
       await waitFor(() => {
         expect(screen.getByText(/modified/i)).toBeInTheDocument()
       }, { timeout: 3000 })
 
+      // Clicking the already-selected favorite drops back to Custom mode
       fireEvent.click(getFavoriteCard(/Codex Fast/i))
 
       await waitFor(() => {
         expect(getFavoriteCard(/Codex Fast/i)).toHaveAttribute('aria-pressed', 'false')
       }, { timeout: 3000 })
 
+      expect(getFavoriteCard(/^Custom\b/)).toHaveAttribute('aria-pressed', 'true')
       expect(screen.getByRole('button', { name: /Customize/i })).toHaveAttribute('aria-expanded', 'true')
+    })
+  })
+
+  describe('quick mode cards', () => {
+    it('renders fixed Spec and Custom cards in the favorites row', async () => {
+      openModal()
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Spec/)).toBeInTheDocument()
+      })
+      expect(getFavoriteCard(/^Custom\b/)).toBeInTheDocument()
+    })
+
+    it('selecting the Spec card creates a draft via onCreate', async () => {
+      const onCreate = vi.fn()
+      renderWithProviders(
+        <NewSessionModal open={true} onClose={vi.fn()} onCreate={onCreate} />
+      )
+
+      await waitFor(() => expect(getFavoriteCard(/Spec/)).toBeInTheDocument())
+      fireEvent.click(getFavoriteCard(/Spec/))
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Spec/)).toHaveAttribute('aria-pressed', 'true')
+      })
+
+      const editorContainer = await screen.findByTestId('mock-markdown-editor')
+      const textarea = editorContainer.querySelector('textarea') as HTMLTextAreaElement
+      fireEvent.change(textarea, { target: { value: 'My spec content' } })
+
+      const createButton = await screen.findByTitle(/Create spec/i)
+      await waitFor(() => expect((createButton as HTMLButtonElement).disabled).toBe(false))
+      fireEvent.click(createButton)
+
+      await waitFor(() => expect(onCreate).toHaveBeenCalled())
+      const payload = onCreate.mock.calls.at(-1)![0]
+      expect(payload.isSpec).toBe(true)
+      expect(payload.draftContent).toBe('My spec content')
+      expect(payload.baseBranch).toBe('')
+    })
+
+    it('Spec card hides the Customize accordion', async () => {
+      openModal()
+      await waitFor(() => expect(getFavoriteCard(/Spec/)).toBeInTheDocument())
+      fireEvent.click(getFavoriteCard(/Spec/))
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Spec/)).toHaveAttribute('aria-pressed', 'true')
+      })
+      expect(screen.queryByRole('button', { name: /Customize/i })).not.toBeInTheDocument()
+    })
+
+    it('Custom card shows the parallel-versions dropdown', async () => {
+      openModal()
+      await waitFor(() => expect(getFavoriteCard(/^Custom\b/)).toBeInTheDocument())
+      fireEvent.click(getFavoriteCard(/^Custom\b/))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('version-selector')).toBeInTheDocument()
+      })
+    })
+
+    it('hides the parallel-versions dropdown when a real preset favorite is selected', async () => {
+      mockAgentPresets.mockReturnValue({
+        presets: [{
+          id: 'preset-pair',
+          name: 'Pair',
+          slots: [
+            { agentType: 'claude' },
+            { agentType: 'codex' },
+          ],
+          isBuiltIn: false,
+        }],
+        loading: false,
+        error: null,
+        savePresets: vi.fn().mockResolvedValue(true),
+        reloadPresets: vi.fn().mockResolvedValue(undefined),
+      })
+      invokeMock.mockImplementation((cmd: string) => {
+        if (cmd === TauriCommands.GetFavoriteOrder) {
+          return Promise.resolve(['preset-pair'])
+        }
+        return defaultInvokeImplementation(cmd)
+      })
+
+      openModal()
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Pair/)).toBeInTheDocument()
+      })
+      fireEvent.click(getFavoriteCard(/Pair/))
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Pair/)).toHaveAttribute('aria-pressed', 'true')
+      })
+
+      expect(screen.queryByTestId('version-selector')).not.toBeInTheDocument()
     })
   })
 
