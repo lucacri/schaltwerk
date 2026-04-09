@@ -118,6 +118,8 @@ import {
     crossProjectCountsAtom,
     hydrateProjectSessionsForSwitchActionAtom,
     activeSessionsHydratedFromCacheAtom,
+    ACTIVITY_FLUSH_INTERVAL,
+    sessionActivityMapAtom,
 } from './sessions'
 import { projectPathAtom } from './project'
 import { listenEvent as listenEventMock } from '../../common/eventSystem'
@@ -1168,6 +1170,181 @@ describe('sessions atoms', () => {
         })
 
         expect(store.get(allSessionsAtom)).toEqual([])
+    })
+
+    describe('SessionActivity batching', () => {
+        it('buffers activity events and flushes to sessionActivityMapAtom', async () => {
+            await store.set(initializeSessionsEventsActionAtom)
+            emitSessionsRefreshed([
+                createSession({ session_id: 'session-a', last_modified: '2024-01-01T00:00:00.000Z' }),
+            ])
+
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 1704200000,
+                current_task: 'Building...',
+            })
+
+            expect(store.get(sessionActivityMapAtom).get('session-a')).toBeUndefined()
+
+            vi.advanceTimersByTime(ACTIVITY_FLUSH_INTERVAL)
+
+            const activity = store.get(sessionActivityMapAtom).get('session-a')
+            expect(activity?.current_task).toBe('Building...')
+            expect(activity?.last_modified_ts).toBe(1704200000 * 1000)
+        })
+
+        it('does not update allSessionsAtom for activity events', async () => {
+            await store.set(initializeSessionsEventsActionAtom)
+            emitSessionsRefreshed([
+                createSession({ session_id: 'session-a' }),
+            ])
+            const beforeRef = store.get(allSessionsAtom)
+
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 100,
+                current_task: 'Working...',
+            })
+            vi.advanceTimersByTime(ACTIVITY_FLUSH_INTERVAL)
+
+            expect(store.get(allSessionsAtom)).toBe(beforeRef)
+        })
+
+        it('batches multiple events for the same session (last-write-wins)', async () => {
+            await store.set(initializeSessionsEventsActionAtom)
+            emitSessionsRefreshed([
+                createSession({ session_id: 'session-a' }),
+            ])
+
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 100,
+                current_task: 'Task 1',
+            })
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 200,
+                current_task: 'Task 2',
+            })
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 300,
+                current_task: 'Task 3',
+            })
+
+            vi.advanceTimersByTime(ACTIVITY_FLUSH_INTERVAL)
+
+            const activity = store.get(sessionActivityMapAtom).get('session-a')
+            expect(activity?.current_task).toBe('Task 3')
+            expect(activity?.last_modified_ts).toBe(300_000)
+        })
+
+        it('batches events for different sessions into a single update', async () => {
+            await store.set(initializeSessionsEventsActionAtom)
+            emitSessionsRefreshed([
+                createSession({ session_id: 'session-a' }),
+                createSession({ session_id: 'session-b' }),
+            ])
+
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 100,
+                current_task: 'Task A',
+            })
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-b',
+                last_activity_ts: 200,
+                current_task: 'Task B',
+            })
+
+            vi.advanceTimersByTime(ACTIVITY_FLUSH_INTERVAL)
+
+            const map = store.get(sessionActivityMapAtom)
+            expect(map.get('session-a')?.current_task).toBe('Task A')
+            expect(map.get('session-b')?.current_task).toBe('Task B')
+        })
+
+        it('resets buffer after flush and can batch again', async () => {
+            await store.set(initializeSessionsEventsActionAtom)
+            emitSessionsRefreshed([
+                createSession({ session_id: 'session-a' }),
+            ])
+
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 100,
+                current_task: 'Batch 1',
+            })
+            vi.advanceTimersByTime(ACTIVITY_FLUSH_INTERVAL)
+            expect(store.get(sessionActivityMapAtom).get('session-a')?.current_task).toBe('Batch 1')
+
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 200,
+                current_task: 'Batch 2',
+            })
+            vi.advanceTimersByTime(ACTIVITY_FLUSH_INTERVAL)
+            expect(store.get(sessionActivityMapAtom).get('session-a')?.current_task).toBe('Batch 2')
+        })
+
+        it('preserves existing field values when activity event omits them', async () => {
+            await store.set(initializeSessionsEventsActionAtom)
+            emitSessionsRefreshed([
+                createSession({ session_id: 'session-a' }),
+            ])
+
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 100,
+                current_task: 'Initial task',
+                todo_percentage: 50,
+            })
+            vi.advanceTimersByTime(ACTIVITY_FLUSH_INTERVAL)
+
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 200,
+            })
+            vi.advanceTimersByTime(ACTIVITY_FLUSH_INTERVAL)
+
+            const activity = store.get(sessionActivityMapAtom).get('session-a')
+            expect(activity?.current_task).toBe('Initial task')
+            expect(activity?.todo_percentage).toBe(50)
+        })
+
+        it('only creates new entry references for updated sessions', async () => {
+            await store.set(initializeSessionsEventsActionAtom)
+            emitSessionsRefreshed([
+                createSession({ session_id: 'session-a' }),
+                createSession({ session_id: 'session-b' }),
+            ])
+
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 100,
+                current_task: 'Task A',
+            })
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-b',
+                last_activity_ts: 100,
+                current_task: 'Task B',
+            })
+            vi.advanceTimersByTime(ACTIVITY_FLUSH_INTERVAL)
+
+            const refA = store.get(sessionActivityMapAtom).get('session-a')
+            const refB = store.get(sessionActivityMapAtom).get('session-b')
+
+            listeners['schaltwerk:session-activity']?.({
+                session_name: 'session-a',
+                last_activity_ts: 200,
+                current_task: 'Task A Updated',
+            })
+            vi.advanceTimersByTime(ACTIVITY_FLUSH_INTERVAL)
+
+            expect(store.get(sessionActivityMapAtom).get('session-a')).not.toBe(refA)
+            expect(store.get(sessionActivityMapAtom).get('session-b')).toBe(refB)
+        })
     })
 
     it('ignores TerminalAttention for unknown sessions', async () => {

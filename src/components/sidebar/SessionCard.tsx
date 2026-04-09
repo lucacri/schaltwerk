@@ -18,6 +18,7 @@ import { useEpics } from "../../hooks/useEpics";
 import { useTranslation } from "../../common/i18n/useTranslation";
 import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, sessionText } from './sessionCardStyles'
 import { useSessionCardActions } from '../../contexts/SessionCardActionsContext'
+import { useSessionActivity } from '../../store/hooks/useSessionActivity'
 
 interface SessionCardProps {
   session: {
@@ -210,11 +211,12 @@ export const SessionCard = memo<SessionCardProps>(
       return "Select session";
     };
     const s = session.info;
+    const activity = useSessionActivity(s.session_id);
     const sessionName = getSessionDisplayName(s);
-    const taskDescription = s.current_task || s.spec_content;
+    const taskDescription = (activity?.current_task ?? s.current_task) || s.spec_content;
     const additions = s.diff_stats?.insertions || s.diff_stats?.additions || 0;
     const deletions = s.diff_stats?.deletions || 0;
-    const isBlocked = s.is_blocked || false;
+    const isBlocked = (activity?.is_blocked ?? s.is_blocked) || false;
     const isReadyToMerge = s.ready_to_merge || false;
     const promotionReason = s.promotionReason?.trim() || s.promotion_reason?.trim();
     const sessionState = mapSessionUiState(s);
