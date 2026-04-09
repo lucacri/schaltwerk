@@ -861,6 +861,16 @@ function deriveMergeStatusFromSession(session: EnrichedSession): MergeStatus | u
 }
 
 export const allSessionsAtom = atom<EnrichedSession[]>([])
+
+export interface SessionActivityData {
+    last_modified: string
+    last_modified_ts: number
+    current_task?: string | null
+    todo_percentage?: number | null
+    is_blocked?: boolean | null
+}
+export const sessionActivityMapAtom = atom<Map<string, SessionActivityData>>(new Map())
+
 export const crossProjectCountsAtom = atom<Record<string, { attention: number; running: number }>>({})
 const filterModeStateAtom = atom<FilterMode>(getDefaultFilterMode())
 const searchQueryStateAtom = atom<string>('')
@@ -908,6 +918,11 @@ function getExpectedSessionsForProject(projectPath: ProjectKey, create = false):
 }
 let sessionsRefreshedReloadPending = false
 const sessionsEventHandlersForTests = new Map<SchaltEvent, (payload: unknown) => void>()
+
+type SessionActivityPayload = { session_name: string; last_activity_ts: number; current_task?: string | null; todo_percentage?: number | null; is_blocked?: boolean | null }
+export const ACTIVITY_FLUSH_INTERVAL = 1000
+const activityBuffer = new Map<string, SessionActivityPayload>()
+let activityFlushTimer: ReturnType<typeof setTimeout> | null = null
 
 export function __getSessionsEventHandlerForTest(event: SchaltEvent): ((payload: unknown) => void) | undefined {
     return sessionsEventHandlersForTests.get(event)
@@ -1583,27 +1598,33 @@ export const initializeSessionsEventsActionAtom = atom(
         })
 
         await register(SchaltEvent.SessionActivity, (payload) => {
-            const event = payload as { session_name: string; last_activity_ts: number; current_task?: string | null; todo_percentage?: number | null; is_blocked?: boolean | null }
+            const event = payload as SessionActivityPayload
             if (!hasSessionInActiveProject(event?.session_name)) {
                 return
             }
-            set(allSessionsAtom, (prev) => prev.map(session => {
-                if (session.info.session_id !== event.session_name) {
-                    return session
-                }
-                return {
-                    ...session,
-                    info: {
-                        ...session.info,
-                        last_modified: new Date((event.last_activity_ts ?? 0) * 1000).toISOString(),
-                        last_modified_ts: (event.last_activity_ts ?? 0) * 1000,
-                        current_task: event.current_task ?? session.info.current_task,
-                        todo_percentage: event.todo_percentage ?? session.info.todo_percentage,
-                        is_blocked: event.is_blocked ?? session.info.is_blocked,
-                    },
-                }
-            }))
-            syncSnapshotsFromAtom(get, set)
+            activityBuffer.set(event.session_name, event)
+            if (activityFlushTimer === null) {
+                activityFlushTimer = setTimeout(() => {
+                    const updates = new Map(activityBuffer)
+                    activityBuffer.clear()
+                    activityFlushTimer = null
+                    if (updates.size === 0) return
+
+                    set(sessionActivityMapAtom, (prev) => {
+                        const next = new Map(prev)
+                        for (const [id, update] of updates) {
+                            next.set(id, {
+                                last_modified: new Date((update.last_activity_ts ?? 0) * 1000).toISOString(),
+                                last_modified_ts: (update.last_activity_ts ?? 0) * 1000,
+                                current_task: update.current_task ?? prev.get(id)?.current_task ?? null,
+                                todo_percentage: update.todo_percentage ?? prev.get(id)?.todo_percentage ?? null,
+                                is_blocked: update.is_blocked ?? prev.get(id)?.is_blocked ?? null,
+                            })
+                        }
+                        return next
+                    })
+                }, ACTIVITY_FLUSH_INTERVAL)
+            }
         })
 
         await register(SchaltEvent.TerminalAttention, (payload) => {
@@ -1879,6 +1900,14 @@ export const initializeSessionsEventsActionAtom = atom(
                     next.delete(event.session_name)
                     return next
                 })
+                set(sessionActivityMapAtom, (prev) => {
+                    if (!prev.has(event.session_name)) {
+                        return prev
+                    }
+                    const next = new Map(prev)
+                    next.delete(event.session_name)
+                    return next
+                })
             }
 
             previousSessionStates.delete(event.session_name)
@@ -1893,6 +1922,11 @@ export const initializeSessionsEventsActionAtom = atom(
                     logger.debug('[SessionsAtoms] Failed to remove session event listener during cleanup', { error })
                 }
             }
+            if (activityFlushTimer !== null) {
+                clearTimeout(activityFlushTimer)
+                activityFlushTimer = null
+            }
+            activityBuffer.clear()
             sessionsEventsCleanup = null
             sessionsRefreshedReloadPending = false
             sessionsEventHandlersForTests.clear()
@@ -1913,6 +1947,11 @@ export function __resetSessionsTestingState() {
     reloadSessionsReplay = false
     pushToastHandler = null
     sessionsRefreshedReloadPending = false
+    if (activityFlushTimer !== null) {
+        clearTimeout(activityFlushTimer)
+        activityFlushTimer = null
+    }
+    activityBuffer.clear()
     previousSessionsSnapshot = []
     previousSessionStates = new Map()
     projectSessionsSnapshotCache.clear()

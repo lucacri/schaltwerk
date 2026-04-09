@@ -1554,6 +1554,145 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     // Calculate counts based on all sessions (unaffected by search)
     const { specsCount, runningCount, reviewedCount } = calculateFilterCounts(allSessions)
 
+    // Refs for stable version-group callbacks — updated every render so
+    // useCallback([]) wrappers always see the latest values without
+    // changing identity, letting memo() on SessionVersionGroup work.
+    const sessionsRef = useRef(sessions)
+    sessionsRef.current = sessions
+    const sessionsWithNotificationsRef = useRef(sessionsWithNotifications)
+    sessionsWithNotificationsRef.current = sessionsWithNotifications
+    const handleSelectSessionRef = useRef(handleSelectSession)
+    handleSelectSessionRef.current = handleSelectSession
+    const handleSelectBestVersionRef = useRef(handleSelectBestVersion)
+    handleSelectBestVersionRef.current = handleSelectBestVersion
+    const selectionRef = useRef(selection)
+    selectionRef.current = selection
+    const terminalsRef = useRef(terminals)
+    terminalsRef.current = terminals
+
+    const stableHasFollowUpMessage = useCallback(
+        (sessionId: string) => sessionsWithNotificationsRef.current.has(sessionId), [])
+    const stableOnSelect = useCallback(
+        (sessionOrIndex: string | number) => { void handleSelectSessionRef.current(sessionOrIndex) }, [])
+    const stableOnMarkReady = useCallback(
+        (sessionId: string) => { if (markReadyCooldownRef.current) return; void triggerMarkReady(sessionId) },
+        [triggerMarkReady])
+    const stableOnUnmarkReady = useCallback(
+        (sessionId: string) => {
+            if (markReadyCooldownRef.current) return
+            engageMarkReadyCooldown('unmark-ready-click')
+            void (async () => {
+                try {
+                    await invoke(TauriCommands.SchaltwerkCoreUnmarkSessionReady, { name: sessionId })
+                    await reloadSessionsAndRefreshIdle()
+                } catch (err) {
+                    logger.error('Failed to unmark reviewed session:', err)
+                } finally {
+                    scheduleMarkReadyCooldownRelease('unmark-ready-click-complete')
+                }
+            })()
+        }, [engageMarkReadyCooldown, reloadSessionsAndRefreshIdle, scheduleMarkReadyCooldownRelease])
+    const stableOnCancel = useCallback(
+        (sessionId: string, hasUncommitted: boolean) => {
+            const session = sessionsRef.current.find(s => s.info.session_id === sessionId)
+            if (session) {
+                emitUiEvent(UiEvent.SessionAction, {
+                    action: 'cancel', sessionId, sessionName: sessionId,
+                    sessionDisplayName: getSessionDisplayName(session.info),
+                    branch: session.info.branch,
+                    hasUncommittedChanges: hasUncommitted,
+                })
+            }
+        }, [])
+    const stableOnConvertToSpec = useCallback(
+        (sessionId: string) => {
+            const session = sessionsRef.current.find(s => s.info.session_id === sessionId)
+            if (session) {
+                if (isReviewed(session.info)) {
+                    logger.warn(`Cannot convert reviewed session "${sessionId}" to spec. Only running sessions can be converted.`)
+                    return
+                }
+                setConvertToDraftModal({
+                    open: true, sessionName: sessionId,
+                    sessionDisplayName: getSessionDisplayName(session.info),
+                    hasUncommitted: session.info.has_uncommitted_changes || false,
+                })
+            }
+        }, [])
+    const stableOnRunDraft = useCallback(
+        (sessionId: string) => {
+            try {
+                emitUiEvent(UiEvent.StartAgentFromSpec, { name: sessionId })
+            } catch (err) {
+                logger.error('Failed to open start modal from spec:', err)
+            }
+        }, [])
+    const stableOnRefineSpec = useCallback(
+        (sessionId: string) => {
+            const target = sessionsRef.current.find(s => s.info.session_id === sessionId)
+            const displayName = target ? getSessionDisplayName(target.info) : undefined
+            runRefineSpecFlow(sessionId, displayName)
+        }, [runRefineSpecFlow])
+    const stableOnDeleteSpec = useCallback(
+        (sessionId: string) => {
+            const session = sessionsRef.current.find(s => s.info.session_id === sessionId)
+            const sessionDisplayName = session ? getSessionDisplayName(session.info) : sessionId
+            emitUiEvent(UiEvent.SessionAction, {
+                action: 'delete-spec', sessionId, sessionName: sessionId, sessionDisplayName,
+                branch: session?.info.branch, hasUncommittedChanges: false,
+            })
+        }, [])
+    const stableOnSelectBestVersion = useCallback(
+        (groupBaseName: string, selectedSessionId: string) => {
+            handleSelectBestVersionRef.current(groupBaseName, selectedSessionId)
+        }, [])
+    const stableOnReset = useCallback(
+        (sessionId: string) => {
+            void (async () => {
+                const sel = selectionRef.current
+                const currentSelection = sel.kind === 'session' && sel.payload === sessionId
+                    ? sel : { kind: 'session' as const, payload: sessionId }
+                await resetSession(currentSelection, terminalsRef.current)
+            })()
+        }, [resetSession])
+    const stableOnRestartTerminals = useCallback(
+        (sessionId: string) => { void handleRestartTerminals(sessionId) }, [handleRestartTerminals])
+    const stableOnSwitchModel = useCallback(
+        (sessionId: string) => {
+            setSwitchModelSessionId(sessionId)
+            const session = sessionsRef.current.find(s => s.info.session_id === sessionId)
+            const initialAgentType = normalizeAgentType(session?.info.original_agent_type)
+            const initialSkipPermissions = Boolean(session?.info && (session.info as { original_skip_permissions?: boolean }).original_skip_permissions)
+            setSwitchOrchestratorModal({ open: true, initialAgentType, initialSkipPermissions, targetSessionId: sessionId })
+        }, [normalizeAgentType])
+    const stableOnCreatePullRequest = useCallback(
+        (sessionId: string) => { void handlePrShortcut(sessionId) }, [handlePrShortcut])
+    const stableOnCreateGitlabMr = useCallback(
+        (sessionId: string) => { handleOpenGitlabMrModal(sessionId) }, [handleOpenGitlabMrModal])
+    const stableOnQuickMerge = useCallback(
+        (sessionId: string) => { void handleMergeShortcut(sessionId) }, [handleMergeShortcut])
+    const stableOnLinkPr = useCallback(
+        (sessionId: string, prNumber: number, prUrl: string) => { void handleLinkPr(sessionId, prNumber, prUrl) },
+        [handleLinkPr])
+    const stableOnConsolidate = useCallback(
+        (group: SessionVersionGroupType) => {
+            const detail = buildConsolidationGroupDetail(group)
+            if (detail) { emitUiEvent(UiEvent.ConsolidateVersionGroup, detail) }
+        }, [])
+    const stableOnTerminateAll = useCallback(
+        (group: SessionVersionGroupType) => {
+            const runningSessions = group.versions
+                .filter(v => v.session.info.session_state === 'running')
+                .map(v => ({
+                    id: v.session.info.session_id, name: v.session.info.session_id,
+                    displayName: getSessionDisplayName(v.session.info),
+                    branch: v.session.info.branch,
+                    hasUncommittedChanges: Boolean(v.session.info.has_uncommitted_changes),
+                }))
+            if (runningSessions.length === 0) return
+            emitUiEvent(UiEvent.TerminateVersionGroup, { baseName: group.baseName, sessions: runningSessions })
+        }, [])
+
     return (
         <div
             ref={sidebarRef}
@@ -1894,142 +2033,33 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                         selection={selection}
                                         startIndex={groupStartIndex}
 
-                                        hasFollowUpMessage={(sessionId: string) => sessionsWithNotifications.has(sessionId)}
-                                        onSelect={(sessionOrIndex) => {
-                                            void handleSelectSession(sessionOrIndex)
-                                        }}
-                                        onMarkReady={(sessionId) => {
-                                            if (markReadyCooldownRef.current) {
-                                                return
-                                            }
-                                            void triggerMarkReady(sessionId)
-                                        }}
-                                        onUnmarkReady={(sessionId) => {
-                                            if (markReadyCooldownRef.current) {
-                                                return
-                                            }
-
-                                            engageMarkReadyCooldown('unmark-ready-click')
-                                            void (async () => {
-                                                try {
-                                                    await invoke(TauriCommands.SchaltwerkCoreUnmarkSessionReady, { name: sessionId })
-                                                    await reloadSessionsAndRefreshIdle()
-                                                } catch (err) {
-                                                    logger.error('Failed to unmark reviewed session:', err)
-                                                } finally {
-                                                    scheduleMarkReadyCooldownRelease('unmark-ready-click-complete')
-                                                }
-                                            })()
-                                        }}
-                                        onCancel={(sessionId, hasUncommitted) => {
-                                            const session = sessions.find(s => s.info.session_id === sessionId)
-                                            if (session) {
-                                                const sessionDisplayName = getSessionDisplayName(session.info)
-                                                emitUiEvent(UiEvent.SessionAction, {
-                                                    action: 'cancel',
-                                                    sessionId,
-                                                    sessionName: sessionId,
-                                                    sessionDisplayName,
-                                                    branch: session.info.branch,
-                                                    hasUncommittedChanges: hasUncommitted,
-                                                })
-                                            }
-                                        }}
-                                        onConvertToSpec={(sessionId) => {
-                                            const session = sessions.find(s => s.info.session_id === sessionId)
-                                            if (session) {
-                                                // Only allow converting running sessions to specs, not reviewed sessions
-                                                if (isReviewed(session.info)) {
-                                                    logger.warn(`Cannot convert reviewed session "${sessionId}" to spec. Only running sessions can be converted.`)
-                                                    return
-                                                }
-                                                // Open confirmation modal
-                                                setConvertToDraftModal({
-                                                    open: true,
-                                                    sessionName: sessionId,
-                                                    sessionDisplayName: getSessionDisplayName(session.info),
-                                                    hasUncommitted: session.info.has_uncommitted_changes || false
-                                                })
-                                            }
-                                        }}
-                                        onRunDraft={(sessionId) => {
-                                            try {
-                                                emitUiEvent(UiEvent.StartAgentFromSpec, { name: sessionId })
-                                            } catch (err) {
-                                                logger.error('Failed to open start modal from spec:', err)
-                                            }
-                                        }}
-                                        onRefineSpec={(sessionId) => {
-                                            const target = sessions.find(s => s.info.session_id === sessionId)
-                                            const displayName = target ? getSessionDisplayName(target.info) : undefined
-                                            runRefineSpecFlow(sessionId, displayName)
-                                        }}
-                                        onDeleteSpec={(sessionId) => {
-                                            const session = sessions.find(s => s.info.session_id === sessionId)
-                                            const sessionDisplayName = session ? getSessionDisplayName(session.info) : sessionId
-
-                                            emitUiEvent(UiEvent.SessionAction, {
-                                                action: 'delete-spec',
-                                                sessionId,
-                                                sessionName: sessionId,
-                                                sessionDisplayName,
-                                                branch: session?.info.branch,
-                                                hasUncommittedChanges: false,
-                                            })
-                                        }}
-                                        onSelectBestVersion={handleSelectBestVersion}
-                                        onReset={(sessionId) => {
-                                            void (async () => {
-                                                const currentSelection = selection.kind === 'session' && selection.payload === sessionId
-                                                    ? selection
-                                                    : { kind: 'session' as const, payload: sessionId }
-                                                await resetSession(currentSelection, terminals)
-                                            })()
-                                        }}
-                                        onRestartTerminals={(sessionId) => { void handleRestartTerminals(sessionId) }}
-                                        onSwitchModel={(sessionId) => {
-                                            setSwitchModelSessionId(sessionId)
-                                            const session = sessions.find(s => s.info.session_id === sessionId)
-                                            const initialAgentType = normalizeAgentType(session?.info.original_agent_type)
-                                            const initialSkipPermissions = Boolean(session?.info && (session.info as { original_skip_permissions?: boolean }).original_skip_permissions)
-                                            setSwitchOrchestratorModal({ open: true, initialAgentType, initialSkipPermissions, targetSessionId: sessionId })
-                                        }}
-                                        onCreatePullRequest={(sessionId) => { void handlePrShortcut(sessionId) }}
-                                        onCreateGitlabMr={(sessionId) => { handleOpenGitlabMrModal(sessionId) }}
+                                        hasFollowUpMessage={stableHasFollowUpMessage}
+                                        onSelect={stableOnSelect}
+                                        onMarkReady={stableOnMarkReady}
+                                        onUnmarkReady={stableOnUnmarkReady}
+                                        onCancel={stableOnCancel}
+                                        onConvertToSpec={stableOnConvertToSpec}
+                                        onRunDraft={stableOnRunDraft}
+                                        onRefineSpec={stableOnRefineSpec}
+                                        onDeleteSpec={stableOnDeleteSpec}
+                                        onSelectBestVersion={stableOnSelectBestVersion}
+                                        onReset={stableOnReset}
+                                        onRestartTerminals={stableOnRestartTerminals}
+                                        onSwitchModel={stableOnSwitchModel}
+                                        onCreatePullRequest={stableOnCreatePullRequest}
+                                        onCreateGitlabMr={stableOnCreateGitlabMr}
                                         resettingSelection={resettingSelection}
                                         isSessionRunning={isSessionRunning}
                                         onMerge={handleMergeSession}
-                                        onQuickMerge={(sessionId) => { void handleMergeShortcut(sessionId) }}
+                                        onQuickMerge={stableOnQuickMerge}
                                         isMergeDisabled={isSessionMerging}
                                         getMergeStatus={getMergeStatus}
                                         isMarkReadyDisabled={isMarkReadyCoolingDown}
                                         isSessionBusy={isSessionMutating}
                                         onRename={handleRenameSession}
-                                        onLinkPr={(sessionId, prNumber, prUrl) => { void handleLinkPr(sessionId, prNumber, prUrl) }}
-                                        onConsolidate={(group) => {
-                                            const detail = buildConsolidationGroupDetail(group)
-                                            if (detail) {
-                                                emitUiEvent(UiEvent.ConsolidateVersionGroup, detail)
-                                            }
-                                        }}
-                                        onTerminateAll={(group) => {
-                                            const runningSessions = group.versions
-                                                .filter(v => v.session.info.session_state === 'running')
-                                                .map(v => ({
-                                                    id: v.session.info.session_id,
-                                                    name: v.session.info.session_id,
-                                                    displayName: getSessionDisplayName(v.session.info),
-                                                    branch: v.session.info.branch,
-                                                    hasUncommittedChanges: Boolean(v.session.info.has_uncommitted_changes),
-                                                }))
-
-                                            if (runningSessions.length === 0) return
-
-                                            emitUiEvent(UiEvent.TerminateVersionGroup, {
-                                                baseName: group.baseName,
-                                                sessions: runningSessions,
-                                            })
-                                        }}
+                                        onLinkPr={stableOnLinkPr}
+                                        onConsolidate={stableOnConsolidate}
+                                        onTerminateAll={stableOnTerminateAll}
                                     />
                                 )
                             }
