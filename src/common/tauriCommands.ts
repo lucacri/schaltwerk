@@ -243,6 +243,7 @@ export const TauriCommands = {
   SetTerminalDividerPosition: 'set_terminal_divider_position',
   SetTerminalSettings: 'set_terminal_settings',
   SetTutorialCompleted: 'set_tutorial_completed',
+  SetVisibleSession: 'set_visible_session',
   StartFileWatcher: 'start_file_watcher',
   StopFileWatcher: 'stop_file_watcher',
   TerminalExists: 'terminal_exists',
