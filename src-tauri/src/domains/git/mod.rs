@@ -7,6 +7,7 @@ pub mod history;
 pub mod operations;
 pub mod repository;
 pub mod service;
+pub mod snapshot;
 pub mod stats;
 pub mod worktrees;
 

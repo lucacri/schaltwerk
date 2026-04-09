@@ -24,8 +24,8 @@ use tokio::time::timeout;
 
 use crate::domains::git::operations::{
     commit_all_changes, get_uncommitted_changes_status, has_uncommitted_changes,
-    uncommitted_sample_paths,
 };
+use crate::domains::git::snapshot::WorktreeSnapshot;
 use crate::domains::git::service as git;
 use crate::domains::merge::lock;
 use crate::domains::merge::types::{
@@ -420,9 +420,14 @@ impl MergeService {
             return Ok(());
         }
 
-        if has_uncommitted_changes(&context.repo_path)? {
-            let sample = uncommitted_sample_paths(&context.repo_path, 3)
-                .unwrap_or_default()
+        let snapshot = WorktreeSnapshot::capture(repo)?;
+        if snapshot.has_uncommitted {
+            let sample: String = snapshot
+                .uncommitted_sample
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
                 .join(", ");
             let hint = if sample.is_empty() {
                 String::new()
@@ -430,9 +435,9 @@ impl MergeService {
                 format!(" Offending paths: {sample}")
             };
             warn!(
-                "{OPERATION_LABEL}: parent branch '{branch}' has uncommitted changes in repository '{repo}'. Merge will attempt to preserve local changes, but may fail if conflicts occur.{hint}",
+                "{OPERATION_LABEL}: parent branch '{branch}' has uncommitted changes in repository '{repo_path}'. Merge will attempt to preserve local changes, but may fail if conflicts occur.{hint}",
                 branch = context.parent_branch,
-                repo = context.repo_path.display(),
+                repo_path = context.repo_path.display(),
                 hint = hint
             );
         }
@@ -483,9 +488,14 @@ impl MergeService {
             ));
         }
 
-        if has_uncommitted_changes(&session.worktree_path)? {
-            let sample = uncommitted_sample_paths(&session.worktree_path, 3)
-                .unwrap_or_default()
+        let snapshot = WorktreeSnapshot::from_path(&session.worktree_path)?;
+        if snapshot.has_uncommitted {
+            let sample: String = snapshot
+                .uncommitted_sample
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
                 .join(", ");
             return Err(anyhow!(
                 "Session '{session_name}' has uncommitted changes. Clean the worktree before merging.{}",

@@ -78,17 +78,25 @@ fn resolve_launch_agent(
     ))
 }
 
+fn compute_commits_ahead_count_with_repo(
+    repo: &git2::Repository,
+    session_branch: &str,
+    parent_branch: &str,
+) -> Option<u32> {
+    let session_oid =
+        crate::domains::merge::service::resolve_branch_oid(repo, session_branch).ok()?;
+    let parent_oid =
+        crate::domains::merge::service::resolve_branch_oid(repo, parent_branch).ok()?;
+    crate::domains::merge::service::count_commits_ahead(repo, session_oid, parent_oid).ok()
+}
+
 fn compute_commits_ahead_count(
     worktree_path: &Path,
     session_branch: &str,
     parent_branch: &str,
 ) -> Option<u32> {
     let repo = git2::Repository::open(worktree_path).ok()?;
-    let session_oid =
-        crate::domains::merge::service::resolve_branch_oid(&repo, session_branch).ok()?;
-    let parent_oid =
-        crate::domains::merge::service::resolve_branch_oid(&repo, parent_branch).ok()?;
-    crate::domains::merge::service::count_commits_ahead(&repo, session_oid, parent_oid).ok()
+    compute_commits_ahead_count_with_repo(&repo, session_branch, parent_branch)
 }
 
 /// Info needed for session cancellation (extracted with brief lock, then released)
@@ -3669,7 +3677,18 @@ impl SessionManager {
         let session = self.db_manager.get_session_by_name(session_name)?;
 
         let ready_to_merge = if session.worktree_path.exists() {
-            !git::has_uncommitted_changes(&session.worktree_path)?
+            match git::calculate_git_stats_fast(
+                &session.worktree_path,
+                &session.parent_branch,
+            ) {
+                Ok(stats) => !stats.has_uncommitted,
+                Err(e) => {
+                    log::warn!(
+                        "mark_session_ready: stats computation failed for '{session_name}': {e}, falling back to uncommitted check"
+                    );
+                    !git::has_uncommitted_changes(&session.worktree_path)?
+                }
+            }
         } else {
             log::warn!(
                 "Worktree for session '{session_name}' is missing at {}; marking as reviewed with ready_to_merge=false",
@@ -3682,10 +3701,6 @@ impl SessionManager {
             .update_session_ready_to_merge(&session.id, ready_to_merge)?;
         self.db_manager
             .update_session_state(&session.id, SessionState::Reviewed)?;
-
-        if let Err(e) = self.db_manager.update_git_stats(&session.id) {
-            log::warn!("mark_session_ready: failed to refresh git stats for '{session_name}': {e}");
-        }
 
         Ok(ready_to_merge)
     }
