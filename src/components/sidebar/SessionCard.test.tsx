@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../tests/test-utils'
 import { SessionCard } from './SessionCard'
+import { SessionCardActionsProvider, type SessionCardActions } from '../../contexts/SessionCardActionsContext'
 import type { EnrichedSession, SessionInfo } from '../../types/session'
 
 const invokeMock = vi.hoisted(() => vi.fn())
@@ -49,6 +50,26 @@ const baseSession: EnrichedSession = {
   terminals: [] as string[],
 }
 
+const mockActions: SessionCardActions = {
+  onSelect: vi.fn(),
+  onMarkReady: vi.fn(),
+  onUnmarkReady: vi.fn(),
+  onCancel: vi.fn(),
+  onConvertToSpec: vi.fn(),
+  onRunDraft: vi.fn(),
+  onRefineSpec: vi.fn(),
+  onDeleteSpec: vi.fn(),
+  onReset: vi.fn(),
+  onRestartTerminals: vi.fn(),
+  onSwitchModel: vi.fn(),
+  onCreatePullRequest: vi.fn(),
+  onCreateGitlabMr: vi.fn(),
+  onMerge: vi.fn(),
+  onQuickMerge: vi.fn(),
+  onRename: vi.fn().mockResolvedValue(undefined),
+  onLinkPr: vi.fn(),
+}
+
 describe('SessionCard dirty indicator', () => {
   it('shows dirty indicator for reviewed sessions with uncommitted changes', () => {
     const session: EnrichedSession = { 
@@ -63,18 +84,15 @@ describe('SessionCard dirty indicator', () => {
       } 
     }
     renderWithProviders(
-      <SessionCard
-        session={session}
-        index={0}
-        isSelected
-
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={session}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
     )
 
     const indicator = screen.getByRole('button', { name: /has uncommitted changes/i })
@@ -94,18 +112,15 @@ describe('SessionCard dirty indicator', () => {
     }
 
     renderWithProviders(
-      <SessionCard
-        session={session}
-        index={0}
-        isSelected
-
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={session}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(screen.getByRole('button', { name: /has uncommitted changes/i })).toBeInTheDocument()
@@ -113,27 +128,24 @@ describe('SessionCard dirty indicator', () => {
 
   it('does not show dirty indicator when has_uncommitted_changes is false for reviewed session', () => {
     renderWithProviders(
-      <SessionCard
-        session={{
-          ...baseSession,
-          info: {
-            ...baseSession.info,
-            ready_to_merge: true,
-            session_state: 'reviewed',
-            status: 'active',
-            dirty_files_count: 0,
-          },
-        }}
-        index={0}
-        isSelected
-
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              ready_to_merge: true,
+              session_state: 'reviewed',
+              status: 'active',
+              dirty_files_count: 0,
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(screen.queryByRole('button', { name: /has uncommitted changes/i })).toBeNull()
@@ -143,25 +155,23 @@ describe('SessionCard dirty indicator', () => {
 describe('SessionCard stats-first layout', () => {
   it('shows stats and hides actions by default when not selected', () => {
     renderWithProviders(
-      <SessionCard
-        session={{
-          ...baseSession,
-          info: {
-            ...baseSession.info,
-            dirty_files_count: 3,
-            commits_ahead_count: 5,
-            diff_stats: { files_changed: 4, additions: 42, deletions: 18, insertions: 42 },
-          },
-        }}
-        index={0}
-        isSelected={false}
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              dirty_files_count: 3,
+              commits_ahead_count: 5,
+              diff_stats: { files_changed: 4, additions: 42, deletions: 18, insertions: 42 },
+            },
+          }}
+          index={0}
+          isSelected={false}
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(screen.getByRole('button', { name: /has uncommitted changes/i })).toHaveTextContent('3 dirty')
@@ -174,17 +184,15 @@ describe('SessionCard stats-first layout', () => {
 
   it('expands selected session cards by default', () => {
     renderWithProviders(
-      <SessionCard
-        session={baseSession}
-        index={0}
-        isSelected
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={baseSession}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(screen.getByTestId('session-actions')).toBeInTheDocument()
@@ -203,18 +211,15 @@ describe('SessionCard running tag', () => {
     }
 
     renderWithProviders(
-      <SessionCard
-        session={session}
-        index={0}
-        isSelected
-
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={session}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning
+        />
+      </SessionCardActionsProvider>
     )
 
     const card = screen.getByRole('button', { name: /selected session/i })
@@ -227,26 +232,24 @@ describe('SessionCard running tag', () => {
 describe('SessionCard metadata badges', () => {
   it('shows issue and PR badges for running sessions before diff stats', () => {
     renderWithProviders(
-      <SessionCard
-        session={{
-          ...baseSession,
-          info: {
-            ...baseSession.info,
-            issue_number: 42,
-            issue_url: 'https://github.com/example/repo/issues/42',
-            pr_number: 15,
-            pr_url: 'https://github.com/example/repo/pull/15',
-          },
-        }}
-        index={0}
-        isSelected
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              issue_number: 42,
+              issue_url: 'https://github.com/example/repo/issues/42',
+              pr_number: 15,
+              pr_url: 'https://github.com/example/repo/pull/15',
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
     )
 
     const issueBadge = screen.getByRole('button', { name: 'Open issue #42' })
@@ -262,24 +265,22 @@ describe('SessionCard metadata badges', () => {
     invokeMock.mockResolvedValue(undefined)
 
     renderWithProviders(
-      <SessionCard
-        session={{
-          ...baseSession,
-          info: {
-            ...baseSession.info,
-            issue_number: 42,
-            issue_url: 'https://github.com/example/repo/issues/42',
-          },
-        }}
-        index={0}
-        isSelected
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              issue_number: 42,
+              issue_url: 'https://github.com/example/repo/issues/42',
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Open issue #42' }))
@@ -291,28 +292,26 @@ describe('SessionCard metadata badges', () => {
 
   it('shows linked badges for spec sessions', () => {
     renderWithProviders(
-      <SessionCard
-        session={{
-          ...baseSession,
-          info: {
-            ...baseSession.info,
-            session_state: 'spec',
-            status: 'spec',
-            issue_number: 9,
-            issue_url: 'https://github.com/example/repo/issues/9',
-            pr_number: 12,
-            pr_url: 'https://github.com/example/repo/pull/12',
-          },
-        }}
-        index={0}
-        isSelected
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              session_state: 'spec',
+              status: 'spec',
+              issue_number: 9,
+              issue_url: 'https://github.com/example/repo/issues/9',
+              pr_number: 12,
+              pr_url: 'https://github.com/example/repo/pull/12',
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(screen.getByText('Spec')).toBeInTheDocument()
@@ -324,19 +323,16 @@ describe('SessionCard metadata badges', () => {
 describe('SessionCard review cooldown', () => {
   it('disables the mark reviewed action when mark ready is temporarily blocked', () => {
     renderWithProviders(
-      <SessionCard
-        session={baseSession}
-        index={0}
-        isSelected
-
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning
-        isMarkReadyDisabled
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={baseSession}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning
+          isMarkReadyDisabled
+        />
+      </SessionCardActionsProvider>
     )
 
     const markReviewedButton = screen.getByRole('button', { name: 'Mark as reviewed' })
@@ -347,23 +343,21 @@ describe('SessionCard review cooldown', () => {
 describe('SessionCard promoted badge', () => {
   it('shows promoted badge and reason when promotion_reason is set', () => {
     renderWithProviders(
-      <SessionCard
-        session={{
-          ...baseSession,
-          info: {
-            ...baseSession.info,
-            promotion_reason: 'Best test coverage. Cherry-picked caching from v2.',
-          },
-        }}
-        index={0}
-        isSelected
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              promotion_reason: 'Best test coverage. Cherry-picked caching from v2.',
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
     )
 
     const badge = screen.getByText(/Promoted/i)
@@ -374,17 +368,15 @@ describe('SessionCard promoted badge', () => {
 
   it('does not show promoted badge when promotion_reason is null', () => {
     renderWithProviders(
-      <SessionCard
-        session={baseSession}
-        index={0}
-        isSelected
-        hasFollowUpMessage={false}
-        onSelect={() => {}}
-        onMarkReady={() => {}}
-        onUnmarkReady={() => {}}
-        onCancel={() => {}}
-        isRunning={false}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={baseSession}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(screen.queryByText(/Promoted/i)).toBeNull()

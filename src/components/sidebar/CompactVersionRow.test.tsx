@@ -3,6 +3,7 @@ import { fireEvent, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { renderWithProviders } from '../../tests/test-utils'
 import { CompactVersionRow } from './CompactVersionRow'
+import { SessionCardActionsProvider, type SessionCardActions } from '../../contexts/SessionCardActionsContext'
 import type { EnrichedSession, SessionInfo } from '../../types/session'
 
 const invokeMock = vi.hoisted(() => vi.fn())
@@ -53,6 +54,26 @@ const baseSession: EnrichedSession = {
   terminals: [],
 }
 
+const mockActions: SessionCardActions = {
+  onSelect: vi.fn(),
+  onMarkReady: vi.fn(),
+  onUnmarkReady: vi.fn(),
+  onCancel: vi.fn(),
+  onConvertToSpec: vi.fn(),
+  onRunDraft: vi.fn(),
+  onRefineSpec: vi.fn(),
+  onDeleteSpec: vi.fn(),
+  onReset: vi.fn(),
+  onRestartTerminals: vi.fn(),
+  onSwitchModel: vi.fn(),
+  onCreatePullRequest: vi.fn(),
+  onCreateGitlabMr: vi.fn(),
+  onMerge: vi.fn(),
+  onQuickMerge: vi.fn(),
+  onRename: vi.fn().mockResolvedValue(undefined),
+  onLinkPr: vi.fn(),
+}
+
 function renderRow(overrides: Partial<ComponentProps<typeof CompactVersionRow>> = {}) {
   const props: ComponentProps<typeof CompactVersionRow> = {
     session: baseSession,
@@ -70,15 +91,11 @@ function renderRow(overrides: Partial<ComponentProps<typeof CompactVersionRow>> 
     isBusy: false,
     isHighlighted: false,
     isConsolidationSourceHighlighted: false,
-    onSelect: vi.fn(),
-    onMarkReady: vi.fn(),
-    onUnmarkReady: vi.fn(),
-    onCancel: vi.fn(),
     onHover: vi.fn(),
     ...overrides,
   }
 
-  renderWithProviders(<CompactVersionRow {...props} />)
+  renderWithProviders(<SessionCardActionsProvider actions={mockActions}><CompactVersionRow {...props} /></SessionCardActionsProvider>)
   return props
 }
 
@@ -148,11 +165,10 @@ describe('CompactVersionRow', () => {
   })
 
   it('selects the session on click', () => {
-    const onSelect = vi.fn()
-    renderRow({ onSelect })
+    renderRow()
 
     fireEvent.click(screen.getByTestId('compact-version-row'))
-    expect(onSelect).toHaveBeenCalledWith('feature_v2')
+    expect(mockActions.onSelect).toHaveBeenCalledWith('feature_v2')
   })
 
   it('expands selected rows by default and shows actions', () => {

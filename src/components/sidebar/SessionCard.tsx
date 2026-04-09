@@ -17,6 +17,7 @@ import { detectPlatformSafe } from "../../keyboardShortcuts/helpers";
 import { useEpics } from "../../hooks/useEpics";
 import { useTranslation } from "../../common/i18n/useTranslation";
 import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, sessionText } from './sessionCardStyles'
+import { useSessionCardActions } from '../../contexts/SessionCardActionsContext'
 
 interface SessionCardProps {
   session: {
@@ -32,32 +33,15 @@ interface SessionCardProps {
   showPromoteIcon?: boolean;
   willBeDeleted?: boolean;
   isPromotionPreview?: boolean;
-  onSelect: (sessionId: string) => void;
-  onMarkReady: (sessionId: string) => void;
-  onUnmarkReady: (sessionId: string) => void;
-  onCancel: (sessionId: string, hasUncommitted: boolean) => void;
-  onConvertToSpec?: (sessionId: string) => void;
-  onRunDraft?: (sessionId: string) => void;
-  onRefineSpec?: (sessionId: string) => void;
-  onDeleteSpec?: (sessionId: string) => void;
   onPromoteVersion?: () => void;
   onPromoteVersionHover?: () => void;
   onPromoteVersionHoverEnd?: () => void;
-  onReset?: (sessionId: string) => void;
-  onRestartTerminals?: (sessionId: string) => void;
-  onSwitchModel?: (sessionId: string) => void;
-  onCreatePullRequest?: (sessionId: string) => void;
-  onCreateGitlabMr?: (sessionId: string) => void;
   isResetting?: boolean;
   isRunning?: boolean;
-  onMerge?: (sessionId: string) => void;
-  onQuickMerge?: (sessionId: string) => void;
   disableMerge?: boolean;
   mergeStatus?: MergeStatus;
   isMarkReadyDisabled?: boolean;
   isBusy?: boolean;
-  onRename?: (sessionId: string, newName: string) => Promise<void>;
-  onLinkPr?: (sessionId: string, prNumber: number, prUrl: string) => void;
   siblings?: SessionInfo[];
   onHover?: (sessionId: string | null) => void;
   isHighlighted?: boolean;
@@ -163,36 +147,26 @@ export const SessionCard = memo<SessionCardProps>(
     showPromoteIcon = false,
     willBeDeleted = false,
     isPromotionPreview = false,
-    onSelect,
-    onMarkReady,
-    onUnmarkReady,
-    onCancel,
-    onConvertToSpec,
-    onRunDraft,
-    onRefineSpec,
-    onDeleteSpec,
     onPromoteVersion,
     onPromoteVersionHover,
     onPromoteVersionHoverEnd,
-    onReset,
-    onRestartTerminals,
-    onSwitchModel,
-    onCreatePullRequest,
-    onCreateGitlabMr,
     isResetting = false,
     isRunning = false,
-    onMerge,
-    onQuickMerge,
     disableMerge = false,
     mergeStatus = "idle",
     isMarkReadyDisabled = false,
     isBusy = false,
-    onRename,
-    onLinkPr,
     siblings = [],
     onHover,
     isHighlighted = false
     }) => {
+    const {
+      onSelect, onMarkReady, onUnmarkReady, onCancel,
+      onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec,
+      onReset, onRestartTerminals, onSwitchModel,
+      onCreatePullRequest, onCreateGitlabMr,
+      onMerge, onQuickMerge, onRename, onLinkPr,
+    } = useSessionCardActions()
 
     const { t } = useTranslation();
     const { setItemEpic } = useEpics();

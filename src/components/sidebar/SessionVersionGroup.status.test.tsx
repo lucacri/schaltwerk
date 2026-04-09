@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { SessionVersionGroup } from './SessionVersionGroup'
 import type { SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
 import type { EnrichedSession } from '../../types/session'
+import { SessionCardActionsProvider, type SessionCardActions } from '../../contexts/SessionCardActionsContext'
 
 vi.mock('./SessionCard', () => ({
   SessionCard: ({ session }: { session: EnrichedSession }) => (
@@ -69,21 +70,39 @@ const baseGroup: SessionVersionGroupType = {
 
 const requiredCallbacks = {
   hasFollowUpMessage: () => false,
+}
+
+const mockActions: SessionCardActions = {
   onSelect: vi.fn(),
   onMarkReady: vi.fn(),
   onUnmarkReady: vi.fn(),
-  onCancel: vi.fn()
+  onCancel: vi.fn(),
+  onConvertToSpec: vi.fn(),
+  onRunDraft: vi.fn(),
+  onRefineSpec: vi.fn(),
+  onDeleteSpec: vi.fn(),
+  onReset: vi.fn(),
+  onRestartTerminals: vi.fn(),
+  onSwitchModel: vi.fn(),
+  onCreatePullRequest: vi.fn(),
+  onCreateGitlabMr: vi.fn(),
+  onMerge: vi.fn(),
+  onQuickMerge: vi.fn(),
+  onRename: vi.fn().mockResolvedValue(undefined),
+  onLinkPr: vi.fn(),
 }
 
 describe('SessionVersionGroup status summary', () => {
   it('does not show a primary status badge in the group header', () => {
     const { queryByLabelText } = render(
-      <SessionVersionGroup
-        group={baseGroup}
-        selection={{ kind: 'session', payload: 'unrelated' }}
-        startIndex={0}
-        {...requiredCallbacks}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(queryByLabelText('Group status: Running')).toBeNull()
@@ -100,12 +119,14 @@ describe('SessionVersionGroup status summary', () => {
     }
 
     const { queryByLabelText } = render(
-      <SessionVersionGroup
-        group={reviewedGroup}
-        selection={{ kind: 'session', payload: 'unrelated' }}
-        startIndex={0}
-        {...requiredCallbacks}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={reviewedGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(queryByLabelText('Group status: Running')).toBeNull()
@@ -114,12 +135,14 @@ describe('SessionVersionGroup status summary', () => {
 
   it('keeps status area visible when collapsed', () => {
     const { getByRole, getByTestId } = render(
-      <SessionVersionGroup
-        group={baseGroup}
-        selection={{ kind: 'session', payload: 'unrelated' }}
-        startIndex={0}
-        {...requiredCallbacks}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
     )
 
     const statusRow = getByTestId('version-group-status')
@@ -142,13 +165,15 @@ describe('SessionVersionGroup status summary', () => {
     }
 
     const { getByTestId } = render(
-      <SessionVersionGroup
-        group={groupWithSpecs}
-        selection={{ kind: 'session', payload: 'unrelated' }}
-        startIndex={0}
-        onConsolidate={onConsolidate}
-        {...requiredCallbacks}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={groupWithSpecs}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onConsolidate={onConsolidate}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
     )
 
     const button = getByTestId('consolidate-versions-button')
@@ -163,13 +188,15 @@ describe('SessionVersionGroup status summary', () => {
     const onConsolidate = vi.fn()
 
     const { getByTestId } = render(
-      <SessionVersionGroup
-        group={baseGroup}
-        selection={{ kind: 'session', payload: 'unrelated' }}
-        startIndex={0}
-        onConsolidate={onConsolidate}
-        {...requiredCallbacks}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onConsolidate={onConsolidate}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
     )
 
     const button = getByTestId('consolidate-versions-button')
@@ -205,13 +232,15 @@ describe('SessionVersionGroup status summary', () => {
     }
 
     const { getByTestId } = render(
-      <SessionVersionGroup
-        group={consolidatedGroup}
-        selection={{ kind: 'session', payload: 'unrelated' }}
-        startIndex={0}
-        onConsolidate={onConsolidate}
-        {...requiredCallbacks}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={consolidatedGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onConsolidate={onConsolidate}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
     )
 
     const button = getByTestId('consolidate-versions-button')
@@ -225,13 +254,15 @@ describe('SessionVersionGroup status summary', () => {
     const onTerminateAll = vi.fn()
 
     const { getByTestId, queryByTestId, rerender } = render(
-      <SessionVersionGroup
-        group={baseGroup}
-        selection={{ kind: 'session', payload: 'unrelated' }}
-        startIndex={0}
-        onTerminateAll={onTerminateAll}
-        {...requiredCallbacks}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onTerminateAll={onTerminateAll}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
     )
 
     const terminateButton = getByTestId('terminate-group-button')
@@ -247,13 +278,15 @@ describe('SessionVersionGroup status summary', () => {
     }
 
     rerender(
-      <SessionVersionGroup
-        group={reviewedOnlyGroup}
-        selection={{ kind: 'session', payload: 'unrelated' }}
-        startIndex={0}
-        onTerminateAll={onTerminateAll}
-        {...requiredCallbacks}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={reviewedOnlyGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onTerminateAll={onTerminateAll}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(queryByTestId('terminate-group-button')).toBeNull()
@@ -261,12 +294,14 @@ describe('SessionVersionGroup status summary', () => {
 
   it('renders the first available group description above compact version rows', () => {
     const { getByText, getAllByTestId, queryAllByTestId } = render(
-      <SessionVersionGroup
-        group={baseGroup}
-        selection={{ kind: 'session', payload: 'unrelated' }}
-        startIndex={0}
-        {...requiredCallbacks}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(getByText('Shared task summary')).toBeInTheDocument()
@@ -284,12 +319,14 @@ describe('SessionVersionGroup status summary', () => {
     }
 
     const { getByText, queryByText } = render(
-      <SessionVersionGroup
-        group={mixedTasksGroup}
-        selection={{ kind: 'session', payload: 'unrelated' }}
-        startIndex={0}
-        {...requiredCallbacks}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={mixedTasksGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(getByText('Task one')).toBeInTheDocument()
@@ -306,12 +343,14 @@ describe('SessionVersionGroup status summary', () => {
     }
 
     const { getByText } = render(
-      <SessionVersionGroup
-        group={mixedCompletenessGroup}
-        selection={{ kind: 'session', payload: 'unrelated' }}
-        startIndex={0}
-        {...requiredCallbacks}
-      />
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={mixedCompletenessGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
     )
 
     expect(getByText('Task one')).toBeInTheDocument()
