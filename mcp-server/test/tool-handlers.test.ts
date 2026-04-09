@@ -466,13 +466,40 @@ describe('MCP tool handler logic', () => {
       })
 
       expect(promoteSessionMock).toHaveBeenCalledTimes(1)
-      expect(promoteSessionMock).toHaveBeenCalledWith('feature_v3', 'Best coverage', undefined)
+      expect(promoteSessionMock).toHaveBeenCalledWith('feature_v3', 'Best coverage', {
+        winnerSessionId: undefined,
+        projectPath: undefined,
+      })
       const json = result.content.find((c: any) => c.mimeType === 'application/json')
       const parsed = JSON.parse(json.text)
       expect(parsed.session).toBe('feature_v3')
       expect(parsed.siblings_cancelled).toEqual(['feature_v1', 'feature_v2'])
       expect(parsed.reason).toBe('Best coverage')
       expect(parsed.failures).toEqual([])
+    })
+
+    it('forwards winner_session_id when provided', async () => {
+      await callTool('lucode_promote', {
+        session_name: 'feature-consolidation',
+        reason: 'v2 was strongest',
+        winner_session_id: 'session-id-v2',
+      })
+
+      expect(promoteSessionMock).toHaveBeenCalledWith(
+        'feature-consolidation',
+        'v2 was strongest',
+        { winnerSessionId: 'session-id-v2', projectPath: undefined }
+      )
+    })
+
+    it('rejects empty winner_session_id', async () => {
+      await expect(
+        callTool('lucode_promote', {
+          session_name: 'feature-consolidation',
+          reason: 'choose one',
+          winner_session_id: '   ',
+        })
+      ).rejects.toThrow('winner_session_id must be a non-empty string')
     })
 
     it('rejects missing reason', async () => {

@@ -1557,7 +1557,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             void (async () => {
                 try {
                     await invoke(TauriCommands.SchaltwerkCoreUnmarkSessionReady, { name: sessionId })
-                    await reloadSessionsAndRefreshIdle()
                 } catch (err) {
                     logger.error('Failed to unmark reviewed session:', err)
                 } finally {

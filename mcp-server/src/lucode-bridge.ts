@@ -1406,7 +1406,11 @@ export class LucodeBridge {
     }
   }
 
-  async promoteSession(sessionName: string, reason: string, projectPath?: string): Promise<PromoteSessionResult> {
+  async promoteSession(
+    sessionName: string,
+    reason: string,
+    options: { winnerSessionId?: string | null; projectPath?: string } = {}
+  ): Promise<PromoteSessionResult> {
     const trimmedSessionName = sessionName.trim()
     const trimmedReason = reason.trim()
 
@@ -1417,13 +1421,19 @@ export class LucodeBridge {
       throw new Error('reason is required and must be a non-empty string when promoting a session.')
     }
 
+    const body: Record<string, unknown> = { reason: trimmedReason }
+    const trimmedWinner = options.winnerSessionId?.trim()
+    if (trimmedWinner) {
+      body.winner_session_id = trimmedWinner
+    }
+
     const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(sessionName)}/promote`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...this.getProjectHeaders(projectPath)
+        ...this.getProjectHeaders(options.projectPath)
       },
-      body: JSON.stringify({ reason: trimmedReason })
+      body: JSON.stringify(body)
     })
 
     const responseBody = await response.text()

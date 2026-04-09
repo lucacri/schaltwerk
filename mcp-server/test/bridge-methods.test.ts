@@ -680,6 +680,47 @@ describe('LucodeBridge untested methods', () => {
       expect(JSON.parse(String(init?.body))).toEqual({ reason: 'Best coverage' })
     })
 
+    it('forwards winner_session_id when provided for consolidation promotions', async () => {
+      fetchMock.mockResolvedValue(createResponse({
+        session_name: 'feature_v2',
+        siblings_cancelled: ['feature_v1', 'feature-consolidation'],
+        reason: 'v2 had the cleanest base',
+      }))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.promoteSession(
+        'feature-consolidation',
+        'v2 had the cleanest base',
+        { winnerSessionId: 'session-id-v2' }
+      )
+
+      expect(result.sessionName).toBe('feature_v2')
+      expect(result.siblingsCancelled).toEqual(['feature_v1', 'feature-consolidation'])
+
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/sessions/feature-consolidation/promote')
+      expect(JSON.parse(String(init?.body))).toEqual({
+        reason: 'v2 had the cleanest base',
+        winner_session_id: 'session-id-v2',
+      })
+    })
+
+    it('omits winner_session_id from the payload when not provided', async () => {
+      fetchMock.mockResolvedValue(createResponse({
+        session_name: 'feature_v3',
+        siblings_cancelled: [],
+        reason: 'solo',
+      }))
+
+      const bridge = new LucodeBridge()
+      await bridge.promoteSession('feature_v3', 'solo')
+
+      const [, init] = fetchMock.mock.calls[0]
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+      expect(body).toEqual({ reason: 'solo' })
+      expect('winner_session_id' in body).toBe(false)
+    })
+
     it('throws on API error using the backend error message', async () => {
       fetchMock.mockResolvedValue(
         createErrorResponse(400, 'Bad Request', JSON.stringify({ error: 'No siblings found' }))

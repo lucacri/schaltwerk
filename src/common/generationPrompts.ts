@@ -82,12 +82,12 @@ Instructions:
 0. Load the Lucode consolidate workflow from your native Lucode wrapper if available, or read the MCP resource lucode://skills/consolidate before making consolidation decisions
 1. Lucode already created this dedicated consolidation session and linked it to the source version group
 2. Read the diff for each session branch (git diff main...{branch})
-3. Compare the approaches taken by each agent
-4. Apply the best base implementation into your current consolidation session branch
+3. Compare the approaches taken by each agent and pick the strongest source session as the conceptual base — record its session ID, you will pass it to lucode_promote as winner_session_id
+4. Apply that base implementation into your current consolidation session branch
 5. Incorporate any valuable improvements from the other versions
 6. Run the project's test suite to verify everything passes
 7. Create a single squashed commit with the consolidated result
-8. Call lucode_promote on the current consolidation session — this cleans up the source versions automatically.`,
+8. Call lucode_promote on the current consolidation session with winner_session_id set to the session ID of the source version you chose as the base — the consolidated commits will be transplanted onto that session's branch so it survives, while the consolidation session and the losing source versions are cancelled automatically.`,
   review_pr_prompt: 'Review the following pull request:\n\nTitle: {{pr.title}}\nAuthor: {{pr.author}}\nSource: {{pr.sourceBranch}} -> {{pr.targetBranch}}\nURL: {{pr.url}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}\n\nFetch and review the diff using the CLI (e.g., `gh pr diff {{pr.number}}` or `git diff {{pr.targetBranch}}...{{pr.sourceBranch}}`).',
   plan_issue_prompt: 'Create an implementation plan for the following issue:\n\nTitle: {{issue.title}}\n\nDescription:\n{{issue.description}}\n\nLabels: {{issue.labels}}',
   issue_prompt: [

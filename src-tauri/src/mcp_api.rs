@@ -314,6 +314,8 @@ fn json_error_response(status: StatusCode, message: String) -> Response<String> 
 #[derive(Debug, Deserialize)]
 struct PromoteSessionRequest {
     reason: String,
+    #[serde(default)]
+    winner_session_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -363,11 +365,16 @@ fn find_promotion_siblings(manager: &SessionManager, session: &Session) -> anyho
     let all_sessions = manager.list_sessions()?;
 
     if session.is_consolidation && let Some(source_ids) = session.consolidation_sources.as_ref() {
+        // `consolidation_sources` may contain either session UUIDs (used by tests
+        // and any caller with backend access) or session names (used by the
+        // frontend, which only exposes names as "session_id"). Match against both.
         let mut siblings = all_sessions
             .iter()
             .filter(|candidate| {
                 candidate.status == SessionStatus::Active
-                    && source_ids.iter().any(|source_id| source_id == &candidate.id)
+                    && source_ids
+                        .iter()
+                        .any(|source_id| source_id == &candidate.id || source_id == &candidate.name)
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -413,6 +420,7 @@ async fn execute_session_promotion<RefreshFn, CancelFn, CancelFuture>(
     manager: &SessionManager,
     name: &str,
     reason: &str,
+    winner_session_id: Option<&str>,
     refresh_fn: RefreshFn,
     mut cancel_fn: CancelFn,
 ) -> Result<PromoteSessionOutcome, (StatusCode, String)>
@@ -454,6 +462,27 @@ where
         ));
     }
 
+    if let Some(winner_id) = winner_session_id {
+        if !session.is_consolidation {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "winner_session_id can only be used when promoting a consolidation session; '{name}' is not one"
+                ),
+            ));
+        }
+        return execute_consolidation_winner_promotion(
+            manager,
+            &session,
+            siblings,
+            winner_id,
+            trimmed_reason,
+            refresh_fn,
+            cancel_fn,
+        )
+        .await;
+    }
+
     manager
         .update_session_promotion_reason(name, Some(trimmed_reason))
         .map_err(|error| {
@@ -487,6 +516,163 @@ where
         status,
         response: PromoteSessionResponse {
             session_name: name.to_string(),
+            siblings_cancelled,
+            reason: trimmed_reason.to_string(),
+            failures,
+        },
+    })
+}
+
+async fn execute_consolidation_winner_promotion<RefreshFn, CancelFn, CancelFuture>(
+    manager: &SessionManager,
+    consolidation: &Session,
+    siblings: Vec<Session>,
+    winner_id: &str,
+    trimmed_reason: &str,
+    refresh_fn: RefreshFn,
+    mut cancel_fn: CancelFn,
+) -> Result<PromoteSessionOutcome, (StatusCode, String)>
+where
+    RefreshFn: FnOnce() -> anyhow::Result<()>,
+    CancelFn: FnMut(&str) -> CancelFuture,
+    CancelFuture: Future<Output = anyhow::Result<()>>,
+{
+    debug_assert!(
+        consolidation.is_consolidation,
+        "execute_consolidation_winner_promotion must be called with a consolidation session"
+    );
+
+    let source_ids = consolidation.consolidation_sources.as_ref().ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Consolidation session has no recorded source versions".to_string(),
+        )
+    })?;
+
+    // `winner_session_id` may be either the database UUID or the session name.
+    // The frontend passes session names (because the "session_id" field exposed to
+    // the UI is actually the session name), while the Rust tests use UUIDs.
+    // Accept both and validate that the resolved winner is one of the recorded
+    // consolidation sources.
+    let winner = match manager.get_session_by_id(winner_id) {
+        Ok(session) => session,
+        Err(_) => manager.get_session(winner_id).map_err(|error| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!("Winner session '{winner_id}' not found: {error}"),
+            )
+        })?,
+    };
+
+    let winner_in_sources = source_ids
+        .iter()
+        .any(|source| source == &winner.id || source == &winner.name);
+    if !winner_in_sources {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "winner_session_id '{winner_id}' is not among the consolidation sources"
+            ),
+        ));
+    }
+
+    if winner.status != SessionStatus::Active {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "Winner session '{}' is not active (status: {}); cannot transplant consolidated work",
+                winner.name,
+                winner.status.as_str()
+            ),
+        ));
+    }
+
+    if winner.session_state == SessionState::Spec {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "Winner session '{}' is a spec and cannot receive a promotion",
+                winner.name
+            ),
+        ));
+    }
+
+    // Warn before we overwrite anything the user may have left in the winner worktree.
+    // The reset below is atomic (single libgit2 hard-reset moves the checked-out branch
+    // ref and the working tree together), but it *will* discard any uncommitted changes
+    // or untracked files not part of the consolidated result.
+    match lucode::domains::git::operations::has_uncommitted_changes(&winner.worktree_path) {
+        Ok(true) => log::warn!(
+            "Winner session '{}' has uncommitted changes in {} — they will be overwritten by the consolidation transplant",
+            winner.name,
+            winner.worktree_path.display()
+        ),
+        Ok(false) => {}
+        Err(error) => log::warn!(
+            "Could not inspect winner worktree '{}' for uncommitted changes before transplant: {error}",
+            winner.worktree_path.display()
+        ),
+    }
+
+    // Single atomic operation: open the winner's worktree, resolve the consolidation
+    // branch from the shared ref db, and hard-reset. This moves the currently
+    // checked-out winner branch ref AND updates the working tree in one step, so
+    // we can't leave behind a stale worktree pointing at a moved ref.
+    lucode::domains::git::worktrees::reset_worktree_to_base(
+        &winner.worktree_path,
+        &consolidation.branch,
+    )
+    .map_err(|error| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!(
+                "Failed to transplant consolidation branch '{}' onto winner '{}' at {}: {error}",
+                consolidation.branch,
+                winner.name,
+                winner.worktree_path.display()
+            ),
+        )
+    })?;
+
+    manager
+        .update_session_promotion_reason(&winner.name, Some(trimmed_reason))
+        .map_err(|error| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to store promotion reason on winner: {error}"),
+            )
+        })?;
+
+    let mut to_cancel: Vec<Session> = siblings
+        .into_iter()
+        .filter(|candidate| candidate.id != winner.id)
+        .collect();
+    to_cancel.push(consolidation.clone());
+
+    let mut siblings_cancelled = Vec::new();
+    let mut failures = Vec::new();
+
+    for sibling in to_cancel {
+        match cancel_fn(&sibling.name).await {
+            Ok(()) => siblings_cancelled.push(sibling.name),
+            Err(error) => failures.push(format!("{}: {}", sibling.name, error)),
+        }
+    }
+
+    if let Err(error) = refresh_fn() {
+        failures.push(format!("sessions refresh: {error}"));
+    }
+
+    let status = if failures.is_empty() {
+        StatusCode::OK
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    };
+
+    Ok(PromoteSessionOutcome {
+        status,
+        response: PromoteSessionResponse {
+            session_name: winner.name,
             siblings_cancelled,
             reason: trimmed_reason.to_string(),
             failures,
@@ -1448,6 +1634,7 @@ mod tests {
             &manager,
             "feature_v3",
             "Best test coverage. Cherry-picked caching from v2.",
+            None,
             || Ok(()),
             move |name| {
                 cancelled_clone.lock().unwrap().push(name.to_string());
@@ -1500,6 +1687,7 @@ mod tests {
             &manager,
             "feature_v3",
             "Keep only active siblings",
+            None,
             || Ok(()),
             |_| std::future::ready(Ok(())),
         )
@@ -1545,6 +1733,7 @@ mod tests {
             &manager,
             "feature-consolidation",
             "Merged the best ideas from both source sessions",
+            None,
             || Ok(()),
             |_| std::future::ready(Ok(())),
         )
@@ -1568,6 +1757,7 @@ mod tests {
             &manager,
             "feature",
             "Best version",
+            None,
             || Ok(()),
             |_| std::future::ready(Ok(())),
         )
@@ -1593,6 +1783,7 @@ mod tests {
             &manager,
             "feature_v1",
             "Keep this one",
+            None,
             || Ok(()),
             |_| std::future::ready(Ok(())),
         )
@@ -1601,6 +1792,384 @@ mod tests {
 
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
         assert!(err.1.contains("is a spec"));
+    }
+
+    fn commit_in_worktree(worktree_path: &Path, file: &str, contents: &str, message: &str) {
+        std::fs::write(worktree_path.join(file), contents).expect("write file");
+        let repo = Repository::open(worktree_path).expect("open worktree");
+        let mut idx = repo.index().expect("index");
+        idx.add_path(Path::new(file)).expect("add path");
+        idx.write().expect("index write");
+        let tree_id = idx.write_tree().expect("write tree");
+        let tree = repo.find_tree(tree_id).expect("find tree");
+        let sig = repo
+            .signature()
+            .unwrap_or_else(|_| git2::Signature::now("Test", "test@example.com").unwrap());
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &[&parent])
+            .expect("commit");
+    }
+
+    fn branch_head_commit(repo_path: &Path, branch: &str) -> git2::Oid {
+        let repo = Repository::open(repo_path).expect("open repo");
+        let b = repo
+            .find_branch(branch, git2::BranchType::Local)
+            .expect("find branch");
+        b.get().peel_to_commit().expect("peel commit").id()
+    }
+
+    #[tokio::test]
+    async fn promote_session_logic_transplants_winner_branch_and_cancels_consolidation() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+
+        let v1 = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, None, Some(1))
+            .expect("create v1");
+        let v2 = manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, None, Some(2))
+            .expect("create v2");
+
+        let consolidation = manager
+            .create_session_with_agent(lucode::domains::sessions::service::SessionCreationParams {
+                name: "feature-consolidation",
+                prompt: None,
+                base_branch: None,
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: None,
+                version_number: None,
+                epic_id: None,
+                agent_type: None,
+                skip_permissions: None,
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+            })
+            .expect("create consolidation session");
+
+        commit_in_worktree(
+            &consolidation.worktree_path,
+            "merged.txt",
+            "merged result",
+            "consolidated change",
+        );
+
+        let consolidated_oid = branch_head_commit(&repo_path, &consolidation.branch);
+        let v1_initial_oid = branch_head_commit(&repo_path, &v1.branch);
+        assert_ne!(consolidated_oid, v1_initial_oid);
+
+        let cancelled = Arc::new(Mutex::new(Vec::new()));
+        let cancelled_clone = cancelled.clone();
+
+        let outcome = execute_session_promotion(
+            &manager,
+            "feature-consolidation",
+            "v1 had the cleanest base; absorbed v2's tests",
+            Some(v1.id.as_str()),
+            || Ok(()),
+            move |name| {
+                cancelled_clone.lock().unwrap().push(name.to_string());
+                std::future::ready(Ok(()))
+            },
+        )
+        .await
+        .expect("promotion should succeed");
+
+        assert_eq!(outcome.status, StatusCode::OK);
+        assert_eq!(
+            outcome.response.session_name,
+            v1.name,
+            "surviving session should be the winner, not the consolidation session"
+        );
+
+        // Winner branch now points at the consolidation's HEAD
+        let v1_after_oid = branch_head_commit(&repo_path, &v1.branch);
+        assert_eq!(
+            v1_after_oid, consolidated_oid,
+            "winner branch should be transplanted to consolidation HEAD"
+        );
+
+        // Winner worktree reflects the consolidated files
+        assert!(
+            v1.worktree_path.join("merged.txt").exists(),
+            "winner worktree should contain the consolidated file after reset"
+        );
+
+        // Consolidation session and loser source session were cancelled; winner was not
+        let cancelled_names = cancelled.lock().unwrap().clone();
+        assert!(cancelled_names.contains(&"feature-consolidation".to_string()));
+        assert!(cancelled_names.contains(&v2.name));
+        assert!(!cancelled_names.contains(&v1.name));
+
+        // promotion_reason stored on the winner, not the consolidation
+        let winner_after = db
+            .get_session_by_name(Path::new(&repo_path), &v1.name)
+            .expect("load winner");
+        assert_eq!(
+            winner_after.promotion_reason.as_deref(),
+            Some("v1 had the cleanest base; absorbed v2's tests")
+        );
+    }
+
+    #[tokio::test]
+    async fn promote_session_logic_accepts_winner_session_name_for_production_flow() {
+        // Mirrors the production path where `consolidation_source_ids` are the
+        // human-friendly session names (not DB UUIDs) because the frontend's
+        // SessionInfo.session_id field exposes the session name.
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+
+        let v1 = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, None, Some(1))
+            .expect("create v1");
+        let v2 = manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, None, Some(2))
+            .expect("create v2");
+
+        let consolidation = manager
+            .create_session_with_agent(lucode::domains::sessions::service::SessionCreationParams {
+                name: "feature-consolidation",
+                prompt: None,
+                base_branch: None,
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: None,
+                version_number: None,
+                epic_id: None,
+                agent_type: None,
+                skip_permissions: None,
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![v1.name.clone(), v2.name.clone()]),
+            })
+            .expect("create consolidation session");
+
+        commit_in_worktree(
+            &consolidation.worktree_path,
+            "merged.txt",
+            "name based",
+            "consolidated change",
+        );
+
+        let consolidated_oid = branch_head_commit(&repo_path, &consolidation.branch);
+
+        let cancelled = Arc::new(Mutex::new(Vec::new()));
+        let cancelled_clone = cancelled.clone();
+
+        let outcome = execute_session_promotion(
+            &manager,
+            "feature-consolidation",
+            "v2 was the cleanest",
+            Some(v2.name.as_str()),
+            || Ok(()),
+            move |name| {
+                cancelled_clone.lock().unwrap().push(name.to_string());
+                std::future::ready(Ok(()))
+            },
+        )
+        .await
+        .expect("promotion by name should succeed");
+
+        assert_eq!(outcome.status, StatusCode::OK);
+        assert_eq!(outcome.response.session_name, v2.name);
+
+        let v2_after_oid = branch_head_commit(&repo_path, &v2.branch);
+        assert_eq!(v2_after_oid, consolidated_oid);
+
+        let cancelled_names = cancelled.lock().unwrap().clone();
+        assert!(cancelled_names.contains(&"feature-consolidation".to_string()));
+        assert!(cancelled_names.contains(&v1.name));
+        assert!(!cancelled_names.contains(&v2.name));
+    }
+
+    #[tokio::test]
+    async fn promote_session_logic_rejects_winner_not_in_consolidation_sources() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+
+        let v1 = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, None, Some(1))
+            .expect("create v1");
+        let v2 = manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, None, Some(2))
+            .expect("create v2");
+        let unrelated = manager
+            .create_session_with_auto_flag("stranger", None, None, false, None, None)
+            .expect("create stranger");
+
+        manager
+            .create_session_with_agent(lucode::domains::sessions::service::SessionCreationParams {
+                name: "feature-consolidation",
+                prompt: None,
+                base_branch: None,
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: None,
+                version_number: None,
+                epic_id: None,
+                agent_type: None,
+                skip_permissions: None,
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+            })
+            .expect("create consolidation session");
+
+        let err = execute_session_promotion(
+            &manager,
+            "feature-consolidation",
+            "picking an unrelated session",
+            Some(unrelated.id.as_str()),
+            || Ok(()),
+            |_| std::future::ready(Ok(())),
+        )
+        .await
+        .expect_err("promotion should fail when winner is not a source");
+
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(
+            err.1.to_lowercase().contains("winner"),
+            "error should mention winner: {}",
+            err.1
+        );
+    }
+
+    #[tokio::test]
+    async fn promote_session_logic_rejects_unknown_winner_id() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+
+        let v1 = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, None, Some(1))
+            .expect("create v1");
+        let v2 = manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, None, Some(2))
+            .expect("create v2");
+
+        manager
+            .create_session_with_agent(lucode::domains::sessions::service::SessionCreationParams {
+                name: "feature-consolidation",
+                prompt: None,
+                base_branch: None,
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: None,
+                version_number: None,
+                epic_id: None,
+                agent_type: None,
+                skip_permissions: None,
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+            })
+            .expect("create consolidation session");
+
+        let err = execute_session_promotion(
+            &manager,
+            "feature-consolidation",
+            "winner id that doesn't exist",
+            Some("not-a-real-session-id"),
+            || Ok(()),
+            |_| std::future::ready(Ok(())),
+        )
+        .await
+        .expect_err("promotion should fail for unknown winner");
+
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn promote_session_logic_rejects_winner_session_id_on_non_consolidation() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db, repo_path);
+        let _v1 = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, Some("grp"), Some(1))
+            .expect("create v1");
+        let v2 = manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, Some("grp"), Some(2))
+            .expect("create v2");
+
+        let err = execute_session_promotion(
+            &manager,
+            "feature_v2",
+            "not a consolidation",
+            Some(v2.id.as_str()),
+            || Ok(()),
+            |_| std::future::ready(Ok(())),
+        )
+        .await
+        .expect_err("should reject winner_session_id on a non-consolidation session");
+
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(
+            err.1.contains("consolidation"),
+            "error should mention consolidation: {}",
+            err.1
+        );
+    }
+
+    #[tokio::test]
+    async fn promote_session_logic_rejects_cancelled_winner() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+
+        let v1 = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, None, Some(1))
+            .expect("create v1");
+        let v2 = manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, None, Some(2))
+            .expect("create v2");
+
+        manager
+            .create_session_with_agent(lucode::domains::sessions::service::SessionCreationParams {
+                name: "feature-consolidation",
+                prompt: None,
+                base_branch: None,
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: None,
+                version_number: None,
+                epic_id: None,
+                agent_type: None,
+                skip_permissions: None,
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+            })
+            .expect("create consolidation session");
+
+        db.update_session_status(&v1.id, SessionStatus::Cancelled)
+            .expect("cancel v1");
+
+        let err = execute_session_promotion(
+            &manager,
+            "feature-consolidation",
+            "winner was cancelled",
+            Some(v1.id.as_str()),
+            || Ok(()),
+            |_| std::future::ready(Ok(())),
+        )
+        .await
+        .expect_err("promotion should fail if winner not active");
+
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
@@ -1622,6 +2191,7 @@ mod tests {
             &manager,
             "feature_v3",
             "Most stable branch",
+            None,
             || Ok(()),
             |name| {
                 if name == "feature_v2" {
@@ -3227,6 +3797,7 @@ async fn promote_session(
         &manager,
         name,
         &payload.reason,
+        payload.winner_session_id.as_deref(),
         || {
             request_sessions_refresh(&app, SessionsRefreshReason::MergeWorkflow);
             Ok(())

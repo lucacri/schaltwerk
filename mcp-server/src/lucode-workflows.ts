@@ -66,14 +66,15 @@ Use the current consolidation session branch as the destination branch.
 
 1. Review every sibling branch with \`git diff main...{branch}\`.
 2. Compare each branch against the recovered spec context, not just code style.
-3. Pick the strongest branch as the conceptual base, then apply its best ideas into the current consolidation session branch.
+3. Pick the strongest branch as the conceptual base, then apply its best ideas into the current consolidation session branch. Remember which source session was the base — its session ID becomes the \`winner_session_id\` you pass to \`lucode_promote\`.
 4. Incorporate any valuable improvements from the remaining branches.
 5. Run the project's verification commands.
 6. Call \`lucode_promote\` with:
    - \`session_name\`: the current consolidation session name
    - \`reason\`: a concise explanation of why this version won and what it absorbed from siblings
+   - \`winner_session_id\`: the session ID of the source version you chose as the strongest base (take it from the session list that was injected into your prompt)
 
-The promote call automatically marks the consolidation session as the winner and cleans up the sibling sessions. If promotion reports failures, surface them clearly.
+The promote call transplants the consolidated commits onto the winner's branch so that session survives with the merged work. The consolidation session and the losing source versions are cancelled automatically. If promotion reports failures, surface them clearly.
 
 ## Step 7: Report
 

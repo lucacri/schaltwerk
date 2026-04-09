@@ -1104,6 +1104,62 @@ mod worktree_operation_tests {
         let p = PathBuf::from("/");
         assert!(extract_session_name_from_path(&p).is_err());
     }
+
+    #[test]
+    fn reset_worktree_to_base_transplants_consolidation_branch_onto_winner_worktree() {
+        // Integration-style test for the consolidation promote path:
+        // create a "consolidation" branch with extra work, then hard-reset the winner
+        // worktree to it in a single atomic op. This mirrors
+        // execute_consolidation_winner_promotion's atomic transplant step.
+        let tmp = TempDir::new().unwrap();
+        let repo_dir = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+        let repo = init_repo_with_commit(&repo_dir);
+
+        let base_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.branch("lucode/consolidation", &base_commit, false).unwrap();
+        repo.set_head("refs/heads/lucode/consolidation").unwrap();
+        repo.checkout_head(Some(CheckoutBuilder::new().force())).unwrap();
+        std::fs::write(repo_dir.join("consolidated.txt"), "final result").unwrap();
+        let mut idx = repo.index().unwrap();
+        idx.add_path(Path::new("consolidated.txt")).unwrap();
+        idx.write().unwrap();
+        let tree_id = idx.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let sig = repo.signature().unwrap();
+        let parent = repo.head().unwrap().peel_to_commit().unwrap();
+        let consolidated_oid = repo
+            .commit(Some("HEAD"), &sig, &sig, "consolidated work", &tree, &[&parent])
+            .unwrap();
+
+        // Switch main repo back to master so the winner worktree can check out its branch
+        repo.set_head("refs/heads/master").unwrap();
+        repo.checkout_head(Some(CheckoutBuilder::new().force())).unwrap();
+
+        // Create the winner session's worktree on its own branch, based on master
+        let wt_path = tmp.path().join("worktrees").join("winner");
+        create_worktree_from_base(&repo_dir, "lucode/winner", &wt_path, "master").unwrap();
+        assert!(!wt_path.join("consolidated.txt").exists());
+
+        // Atomic transplant: reset winner worktree to consolidation branch HEAD
+        reset_worktree_to_base(&wt_path, "lucode/consolidation").expect("reset transplants");
+
+        // Winner worktree reflects the consolidated work
+        assert!(wt_path.join("consolidated.txt").exists());
+        let contents = std::fs::read_to_string(wt_path.join("consolidated.txt")).unwrap();
+        assert_eq!(contents, "final result");
+
+        // And the winner branch ref was moved (single atomic op updates both worktree and ref)
+        let main_repo = Repository::open(&repo_dir).unwrap();
+        let winner_branch = main_repo
+            .find_branch("lucode/winner", BranchType::Local)
+            .unwrap();
+        let winner_oid = winner_branch.get().peel_to_commit().unwrap().id();
+        assert_eq!(
+            winner_oid, consolidated_oid,
+            "winner branch ref should be transplanted to consolidation HEAD"
+        );
+    }
 }
 
 fn validate_branch_name(name: &str) -> Result<()> {

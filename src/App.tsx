@@ -1634,7 +1634,7 @@ function AppContent() {
           const statsStr = stats
             ? `Files changed: ${stats.files_changed}, +${stats.additions} -${stats.deletions}`
             : 'No diff stats available'
-          return `- ${s.name} (branch: ${s.branch}, worktree: ${s.worktreePath})\n  ${statsStr}`
+          return `- ${s.name} (session_id: ${s.id}, branch: ${s.branch}, worktree: ${s.worktreePath})\n  ${statsStr}`
         }).join('\n')
 
         const prompts = await loadGenerationPrompts()

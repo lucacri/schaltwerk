@@ -95,6 +95,7 @@ interface LucodeMergeArgs {
 interface LucodePromoteArgs {
   session_name: string
   reason: string
+  winner_session_id?: string | null
 }
 
 interface LucodeCreatePrArgs {
@@ -742,17 +743,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "lucode_promote",
-        description: `Promote a winning session version and automatically clean up its siblings. Use this after consolidating the best changes into one session and provide a concise reason describing why it won.`,
+        description: `Promote a winning session version and automatically clean up its siblings. Use this after consolidating the best changes into one session and provide a concise reason describing why it won. When promoting a consolidation session, pass winner_session_id so the consolidated result is transplanted onto the winning source version's branch — the consolidation session itself is then cancelled and the winner survives.`,
         inputSchema: {
           type: "object",
           properties: {
             session_name: {
               type: "string",
-              description: "Name of the session version to keep."
+              description: "Name of the session being promoted. When promoting a consolidation session, pass that session's name here."
             },
             reason: {
               type: "string",
               description: "Required justification for why this session was promoted."
+            },
+            winner_session_id: {
+              type: "string",
+              description: "Optional. When session_name is a consolidation session, pass the session ID of the source version chosen as the strongest base. The consolidation commits will be transplanted onto that winner's branch, the winner session survives, and the consolidation session plus other source versions are cancelled."
             }
           },
           required: ["session_name", "reason"],
@@ -1619,8 +1624,20 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         if (!promoteArgs.reason || typeof promoteArgs.reason !== 'string' || promoteArgs.reason.trim().length === 0) {
           throw new Error('reason is required when invoking lucode_promote.')
         }
+        if (promoteArgs.winner_session_id !== undefined && promoteArgs.winner_session_id !== null) {
+          if (typeof promoteArgs.winner_session_id !== 'string' || promoteArgs.winner_session_id.trim().length === 0) {
+            throw new Error('winner_session_id must be a non-empty string when provided.')
+          }
+        }
 
-        const promoteResult = await bridge.promoteSession(promoteArgs.session_name, promoteArgs.reason, projectPath)
+        const promoteResult = await bridge.promoteSession(
+          promoteArgs.session_name,
+          promoteArgs.reason,
+          {
+            winnerSessionId: promoteArgs.winner_session_id ?? undefined,
+            projectPath,
+          }
+        )
 
         const structured = {
           session: promoteResult.sessionName,
