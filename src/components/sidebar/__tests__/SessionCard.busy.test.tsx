@@ -6,6 +6,7 @@ import { GithubIntegrationProvider } from '../../../contexts/GithubIntegrationCo
 import { GitlabIntegrationContext } from '../../../contexts/GitlabIntegrationContext'
 import type { GitlabIntegrationValue } from '../../../hooks/useGitlabIntegration'
 import { ToastProvider } from '../../../common/toast/ToastProvider'
+import { SessionCardActionsProvider, type SessionCardActions } from '../../../contexts/SessionCardActionsContext'
 
 vi.mock('../../../hooks/usePrComments', () => ({
   usePrComments: () => ({
@@ -58,27 +59,45 @@ const defaultGitlabValue: GitlabIntegrationValue = {
   saveSources: async () => {},
 }
 
+const mockActions: SessionCardActions = {
+  onSelect: vi.fn(),
+  onMarkReady: vi.fn(),
+  onUnmarkReady: vi.fn(),
+  onCancel: vi.fn(),
+  onConvertToSpec: vi.fn(),
+  onRunDraft: vi.fn(),
+  onRefineSpec: vi.fn(),
+  onDeleteSpec: vi.fn(),
+  onReset: vi.fn(),
+  onRestartTerminals: vi.fn(),
+  onSwitchModel: vi.fn(),
+  onCreatePullRequest: vi.fn(),
+  onCreateGitlabMr: vi.fn(),
+  onMerge: vi.fn(),
+  onQuickMerge: vi.fn(),
+  onRename: vi.fn().mockResolvedValue(undefined),
+  onLinkPr: vi.fn(),
+}
+
 function renderButton(overrides: Partial<SessionCardProps> = {}) {
   const props: SessionCardProps = {
     session: baseSession,
     index: 0,
     isSelected: false,
     hasFollowUpMessage: false,
-    onSelect: () => {},
-    onMarkReady: () => {},
-    onUnmarkReady: () => {},
-    onCancel: () => {},
     ...overrides
   }
 
   return render(
-    <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
-      <GithubIntegrationProvider>
-        <ToastProvider>
-          <SessionCard {...props} />
-        </ToastProvider>
-      </GithubIntegrationProvider>
-    </GitlabIntegrationContext.Provider>
+    <SessionCardActionsProvider actions={mockActions}>
+      <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+        <GithubIntegrationProvider>
+          <ToastProvider>
+            <SessionCard {...props} />
+          </ToastProvider>
+        </GithubIntegrationProvider>
+      </GitlabIntegrationContext.Provider>
+    </SessionCardActionsProvider>
   )
 }
 

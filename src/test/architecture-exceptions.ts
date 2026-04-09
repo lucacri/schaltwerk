@@ -34,6 +34,7 @@ export const STATE_MANAGEMENT_EXCEPTIONS: ArchitectureException[] = [
   { file: 'src/contexts/GithubIntegrationContext.tsx', reason: 'Needs evaluation - might be dependency injection' },
   { file: 'src/contexts/GitlabIntegrationContext.tsx', reason: 'Needs evaluation - mirrors GithubIntegrationContext pattern' },
   { file: 'src/contexts/KeyboardShortcutsContext.tsx', reason: 'Needs evaluation - might not need reactive state' },
+  { file: 'src/contexts/SessionCardActionsContext.tsx', reason: 'UI coordination - stable action callback dispatch for sidebar card memoization (acceptable use)' },
 ];
 
 export const ERROR_HANDLING_EXCEPTIONS: ArchitectureException[] = [];

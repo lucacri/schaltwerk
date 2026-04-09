@@ -14,35 +14,18 @@ interface SessionVersionGroupProps {
     kind: string
     payload?: string
   }
-  startIndex: number  // The starting index of this group in the overall sessions list
+  startIndex: number
 
   hasFollowUpMessage: (sessionId: string) => boolean
-  onSelect: (sessionId: string) => void
-  onMarkReady: (sessionId: string) => void
-  onUnmarkReady: (sessionId: string) => void
-  onCancel: (sessionId: string, hasUncommitted: boolean) => void
-  onConvertToSpec?: (sessionId: string) => void
-  onRunDraft?: (sessionId: string) => void
-  onRefineSpec?: (sessionId: string) => void
-  onDeleteSpec?: (sessionId: string) => void
   onSelectBestVersion?: (groupBaseName: string, selectedSessionId: string) => void
-  onReset?: (sessionId: string) => void
-  onRestartTerminals?: (sessionId: string) => void
-  onSwitchModel?: (sessionId: string) => void
-  onCreatePullRequest?: (sessionId: string) => void
-  onCreateGitlabMr?: (sessionId: string) => void
   resettingSelection?: SessionSelection | null
-  isInSpecMode?: boolean  // Optional: whether we're in spec mode
-  currentSpecId?: string | null  // Optional: current spec selected in spec mode
-  isSessionRunning?: (sessionId: string) => boolean  // Function to check if a session is running
-  onMerge?: (sessionId: string) => void
-  onQuickMerge?: (sessionId: string) => void
+  isInSpecMode?: boolean
+  currentSpecId?: string | null
+  isSessionRunning?: (sessionId: string) => boolean
   isMergeDisabled?: (sessionId: string) => boolean
   getMergeStatus?: (sessionId: string) => MergeStatus
   isMarkReadyDisabled?: boolean
   isSessionBusy?: (sessionId: string) => boolean
-  onRename?: (sessionId: string, newName: string) => Promise<void>
-  onLinkPr?: (sessionId: string, prNumber: number, prUrl: string) => void
   onConsolidate?: (group: SessionVersionGroupType) => void
   onTerminateAll?: (group: SessionVersionGroupType) => void
 }
@@ -53,32 +36,15 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   startIndex,
 
   hasFollowUpMessage,
-  onSelect,
-  onMarkReady,
-  onUnmarkReady,
-  onCancel,
-  onConvertToSpec,
-  onRunDraft,
-  onRefineSpec,
-  onDeleteSpec,
   onSelectBestVersion,
-  onReset,
-  onRestartTerminals,
-  onSwitchModel,
-  onCreatePullRequest,
-  onCreateGitlabMr,
   resettingSelection,
   isInSpecMode,
   currentSpecId,
   isSessionRunning,
-  onMerge,
-  onQuickMerge,
   isMergeDisabled,
   getMergeStatus,
   isMarkReadyDisabled = false,
   isSessionBusy,
-  onRename,
-  onLinkPr,
   onConsolidate,
   onTerminateAll
 }) => {
@@ -105,29 +71,12 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
         hasFollowUpMessage={hasFollowUpMessage(session.session.info.session_id)}
         isWithinVersionGroup={false}
         showPromoteIcon={false}
-        onSelect={onSelect}
-        onMarkReady={onMarkReady}
-        onUnmarkReady={onUnmarkReady}
-        onCancel={onCancel}
-        onConvertToSpec={onConvertToSpec}
-        onRunDraft={onRunDraft}
-        onRefineSpec={onRefineSpec}
-        onDeleteSpec={onDeleteSpec}
-        onReset={onReset}
-        onRestartTerminals={onRestartTerminals}
-        onSwitchModel={onSwitchModel}
-        onCreatePullRequest={onCreatePullRequest}
-        onCreateGitlabMr={onCreateGitlabMr}
         isResetting={isResettingForSession}
         isRunning={isSessionRunning?.(session.session.info.session_id) || false}
-        onMerge={onMerge}
-        onQuickMerge={onQuickMerge}
         disableMerge={isMergeDisabled?.(session.session.info.session_id) || false}
         mergeStatus={getMergeStatus?.(session.session.info.session_id) ?? 'idle'}
         isMarkReadyDisabled={isMarkReadyDisabled}
         isBusy={isSessionBusy?.(session.session.info.session_id) ?? false}
-        onRename={onRename}
-        onLinkPr={onLinkPr}
         siblings={group.versions.map(v => v.session.info)}
         onHover={setHoveredSessionId}
         isHighlighted={hoveredSessionId === session.session.info.session_id}
@@ -331,14 +280,6 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                       showPromoteIcon={isSelected}
                       willBeDeleted={willBeDeleted}
                       isPromotionPreview={isPreviewingDeletion && isSelected}
-                      onSelect={onSelect}
-                      onMarkReady={onMarkReady}
-                      onUnmarkReady={onUnmarkReady}
-                      onCancel={onCancel}
-                      onConvertToSpec={onConvertToSpec}
-                      onRunDraft={onRunDraft}
-                      onRefineSpec={onRefineSpec}
-                      onDeleteSpec={onDeleteSpec}
                       onPromoteVersion={() => {
                         if (onSelectBestVersion) {
                           onSelectBestVersion(group.baseName, version.session.info.session_id)
@@ -346,21 +287,13 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                       }}
                       onPromoteVersionHover={() => setIsPreviewingDeletion(true)}
                       onPromoteVersionHoverEnd={() => setIsPreviewingDeletion(false)}
-                      onReset={onReset}
-                      onRestartTerminals={onRestartTerminals}
-                      onSwitchModel={onSwitchModel}
-                      onCreatePullRequest={onCreatePullRequest}
-                      onCreateGitlabMr={onCreateGitlabMr}
                       isResetting={resettingSelection?.kind === 'session'
                         && resettingSelection.payload === version.session.info.session_id}
                       isRunning={isSessionRunning?.(version.session.info.session_id) || false}
-                      onMerge={onMerge}
-                      onQuickMerge={onQuickMerge}
                       disableMerge={isMergeDisabled?.(version.session.info.session_id) || false}
                       mergeStatus={getMergeStatus?.(version.session.info.session_id) ?? 'idle'}
                       isMarkReadyDisabled={isMarkReadyDisabled}
                       isBusy={isSessionBusy?.(version.session.info.session_id) ?? false}
-                      onLinkPr={onLinkPr}
                       onHover={setHoveredSessionId}
                       isHighlighted={isHighlighted}
                       isConsolidationSourceHighlighted={Boolean(isConsolidationSourceHighlighted)}
