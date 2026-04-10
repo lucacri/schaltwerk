@@ -128,6 +128,22 @@ describe('SpecEditor keyboard shortcuts', () => {
     expect(screen.queryByRole('button', { name: 'Refine' })).toBeNull()
   })
 
+  it('renders a Clarify action and calls onStart when clicked', async () => {
+    const onStart = vi.fn()
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="clarify-spec" onStart={onStart} />
+      </TestProviders>
+    )
+
+    const button = await screen.findByRole('button', { name: /clarify/i })
+    fireEvent.click(button)
+
+    expect(onStart).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: /run agent/i })).toBeNull()
+  })
+
   it('marks a draft spec clarified from the editor', async () => {
     render(
       <TestProviders>

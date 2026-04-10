@@ -280,6 +280,7 @@ mod tests {
                 ready_to_merge: false,
                 spec_content: None,
                 spec_stage: None,
+                clarification_started: None,
                 session_state: SessionState::Running,
                 issue_number: None,
                 issue_url: None,

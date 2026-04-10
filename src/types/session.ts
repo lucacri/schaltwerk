@@ -110,6 +110,7 @@ export interface SessionInfo {
     ready_to_merge?: boolean
     spec_content?: string
     spec_stage?: SpecStage
+    clarification_started?: boolean
     original_agent_type?: AgentType
     original_skip_permissions?: boolean | null
     diff_stats?: DiffStats

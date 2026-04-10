@@ -552,16 +552,16 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
           )}
           <button
             onClick={() => { void handleRun() }}
-            disabled={starting}
+            disabled={starting || !onStart}
             className="px-3 py-1 rounded bg-accent-green hover:bg-[var(--color-accent-green-light)] text-text-primary flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
             style={specText.toolbarButton}
-            title={t.specEditor.runAgent}
+            title={t.specEditor.refine}
           >
             <VscPlay />
             {starting ? (
               <AnimatedText text="loading" size="xs" />
             ) : (
-              t.specEditor.runAgentButton
+              t.specEditor.refine
             )}
           </button>
           <button

@@ -848,6 +848,47 @@ mod service_unified_tests {
     }
 
     #[test]
+    fn list_enriched_sessions_includes_clarification_started_for_specs() {
+        let (manager, temp_dir) = create_test_session_manager();
+        let now = Utc::now();
+        let spec = Spec {
+            id: Uuid::new_v4().to_string(),
+            name: "clarify-status".to_string(),
+            display_name: None,
+            epic_id: None,
+            issue_number: None,
+            issue_url: None,
+            pr_number: None,
+            pr_url: None,
+            repository_path: temp_dir.path().join("repo"),
+            repository_name: "test-repo".to_string(),
+            content: "Clarify this spec".to_string(),
+            stage: SpecStage::Draft,
+            attention_required: true,
+            clarification_started: true,
+            created_at: now,
+            updated_at: now,
+        };
+
+        manager
+            .db_manager
+            .create_spec(&spec)
+            .expect("spec should be created");
+
+        let enriched = manager
+            .list_enriched_sessions()
+            .expect("listing enriched sessions should succeed");
+
+        let spec_session = enriched
+            .iter()
+            .find(|session| session.info.session_id == spec.name)
+            .expect("spec should be present in enriched sessions");
+
+        assert_eq!(spec_session.info.clarification_started, Some(true));
+        assert_eq!(spec_session.attention_required, Some(true));
+    }
+
+    #[test]
     #[serial_test::serial]
     fn test_start_spec_with_config_uses_codex_and_prompt_without_resume() {
         use std::process::Command;
@@ -2701,6 +2742,7 @@ impl SessionManager {
                 ready_to_merge: false,
                 spec_content: Some(spec.content.clone()),
                 spec_stage: Some(spec.stage.clone()),
+                clarification_started: Some(spec.clarification_started),
                 session_state: SessionState::Spec,
                 issue_number: spec.issue_number,
                 issue_url: spec.issue_url.clone(),
@@ -2759,6 +2801,7 @@ impl SessionManager {
                     ready_to_merge: session.ready_to_merge,
                     spec_content: session.spec_content.clone(),
                     spec_stage: Some(SpecStage::Draft),
+                    clarification_started: None,
                     session_state: session.session_state.clone(),
                     issue_number: session.issue_number,
                     issue_url: session.issue_url.clone(),
@@ -2845,6 +2888,7 @@ impl SessionManager {
                     ready_to_merge: session.ready_to_merge,
                     spec_content: session.spec_content.clone(),
                     spec_stage: None,
+                    clarification_started: None,
                     session_state,
                 issue_number: session.issue_number,
                 issue_url: session.issue_url.clone(),

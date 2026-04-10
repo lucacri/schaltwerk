@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, waitFor, cleanup, act, fireEvent, type RenderOptions } from '@testing-library/react'
 import { Terminal, type TerminalProps } from './Terminal'
 import { listenEvent } from '../../common/eventSystem'
-import { startSessionTop } from '../../common/agentSpawn'
+import { startSessionTop, startSpecOrchestratorTop } from '../../common/agentSpawn'
 import { writeTerminalBackend } from '../../terminal/transport/backend'
 import { TERMINAL_FILE_DRAG_TYPE } from '../../common/dragTypes'
 import { __resetTerminalTargetingForTest, getActiveAgentTerminalId, setActiveAgentTerminalId } from '../../common/terminalTargeting'
@@ -323,6 +323,7 @@ vi.mock('../../common/terminalStartState', () => ({
 vi.mock('../../common/agentSpawn', () => ({
   startOrchestratorTop: vi.fn(async () => {}),
   startSessionTop: vi.fn(async () => {}),
+  startSpecOrchestratorTop: vi.fn(async () => {}),
   AGENT_START_TIMEOUT_MESSAGE: 'timeout',
 }))
 
@@ -398,6 +399,7 @@ beforeEach(() => {
   }))
   registryMocks.hasTerminalInstance.mockReturnValue(false)
   vi.mocked(startSessionTop).mockClear()
+  vi.mocked(startSpecOrchestratorTop).mockClear()
   __resetTerminalTargetingForTest()
 })
 
@@ -608,6 +610,24 @@ describe('Terminal', () => {
 
     await waitFor(() => {
       expect(startSessionTop).not.toHaveBeenCalled()
+    })
+  })
+
+  it('does not auto-start the spec clarification agent when a spec terminal mounts', async () => {
+    renderTerminal({
+      terminalId: 'spec-clarify-top',
+      sessionName: 'spec-clarify',
+      specOrchestratorSessionName: 'spec-clarify',
+      agentType: 'claude',
+    })
+
+    await waitFor(() => {
+      expect(terminalHarness.acquireMock).toHaveBeenCalled()
+      expect(terminalHarness.instances.length).toBeGreaterThan(0)
+    })
+
+    await waitFor(() => {
+      expect(startSpecOrchestratorTop).not.toHaveBeenCalled()
     })
   })
 

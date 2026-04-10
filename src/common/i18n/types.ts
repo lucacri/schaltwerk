@@ -434,6 +434,8 @@ export interface Translations {
   }
   session: {
     idle: string
+    notStarted: string
+    waitingForInput: string
     running: string
     reviewed: string
     blocked: string

@@ -432,6 +432,8 @@
   },
   "session": {
     "idle": "⏸︎ 空闲",
+    "notStarted": "未开始",
+    "waitingForInput": "等待输入",
     "running": "运行中",
     "reviewed": "✓ 已审核",
     "blocked": "⚠ 已阻塞",

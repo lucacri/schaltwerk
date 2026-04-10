@@ -90,6 +90,13 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   const isReadyToMerge = s.ready_to_merge || false
   const sessionState = mapSessionUiState(s)
   const isReviewedState = sessionState === 'reviewed'
+  const isSpecClarificationStarted = sessionState === 'spec' && s.clarification_started === true
+  const specNotStarted = sessionState === 'spec' && !isSpecClarificationStarted
+  const specWaitingForInput = isSpecClarificationStarted && s.attention_required === true
+  const isIdle = sessionState === 'spec'
+    ? specWaitingForInput
+    : s.attention_required === true
+  const isClarificationRunning = isSpecClarificationStarted && !isIdle
   const hasUncommittedChanges = !!s.has_uncommitted_changes
   const dirtyFilesCount =
     s.dirty_files_count
@@ -126,8 +133,8 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
     sessionState,
     isSelected,
     isReviewedState,
-    isRunning: Boolean(isRunning),
-    isIdle: !!s.attention_required,
+    isRunning: Boolean(isRunning) || isClarificationRunning,
+    isIdle,
     hasFollowUpMessage,
     willBeDeleted,
     isPromotionPreview,
@@ -180,7 +187,24 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
       )
     }
 
-    if (s.attention_required) {
+    if (specWaitingForInput) {
+      return (
+        <span
+          data-testid="compact-row-status-idle"
+          className="inline-flex items-center px-1.5 py-[1px] rounded border"
+          style={{
+            ...sessionText.badge,
+            backgroundColor: 'var(--color-accent-amber-bg)',
+            color: 'var(--color-accent-amber-light)',
+            borderColor: 'var(--color-accent-amber-border)',
+          }}
+        >
+          {t.session.waitingForInput}
+        </span>
+      )
+    }
+
+    if (isIdle) {
       return (
         <span
           data-testid="compact-row-status-idle"
@@ -197,7 +221,24 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
       )
     }
 
-    if (sessionState === 'running' && !isReadyToMerge) {
+    if (specNotStarted) {
+      return (
+        <span
+          data-testid="compact-row-status-not-started"
+          className="inline-flex items-center px-1.5 py-[1px] rounded border"
+          style={{
+            ...sessionText.badge,
+            backgroundColor: 'var(--color-bg-hover)',
+            color: 'var(--color-text-muted)',
+            borderColor: 'var(--color-border-subtle)',
+          }}
+        >
+          {t.session.notStarted}
+        </span>
+      )
+    }
+
+    if ((sessionState === 'running' || isClarificationRunning) && !isReadyToMerge) {
       return (
         <span
           data-testid="compact-row-status-running"
@@ -297,13 +338,14 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
         style={surface.style}
         aria-label={`Select session ${s.display_name ?? s.session_id}`}
       >
-        {sessionState !== 'spec' && (() => {
-          const isIdle = !!s.attention_required
-          const isActivelyRunning = !isIdle && sessionState === 'running' && !isReadyToMerge
+        {(sessionState !== 'spec' || isSpecClarificationStarted || specNotStarted) && (() => {
+          const isActivelyRunning = !isIdle && ((sessionState === 'running' && !isReadyToMerge) || isClarificationRunning)
           const stripColor = isIdle
             ? 'var(--color-accent-yellow)'
             : isActivelyRunning
               ? 'var(--color-accent-blue)'
+              : specNotStarted
+                ? 'var(--color-border-subtle)'
               : isReviewedState
                 ? 'var(--color-accent-green)'
                 : 'var(--color-border-subtle)'
@@ -317,17 +359,20 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
         <div className="flex flex-col gap-1">
           <div className="flex min-w-0 items-center gap-2 overflow-hidden" style={sessionText.meta}>
             {sessionState === 'spec' ? (
-              <span
-                className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded border"
-                style={{
-                  ...sessionText.badge,
-                  backgroundColor: 'var(--color-accent-amber-bg)',
-                  color: 'var(--color-accent-amber-light)',
-                  borderColor: 'var(--color-accent-amber-border)',
-                }}
-              >
-                {t.session.spec}
-              </span>
+              <>
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded border"
+                  style={{
+                    ...sessionText.badge,
+                    backgroundColor: 'var(--color-accent-amber-bg)',
+                    color: 'var(--color-accent-amber-light)',
+                    borderColor: 'var(--color-accent-amber-border)',
+                  }}
+                >
+                  {t.session.spec}
+                </span>
+                {statusIndicator}
+              </>
             ) : (
               <>
                 {agentType && (

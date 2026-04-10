@@ -221,6 +221,13 @@ export const SessionCard = memo<SessionCardProps>(
     const promotionReason = s.promotionReason?.trim() || s.promotion_reason?.trim();
     const sessionState = mapSessionUiState(s);
     const isReviewedState = sessionState === "reviewed";
+    const isSpecClarificationStarted = sessionState === "spec" && s.clarification_started === true;
+    const specNotStarted = sessionState === "spec" && !isSpecClarificationStarted;
+    const specWaitingForInput = isSpecClarificationStarted && s.attention_required === true;
+    const isIdle = sessionState === "spec"
+      ? specWaitingForInput
+      : s.attention_required === true;
+    const isClarificationRunning = isSpecClarificationStarted && !isIdle;
     const agentType =
       s.original_agent_type as SessionInfo["original_agent_type"];
     const agentKey = (agentType || "").toLowerCase();
@@ -253,8 +260,8 @@ export const SessionCard = memo<SessionCardProps>(
       sessionState,
       isSelected,
       isReviewedState,
-      isRunning: Boolean(isRunning),
-      isIdle: !!s.attention_required,
+      isRunning: Boolean(isRunning) || isClarificationRunning,
+      isIdle,
       hasFollowUpMessage,
       willBeDeleted,
       isPromotionPreview,
@@ -335,13 +342,14 @@ export const SessionCard = memo<SessionCardProps>(
         style={surface.style}
         aria-label={getAccessibilityLabel(isSelected, index)}
       >
-        {(sessionState !== "spec" || isRunning) && (() => {
-          const isIdle = !!s.attention_required
-          const isActivelyRunning = !isIdle && (sessionState === "running" || isRunning) && !isReadyToMerge
+        {(sessionState !== "spec" || isRunning || isSpecClarificationStarted || specNotStarted) && (() => {
+          const isActivelyRunning = !isIdle && ((sessionState === "running" || isRunning) && !isReadyToMerge || isClarificationRunning)
           const stripColor = isIdle
             ? "var(--color-accent-yellow)"
             : isActivelyRunning
               ? "var(--color-accent-blue)"
+              : specNotStarted
+                ? "var(--color-border-subtle)"
               : isReviewedState
                 ? "var(--color-accent-green)"
                 : "var(--color-border-subtle)"
@@ -401,7 +409,40 @@ export const SessionCard = memo<SessionCardProps>(
                 {s.spec_stage === "clarified" ? "Clarified" : "Draft"}
               </span>
             )}
-            {s.attention_required && (
+            {specNotStarted && (
+              <span
+                className="flex-shrink-0"
+                style={{
+                  ...sessionText.badge,
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                {t.session.notStarted}
+              </span>
+            )}
+            {specWaitingForInput && (
+              <span
+                className="flex-shrink-0"
+                style={{
+                  ...sessionText.badge,
+                  color: "var(--color-accent-yellow-light)",
+                }}
+              >
+                {t.session.waitingForInput}
+              </span>
+            )}
+            {isClarificationRunning && (
+              <span
+                className="flex-shrink-0"
+                style={{
+                  ...sessionText.badge,
+                  color: "var(--color-accent-blue-light)",
+                }}
+              >
+                {t.session.running}
+              </span>
+            )}
+            {isIdle && !specWaitingForInput && (
               <span
                 className="flex-shrink-0"
                 style={{

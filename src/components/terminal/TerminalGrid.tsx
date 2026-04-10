@@ -123,6 +123,7 @@ const TerminalGridComponent = () => {
     const shouldShowActionButtons = (selection.kind === 'orchestrator' || selection.kind === 'session') && actionButtons.length > 0
     
     const [terminalKey, setTerminalKey] = useState(0)
+    const [specStartRequestNonces, setSpecStartRequestNonces] = useState<Record<string, number>>({})
     const [pendingRefineRequest, setPendingRefineRequest] = useState<{
         sessionName: string
         displayName: string
@@ -1471,6 +1472,7 @@ const TerminalGridComponent = () => {
 
     if (selectionIsSpec) {
         const specName = selection.payload ?? ''
+        const startAgentRequestNonce = specStartRequestNonces[specName] ?? 0
         return (
             <div className="h-full relative px-0 py-2">
                 <Split
@@ -1484,7 +1486,10 @@ const TerminalGridComponent = () => {
                         <SpecEditor
                             sessionName={specName}
                             onStart={() => {
-                                emitUiEvent(UiEvent.StartAgentFromSpec, { name: specName })
+                                setSpecStartRequestNonces(previous => ({
+                                    ...previous,
+                                    [specName]: (previous[specName] ?? 0) + 1,
+                                }))
                             }}
                         />
                     </div>
@@ -1515,6 +1520,7 @@ const TerminalGridComponent = () => {
                                         className="h-full w-full"
                                         sessionName={specName}
                                         specOrchestratorSessionName={specName}
+                                        startAgentRequestNonce={startAgentRequestNonce}
                                         agentType={selectedSpec?.info.original_agent_type ?? agentType}
                                         onTerminalClick={handleClaudeSessionClick}
                                         workingDirectory={effectiveWorkingDirectory}

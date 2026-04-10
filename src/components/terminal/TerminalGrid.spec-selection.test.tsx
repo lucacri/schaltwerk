@@ -21,7 +21,18 @@ vi.mock('@tauri-apps/api/event', () => ({
 }))
 
 vi.mock('./Terminal', () => ({
-  Terminal: ({ terminalId }: { terminalId: string }) => <div data-testid={`terminal-${terminalId}`} />
+  Terminal: ({
+    terminalId,
+    startAgentRequestNonce,
+  }: {
+    terminalId: string
+    startAgentRequestNonce?: number
+  }) => (
+    <div
+      data-testid={`terminal-${terminalId}`}
+      data-start-agent-request-nonce={startAgentRequestNonce ?? 0}
+    />
+  )
 }))
 
 vi.mock('./TerminalTabs', () => ({
@@ -35,8 +46,19 @@ vi.mock('./RunTerminal', () => ({
 }))
 
 vi.mock('../specs/SpecEditor', () => ({
-  SpecEditor: ({ sessionName }: { sessionName: string }) => (
-    <div data-testid="spec-editor">{sessionName}</div>
+  SpecEditor: ({
+    sessionName,
+    onStart,
+  }: {
+    sessionName: string
+    onStart?: () => void
+  }) => (
+    <div data-testid="spec-editor">
+      <span>{sessionName}</span>
+      <button type="button" onClick={() => onStart?.()}>
+        Clarify
+      </button>
+    </div>
   )
 }))
 
@@ -184,5 +206,41 @@ describe('TerminalGrid spec selection layout', () => {
       screen.getByTestId(`terminal-${specOrchestratorTerminalId('spec-2-stable-id')}`)
     ).toBeInTheDocument()
     expect(screen.queryByTestId('run-terminal-spec-2')).toBeNull()
+  })
+
+  it('keeps the spec terminal idle until Clarify is clicked', async () => {
+    const spec = mockEnrichedSession('spec-manual', 'spec', false)
+    spec.info.stable_id = 'spec-manual-stable-id'
+    spec.info.spec_stage = 'draft'
+    setSessionData([spec])
+
+    render(
+      <TestProviders>
+        <SelectionDriver onReady={(c) => { controller = c }} />
+        <TerminalGrid />
+      </TestProviders>
+    )
+
+    await waitFor(() => {
+      expect(controller).not.toBeNull()
+    }, { timeout: 10000 })
+
+    await act(async () => {
+      await controller!.setSelection({
+        kind: 'session',
+        payload: 'spec-manual',
+        sessionState: 'spec',
+        stableId: 'spec-manual-stable-id',
+      }, false, true)
+    })
+
+    const terminal = await screen.findByTestId(`terminal-${specOrchestratorTerminalId('spec-manual-stable-id')}`)
+    expect(terminal).toHaveAttribute('data-start-agent-request-nonce', '0')
+
+    await act(async () => {
+      screen.getByRole('button', { name: /clarify/i }).click()
+    })
+
+    expect(terminal).toHaveAttribute('data-start-agent-request-nonce', '1')
   })
 })

@@ -254,6 +254,90 @@ describe('SessionCard spec stage badges', () => {
 
     expect(screen.getByText('Clarified')).toBeInTheDocument()
   })
+
+  it('shows not started for specs whose clarification has not been started', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              session_state: 'spec',
+              status: 'spec',
+              worktree_path: '',
+              attention_required: false,
+              clarification_started: false,
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByText(/not started/i)).toBeInTheDocument()
+  })
+
+  it('shows clarification running state for started specs', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              session_state: 'spec',
+              status: 'spec',
+              spec_stage: 'draft',
+              worktree_path: '',
+              attention_required: false,
+              clarification_started: true,
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const card = screen.getByRole('button', { name: /selected session/i })
+    expect(card.querySelector('.w-\\[3px\\]')).toBeInTheDocument()
+    expect(screen.getByText(/^running$/i)).toBeInTheDocument()
+  })
+
+  it('shows waiting for input state for started specs that need input', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              session_state: 'spec',
+              status: 'spec',
+              spec_stage: 'draft',
+              worktree_path: '',
+              attention_required: true,
+              clarification_started: true,
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const card = screen.getByRole('button', { name: /selected session/i })
+    expect(card.querySelector('.w-\\[3px\\]')).toBeInTheDocument()
+    expect(screen.getByText(/waiting for input/i)).toBeInTheDocument()
+  })
 })
 
 describe('SessionCard metadata badges', () => {

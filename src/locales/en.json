@@ -432,6 +432,8 @@
   },
   "session": {
     "idle": "⏸︎ Idle",
+    "notStarted": "Not started",
+    "waitingForInput": "Waiting for input",
     "running": "Running",
     "reviewed": "✓ Reviewed",
     "blocked": "⚠ blocked",
@@ -913,7 +915,7 @@
     "focusSpecContent": "Focus spec content",
     "editSpecContent": "Edit spec content",
     "saving": "Saving...",
-    "refine": "Refine",
+    "refine": "Clarify",
     "previewMarkdown": "Preview markdown",
     "editMarkdown": "Edit markdown",
     "preview": "Preview",

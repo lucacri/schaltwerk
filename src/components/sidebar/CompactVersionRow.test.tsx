@@ -133,6 +133,61 @@ describe('CompactVersionRow', () => {
     expect(screen.getByText(/idle/i)).toBeInTheDocument()
   })
 
+  it('renders not started for spec rows that have never started clarification', () => {
+    renderRow({
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          session_state: 'spec',
+          status: 'spec',
+          worktree_path: '',
+          clarification_started: false,
+        },
+      },
+    })
+
+    expect(screen.getByTestId('compact-row-status-not-started')).toBeInTheDocument()
+    expect(screen.getByText(/not started/i)).toBeInTheDocument()
+  })
+
+  it('renders clarification running state for started specs', () => {
+    renderRow({
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          session_state: 'spec',
+          status: 'spec',
+          worktree_path: '',
+          attention_required: false,
+          clarification_started: true,
+        },
+      },
+    })
+
+    expect(screen.getByTestId('compact-row-status-running')).toBeInTheDocument()
+  })
+
+  it('renders clarification waiting state for started specs', () => {
+    renderRow({
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          session_state: 'spec',
+          status: 'spec',
+          worktree_path: '',
+          attention_required: true,
+          clarification_started: true,
+        },
+      },
+    })
+
+    expect(screen.getByTestId('compact-row-status-idle')).toBeInTheDocument()
+    expect(screen.getByText(/waiting for input/i)).toBeInTheDocument()
+  })
+
   it('renders reviewed state when session is reviewed', () => {
     renderRow({
       session: {
