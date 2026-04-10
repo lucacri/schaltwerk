@@ -1775,6 +1775,136 @@ describe('NewSessionModal', () => {
       expect(getFavoriteCard(/^Custom\b/)).toHaveAttribute('aria-pressed', 'true')
       expect(screen.getByRole('button', { name: /Customize/i })).toHaveAttribute('aria-expanded', 'true')
     })
+
+    it('reselects the last used favorite after the modal reopens', async () => {
+      mockAgentVariants.mockReturnValue({
+        variants: [
+          { id: 'variant-codex-fast', name: 'Codex Fast', agentType: 'codex', model: 'gpt-5.4', reasoningEffort: 'high', isBuiltIn: false },
+          { id: 'variant-claude-opus', name: 'Claude Opus', agentType: 'claude', model: 'opus', isBuiltIn: false },
+        ],
+        loading: false,
+        error: null,
+        saveVariants: vi.fn().mockResolvedValue(true),
+        reloadVariants: vi.fn().mockResolvedValue(undefined),
+      })
+      invokeMock.mockImplementation((cmd: string) => {
+        if (cmd === TauriCommands.GetFavoriteOrder) {
+          return Promise.resolve(['variant-codex-fast', 'variant-claude-opus'])
+        }
+        return defaultInvokeImplementation(cmd)
+      })
+
+      const onCreate = vi.fn()
+      const onClose = vi.fn()
+      const store = createStore()
+      const { rerender } = render(
+        <JotaiProvider store={store}>
+          <ModalProvider>
+            <NewSessionModal open={true} onClose={onClose} onCreate={onCreate} />
+          </ModalProvider>
+        </JotaiProvider>
+      )
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Codex Fast/i)).toHaveAttribute('aria-pressed', 'true')
+      })
+
+      fireEvent.click(getFavoriteCard(/Claude Opus/i))
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Claude Opus/i)).toHaveAttribute('aria-pressed', 'true')
+      })
+
+      fireEvent.click(screen.getByTitle('Start agent (Cmd+Enter)'))
+
+      await waitFor(() => {
+        expect(onCreate).toHaveBeenCalledTimes(1)
+      })
+
+      rerender(
+        <JotaiProvider store={store}>
+          <ModalProvider>
+            <NewSessionModal open={false} onClose={onClose} onCreate={onCreate} />
+          </ModalProvider>
+        </JotaiProvider>
+      )
+
+      rerender(
+        <JotaiProvider store={store}>
+          <ModalProvider>
+            <NewSessionModal open={true} onClose={onClose} onCreate={onCreate} />
+          </ModalProvider>
+        </JotaiProvider>
+      )
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Claude Opus/i)).toHaveAttribute('aria-pressed', 'true')
+      })
+    })
+
+    it('keeps the remembered favorite after switching to Custom before reopening', async () => {
+      mockAgentVariants.mockReturnValue({
+        variants: [
+          { id: 'variant-codex-fast', name: 'Codex Fast', agentType: 'codex', model: 'gpt-5.4', reasoningEffort: 'high', isBuiltIn: false },
+          { id: 'variant-claude-opus', name: 'Claude Opus', agentType: 'claude', model: 'opus', isBuiltIn: false },
+        ],
+        loading: false,
+        error: null,
+        saveVariants: vi.fn().mockResolvedValue(true),
+        reloadVariants: vi.fn().mockResolvedValue(undefined),
+      })
+      invokeMock.mockImplementation((cmd: string) => {
+        if (cmd === TauriCommands.GetFavoriteOrder) {
+          return Promise.resolve(['variant-codex-fast', 'variant-claude-opus'])
+        }
+        return defaultInvokeImplementation(cmd)
+      })
+
+      const store = createStore()
+      const { rerender } = render(
+        <JotaiProvider store={store}>
+          <ModalProvider>
+            <NewSessionModal open={true} onClose={vi.fn()} onCreate={vi.fn()} />
+          </ModalProvider>
+        </JotaiProvider>
+      )
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Codex Fast/i)).toHaveAttribute('aria-pressed', 'true')
+      })
+
+      fireEvent.click(getFavoriteCard(/Claude Opus/i))
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Claude Opus/i)).toHaveAttribute('aria-pressed', 'true')
+      })
+
+      fireEvent.click(getFavoriteCard(/^Custom\b/))
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/^Custom\b/)).toHaveAttribute('aria-pressed', 'true')
+      })
+
+      rerender(
+        <JotaiProvider store={store}>
+          <ModalProvider>
+            <NewSessionModal open={false} onClose={vi.fn()} onCreate={vi.fn()} />
+          </ModalProvider>
+        </JotaiProvider>
+      )
+
+      rerender(
+        <JotaiProvider store={store}>
+          <ModalProvider>
+            <NewSessionModal open={true} onClose={vi.fn()} onCreate={vi.fn()} />
+          </ModalProvider>
+        </JotaiProvider>
+      )
+
+      await waitFor(() => {
+        expect(getFavoriteCard(/Claude Opus/i)).toHaveAttribute('aria-pressed', 'true')
+      })
+    })
   })
 
   describe('quick mode cards', () => {

@@ -168,7 +168,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const { epics, ensureLoaded: ensureEpicsLoaded } = useEpics()
     const { variants: agentVariantsList } = useAgentVariants()
     const { presets: agentPresetsList } = useAgentPresets()
-    const { favorites, favoriteOrderLoaded } = useFavorites()
+    const { favorites, favoriteOrderLoaded, loading: favoritesLoading } = useFavorites()
     const githubIntegration = useGithubIntegrationContext()
     const [name, setName] = useState(() => generateDockerStyleName())
     const [, setWasEdited] = useState(false)
@@ -232,6 +232,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const createRef = useRef<() => void>(() => {})
     const initialGeneratedNameRef = useRef<string>('')
     const lastAgentTypeRef = useRef<AgentType>('claude')
+    const lastFavoriteIdRef = useRef<string | null>(null)
     const hasAgentOverrideRef = useRef(false)
     const lastSupportedSkipPermissionsRef = useRef(false)
     const lastOpenStateRef = useRef(false)
@@ -482,6 +483,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         }
 
         applyFavoriteConfigSnapshot(nextConfig)
+        lastFavoriteIdRef.current = favorite.id
         setSelectedFavoriteId(favorite.id)
         setFavoriteBaseline(nextConfig)
         setCustomizeExpanded(false)
@@ -1425,7 +1427,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         if (!open || favoriteSelectionInitializedRef.current) {
             return
         }
-        if (!persistedDefaultsLoaded || agentConfigLoading || !favoriteOrderLoaded) {
+        if (!persistedDefaultsLoaded || agentConfigLoading || favoritesLoading || !favoriteOrderLoaded) {
             return
         }
         if (hasPrefillData && (selectedVariantId || selectedPresetId)) {
@@ -1440,6 +1442,16 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             return
         }
 
+        const lastFavoriteId = lastFavoriteIdRef.current
+        if (lastFavoriteId) {
+            const lastFavorite = favoriteMap.get(lastFavoriteId)
+            if (lastFavorite && !lastFavorite.disabled) {
+                selectFavorite(lastFavorite.id)
+                return
+            }
+            lastFavoriteIdRef.current = null
+        }
+
         const firstEnabledFavorite = favorites.find(favorite => !favorite.disabled)
         if (firstEnabledFavorite) {
             selectFavorite(firstEnabledFavorite.id)
@@ -1448,6 +1460,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         }
     }, [
         agentConfigLoading,
+        favoriteMap,
+        favoritesLoading,
         favorites,
         favoriteOrderLoaded,
         hasPrefillData,
@@ -1468,6 +1482,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             return
         }
         if (!favoriteMap.has(selectedFavoriteId)) {
+            lastFavoriteIdRef.current = null
             selectQuickMode(CUSTOM_FAVORITE_ID)
         }
     }, [favoriteMap, open, selectedFavoriteId, selectQuickMode])
