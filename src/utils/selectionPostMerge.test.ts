@@ -3,7 +3,7 @@ import { computeSelectionCandidate } from './selectionPostMerge'
 import type { EnrichedSession } from '../types/session'
 import { SessionState } from '../types/session'
 
-function session(id: string, ready = false, state: SessionState = ready ? SessionState.Reviewed : SessionState.Running): EnrichedSession {
+function session(id: string, ready = false, state: SessionState = ready ? SessionState.Running : SessionState.Running): EnrichedSession {
     return {
         info: {
             session_id: id,
@@ -23,8 +23,8 @@ function session(id: string, ready = false, state: SessionState = ready ? Sessio
 
 describe('computeSelectionCandidate', () => {
     it('prefers next reviewed session when advancing from merged reviewed', () => {
-        const reviewedOne = session('reviewed-one', true, SessionState.Reviewed)
-        const reviewedTwo = session('reviewed-two', true, SessionState.Reviewed)
+        const reviewedOne = session('reviewed-one', true, SessionState.Running)
+        const reviewedTwo = session('reviewed-two', true, SessionState.Running)
         const running = session('running-session')
 
         const candidate = computeSelectionCandidate({
@@ -35,7 +35,7 @@ describe('computeSelectionCandidate', () => {
             removalCandidate: null,
             mergedCandidate: 'reviewed-one',
             shouldAdvanceFromMerged: true,
-            shouldPreserveForReviewedRemoval: false,
+            shouldPreserveForReadyRemoval: false,
             allSessions: [reviewedOne, reviewedTwo, running]
         })
 
@@ -43,7 +43,7 @@ describe('computeSelectionCandidate', () => {
     })
 
     it('returns null when merged reviewed session has no peers', () => {
-        const reviewed = session('solo-reviewed', true, SessionState.Reviewed)
+        const reviewed = session('solo-reviewed', true, SessionState.Running)
 
         const candidate = computeSelectionCandidate({
             currentSelectionId: 'solo-reviewed',
@@ -53,7 +53,7 @@ describe('computeSelectionCandidate', () => {
             removalCandidate: null,
             mergedCandidate: 'solo-reviewed',
             shouldAdvanceFromMerged: true,
-            shouldPreserveForReviewedRemoval: false,
+            shouldPreserveForReadyRemoval: false,
             allSessions: [reviewed]
         })
 
@@ -62,7 +62,7 @@ describe('computeSelectionCandidate', () => {
 
     it('honours preservation when reviewed removed under other filter', () => {
         const running = session('running-session')
-        const reviewed = session('reviewed-session', true, SessionState.Reviewed)
+        const reviewed = session('reviewed-session', true, SessionState.Running)
 
         const candidate = computeSelectionCandidate({
             currentSelectionId: 'running-session',
@@ -72,7 +72,7 @@ describe('computeSelectionCandidate', () => {
             removalCandidate: 'reviewed-session',
             mergedCandidate: null,
             shouldAdvanceFromMerged: false,
-            shouldPreserveForReviewedRemoval: true,
+            shouldPreserveForReadyRemoval: true,
             allSessions: [running, reviewed]
         })
 
@@ -91,7 +91,7 @@ describe('computeSelectionCandidate', () => {
             removalCandidate: null,
             mergedCandidate: null,
             shouldAdvanceFromMerged: false,
-            shouldPreserveForReviewedRemoval: false,
+            shouldPreserveForReadyRemoval: false,
             allSessions: [running, other]
         })
 

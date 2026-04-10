@@ -10,7 +10,7 @@ import { sessionTerminalGroup, stableSessionTerminalId } from '../../common/term
 let selectionState: {
   kind: 'session' | 'orchestrator'
   payload?: string
-  sessionState?: 'spec' | 'processing' | 'running' | 'reviewed'
+  sessionState?: 'spec' | 'processing' | 'running'
 }
 let sessionsState: EnrichedSession[]
 const reloadSessionsMock = vi.fn(async () => {})
@@ -92,7 +92,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: Parameters<typeof invokeMock>) => invokeMock(...args)
 }))
 
-describe('UnifiedDiffModal mark reviewed button', () => {
+describe('UnifiedDiffModal ready button removal', () => {
   beforeEach(() => {
     selectionState = { kind: 'session', payload: 'demo', sessionState: 'running' }
     sessionsState = [createSession()]
@@ -104,37 +104,7 @@ describe('UnifiedDiffModal mark reviewed button', () => {
     vi.clearAllMocks()
   })
 
-  it('marks session as reviewed when the button is clicked', async () => {
-    invokeMock.mockImplementation(async (cmd: string, _args?: Record<string, unknown>) => {
-      if (cmd === TauriCommands.SchaltwerkCoreMarkSessionReady) return true
-      return baseInvoke(cmd)
-    })
-
-    const onClose = vi.fn()
-
-    render(
-      <TestProviders>
-        <UnifiedDiffModal filePath={null} isOpen={true} onClose={onClose} />
-      </TestProviders>
-    )
-
-    await waitFor(() => expect(screen.getByText('Git Diff Viewer')).toBeInTheDocument())
-
-    const markButton = await screen.findByRole('button', { name: /mark as reviewed/i })
-    fireEvent.click(markButton)
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith(
-        TauriCommands.SchaltwerkCoreMarkSessionReady,
-        expect.objectContaining({ name: 'demo' })
-      )
-    })
-
-    await waitFor(() => expect(reloadSessionsMock).toHaveBeenCalled())
-    await waitFor(() => expect(onClose).toHaveBeenCalled())
-  })
-
-  it('does not render mark reviewed button for reviewed sessions', async () => {
+  it('does not render a manual ready button for ready sessions', async () => {
     sessionsState = [createSession({ ready_to_merge: true })]
 
     const onClose = vi.fn()

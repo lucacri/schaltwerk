@@ -8,7 +8,7 @@ export interface SelectionCandidateInput {
     removalCandidate: string | null
     mergedCandidate: string | null
     shouldAdvanceFromMerged: boolean
-    shouldPreserveForReviewedRemoval: boolean
+    shouldPreserveForReadyRemoval: boolean
     allSessions: EnrichedSession[]
 }
 
@@ -16,28 +16,28 @@ function getSessionIds(sessions: EnrichedSession[]): string[] {
     return sessions.map(session => session.info.session_id)
 }
 
-function pickNextReviewedAfterMerge(
+function pickNextReadyAfterMerge(
     mergedCandidate: string,
     previousSessions: EnrichedSession[],
     allSessions: EnrichedSession[]
 ): string | null {
-    const previousReviewed = previousSessions.filter(s => s.info.ready_to_merge)
-    const reviewedIds = previousReviewed.map(s => s.info.session_id)
+    const previousReady = previousSessions.filter(s => s.info.ready_to_merge)
+    const readyIds = previousReady.map(s => s.info.session_id)
 
-    const mergedIndex = reviewedIds.indexOf(mergedCandidate)
+    const mergedIndex = readyIds.indexOf(mergedCandidate)
     if (mergedIndex !== -1) {
-        const nextId = reviewedIds[mergedIndex + 1]
+        const nextId = readyIds[mergedIndex + 1]
         if (nextId) {
             return nextId
         }
     }
 
-    const currentReviewedIds = allSessions
+    const currentReadyIds = allSessions
         .filter(s => s.info.ready_to_merge && s.info.session_id !== mergedCandidate)
         .map(s => s.info.session_id)
         .sort((a, b) => a.localeCompare(b))
 
-    return currentReviewedIds[0] ?? null
+    return currentReadyIds[0] ?? null
 }
 
 export function computeSelectionCandidate(input: SelectionCandidateInput): string | null {
@@ -49,7 +49,7 @@ export function computeSelectionCandidate(input: SelectionCandidateInput): strin
         removalCandidate,
         mergedCandidate,
         shouldAdvanceFromMerged,
-    shouldPreserveForReviewedRemoval,
+    shouldPreserveForReadyRemoval,
     allSessions,
   } = input
 
@@ -70,13 +70,13 @@ export function computeSelectionCandidate(input: SelectionCandidateInput): strin
   }
 
   if (shouldAdvanceFromMerged && mergedCandidate) {
-    const nextReviewed = pickNextReviewedAfterMerge(mergedCandidate, previousSessions, allSessions)
-    if (nextReviewed) {
-      return nextReviewed
+    const nextReady = pickNextReadyAfterMerge(mergedCandidate, previousSessions, allSessions)
+    if (nextReady) {
+      return nextReady
     }
     }
 
-    if (shouldPreserveForReviewedRemoval) {
+    if (shouldPreserveForReadyRemoval) {
         if (currentSelectionId && visibleSessions.find(s => s.info.session_id === currentSelectionId)) {
             return currentSelectionId
         }

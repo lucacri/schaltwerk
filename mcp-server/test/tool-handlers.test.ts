@@ -132,7 +132,6 @@ const listEpicsMock = mock(() =>
   Promise.resolve([{ id: 'e1', name: 'Epic A', color: '#00FF00' }])
 )
 const listSessionsByStateMock = mock(() => Promise.resolve([]))
-const markSessionReviewedMock = mock(() => Promise.resolve())
 const promoteSessionMock = mock(() =>
   Promise.resolve({
     sessionName: 'feature_v3',
@@ -214,7 +213,6 @@ describe('MCP tool handler logic', () => {
       listDraftSessions: listDraftSessionsMock,
       listEpics: listEpicsMock,
       listSessionsByState: listSessionsByStateMock,
-      markSessionReviewed: markSessionReviewedMock,
       promoteSession: promoteSessionMock,
       sendFollowUpMessage: sendFollowUpMessageMock,
       startDraftSession: startDraftSessionMock,
@@ -246,7 +244,6 @@ describe('MCP tool handler logic', () => {
     listDraftSessionsMock.mockClear()
     listEpicsMock.mockClear()
     listSessionsByStateMock.mockClear()
-    markSessionReviewedMock.mockClear()
     promoteSessionMock.mockClear()
     sendFollowUpMessageMock.mockClear()
     startDraftSessionMock.mockClear()
@@ -525,9 +522,10 @@ describe('MCP tool handler logic', () => {
     it('passes filter to listSessionsByState', async () => {
       listSessionsByStateMock.mockResolvedValueOnce([])
 
-      await callTool('lucode_list', { filter: 'reviewed' })
+      await callTool('lucode_list', { filter: 'ready' })
 
       expect(listSessionsByStateMock).toHaveBeenCalledTimes(1)
+      expect(listSessionsByStateMock).toHaveBeenCalledWith('ready', undefined)
     })
 
     it('shows no sessions message when empty', async () => {
@@ -552,18 +550,6 @@ describe('MCP tool handler logic', () => {
       expect(parsed.session).toBe('my-sess')
       expect(parsed.status).toBe('sent')
       expect(parsed.message).toBe('hello agent')
-    })
-  })
-
-  describe('lucode_mark_session_reviewed', () => {
-    it('marks session reviewed and returns structured response', async () => {
-      const result = await callTool('lucode_mark_session_reviewed', { session_name: 'my-sess' })
-
-      expect(markSessionReviewedMock).toHaveBeenCalledTimes(1)
-      const json = result.content.find((c: any) => c.mimeType === 'application/json')
-      const parsed = JSON.parse(json.text)
-      expect(parsed.session).toBe('my-sess')
-      expect(parsed.reviewed).toBe(true)
     })
   })
 

@@ -25,7 +25,7 @@ const createSession = (id: string, createdAt: string, readyToMerge = false): Enr
     is_current: false,
     session_type: 'worktree',
     ready_to_merge: readyToMerge,
-    session_state: readyToMerge ? 'reviewed' : 'running',
+    session_state: 'running',
   },
   terminals: [],
 })

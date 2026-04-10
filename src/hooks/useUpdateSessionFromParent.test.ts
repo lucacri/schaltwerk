@@ -392,7 +392,7 @@ describe('useUpdateSessionFromParent', () => {
       const reviewed = createSession({
         session_id: 'reviewed-1',
         display_name: 'Reviewed One',
-        session_state: 'reviewed',
+        session_state: 'running',
         ready_to_merge: true,
       })
       const spec = createSession({ session_id: 'spec-1', session_state: 'spec', status: 'spec' })

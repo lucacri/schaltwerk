@@ -41,7 +41,7 @@ function createVersion({
 }: {
   id: string
   attentionRequired?: boolean
-  sessionState?: 'spec' | 'running' | 'reviewed'
+  sessionState?: 'spec' | 'running'
   currentTask?: string
   specContent?: string
 }): SessionVersionGroupType['versions'][number] {
@@ -89,8 +89,6 @@ const requiredCallbacks = {
 
 const mockActions: SessionCardActions = {
   onSelect: vi.fn(),
-  onMarkReady: vi.fn(),
-  onUnmarkReady: vi.fn(),
   onCancel: vi.fn(),
   onConvertToSpec: vi.fn(),
   onRunDraft: vi.fn(),
@@ -121,22 +119,22 @@ describe('SessionVersionGroup status summary', () => {
     )
 
     expect(queryByLabelText('Group status: Running')).toBeNull()
-    expect(queryByLabelText('Group status: Reviewed')).toBeNull()
+    expect(queryByLabelText('Group status: Ready')).toBeNull()
   })
 
-  it('does not show a primary status badge even when all versions are reviewed', () => {
-    const reviewedGroup: SessionVersionGroupType = {
+  it('does not show a primary status badge even when all versions are ready', () => {
+    const readyGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
-        createVersion({ id: 'feature-A_v1', sessionState: 'reviewed' }),
-        createVersion({ id: 'feature-A_v2', sessionState: 'reviewed' }),
+        createVersion({ id: 'feature-A_v1', sessionState: 'running' }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running' }),
       ]
     }
 
     const { queryByLabelText } = render(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionVersionGroup
-          group={reviewedGroup}
+          group={readyGroup}
           selection={{ kind: 'session', payload: 'unrelated' }}
           startIndex={0}
           {...requiredCallbacks}
@@ -145,7 +143,7 @@ describe('SessionVersionGroup status summary', () => {
     )
 
     expect(queryByLabelText('Group status: Running')).toBeNull()
-    expect(queryByLabelText('Group status: Reviewed')).toBeNull()
+    expect(queryByLabelText('Group status: Ready')).toBeNull()
   })
 
   it('keeps status area visible when collapsed', () => {
@@ -169,7 +167,7 @@ describe('SessionVersionGroup status summary', () => {
     expect(getByTestId('version-group-status')).toBeVisible()
   })
 
-  it('shows consolidate button disabled when fewer than two running/reviewed sessions exist', () => {
+  it('shows consolidate button disabled when fewer than two running sessions exist', () => {
     const onConsolidate = vi.fn()
     const groupWithSpecs: SessionVersionGroupType = {
       ...baseGroup,
@@ -193,13 +191,13 @@ describe('SessionVersionGroup status summary', () => {
 
     const button = getByTestId('consolidate-versions-button')
     expect(button).toBeDisabled()
-    expect(button).toHaveAttribute('title', 'Needs at least 2 running/reviewed sessions to consolidate')
+    expect(button).toHaveAttribute('title', 'Needs at least 2 running sessions to consolidate')
 
     fireEvent.click(button)
     expect(onConsolidate).not.toHaveBeenCalled()
   })
 
-  it('enables consolidate button when at least two running/reviewed sessions exist', () => {
+  it('enables consolidate button when at least two running sessions exist', () => {
     const onConsolidate = vi.fn()
 
     const { getByTestId } = render(
@@ -227,7 +225,7 @@ describe('SessionVersionGroup status summary', () => {
       ...baseGroup,
       versions: [
         createVersion({ id: 'feature-A_v1', sessionState: 'running' }),
-        createVersion({ id: 'feature-A_v2', sessionState: 'reviewed' }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running' }),
         createVersion({
           id: 'feature-A-consolidation',
           sessionState: 'running',
@@ -284,10 +282,10 @@ describe('SessionVersionGroup status summary', () => {
     fireEvent.click(terminateButton)
     expect(onTerminateAll).toHaveBeenCalledTimes(1)
 
-    const reviewedOnlyGroup: SessionVersionGroupType = {
+    const specOnlyGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
-        createVersion({ id: 'feature-A_v1', sessionState: 'reviewed' }),
+        createVersion({ id: 'feature-A_v1', sessionState: 'spec' }),
         createVersion({ id: 'feature-A_v2', sessionState: 'spec' }),
       ],
     }
@@ -295,7 +293,7 @@ describe('SessionVersionGroup status summary', () => {
     rerender(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionVersionGroup
-          group={reviewedOnlyGroup}
+          group={specOnlyGroup}
           selection={{ kind: 'session', payload: 'unrelated' }}
           startIndex={0}
           onTerminateAll={onTerminateAll}
@@ -376,7 +374,7 @@ describe('SessionVersionGroup status summary', () => {
       ...baseGroup,
       versions: [
         createVersion({ id: 'feature-A_v1', sessionState: 'running' }),
-        createVersion({ id: 'feature-A_v2', sessionState: 'reviewed' }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running' }),
         {
           ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }),
           session: {
@@ -417,7 +415,7 @@ describe('SessionVersionGroup status summary', () => {
       ...baseGroup,
       versions: [
         createVersion({ id: 'feature-A_v1', sessionState: 'running' }),
-        createVersion({ id: 'feature-A_v2', sessionState: 'reviewed' }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running' }),
         {
           ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }),
           session: {

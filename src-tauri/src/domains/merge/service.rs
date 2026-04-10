@@ -429,7 +429,6 @@ impl MergeService {
                 session_name = context.session_name
             );
         }
-        manager.update_session_state(&context.session_name, SessionState::Reviewed)?;
 
         if let Err(err) = git::calculate_git_stats_fast(&context.worktree_path, &context.parent_branch) {
             warn!(
@@ -2369,7 +2368,7 @@ mod tests {
 
         let refreshed = manager.get_session(&session.name).unwrap();
         assert!(refreshed.ready_to_merge);
-        assert_eq!(refreshed.session_state, SessionState::Reviewed);
+        assert_eq!(refreshed.session_state, SessionState::Running);
     }
 
     #[tokio::test]
@@ -2910,7 +2909,7 @@ mod tests {
 
         let session_after = manager.get_session(&session.name).unwrap();
         assert!(session_after.ready_to_merge);
-        assert_eq!(session_after.session_state, SessionState::Reviewed);
+        assert_eq!(session_after.session_state, SessionState::Running);
     }
 
     #[tokio::test]
@@ -3090,7 +3089,7 @@ mod tests {
 
         let final_session = manager.get_session(&session_after.name).unwrap();
         assert!(final_session.ready_to_merge);
-        assert_eq!(final_session.session_state, SessionState::Reviewed);
+        assert_eq!(final_session.session_state, SessionState::Running);
     }
 
     #[tokio::test]
@@ -3150,7 +3149,7 @@ mod tests {
 
         let session_after = manager.get_session(&session.name).unwrap();
         assert!(session_after.ready_to_merge);
-        assert_eq!(session_after.session_state, SessionState::Reviewed);
+        assert_eq!(session_after.session_state, SessionState::Running);
     }
 
     #[tokio::test]

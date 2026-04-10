@@ -18,7 +18,7 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
                 parent_branch TEXT NOT NULL,
                 worktree_path TEXT NOT NULL,
             status TEXT NOT NULL,  -- 'active', 'cancelled', or 'spec'
-            session_state TEXT DEFAULT 'running',  -- 'spec', 'processing', 'running', or 'reviewed'
+            session_state TEXT DEFAULT 'running',  -- 'spec', 'processing', or 'running'
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
             last_activity INTEGER,
@@ -292,6 +292,10 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN spec_content TEXT", []);
     let _ = conn.execute(
         "ALTER TABLE sessions ADD COLUMN session_state TEXT DEFAULT 'running'",
+        [],
+    );
+    let _ = conn.execute(
+        "UPDATE sessions SET session_state = 'running' WHERE session_state = 'reviewed'",
         [],
     );
     // New: gate agent resume after Spec/Cancel until first fresh start
@@ -736,6 +740,46 @@ mod tests {
 
         super::apply_project_config_migrations(&conn).unwrap();
         super::apply_project_config_migrations(&conn).unwrap();
+    }
+
+    #[test]
+    fn sessions_migration_rewrites_reviewed_state_to_running() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE sessions (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                repository_path TEXT NOT NULL,
+                repository_name TEXT NOT NULL,
+                branch TEXT NOT NULL,
+                parent_branch TEXT NOT NULL,
+                worktree_path TEXT NOT NULL,
+                status TEXT NOT NULL,
+                session_state TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO sessions (id, name, repository_path, repository_name, branch, parent_branch, worktree_path, status, session_state, created_at, updated_at)
+             VALUES ('s1', 'legacy-reviewed', '/repo', 'repo', 'b', 'main', '/wt', 'active', 'reviewed', 0, 0)",
+            [],
+        )
+        .unwrap();
+
+        super::apply_sessions_migrations(&conn).unwrap();
+
+        let state: String = conn
+            .query_row(
+                "SELECT session_state FROM sessions WHERE id = 's1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(state, "running");
     }
 
     #[test]

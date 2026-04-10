@@ -51,7 +51,7 @@ export interface MockSelection {
 export interface MockSessionInfo {
   session_id: string
   session_name: string
-  session_state: 'spec' | 'processing' | 'running' | 'reviewed'
+  session_state: 'spec' | 'processing' | 'running'
   branch_name: string
   base_branch: string
   created_at: string

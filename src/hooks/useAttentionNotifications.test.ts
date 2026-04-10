@@ -22,7 +22,7 @@ const createSession = (
 })
 
 describe('shouldCountSessionForAttention', () => {
-  it('excludes reviewed sessions even when they require attention', () => {
+  it('excludes ready sessions even when they require attention', () => {
     const session = createSession({
       attention_required: true,
       ready_to_merge: true,
@@ -49,14 +49,14 @@ describe('shouldCountSessionForAttention', () => {
     expect(shouldCountSessionForAttention(session)).toBe(false)
   })
 
-  it('excludes sessions with session_state reviewed even when ready_to_merge is false', () => {
+  it('includes running sessions when ready_to_merge is false', () => {
     const session = createSession({
       attention_required: true,
       ready_to_merge: false,
-      session_state: 'reviewed',
+      session_state: 'running',
     })
 
-    expect(shouldCountSessionForAttention(session)).toBe(false)
+    expect(shouldCountSessionForAttention(session)).toBe(true)
   })
 })
 
@@ -81,17 +81,17 @@ describe('isSessionActivelyRunning', () => {
     expect(isSessionActivelyRunning(session)).toBe(false)
   })
 
-  it('returns false for reviewed sessions', () => {
+  it('returns true for running sessions without attention or ready state', () => {
     const session = createSession({
-      session_state: 'reviewed',
+      session_state: 'running',
       attention_required: false,
       ready_to_merge: false,
     })
 
-    expect(isSessionActivelyRunning(session)).toBe(false)
+    expect(isSessionActivelyRunning(session)).toBe(true)
   })
 
-  it('returns false for reviewed sessions via ready_to_merge', () => {
+  it('returns false for ready sessions via ready_to_merge', () => {
     const session = createSession({
       session_state: 'running',
       attention_required: false,

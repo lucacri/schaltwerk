@@ -41,7 +41,7 @@ function createSession(overrides: Partial<EnrichedSession['info']> = {}): Enrich
       worktree_path: '/tmp/session-one',
       base_branch: 'main',
       status: 'active',
-      session_state: 'reviewed',
+      session_state: 'running',
       ready_to_merge: true,
       is_current: false,
       session_type: 'worktree',
@@ -175,5 +175,22 @@ describe('useSessionMergeShortcut', () => {
     const { result } = renderHook(() => useSessionMergeShortcut())
 
     expect(result.current.isSessionMerging('session-1')).toBe(true)
+  })
+
+  it('tells the user to select a running session when merge is blocked as not ready', async () => {
+    quickMergeSession.mockResolvedValueOnce({ status: 'blocked', reason: 'not-ready' })
+
+    const { result } = renderHook(() => useSessionMergeShortcut())
+
+    await act(async () => {
+      await result.current.handleMergeShortcut()
+    })
+
+    expect(pushToastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Select a running session',
+        description: 'Choose a running session before merging.',
+      }),
+    )
   })
 })

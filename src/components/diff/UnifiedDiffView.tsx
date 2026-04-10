@@ -43,7 +43,6 @@ import {
 import { SearchBox } from "../common/SearchBox";
 import { logger } from "../../utils/logger";
 import { useSessions } from "../../hooks/useSessions";
-import { mapSessionUiState } from "../../utils/sessionFilters";
 import { DiffSessionActions } from "./DiffSessionActions";
 import { useKeyboardShortcutsConfig } from "../../contexts/KeyboardShortcutsContext";
 import {
@@ -154,7 +153,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
     updateComment,
   } = useReview();
   const { setFocusForSession, setCurrentFocus } = useFocus();
-  const { sessions, reloadSessions } = useSessions();
+  const { sessions } = useSessions();
   const { getOrchestratorAgentType } = useClaudeSession();
   const { config: keyboardShortcutConfig } = useKeyboardShortcutsConfig();
   const platform = useMemo(() => detectPlatformSafe(), []);
@@ -452,11 +451,6 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
     if (selection.kind !== "session" || !sessionName) return null;
     return sessions.find((s) => s.info.session_id === sessionName) ?? null;
   }, [selection.kind, sessionName, sessions]);
-  const canMarkReviewed = useMemo(() => {
-    if (!targetSession) return false;
-    return mapSessionUiState(targetSession.info) === "running";
-  }, [targetSession]);
-
   const diffSourceRef = useRef(diffSource);
   diffSourceRef.current = diffSource;
   const shouldUseCommittedPreload = diffSource !== "uncommitted";
@@ -3603,9 +3597,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
       isSessionSelection={selection.kind === "session"}
       sessionName={sessionName}
       targetSession={targetSession}
-      canMarkReviewed={canMarkReviewed}
       onClose={onClose}
-      onReloadSessions={reloadSessions}
       onLoadChangedFiles={loadChangedFiles}
     >
       {({ headerActions, dialogs }) =>

@@ -99,7 +99,7 @@ describe('useLastAgentResponseTracker', () => {
 
   it('registers listeners for reviewed sessions (they still have terminals)', () => {
     const sessions = [
-      createSession({ session_id: 'reviewed-one', session_state: 'reviewed' }),
+      createSession({ session_id: 'reviewed-one', session_state: 'running' }),
     ]
     store.set(allSessionsAtom, sessions)
 

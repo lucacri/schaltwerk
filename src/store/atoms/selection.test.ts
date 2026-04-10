@@ -358,7 +358,7 @@ describe('selection atoms', () => {
     })
   })
 
-  it('allocates terminals for reviewed sessions with a worktree', async () => {
+  it('allocates terminals for ready running sessions with a worktree', async () => {
     await withNodeEnv('development', async () => {
       const backend = await import('../../terminal/transport/backend')
 
@@ -370,7 +370,7 @@ describe('selection atoms', () => {
         selection: {
           kind: 'session',
           payload: 'reviewed-1',
-          sessionState: 'reviewed',
+          sessionState: 'running',
           worktreePath: '/tmp/worktrees/reviewed-1',
         },
       })
@@ -814,13 +814,13 @@ describe('selection atoms', () => {
   it('refreshes snapshot when session state change event matches current selection', async () => {
     await store.set(setProjectPathActionAtom, '/projects/alpha')
     await store.set(setSelectionActionAtom, { selection: { kind: 'session', payload: 'session-1' } })
-    vi.mocked(core.invoke).mockResolvedValueOnce(createRawSession({ session_state: 'reviewed' }))
+    vi.mocked(core.invoke).mockResolvedValueOnce(createRawSession({ session_state: 'running' }))
 
     await store.set(initializeSelectionEventsActionAtom)
     sessionStateHandlers[0]?.({ sessionId: 'session-1' })
     await waitForSelectionAsyncEffectsForTest()
     const selection = store.get(selectionValueAtom)
-    expect(selection.sessionState).toBe('reviewed')
+    expect(selection.sessionState).toBe('running')
     expect(getInvokeCallCount(TauriCommands.SchaltwerkCoreGetSession)).toBe(2)
   })
 

@@ -7,8 +7,6 @@ import { renderWithProviders } from '../../../tests/test-utils'
 
 const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
   switch (command) {
-    case TauriCommands.SchaltwerkCoreMarkSessionReady:
-      return true
     case TauriCommands.SchaltwerkCoreResetSessionWorktree:
       return undefined
     default:
@@ -50,9 +48,7 @@ describe('DiffSessionActions', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders session controls and marks session ready immediately', async () => {
-    const onClose = vi.fn()
-    const onReloadSessions = vi.fn(async () => {})
+  it('renders session controls', async () => {
     const onLoadChangedFiles = vi.fn(async () => {})
 
     renderWithProviders(
@@ -60,9 +56,7 @@ describe('DiffSessionActions', () => {
         isSessionSelection={true}
         sessionName="demo"
         targetSession={createSession()}
-        canMarkReviewed={true}
-        onClose={onClose}
-        onReloadSessions={onReloadSessions}
+        onClose={vi.fn()}
         onLoadChangedFiles={onLoadChangedFiles}
       >
         {({ headerActions, dialogs }) => (
@@ -74,29 +68,16 @@ describe('DiffSessionActions', () => {
       </DiffSessionActions>
     )
 
-    const markButton = await screen.findByRole('button', { name: /mark as reviewed/i })
-    fireEvent.click(markButton)
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith(
-        TauriCommands.SchaltwerkCoreMarkSessionReady,
-        expect.objectContaining({ name: 'demo' })
-      )
-    })
-
-    await waitFor(() => expect(onReloadSessions).toHaveBeenCalled())
-    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect(await screen.findByRole('button', { name: /reset session/i })).toBeInTheDocument()
   })
 
-  it('hides mark reviewed when session cannot be marked', () => {
+  it('does not render a manual ready action', () => {
     renderWithProviders(
       <DiffSessionActions
         isSessionSelection={true}
         sessionName="demo"
         targetSession={createSession({ ready_to_merge: true })}
-        canMarkReviewed={false}
         onClose={() => {}}
-        onReloadSessions={async () => {}}
         onLoadChangedFiles={async () => {}}
       >
         {({ headerActions }) => <div data-testid="header">{headerActions}</div>}
@@ -115,9 +96,7 @@ describe('DiffSessionActions', () => {
         isSessionSelection={true}
         sessionName="demo"
         targetSession={createSession()}
-        canMarkReviewed={false}
         onClose={onClose}
-        onReloadSessions={async () => {}}
         onLoadChangedFiles={onLoadChangedFiles}
       >
         {({ headerActions, dialogs }) => (

@@ -409,13 +409,10 @@ export interface Translations {
     filters: {
       specs: string
       running: string
-      reviewed: string
       specShort: string
       runShort: string
-      revShort: string
       showSpecs: string
       showRunning: string
-      showReviewed: string
     }
     search: {
       placeholder: string
@@ -437,7 +434,7 @@ export interface Translations {
     notStarted: string
     waitingForInput: string
     running: string
-    reviewed: string
+    ready: string
     blocked: string
     promoted: string
     spec: string
@@ -903,8 +900,6 @@ export interface Translations {
     restartTerminals: string
     discardAllChanges: string
     resetSession: string
-    markAsReviewed: string
-    markAsReviewedTitle: string
   }
   collapsedDiffBadge: {
     generatedFile: string

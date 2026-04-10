@@ -15,7 +15,7 @@ export interface Session {
   parent_branch: string
   worktree_path: string
   status: 'active' | 'cancelled' | 'spec'
-  session_state?: 'Spec' | 'Running' | 'Reviewed'
+  session_state?: 'spec' | 'processing' | 'running'
   created_at: number
   updated_at: number
   last_activity?: number
@@ -573,7 +573,7 @@ export class LucodeBridge {
         parent_branch: es.info.base_branch,
         worktree_path: es.info.worktree_path,
         status: es.info.session_state === 'spec' ? 'spec' as const : 'active' as const,
-        session_state: es.info.session_state as 'Spec' | 'Running' | 'Reviewed' | undefined,
+        session_state: es.info.session_state as 'spec' | 'processing' | 'running' | undefined,
         created_at: es.info.created_at ? new Date(es.info.created_at).getTime() : Date.now(),
         updated_at: es.info.updated_at ? new Date(es.info.updated_at).getTime() : Date.now(),
         last_activity: es.info.last_activity ? new Date(es.info.last_activity).getTime() : undefined,
@@ -1405,7 +1405,7 @@ export class LucodeBridge {
     return payload
   }
 
-  async listSessionsByState(filter?: 'all' | 'active' | 'spec' | 'reviewed', projectPath?: string): Promise<Session[]> {
+  async listSessionsByState(filter?: 'all' | 'active' | 'spec' | 'ready', projectPath?: string): Promise<Session[]> {
     try {
       if (filter === 'spec') {
         return this.listDraftSessions(projectPath)
@@ -1413,9 +1413,7 @@ export class LucodeBridge {
       
       // Use query parameter for server-side filtering when possible
       let pathSegment = '/api/sessions'
-      if (filter === 'reviewed') {
-        pathSegment += '?state=reviewed'
-      } else if (filter === 'active') {
+      if (filter === 'active' || filter === 'ready') {
         pathSegment += '?state=running'
       }
       
@@ -1465,7 +1463,7 @@ export class LucodeBridge {
         parent_branch: es.info.base_branch,
         worktree_path: es.info.worktree_path,
         status: es.info.session_state === 'spec' ? 'spec' as const : 'active' as const,
-        session_state: es.info.session_state as 'Spec' | 'Running' | 'Reviewed' | undefined,
+        session_state: es.info.session_state as 'spec' | 'processing' | 'running' | undefined,
         created_at: es.info.created_at ? new Date(es.info.created_at).getTime() : Date.now(),
         updated_at: es.info.updated_at ? new Date(es.info.updated_at).getTime() : Date.now(),
         last_activity: es.info.last_activity ? new Date(es.info.last_activity).getTime() : undefined,
@@ -1478,8 +1476,12 @@ export class LucodeBridge {
         was_auto_generated: es.info.was_auto_generated ?? false
       }))
       
-      // Don't duplicate specs - they're already included in enrichedSessions from API
-      
+      if (filter === 'ready') {
+        sessions = sessions.filter(session => session.ready_to_merge)
+      } else if (filter === 'active') {
+        sessions = sessions.filter(session => !session.ready_to_merge)
+      }
+
       return sessions
     } catch (error) {
       console.error('Failed to list sessions by state via API:', error)
@@ -1499,25 +1501,6 @@ export class LucodeBridge {
     } catch (error) {
       console.error('Failed to get current agents via API:', error)
       return []
-    }
-  }
-
-  async markSessionReviewed(sessionName: string, projectPath?: string): Promise<void> {
-    try {
-      const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(sessionName)}/mark-reviewed`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...this.getProjectHeaders(projectPath)
-        }
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to mark session as reviewed: ${response.statusText}`)
-      }
-    } catch (error) {
-      console.error('Failed to mark session as reviewed via API:', error)
-      throw error
     }
   }
 

@@ -12,13 +12,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }))
 
 vi.mock('../session/SessionActions', () => ({
-  SessionActions: ({ isMarkReadyDisabled }: { isMarkReadyDisabled?: boolean }) => (
-    <div data-testid="session-actions">
-      <button aria-label="Mark as reviewed" disabled={Boolean(isMarkReadyDisabled)}>
-        Mark as reviewed
-      </button>
-    </div>
-  ),
+  SessionActions: () => <div data-testid="session-actions" />,
 }))
 
 const baseInfo: SessionInfo = {
@@ -52,8 +46,6 @@ const baseSession: EnrichedSession = {
 
 const mockActions: SessionCardActions = {
   onSelect: vi.fn(),
-  onMarkReady: vi.fn(),
-  onUnmarkReady: vi.fn(),
   onCancel: vi.fn(),
   onConvertToSpec: vi.fn(),
   onRunDraft: vi.fn(),
@@ -71,14 +63,14 @@ const mockActions: SessionCardActions = {
 }
 
 describe('SessionCard dirty indicator', () => {
-  it('shows dirty indicator for reviewed sessions with uncommitted changes', () => {
+  it('shows dirty indicator for ready sessions with uncommitted changes', () => {
     const session: EnrichedSession = { 
       ...baseSession, 
       info: { 
         ...baseSession.info, 
         has_uncommitted_changes: true,
         ready_to_merge: false,
-        session_state: 'reviewed',
+        session_state: 'running',
         status: 'dirty',
         top_uncommitted_paths: ['src/main.rs', 'README.md']
       } 
@@ -126,7 +118,7 @@ describe('SessionCard dirty indicator', () => {
     expect(screen.getByRole('button', { name: /has uncommitted changes/i })).toBeInTheDocument()
   })
 
-  it('does not show dirty indicator when has_uncommitted_changes is false for reviewed session', () => {
+  it('does not show dirty indicator when has_uncommitted_changes is false for ready session', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionCard
@@ -135,7 +127,7 @@ describe('SessionCard dirty indicator', () => {
             info: {
               ...baseSession.info,
               ready_to_merge: true,
-              session_state: 'reviewed',
+              session_state: 'running',
               status: 'active',
               dirty_files_count: 0,
             },
@@ -200,13 +192,13 @@ describe('SessionCard stats-first layout', () => {
 })
 
 describe('SessionCard running tag', () => {
-  it('shows status strip and reviewed label when session is reviewed but still running', () => {
+  it('shows status strip and ready label when session is ready to merge but still running', () => {
     const session: EnrichedSession = {
       ...baseSession,
       info: {
         ...baseSession.info,
-        ready_to_merge: false,
-        session_state: 'reviewed',
+        ready_to_merge: true,
+        session_state: 'running',
       },
     }
 
@@ -225,7 +217,7 @@ describe('SessionCard running tag', () => {
     const card = screen.getByRole('button', { name: /selected session/i })
     const statusStrip = card.querySelector('.w-\\[3px\\]')
     expect(statusStrip).toBeInTheDocument()
-    expect(screen.getByText(/✓ Reviewed/)).toBeInTheDocument()
+    expect(screen.getByText(/✓ Ready/)).toBeInTheDocument()
   })
 })
 
@@ -428,26 +420,6 @@ describe('SessionCard metadata badges', () => {
     expect(screen.getByText('Spec')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Open issue #9' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Open PR #12' })).toBeInTheDocument()
-  })
-})
-
-describe('SessionCard review cooldown', () => {
-  it('disables the mark reviewed action when mark ready is temporarily blocked', () => {
-    renderWithProviders(
-      <SessionCardActionsProvider actions={mockActions}>
-        <SessionCard
-          session={baseSession}
-          index={0}
-          isSelected
-          hasFollowUpMessage={false}
-          isRunning
-          isMarkReadyDisabled
-        />
-      </SessionCardActionsProvider>
-    )
-
-    const markReviewedButton = screen.getByRole('button', { name: 'Mark as reviewed' })
-    expect(markReviewedButton).toBeDisabled()
   })
 })
 

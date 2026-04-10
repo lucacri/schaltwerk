@@ -362,7 +362,7 @@ body.is-split-dragging[data-split-orientation="mixed"] {
 
 /* Session frame highlighting (use actual box-shadow on the element for better overflow handling) */
 .session-ring {
-  /* Keep smaller border-radius for reviewed cards to differentiate them */
+  /* Keep smaller border-radius for ready-to-merge cards to differentiate them */
   border-radius: 0.375rem;
   transform: scale(0.97);
   transform-origin: center;

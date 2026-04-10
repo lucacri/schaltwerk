@@ -4,21 +4,11 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import { Sidebar } from './Sidebar'
 import { TestProviders } from '../../tests/test-utils'
 import * as uiEvents from '../../common/uiEvents'
-import { logger } from '../../utils/logger'
 
 // Use real keyboard hook behavior
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(), UnlistenFn: vi.fn() }))
-vi.mock('../../utils/logger', () => ({
-  logger: {
-    warn: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    debug: vi.fn()
-  }
-}))
-
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
@@ -195,9 +185,7 @@ describe('Sidebar keyboard navigation basic', () => {
     expect(emitSpy).not.toHaveBeenCalledWith(uiEvents.UiEvent.RefineSpecInNewTab, expect.anything())
   })
 
-  it('prevents marking spec sessions as reviewed', async () => {
-    const consoleWarnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
-
+  it('does not trigger a manual review action for spec sessions', async () => {
     const specSessions = [
       { info: { session_id: 'spec-session', branch: 'spec/branch', worktree_path: '/spec', base_branch: 'main', status: 'spec', session_state: 'spec', is_current: false, session_type: 'worktree', ready_to_merge: false }, terminals: [] },
     ]
@@ -240,18 +228,10 @@ describe('Sidebar keyboard navigation basic', () => {
 
     await press('r', { metaKey: true })
 
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Cannot mark spec "spec-session" as reviewed')
-    )
-
-    expect(invoke).not.toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreMarkSessionReady, expect.anything())
-
-    consoleWarnSpy.mockRestore()
+    expect(invoke).not.toHaveBeenCalledWith('schaltwerk_core_mark_session_ready', expect.anything())
   })
 
-  it('allows marking running sessions as reviewed', async () => {
-    const consoleWarnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
-
+  it('does not trigger a manual review action for running sessions', async () => {
     const runningSessions = [
       { info: { session_id: 'running-session', branch: 'running/branch', worktree_path: '/running', base_branch: 'main', status: 'active', is_current: false, session_type: 'worktree', ready_to_merge: false }, terminals: [] },
     ]
@@ -294,12 +274,7 @@ describe('Sidebar keyboard navigation basic', () => {
 
     await press('r', { metaKey: true })
 
-    expect(consoleWarnSpy).not.toHaveBeenCalled()
-    expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreMarkSessionReady, {
-      name: 'running-session'
-    })
-
-    consoleWarnSpy.mockRestore()
+    expect(invoke).not.toHaveBeenCalledWith('schaltwerk_core_mark_session_ready', expect.anything())
   })
 
   it('prevents converting spec sessions to specs with Cmd+S', async () => {
@@ -350,15 +325,14 @@ describe('Sidebar keyboard navigation basic', () => {
     })
   })
 
-  it('unmarks a reviewed session when pressing Cmd+R', async () => {
-    const reviewedSessions = [
-      { info: { session_id: 'reviewed-session', branch: 'review/branch', worktree_path: '/review', base_branch: 'main', status: 'active', is_current: false, session_type: 'worktree', ready_to_merge: true, session_state: 'reviewed' }, terminals: [] },
+  it('does not trigger a manual review action for ready sessions', async () => {
+    const readySessions = [
+      { info: { session_id: 'ready-session', branch: 'review/branch', worktree_path: '/review', base_branch: 'main', status: 'active', is_current: false, session_type: 'worktree', ready_to_merge: true, session_state: 'running' }, terminals: [] },
     ]
 
     vi.mocked(invoke).mockImplementation(async (cmd) => {
-      if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) return reviewedSessions
+      if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) return readySessions
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.SchaltwerkCoreUnmarkSessionReady) return undefined
       if (cmd === TauriCommands.GetCurrentDirectory) return '/cwd'
       if (cmd === TauriCommands.TerminalExists) return false
       if (cmd === TauriCommands.CreateTerminal) return true
@@ -368,7 +342,7 @@ describe('Sidebar keyboard navigation basic', () => {
       if (cmd === TauriCommands.DirectoryExists) return true
       if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
       if (cmd === TauriCommands.GetProjectSessionsSettings) {
-        return { filter_mode: 'reviewed', sort_mode: 'name' }
+        return { filter_mode: 'running', sort_mode: 'name' }
       }
       if (cmd === TauriCommands.SetProjectSessionsSettings) {
         return undefined
@@ -379,26 +353,22 @@ describe('Sidebar keyboard navigation basic', () => {
     await renderSidebar()
 
     await waitFor(() => {
-      expect(screen.getByText('reviewed-session')).toBeInTheDocument()
+      expect(screen.getByText('ready-session')).toBeInTheDocument()
     })
 
-    const reviewedButton = screen.getByText('reviewed-session').closest('[role="button"]') as HTMLElement | null
-    if (reviewedButton) {
-      await click(reviewedButton)
+    const readyButton = screen.getByText('ready-session').closest('[role="button"]') as HTMLElement | null
+    if (readyButton) {
+      await click(readyButton)
     }
 
     await waitFor(() => {
-      const selectedButton = screen.getByText('reviewed-session').closest('[role="button"]')
+      const selectedButton = screen.getByText('ready-session').closest('[role="button"]')
       expect(selectedButton?.getAttribute('data-session-selected')).toBe('true')
     })
 
     await press('r', { metaKey: true })
 
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreUnmarkSessionReady, {
-        name: 'reviewed-session'
-      })
-    })
+    expect(invoke).not.toHaveBeenCalledWith('schaltwerk_core_mark_session_ready', expect.anything())
   })
 
   it('allows converting running sessions to specs with Cmd+S', async () => {

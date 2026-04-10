@@ -2736,66 +2736,6 @@ pub async fn schaltwerk_core_set_font_sizes(
 }
 
 #[tauri::command]
-pub async fn schaltwerk_core_mark_session_ready(
-    app: tauri::AppHandle,
-    name: String,
-) -> Result<bool, String> {
-    log::info!("Marking session {name} as reviewed");
-
-    let core = get_core_write().await?;
-    let manager = core.session_manager();
-
-    let result = manager
-        .mark_session_ready(&name)
-        .map_err(|e| format!("Failed to mark session as reviewed: {e}"))?;
-
-    if let Ok(session) = manager.get_session(&name)
-        && session.worktree_path.exists()
-        && let Ok(stats) = lucode::domains::git::service::calculate_git_stats_fast(
-            &session.worktree_path,
-            &session.parent_branch,
-        )
-    {
-        let merge_service = MergeService::new(core.db.clone(), core.repo_path.clone());
-        let merge_preview = merge_service.preview(&name).ok();
-
-        let merge_snapshot = MergeStateSnapshot::from_preview(merge_preview.as_ref());
-
-        let payload = lucode::domains::sessions::activity::SessionGitStatsUpdated {
-            session_id: session.id.clone(),
-            session_name: session.name.clone(),
-            project_path: session.repository_path.to_string_lossy().to_string(),
-            files_changed: stats.files_changed,
-            lines_added: stats.lines_added,
-            lines_removed: stats.lines_removed,
-            has_uncommitted: stats.has_uncommitted,
-            dirty_files_count: Some(stats.dirty_files_count),
-            commits_ahead_count: merge_preview.as_ref().map(|value| value.commits_ahead_count),
-            has_conflicts: stats.has_conflicts,
-            top_uncommitted_paths: None,
-            merge_has_conflicts: merge_snapshot.merge_has_conflicts,
-            merge_conflicting_paths: merge_snapshot.merge_conflicting_paths,
-            merge_is_up_to_date: merge_snapshot.merge_is_up_to_date,
-        };
-
-        if let Err(err) = emit_event(&app, SchaltEvent::SessionGitStats, &payload) {
-            log::debug!(
-                "Failed to emit SessionGitStats after marking ready for {}: {}",
-                session.name,
-                err
-            );
-        }
-    }
-
-    // Emit event to notify frontend of the change
-    // Invalidate cache before emitting refreshed event
-    log::info!("Queueing sessions refresh after marking session ready");
-    events::request_sessions_refreshed(&app, events::SessionsRefreshReason::MergeWorkflow);
-
-    Ok(result)
-}
-
-#[tauri::command]
 pub async fn schaltwerk_core_has_uncommitted_changes(name: String) -> Result<bool, String> {
     let manager = session_manager_read().await?;
 
@@ -2805,28 +2745,6 @@ pub async fn schaltwerk_core_has_uncommitted_changes(name: String) -> Result<boo
 
     lucode::domains::git::has_uncommitted_changes(&session.worktree_path)
         .map_err(|e| format!("Failed to check uncommitted changes: {e}"))
-}
-
-#[tauri::command]
-pub async fn schaltwerk_core_unmark_session_ready(
-    app: tauri::AppHandle,
-    name: String,
-) -> Result<(), String> {
-    log::info!("Unmarking session {name} as reviewed");
-
-    let core = get_core_write().await?;
-    let manager = core.session_manager();
-
-    manager
-        .unmark_session_ready(&name)
-        .map_err(|e| format!("Failed to unmark session as reviewed: {e}"))?;
-
-    // Emit event to notify frontend of the change
-    // Invalidate cache before emitting refreshed event
-    log::info!("Queueing sessions refresh after unmarking session ready");
-    events::request_sessions_refreshed(&app, events::SessionsRefreshReason::MergeWorkflow);
-
-    Ok(())
 }
 
 #[tauri::command]

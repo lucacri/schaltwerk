@@ -226,12 +226,13 @@ describe('sessions atoms', () => {
         expect(store.get(sortedSessionsAtom).map(s => s.info.session_id)).toEqual([
             'running-b',
             'running-a',
+            'reviewed-one',
         ])
 
         store.set(filterModeAtom, FilterMode.Spec)
         expect(store.get(filteredSessionsAtom).map(s => s.info.session_id)).toEqual(['spec-session'])
 
-        store.set(filterModeAtom, FilterMode.Reviewed)
+        store.set(filterModeAtom, FilterMode.Running)
         store.set(searchQueryAtom, 'reviewed')
         expect(store.get(sessionsAtom).map(s => s.info.session_id)).toEqual(['reviewed-one'])
     })
@@ -577,7 +578,7 @@ describe('sessions atoms', () => {
             session_id: 'ready',
             ready_to_merge: true,
             status: 'dirty',
-            session_state: SessionState.Reviewed,
+            session_state: SessionState.Running,
         })
         store.set(allSessionsAtom, [readySession])
 
@@ -612,7 +613,7 @@ describe('sessions atoms', () => {
             session_id: 'conflict',
             ready_to_merge: true,
             status: 'dirty',
-            session_state: SessionState.Reviewed,
+            session_state: SessionState.Running,
         })
         store.set(allSessionsAtom, [conflictSession])
 
@@ -723,7 +724,7 @@ describe('sessions atoms', () => {
         store.set(projectPathAtom, '/project')
         const sessionSnapshot = [
             createSession({ session_id: 'running', status: 'active', session_state: 'running' }),
-            createSession({ session_id: 'review', status: 'dirty', session_state: 'reviewed', ready_to_merge: true }),
+            createSession({ session_id: 'review', status: 'dirty', session_state: 'running', ready_to_merge: true }),
         ]
         store.set(allSessionsAtom, sessionSnapshot)
 
@@ -744,7 +745,7 @@ describe('sessions atoms', () => {
         expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreConvertSessionToDraft, { name: 'running' })
 
         await store.set(updateSessionStatusActionAtom, { sessionId: 'review', status: 'dirty' })
-        expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreMarkReady, { name: 'review' })
+        expect(invoke).not.toHaveBeenCalledWith('schaltwerk_core_mark_ready', { name: 'review' })
     })
 
     it('creates draft sessions and reloads afterwards', async () => {
@@ -809,12 +810,12 @@ describe('sessions atoms', () => {
         expect(store.get(filterModeAtom)).toBe(FilterMode.Spec)
         expect(store.get(autoCancelAfterMergeAtom)).toBe(false)
 
-        store.set(filterModeAtom, FilterMode.Reviewed)
+        store.set(filterModeAtom, FilterMode.Running)
         await Promise.resolve()
 
         expect(invoke).toHaveBeenCalledWith(TauriCommands.SetProjectSessionsSettings, {
             settings: {
-                filter_mode: FilterMode.Reviewed,
+                filter_mode: FilterMode.Running,
             },
         })
     })
@@ -954,7 +955,7 @@ describe('sessions atoms', () => {
         await Promise.resolve()
 
         store.set(allSessionsAtom, [
-            createSession({ session_id: 'merge', ready_to_merge: true, status: 'dirty', session_state: 'reviewed' }),
+            createSession({ session_id: 'merge', ready_to_merge: true, status: 'dirty', session_state: 'running' }),
         ])
 
         expect(listenEventMock).toHaveBeenCalledWith('schaltwerk:git-operation-started', expect.any(Function))
@@ -1734,12 +1735,12 @@ describe('sessions atoms', () => {
         expect(store.get(isElementPickerActiveAtom)(previewKey)).toBe(false)
     })
 
-    it('auto-starts reviewed sessions just like running sessions', async () => {
+    it('auto-starts ready sessions just like running sessions', async () => {
         const { invoke } = await import('@tauri-apps/api/core')
         vi.mocked(invoke).mockImplementation(async (cmd) => {
             if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
                 return [
-                    createSession({ session_id: 'reviewed-session', status: 'active', session_state: SessionState.Reviewed }),
+                    createSession({ session_id: 'reviewed-session', status: 'active', session_state: SessionState.Running }),
                 ]
             }
             if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
@@ -1753,7 +1754,7 @@ describe('sessions atoms', () => {
         await store.set(refreshSessionsActionAtom)
 
         expect(store.get(allSessionsAtom)).toHaveLength(1)
-        expect(store.get(allSessionsAtom)[0]?.info.session_state).toBe(SessionState.Reviewed)
+        expect(store.get(allSessionsAtom)[0]?.info.session_state).toBe(SessionState.Running)
 
         await vi.waitFor(() => {
             expect(startSessionTop).toHaveBeenCalledWith(expect.objectContaining({ sessionName: 'reviewed-session' }))
@@ -1891,7 +1892,7 @@ describe('sessions atoms', () => {
         expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 1, running: 2 })
     })
 
-    it('snapshots outgoing project counts on switch and excludes reviewed sessions', async () => {
+    it('snapshots outgoing project counts on switch and keeps ready sessions in running counts', async () => {
         const { invoke } = await import('@tauri-apps/api/core')
 
         vi.mocked(invoke).mockImplementation(async (cmd) => {
@@ -1908,7 +1909,7 @@ describe('sessions atoms', () => {
                         createSession({
                             session_id: 'alpha-reviewed',
                             worktree_path: '/tmp/alpha-reviewed',
-                            session_state: SessionState.Reviewed,
+                            session_state: SessionState.Running,
                             ready_to_merge: true,
                         }),
                     ]
@@ -1931,10 +1932,10 @@ describe('sessions atoms', () => {
         store.set(projectPathAtom, '/projects/beta')
         await store.set(refreshSessionsActionAtom)
 
-        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 0, running: 1 })
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 0, running: 2 })
     })
 
-    it('does not count version groups as running when all running versions need attention or are reviewed', async () => {
+    it('counts a version group as running when a ready version remains', async () => {
         const { invoke } = await import('@tauri-apps/api/core')
 
         vi.mocked(invoke).mockImplementation(async (cmd) => {
@@ -1959,7 +1960,7 @@ describe('sessions atoms', () => {
                     session_id: 'feature_v1',
                     worktree_path: '/tmp/feature-v1',
                     version_number: 1,
-                    session_state: SessionState.Reviewed,
+                    session_state: SessionState.Running,
                     ready_to_merge: true,
                     attention_required: false,
                 }),
@@ -1974,7 +1975,7 @@ describe('sessions atoms', () => {
             ],
         })
 
-        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 1, running: 0 })
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 1, running: 1 })
     })
 
     it('resets cached cross-project counts when switching away from an empty project', async () => {

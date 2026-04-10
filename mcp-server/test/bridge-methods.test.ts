@@ -707,14 +707,14 @@ describe('LucodeBridge untested methods', () => {
       expect(String(url)).toContain('/api/specs')
     })
 
-    it('appends state=reviewed query for reviewed filter', async () => {
+    it('appends state=running query for ready filter', async () => {
       fetchMock.mockResolvedValue(createResponse([]))
 
       const bridge = new LucodeBridge()
-      await bridge.listSessionsByState('reviewed')
+      await bridge.listSessionsByState('ready')
 
       const [url] = fetchMock.mock.calls[0]
-      expect(String(url)).toContain('/api/sessions?state=reviewed')
+      expect(String(url)).toContain('/api/sessions?state=running')
     })
 
     it('appends state=running query for active filter', async () => {
@@ -745,38 +745,6 @@ describe('LucodeBridge untested methods', () => {
       const result = await bridge.listSessionsByState('all')
 
       expect(result).toEqual([])
-    })
-  })
-
-  describe('markSessionReviewed', () => {
-    it('marks session as reviewed via API', async () => {
-      fetchMock.mockResolvedValue(createResponse({}))
-
-      const bridge = new LucodeBridge()
-      await bridge.markSessionReviewed('my-session')
-
-      const [url, init] = fetchMock.mock.calls[0]
-      expect(String(url)).toContain('/api/sessions/my-session/mark-reviewed')
-      expect(init?.method).toBe('POST')
-    })
-
-    it('throws on API error', async () => {
-      fetchMock.mockResolvedValue(createErrorResponse(500, 'Internal Server Error'))
-
-      const bridge = new LucodeBridge()
-      await expect(bridge.markSessionReviewed('bad')).rejects.toThrow('Failed to mark session as reviewed')
-    })
-
-    it('passes project headers', async () => {
-      fetchMock.mockResolvedValue(createResponse({}))
-
-      const bridge = new LucodeBridge()
-      await bridge.markSessionReviewed('sess', '/other/project')
-
-      const [, init] = fetchMock.mock.calls[0]
-      const headers = init?.headers as Record<string, string>
-      expect(headers['Content-Type']).toBe('application/json')
-      expect(headers['X-Project-Path']).toBeDefined()
     })
   })
 

@@ -290,9 +290,9 @@
       "openProject": "打开项目以完成设置",
       "openProjectDesc": "打开 Lucode 项目，以便 GitHub 集成可以连接到正确的仓库。",
       "connected": "已连接到 {repo}",
-      "connectedDesc": "默认分支 {branch}。已审核的会话将以此仓库为目标。",
+      "connectedDesc": "默认分支 {branch}。可合并的会话将以此仓库为目标。",
       "readyToConnect": "准备连接项目",
-      "readyToConnectDesc": "连接此项目，以便已审核的会话推送到正确的 GitHub 仓库。",
+      "readyToConnectDesc": "连接此项目，以便可合并的会话推送到正确的 GitHub 仓库。",
       "authenticate": "认证",
       "authenticating": "认证中…",
       "connectProject": "连接项目",
@@ -407,13 +407,10 @@
     "filters": {
       "specs": "规格",
       "running": "运行中",
-      "reviewed": "已审核",
       "specShort": "规格",
       "runShort": "运行",
-      "revShort": "审核",
       "showSpecs": "显示规格代理",
-      "showRunning": "显示运行中代理",
-      "showReviewed": "显示已审核代理"
+      "showRunning": "显示运行中代理"
     },
     "search": {
       "placeholder": "搜索会话...",
@@ -435,7 +432,7 @@
     "notStarted": "未开始",
     "waitingForInput": "等待输入",
     "running": "运行中",
-    "reviewed": "✓ 已审核",
+    "ready": "✓ 就绪",
     "blocked": "⚠ 已阻塞",
     "promoted": "★ 已推广",
     "spec": "规格",
@@ -900,9 +897,7 @@
     "openPrInBrowser": "在浏览器中打开 PR #{number}",
     "restartTerminals": "重启终端",
     "discardAllChanges": "放弃所有更改并重置此会话",
-    "resetSession": "重置会话",
-    "markAsReviewed": "标记为已审核",
-    "markAsReviewedTitle": "将此会话标记为已审核"
+    "resetSession": "重置会话"
   },
   "collapsedDiffBadge": {
     "generatedFile": "生成的文件",

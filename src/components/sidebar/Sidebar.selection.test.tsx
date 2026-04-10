@@ -41,7 +41,7 @@ vi.mock('@tauri-apps/api/event', () => ({
 
 type TestSession = EnrichedSession
 
-describe('Reviewed session cancellation focus preservation', () => {
+describe('Ready session cancellation focus preservation', () => {
   let currentSessions: TestSession[] = []
 
   beforeEach(() => {
@@ -51,7 +51,7 @@ describe('Reviewed session cancellation focus preservation', () => {
 
     // Set up the mock to return sessions
     const currentSession = mockEnrichedSession('current-session', SessionState.Running, false)
-    const reviewedSession = mockEnrichedSession('reviewed-session', SessionState.Reviewed, true)
+    const reviewedSession = mockEnrichedSession('reviewed-session', SessionState.Running, true)
     const anotherSession = mockEnrichedSession('another-session', SessionState.Running, false)
 
     currentSessions = [currentSession, reviewedSession, anotherSession]
@@ -98,10 +98,10 @@ describe('Reviewed session cancellation focus preservation', () => {
     })
   }
 
-  it('preserves focus on current session when a reviewed session is cancelled', async () => {
+  it('preserves focus on current session when a ready session is cancelled', async () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Wait for running sessions to load (reviewed-session is not visible with Running filter)
+    // Wait for running sessions to load
     await waitFor(() => {
       const sessionButtons = screen.getAllByRole('button').filter(btn => {
         const text = btn.textContent || ''
@@ -117,7 +117,7 @@ describe('Reviewed session cancellation focus preservation', () => {
       expect(currentButton).toHaveClass('session-ring-blue')
     })
 
-    // Cancel the reviewed session via MCP server (emit SessionRemoved event)
+    // Cancel the ready session via MCP server (emit SessionRemoved event)
     await emitEvent(SchaltEvent.SessionRemoved, { session_name: 'reviewed-session' })
 
     // Focus should remain on current session, not switch to another-session
@@ -129,8 +129,8 @@ describe('Reviewed session cancellation focus preservation', () => {
     })
   })
 
-  it('falls back to orchestrator when current selection becomes invalid after reviewed session cancellation', async () => {
-    const reviewedSession = mockEnrichedSession('reviewed-session', SessionState.Reviewed, true)
+  it('falls back to orchestrator when current selection becomes invalid after ready session cancellation', async () => {
+    const reviewedSession = mockEnrichedSession('reviewed-session', SessionState.Running, true)
     const sessions = [reviewedSession]
 
     vi.mocked(invoke).mockImplementation(async (cmd: string, args?: MockTauriInvokeArgs) => {
@@ -141,14 +141,14 @@ describe('Reviewed session cancellation focus preservation', () => {
         return match ? toRawSession(match) : null
       }
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'reviewed', sort_mode: 'name' }
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'running', sort_mode: 'name' }
       if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
       return undefined
     })
 
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Wait for sessions to load (using reviewed filter to see reviewed sessions)
+    // Wait for sessions to load
     await waitFor(() => {
       const sessionButtons = screen.getAllByRole('button').filter(btn => {
         const text = btn.textContent || ''
@@ -157,14 +157,14 @@ describe('Reviewed session cancellation focus preservation', () => {
       expect(sessionButtons).toHaveLength(1)
     })
 
-    // Select the reviewed session
+    // Select the ready session
     await userEvent.click(screen.getByText('reviewed-session'))
     await waitFor(() => {
       const reviewedButton = screen.getByText('reviewed-session').closest('[role="button"]')
       expect(reviewedButton).toHaveClass('session-ring-blue')
     })
 
-    // Cancel the reviewed session
+    // Cancel the ready session
     await emitEvent(SchaltEvent.SessionRemoved, { session_name: 'reviewed-session' })
 
     // Should fall back to orchestrator since current selection is no longer valid
@@ -174,9 +174,9 @@ describe('Reviewed session cancellation focus preservation', () => {
     })
   })
 
-  it('selects next reviewed session when current reviewed session is removed while filtering reviewed', async () => {
-    const reviewedOne = mockEnrichedSession('reviewed-one', SessionState.Reviewed, true)
-    const reviewedTwo = mockEnrichedSession('reviewed-two', SessionState.Reviewed, true)
+  it('selects next ready session when current ready session is removed while filtering running', async () => {
+    const reviewedOne = mockEnrichedSession('reviewed-one', SessionState.Running, true)
+    const reviewedTwo = mockEnrichedSession('reviewed-two', SessionState.Running, true)
 
     currentSessions = [reviewedOne, reviewedTwo]
     ;(globalThis as { __testCurrentSessions?: TestSession[] }).__testCurrentSessions = currentSessions
@@ -192,7 +192,7 @@ describe('Reviewed session cancellation focus preservation', () => {
         return match ? toRawSession(match) : null
       }
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'reviewed', sort_mode: 'name' }
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'running', sort_mode: 'name' }
       if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
       return undefined
     })
@@ -221,7 +221,7 @@ describe('Reviewed session cancellation focus preservation', () => {
     })
   })
 
-  it('continues normal auto-selection behavior for non-reviewed session cancellation', async () => {
+  it('continues normal auto-selection behavior for non-ready session cancellation', async () => {
     const runningSession = mockEnrichedSession('running-session', SessionState.Running, false)
     const anotherRunning = mockEnrichedSession('another-running', SessionState.Running, false)
 
@@ -302,10 +302,10 @@ describe('Reviewed session cancellation focus preservation', () => {
   })
 
 
-  it('handles multiple reviewed sessions correctly during cancellation', async () => {
+  it('handles multiple ready sessions correctly during cancellation', async () => {
     const currentSession = mockEnrichedSession('current-session', SessionState.Running, false)
-    const reviewedSession1 = mockEnrichedSession('reviewed-1', SessionState.Reviewed, true)
-    const reviewedSession2 = mockEnrichedSession('reviewed-2', SessionState.Reviewed, true)
+    const reviewedSession1 = mockEnrichedSession('reviewed-1', SessionState.Running, true)
+    const reviewedSession2 = mockEnrichedSession('reviewed-2', SessionState.Running, true)
 
     const sessions = [currentSession, reviewedSession1, reviewedSession2]
 
@@ -324,7 +324,7 @@ describe('Reviewed session cancellation focus preservation', () => {
 
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Wait for running session to load (reviewed sessions not visible with Running filter)
+    // Wait for running sessions to load
     await waitFor(() => {
       const sessionButtons = screen.getAllByRole('button').filter(btn => {
         const text = btn.textContent || ''
@@ -340,7 +340,7 @@ describe('Reviewed session cancellation focus preservation', () => {
       expect(currentButton).toHaveClass('session-ring-blue')
     })
 
-    // Cancel one reviewed session
+    // Cancel one ready session
     await emitEvent(SchaltEvent.SessionRemoved, { session_name: 'reviewed-1' })
 
     // Focus should remain on current session
@@ -350,8 +350,8 @@ describe('Reviewed session cancellation focus preservation', () => {
     })
   })
 
-  it('works correctly when reviewed session is the current selection', async () => {
-    const reviewedSession = mockEnrichedSession('reviewed-session', SessionState.Reviewed, true)
+  it('works correctly when a ready session is the current selection', async () => {
+    const reviewedSession = mockEnrichedSession('reviewed-session', SessionState.Running, true)
     const sessions = [reviewedSession]
 
     vi.mocked(invoke).mockImplementation(async (cmd: string, args?: MockTauriInvokeArgs) => {
@@ -362,14 +362,14 @@ describe('Reviewed session cancellation focus preservation', () => {
         return match ? toRawSession(match) : null
       }
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'reviewed', sort_mode: 'name' }
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'running', sort_mode: 'name' }
       if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
       return undefined
     })
 
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Wait for sessions to load (using reviewed filter to see reviewed sessions)
+    // Wait for sessions to load
     await waitFor(() => {
       const sessionButtons = screen.getAllByRole('button').filter(btn => {
         const text = btn.textContent || ''
@@ -378,14 +378,14 @@ describe('Reviewed session cancellation focus preservation', () => {
       expect(sessionButtons).toHaveLength(1)
     })
 
-    // Select the reviewed session
+    // Select the ready session
     await userEvent.click(screen.getByText('reviewed-session'))
     await waitFor(() => {
       const reviewedButton = screen.getByText('reviewed-session').closest('[role="button"]')
       expect(reviewedButton).toHaveClass('session-ring-blue')
     })
 
-    // Cancel the current reviewed session
+    // Cancel the current ready session
     await emitEvent(SchaltEvent.SessionRemoved, { session_name: 'reviewed-session' })
 
     // Should fall back to orchestrator
@@ -395,9 +395,9 @@ describe('Reviewed session cancellation focus preservation', () => {
     })
   })
 
-  it('preserves focus when cancelling reviewed session in filtered view', async () => {
+  it('preserves focus when cancelling a ready session in filtered view', async () => {
     const currentSession = mockEnrichedSession('current-session', SessionState.Running, false)
-    const reviewedSession = mockEnrichedSession('reviewed-session', SessionState.Reviewed, true)
+    const reviewedSession = mockEnrichedSession('reviewed-session', SessionState.Running, true)
     const anotherSession = mockEnrichedSession('another-session', SessionState.Running, false)
 
     const sessions = [currentSession, reviewedSession, anotherSession]
@@ -417,7 +417,7 @@ describe('Reviewed session cancellation focus preservation', () => {
 
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Wait for running sessions to load (reviewed sessions not visible with Running filter)
+    // Wait for running sessions to load
     await waitFor(() => {
       const sessionButtons = screen.getAllByRole('button').filter(btn => {
         const text = btn.textContent || ''
@@ -433,7 +433,7 @@ describe('Reviewed session cancellation focus preservation', () => {
       expect(currentButton).toHaveClass('session-ring-blue')
     })
 
-    // Cancel the reviewed session (which is not visible in running filter)
+    // Cancel the ready session
     await emitEvent(SchaltEvent.SessionRemoved, { session_name: 'reviewed-session' })
 
     // Focus should remain on current session
@@ -452,8 +452,8 @@ describe('Merge selection progression', () => {
     Object.keys(listeners).forEach(key => delete listeners[key])
     localStorage.clear()
 
-    const reviewedOne = mockEnrichedSession('reviewed-one', SessionState.Reviewed, true)
-    const reviewedTwo = mockEnrichedSession('reviewed-two', SessionState.Reviewed, true)
+    const reviewedOne = mockEnrichedSession('reviewed-one', SessionState.Running, true)
+    const reviewedTwo = mockEnrichedSession('reviewed-two', SessionState.Running, true)
     const running = mockEnrichedSession('running-session', SessionState.Running, false)
 
     currentSessions = [reviewedOne, reviewedTwo, running]
@@ -470,7 +470,7 @@ describe('Merge selection progression', () => {
         return match ? toRawSession(match) : null
       }
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'reviewed', sort_mode: 'name' }
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'running', sort_mode: 'name' }
       if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
       return undefined
     })
@@ -494,7 +494,7 @@ describe('Merge selection progression', () => {
     })
   }
 
-  it('selects the next reviewed session after completing a merge', async () => {
+  it('selects the next ready session after completing a merge', async () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
@@ -540,11 +540,11 @@ describe('Merge selection progression', () => {
       expect(selectedButtons[0]?.textContent ?? '').toContain('reviewed-two')
     })
 
-    expect(screen.queryByText('reviewed-one')).toBeNull()
+    expect(screen.getByText('reviewed-one')).toBeInTheDocument()
   })
 
-  it('falls back to orchestrator when no reviewed sessions remain after merge', async () => {
-    const soloReviewed = mockEnrichedSession('solo-reviewed', SessionState.Reviewed, true)
+  it('falls back to orchestrator when no ready sessions remain after merge', async () => {
+    const soloReviewed = mockEnrichedSession('solo-reviewed', SessionState.Running, true)
     currentSessions = [soloReviewed]
     ;(globalThis as { __testCurrentSessions?: ReturnType<typeof mockEnrichedSession>[] }).__testCurrentSessions = currentSessions
 
@@ -557,7 +557,7 @@ describe('Merge selection progression', () => {
         return match ? toRawSession(match) : null
       }
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'reviewed', sort_mode: 'name' }
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'running', sort_mode: 'name' }
       if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
       return undefined
     })
@@ -602,6 +602,6 @@ describe('Merge selection progression', () => {
       expect(selectedButtons[0]?.textContent ?? '').toMatch(/orchestrator/i)
     })
 
-    expect(screen.queryByText('solo-reviewed')).toBeNull()
+    expect(screen.getByText('solo-reviewed')).toBeInTheDocument()
   })
 })

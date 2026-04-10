@@ -65,8 +65,7 @@ export function filterEnabledAgents(
 export enum SessionState {
     Spec = 'spec',
     Processing = 'processing',
-    Running = 'running',
-    Reviewed = 'reviewed'
+    Running = 'running'
 }
 
 export type SpecStage = 'draft' | 'clarified'
@@ -103,7 +102,7 @@ export interface SessionInfo {
     is_current: boolean
     session_type: 'worktree' | 'container'
     container_status?: string
-    session_state: SessionState | 'spec' | 'processing' | 'running' | 'reviewed'
+    session_state: SessionState | 'spec' | 'processing' | 'running'
     current_task?: string
     todo_percentage?: number
     is_blocked?: boolean
@@ -171,7 +170,7 @@ export interface RawSession {
     was_auto_generated: boolean
     spec_content?: string
     spec_stage?: SpecStage
-    session_state: 'spec' | 'processing' | 'running' | 'reviewed'
+    session_state: 'spec' | 'processing' | 'running'
     git_stats?: {
         files_changed: number
         additions: number

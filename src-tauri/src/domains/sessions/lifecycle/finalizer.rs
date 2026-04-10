@@ -239,11 +239,11 @@ mod tests {
         let session = create_test_session(PathBuf::from("/tmp/worktree"));
         finalizer.persist_session(&session).unwrap();
 
-        let result = finalizer.finalize_state_transition(&session.id, SessionState::Reviewed);
+        let result = finalizer.finalize_state_transition(&session.id, SessionState::Running);
         assert!(result.is_ok());
 
         let updated = db_manager.get_session_by_id(&session.id).unwrap();
-        assert_eq!(updated.session_state, SessionState::Reviewed);
+        assert_eq!(updated.session_state, SessionState::Running);
     }
 
     #[test]

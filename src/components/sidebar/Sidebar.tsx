@@ -20,7 +20,7 @@ import { captureSelectionSnapshot, SelectionMemoryEntry } from '../../utils/sele
 import { computeSelectionCandidate } from '../../utils/selectionPostMerge'
 import { ConvertToSpecConfirmation } from '../modals/ConvertToSpecConfirmation'
 import { FilterMode, FILTER_MODES } from '../../types/sessionFilters'
-import { calculateFilterCounts, mapSessionUiState, isReviewed, isSpec } from '../../utils/sessionFilters'
+import { calculateFilterCounts, isSpec } from '../../utils/sessionFilters'
 import { theme } from '../../common/theme'
 import { groupSessionsByVersion, selectBestVersionAndCleanup, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
 import { SessionVersionGroup } from './SessionVersionGroup'
@@ -61,6 +61,7 @@ import { EpicGroupHeader } from './EpicGroupHeader'
 import { getEpicAccentScheme } from '../../utils/epicColors'
 import { projectForgeAtom } from '../../store/atoms/forge'
 import { SessionCardActionsProvider, type SessionCardActions } from '../../contexts/SessionCardActionsContext'
+import { getSessionLifecycleState } from '../../utils/sessionState'
 
 // Removed legacy terminal-stuck idle handling; we rely on last-edited timestamps only
 
@@ -226,53 +227,11 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const [epicMenuOpenId, setEpicMenuOpenId] = useState<string | null>(null)
     const [collapsedEpicIds, setCollapsedEpicIds] = useState<Record<string, boolean>>({})
     const inlineDiffDefault = useAtomValue(inlineSidebarDefaultPreferenceAtom)
-    const [isMarkReadyCoolingDown, setIsMarkReadyCoolingDown] = useState(false)
-    const markReadyCooldownRef = useRef(false)
-    const markReadyCooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const projectPathRef = useRef(projectPath)
-    const MARK_READY_COOLDOWN_MS = 250
 
     useEffect(() => {
         projectPathRef.current = projectPath
     }, [projectPath])
-
-    const engageMarkReadyCooldown = useCallback((reason: string) => {
-        if (!markReadyCooldownRef.current) {
-            logger.debug(`[Sidebar] Entering mark-ready cooldown (reason: ${reason})`)
-        } else {
-            logger.debug(`[Sidebar] Mark-ready cooldown refreshed (reason: ${reason})`)
-        }
-        markReadyCooldownRef.current = true
-        setIsMarkReadyCoolingDown(true)
-        if (markReadyCooldownTimerRef.current) {
-            clearTimeout(markReadyCooldownTimerRef.current)
-            markReadyCooldownTimerRef.current = null
-        }
-    }, [])
-
-    const scheduleMarkReadyCooldownRelease = useCallback((source: string) => {
-        if (markReadyCooldownTimerRef.current) {
-            clearTimeout(markReadyCooldownTimerRef.current)
-        }
-        markReadyCooldownTimerRef.current = setTimeout(() => {
-            markReadyCooldownRef.current = false
-            setIsMarkReadyCoolingDown(false)
-            markReadyCooldownTimerRef.current = null
-            logger.debug(`[Sidebar] Mark-ready cooldown released (source: ${source})`)
-        }, MARK_READY_COOLDOWN_MS)
-    }, [])
-
-    const cancelMarkReadyCooldown = useCallback(() => {
-        if (markReadyCooldownTimerRef.current) {
-            clearTimeout(markReadyCooldownTimerRef.current)
-            markReadyCooldownTimerRef.current = null
-        }
-        if (markReadyCooldownRef.current) {
-            logger.debug('[Sidebar] Mark-ready cooldown cancelled (cleanup)')
-        }
-        markReadyCooldownRef.current = false
-        setIsMarkReadyCoolingDown(false)
-    }, [])
     const fetchOrchestratorBranch = useEffectEvent(async () => {
         try {
             const branch = await invoke<string>(TauriCommands.GetCurrentBranchName, { sessionName: null })
@@ -591,7 +550,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         selectionMemoryRef.current.set(key, {
           [FilterMode.Spec]: { lastSelection: null, lastSessions: [] },
           [FilterMode.Running]: { lastSelection: null, lastSessions: [] },
-          [FilterMode.Reviewed]: { lastSelection: null, lastSessions: [] },
         });
       }
       return selectionMemoryRef.current.get(key)!;
@@ -844,45 +802,30 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         const { previousSessions } = captureSelectionSnapshot(entry, visibleSessions)
 
         const removalCandidateFromEvent = lastRemovedSessionRef.current
-        const mergedCandidate = lastMergedReviewedSessionRef.current
+        const mergedCandidate = lastMergedReadySessionRef.current
 
         const mergedSessionInfo = mergedCandidate
             ? allSessionsSnapshot.find(s => s.info.session_id === mergedCandidate)
             : undefined
-        const mergedStillReviewed = mergedSessionInfo ? isReviewed(mergedSessionInfo.info) : false
+        const mergedStillReady = Boolean(mergedSessionInfo?.info.ready_to_merge)
 
         const shouldAdvanceFromMerged = Boolean(
             mergedCandidate &&
             currentSelectionId === mergedCandidate &&
-            !mergedStillReviewed
+            !mergedStillReady
         )
 
         if (mergedCandidate && (!currentSelectionId || currentSelectionId !== mergedCandidate)) {
-            lastMergedReviewedSessionRef.current = null
+            lastMergedReadySessionRef.current = null
         }
 
-        const removalCandidateSession = removalCandidateFromEvent
-            ? allSessionsSnapshot.find(s => s.info.session_id === removalCandidateFromEvent)
-            : undefined
-        const wasReviewedSession = removalCandidateSession ? isReviewed(removalCandidateSession.info) : false
-        const shouldPreserveForReviewedRemoval = Boolean(wasReviewedSession && removalCandidateFromEvent && filterMode !== FilterMode.Reviewed)
+        const shouldPreserveForReadyRemoval = false
 
-        const filterModeChanged = previousFilterModeRef.current !== filterMode
         previousFilterModeRef.current = filterMode
 
-        const currentSelectionSession = currentSelectionId
-            ? allSessionsSnapshot.find(s => s.info.session_id === currentSelectionId)
-            : undefined
-        const currentSessionMovedToReviewed = Boolean(
-            !filterModeChanged &&
-            currentSelectionId &&
-            !visibleIds.has(currentSelectionId) &&
-            currentSelectionSession &&
-            isReviewed(currentSelectionSession.info) &&
-            filterMode === FilterMode.Running
-        )
+        const currentSessionMovedToReady = false
 
-        const effectiveRemovalCandidate = currentSessionMovedToReviewed && currentSelectionId
+        const effectiveRemovalCandidate = currentSessionMovedToReady && currentSelectionId
             ? currentSelectionId
             : removalCandidateFromEvent
 
@@ -900,7 +843,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 lastRemovedSessionRef.current = null
             }
             if (shouldAdvanceFromMerged) {
-                lastMergedReviewedSessionRef.current = null
+                lastMergedReadySessionRef.current = null
             }
             return
         }
@@ -922,7 +865,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             removalCandidate: effectiveRemovalCandidate,
             mergedCandidate,
             shouldAdvanceFromMerged,
-            shouldPreserveForReviewedRemoval,
+            shouldPreserveForReadyRemoval,
             allSessions: allSessionsSnapshot
         })
 
@@ -936,7 +879,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                         kind: 'session',
                         payload: candidateId,
                         worktreePath: targetSession.info.worktree_path,
-                        sessionState: mapSessionUiState(targetSession.info)
+                        sessionState: getSessionLifecycleState(targetSession.info)
                     }, false, false)
                 }
             }
@@ -949,7 +892,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             lastRemovedSessionRef.current = null
         }
         if (shouldAdvanceFromMerged) {
-            lastMergedReviewedSessionRef.current = null
+            lastMergedReadySessionRef.current = null
         }
     }, [sessions, selection, filterMode, ensureProjectMemory, allSessions, setSelection])
 
@@ -1022,7 +965,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 kind: 'session',
                 payload: s.session_id,
                 worktreePath: s.worktree_path,
-                sessionState: mapSessionUiState(s)
+                sessionState: getSessionLifecycleState(s)
             }, false, true) // User clicked - intentional
         }
     }
@@ -1100,17 +1043,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }
 
-    const handleMarkReady = useCallback(async (sessionId: string) => {
-        try {
-            await invoke(TauriCommands.SchaltwerkCoreMarkSessionReady, {
-                name: sessionId
-            })
-        } catch (error) {
-            logger.error('Failed to mark session as reviewed:', error)
-            alert(`Failed to mark session as reviewed: ${error}`)
-        }
-    }, [])
-
     const handleRenameSession = useCallback(async (sessionId: string, newName: string) => {
         try {
             await invoke(TauriCommands.SchaltwerkCoreRenameSessionDisplayName, {
@@ -1156,68 +1088,10 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }, [])
 
-    const triggerMarkReady = useCallback(async (sessionId: string) => {
-        if (markReadyCooldownRef.current) {
-            logger.debug(`[Sidebar] Skipping mark-ready for ${sessionId} (cooldown active)`)
-            return
-        }
-
-        logger.debug(`[Sidebar] Triggering mark-ready for ${sessionId}`)
-        engageMarkReadyCooldown('mark-ready-trigger')
-        try {
-            await handleMarkReady(sessionId)
-        } catch (error) {
-            logger.error('Failed to mark session ready during cooldown window:', error)
-        } finally {
-            scheduleMarkReadyCooldownRelease('mark-ready-complete')
-        }
-    }, [engageMarkReadyCooldown, scheduleMarkReadyCooldownRelease, handleMarkReady])
-
-    const handleMarkSelectedSessionReady = useCallback(async () => {
-        if (selection.kind !== 'session') return
-
-        const selectedSession = allSessions.find(s => s.info.session_id === selection.payload)
-        if (!selectedSession) return
-
-        const sessionInfo = selectedSession.info
-
-        if (isReviewed(sessionInfo)) {
-            if (markReadyCooldownRef.current) {
-                logger.debug(`[Sidebar] Skipping unmark-ready for ${sessionInfo.session_id} (cooldown active)`)
-                return
-            }
-
-            logger.debug(`[Sidebar] Triggering unmark-ready for ${sessionInfo.session_id}`)
-            engageMarkReadyCooldown('unmark-ready-trigger')
-            try {
-                await invoke(TauriCommands.SchaltwerkCoreUnmarkSessionReady, { name: sessionInfo.session_id })
-            } catch (error) {
-                logger.error('Failed to unmark reviewed session via keyboard:', error)
-            } finally {
-                scheduleMarkReadyCooldownRelease('unmark-ready-complete')
-            }
-            return
-        }
-
-        if (isSpec(sessionInfo)) {
-            logger.warn(`Cannot mark spec "${sessionInfo.session_id}" as reviewed. Specs must be started as agents first.`)
-            return
-        }
-
-        await triggerMarkReady(sessionInfo.session_id)
-    }, [
-        selection,
-        allSessions,
-        triggerMarkReady,
-        engageMarkReadyCooldown,
-        scheduleMarkReadyCooldownRelease
-    ])
-
     const handleSpecSelectedSession = () => {
         if (selection.kind === 'session') {
             const selectedSession = sessions.find(s => s.info.session_id === selection.payload)
-            if (selectedSession && !isSpec(selectedSession.info) && !isReviewed(selectedSession.info)) {
-                // Allow converting running sessions to specs only, not reviewed or spec sessions
+            if (selectedSession && !isSpec(selectedSession.info)) {
                 setConvertToDraftModal({
                     open: true,
                     sessionName: selectedSession.info.session_id,
@@ -1330,11 +1204,11 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             || null
     }, [sessions, allSessions])
 
-    const getSelectedSessionState = useCallback((): ('spec' | 'processing' | 'running' | 'reviewed') | null => {
+    const getSelectedSessionState = useCallback((): ('spec' | 'processing' | 'running') | null => {
         if (selection.kind !== 'session') return null
         if (selection.sessionState) return selection.sessionState
         const session = findSessionById(selection.payload || null)
-        return session ? mapSessionUiState(session.info) : null
+        return session ? getSessionLifecycleState(session.info) : null
     }, [selection, findSessionById])
 
     const handleResetSelectionShortcut = useCallback(() => {
@@ -1349,7 +1223,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         if (selection.kind !== 'session' || !selection.payload) return
 
         const state = getSelectedSessionState()
-        if (state !== 'running' && state !== 'reviewed') return
+        if (state !== 'running') return
 
         void resetSession({ kind: 'session', payload: selection.payload }, terminals)
     }, [isResetting, isAnyModalOpen, selection, resetSession, terminals, getSelectedSessionState])
@@ -1423,7 +1297,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         onSelectOrchestrator: () => { void handleSelectOrchestrator() },
         onSelectSession: (index) => { void handleSelectSession(index) },
         onCancelSelectedSession: handleCancelSelectedSession,
-        onMarkSelectedSessionReady: () => { void handleMarkSelectedSessionReady() },
         onRefineSpec: handleRefineSpecShortcut,
         onSpecSession: handleSpecSelectedSession,
         onPromoteSelectedVersion: () => { void handlePromoteSelectedVersion() },
@@ -1482,20 +1355,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         isModalOpen: isAnyModalOpen()
     })
 
-    // Sessions are now managed by Jotai sessions atoms with integrated sorting/filtering
-    
-    // Global shortcut from terminal for Mark Reviewed (⌘R)
-    useEffect(() => {
-        let unsubscribe: (() => void) | null = null
-        const attach = async () => {
-            unsubscribe = await listenUiEvent(UiEvent.GlobalMarkReadyShortcut, () => { void handleMarkSelectedSessionReady() })
-        }
-        void attach()
-        return () => {
-            unsubscribe?.()
-        }
-    }, [selection, allSessions, handleMarkSelectedSessionReady])
-
     // Selection is now restored by the selection state atoms
 
     // No longer need to listen for events - context handles everything
@@ -1503,7 +1362,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     // Keep latest values in refs for use in event handlers without re-attaching listeners
     const latestSessionsRef = useRef(allSessions)
     const lastRemovedSessionRef = useRef<string | null>(null)
-    const lastMergedReviewedSessionRef = useRef<string | null>(null)
+    const lastMergedReadySessionRef = useRef<string | null>(null)
 
     useEffect(() => { latestSessionsRef.current = allSessions }, [allSessions])
 
@@ -1572,7 +1431,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
 
         void register(SchaltEvent.GitOperationCompleted, (event: GitOperationPayload) => {
             if (event?.operation === 'merge') {
-                lastMergedReviewedSessionRef.current = event.session_name
+                lastMergedReadySessionRef.current = event.session_name
             }
         })
 
@@ -1587,7 +1446,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 kind: 'session',
                 payload: session_name,
                 worktreePath: session.info.worktree_path,
-                sessionState: mapSessionUiState(session.info)
+                sessionState: getSessionLifecycleState(session.info)
             }, false, true)
                 setFocusForSession(session_name, 'claude')
                 setCurrentFocus('claude')
@@ -1614,30 +1473,11 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }, [setCurrentFocus, setFocusForSession, setSelection, createSafeUnlistener])
 
-    useEffect(() => () => cancelMarkReadyCooldown(), [cancelMarkReadyCooldown])
-
     // Calculate counts based on all sessions (unaffected by search)
-    const { specsCount, runningCount, reviewedCount } = calculateFilterCounts(allSessions)
+    const { specsCount, runningCount } = calculateFilterCounts(allSessions)
 
     const sessionCardActions: SessionCardActions = {
         onSelect: (sessionId) => { void handleSelectSession(sessionId) },
-        onMarkReady: (sessionId) => {
-            if (markReadyCooldownRef.current) return
-            void triggerMarkReady(sessionId)
-        },
-        onUnmarkReady: (sessionId) => {
-            if (markReadyCooldownRef.current) return
-            engageMarkReadyCooldown('unmark-ready-click')
-            void (async () => {
-                try {
-                    await invoke(TauriCommands.SchaltwerkCoreUnmarkSessionReady, { name: sessionId })
-                } catch (err) {
-                    logger.error('Failed to unmark reviewed session:', err)
-                } finally {
-                    scheduleMarkReadyCooldownRelease('unmark-ready-click-complete')
-                }
-            })()
-        },
         onCancel: (sessionId, hasUncommitted) => {
             const session = sessions.find(s => s.info.session_id === sessionId)
             if (session) {
@@ -1655,10 +1495,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         onConvertToSpec: (sessionId) => {
             const session = sessions.find(s => s.info.session_id === sessionId)
             if (session) {
-                if (isReviewed(session.info)) {
-                    logger.warn(`Cannot convert reviewed session "${sessionId}" to spec. Only running sessions can be converted.`)
-                    return
-                }
                 setConvertToDraftModal({
                     open: true,
                     sessionName: sessionId,
@@ -1858,7 +1694,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                     >
                         {filterMode === FilterMode.Spec && t.sidebar.filters.specShort}
                         {filterMode === FilterMode.Running && t.sidebar.filters.runShort}
-                        {filterMode === FilterMode.Reviewed && t.sidebar.filters.revShort}
                     </span>
                 </div>
             )}
@@ -1928,19 +1763,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                 title={t.sidebar.filters.showRunning}
                             >
                                 {t.sidebar.filters.running} <span className="text-[var(--color-text-muted)]">({runningCount})</span>
-                            </button>
-                            <button
-                                className={clsx(
-                                    'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
-                                    filterMode === FilterMode.Reviewed
-                                        ? 'bg-[var(--color-accent-blue-bg)] text-[var(--color-text-primary)] border-[var(--color-accent-blue-border)] font-medium'
-                                        : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
-                                    keyboardNavigatedFilter === FilterMode.Reviewed && ''
-                                )}
-                                onClick={() => setFilterMode(FilterMode.Reviewed)}
-                                title={t.sidebar.filters.showReviewed}
-                            >
-                                {t.sidebar.filters.reviewed} <span className="text-[var(--color-text-muted)]">({reviewedCount})</span>
                             </button>
                         </div>
                     </div>
@@ -2058,7 +1880,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                         isSessionRunning={isSessionRunning}
                                         isMergeDisabled={isSessionMerging}
                                         getMergeStatus={getMergeStatus}
-                                        isMarkReadyDisabled={isMarkReadyCoolingDown}
                                         isSessionBusy={isSessionMutating}
                                         onConsolidate={(group) => {
                                             const detail = buildConsolidationGroupDetail(group)

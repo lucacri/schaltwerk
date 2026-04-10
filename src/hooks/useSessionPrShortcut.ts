@@ -59,7 +59,7 @@ export function useSessionPrShortcut(options: UseSessionPrShortcutOptions) {
       pushToast({
         tone: 'info',
         title: 'Select a session',
-        description: 'Select a running or reviewed session to create a PR.',
+        description: 'Select a running session to create a PR.',
       })
       return
     }

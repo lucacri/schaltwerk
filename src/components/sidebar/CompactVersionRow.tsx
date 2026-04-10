@@ -8,7 +8,6 @@ import { UncommittedIndicator } from '../common/UncommittedIndicator'
 import { getAgentColorScheme } from '../../common/theme'
 import type { MergeStatus } from '../../store/atoms/sessions'
 import { lastAgentResponseMapAtom, agentResponseTickAtom } from '../../store/atoms/lastAgentResponse'
-import { mapSessionUiState } from '../../utils/sessionFilters'
 import { useEpics } from '../../hooks/useEpics'
 import { useTranslation } from '../../common/i18n/useTranslation'
 import type { SessionInfo, SessionMonitorStatus } from '../../types/session'
@@ -16,6 +15,7 @@ import { getSessionCardSurfaceClasses } from './SessionCard'
 import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, sessionText } from './sessionCardStyles'
 import { useSessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { useSessionActivity } from '../../store/hooks/useSessionActivity'
+import { getSessionLifecycleState } from '../../utils/sessionState'
 
 interface CompactVersionRowProps {
   session: {
@@ -37,7 +37,6 @@ interface CompactVersionRowProps {
   isRunning?: boolean
   disableMerge?: boolean
   mergeStatus?: MergeStatus
-  isMarkReadyDisabled?: boolean
   isBusy?: boolean
   siblings?: SessionInfo[]
   hideTreeConnector?: boolean
@@ -61,7 +60,6 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   isRunning = false,
   disableMerge = false,
   mergeStatus = 'idle',
-  isMarkReadyDisabled = false,
   isBusy = false,
   siblings,
   hideTreeConnector = false,
@@ -70,7 +68,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   isConsolidationSourceHighlighted = false,
 }) => {
   const {
-    onSelect, onMarkReady, onUnmarkReady, onCancel,
+    onSelect, onCancel,
     onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec,
     onReset, onRestartTerminals, onSwitchModel,
     onCreatePullRequest, onCreateGitlabMr,
@@ -88,8 +86,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   const filesChanged = s.diff_stats?.files_changed || 0
   const isBlocked = (activity?.is_blocked ?? s.is_blocked) || false
   const isReadyToMerge = s.ready_to_merge || false
-  const sessionState = mapSessionUiState(s)
-  const isReviewedState = sessionState === 'reviewed'
+  const sessionState = getSessionLifecycleState(s)
   const isSpecClarificationStarted = sessionState === 'spec' && s.clarification_started === true
   const specNotStarted = sessionState === 'spec' && !isSpecClarificationStarted
   const specWaitingForInput = isSpecClarificationStarted && s.attention_required === true
@@ -132,7 +129,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   const surface = getSessionCardSurfaceClasses({
     sessionState,
     isSelected,
-    isReviewedState,
+    isReadyToMerge,
     isRunning: Boolean(isRunning) || isClarificationRunning,
     isIdle,
     hasFollowUpMessage,
@@ -170,10 +167,10 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
       )
     }
 
-    if (isReviewedState) {
+    if (isReadyToMerge) {
       return (
         <span
-          data-testid="compact-row-status-reviewed"
+          data-testid="compact-row-status-ready"
           className="inline-flex items-center px-1.5 py-[1px] rounded border"
           style={{
             ...sessionText.badge,
@@ -182,7 +179,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
             borderColor: 'var(--color-accent-green-border)',
           }}
         >
-          {t.session.reviewed}
+          {t.session.ready}
         </span>
       )
     }
@@ -346,7 +343,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
               ? 'var(--color-accent-blue)'
               : specNotStarted
                 ? 'var(--color-border-subtle)'
-              : isReviewedState
+              : isReadyToMerge
                 ? 'var(--color-accent-green)'
                 : 'var(--color-border-subtle)'
           return (
@@ -447,7 +444,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
           {isSelected && (
             <div data-testid="compact-row-actions" className="flex justify-end" onClick={(event) => event.stopPropagation()}>
               <SessionActions
-                sessionState={sessionState as 'spec' | 'running' | 'reviewed'}
+                sessionState={sessionState as 'spec' | 'processing' | 'running'}
                 isReadyToMerge={isReadyToMerge}
                 sessionId={s.session_id}
                 sessionSlug={s.session_id}
@@ -462,8 +459,6 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                 onRunSpec={onRunDraft}
                 onRefineSpec={onRefineSpec}
                 onDeleteSpec={onDeleteSpec}
-                onMarkReviewed={onMarkReady}
-                onUnmarkReviewed={onUnmarkReady}
                 onCancel={onCancel}
                 onConvertToSpec={onConvertToSpec}
                 onPromoteVersion={onPromoteVersion}
@@ -478,7 +473,6 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                 disableMerge={disableMerge}
                 mergeStatus={mergeStatus}
                 mergeConflictingPaths={s.merge_conflicting_paths}
-                isMarkReadyDisabled={isMarkReadyDisabled}
                 hasUncommittedChanges={s.has_uncommitted_changes}
                 onLinkPr={onLinkPr}
                 epic={s.epic}

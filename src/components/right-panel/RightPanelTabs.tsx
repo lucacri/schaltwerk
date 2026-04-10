@@ -82,7 +82,7 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const currentSession = effectiveSelection.kind === 'session' && effectiveSelection.payload
     ? allSessions.find(s => s.info.session_id === effectiveSelection.payload || s.info.branch === effectiveSelection.payload)
     : null
-  const sessionState = currentSession?.info.session_state as ('spec' | 'processing' | 'running' | 'reviewed') | undefined
+  const sessionState = currentSession?.info.session_state as ('spec' | 'processing' | 'running') | undefined
   const sessionWorktreePath = effectiveSelection.kind === 'session'
     ? effectiveSelection.worktreePath ?? currentSession?.info.worktree_path ?? null
     : null

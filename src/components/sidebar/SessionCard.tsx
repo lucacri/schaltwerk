@@ -10,7 +10,6 @@ import { theme, getAgentColorScheme } from "../../common/theme";
 import type { MergeStatus } from "../../store/atoms/sessions";
 import { lastAgentResponseMapAtom, agentResponseTickAtom, formatAgentResponseTime } from "../../store/atoms/lastAgentResponse";
 import { getSessionDisplayName } from "../../utils/sessionDisplayName";
-import { mapSessionUiState } from "../../utils/sessionFilters";
 import { useMultipleShortcutDisplays } from "../../keyboardShortcuts/useShortcutDisplay";
 import { KeyboardShortcutAction } from "../../keyboardShortcuts/config";
 import { detectPlatformSafe } from "../../keyboardShortcuts/helpers";
@@ -19,6 +18,7 @@ import { useTranslation } from "../../common/i18n/useTranslation";
 import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, sessionText } from './sessionCardStyles'
 import { useSessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { useSessionActivity } from '../../store/hooks/useSessionActivity'
+import { getSessionLifecycleState } from '../../utils/sessionState'
 
 interface SessionCardProps {
   session: {
@@ -41,7 +41,6 @@ interface SessionCardProps {
   isRunning?: boolean;
   disableMerge?: boolean;
   mergeStatus?: MergeStatus;
-  isMarkReadyDisabled?: boolean;
   isBusy?: boolean;
   siblings?: SessionInfo[];
   onHover?: (sessionId: string | null) => void;
@@ -51,7 +50,7 @@ interface SessionCardProps {
 type SessionCardSurfaceOptions = {
   sessionState: SessionInfo['session_state']
   isSelected: boolean
-  isReviewedState: boolean
+  isReadyToMerge: boolean
   isRunning: boolean
   isIdle: boolean
   hasFollowUpMessage?: boolean
@@ -74,7 +73,7 @@ type SessionCardSurfaceStyle = CSSProperties & {
 export function getSessionCardSurfaceClasses({
   sessionState,
   isSelected,
-  isReviewedState: _isReviewedState,
+  isReadyToMerge: _isReadyToMerge,
   isRunning,
   isIdle,
   hasFollowUpMessage,
@@ -155,14 +154,13 @@ export const SessionCard = memo<SessionCardProps>(
     isRunning = false,
     disableMerge = false,
     mergeStatus = "idle",
-    isMarkReadyDisabled = false,
     isBusy = false,
     siblings = [],
     onHover,
     isHighlighted = false
     }) => {
     const {
-      onSelect, onMarkReady, onUnmarkReady, onCancel,
+      onSelect, onCancel,
       onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec,
       onReset, onRestartTerminals, onSwitchModel,
       onCreatePullRequest, onCreateGitlabMr,
@@ -177,7 +175,6 @@ export const SessionCard = memo<SessionCardProps>(
     const shortcuts = useMultipleShortcutDisplays([
       KeyboardShortcutAction.OpenDiffViewer,
       KeyboardShortcutAction.CancelSession,
-      KeyboardShortcutAction.MarkSessionReady,
       KeyboardShortcutAction.SwitchToSession1,
       KeyboardShortcutAction.SwitchToSession2,
       KeyboardShortcutAction.SwitchToSession3,
@@ -193,7 +190,7 @@ export const SessionCard = memo<SessionCardProps>(
 
     const getAccessibilityLabel = (isSelected: boolean, index: number) => {
       if (isSelected) {
-        return `Selected session • Diff: ${shortcuts[KeyboardShortcutAction.OpenDiffViewer] || `${modKey}G`} • Cancel: ${shortcuts[KeyboardShortcutAction.CancelSession] || `${modKey}D`} (${shortcuts[KeyboardShortcutAction.ForceCancelSession] || `${shiftModKey}D`} force) • Mark Reviewed: ${shortcuts[KeyboardShortcutAction.MarkSessionReady] || `${modKey}R`}`;
+        return `Selected session • Diff: ${shortcuts[KeyboardShortcutAction.OpenDiffViewer] || `${modKey}G`} • Cancel: ${shortcuts[KeyboardShortcutAction.CancelSession] || `${modKey}D`} (${shortcuts[KeyboardShortcutAction.ForceCancelSession] || `${shiftModKey}D`} force)`;
       }
       if (index < 8) {
         const sessionActions = [
@@ -219,8 +216,7 @@ export const SessionCard = memo<SessionCardProps>(
     const isBlocked = (activity?.is_blocked ?? s.is_blocked) || false;
     const isReadyToMerge = s.ready_to_merge || false;
     const promotionReason = s.promotionReason?.trim() || s.promotion_reason?.trim();
-    const sessionState = mapSessionUiState(s);
-    const isReviewedState = sessionState === "reviewed";
+    const sessionState = getSessionLifecycleState(s);
     const isSpecClarificationStarted = sessionState === "spec" && s.clarification_started === true;
     const specNotStarted = sessionState === "spec" && !isSpecClarificationStarted;
     const specWaitingForInput = isSpecClarificationStarted && s.attention_required === true;
@@ -259,7 +255,7 @@ export const SessionCard = memo<SessionCardProps>(
     const surface = getSessionCardSurfaceClasses({
       sessionState,
       isSelected,
-      isReviewedState,
+      isReadyToMerge,
       isRunning: Boolean(isRunning) || isClarificationRunning,
       isIdle,
       hasFollowUpMessage,
@@ -350,7 +346,7 @@ export const SessionCard = memo<SessionCardProps>(
               ? "var(--color-accent-blue)"
               : specNotStarted
                 ? "var(--color-border-subtle)"
-              : isReviewedState
+              : isReadyToMerge
                 ? "var(--color-accent-green)"
                 : "var(--color-border-subtle)"
           return (
@@ -453,7 +449,7 @@ export const SessionCard = memo<SessionCardProps>(
                 {t.session.idle}
               </span>
             )}
-            {isReviewedState && (
+            {isReadyToMerge && (
               <span
                 className="flex-shrink-0"
                 style={{
@@ -461,7 +457,7 @@ export const SessionCard = memo<SessionCardProps>(
                   color: "var(--color-accent-green-light)",
                 }}
               >
-                {t.session.reviewed}
+                {t.session.ready}
               </span>
             )}
             {isBlocked && (
@@ -728,7 +724,7 @@ export const SessionCard = memo<SessionCardProps>(
           onClick={(event) => event.stopPropagation()}
         >
           <SessionActions
-            sessionState={sessionState as "spec" | "running" | "reviewed"}
+            sessionState={sessionState as "spec" | "processing" | "running"}
             isReadyToMerge={isReadyToMerge}
             sessionId={s.session_id}
             sessionSlug={s.session_id}
@@ -743,8 +739,6 @@ export const SessionCard = memo<SessionCardProps>(
             onRunSpec={onRunDraft}
             onRefineSpec={onRefineSpec}
             onDeleteSpec={onDeleteSpec}
-            onMarkReviewed={onMarkReady}
-            onUnmarkReviewed={onUnmarkReady}
             onCancel={onCancel}
             onConvertToSpec={onConvertToSpec}
             onPromoteVersion={onPromoteVersion}
@@ -759,7 +753,6 @@ export const SessionCard = memo<SessionCardProps>(
             disableMerge={disableMerge}
             mergeStatus={mergeStatus}
             mergeConflictingPaths={s.merge_conflicting_paths}
-            isMarkReadyDisabled={isMarkReadyDisabled}
             onLinkPr={onLinkPr}
             epic={s.epic}
             onEpicChange={handleEpicChange}

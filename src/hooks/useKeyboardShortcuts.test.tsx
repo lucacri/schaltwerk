@@ -673,13 +673,11 @@ describe('useKeyboardShortcuts', () => {
       const onSelectOrchestrator = vi.fn()
       const onSelectSession = vi.fn()
       const onCancelSelectedSession = vi.fn()
-      const onMarkSelectedSessionReady = vi.fn()
 
       renderHook(() => useKeyboardShortcuts({ 
         onSelectOrchestrator, 
         onSelectSession, 
         onCancelSelectedSession,
-        onMarkSelectedSessionReady,
         sessionCount: 5
       }))
 
@@ -699,7 +697,6 @@ describe('useKeyboardShortcuts', () => {
       expect(onSelectOrchestrator).not.toHaveBeenCalled()
       expect(onSelectSession).not.toHaveBeenCalled()
       expect(onCancelSelectedSession).not.toHaveBeenCalled()
-      expect(onMarkSelectedSessionReady).not.toHaveBeenCalled()
     })
 
     it('handles mixed modifier keys correctly', () => {
@@ -725,25 +722,6 @@ describe('useKeyboardShortcuts', () => {
   })
 
   describe('Session management shortcuts', () => {
-   it('marks session ready with Cmd+R', () => {
-       const onMarkSelectedSessionReady = vi.fn()
-       const onSelectOrchestrator = vi.fn()
-       const onSelectSession = vi.fn()
-
-       renderHook(() => useKeyboardShortcuts({
-           onSelectOrchestrator,
-           onSelectSession,
-           onMarkSelectedSessionReady,
-           sessionCount: 1
-       }))
-
-       pressKey('r', { metaKey: true })
-       expect(onMarkSelectedSessionReady).toHaveBeenCalledTimes(1)
-
-       pressKey('R', { metaKey: true })
-       expect(onMarkSelectedSessionReady).toHaveBeenCalledTimes(2)
-   })
-
    it('converts session to spec with Cmd+S', () => {
        const onSpecSession = vi.fn()
        const onSelectOrchestrator = vi.fn()
@@ -1180,7 +1158,6 @@ describe('useKeyboardShortcuts', () => {
 
       // Should not throw
       pressKey('d', { metaKey: true })
-      pressKey('r', { metaKey: true })
       pressKey('g', { metaKey: true })
       pressKey('t', { metaKey: true })
       pressKey('/', { metaKey: true })
@@ -1195,7 +1172,6 @@ describe('useKeyboardShortcuts', () => {
         onSelectOrchestrator: vi.fn(),
         onSelectSession: vi.fn(),
         onCancelSelectedSession: vi.fn(),
-        onMarkSelectedSessionReady: vi.fn(),
         onSelectPrevSession: vi.fn(),
         onSelectNextSession: vi.fn(),
         onFocusSidebar: vi.fn(),
@@ -1227,8 +1203,8 @@ describe('useKeyboardShortcuts', () => {
       expect(testPreventDefault('2')).toBe(true)
       expect(testPreventDefault('d')).toBe(true)
       expect(testPreventDefault('D')).toBe(true)
-      expect(testPreventDefault('r')).toBe(true)
-      expect(testPreventDefault('R')).toBe(true)
+      expect(testPreventDefault('r')).toBe(false)
+      expect(testPreventDefault('R')).toBe(false)
       expect(testPreventDefault('g')).toBe(true)
       expect(testPreventDefault('G')).toBe(true)
       expect(testPreventDefault('t')).toBe(true)
@@ -1245,7 +1221,6 @@ describe('useKeyboardShortcuts', () => {
         onSelectOrchestrator: vi.fn(),
         onSelectSession: vi.fn(),
         onCancelSelectedSession: vi.fn(),
-        onMarkSelectedSessionReady: vi.fn(),
         onSelectPrevSession: vi.fn(),
         onSelectNextSession: vi.fn(),
         onFocusSidebar: vi.fn(),
@@ -1273,9 +1248,6 @@ describe('useKeyboardShortcuts', () => {
 
       pressKey('d', { metaKey: true })
       expect(callbacks.onCancelSelectedSession).toHaveBeenCalledWith(false)
-
-      pressKey('r', { metaKey: true })
-      expect(callbacks.onMarkSelectedSessionReady).toHaveBeenCalled()
 
       pressKey('ArrowUp', { metaKey: true })
       expect(callbacks.onSelectPrevSession).toHaveBeenCalled()

@@ -27,7 +27,6 @@ impl FromStr for SortMode {
 pub enum FilterMode {
     Spec,
     Running,
-    Reviewed,
 }
 
 impl FromStr for FilterMode {
@@ -37,7 +36,6 @@ impl FromStr for FilterMode {
         match s {
             "all" | "running" => Ok(FilterMode::Running),
             "spec" => Ok(FilterMode::Spec),
-            "reviewed" => Ok(FilterMode::Reviewed),
             _ => Err(format!("Invalid filter mode: {s}")),
         }
     }
@@ -97,7 +95,7 @@ pub struct Session {
     pub was_auto_generated: bool,
     // Content for spec agents (markdown format)
     pub spec_content: Option<String>,
-    // Current session state (Spec, Running, Reviewed)
+    // Current session state (Spec, Processing, Running)
     pub session_state: SessionState,
     // Whether agent resume/continue is allowed (freshly false after Spec/Cancel until first start)
     pub resume_allowed: bool,
@@ -185,7 +183,6 @@ pub enum SessionState {
     Spec,
     Processing,
     Running,
-    Reviewed,
 }
 
 impl SessionStatus {
@@ -217,7 +214,6 @@ impl SessionState {
             SessionState::Spec => "spec",
             SessionState::Processing => "processing",
             SessionState::Running => "running",
-            SessionState::Reviewed => "reviewed",
         }
     }
 }
@@ -230,7 +226,6 @@ impl FromStr for SessionState {
             "spec" => Ok(SessionState::Spec),
             "processing" => Ok(SessionState::Processing),
             "running" => Ok(SessionState::Running),
-            "reviewed" => Ok(SessionState::Reviewed),
             _ => Err(format!("Invalid session state: {s}")),
         }
     }

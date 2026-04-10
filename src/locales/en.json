@@ -157,7 +157,7 @@
     },
     "sessions": {
       "title": "Session Review Settings",
-      "description": "Configure how sessions are handled when marked as reviewed.",
+      "description": "Configure how session actions behave during review and merge workflows.",
       "skipConfirmation": "Skip Confirmation Dialogs",
       "skipConfirmationDesc": "Skip confirmation dialogs for actions that ask \"Don't ask me again\". When enabled, previously dismissed confirmations will be automatically applied.",
       "alwaysShowLargeDiffs": "Always Show Large Diffs",
@@ -290,9 +290,9 @@
       "openProject": "Open a project to finish setup",
       "openProjectDesc": "Open a Lucode project so GitHub integration can connect it to the right repository.",
       "connected": "Connected to {repo}",
-      "connectedDesc": "Default branch {branch}. Reviewed sessions will target this repository.",
+      "connectedDesc": "Default branch {branch}. Ready-to-merge sessions will target this repository.",
       "readyToConnect": "Ready to connect project",
-      "readyToConnectDesc": "Connect this project so reviewed sessions push to the correct GitHub repository.",
+      "readyToConnectDesc": "Connect this project so ready-to-merge sessions push to the correct GitHub repository.",
       "authenticate": "Authenticate",
       "authenticating": "Authenticating…",
       "connectProject": "Connect project",
@@ -407,13 +407,10 @@
     "filters": {
       "specs": "Specs",
       "running": "Running",
-      "reviewed": "Reviewed",
       "specShort": "SPEC",
       "runShort": "RUN",
-      "revShort": "REV",
       "showSpecs": "Show spec agents",
-      "showRunning": "Show running agents",
-      "showReviewed": "Show reviewed agents"
+      "showRunning": "Show running agents"
     },
     "search": {
       "placeholder": "Search sessions...",
@@ -435,7 +432,7 @@
     "notStarted": "Not started",
     "waitingForInput": "Waiting for input",
     "running": "Running",
-    "reviewed": "✓ Reviewed",
+    "ready": "✓ Ready",
     "blocked": "⚠ blocked",
     "promoted": "★ Promoted",
     "spec": "Spec",
@@ -900,9 +897,7 @@
     "openPrInBrowser": "Open PR #{number} in browser",
     "restartTerminals": "Restart Terminals",
     "discardAllChanges": "Discard all changes and reset this session",
-    "resetSession": "Reset Session",
-    "markAsReviewed": "Mark as Reviewed",
-    "markAsReviewedTitle": "Mark this session as reviewed"
+    "resetSession": "Reset Session"
   },
   "collapsedDiffBadge": {
     "generatedFile": "Generated file",

@@ -2,8 +2,6 @@ import { createContext, useContext, useRef, useMemo, type ReactNode } from 'reac
 
 export interface SessionCardActions {
   onSelect: (sessionId: string) => void
-  onMarkReady: (sessionId: string) => void
-  onUnmarkReady: (sessionId: string) => void
   onCancel: (sessionId: string, hasUncommitted: boolean) => void
   onConvertToSpec: (sessionId: string) => void
   onRunDraft: (sessionId: string) => void
@@ -39,8 +37,6 @@ export function SessionCardActionsProvider({ actions, children }: ProviderProps)
 
   const stable = useMemo<SessionCardActions>(() => ({
     onSelect: (...args) => ref.current.onSelect(...args),
-    onMarkReady: (...args) => ref.current.onMarkReady(...args),
-    onUnmarkReady: (...args) => ref.current.onUnmarkReady(...args),
     onCancel: (...args) => ref.current.onCancel(...args),
     onConvertToSpec: (...args) => ref.current.onConvertToSpec(...args),
     onRunDraft: (...args) => ref.current.onRunDraft(...args),

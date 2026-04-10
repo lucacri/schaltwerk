@@ -493,14 +493,14 @@ describe('useSpecMode', () => {
         sessions: [spec],
         setFilterMode: mockSetFilterMode,
         setSelection: mockSetSelection,
-        currentFilterMode: FilterMode.Reviewed
+        currentFilterMode: FilterMode.Running
       }))
 
       await act(async () => {
         await result.current.toggleSpecMode()
       })
 
-      expect(sessionStorage.getItem('schaltwerk:prev-filter:project')).toBe(FilterMode.Reviewed)
+      expect(sessionStorage.getItem('schaltwerk:prev-filter:project')).toBe(FilterMode.Running)
     })
 
     it('should keep Spec filter if it was already selected', async () => {

@@ -3,7 +3,7 @@ import { SessionState, type EnrichedSession } from '../types/session'
 
 export const mockEnrichedSession = (
   name: string,
-  status: 'active' | 'spec' | 'processing' | 'running' | 'reviewed' = 'active',
+  status: 'active' | 'spec' | 'processing' | 'running' = 'active',
   readyToMerge: boolean = false,
 ): EnrichedSession => {
   const sessionState =
@@ -11,9 +11,7 @@ export const mockEnrichedSession = (
       ? SessionState.Spec
       : status === 'processing'
         ? SessionState.Processing
-        : status === 'reviewed'
-          ? SessionState.Reviewed
-          : SessionState.Running
+        : SessionState.Running
 
   return {
     info: {

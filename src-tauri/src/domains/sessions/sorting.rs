@@ -121,9 +121,9 @@ mod session_sorting_tests {
                 Some(15),
                 &repo_path,
             ),
-            // Reviewed sessions
+            // Ready-to-merge sessions
             create_test_session_with_repo(
-                "reviewed-foxtrot",
+                "ready-foxtrot",
                 SessionStatus::Active,
                 SessionState::Running,
                 true,
@@ -132,7 +132,7 @@ mod session_sorting_tests {
                 &repo_path,
             ),
             create_test_session_with_repo(
-                "reviewed-golf",
+                "ready-golf",
                 SessionStatus::Active,
                 SessionState::Running,
                 true,
@@ -166,7 +166,13 @@ mod session_sorting_tests {
 
         assert_eq!(
             session_names,
-            vec!["running-charlie", "running-delta", "running-echo"]
+            vec![
+                "running-charlie",
+                "running-delta",
+                "running-echo",
+                "ready-foxtrot",
+                "ready-golf",
+            ]
         );
     }
 
@@ -184,10 +190,16 @@ mod session_sorting_tests {
             .map(|s| s.info.session_id.as_str())
             .collect();
 
-        // Expected order: running-echo (20min ago), running-delta (45min ago), running-charlie (90min ago)
+        // Expected order: running sessions first by creation time, then ready sessions grouped afterward.
         assert_eq!(
             session_names,
-            vec!["running-echo", "running-delta", "running-charlie"]
+            vec![
+                "running-echo",
+                "running-delta",
+                "running-charlie",
+                "ready-foxtrot",
+                "ready-golf",
+            ]
         );
     }
 
@@ -205,10 +217,16 @@ mod session_sorting_tests {
             .map(|s| s.info.session_id.as_str())
             .collect();
 
-        // Expected order by last activity: running-charlie (5min ago), running-delta (10min ago), running-echo (15min ago)
+        // Expected order by last activity for running sessions, followed by ready sessions.
         assert_eq!(
             session_names,
-            vec!["running-charlie", "running-delta", "running-echo"]
+            vec![
+                "running-charlie",
+                "running-delta",
+                "running-echo",
+                "ready-foxtrot",
+                "ready-golf",
+            ]
         );
     }
 
@@ -242,43 +260,25 @@ mod session_sorting_tests {
             .list_enriched_sessions_sorted(SortMode::Name, FilterMode::Running)
             .unwrap();
 
-        // Should only have running (not spec, not reviewed) sessions
-        assert_eq!(filtered_sessions.len(), 3);
+        // Should have all non-spec sessions, with ready sessions sorted after active ones.
+        assert_eq!(filtered_sessions.len(), 5);
         let session_names: Vec<&str> = filtered_sessions
             .iter()
             .map(|s| s.info.session_id.as_str())
             .collect();
         assert_eq!(
             session_names,
-            vec!["running-charlie", "running-delta", "running-echo"]
+            vec![
+                "running-charlie",
+                "running-delta",
+                "running-echo",
+                "ready-foxtrot",
+                "ready-golf",
+            ]
         );
 
-        // All sessions should not be specs and not ready for merge
         for session in &filtered_sessions {
             assert_ne!(session.info.session_state, SessionState::Spec);
-            assert!(!session.info.ready_to_merge);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_filter_reviewed_sessions() {
-        let (_temp_dir, manager, _sessions) = setup_test_sessions();
-
-        let filtered_sessions = manager
-            .list_enriched_sessions_sorted(SortMode::Name, FilterMode::Reviewed)
-            .unwrap();
-
-        // Should only have reviewed sessions
-        assert_eq!(filtered_sessions.len(), 2);
-        let session_names: Vec<&str> = filtered_sessions
-            .iter()
-            .map(|s| s.info.session_id.as_str())
-            .collect();
-        assert_eq!(session_names, vec!["reviewed-foxtrot", "reviewed-golf"]);
-
-        // All sessions should be ready to merge
-        for session in &filtered_sessions {
-            assert!(session.info.ready_to_merge);
         }
     }
 

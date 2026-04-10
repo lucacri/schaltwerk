@@ -70,7 +70,7 @@ function renderWithGithub(value: Partial<GithubIntegrationValue>) {
       <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
         <GithubIntegrationContext.Provider value={contextValue}>
           <SessionActions
-            sessionState="reviewed"
+            sessionState="running"
             isReadyToMerge={true}
             sessionId="session-123"
             onCreatePullRequest={vi.fn()}
@@ -122,7 +122,7 @@ describe('SessionActions – GitHub PR button', () => {
         <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
           <GithubIntegrationContext.Provider value={defaultValue}>
             <SessionActions
-              sessionState="reviewed"
+              sessionState="running"
               isReadyToMerge={true}
               sessionId="session-123"
               onCreatePullRequest={onCreatePullRequest}
@@ -155,7 +155,7 @@ describe('SessionActions – GitHub PR button', () => {
         <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
           <GithubIntegrationContext.Provider value={defaultValue}>
             <SessionActions
-              sessionState="reviewed"
+              sessionState="running"
               isReadyToMerge={true}
               sessionId="session-123"
             />
@@ -285,5 +285,21 @@ describe('SessionActions – Running state', () => {
 
     const button = screen.queryByLabelText('Quick merge session')
     expect(button).not.toBeInTheDocument()
+  })
+
+  it('does not render a manual reviewed action for running sessions', () => {
+    render(
+      <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+        <GithubIntegrationContext.Provider value={mockGithub}>
+          <SessionActions
+            sessionState="running"
+            isReadyToMerge={true}
+            sessionId="session-123"
+          />
+        </GithubIntegrationContext.Provider>
+      </GitlabIntegrationContext.Provider>
+    )
+
+    expect(screen.queryByRole('button', { name: /review/i })).not.toBeInTheDocument()
   })
 })

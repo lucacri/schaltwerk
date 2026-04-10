@@ -228,10 +228,6 @@ const sampleStructuredOutputs: Record<string, any> = {
       },
     ],
   },
-  lucode_mark_session_reviewed: {
-    session: 'alpha',
-    reviewed: true,
-  },
   lucode_promote: {
     session: 'alpha_v3',
     siblings_cancelled: ['alpha_v1', 'alpha_v2'],

@@ -16,7 +16,7 @@ If Lucode already created a dedicated consolidation session for you and your pro
 
 Call `lucode_get_current_tasks` with `fields: ["name", "display_name", "status", "session_state", "branch", "epic_id", "initial_prompt"]` and `status_filter: "active"`.
 
-Group sessions by `display_name`. Keep only groups with at least two running or reviewed sessions.
+Group sessions by `display_name`. Keep only groups with at least two running or ready sessions.
 
 If no eligible group exists, stop and report that there is nothing to consolidate.
 

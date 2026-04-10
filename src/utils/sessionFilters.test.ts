@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { 
-    mapSessionUiState, 
     isSpec, 
-    isReviewed, 
-    isRunning, 
     calculateFilterCounts, 
     searchSessions 
 } from './sessionFilters'
@@ -30,55 +27,11 @@ const createMockSession = (overrides: Record<string, unknown> = {}) => {
     }
 }
 
-describe('mapSessionUiState', () => {
-    it('should return "spec" for sessions with session_state = "spec"', () => {
-        const session = createMockSession({ session_state: 'spec' })
-        expect(mapSessionUiState(session.info)).toBe('spec')
-    })
-
-    it('should return "spec" for sessions with status = "spec"', () => {
-        const session = createMockSession({ status: 'spec', session_state: 'running' })
-        expect(mapSessionUiState(session.info)).toBe('spec')
-    })
-
-    it('should return "reviewed" for sessions with ready_to_merge = true', () => {
-        const session = createMockSession({ ready_to_merge: true })
-        expect(mapSessionUiState(session.info)).toBe('reviewed')
-    })
-
-    it('should return "reviewed" when session_state = "reviewed" even if ready_to_merge is false', () => {
-        const session = createMockSession({ session_state: 'reviewed', ready_to_merge: false })
-        expect(mapSessionUiState(session.info)).toBe('reviewed')
-    })
-
-    it('should return "running" for normal active sessions', () => {
-        const session = createMockSession({ session_state: 'running' })
-        expect(mapSessionUiState(session.info)).toBe('running')
-    })
-
-    it('should return "running" as default case', () => {
-        const session = createMockSession({ session_state: 'unknown', ready_to_merge: false })
-        expect(mapSessionUiState(session.info)).toBe('running')
-    })
-})
-
 describe('Session type checking functions', () => {
     it('isSpec should correctly identify spec sessions', () => {
         expect(isSpec(createMockSession({ session_state: 'spec' }).info)).toBe(true)
         expect(isSpec(createMockSession({ status: 'spec' }).info)).toBe(true)
         expect(isSpec(createMockSession({ session_state: 'running' }).info)).toBe(false)
-    })
-
-    it('isReviewed should correctly identify reviewed sessions', () => {
-        expect(isReviewed(createMockSession({ ready_to_merge: true }).info)).toBe(true)
-        expect(isReviewed(createMockSession({ session_state: 'reviewed' }).info)).toBe(true)
-        expect(isReviewed(createMockSession({ ready_to_merge: false }).info)).toBe(false)
-    })
-
-    it('isRunning should correctly identify running sessions', () => {
-        expect(isRunning(createMockSession({ session_state: 'running' }).info)).toBe(true)
-        expect(isRunning(createMockSession({ session_state: 'spec' }).info)).toBe(false)
-        expect(isRunning(createMockSession({ ready_to_merge: true }).info)).toBe(false)
     })
 })
 
@@ -86,16 +39,15 @@ describe('calculateFilterCounts', () => {
     const specSession = createMockSession({ session_state: 'spec', session_id: 'spec-1' })
     const runningSession1 = createMockSession({ session_state: 'running', session_id: 'running-1' })
     const runningSession2 = createMockSession({ session_state: 'running', session_id: 'running-2' })
-    const reviewedSession = createMockSession({ ready_to_merge: true, session_id: 'reviewed-1' })
+    const readySession = createMockSession({ ready_to_merge: true, session_id: 'ready-1' })
     
-    const allSessions = [specSession, runningSession1, runningSession2, reviewedSession]
+    const allSessions = [specSession, runningSession1, runningSession2, readySession]
 
     it('should correctly count all session types', () => {
         const counts = calculateFilterCounts(allSessions)
 
         expect(counts.specsCount).toBe(1)
-        expect(counts.runningCount).toBe(2)
-        expect(counts.reviewedCount).toBe(1)
+        expect(counts.runningCount).toBe(3)
     })
 
     it('should return zero counts for empty array', () => {
@@ -103,7 +55,6 @@ describe('calculateFilterCounts', () => {
 
         expect(counts.specsCount).toBe(0)
         expect(counts.runningCount).toBe(0)
-        expect(counts.reviewedCount).toBe(0)
     })
 
     it('should handle sessions with only one type', () => {
@@ -112,18 +63,16 @@ describe('calculateFilterCounts', () => {
 
         expect(counts.specsCount).toBe(0)
         expect(counts.runningCount).toBe(2)
-        expect(counts.reviewedCount).toBe(0)
     })
 
-    it('should correctly categorize edge case sessions', () => {
+    it('counts ready sessions with the running bucket', () => {
         const edgeCaseSession = createMockSession({ 
             session_state: 'running', 
-            ready_to_merge: true // This should be categorized as reviewed
+            ready_to_merge: true
         })
         const counts = calculateFilterCounts([edgeCaseSession])
         
-        expect(counts.reviewedCount).toBe(1)
-        expect(counts.runningCount).toBe(0)
+        expect(counts.runningCount).toBe(1)
     })
 
     it('counts a version group once using its aggregate state', () => {
@@ -137,7 +86,7 @@ describe('calculateFilterCounts', () => {
             session_id: 'feature_v2',
             version_group_id: 'group-1',
             version_number: 2,
-            session_state: 'reviewed',
+            session_state: 'running',
             ready_to_merge: true,
         })
 
@@ -145,15 +94,14 @@ describe('calculateFilterCounts', () => {
 
         expect(counts.specsCount).toBe(0)
         expect(counts.runningCount).toBe(1)
-        expect(counts.reviewedCount).toBe(0)
     })
 
-    it('counts a finished mixed reviewed/spec group as reviewed', () => {
-        const groupedReviewed = createMockSession({
+    it('counts a mixed ready/spec group as running', () => {
+        const groupedReady = createMockSession({
             session_id: 'feature',
             version_group_id: 'group-1',
             version_number: 1,
-            session_state: 'reviewed',
+            session_state: 'running',
             ready_to_merge: true,
         })
         const groupedSpec = createMockSession({
@@ -164,11 +112,10 @@ describe('calculateFilterCounts', () => {
             status: 'spec',
         })
 
-        const counts = calculateFilterCounts([groupedReviewed, groupedSpec])
+        const counts = calculateFilterCounts([groupedReady, groupedSpec])
 
         expect(counts.specsCount).toBe(0)
-        expect(counts.runningCount).toBe(0)
-        expect(counts.reviewedCount).toBe(1)
+        expect(counts.runningCount).toBe(1)
     })
 })
 

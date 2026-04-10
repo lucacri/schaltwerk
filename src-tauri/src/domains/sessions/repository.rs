@@ -386,9 +386,8 @@ impl SessionDbManager {
         if matches!(
             session_state,
             crate::domains::sessions::entity::SessionState::Running
-                | crate::domains::sessions::entity::SessionState::Reviewed
         ) {
-            log::debug!("Caching spec content for running/reviewed session: {name}");
+            log::debug!("Caching spec content for running session: {name}");
             crate::domains::sessions::cache::cache_spec_content(
                 &self.repo_path,
                 name,

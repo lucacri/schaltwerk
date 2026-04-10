@@ -1529,7 +1529,7 @@ fn test_spec_session_ai_renaming_potential() {
 }
 
 #[test]
-fn test_mark_reviewed_refreshes_git_stats() {
+fn test_mark_ready_refreshes_git_stats_without_changing_state() {
     let env = TestEnvironment::new().unwrap();
     let manager = env.get_session_manager().unwrap();
 
@@ -1554,8 +1554,8 @@ fn test_mark_reviewed_refreshes_git_stats() {
         .output()
         .unwrap();
 
-    // Immediately mark as reviewed
-    manager.mark_session_as_reviewed(&session.name).unwrap();
+    // Recompute readiness after cleaning the worktree
+    manager.mark_session_ready(&session.name).unwrap();
 
     // Fetch enriched sessions; git stats should be refreshed and clean
     let enriched = manager.list_enriched_sessions().unwrap();
@@ -1570,8 +1570,9 @@ fn test_mark_reviewed_refreshes_git_stats() {
     assert_eq!(
         me.info.has_uncommitted_changes,
         Some(false),
-        "Git stats should reflect clean state after review"
+        "Git stats should reflect clean state after readiness refresh"
     );
+    assert_eq!(me.info.session_state, SessionState::Running);
 }
 
 #[test]
@@ -1595,12 +1596,12 @@ fn test_mark_ready_never_auto_commits_dirty_worktree() {
         .db_ref()
         .get_session_by_name(&env.repo_path, &session.name)
         .unwrap();
-    assert_eq!(db_session.session_state, SessionState::Reviewed);
+    assert_eq!(db_session.session_state, SessionState::Running);
     assert!(!db_session.ready_to_merge);
 }
 
 #[test]
-fn test_mark_ready_succeeds_with_missing_worktree() {
+fn test_mark_ready_with_missing_worktree_keeps_running_state() {
     let env = TestEnvironment::new().unwrap();
     let manager = env.get_session_manager().unwrap();
 
@@ -1622,95 +1623,67 @@ fn test_mark_ready_succeeds_with_missing_worktree() {
         .unwrap();
     assert_eq!(
         db_session.session_state,
-        SessionState::Reviewed,
-        "should still transition to Reviewed even with missing worktree"
+        SessionState::Running,
+        "missing worktrees should not change the runtime state"
     );
     assert!(!db_session.ready_to_merge);
 }
 
 #[test]
-fn test_follow_up_unmarks_reviewed_and_sets_running() {
+fn test_list_enriched_sessions_marks_clean_committed_session_ready() {
     let env = TestEnvironment::new().unwrap();
     let manager = env.get_session_manager().unwrap();
 
-    // Create a running session
     let session = manager
-        .create_session("followup-reviewed", None, None)
+        .create_session("committed-ready-session", None, None)
         .unwrap();
 
-    // Mark as reviewed
-    manager.mark_session_as_reviewed(&session.name).unwrap();
-
-    // Sanity: is reviewed
-    let s1 = manager
-        .db_ref()
-        .get_session_by_name(&env.repo_path, &session.name)
+    std::fs::write(session.worktree_path.join("ready.txt"), "ready\n").unwrap();
+    Command::new("git")
+        .args(["add", "."])
+        .current_dir(&session.worktree_path)
+        .output()
         .unwrap();
-    assert!(s1.ready_to_merge);
-
-    // Follow-up arrives → should unmark reviewed and set Running
-    let changed = manager.unmark_reviewed_on_follow_up(&session.name).unwrap();
-    assert!(changed, "expected a state change for reviewed session");
-
-    let s2 = manager
-        .db_ref()
-        .get_session_by_name(&env.repo_path, &session.name)
+    Command::new("git")
+        .args(["commit", "-m", "Ready work"])
+        .current_dir(&session.worktree_path)
+        .output()
         .unwrap();
-    assert!(!s2.ready_to_merge, "follow-up should clear ready_to_merge");
-    assert_eq!(
-        s2.session_state,
-        SessionState::Running,
-        "state should be Running"
-    );
+
+    let enriched = manager.list_enriched_sessions().unwrap();
+    let refreshed = enriched
+        .iter()
+        .find(|candidate| candidate.info.session_id == session.name)
+        .expect("session present");
+
+    assert!(refreshed.info.ready_to_merge);
+    assert_eq!(refreshed.info.session_state, SessionState::Running);
 }
 
 #[test]
-fn test_follow_up_noop_for_running_unreviewed() {
+fn test_list_enriched_sessions_clears_stale_ready_flag_for_dirty_session() {
     let env = TestEnvironment::new().unwrap();
     let manager = env.get_session_manager().unwrap();
 
-    // Create a running, unreviewed session
     let session = manager
-        .create_session("followup-running", None, None)
+        .create_session("dirty-not-ready-session", None, None)
         .unwrap();
 
-    // Follow-up should be a no-op
-    let changed = manager.unmark_reviewed_on_follow_up(&session.name).unwrap();
-    assert!(
-        !changed,
-        "no change expected for unreviewed running session"
-    );
-    let s = manager
-        .db_ref()
-        .get_session_by_name(&env.repo_path, &session.name)
-        .unwrap();
-    assert!(!s.ready_to_merge);
+    manager.set_session_ready_flag(&session.name, true).unwrap();
+    std::fs::write(session.worktree_path.join("dirty.txt"), "dirty").unwrap();
+
+    let enriched = manager.list_enriched_sessions().unwrap();
+    let refreshed = enriched
+        .iter()
+        .find(|candidate| candidate.info.session_id == session.name)
+        .expect("session present");
+
+    assert!(!refreshed.info.ready_to_merge);
+    assert_eq!(refreshed.info.session_state, SessionState::Running);
 }
 
 #[test]
-fn test_follow_up_noop_for_spec() {
-    let env = TestEnvironment::new().unwrap();
-    let manager = env.get_session_manager().unwrap();
-
-    // Create a spec
-    let _spec = manager
-        .create_spec_session("followup-spec", "# plan\n- item")
-        .unwrap();
-
-    // No change expected for spec sessions
-    let changed = manager
-        .unmark_reviewed_on_follow_up("followup-spec")
-        .unwrap();
-    assert!(!changed, "no change expected for spec session");
-
-    let s = manager.get_spec("followup-spec").unwrap();
-    assert_eq!(s.content, "# plan\n- item");
-}
-
-#[test]
-fn test_mark_reviewed_when_dirty_keeps_ready_flag_false() {
-    use crate::domains::sessions::entity::SessionState;
-
+fn test_mark_ready_when_dirty_keeps_ready_flag_false() {
     let env = TestEnvironment::new().unwrap();
     let manager = env.get_session_manager().unwrap();
 
@@ -1726,35 +1699,7 @@ fn test_mark_reviewed_when_dirty_keeps_ready_flag_false() {
         .get_session_by_name(&env.repo_path, &session.name)
         .unwrap();
     assert!(!refreshed.ready_to_merge);
-    assert_eq!(refreshed.session_state, SessionState::Reviewed);
-}
-
-#[test]
-fn test_follow_up_handles_reviewed_sessions_without_ready_flag() {
-    use crate::domains::sessions::entity::SessionState;
-
-    let env = TestEnvironment::new().unwrap();
-    let manager = env.get_session_manager().unwrap();
-
-    let session = manager
-        .create_session("followup-dirty-review", None, None)
-        .unwrap();
-
-    std::fs::write(session.worktree_path.join("dirty.txt"), "dirty").unwrap();
-    manager.mark_session_ready(&session.name).unwrap();
-
-    let changed = manager.unmark_reviewed_on_follow_up(&session.name).unwrap();
-    assert!(
-        changed,
-        "dirty reviewed sessions should move back to running"
-    );
-
-    let refreshed = manager
-        .db_ref()
-        .get_session_by_name(&env.repo_path, &session.name)
-        .unwrap();
     assert_eq!(refreshed.session_state, SessionState::Running);
-    assert!(!refreshed.ready_to_merge);
 }
 
 #[test]

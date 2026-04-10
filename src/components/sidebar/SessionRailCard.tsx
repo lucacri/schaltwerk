@@ -2,7 +2,6 @@ import { memo } from 'react'
 import { clsx } from 'clsx'
 import { SessionInfo, SessionMonitorStatus, SessionState } from '../../types/session'
 import { getSessionDisplayName } from '../../utils/sessionDisplayName'
-import { mapSessionUiState } from '../../utils/sessionFilters'
 import { theme } from '../../common/theme'
 import { typography } from '../../common/typography'
 import { getSessionCardSurfaceClasses } from './SessionCard'
@@ -11,6 +10,7 @@ import { useMultipleShortcutDisplays } from '../../keyboardShortcuts/useShortcut
 import { KeyboardShortcutAction } from '../../keyboardShortcuts/config'
 import { detectPlatformSafe } from '../../keyboardShortcuts/helpers'
 import { useTranslation } from '../../common/i18n'
+import { getSessionLifecycleState } from '../../utils/sessionState'
 
 interface SessionRailCardProps {
   session: {
@@ -37,10 +37,11 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
   const info = session.info
   const sessionName = getSessionDisplayName(info)
   const sessionState = info.session_state
-  const stateLabel = mapSessionUiState(info)
+  const lifecycleState = getSessionLifecycleState(info)
   const isIdle = Boolean((info as SessionInfo & { attention_required?: boolean }).attention_required)
-  const isRunningState = (stateLabel === 'running' || isRunning) && !isIdle
-  const accessibleState = isIdle ? 'idle' : stateLabel
+  const isRunningState = (lifecycleState === 'running' || isRunning) && !isIdle
+  const isReadyState = Boolean(info.ready_to_merge)
+  const accessibleState = isIdle ? 'idle' : (isReadyState ? 'ready' : lifecycleState)
   const shortcuts = useMultipleShortcutDisplays([
     KeyboardShortcutAction.SwitchToSession1,
     KeyboardShortcutAction.SwitchToSession2,
@@ -76,7 +77,7 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
   const surface = getSessionCardSurfaceClasses({
     sessionState,
     isSelected,
-    isReviewedState: sessionState === 'reviewed',
+    isReadyToMerge: isReadyState,
     isRunning,
     isIdle: !!info.attention_required,
     hasFollowUpMessage,
@@ -138,14 +139,14 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
             ⏸ {t.sidebar.states.idle}
           </span>
           )}
-          {!isRunningState && !isIdle && stateLabel === SessionState.Spec && (
+          {!isRunningState && !isIdle && lifecycleState === SessionState.Spec && (
             <span
               className="block w-1.5 h-1.5 rounded-full"
               style={{ backgroundColor: 'var(--color-accent-yellow)' }}
               title={t.sidebar.states.spec}
             />
           )}
-          {!isRunningState && !isIdle && stateLabel === SessionState.Reviewed && (
+          {!isRunningState && !isIdle && isReadyState && (
             <span
               className="font-bold"
               style={{ color: 'var(--color-accent-green-light)', fontSize: theme.fontSize.caption }}
@@ -154,7 +155,7 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
               ✓
             </span>
           )}
-          {!isRunningState && !isIdle && stateLabel === SessionState.Running && (
+          {!isRunningState && !isIdle && !isReadyState && lifecycleState === SessionState.Running && (
             <span
               className="block w-1 h-1 rounded-full opacity-40"
               style={{ backgroundColor: 'var(--color-text-tertiary)' }}

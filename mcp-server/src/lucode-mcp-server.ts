@@ -36,7 +36,7 @@ interface LucodeCancelArgs {
 
 interface LucodeListArgs {
   json?: boolean
-  filter?: 'all' | 'active' | 'spec' | 'reviewed'
+  filter?: 'all' | 'active' | 'spec' | 'ready'
 }
 
 interface LucodeSendMessageArgs {
@@ -75,10 +75,6 @@ interface LucodeDraftListArgs {
 }
 
 interface LucodeDraftDeleteArgs {
-  session_name: string
-}
-
-interface LucodeMarkReviewedArgs {
   session_name: string
 }
 
@@ -145,7 +141,7 @@ const bridge = new LucodeBridge()
 
   // 🔒 SECURITY NOTICE: This MCP server manages Git worktrees and sessions
   // - All session operations preserve Git history and commits
-  // - Reviewed sessions represent validated work that should be protected
+  // - Ready-to-merge sessions represent validated work that should be protected
   // - Never delete sessions without user consent or successful merge validation
   // - If MCP server is not accessible, ask user for help immediately
   // - Session cancellation requires explicit force parameter for safety
@@ -475,7 +471,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "lucode_list",
-        description: `List Lucode sessions for quick status checks. Default output is a readable summary; set json: true for structured fields (name, status, timestamps, agent_type, branch, prompts). Use filter to focus on all, active, spec, or reviewed sessions. Treat reviewed sessions as protected; only cancel them after a successful merge and passing tests.`,
+        description: `List Lucode sessions for quick status checks. Default output is a readable summary; set json: true for structured fields (name, status, timestamps, agent_type, branch, prompts). Use filter to focus on all, active, spec, or ready sessions. Ready sessions are those with ready_to_merge=true.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -486,7 +482,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             filter: {
               type: "string",
-              enum: ["all", "active", "spec", "reviewed"],
+              enum: ["all", "active", "spec", "ready"],
               description: "Limit results to a subset of sessions",
               default: "all"
             }
@@ -516,7 +512,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "lucode_cancel",
-        description: `Cancel a session by deleting its worktree and branch. The server blocks the operation if uncommitted changes are present; pass force: true to override (irreversible and drops unstaged work). Only use after the session has been merged and validated. Reviewed sessions should almost always stay; if uncertain, use lucode_convert_to_spec to preserve the work.`,
+        description: `Cancel a session by deleting its worktree and branch. The server blocks the operation if uncommitted changes are present; pass force: true to override (irreversible and drops unstaged work). Only use after the session has been merged and validated. Ready sessions should almost always stay until merge is complete; if uncertain, use lucode_convert_to_spec to preserve the work.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -796,21 +792,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         outputSchema: toolOutputSchemas.lucode_draft_delete
       },
       {
-        name: "lucode_mark_session_reviewed",
-        description: `Mark a running session as reviewed and ready_to_merge. The worktree stays intact for verification, but the session is now protected; only cancel it after a successful merge and green tests.`,
-        inputSchema: {
-          type: "object",
-          properties: {
-            session_name: {
-              type: "string",
-              description: "Name of the running session to mark as reviewed"
-            }
-          },
-          required: ["session_name"]
-        },
-        outputSchema: toolOutputSchemas.lucode_mark_session_reviewed
-      },
-      {
         name: "lucode_promote",
         description: `Promote a winning session version and automatically clean up its siblings. Use this after consolidating the best changes into one session and provide a concise reason describing why it won. When promoting a consolidation session, pass winner_session_id so the consolidated result is transplanted onto the winning source version's branch — the winner survives, the losing source versions are cancelled, and the consolidation session remains open for manual review and cleanup after promote returns.`,
         inputSchema: {
@@ -836,13 +817,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "lucode_convert_to_spec",
-        description: `Convert a running or reviewed session back into a spec for rework. The worktree is removed but the branch and commits remain, so you can refine the plan and restart it with lucode_draft_start.`,
+        description: `Convert a running session back into a spec for rework. The worktree is removed but the branch and commits remain, so you can refine the plan and restart it with lucode_draft_start.`,
         inputSchema: {
           type: "object",
           properties: {
             session_name: {
               type: "string",
-              description: "Name of the running or reviewed session to convert back to spec"
+              description: "Name of the running session to convert back to spec"
             }
           },
           required: ["session_name"]
@@ -851,13 +832,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "lucode_merge_session",
-        description: `Merge a reviewed session back onto its parent branch using the same pipeline as the desktop app. Run this only after the session is reviewed, clean, and tests are green. Optional parameters select the merge mode (squash or reapply), supply the squash commit_message, and request cancel_after_merge to queue worktree cleanup. The tool rejects spec sessions, unresolved conflicts, and empty merges, and it never runs tests for you.`,
+        description: `Merge a running session back onto its parent branch using the same pipeline as the desktop app. Run this after the session is clean and tests are green. ready_to_merge highlights clean sessions, but merge still rechecks Git state. Optional parameters select the merge mode (squash or reapply), supply the squash commit_message, and request cancel_after_merge to queue worktree cleanup. The tool rejects spec sessions, unresolved conflicts, and empty merges, and it never runs tests for you.`,
         inputSchema: {
           type: "object",
           properties: {
             session_name: {
               type: "string",
-              description: "Reviewed session to merge back into its parent branch."
+              description: "Running session to merge back into its parent branch."
             },
             commit_message: {
               type: "string",
@@ -879,13 +860,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "lucode_create_pr",
-        description: `Open a pull request modal in the Lucode UI for user review and confirmation. The modal is pre-filled with the provided title, body, and branch options. The user can review, edit, and confirm to create the PR. This tool does NOT create the PR directly - it requires user confirmation via the UI. Works for running and reviewed sessions. Spec sessions are not eligible for PR creation.`,
+        description: `Open a pull request modal in the Lucode UI for user review and confirmation. The modal is pre-filled with the provided title, body, and branch options. The user can review, edit, and confirm to create the PR. This tool does NOT create the PR directly - it requires user confirmation via the UI. Works for running sessions. Spec sessions are not eligible for PR creation.`,
         inputSchema: {
           type: "object",
           properties: {
             session_name: {
               type: "string",
-              description: "Running or reviewed session to open the PR modal for."
+              description: "Running session to open the PR modal for."
             },
             pr_title: {
               type: "string",
@@ -927,13 +908,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "lucode_link_pr",
-        description: "Link an existing GitHub pull request to a running or reviewed session",
+        description: "Link an existing GitHub pull request to a running session",
         inputSchema: {
           type: "object",
           properties: {
             session_name: {
               type: "string",
-              description: "Running or reviewed session whose PR metadata should be updated."
+              description: "Running session whose PR metadata should be updated."
             },
             pr_number: {
               type: "number",
@@ -981,13 +962,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "lucode_prepare_merge",
-        description: `Open a merge modal in the Lucode UI for user review and confirmation. The modal is pre-filled with the provided commit message and merge mode. The user can review, edit, and confirm to merge. This tool does NOT merge directly - it requires user confirmation via the UI. Works for running and reviewed sessions. Spec sessions are not eligible for merging.`,
+        description: `Open a merge modal in the Lucode UI for user review and confirmation. The modal is pre-filled with the provided commit message and merge mode. The user can review, edit, and confirm to merge. This tool does NOT merge directly - it requires user confirmation via the UI. Works for running sessions. Spec sessions are not eligible for merging.`,
         inputSchema: {
           type: "object",
           properties: {
             session_name: {
               type: "string",
-              description: "Running or reviewed session to open the merge modal for."
+              description: "Running session to open the merge modal for."
             },
             commit_message: {
               type: "string",
@@ -1020,8 +1001,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             status_filter: {
               type: "string",
-              enum: ["spec", "active", "reviewed", "all"],
-              description: "Filter agents by status. 'reviewed' shows ready_to_merge sessions.",
+              enum: ["spec", "active", "ready", "all"],
+              description: "Filter agents by status. 'ready' shows ready_to_merge sessions.",
               default: "all"
             },
             content_preview_length: {
@@ -1419,7 +1400,7 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
         const structuredSessions = sessions.map(s => ({
           name: s.name,
           display_name: s.display_name || s.name,
-          status: s.status === 'spec' ? 'spec' : (s.ready_to_merge ? 'reviewed' : 'new'),
+          status: s.status === 'spec' ? 'spec' : (s.ready_to_merge ? 'ready' : 'active'),
           session_state: s.session_state || null,
           ready_to_merge: s.ready_to_merge || false,
           created_at: s.created_at && !isNaN(new Date(s.created_at).getTime()) ? new Date(s.created_at).toISOString() : null,
@@ -1446,11 +1427,11 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
               const nameLabel = s.display_name || s.name
               return `[PLAN] ${nameLabel} - Created: ${created}, Content: ${contentLength} chars`
             } else {
-              const reviewed = s.ready_to_merge ? '[REVIEWED]' : '[NEW]'
+              const stateLabel = s.ready_to_merge ? '[READY]' : '[ACTIVE]'
               const agent = s.original_agent_type || 'unknown'
               const modified = s.last_activity && !isNaN(new Date(s.last_activity).getTime()) ? new Date(s.last_activity).toLocaleString() : 'never'
               const nameLabel = s.display_name || s.name
-              return `${reviewed} ${nameLabel} - Agent: ${agent}, Modified: ${modified}`
+              return `${stateLabel} ${nameLabel} - Agent: ${agent}, Modified: ${modified}`
             }
           })
 
@@ -1676,7 +1657,7 @@ ${presetStart.sessions
       case "lucode_get_current_tasks": {
         const taskArgs = args as {
           fields?: string[],
-          status_filter?: 'spec' | 'active' | 'reviewed' | 'all',
+          status_filter?: 'spec' | 'active' | 'ready' | 'all',
           content_preview_length?: number
         }
 
@@ -1692,7 +1673,7 @@ ${presetStart.sessions
                 return t.status === 'spec'
               case 'active':
                 return t.status !== 'spec' && !t.ready_to_merge
-              case 'reviewed':
+              case 'ready':
                 return t.ready_to_merge === true
               default:
                 return true
@@ -1763,17 +1744,6 @@ ${presetStart.sessions
         })
         break
        }
-
-      case "lucode_mark_session_reviewed": {
-        const markReviewedArgs = args as unknown as LucodeMarkReviewedArgs
-
-        await bridge.markSessionReviewed(markReviewedArgs.session_name, projectPath)
-
-        const structured = { session: markReviewedArgs.session_name, reviewed: true }
-        const summary = `Session '${markReviewedArgs.session_name}' has been marked as reviewed and is ready for merge`
-        response = buildStructuredResponse(structured, { summaryText: summary })
-        break
-      }
 
       case "lucode_promote": {
         const promoteArgs = args as unknown as LucodePromoteArgs
@@ -2046,15 +2016,15 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
         mimeType: "application/json"
       },
       {
-        uri: "lucode://sessions/reviewed",
-        name: "Reviewed Sessions",
+        uri: "lucode://sessions/ready",
+        name: "Ready Sessions",
         description: "Sessions marked as ready to merge",
         mimeType: "application/json"
       },
       {
-        uri: "lucode://sessions/new",
-        name: "New Sessions",
-        description: "Sessions not yet reviewed",
+        uri: "lucode://sessions/active",
+        name: "Active Sessions",
+        description: "Running sessions that are not yet ready to merge",
         mimeType: "application/json"
       },
       {
@@ -2112,17 +2082,17 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request: { params: { 
         break
       }
 
-      case "lucode://sessions/reviewed": {
+      case "lucode://sessions/ready": {
         const sessions = await bridge.listSessions()
-        const reviewed = sessions.filter(s => s.ready_to_merge)
-        content = JSON.stringify(reviewed, null, 2)
+        const readySessions = sessions.filter(s => s.ready_to_merge)
+        content = JSON.stringify(readySessions, null, 2)
         break
       }
 
-      case "lucode://sessions/new": {
+      case "lucode://sessions/active": {
         const sessions = await bridge.listSessions()
-        const newSessions = sessions.filter(s => !s.ready_to_merge)
-        content = JSON.stringify(newSessions, null, 2)
+        const activeSessions = sessions.filter(s => !s.ready_to_merge)
+        content = JSON.stringify(activeSessions, null, 2)
         break
       }
 

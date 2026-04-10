@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { AGENT_TYPES, type EnrichedSession, type AgentType, type Epic } from '../../types/session'
 import { FilterMode, getDefaultFilterMode, isValidFilterMode } from '../../types/sessionFilters'
 import { TauriCommands } from '../../common/tauriCommands'
-import { mapSessionUiState, searchSessions as searchSessionsUtil } from '../../utils/sessionFilters'
+import { searchSessions as searchSessionsUtil } from '../../utils/sessionFilters'
 import { SessionState, type SessionInfo } from '../../types/session'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
 import { projectPathAtom } from './project'
@@ -21,6 +21,7 @@ import { getErrorMessage, isSchaltError } from '../../types/errors'
 import { closePreview } from '../../features/preview/previewIframeRegistry'
 import { buildPreviewKey, clearPreviewStateActionAtom } from './preview'
 import { countLogicalRunningSessions } from '../../utils/sessionVersions'
+import { getSessionLifecycleState, isSpec } from '../../utils/sessionState'
 
 type MergeModeOption = 'squash' | 'reapply'
 
@@ -166,8 +167,8 @@ function sortSessionsByCreationDate(sessions: EnrichedSession[]): EnrichedSessio
 
     const sessionMap = new Map(sessions.map(session => [session.info.session_id, session]))
 
-    const reviewed = sessions.filter(session => mapSessionUiState(session.info) === SessionState.Reviewed)
-    const unreviewed = sessions.filter(session => mapSessionUiState(session.info) !== SessionState.Reviewed)
+    const ready = sessions.filter(session => session.info.ready_to_merge)
+    const notReady = sessions.filter(session => !session.info.ready_to_merge)
 
     const compareByCreated = (a: EnrichedSession, b: EnrichedSession) => {
         const aTime = new Date(a.info.created_at || 0).getTime()
@@ -179,24 +180,22 @@ function sortSessionsByCreationDate(sessions: EnrichedSession[]): EnrichedSessio
         return a.info.session_id.localeCompare(b.info.session_id)
     }
 
-    const sortedUnreviewed = [...unreviewed].sort(compareByCreated)
+    const sortedUnready = [...notReady].sort(compareByCreated)
 
-    const sortedReviewed = [...reviewed].sort((a, b) => a.info.session_id.localeCompare(b.info.session_id))
+    const sortedReady = [...ready].sort((a, b) => a.info.session_id.localeCompare(b.info.session_id))
 
-    const sorted = [...sortedUnreviewed, ...sortedReviewed]
+    const sorted = [...sortedUnready, ...sortedReady]
     return sorted.map(session => sessionMap.get(session.info.session_id) ?? session)
 }
 
 function filterSessions(sessions: EnrichedSession[], filterMode: FilterMode): EnrichedSession[] {
     switch (filterMode) {
         case FilterMode.Spec:
-            return sessions.filter(session => mapSessionUiState(session.info) === SessionState.Spec)
+            return sessions.filter(session => isSpec(session.info))
         case FilterMode.Running:
-            return sessions.filter(session => mapSessionUiState(session.info) === SessionState.Running)
-        case FilterMode.Reviewed:
-            return sessions.filter(session => mapSessionUiState(session.info) === SessionState.Reviewed)
+            return sessions.filter(session => !isSpec(session.info))
         default:
-            return sessions.filter(session => mapSessionUiState(session.info) === SessionState.Running)
+            return sessions.filter(session => !isSpec(session.info))
     }
 }
 
@@ -249,7 +248,7 @@ function createPendingStartup(_sessionId: string, agentType?: AgentType, ttlMs: 
 function buildStateMap(sessions: EnrichedSession[]): Map<string, string> {
     const map = new Map<string, string>()
     for (const session of sessions) {
-        map.set(session.info.session_id, mapSessionUiState(session.info))
+        map.set(session.info.session_id, getSessionLifecycleState(session.info))
     }
     return map
 }
@@ -264,11 +263,11 @@ function dedupeSessions(sessions: EnrichedSession[]): EnrichedSession[] {
             continue
         }
 
-        const existingState = mapSessionUiState(existing.info)
+        const existingState = getSessionLifecycleState(existing.info)
         if (existingState === SessionState.Spec) {
             continue
         }
-        const nextState = mapSessionUiState(session.info)
+        const nextState = getSessionLifecycleState(session.info)
         if (nextState === SessionState.Spec) {
             byId.set(sessionId, session)
             continue
@@ -286,7 +285,7 @@ async function releaseRemovedSessions(get: Getter, set: Setter, previous: Enrich
 
     for (const session of next) {
         const id = session.info.session_id
-        const nextState = mapSessionUiState(session.info)
+        const nextState = getSessionLifecycleState(session.info)
         const previousState = previousSessionStates.get(id) ?? null
 
         if (previousState === SessionState.Spec && nextState === SessionState.Running) {
@@ -413,11 +412,9 @@ function autoStartRunningSessions(
             continue
         }
 
-        const uiState = mapSessionUiState(session.info)
         const rawState = session.info.session_state
-        const isEligibleRunning = uiState === SessionState.Running && rawState === SessionState.Running
-        const isEligibleReviewed = uiState === SessionState.Reviewed && rawState === SessionState.Reviewed
-        const isEligible = isEligibleRunning || isEligibleReviewed
+        const uiState = getSessionLifecycleState(session.info)
+        const isEligible = uiState === SessionState.Running && rawState === SessionState.Running
         const topId = stableSessionTerminalId(sessionId, 'top')
         const pendingEntry = pending.get(sessionId)
 
@@ -458,11 +455,10 @@ function autoStartRunningSessions(
                             return
                         }
 
-                        const latestUiState = mapSessionUiState(latestSession.info)
+                        const latestUiState = getSessionLifecycleState(latestSession.info)
                         const latestRawState = latestSession.info.session_state
-                        const latestEligibleRunning = latestUiState === SessionState.Running && latestRawState === SessionState.Running
-                        const latestEligibleReviewed = latestUiState === SessionState.Reviewed && latestRawState === SessionState.Reviewed
-                        const latestEligible = latestEligibleRunning || latestEligibleReviewed
+                        const latestEligible =
+                            latestUiState === SessionState.Running && latestRawState === SessionState.Running
                         if (!latestEligible) {
                             logger.debug(
                                 `[AGENT_LAUNCH_TRACE] autoStartRunningSessions - skipping ${sessionId}; latest state=${latestRawState} (${reason})`,
@@ -789,10 +785,10 @@ function recomputeCrossProjectCounts(projectPath: string): { attention: number; 
 
     let attention = 0
     for (const session of sessions) {
-        const isReviewed = session.info.ready_to_merge === true || session.info.session_state === 'reviewed'
+        const isReadyToMerge = session.info.ready_to_merge === true
         const needsAttention = attentionMap.get(session.info.session_id) === true
 
-        if (needsAttention && !isReviewed) attention++
+        if (needsAttention && !isReadyToMerge) attention++
     }
 
     const running = countLogicalRunningSessions(sessions, session => attentionMap.get(session.info.session_id) === true)
@@ -2225,12 +2221,6 @@ export const updateSessionStatusActionAtom = atom(
                 if (currentSelection === input.sessionId) {
                     set(currentSelectionStateAtom, createdSpecName ?? null)
                 }
-            } else if (input.status === 'active') {
-                if (session.info.ready_to_merge) {
-                    await invoke(TauriCommands.SchaltwerkCoreUnmarkReady, { name: input.sessionId })
-                }
-            } else if (input.status === 'dirty') {
-                await invoke(TauriCommands.SchaltwerkCoreMarkReady, { name: input.sessionId })
             }
         } finally {
             await set(refreshSessionsActionAtom)

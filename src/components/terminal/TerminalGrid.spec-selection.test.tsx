@@ -83,11 +83,7 @@ let rawSessions: Record<string, RawSession> = {}
 
 function toRaw(session: MockSession): RawSession {
   const now = new Date().toISOString()
-  const state = session.info.session_state === 'spec'
-    ? 'spec'
-    : session.info.ready_to_merge
-      ? 'reviewed'
-      : 'running'
+  const state = session.info.session_state === 'spec' ? 'spec' : 'running'
   return {
     id: `${session.info.session_id}-id`,
     name: session.info.session_id,

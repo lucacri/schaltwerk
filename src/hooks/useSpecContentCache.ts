@@ -12,7 +12,7 @@ const specCache = new Map<string, SpecCacheEntry>()
 
 export function useSpecContentCache(
   sessionName: string,
-  sessionState?: 'spec' | 'processing' | 'running' | 'reviewed',
+  sessionState?: 'spec' | 'processing' | 'running',
 ) {
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(true)
@@ -20,7 +20,7 @@ export function useSpecContentCache(
 
   useEffect(() => {
     let mounted = true
-    const isStatic = sessionState === 'running' || sessionState === 'reviewed'
+    const isStatic = sessionState === 'running'
 
     const cached = specCache.get(sessionName)
     if (cached) {

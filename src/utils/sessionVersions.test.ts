@@ -242,20 +242,20 @@ describe('sessionVersions', () => {
 
     it('returns running aggregate state when any version is still running', () => {
       const groups = groupSessionsByVersion([
-        createMockSession('feature', undefined, { version_group_id: 'group-1', version_number: 1, session_state: 'reviewed', ready_to_merge: true }),
+        createMockSession('feature', undefined, { version_group_id: 'group-1', version_number: 1, session_state: 'running', ready_to_merge: true }),
         createMockSession('feature_v2', undefined, { version_group_id: 'group-1', version_number: 2, session_state: 'running' }),
       ])
 
       expect(getSessionVersionGroupAggregate(groups[0]!).state).toBe('running')
     })
 
-    it('returns reviewed aggregate state when no version is running and at least one is reviewed', () => {
+    it('returns running aggregate state when a ready version is paired with specs', () => {
       const groups = groupSessionsByVersion([
-        createMockSession('feature', undefined, { version_group_id: 'group-1', version_number: 1, session_state: 'reviewed', ready_to_merge: true }),
+        createMockSession('feature', undefined, { version_group_id: 'group-1', version_number: 1, session_state: 'running', ready_to_merge: true }),
         createMockSession('feature_v2', undefined, { version_group_id: 'group-1', version_number: 2, session_state: 'spec', status: 'spec' }),
       ])
 
-      expect(getSessionVersionGroupAggregate(groups[0]!).state).toBe('reviewed')
+      expect(getSessionVersionGroupAggregate(groups[0]!).state).toBe('running')
     })
 
     it('returns spec aggregate state when every version is a spec', () => {
@@ -270,7 +270,7 @@ describe('sessionVersions', () => {
     it('counts a version group as one logical running unit', () => {
       const sessions = [
         createMockSession('feature', undefined, { version_group_id: 'group-1', version_number: 1, session_state: 'running' }),
-        createMockSession('feature_v2', undefined, { version_group_id: 'group-1', version_number: 2, session_state: 'reviewed', ready_to_merge: true }),
+        createMockSession('feature_v2', undefined, { version_group_id: 'group-1', version_number: 2, session_state: 'running', ready_to_merge: true }),
         createMockSession('standalone', undefined, { session_state: 'running' }),
       ]
 
@@ -287,7 +287,7 @@ describe('sessionVersions', () => {
         createMockSession('feature', undefined, {
           version_group_id: 'group-1',
           version_number: 1,
-          session_state: 'reviewed',
+          session_state: 'running',
           ready_to_merge: true,
         }),
         createMockSession('feature_v2', undefined, {
@@ -298,7 +298,7 @@ describe('sessionVersions', () => {
         }),
       ]
 
-      expect(countLogicalRunningSessions(sessions, s => s.info.attention_required === true)).toBe(1)
+      expect(countLogicalRunningSessions(sessions, s => s.info.attention_required === true)).toBe(2)
     })
   })
 

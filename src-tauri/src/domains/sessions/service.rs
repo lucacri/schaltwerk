@@ -157,6 +157,7 @@ pub fn apply_git_enrichment(
 ) {
     for result in results {
         let session = &mut sessions[result.index];
+        let has_uncommitted_changes = result.git_stats.as_ref().map(|stats| stats.has_uncommitted);
         if let Some(stats) = &result.git_stats {
             session.info.has_uncommitted_changes = Some(stats.has_uncommitted);
             session.info.dirty_files_count = Some(stats.dirty_files_count);
@@ -172,6 +173,10 @@ pub fn apply_git_enrichment(
         }
         session.info.has_conflicts = result.has_conflicts;
         session.info.commits_ahead_count = result.commits_ahead_count;
+        session.info.ready_to_merge = matches!(session.info.session_state, SessionState::Running)
+            && has_uncommitted_changes == Some(false)
+            && result.has_conflicts != Some(true)
+            && result.commits_ahead_count.unwrap_or(0) > 0;
     }
 }
 
@@ -3566,27 +3571,6 @@ impl SessionManager {
         }
     }
 
-    pub fn mark_session_as_reviewed(&self, session_name: &str) -> Result<()> {
-        // Get session and validate state
-        let session = self.db_manager.get_session_by_name(session_name)?;
-
-        // Validate that the session is in a valid state for marking as reviewed
-        if session.session_state == SessionState::Spec {
-            return Err(anyhow!(
-                "Cannot mark spec session '{session_name}' as reviewed. Start the spec first with lucode_draft_start."
-            ));
-        }
-
-        if session.ready_to_merge {
-            return Err(anyhow!(
-                "Session '{session_name}' is already marked as reviewed"
-            ));
-        }
-
-        self.mark_session_ready(session_name)?;
-        Ok(())
-    }
-
     pub fn convert_session_to_spec(&self, session_name: &str) -> Result<String> {
         // Get session and validate state
         let session = self.db_manager.get_session_by_name(session_name)?;
@@ -3648,7 +3632,7 @@ impl SessionManager {
             }
         } else {
             log::warn!(
-                "Worktree for session '{session_name}' is missing at {}; marking as reviewed with ready_to_merge=false",
+                "Worktree for session '{session_name}' is missing at {}; marking ready_to_merge=false",
                 session.worktree_path.display()
             );
             false
@@ -3656,63 +3640,13 @@ impl SessionManager {
 
         self.db_manager
             .update_session_ready_to_merge(&session.id, ready_to_merge)?;
-        self.db_manager
-            .update_session_state(&session.id, SessionState::Reviewed)?;
 
         Ok(ready_to_merge)
-    }
-
-    pub fn unmark_session_ready(&self, session_name: &str) -> Result<()> {
-        let session = self.db_manager.get_session_by_name(session_name)?;
-        self.db_manager
-            .update_session_ready_to_merge(&session.id, false)?;
-        if session.session_state != SessionState::Spec {
-            self.db_manager
-                .update_session_state(&session.id, SessionState::Running)?;
-        }
-        Ok(())
     }
 
     pub fn set_session_ready_flag(&self, session_name: &str, ready: bool) -> Result<()> {
         self.db_manager
             .update_session_ready_to_merge_by_name(session_name, ready)
-    }
-
-    // When a follow-up message arrives for a reviewed session, it should move back to running.
-    // Only act if the session is actually marked reviewed (session_state = Reviewed).
-    // Returns true if a change was applied, false if no-op (not reviewed/spec/missing flags).
-    pub fn unmark_reviewed_on_follow_up(&self, session_name: &str) -> Result<bool> {
-        let session = match self.db_manager.get_session_by_name(session_name) {
-            Ok(s) => s,
-            Err(_) => {
-                // Specs (stored separately) have no follow-up behavior; treat as no-op
-                if self.db_manager.get_spec_by_name(session_name).is_ok() {
-                    return Ok(false);
-                }
-                return Err(anyhow!("Session '{session_name}' not found"));
-            }
-        };
-
-        // Do nothing for specs (cannot receive follow-ups into terminals)
-        if session.session_state == SessionState::Spec {
-            return Ok(false);
-        }
-
-        if session.session_state == SessionState::Reviewed {
-            // Clear review flag/state and ensure state is Running for UI consistency
-            self.db_manager
-                .update_session_ready_to_merge(&session.id, false)?;
-            self.db_manager
-                .update_session_state(&session.id, SessionState::Running)?;
-
-            // Touch last_activity to surface recency deterministically
-            let _ = self
-                .db_manager
-                .set_session_activity(&session.id, chrono::Utc::now());
-            return Ok(true);
-        }
-
-        Ok(false)
     }
 
     pub fn create_spec_session(&self, name: &str, spec_content: &str) -> Result<Spec> {

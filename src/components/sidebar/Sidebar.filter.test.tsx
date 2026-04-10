@@ -42,7 +42,7 @@ const createSession = (id: string, readyToMerge = false, sessionState?: 'spec' |
     is_current: false,
     session_type: 'worktree',
     ready_to_merge: readyToMerge,
-    session_state: sessionState === 'spec' ? 'spec' : (readyToMerge ? 'reviewed' : 'running')
+    session_state: sessionState === 'spec' ? 'spec' : 'running'
   },
   terminals: []
 })
@@ -86,39 +86,26 @@ describe('Sidebar filter functionality and persistence', () => {
     vi.restoreAllMocks()
   })
 
-  it('filters sessions: Running -> Specs -> Reviewed', async () => {
+  it('filters sessions: Running -> Specs', async () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Wait for sessions to load (verify by filter counts) - defaults to Running filter
     await waitFor(() => {
       const runningButton = screen.getByTitle('Show running agents')
-      // bravo is running (not spec, not reviewed)
-      expect(runningButton.textContent).toContain('1')
+      expect(runningButton.textContent).toContain('3')
     })
 
-    // Click Specs
     fireEvent.click(screen.getByTitle('Show spec agents'))
 
     await waitFor(() => {
       const specsButton = screen.getByTitle('Show spec agents')
-      expect(specsButton.textContent).toContain('2') // alpha and charlie are specs (session_state: 'spec')
+      expect(specsButton.textContent).toContain('2')
     })
 
-    // Click Reviewed
-    fireEvent.click(screen.getByTitle('Show reviewed agents'))
-
-    await waitFor(() => {
-      // Check that the filter counter shows the right numbers
-      const reviewedButton = screen.getByTitle('Show reviewed agents')
-      expect(reviewedButton.textContent).toContain('2') // bravo and delta are reviewed
-    })
-
-    // Back to Running
     fireEvent.click(screen.getByTitle('Show running agents'))
 
     await waitFor(() => {
       const runningButton = screen.getByTitle('Show running agents')
-      expect(runningButton.textContent).toContain('1')
+      expect(runningButton.textContent).toContain('3')
     })
   })
 
@@ -157,40 +144,39 @@ describe('Sidebar filter functionality and persistence', () => {
       return undefined
     })
 
-    // First render: starts at Running, switch to Reviewed
+    // First render: starts at Running, switch to Specs
     const { unmount } = render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
       const runningButton = screen.getByTitle('Show running agents')
-      expect(runningButton.textContent).toContain('2') // session1 and session2 are running
+      expect(runningButton.textContent).toContain('4')
     })
 
-    fireEvent.click(screen.getByTitle('Show reviewed agents'))
+    fireEvent.click(screen.getByTitle('Show spec agents'))
 
     await waitFor(() => {
-      expect(savedFilterMode).toBe('reviewed')
+      expect(savedFilterMode).toBe('spec')
     })
 
     unmount()
 
-    // Second render should restore 'reviewed'
+    // Second render should restore 'spec'
     render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
-      const reviewedButton = screen.getByTitle('Show reviewed agents')
-      expect(reviewedButton.textContent).toContain('2') // session3 and session4 are reviewed
+      const specsButton = screen.getByTitle('Show spec agents')
+      expect(specsButton.textContent).toContain('0')
     })
   })
 
-  describe('Reviewed session preservation with Running filter', () => {
-    it('preserves selection when currently selected session is marked as reviewed while Running filter is active', async () => {
+  describe('Ready session preservation with Running filter', () => {
+    it('preserves selection when currently selected session becomes ready while Running filter is active', async () => {
       let sessionsList: EnrichedSession[] = [
         createSession('running-1', false, 'active'),
         createSession('running-2', false, 'active'),
         createSession('running-3', false, 'active'),
       ]
 
-      const mockSetSelection = vi.fn()
       let currentFilterMode = FilterMode.Running
 
       vi.mocked(invoke).mockImplementation(async (cmd, args?: unknown) => {
@@ -245,17 +231,13 @@ describe('Sidebar filter functionality and persistence', () => {
 
       await waitFor(() => {
         const runningCount = screen.getByTitle('Show running agents')
-        expect(runningCount.textContent).toContain('2')
+        expect(runningCount.textContent).toContain('3')
       })
 
-      expect(mockSetSelection).not.toHaveBeenCalledWith(
-        expect.objectContaining({ payload: 'running-2' }),
-        expect.anything(),
-        expect.anything()
-      )
+      expect(getSessionRow('running-1')).toBeInTheDocument()
     })
 
-    it('preserves selection when first session moves to reviewed with Running filter active', async () => {
+    it('keeps ready sessions visible when the first session becomes ready with Running filter active', async () => {
       let sessionsList: EnrichedSession[] = [
         createSession('alpha', false, 'active'),
         createSession('beta', false, 'active'),
@@ -303,13 +285,13 @@ describe('Sidebar filter functionality and persistence', () => {
 
       await waitFor(() => {
         const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('2')
-        const reviewedButton = screen.getByTitle('Show reviewed agents')
-        expect(reviewedButton.textContent).toContain('1')
+        expect(runningButton.textContent).toContain('3')
       })
+
+      expect(screen.getByText('alpha')).toBeInTheDocument()
     })
 
-    it('allows switching to different session after reviewed session disappears from Running filter', async () => {
+    it('allows switching to a different session after another session becomes ready', async () => {
       let sessionsList: EnrichedSession[] = [
         createSession('session-1', false, 'active'),
         createSession('session-2', false, 'active'),
@@ -354,7 +336,7 @@ describe('Sidebar filter functionality and persistence', () => {
 
       await waitFor(() => {
         const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('1')
+        expect(runningButton.textContent).toContain('2')
       })
 
       const session2Button = screen.getAllByRole('button').find(b => b.textContent?.includes('session-2'))

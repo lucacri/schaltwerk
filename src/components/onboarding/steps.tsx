@@ -148,7 +148,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-slate-400">
                     <li>Use <kbd className="px-1 py-0.5 bg-slate-700 rounded text-caption">⌘/</kbd> to focus the shell.</li>
-                    <li>Run <code>bun run test</code> (or your project’s scripts) before marking reviewed.</li>
+                    <li>Run <code>bun run test</code> (or your project’s scripts) before merging or opening a PR.</li>
                     <li>Edit files or stage changes here — it’s the same worktree the agent uses.</li>
                     <li>Add extra tabs if you need multiple shell sessions.</li>
                 </ul>
@@ -179,10 +179,10 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         content: (
             <div>
                 <p className="mb-3 text-slate-300">
-                    The sidebar filters keep specs, running sessions, and reviewed work easy to find.
+                    The sidebar filters keep specs and running sessions easy to find.
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-slate-400">
-                    <li>Use the filter pills for <strong>Specs</strong>, <strong>Running</strong>, and <strong>Reviewed</strong>.</li>
+                    <li>Use the filter pills for <strong>Specs</strong> and <strong>Running</strong>.</li>
                     <li>Cycle filters with <kbd className="px-1 py-0.5 bg-slate-700 rounded text-caption">⌘←</kbd> and <kbd className="px-1 py-0.5 bg-slate-700 rounded text-caption">⌘→</kbd>.</li>
                     <li>Move through the session list with <kbd className="px-1 py-0.5 bg-slate-700 rounded text-caption">⌘↑</kbd>/<kbd className="px-1 py-0.5 bg-slate-700 rounded text-caption">⌘↓</kbd> or jump straight to a slot with <kbd className="px-1 py-0.5 bg-slate-700 rounded text-caption">⌘2…⌘8</kbd>.</li>
                     <li>Specs stay available even after you convert them to sessions.</li>
@@ -193,16 +193,16 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         action: 'highlight'
     },
     {
-        title: 'Mark Sessions Reviewed',
+        title: 'Keep Sessions Merge-Ready',
         content: (
             <div>
                 <p className="mb-3 text-slate-300">
-                    Once the tests pass and the diff looks right, mark the session as reviewed.
+                    Once the tests pass and the diff looks right, keep the session clean so it stays ready to merge.
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-slate-400">
-                    <li>Click the green check button or press <kbd className="px-1 py-0.5 bg-slate-700 rounded text-caption">⌘R</kbd>.</li>
-                    <li>The session moves to the <strong>Reviewed</strong> filter and keeps its worktree so you can still make tweaks.</li>
-                    <li>If the worktree is dirty you’ll see a warning before you merge.</li>
+                    <li>Commit your work so the sidebar can show the ready badge automatically.</li>
+                    <li>The session keeps its worktree so you can still make tweaks before merge.</li>
+                    <li>If the worktree is dirty you’ll see that it is no longer ready before you merge.</li>
                 </ul>
             </div>
         ),
@@ -214,7 +214,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
         content: (
             <div>
                 <p className="mb-3 text-slate-300">
-                    Reviewed sessions have two finishes: merge locally or open a pull request.
+                    Running sessions have two finishes: merge locally or open a pull request.
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-slate-400">
                     <li><strong>Merge:</strong> Apply the branch back to trunk immediately (<kbd className="px-1 py-0.5 bg-slate-700 rounded text-caption">⌘⇧M</kbd>).</li>

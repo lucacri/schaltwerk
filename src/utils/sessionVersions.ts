@@ -2,7 +2,7 @@ import { EnrichedSession } from '../types/session'
 import { TauriCommands } from '../common/tauriCommands'
 import { logger } from '../utils/logger'
 import { getSessionDisplayName } from './sessionDisplayName'
-import { mapSessionUiState } from './sessionState'
+import { getSessionLifecycleState, isSpec } from './sessionState'
 
 export { type EnrichedSession }
 
@@ -18,13 +18,13 @@ export interface SessionVersionGroup {
   isVersionGroup: boolean // true if multiple versions exist
 }
 
-export type SessionVersionGroupUiState = 'spec' | 'running' | 'reviewed'
+export type SessionVersionGroupUiState = 'spec' | 'running'
 
 export interface SessionVersionGroupAggregate {
   state: SessionVersionGroupUiState
   hasAttention: boolean
   runningVersions: number
-  reviewedVersions: number
+  readyVersions: number
   specVersions: number
   totalVersions: number
 }
@@ -133,12 +133,14 @@ export function groupSessionsByVersion(sessions: EnrichedSession[]): SessionVers
 
 export function getSessionVersionGroupAggregate(group: SessionVersionGroup): SessionVersionGroupAggregate {
   const counts = group.versions.reduce((acc, version) => {
-    const state = mapSessionUiState(version.session.info)
+    const state = getSessionLifecycleState(version.session.info)
+    const ready = Boolean(version.session.info.ready_to_merge)
 
-    if (state === 'running') {
+    if (state === 'running' || state === 'processing') {
       acc.runningVersions += 1
-    } else if (state === 'reviewed') {
-      acc.reviewedVersions += 1
+      if (ready) {
+        acc.readyVersions += 1
+      }
     } else {
       acc.specVersions += 1
     }
@@ -151,7 +153,7 @@ export function getSessionVersionGroupAggregate(group: SessionVersionGroup): Ses
   }, {
     hasAttention: false,
     runningVersions: 0,
-    reviewedVersions: 0,
+    readyVersions: 0,
     specVersions: 0,
   })
 
@@ -159,15 +161,13 @@ export function getSessionVersionGroupAggregate(group: SessionVersionGroup): Ses
 
   if (counts.runningVersions > 0) {
     state = 'running'
-  } else if (counts.reviewedVersions > 0) {
-    state = 'reviewed'
   }
 
   return {
     state,
     hasAttention: counts.hasAttention,
     runningVersions: counts.runningVersions,
-    reviewedVersions: counts.reviewedVersions,
+    readyVersions: counts.readyVersions,
     specVersions: counts.specVersions,
     totalVersions: group.versions.length,
   }
@@ -179,7 +179,7 @@ export function countLogicalRunningSessions(
 ): number {
   return groupSessionsByVersion(sessions).filter(group => {
     return group.versions.some(version => {
-      if (mapSessionUiState(version.session.info) !== 'running') return false
+      if (isSpec(version.session.info)) return false
       return needsAttention ? !needsAttention(version.session) : true
     })
   }).length

@@ -67,7 +67,6 @@ export const KEYBOARD_SHORTCUT_SECTIONS: ShortcutSection[] = [
       { action: KeyboardShortcutAction.NewSpec, label: 'Create new spec' },
       { action: KeyboardShortcutAction.CancelSession, label: 'Cancel session' },
       { action: KeyboardShortcutAction.ForceCancelSession, label: 'Force cancel session' },
-      { action: KeyboardShortcutAction.MarkSessionReady, label: 'Mark ready for review' },
       { action: KeyboardShortcutAction.RefineSpec, label: 'Open clarification agent' },
       { action: KeyboardShortcutAction.PromoteSessionVersion, label: 'Promote best version' },
       { action: KeyboardShortcutAction.ConvertSessionToSpec, label: 'Convert session to spec' },

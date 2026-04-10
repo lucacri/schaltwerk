@@ -1,7 +1,7 @@
 const formatListJson = (s: any) => ({
   name: s.name,
   display_name: s.display_name || s.name,
-  status: s.status === 'spec' ? 'spec' : (s.ready_to_merge ? 'reviewed' : 'new'),
+  status: s.status === 'spec' ? 'spec' : (s.ready_to_merge ? 'ready' : 'active'),
   state: s.session_state,
   created_at: s.created_at ? new Date(s.created_at).toISOString() : null,
   last_activity: s.last_activity ? new Date(s.last_activity).toISOString() : null,
@@ -19,11 +19,11 @@ const formatListText = (s: any) => {
     const name = s.display_name || s.name
     return `[PLAN] ${name} - Created: ${created}, Content: ${contentLength} chars`
   } else {
-    const reviewed = s.ready_to_merge ? '[REVIEWED]' : '[NEW]'
+    const readiness = s.ready_to_merge ? '[READY]' : '[ACTIVE]'
     const agent = s.original_agent_type || 'unknown'
     const modified = s.last_activity ? new Date(s.last_activity).toLocaleString() : 'never'
     const name = s.display_name || s.name
-    return `${reviewed} ${name} - Agent: ${agent}, Modified: ${modified}`
+    return `${readiness} ${name} - Agent: ${agent}, Modified: ${modified}`
   }
 }
 

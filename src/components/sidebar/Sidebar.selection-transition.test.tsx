@@ -138,7 +138,7 @@ describe('Sidebar selection transitions', () => {
     })
   })
 
-  it('advances to the next running session when the current one is marked reviewed under Running filter', async () => {
+  it('keeps the current selection when the session becomes ready under Running filter', async () => {
     const sessionA = createEnrichedSession('session-a', '/worktrees/a', SessionState.Running, false)
     const sessionB = createEnrichedSession('session-b', '/worktrees/b', SessionState.Running, false)
     enrichedSessions = [sessionA, sessionB]
@@ -184,25 +184,24 @@ describe('Sidebar selection transitions', () => {
         id: session.info.session_id,
         ready: session.info.ready_to_merge,
       }))
-      const runningIds = visible
-        .filter(session => !session.ready)
-        .map(session => session.id)
-      expect(runningIds).toContain('session-b')
-      expect(runningIds).not.toContain('session-a')
+      expect(visible).toEqual([
+        { id: 'session-b', ready: false },
+        { id: 'session-a', ready: true },
+      ])
     })
 
     await waitFor(() => {
-      expect(result.current.selectionCtx.selection.payload).toBe('session-b')
+      expect(result.current.selectionCtx.selection.payload).toBe('session-a')
     })
     expect(result.current.selectionCtx.selection.kind).toBe('session')
   })
 
-  it('re-focuses when switching filter after project switch without waiting for ProjectSwitchComplete', async () => {
+  it('preserves selection when switching filter after project switch without waiting for ProjectSwitchComplete', async () => {
     const sessionA = createEnrichedSession('session-a', '/worktrees/a', SessionState.Running, false)
-    const sessionB = createEnrichedSession('session-b', '/worktrees/b', SessionState.Reviewed, true)
+    const sessionB = createEnrichedSession('session-b', '/worktrees/b', SessionState.Running, true)
     enrichedSessions = [sessionA, sessionB]
     rawSessions['session-a'] = createRawSession('session-a', '/worktrees/a', SessionState.Running, false)
-    rawSessions['session-b'] = createRawSession('session-b', '/worktrees/b', SessionState.Reviewed, true)
+    rawSessions['session-b'] = createRawSession('session-b', '/worktrees/b', SessionState.Running, true)
 
     const { result } = renderHook(() => ({
       selectionCtx: useSelection(),
@@ -226,16 +225,15 @@ describe('Sidebar selection transitions', () => {
     // Simulate project switch flag set (without ProjectSwitchComplete firing yet)
     await act(async () => {
       // trigger filter change to Reviewed while switch flag would be true
-      result.current.sessionsCtx.setFilterMode(FilterMode.Reviewed)
+      result.current.sessionsCtx.setFilterMode(FilterMode.Running)
     })
 
     await waitFor(() => {
-      expect(result.current.sessionsCtx.filterMode).toBe(FilterMode.Reviewed)
+      expect(result.current.sessionsCtx.filterMode).toBe(FilterMode.Running)
     })
 
     await waitFor(() => {
-      // Should refocus to the reviewed session, not stay on the hidden running one
-      expect(result.current.selectionCtx.selection.payload).toBe('session-b')
+      expect(result.current.selectionCtx.selection.payload).toBe('session-a')
     })
   })
 })

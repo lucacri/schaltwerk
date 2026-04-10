@@ -24,7 +24,7 @@ import { stableSessionTerminalId } from '../../common/terminalIdentity'
 describe('Sidebar status indicators and actions', () => {
   const sessions: EnrichedSession[] = [
     { info: { session_id: 's1', branch: 'para/s1', worktree_path: '/p/s1', base_branch: 'main', status: 'active', is_current: false, session_type: 'worktree', ready_to_merge: false, session_state: 'running' }, terminals: [] },
-    { info: { session_id: 's2', branch: 'para/s2', worktree_path: '/p/s2', base_branch: 'main', status: 'active', is_current: false, session_type: 'worktree', ready_to_merge: true, session_state: 'reviewed' }, terminals: [] },
+    { info: { session_id: 's2', branch: 'para/s2', worktree_path: '/p/s2', base_branch: 'main', status: 'active', is_current: false, session_type: 'worktree', ready_to_merge: true, session_state: 'running' }, terminals: [] },
   ]
 
   let unlistenFns: Array<() => void> = []
@@ -37,14 +37,12 @@ describe('Sidebar status indicators and actions', () => {
 
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
       if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) return sessions
-            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) return sessions
       if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
-      if (cmd === TauriCommands.SchaltwerkCoreUnmarkSessionReady) return undefined
       if (cmd === TauriCommands.GetCurrentDirectory) return '/cwd'
       if (cmd === TauriCommands.TerminalExists) return false
       if (cmd === TauriCommands.CreateTerminal) return true
       if (cmd === TauriCommands.GetProjectSessionsSettings) {
-        return { filter_mode: 'all', sort_mode: 'name' }
+        return { filter_mode: 'running', sort_mode: 'name' }
       }
       if (cmd === TauriCommands.SetProjectSessionsSettings) {
         return undefined
@@ -68,30 +66,16 @@ describe('Sidebar status indicators and actions', () => {
     unlistenFns = []
   })
 
-  it('shows Reviewed badge for ready sessions and toggles with Unmark', async () => {
+  it('shows Ready badge for ready sessions in the running list', async () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
-      expect(screen.getByTitle('Show reviewed agents')).toBeInTheDocument()
-    })
-    fireEvent.click(screen.getByTitle('Show reviewed agents'))
-
-    await waitFor(() => {
-      expect(sessionRows().map(button => button.getAttribute('data-session-id'))).toEqual(['s2'])
+      expect(sessionRows().map(button => button.getAttribute('data-session-id'))).toEqual(['s1', 's2'])
     })
 
-    const reviewedItem = getSessionRow('s2')!
-    expect(reviewedItem).toHaveTextContent('Reviewed')
-    fireEvent.click(reviewedItem)
-
-    // Click Unmark
-    const unmarkCandidates = within(reviewedItem).getAllByRole('button', { name: /Unmark as reviewed/i })
-    const unmarkBtn = unmarkCandidates.find(el => (el as HTMLElement).tagName === 'BUTTON') as HTMLElement
-    fireEvent.click(unmarkBtn)
-
-    await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreUnmarkSessionReady, { name: 's2' })
-    })
+    const readyItem = getSessionRow('s2')!
+    expect(readyItem).toHaveTextContent('Ready')
+    expect(within(readyItem).queryByRole('button', { name: /review/i })).toBeNull()
   })
 
   it('clicking Refine on a spec switches to orchestrator and emits terminal insert events', async () => {
@@ -194,7 +178,7 @@ describe('Sidebar status indicators and actions', () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
-      expect(sessionRows().map(button => button.getAttribute('data-session-id'))).toEqual(['s1'])
+      expect(sessionRows().map(button => button.getAttribute('data-session-id'))).toEqual(['s1', 's2'])
     })
 
     const sessionRow = getSessionRow('s1')!
@@ -237,7 +221,7 @@ describe('Sidebar status indicators and actions', () => {
           is_current: false,
           session_type: 'worktree',
           ready_to_merge: true,
-          session_state: 'reviewed',
+          session_state: 'running',
           original_agent_type: 'codex',
         },
         terminals: [],
@@ -273,9 +257,9 @@ describe('Sidebar status indicators and actions', () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
-      expect(screen.getByTitle('Show reviewed agents')).toBeInTheDocument()
+      expect(screen.getByTitle('Show running agents')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByTitle('Show reviewed agents'))
+    fireEvent.click(screen.getByTitle('Show running agents'))
 
     await waitFor(() => {
       expect(getSessionRow('s2')).toBeTruthy()
@@ -283,7 +267,7 @@ describe('Sidebar status indicators and actions', () => {
 
     const sessionRow = getSessionRow('s2') as HTMLElement
     fireEvent.click(sessionRow)
-    fireEvent.click(within(sessionRow).getByRole('button', { name: /Merge session/i }))
+    fireEvent.click(within(sessionRow).getByRole('button', { name: 'Merge session' }))
 
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
@@ -347,7 +331,7 @@ describe('Sidebar status indicators and actions', () => {
               is_current: false,
               session_type: 'worktree',
               ready_to_merge: true,
-              session_state: 'reviewed',
+              session_state: 'running',
             },
             terminals: [],
           },
@@ -556,9 +540,6 @@ describe('Sidebar status indicators and actions', () => {
       expect(specButton).toBeTruthy()
       expect(specButton).toHaveTextContent('Spec')
     })
-
-    // Switch to reviewed filter and ensure session is not present
-    fireEvent.click(screen.getByTitle('Show reviewed agents'))
 
     await waitFor(() => {
       expect(getSessionRow('s1')).toBeUndefined()

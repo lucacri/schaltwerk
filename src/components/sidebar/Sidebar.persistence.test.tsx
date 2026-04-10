@@ -25,7 +25,7 @@ const createSession = (id: string, createdAt: string, readyToMerge = false): Enr
     has_uncommitted_changes: false,
     is_current: false,
     session_type: 'worktree',
-    session_state: readyToMerge ? 'reviewed' : 'running',
+    session_state: 'running',
     ready_to_merge: readyToMerge,
   },
   terminals: [],
@@ -89,7 +89,7 @@ describe('Sidebar session ordering and persistence', () => {
     )
 
     await waitFor(() => {
-      expect(sessionRows()).toHaveLength(3)
+      expect(sessionRows()).toHaveLength(4)
     })
 
     const orderedButtons = sessionRows()
@@ -98,10 +98,11 @@ describe('Sidebar session ordering and persistence', () => {
       'test_session_b',
       'test_session_a',
       'test_session_c',
+      'reviewed_session',
     ])
   })
 
-  it('shows reviewed sessions separately in reviewed filter', async () => {
+  it('keeps ready sessions in the running filter', async () => {
     render(
       <TestProviders>
         <Sidebar />
@@ -109,13 +110,7 @@ describe('Sidebar session ordering and persistence', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByTitle('Show reviewed agents')).toBeInTheDocument()
-    })
-
-    fireEvent.click(screen.getByTitle('Show reviewed agents'))
-
-    await waitFor(() => {
-      expect(sessionRows().map(button => button.getAttribute('data-session-id'))).toEqual(['reviewed_session'])
+      expect(sessionRows().map(button => button.getAttribute('data-session-id'))).toContain('reviewed_session')
     })
   })
 

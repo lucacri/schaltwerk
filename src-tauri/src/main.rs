@@ -863,7 +863,6 @@ async fn start_webhook_server(app: tauri::AppHandle) -> bool {
                                 }
                             });
 
-                        // Move reviewed sessions back to running upon follow-up (only if reviewed)
                         let mut agent_type: Option<String> = None;
                         if let Ok(core) = get_core_write().await {
                             let manager = core.session_manager();
@@ -878,31 +877,9 @@ async fn start_webhook_server(app: tauri::AppHandle) -> bool {
                                     );
                                 }
                             }
-
-                            match manager.unmark_reviewed_on_follow_up(session_name) {
-                                Ok(true) => {
-                                    log::info!(
-                                        "Follow-up unmarked review state for '{session_name}', scheduling sessions refresh"
-                                    );
-                                    request_sessions_refresh(
-                                        &app,
-                                        SessionsRefreshReason::AgentActivity,
-                                    );
-                                }
-                                Ok(false) => {
-                                    log::debug!(
-                                        "Follow-up received for '{session_name}' with no review state to clear"
-                                    );
-                                }
-                                Err(e) => {
-                                    log::warn!(
-                                        "Failed to process follow-up review state for '{session_name}': {e}"
-                                    );
-                                }
-                            }
                         } else {
                             log::warn!(
-                                "Could not access SchaltwerkCore to update session state on follow-up"
+                                "Could not access SchaltwerkCore while processing follow-up message"
                             );
                         }
 
@@ -1381,9 +1358,7 @@ fn main() {
             schaltwerk_core_get_merge_preview_with_worktree,
             schaltwerk_core_merge_session_to_main,
             schaltwerk_core_update_session_from_parent,
-            schaltwerk_core_mark_session_ready,
             schaltwerk_core_has_uncommitted_changes,
-            schaltwerk_core_unmark_session_ready,
             schaltwerk_core_set_agent_type,
             schaltwerk_core_set_session_agent_type,
             schaltwerk_core_get_agent_type,

@@ -1,7 +1,6 @@
 export enum FilterMode {
     Spec = 'spec',
-    Running = 'running',
-    Reviewed = 'reviewed'
+    Running = 'running'
 }
 
 export const FILTER_MODES = Object.values(FilterMode) as FilterMode[]

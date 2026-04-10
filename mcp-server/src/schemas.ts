@@ -23,7 +23,7 @@ const sessionSummarySchema = {
   properties: {
     name: { type: 'string' },
     display_name: { type: 'string' },
-    status: { enum: ['spec', 'reviewed', 'new'] },
+    status: { enum: ['spec', 'ready', 'active'] },
     session_state: nullableString,
     ready_to_merge: { type: 'boolean' },
     created_at: nullableIsoDateTime,
@@ -601,17 +601,6 @@ export const toolOutputSchemas = {
       },
     },
     required: ['tasks'],
-    additionalProperties: false,
-  },
-
-  lucode_mark_session_reviewed: {
-    $schema: draft2020,
-    type: 'object',
-    properties: {
-      session: { type: 'string' },
-      reviewed: { type: 'boolean' },
-    },
-    required: ['session', 'reviewed'],
     additionalProperties: false,
   },
 

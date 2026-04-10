@@ -477,11 +477,7 @@ impl SessionUtils {
                 .collect(),
             FilterMode::Running => sessions
                 .into_iter()
-                .filter(|s| s.info.session_state != SessionState::Spec && !s.info.ready_to_merge)
-                .collect(),
-            FilterMode::Reviewed => sessions
-                .into_iter()
-                .filter(|s| s.info.ready_to_merge)
+                .filter(|s| s.info.session_state != SessionState::Spec)
                 .collect(),
         }
     }
@@ -491,22 +487,22 @@ impl SessionUtils {
         sessions: Vec<EnrichedSession>,
         sort_mode: &SortMode,
     ) -> Vec<EnrichedSession> {
-        let mut reviewed: Vec<EnrichedSession> = sessions
+        let mut ready: Vec<EnrichedSession> = sessions
             .iter()
             .filter(|s| s.info.ready_to_merge)
             .cloned()
             .collect();
-        let mut unreviewed: Vec<EnrichedSession> = sessions
+        let mut not_ready: Vec<EnrichedSession> = sessions
             .iter()
             .filter(|s| !s.info.ready_to_merge)
             .cloned()
             .collect();
 
-        self.sort_sessions_by_mode(&mut unreviewed, sort_mode);
-        self.sort_sessions_by_mode(&mut reviewed, &SortMode::Name);
+        self.sort_sessions_by_mode(&mut not_ready, sort_mode);
+        self.sort_sessions_by_mode(&mut ready, &SortMode::Name);
 
-        let mut result = unreviewed;
-        result.extend(reviewed);
+        let mut result = not_ready;
+        result.extend(ready);
         result
     }
 
@@ -514,16 +510,14 @@ impl SessionUtils {
         match sort_mode {
             SortMode::Name => {
                 sessions.sort_by(|a, b| {
-                    // First sort by session state priority (Spec > Running)
+                    // First sort by session state priority (Spec > Active)
                     let a_priority = match a.info.session_state {
                         SessionState::Spec => 0,
                         SessionState::Processing | SessionState::Running => 1,
-                        SessionState::Reviewed => 2,
                     };
                     let b_priority = match b.info.session_state {
                         SessionState::Spec => 0,
                         SessionState::Processing | SessionState::Running => 1,
-                        SessionState::Reviewed => 2,
                     };
 
                     match a_priority.cmp(&b_priority) {

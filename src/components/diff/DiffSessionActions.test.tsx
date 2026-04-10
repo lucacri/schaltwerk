@@ -37,8 +37,6 @@ vi.mock('../../common/i18n', () => ({
         restartTerminals: 'Restart Terminals',
         discardAllChanges: 'Discard all changes',
         resetSession: 'Reset Session',
-        markAsReviewedTitle: 'Mark as reviewed',
-        markAsReviewed: 'Mark Reviewed',
       },
     },
     currentLanguage: 'en',
@@ -89,9 +87,7 @@ function renderActions(props: Partial<Parameters<typeof DiffSessionActions>[0]> 
     isSessionSelection: true,
     sessionName: 'test-session',
     targetSession: createSession(),
-    canMarkReviewed: false,
     onClose: vi.fn(),
-    onReloadSessions: vi.fn().mockResolvedValue(undefined),
     onLoadChangedFiles: vi.fn().mockResolvedValue(undefined),
     children: ({ headerActions, dialogs }: { headerActions: React.ReactNode; dialogs: React.ReactNode }) => (
       <div>
@@ -124,16 +120,6 @@ describe('DiffSessionActions', () => {
     renderActions({ isSessionSelection: false })
     expect(screen.queryByText('Restart Terminals')).toBeNull()
     expect(screen.queryByText('Reset Session')).toBeNull()
-  })
-
-  it('renders mark reviewed button when canMarkReviewed is true', () => {
-    renderActions({ canMarkReviewed: true })
-    expect(screen.getByText('Mark Reviewed')).toBeTruthy()
-  })
-
-  it('does not render mark reviewed button when canMarkReviewed is false', () => {
-    renderActions({ canMarkReviewed: false })
-    expect(screen.queryByText('Mark Reviewed')).toBeNull()
   })
 
   it('calls invoke to restart terminals when restart button clicked', async () => {
@@ -174,20 +160,6 @@ describe('DiffSessionActions', () => {
     renderActions()
     fireEvent.click(screen.getByText('Reset Session'))
     expect(screen.getByTestId('confirm-reset-dialog')).toBeTruthy()
-  })
-
-  it('calls invoke to mark session reviewed', async () => {
-    const onClose = vi.fn()
-    const onReloadSessions = vi.fn().mockResolvedValue(undefined)
-    renderActions({ canMarkReviewed: true, onClose, onReloadSessions })
-
-    fireEvent.click(screen.getByText('Mark Reviewed'))
-
-    await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreMarkSessionReady, {
-        name: 'test-session',
-      })
-    })
   })
 
   it('renders PR comment button when session has pr_number', () => {

@@ -1,30 +1,27 @@
 import type { SessionInfo } from '../types/session'
 import { SessionState } from '../types/session'
 
-type SessionStateSource = Pick<SessionInfo, 'session_state' | 'status' | 'ready_to_merge'>
+type SessionStateSource = Pick<SessionInfo, 'session_state' | 'status'>
 
-export type SessionUiState = SessionState.Spec | SessionState.Running | SessionState.Reviewed
-
-export function mapSessionUiState(info: SessionStateSource): SessionUiState {
+export function getSessionLifecycleState(
+    info: SessionStateSource,
+): SessionState.Spec | SessionState.Processing | SessionState.Running {
     if (info.session_state === SessionState.Spec || info.status === 'spec') {
         return SessionState.Spec
     }
 
-    if (info.session_state === SessionState.Reviewed || info.ready_to_merge) {
-        return SessionState.Reviewed
+    if (info.session_state === SessionState.Processing) {
+        return SessionState.Processing
     }
 
     return SessionState.Running
 }
 
 export function isSpec(info: SessionStateSource): boolean {
-    return mapSessionUiState(info) === SessionState.Spec
-}
-
-export function isReviewed(info: SessionStateSource): boolean {
-    return mapSessionUiState(info) === SessionState.Reviewed
+    return getSessionLifecycleState(info) === SessionState.Spec
 }
 
 export function isRunning(info: SessionStateSource): boolean {
-    return mapSessionUiState(info) === SessionState.Running
+    return getSessionLifecycleState(info) === SessionState.Running
 }
+

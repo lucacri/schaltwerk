@@ -24,7 +24,6 @@ interface SessionVersionGroupProps {
   isSessionRunning?: (sessionId: string) => boolean
   isMergeDisabled?: (sessionId: string) => boolean
   getMergeStatus?: (sessionId: string) => MergeStatus
-  isMarkReadyDisabled?: boolean
   isSessionBusy?: (sessionId: string) => boolean
   onConsolidate?: (group: SessionVersionGroupType) => void
   onTerminateAll?: (group: SessionVersionGroupType) => void
@@ -43,7 +42,6 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   isSessionRunning,
   isMergeDisabled,
   getMergeStatus,
-  isMarkReadyDisabled = false,
   isSessionBusy,
   onConsolidate,
   onTerminateAll
@@ -75,7 +73,6 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
         isRunning={isSessionRunning?.(session.session.info.session_id) || false}
         disableMerge={isMergeDisabled?.(session.session.info.session_id) || false}
         mergeStatus={getMergeStatus?.(session.session.info.session_id) ?? 'idle'}
-        isMarkReadyDisabled={isMarkReadyDisabled}
         isBusy={isSessionBusy?.(session.session.info.session_id) ?? false}
         siblings={group.versions.map(v => v.session.info)}
         onHover={setHoveredSessionId}
@@ -96,11 +93,11 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   const hoveredSession = group.versions.find(v => v.session.info.session_id === hoveredSessionId)?.session.info
 
   const hasMultipleVersions = group.versions.length >= 2
-  const runningOrReviewedCount = sourceVersions.filter(v => {
+  const activeVersionCount = sourceVersions.filter(v => {
     const state = v.session.info.session_state
-    return state === 'running' || state === 'reviewed'
+    return state === 'running'
   }).length
-  const canConsolidate = !hasConsolidationVersion && runningOrReviewedCount >= 2
+  const canConsolidate = !hasConsolidationVersion && activeVersionCount >= 2
   const hasRunning = group.versions.some(v => v.session.info.session_state === 'running')
   const maxTagLength = Math.max(
     ...group.versions.map(v => {
@@ -155,7 +152,6 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
         isRunning={isSessionRunning?.(version.session.info.session_id) || false}
         disableMerge={isMergeDisabled?.(version.session.info.session_id) || false}
         mergeStatus={getMergeStatus?.(version.session.info.session_id) ?? 'idle'}
-        isMarkReadyDisabled={isMarkReadyDisabled}
         isBusy={isSessionBusy?.(version.session.info.session_id) ?? false}
         siblings={siblingInfos}
         hideTreeConnector={hideTreeConnector}
@@ -276,7 +272,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                   e.currentTarget.style.color = 'var(--color-accent-purple-light)'
                 }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
-                title={canConsolidate ? 'Consolidate versions' : 'Needs at least 2 running/reviewed sessions to consolidate'}
+                title={canConsolidate ? 'Consolidate versions' : 'Needs at least 2 running sessions to consolidate'}
                 data-testid="consolidate-versions-button"
               >
                 <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">

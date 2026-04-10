@@ -25,7 +25,6 @@ pub enum SessionsRefreshReason {
     Unknown,
     SessionLifecycle,
     GitUpdate,
-    AgentActivity,
     MergeWorkflow,
     SpecSync,
 }
@@ -36,7 +35,6 @@ impl SessionsRefreshReason {
             SessionsRefreshReason::Unknown => "unknown",
             SessionsRefreshReason::SessionLifecycle => "session-lifecycle",
             SessionsRefreshReason::GitUpdate => "git-update",
-            SessionsRefreshReason::AgentActivity => "agent-activity",
             SessionsRefreshReason::MergeWorkflow => "merge-workflow",
             SessionsRefreshReason::SpecSync => "spec-sync",
         }
@@ -253,12 +251,6 @@ mod tests {
     }
 
     #[test]
-    fn test_sessions_refresh_reason_as_str_agent_activity() {
-        let reason = SessionsRefreshReason::AgentActivity;
-        assert_eq!(reason.as_str(), "agent-activity");
-    }
-
-    #[test]
     fn test_sessions_refresh_reason_as_str_merge_workflow() {
         let reason = SessionsRefreshReason::MergeWorkflow;
         assert_eq!(reason.as_str(), "merge-workflow");
@@ -347,8 +339,8 @@ mod tests {
         state.dirty = true;
         assert!(state.dirty);
 
-        state.last_reason = SessionsRefreshReason::AgentActivity;
-        assert_eq!(state.last_reason.as_str(), "agent-activity");
+        state.last_reason = SessionsRefreshReason::GitUpdate;
+        assert_eq!(state.last_reason.as_str(), "git-update");
 
         let now = Instant::now();
         state.last_emit = Some(now);
@@ -447,7 +439,6 @@ mod tests {
             SessionsRefreshReason::Unknown,
             SessionsRefreshReason::SessionLifecycle,
             SessionsRefreshReason::GitUpdate,
-            SessionsRefreshReason::AgentActivity,
             SessionsRefreshReason::MergeWorkflow,
             SessionsRefreshReason::SpecSync,
         ];
@@ -464,7 +455,6 @@ mod tests {
             SessionsRefreshReason::Unknown,
             SessionsRefreshReason::SessionLifecycle,
             SessionsRefreshReason::GitUpdate,
-            SessionsRefreshReason::AgentActivity,
             SessionsRefreshReason::MergeWorkflow,
             SessionsRefreshReason::SpecSync,
         ];
@@ -474,6 +464,6 @@ mod tests {
             .iter()
             .collect::<std::collections::HashSet<_>>()
             .len();
-        assert_eq!(unique_count, 6, "All reason strings should be unique");
+        assert_eq!(unique_count, 5, "All reason strings should be unique");
     }
 }

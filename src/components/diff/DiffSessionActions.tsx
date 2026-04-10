@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { VscCheck, VscDiscard, VscComment, VscLinkExternal, VscTerminal } from 'react-icons/vsc'
+import { VscDiscard, VscComment, VscLinkExternal, VscTerminal } from 'react-icons/vsc'
 import type { EnrichedSession } from '../../types/session'
 import { TauriCommands } from '../../common/tauriCommands'
 import { ConfirmResetDialog } from '../common/ConfirmResetDialog'
@@ -19,9 +19,7 @@ interface DiffSessionActionsProps {
   isSessionSelection: boolean
   sessionName: string | null
   targetSession: EnrichedSession | null
-  canMarkReviewed: boolean
   onClose: () => void
-  onReloadSessions: () => Promise<void>
   onLoadChangedFiles: () => Promise<void>
   children: (parts: DiffSessionActionsRenderProps) => ReactNode
 }
@@ -30,9 +28,7 @@ export function DiffSessionActions({
   isSessionSelection,
   sessionName,
   targetSession,
-  canMarkReviewed,
   onClose,
-  onReloadSessions,
   onLoadChangedFiles,
   children
 }: DiffSessionActionsProps) {
@@ -41,7 +37,6 @@ export function DiffSessionActions({
   const { fetchingComments, fetchAndPasteToTerminal } = usePrComments()
   const [isResetting, setIsResetting] = useState(false)
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
-  const [isMarkingReviewed, setIsMarkingReviewed] = useState(false)
 
   const prNumber = targetSession?.info.pr_number
   const prUrl = targetSession?.info.pr_url
@@ -83,24 +78,6 @@ export function DiffSessionActions({
       setConfirmResetOpen(false)
     }
   }, [sessionName, onLoadChangedFiles, onClose])
-
-  const handleMarkReviewedClick = useCallback(async () => {
-    if (!targetSession || !sessionName || isMarkingReviewed) return
-
-    setIsMarkingReviewed(true)
-    try {
-      await invoke(TauriCommands.SchaltwerkCoreMarkSessionReady, {
-        name: sessionName
-      })
-      await onReloadSessions()
-      onClose()
-    } catch (error) {
-      logger.error('[DiffSessionActions] Failed to mark session as reviewed:', error)
-      alert(`Failed to mark session as reviewed: ${error}`)
-    } finally {
-      setIsMarkingReviewed(false)
-    }
-  }, [targetSession, sessionName, isMarkingReviewed, onReloadSessions, onClose])
 
   const handleFetchAndPasteComments = useCallback(async () => {
     if (!prNumber) return
@@ -151,20 +128,9 @@ export function DiffSessionActions({
           <VscDiscard className="text-lg" />
           {t.diffSessionActions.resetSession}
         </button>
-        {canMarkReviewed && (
-          <button
-            onClick={() => { void handleMarkReviewedClick() }}
-            className="px-2 py-1 bg-green-600/80 hover:bg-green-600 rounded-md text-sm font-medium flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-            title={t.diffSessionActions.markAsReviewedTitle}
-            disabled={isMarkingReviewed}
-          >
-            <VscCheck className="text-lg" />
-            {t.diffSessionActions.markAsReviewed}
-          </button>
-        )}
       </>
     )
-  }, [t, isSessionSelection, isResetting, canMarkReviewed, handleMarkReviewedClick, isMarkingReviewed, prNumber, prUrl, fetchingComments, handleFetchAndPasteComments, handleRestartTerminals])
+  }, [t, isSessionSelection, isResetting, prNumber, prUrl, fetchingComments, handleFetchAndPasteComments, handleRestartTerminals])
 
   const dialogs = useMemo(() => (
     <ConfirmResetDialog

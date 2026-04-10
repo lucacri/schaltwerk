@@ -36,7 +36,6 @@ export enum UiEvent {
   ThemeChanged = 'theme-changed',
   LanguageChanged = 'language-changed',
   GlobalNewSessionShortcut = 'global-new-session-shortcut',
-  GlobalMarkReadyShortcut = 'global-mark-ready-shortcut',
   NoProjectError = 'schaltwerk:no-project-error',
   SpawnError = 'schaltwerk:spawn-error',
   NotGitError = 'schaltwerk:not-git-error',
@@ -82,7 +81,7 @@ export interface SelectionChangedDetail {
   kind: 'session' | 'orchestrator'
   payload?: string
   worktreePath?: string
-  sessionState?: 'spec' | 'processing' | 'running' | 'reviewed'
+  sessionState?: 'spec' | 'processing' | 'running'
 }
 
 export interface FocusTerminalDetail {
@@ -304,7 +303,6 @@ export type UiEventPayloads = {
   [UiEvent.ThemeChanged]: ThemeChangedDetail
   [UiEvent.LanguageChanged]: LanguageChangedDetail
   [UiEvent.GlobalNewSessionShortcut]: undefined
-  [UiEvent.GlobalMarkReadyShortcut]: undefined
   [UiEvent.NoProjectError]: TerminalErrorDetail
   [UiEvent.SpawnError]: TerminalErrorDetail
   [UiEvent.NotGitError]: TerminalErrorDetail

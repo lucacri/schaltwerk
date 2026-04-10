@@ -115,7 +115,7 @@ describe('useSpecContentCache', () => {
     mockInvoke.mockResolvedValue(['Reviewed content', null])
 
     const { result: result1 } = renderHook(() =>
-      useSpecContentCache('test-session', 'reviewed')
+      useSpecContentCache('test-session', 'running')
     )
 
     await flushPromises()
@@ -126,7 +126,7 @@ describe('useSpecContentCache', () => {
     mockInvoke.mockClear()
 
     const { result: result2 } = renderHook(() =>
-      useSpecContentCache('test-session', 'reviewed')
+      useSpecContentCache('test-session', 'running')
     )
 
     expect(result2.current.loading).toBe(false)
@@ -325,9 +325,9 @@ describe('useSpecContentCache', () => {
     mockInvoke.mockResolvedValue(['Content', null])
 
     const { result, rerender } = renderHook(
-      ({ sessionState }: { sessionState: 'spec' | 'processing' | 'running' | 'reviewed' }) =>
+      ({ sessionState }: { sessionState: 'spec' | 'processing' | 'running' }) =>
         useSpecContentCache('test-session', sessionState),
-      { initialProps: { sessionState: 'spec' as 'spec' | 'processing' | 'running' | 'reviewed' } }
+      { initialProps: { sessionState: 'spec' as 'spec' | 'processing' | 'running' } }
     )
 
     await flushPromises()
@@ -336,7 +336,7 @@ describe('useSpecContentCache', () => {
     expect(mockInvoke).toHaveBeenCalledTimes(1)
     mockInvoke.mockClear()
 
-    rerender({ sessionState: 'running' as 'spec' | 'processing' | 'running' | 'reviewed' })
+    rerender({ sessionState: 'running' as 'spec' | 'processing' | 'running' })
 
     await flushPromises()
     expect(result.current.loading).toBe(false)
@@ -345,7 +345,7 @@ describe('useSpecContentCache', () => {
 
     mockInvoke.mockClear()
 
-    rerender({ sessionState: 'running' as 'spec' | 'processing' | 'running' | 'reviewed' })
+    rerender({ sessionState: 'running' as 'spec' | 'processing' | 'running' })
 
     expect(mockInvoke).not.toHaveBeenCalled()
   })

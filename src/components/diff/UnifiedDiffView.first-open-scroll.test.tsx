@@ -12,7 +12,7 @@ import { sessionTerminalGroup, stableSessionTerminalId } from '../../common/term
 let selectionState: {
   kind: 'session' | 'orchestrator'
   payload?: string
-  sessionState?: 'spec' | 'processing' | 'running' | 'reviewed'
+  sessionState?: 'spec' | 'processing' | 'running'
 }
 let sessionsState: EnrichedSession[]
 const reloadSessionsMock = vi.fn(async () => {})

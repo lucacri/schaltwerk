@@ -61,8 +61,6 @@ const defaultGitlabValue: GitlabIntegrationValue = {
 
 const mockActions: SessionCardActions = {
   onSelect: vi.fn(),
-  onMarkReady: vi.fn(),
-  onUnmarkReady: vi.fn(),
   onCancel: vi.fn(),
   onConvertToSpec: vi.fn(),
   onRunDraft: vi.fn(),

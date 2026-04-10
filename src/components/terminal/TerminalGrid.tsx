@@ -44,7 +44,7 @@ import { useShortcutDisplay } from '../../keyboardShortcuts/useShortcutDisplay'
 import { KeyboardShortcutAction } from '../../keyboardShortcuts/config'
 import { useKeyboardShortcutsConfig } from '../../contexts/KeyboardShortcutsContext'
 import { detectPlatformSafe, isShortcutForAction } from '../../keyboardShortcuts/helpers'
-import { mapSessionUiState } from '../../utils/sessionFilters'
+import { isSpec as isSpecSession } from '../../utils/sessionState'
 import { SPLIT_GUTTER_SIZE } from '../../common/splitLayout'
 import { logger } from '../../utils/logger'
 import { loadRunScriptConfiguration } from '../../utils/runScriptLoader'
@@ -1840,7 +1840,7 @@ const TerminalGridComponent = () => {
                                 {selection.kind === 'session' && (() => {
                                     const active = sessions.find(s => s.info.session_id === selection.payload)
                                     if (!active) return null
-                                    if (mapSessionUiState(active.info) === 'spec') return null
+                                    if (isSpecSession(active.info)) return null
                                     const sessionId = active.info.session_id
                                     return (
                                         <div key={sessionId} className="h-full w-full">

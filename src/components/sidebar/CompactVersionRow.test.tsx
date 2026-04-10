@@ -56,8 +56,6 @@ const baseSession: EnrichedSession = {
 
 const mockActions: SessionCardActions = {
   onSelect: vi.fn(),
-  onMarkReady: vi.fn(),
-  onUnmarkReady: vi.fn(),
   onCancel: vi.fn(),
   onConvertToSpec: vi.fn(),
   onRunDraft: vi.fn(),
@@ -87,7 +85,6 @@ function renderRow(overrides: Partial<ComponentProps<typeof CompactVersionRow>> 
     isResetting: false,
     disableMerge: false,
     mergeStatus: 'idle',
-    isMarkReadyDisabled: false,
     isBusy: false,
     isHighlighted: false,
     isConsolidationSourceHighlighted: false,
@@ -188,20 +185,21 @@ describe('CompactVersionRow', () => {
     expect(screen.getByText(/waiting for input/i)).toBeInTheDocument()
   })
 
-  it('renders reviewed state when session is reviewed', () => {
+  it('renders ready state when session is ready to merge', () => {
     renderRow({
       session: {
         ...baseSession,
         info: {
           ...baseSession.info,
-          session_state: 'reviewed',
-          status: 'dirty',
+          ready_to_merge: true,
+          session_state: 'running',
+          status: 'active',
         },
       },
     })
 
-    expect(screen.getByTestId('compact-row-status-reviewed')).toBeInTheDocument()
-    expect(screen.getByText(/reviewed/i)).toBeInTheDocument()
+    expect(screen.getByTestId('compact-row-status-ready')).toBeInTheDocument()
+    expect(screen.getByText(/ready/i)).toBeInTheDocument()
   })
 
   it('renders blocked state when session is blocked', () => {

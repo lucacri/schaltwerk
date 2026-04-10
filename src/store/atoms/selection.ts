@@ -24,7 +24,7 @@ export interface Selection {
   payload?: string
   stableId?: string
   worktreePath?: string
-  sessionState?: 'spec' | 'processing' | 'running' | 'reviewed'
+  sessionState?: 'spec' | 'processing' | 'running'
   projectPath?: string | null
 }
 
@@ -152,7 +152,7 @@ function computeTerminals(selection: Selection, projectPath: string | null): Ter
   }
 
   const group = sessionTerminalGroup(selection.payload)
-  const workingDirectory = (selection.sessionState === 'running' || selection.sessionState === 'reviewed') && selection.worktreePath
+  const workingDirectory = selection.sessionState === 'running' && selection.worktreePath
     ? selection.worktreePath
     : ''
 
@@ -217,8 +217,6 @@ function selectionMatchesCurrentFilter(selection: Selection): boolean {
       return state === 'spec'
     case FilterMode.Running:
       return state === 'running' || state === 'processing'
-    case FilterMode.Reviewed:
-      return state === 'reviewed'
     default:
       return state === 'running'
   }
@@ -239,15 +237,12 @@ export const setSelectionFilterModeActionAtom = atom(
   },
 )
 
-function normalizeSessionState(state?: string | null, status?: string, readyToMerge?: boolean): NormalizedSessionState {
-  if (state === 'spec' || state === 'processing' || state === 'running' || state === 'reviewed') {
+function normalizeSessionState(state?: string | null, status?: string): NormalizedSessionState {
+  if (state === 'spec' || state === 'processing' || state === 'running') {
     return state
   }
   if (status === 'spec') {
     return 'spec'
-  }
-  if (readyToMerge) {
-    return 'reviewed'
   }
   return 'running'
 }
@@ -256,7 +251,7 @@ function snapshotFromRawSession(raw: RawSession): SessionSnapshot {
   return {
     sessionId: raw.name,
     stableId: raw.id,
-    sessionState: normalizeSessionState(raw.session_state, raw.status, raw.ready_to_merge),
+    sessionState: normalizeSessionState(raw.session_state, raw.status),
     worktreePath: raw.worktree_path ?? undefined,
     branch: raw.branch ?? undefined,
     readyToMerge: raw.ready_to_merge ?? undefined,
@@ -1046,7 +1041,7 @@ export const initializeSelectionEventsActionAtom = atom(
           if (!info?.session_id) {
             continue
           }
-          const nextState = normalizeSessionState(info.session_state, info.status, info.ready_to_merge)
+          const nextState = normalizeSessionState(info.session_state, info.status)
           await handleSessionStateUpdate(set as SetAtomFunction, info.session_id, nextState, get(projectPathAtom))
         }
       }

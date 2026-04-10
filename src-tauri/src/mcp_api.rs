@@ -186,12 +186,6 @@ async fn handle_mcp_request_inner(
             delete_session(&name, app).await
         }
         (&Method::POST, path)
-            if path.starts_with("/api/sessions/") && path.ends_with("/mark-reviewed") =>
-        {
-            let name = extract_session_name_for_action(path, "/mark-reviewed");
-            mark_session_reviewed(&name, app).await
-        }
-        (&Method::POST, path)
             if path.starts_with("/api/sessions/") && path.ends_with("/convert-to-spec") =>
         {
             let name = extract_session_name_for_action(path, "/convert-to-spec");
@@ -2102,8 +2096,8 @@ mod tests {
     fn extract_session_name_for_action_decodes_and_strips() {
         assert_eq!(
             extract_session_name_for_action(
-                "/api/sessions/my%20session/mark-reviewed",
-                "/mark-reviewed"
+                "/api/sessions/my%20session/prepare-merge",
+                "/prepare-merge"
             ),
             "my session"
         );
@@ -4026,9 +4020,7 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
     let mut filter_state: Option<SessionState> = None;
 
     // Simple query parameter parsing for state filter
-    if query.contains("state=reviewed") {
-        filter_state = Some(SessionState::Reviewed);
-    } else if query.contains("state=processing") {
+    if query.contains("state=processing") {
         filter_state = Some(SessionState::Processing);
     } else if query.contains("state=running") {
         filter_state = Some(SessionState::Running);
@@ -4081,13 +4073,8 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
 
         if let Some(state) = filter_state {
             sessions.retain(|s| match state {
-                SessionState::Reviewed => s.info.ready_to_merge,
-                SessionState::Running => {
-                    !s.info.ready_to_merge && s.info.session_state == SessionState::Running
-                }
-                SessionState::Processing => {
-                    !s.info.ready_to_merge && s.info.session_state == SessionState::Processing
-                }
+                SessionState::Running => s.info.session_state == SessionState::Running,
+                SessionState::Processing => s.info.session_state == SessionState::Processing,
                 SessionState::Spec => s.info.session_state == SessionState::Spec,
             });
         }
@@ -4857,39 +4844,6 @@ async fn delete_session(
             Ok(error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to cancel session: {e}"),
-            ))
-        }
-    }
-}
-
-async fn mark_session_reviewed(
-    name: &str,
-    app: tauri::AppHandle,
-) -> Result<Response<String>, hyper::Error> {
-    let manager = match get_core_write().await {
-        Ok(core) => core.session_manager(),
-        Err(e) => {
-            error!("Failed to get lucode core: {e}");
-            return Ok(error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Internal error: {e}"),
-            ));
-        }
-    };
-
-    // Use the manager method that encapsulates all validation and business logic
-    match manager.mark_session_as_reviewed(name) {
-        Ok(()) => {
-            info!("Marked session '{name}' as reviewed via API");
-            request_sessions_refresh(&app, SessionsRefreshReason::MergeWorkflow);
-
-            Ok(Response::new("OK".to_string()))
-        }
-        Err(e) => {
-            error!("Failed to mark session '{name}' as reviewed: {e}");
-            Ok(error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to mark session as reviewed: {e}"),
             ))
         }
     }

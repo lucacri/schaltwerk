@@ -27,7 +27,7 @@ const mockUnlisten = vi.fn()
 
 const runningSession = mockEnrichedSession('running-session', 'running', false)
 const specSession = mockEnrichedSession('spec-session', 'spec', false)
-const reviewedSession = mockEnrichedSession('reviewed-session', 'reviewed', true)
+const reviewedSession = mockEnrichedSession('reviewed-session', 'running', true)
 const sampleSessions = [runningSession, specSession, reviewedSession]
 
 async function renderCollapsedSidebar(isCollapsed = true) {

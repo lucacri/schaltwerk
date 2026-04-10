@@ -27,7 +27,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
   return <RunProvider>{children}</RunProvider>
 }
 
-function makeSession(id: string, state: 'running' | 'spec' | 'reviewed'): EnrichedSession {
+function makeSession(id: string, state: 'running' | 'spec'): EnrichedSession {
   return {
     info: {
       session_id: id,

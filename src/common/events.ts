@@ -246,7 +246,7 @@ export interface SelectionPayload {
   kind: 'session' | 'orchestrator'
   payload?: string
   worktreePath?: string
-  sessionState?: 'spec' | 'processing' | 'running' | 'reviewed'
+  sessionState?: 'spec' | 'processing' | 'running'
 }
 
 export type EventPayloadMap = {

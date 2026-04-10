@@ -4,7 +4,6 @@ import {
   VscTrash,
   VscCheck,
   VscClose,
-  VscDiscard,
   VscArchive,
   VscStarFull,
   VscRefresh,
@@ -33,7 +32,7 @@ const spinnerIcon = (
 )
 
 interface SessionActionsProps {
-  sessionState: 'spec' | 'processing' | 'running' | 'reviewed';
+  sessionState: 'spec' | 'processing' | 'running';
   isReadyToMerge?: boolean;
   sessionId: string;
   hasUncommittedChanges?: boolean;
@@ -49,8 +48,6 @@ interface SessionActionsProps {
   onRunSpec?: (sessionId: string) => void;
   onRefineSpec?: (sessionId: string) => void;
   onDeleteSpec?: (sessionId: string) => void;
-  onMarkReviewed?: (sessionId: string) => void;
-  onUnmarkReviewed?: (sessionId: string) => void;
   onCancel?: (sessionId: string, hasUncommitted: boolean) => void;
   onConvertToSpec?: (sessionId: string) => void;
   onPromoteVersion?: () => void;
@@ -64,7 +61,6 @@ interface SessionActionsProps {
   onQuickMerge?: (sessionId: string) => void;
   disableMerge?: boolean;
   mergeStatus?: MergeStatus;
-  isMarkReadyDisabled?: boolean;
   mergeConflictingPaths?: string[];
   onLinkPr?: (sessionId: string, prNumber: number, prUrl: string) => void;
   epic?: Epic | null;
@@ -84,8 +80,6 @@ export function SessionActions({
   onRunSpec,
   onRefineSpec,
   onDeleteSpec,
-  onMarkReviewed,
-  onUnmarkReviewed,
   onCancel,
   onConvertToSpec,
   onPromoteVersion,
@@ -99,7 +93,6 @@ export function SessionActions({
   isResetting = false,
   disableMerge = false,
   mergeStatus = 'idle',
-  isMarkReadyDisabled = false,
   mergeConflictingPaths,
   onLinkPr: _onLinkPr,
   epic,
@@ -227,6 +220,58 @@ export function SessionActions({
               showDeleteButton
             />
           )}
+          {prNumber && (
+            <IconButton
+              icon={fetchingComments ? spinnerIcon : <VscComment />}
+              onClick={() => { void handleFetchAndCopyComments() }}
+              ariaLabel="Copy PR comments"
+              tooltip={`Fetch & copy PR #${prNumber} review comments to clipboard`}
+              disabled={fetchingComments}
+            />
+          )}
+          {onMerge && (
+            mergeStatus === 'merged' ? (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border"
+                style={{
+                  backgroundColor: 'var(--color-accent-green-bg)',
+                  borderColor: 'var(--color-accent-green-border)',
+                  color: 'var(--color-accent-green-light)',
+                }}
+                title="Session already merged"
+              >
+                <VscCheck />
+                Merged
+              </span>
+            ) : mergeStatus === 'conflict' ? (
+              <button
+                type="button"
+                onClick={() => { void onMerge(sessionId) }}
+                disabled={disableMerge}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border"
+                style={{
+                  backgroundColor: 'var(--color-accent-red-bg)',
+                  borderColor: 'var(--color-accent-red-border)',
+                  color: 'var(--color-accent-red-light)',
+                  cursor: disableMerge ? 'not-allowed' : 'pointer',
+                  opacity: disableMerge ? 0.6 : 1,
+                }}
+                title={conflictTooltip}
+                aria-label="Resolve merge conflicts"
+              >
+                <VscWarning />
+                {conflictLabel}
+              </button>
+            ) : (
+              <IconButton
+                icon={<VscGitMerge />}
+                onClick={() => { void onMerge(sessionId) }}
+                ariaLabel="Merge session"
+                tooltip="Merge session (⌘⇧M merges instantly)"
+                disabled={disableMerge}
+              />
+            )
+          )}
           {forgeButton}
           {showPromoteIcon && onPromoteVersion && (
             <div
@@ -276,16 +321,6 @@ export function SessionActions({
               tooltip="Merge session (⌘⇧M)"
             />
           )}
-          {onMarkReviewed && (
-            <IconButton
-              icon={<VscCheck />}
-              onClick={() => onMarkReviewed(sessionId)}
-              ariaLabel="Mark as reviewed"
-              tooltip="Mark as reviewed (⌘R)"
-              variant="success"
-              disabled={isMarkReadyDisabled}
-            />
-          )}
           {onConvertToSpec && (
             <IconButton
               icon={<VscArchive />}
@@ -298,133 +333,6 @@ export function SessionActions({
             <IconButton
               icon={<VscClose />}
               onClick={() => onCancel(sessionId, hasUncommittedChanges)}
-              ariaLabel="Cancel session"
-              tooltip="Cancel session (⌘D)"
-              variant="danger"
-            />
-          )}
-        </>
-      )}
-
-      {/* Reviewed state actions */}
-      {sessionState === 'reviewed' && (
-        <>
-          {onEpicChange && (
-            <EpicSelect
-              value={epic ?? null}
-              onChange={onEpicChange}
-              disabled={epicDisabled}
-              stopPropagation
-              variant="icon"
-              showDeleteButton
-            />
-          )}
-          {prNumber && (
-            <IconButton
-              icon={fetchingComments ? spinnerIcon : <VscComment />}
-              onClick={() => { void handleFetchAndCopyComments() }}
-              ariaLabel="Copy PR comments"
-              tooltip={`Fetch & copy PR #${prNumber} review comments to clipboard`}
-              disabled={fetchingComments}
-            />
-          )}
-          {forgeButton}
-          {onMerge && (
-            mergeStatus === 'merged' ? (
-              <span
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border"
-                style={{
-                  backgroundColor: 'var(--color-accent-green-bg)',
-                  borderColor: 'var(--color-accent-green-border)',
-                  color: 'var(--color-accent-green-light)',
-                }}
-                title="Session already merged"
-              >
-                <VscCheck />
-                Merged
-              </span>
-            ) : mergeStatus === 'conflict' ? (
-              <button
-                type="button"
-                onClick={() => { void onMerge(sessionId) }}
-                disabled={disableMerge}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border"
-                style={{
-                  backgroundColor: 'var(--color-accent-red-bg)',
-                  borderColor: 'var(--color-accent-red-border)',
-                  color: 'var(--color-accent-red-light)',
-                  cursor: disableMerge ? 'not-allowed' : 'pointer',
-                  opacity: disableMerge ? 0.6 : 1,
-                }}
-                title={conflictTooltip}
-                aria-label="Resolve merge conflicts"
-              >
-                <VscWarning />
-                {conflictLabel}
-              </button>
-            ) : (
-              <IconButton
-                icon={<VscGitMerge />}
-                onClick={() => { void onMerge(sessionId) }}
-                ariaLabel="Merge session"
-                tooltip="Merge session (⌘⇧M merges instantly)"
-                disabled={disableMerge}
-              />
-            )
-          )}
-          {showPromoteIcon && onPromoteVersion && (
-            <div
-              onMouseEnter={onPromoteVersionHover}
-              onMouseLeave={onPromoteVersionHoverEnd}
-              className="inline-block"
-            >
-              <IconButton
-                icon={<VscStarFull />}
-                onClick={onPromoteVersion}
-                ariaLabel="Promote as best version"
-                tooltip="Promote as best version and delete others (⌘B)"
-                variant="warning"
-              />
-            </div>
-          )}
-          {onSwitchModel && (
-            <IconButton
-              icon={<VscCode />}
-              onClick={() => onSwitchModel(sessionId)}
-              ariaLabel="Switch model"
-              tooltip="Switch model (⌘P)"
-            />
-          )}
-          {onReset && (
-            <IconButton
-              icon={<VscRefresh />}
-              onClick={() => onReset(sessionId)}
-              ariaLabel="Reset session"
-              tooltip="Reset session (⌘Y)"
-              disabled={isResetting}
-            />
-          )}
-          {onUnmarkReviewed && (
-            <IconButton
-              icon={<VscDiscard />}
-              onClick={() => { void onUnmarkReviewed(sessionId) }}
-              ariaLabel="Unmark as reviewed"
-              tooltip="Unmark as reviewed (⌘R)"
-              disabled={isMarkReadyDisabled}
-            />
-          )}
-          {onConvertToSpec && (
-            <IconButton
-              icon={<VscArchive />}
-              onClick={() => onConvertToSpec(sessionId)}
-              ariaLabel="Move to spec"
-              tooltip="Move to spec (⌘S)"
-            />
-          )}
-          {onCancel && (
-            <IconButton
-              icon={<VscClose />}
-              onClick={() => { void onCancel(sessionId, hasUncommittedChanges) }}
               ariaLabel="Cancel session"
               tooltip="Cancel session (⌘D)"
               variant="danger"

@@ -1595,10 +1595,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                 emitUiEvent(UiEvent.GlobalNewSessionShortcut)
                 return false // Prevent xterm.js from processing this event
             }
-            if (modifierKey && (event.key === 'r' || event.key === 'R')) {
-                emitUiEvent(UiEvent.GlobalMarkReadyShortcut)
-                return false
-            }
             if (modifierKey && (event.key === 'f' || event.key === 'F')) {
                 // Show search UI
                 setIsSearchVisible(true);
