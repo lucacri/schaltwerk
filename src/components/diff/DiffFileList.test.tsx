@@ -900,6 +900,114 @@ describe('DiffFileList', () => {
       }, { timeout: 1000 })
     })
 
+    it('ignores stale dirty-file load failures after switching sessions', async () => {
+      const mockInvoke = await getInvokeMock()
+      const dirtyRequests = new Map<string, { resolve: (files: MockChangedFile[]) => void; reject: (error: Error) => void }>()
+      const onFilesChange = vi.fn()
+
+      mockInvoke.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+        if (cmd === TauriCommands.GetChangedFilesFromMain) {
+          return []
+        }
+        if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
+        if (cmd === TauriCommands.GetBaseBranchName) return 'main'
+        if (cmd === TauriCommands.GetCommitComparisonInfo) return ['abc123', 'def456']
+        if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { original_parent_branch: 'main' }
+        if (cmd === TauriCommands.GetUncommittedFiles) {
+          const sessionName = String(args?.sessionName)
+          return await new Promise<MockChangedFile[]>((resolve, reject) => {
+            dirtyRequests.set(sessionName, { resolve, reject })
+          })
+        }
+        return undefined
+      })
+
+      const TestWrapper = ({ sessionName }: { sessionName: string }) => (
+        <Wrapper sessionName={sessionName}>
+          <DiffFileList onFileSelect={() => {}} onFilesChange={onFilesChange} sessionNameOverride={sessionName} />
+        </Wrapper>
+      )
+
+      const { rerender } = render(<TestWrapper sessionName="stale-session-1" />)
+
+      await waitFor(() => {
+        expect(dirtyRequests.has('stale-session-1')).toBe(true)
+      })
+
+      rerender(<TestWrapper sessionName="stale-session-2" />)
+
+      await waitFor(() => {
+        expect(dirtyRequests.has('stale-session-2')).toBe(true)
+      })
+
+      onFilesChange.mockClear()
+
+      await act(async () => {
+        dirtyRequests.get('stale-session-1')?.reject(new Error('session1 load failed'))
+        await Promise.resolve()
+      })
+
+      expect(onFilesChange).not.toHaveBeenCalledWith(false)
+
+      await act(async () => {
+        dirtyRequests.get('stale-session-2')?.resolve([])
+        await Promise.resolve()
+      })
+
+      await waitFor(() => {
+        expect(onFilesChange).toHaveBeenCalledWith(false)
+      })
+    })
+
+    it('clears stale dirty files immediately when sessions switch', async () => {
+      const mockInvoke = await getInvokeMock()
+      const dirtyRequests = new Map<string, { resolve: (files: MockChangedFile[]) => void }>()
+
+      mockInvoke.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+        if (cmd === TauriCommands.GetChangedFilesFromMain) {
+          return []
+        }
+        if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
+        if (cmd === TauriCommands.GetBaseBranchName) return 'main'
+        if (cmd === TauriCommands.GetCommitComparisonInfo) return ['abc123', 'def456']
+        if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { original_parent_branch: 'main' }
+        if (cmd === TauriCommands.GetUncommittedFiles) {
+          const sessionName = String(args?.sessionName)
+          return await new Promise<MockChangedFile[]>(resolve => {
+            dirtyRequests.set(sessionName, { resolve })
+          })
+        }
+        return undefined
+      })
+
+      const TestWrapper = ({ sessionName }: { sessionName: string }) => (
+        <Wrapper sessionName={sessionName}>
+          <DiffFileList onFileSelect={() => {}} sessionNameOverride={sessionName} />
+        </Wrapper>
+      )
+
+      const { rerender } = render(<TestWrapper sessionName="dirty-session-1" />)
+
+      await waitFor(() => {
+        expect(dirtyRequests.has('dirty-session-1')).toBe(true)
+      })
+
+      await act(async () => {
+        dirtyRequests.get('dirty-session-1')?.resolve([
+          createMockChangedFile({ path: 'dirty-session-1.md', change_type: 'modified', additions: 1 })
+        ])
+        await Promise.resolve()
+      })
+
+      expect(await screen.findByText('dirty-session-1.md')).toBeInTheDocument()
+
+      rerender(<TestWrapper sessionName="dirty-session-2" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('dirty-session-1.md')).not.toBeInTheDocument()
+      })
+    })
+
     it('should include session name in result signatures to prevent cache sharing', async () => {
       const mockInvoke = await getInvokeMock()
 

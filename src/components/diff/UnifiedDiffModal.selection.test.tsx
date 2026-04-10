@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { render, waitFor, screen } from '@testing-library/react'
 import { UnifiedDiffModal } from './UnifiedDiffModal'
+import { UnifiedDiffView } from './UnifiedDiffView'
 import { TestProviders, createChangedFile } from '../../tests/test-utils'
 import { TauriCommands } from '../../common/tauriCommands'
 import type { LineSelection } from '../../hooks/useLineSelection'
@@ -81,12 +82,18 @@ const sampleDiff: FileDiffData = {
 }
 
 const loadFileDiffMock = vi.fn(async () => sampleDiff)
+const loadUncommittedFileDiffMock = vi.fn(async (_sessionName: string, file: ChangedFile) => ({
+  ...sampleDiff,
+  file,
+}))
 
 vi.mock('./loadDiffs', async () => {
   const actual = await vi.importActual<typeof import('./loadDiffs')>('./loadDiffs')
   return {
     ...actual,
     loadFileDiff: (...args: Parameters<typeof loadFileDiffMock>) => loadFileDiffMock(...args),
+    loadUncommittedFileDiff: (...args: Parameters<typeof loadUncommittedFileDiffMock>) =>
+      loadUncommittedFileDiffMock(...args),
     loadCommitFileDiff: vi.fn()
   }
 })
@@ -112,6 +119,8 @@ function setupInvokeMock(changedFiles: ChangedFile[]) {
     switch (cmd) {
       case TauriCommands.GetChangedFilesFromMain:
         return changedFiles
+      case TauriCommands.GetUncommittedFiles:
+        return []
       case TauriCommands.GetCurrentBranchName:
         return 'feature/demo'
       case TauriCommands.GetBaseBranchName:
@@ -142,6 +151,7 @@ beforeEach(() => {
   isLineSelected.mockClear()
   isLineInRange.mockClear()
   loadFileDiffMock.mockClear()
+  loadUncommittedFileDiffMock.mockClear()
   invokeMock.mockClear()
   document.body.classList.remove('sw-no-text-select')
 })
@@ -180,5 +190,67 @@ describe('UnifiedDiffModal line selection behaviour', () => {
     })
 
     expect(result.getByText('Changed Files')).toBeTruthy()
+  })
+
+  it('keeps an uncommitted-only markdown file selected in sidebar review mode', async () => {
+    const uncommittedFile = createChangedFile({
+      path: 'notes/todo.md',
+      change_type: 'modified',
+      additions: 2,
+      deletions: 1,
+    })
+    const onSelectedFileChange = vi.fn()
+
+    invokeMock.mockImplementation(async (cmd: string) => {
+      switch (cmd) {
+        case TauriCommands.GetChangedFilesFromMain:
+          return []
+        case TauriCommands.GetUncommittedFiles:
+          return [uncommittedFile]
+        case TauriCommands.GetCurrentBranchName:
+          return 'feature/demo'
+        case TauriCommands.GetBaseBranchName:
+          return 'main'
+        case TauriCommands.GetCommitComparisonInfo:
+          return ['abc123', 'def456']
+        case TauriCommands.GetDiffViewPreferences:
+          return { continuous_scroll: false, compact_diffs: true, sidebar_width: 320 }
+        case TauriCommands.GetSessionPreferences:
+          return { skip_confirmation_modals: false }
+        case TauriCommands.ListAvailableOpenApps:
+          return []
+        case TauriCommands.GetDefaultOpenApp:
+          return 'code'
+        case TauriCommands.GetProjectSettings:
+          return { project_name: 'demo', project_path: '/tmp/demo' }
+        default:
+          return null
+      }
+    })
+
+    render(
+      <TestProviders>
+        <UnifiedDiffView
+          filePath={uncommittedFile.path}
+          isOpen={true}
+          onClose={() => {}}
+          viewMode="sidebar"
+          diffSource="uncommitted"
+          onSelectedFileChange={onSelectedFileChange}
+        />
+      </TestProviders>
+    )
+
+    expect(
+      await screen.findByRole('button', { name: 'Toggle notes/todo.md diff' })
+    ).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(loadUncommittedFileDiffMock).toHaveBeenCalledWith('demo', expect.objectContaining({
+        path: uncommittedFile.path,
+      }))
+    })
+
+    expect(onSelectedFileChange).not.toHaveBeenCalledWith(null)
   })
 })

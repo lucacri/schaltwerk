@@ -459,6 +459,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
 
   const diffSourceRef = useRef(diffSource);
   diffSourceRef.current = diffSource;
+  const shouldUseCommittedPreload = diffSource !== "uncommitted";
 
   const loadDiffForFile = useCallback(
     (session: string | null, file: ChangedFile, viewMode: "unified" | "split") => {
@@ -861,10 +862,16 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
   }, [isResizingSidebar, handleSidebarResizeMove, finishSidebarResize]);
 
   const fetchSessionChangedFiles = useCallback(async () => {
+    if (diffSource === "uncommitted" && sessionName) {
+      return await invoke<ChangedFile[]>(TauriCommands.GetUncommittedFiles, {
+        sessionName,
+      });
+    }
+
     return await invoke<ChangedFile[]>(TauriCommands.GetChangedFilesFromMain, {
       sessionName,
     });
-  }, [sessionName]);
+  }, [diffSource, sessionName]);
 
   const fetchOrchestratorChangedFiles = useCallback(async () => {
     return await invoke<ChangedFile[]>(
@@ -949,7 +956,10 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
 
     try {
       const target = isCommanderView() ? ORCHESTRATOR_SESSION_NAME : sessionName;
-      const preloadedFiles = target ? diffPreloader.getChangedFiles(target, currentProjectPath) : null;
+      const preloadedFiles =
+        shouldUseCommittedPreload && target
+          ? diffPreloader.getChangedFiles(target, currentProjectPath)
+          : null;
       const changedFiles = preloadedFiles ?? (isCommanderView()
         ? await fetchOrchestratorChangedFiles()
         : await fetchSessionChangedFiles());
@@ -1001,7 +1011,14 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         const targetFile = changedFiles[nextSelectedIndex];
         if (targetFile) {
           try {
-            const preloadedDiff = target ? diffPreloader.getFileDiff(target, targetFile.path, currentProjectPath) : null;
+            const preloadedDiff =
+              shouldUseCommittedPreload && target
+                ? diffPreloader.getFileDiff(
+                    target,
+                    targetFile.path,
+                    currentProjectPath,
+                  )
+                : null;
             const primary = preloadedDiff ?? await loadDiffForFile(
               sessionName,
               targetFile,
@@ -1042,6 +1059,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
     historyContext,
     historyFiles,
     historyInitialFile,
+    shouldUseCommittedPreload,
     isCommanderView,
     fetchOrchestratorChangedFiles,
     fetchSessionChangedFiles,
@@ -1223,8 +1241,17 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
                 historyLoadedRef.current.add(path);
               }
             } else {
-              const preloadedDiff = sessionName ? diffPreloader.getFileDiff(sessionName, path, currentProjectPath) : null;
-              diff = preloadedDiff ?? await loadDiffForFile(sessionName, file, diffLayout);
+              const preloadedDiff =
+                shouldUseCommittedPreload && sessionName
+                  ? diffPreloader.getFileDiff(
+                      sessionName,
+                      path,
+                      currentProjectPath,
+                    )
+                  : null;
+              diff =
+                preloadedDiff ??
+                (await loadDiffForFile(sessionName, file, diffLayout));
             }
 
             if (diff) {
@@ -1308,6 +1335,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
     files,
     sessionName,
     allFileDiffs,
+    shouldUseCommittedPreload,
     diffLayout,
     viewMode,
   ],
@@ -1851,8 +1879,13 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
             return { path, diff };
           }
 
-          const preloadedDiff = sessionName ? diffPreloader.getFileDiff(sessionName, path, currentProjectPath) : null;
-          const diff = preloadedDiff ?? await loadDiffForFile(sessionName, file, diffLayout);
+          const preloadedDiff =
+            shouldUseCommittedPreload && sessionName
+              ? diffPreloader.getFileDiff(sessionName, path, currentProjectPath)
+              : null;
+          const diff =
+            preloadedDiff ??
+            (await loadDiffForFile(sessionName, file, diffLayout));
           return { path, diff };
         } catch (e) {
           logger.error(`Failed to load diff for ${path}:`, e);
@@ -1897,6 +1930,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
     isLargeDiffMode,
     isOpen,
     sessionName,
+    shouldUseCommittedPreload,
     diffLayout,
     mode,
     historyContext,
@@ -2198,7 +2232,14 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
   useEffect(() => {
     if (!isOpen || mode === "history") return;
     void loadChangedFilesGuarded();
-  }, [isOpen, mode, sessionName, selection.kind, loadChangedFilesGuarded]);
+  }, [
+    isOpen,
+    mode,
+    sessionName,
+    selection.kind,
+    diffSource,
+    loadChangedFilesGuarded,
+  ]);
 
   useEffect(() => {
     if (!isOpen || mode !== "session") return;
@@ -2230,7 +2271,9 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         baseCommit: branchPayload.base_commit,
         headCommit: branchPayload.head_commit,
       });
-      setFiles(event.changed_files);
+      if (diffSourceRef.current !== "uncommitted") {
+        setFiles(event.changed_files);
+      }
       if (event.session_name) diffPreloader.invalidate(event.session_name, currentProjectPath);
       setAllFileDiffs(new Map());
 

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { TauriCommands } from '../../common/tauriCommands'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { vi, type MockedFunction } from 'vitest'
 import { createChangedFile } from '../../tests/test-utils'
 import { TestProviders } from '../../tests/test-utils'
@@ -142,12 +143,18 @@ describe('SimpleDiffPanel', () => {
   it('returns to list mode when files disappear during review', async () => {
     vi.doMock('./DiffFileList', async () => {
       const ReactModule = await import('react')
-      const { useEffect } = ReactModule
+      const { useEffect, useState: useStateReact } = ReactModule
       return {
         DiffFileList: ({ onFilesChange }: { onFilesChange?: (hasFiles: boolean) => void }) => {
+          const [step, setStep] = useStateReact(0)
           useEffect(() => {
-            onFilesChange?.(false)
-          }, [onFilesChange])
+            if (step === 0) {
+              onFilesChange?.(true)
+              setStep(1)
+            } else if (step === 1) {
+              onFilesChange?.(false)
+            }
+          }, [step, onFilesChange])
           return <div data-testid="mock-diff-list" />
         }
       }
@@ -209,5 +216,61 @@ describe('SimpleDiffPanel', () => {
     expect(onActiveFileChange).toHaveBeenCalledWith('src/a/file1.txt')
     expect(onModeChange).toHaveBeenCalledWith('review')
 
+  })
+
+  it('stays in review mode for an uncommitted-only file while the hidden list reloads', async () => {
+    currentSelection = { kind: 'session', payload: 's1' }
+
+    const dirtyFile = createChangedFile({
+      path: 'notes/todo.md',
+      change_type: 'modified',
+      additions: 2,
+      deletions: 1,
+    })
+
+    invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === TauriCommands.GetChangedFilesFromMain) return []
+      if (cmd === TauriCommands.GetCurrentBranchName) return 'feat'
+      if (cmd === TauriCommands.GetBaseBranchName) return 'main'
+      if (cmd === TauriCommands.GetCommitComparisonInfo) return ['a', 'b']
+      if (cmd === TauriCommands.GetDiffViewPreferences) return defaultDiffPrefs
+      if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { original_parent_branch: 'main' }
+      if (cmd === TauriCommands.StartFileWatcher) return undefined
+      if (cmd === TauriCommands.StopFileWatcher) return undefined
+      if (cmd === TauriCommands.GetUncommittedFiles) return [dirtyFile]
+      return null
+    })
+
+    const { SimpleDiffPanel } = await import('./SimpleDiffPanel')
+
+    function Harness() {
+      const [mode, setMode] = useState<'list' | 'review'>('list')
+      const [activeFile, setActiveFile] = useState<string | null>(null)
+
+      return (
+        <SimpleDiffPanel
+          mode={mode}
+          onModeChange={setMode}
+          activeFile={activeFile}
+          onActiveFileChange={setActiveFile}
+        />
+      )
+    }
+
+    render(
+      <TestProviders>
+        <Harness />
+      </TestProviders>
+    )
+
+    await user.click(await screen.findByText('todo.md'))
+
+    expect(screen.getByTestId('mock-unified-view')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(TauriCommands.GetUncommittedFiles, { sessionName: 's1' })
+    })
+
+    expect(screen.getByTestId('mock-unified-view')).toBeInTheDocument()
   })
 })

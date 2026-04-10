@@ -158,6 +158,7 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
     originalBaseBranch?: string | null
   } | null>(null)
   const [hasLoadedInitialResult, setHasLoadedInitialResult] = useState(false)
+  const [hasLoadedDirtyResult, setHasLoadedDirtyResult] = useState(false)
 
   const sessionName = sessionNameOverride ?? (selection.kind === 'session' ? selection.payload : null) ?? null
   const compareMode = useAtomValue(diffCompareModeAtomFamily(sessionName ?? 'no-session'))
@@ -516,10 +517,14 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
 
   const loadDirtyFiles = useCallback(async () => {
     const { sessionNameOverride: overrideSnapshot, selection: selectionSnapshot, isCommander: commanderSnapshot } = currentPropsRef.current
-    if (commanderSnapshot) return
+    if (commanderSnapshot) {
+      setHasLoadedDirtyResult(true)
+      return
+    }
     const targetSession = overrideSnapshot ?? (selectionSnapshot.kind === 'session' ? selectionSnapshot.payload : null)
     if (!targetSession) {
       setDirtyFiles([])
+      setHasLoadedDirtyResult(true)
       return
     }
     try {
@@ -529,13 +534,19 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
       if (latestSession === targetSession) {
         const files = result ?? []
         setDirtyFiles(prev => files.length === 0 && prev.length === 0 ? prev : files)
+        setHasLoadedDirtyResult(true)
       }
     } catch (error: unknown) {
       const message = String(error ?? '').toLowerCase()
       if (!message.includes('not found') && !message.includes('no such file')) {
         logger.error('Failed to load dirty files:', error)
       }
-      setDirtyFiles(prev => prev.length === 0 ? prev : [])
+      const { sessionNameOverride: latestOverride, selection: latestSelection } = currentPropsRef.current
+      const latestSession = latestOverride ?? (latestSelection.kind === 'session' ? latestSelection.payload : null)
+      if (latestSession === targetSession) {
+        setDirtyFiles(prev => prev.length === 0 ? prev : [])
+        setHasLoadedDirtyResult(true)
+      }
     }
   }, [])
 
@@ -550,8 +561,10 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
     if (!currentSession && !currentIsCommander) {
       // Clear files when no session and not orchestrator
       setFiles([])
+      setDirtyFiles([])
       setBranchInfo(null)
       setHasLoadedInitialResult(true)
+      setHasLoadedDirtyResult(true)
       lastResultRef.current = 'no-session'
       lastSessionKeyRef.current = getSessionKey(null, false)
       return
@@ -583,9 +596,14 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
     }
 
     if (currentSession && !currentIsCommander) {
+      if (needsDataClear) {
+        setDirtyFiles([])
+        setHasLoadedDirtyResult(false)
+      }
       void loadDirtyFiles()
     } else {
       setDirtyFiles([])
+      setHasLoadedDirtyResult(true)
     }
 
     let pollInterval: NodeJS.Timeout | null = null
@@ -629,8 +647,10 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
             cancelledSessionsRef.current.add(currentSession)
             // Clear data immediately
             setFiles([])
+            setDirtyFiles([])
             setBranchInfo(null)
             setHasLoadedInitialResult(true)
+            setHasLoadedDirtyResult(true)
             sessionDataCacheRef.current.delete(getSessionKey(currentSession, false))
             // Stop polling
             if (pollInterval) {
@@ -838,8 +858,17 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
           lastResultRef.current = ''
           lastSessionKeyRef.current = null
           setFiles([])
+          setDirtyFiles([])
           setBranchInfo(null)
           setHasLoadedInitialResult(false)
+          const { sessionNameOverride: currentOverride, selection: currentSelection, isCommander: currentIsCommander } = currentPropsRef.current
+          const currentSession = currentOverride ?? (currentSelection.kind === 'session' ? currentSelection.payload : null)
+          if (currentSession && !currentIsCommander) {
+            setHasLoadedDirtyResult(false)
+            void loadDirtyFiles()
+          } else {
+            setHasLoadedDirtyResult(true)
+          }
           setIsLoading(false)
           void loadChangedFiles()
         })
@@ -867,8 +896,8 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
         }
       }
     }
-  }, [loadChangedFiles])
-  
+  }, [loadChangedFiles, loadDirtyFiles])
+
   const handleFileClick = (file: ChangedFile, source: DiffSource = 'committed') => {
     setSelectedFile(file.path)
     onFileSelect(file.path, source)
@@ -883,11 +912,12 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
   }, [selectedFilePath, selectedFile])
 
   useEffect(() => {
-    if (!hasLoadedInitialResult) {
+    const isReadyForFileStatus = hasLoadedInitialResult && ((isCommander ?? false) || hasLoadedDirtyResult)
+    if (!isReadyForFileStatus) {
       return
     }
     onFilesChange?.(files.length > 0 || dirtyFiles.length > 0)
-  }, [files, dirtyFiles, hasLoadedInitialResult, onFilesChange])
+  }, [files, dirtyFiles, hasLoadedInitialResult, hasLoadedDirtyResult, isCommander, onFilesChange])
   
   const getFileIcon = (changeType: string, filePath: string) => {
     if (isBinaryFileByExtension(filePath)) {
