@@ -1,5 +1,8 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useEffectEvent, useMemo, memo, type ReactNode } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
+import { stableSessionTerminalId } from '../../common/terminalIdentity'
+import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
+import { getPasteSubmissionOptions } from '../../common/terminalPaste'
 import clsx from 'clsx'
 import { invoke } from '@tauri-apps/api/core'
 import { useAtomValue, useSetAtom } from 'jotai'
@@ -35,6 +38,7 @@ import { VscRefresh, VscCode, VscLayoutSidebarLeft, VscLayoutSidebarLeftOff } fr
 import { IconButton } from '../common/IconButton'
 import { ProgressIndicator } from '../common/ProgressIndicator'
 import { logger } from '../../utils/logger'
+import { getErrorMessage } from '../../types/errors'
 import { UiEvent, emitUiEvent, listenUiEvent } from '../../common/uiEvents'
 import { AGENT_TYPES, AgentType, EnrichedSession, type Epic } from '../../types/session'
 import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationContext'
@@ -500,6 +504,77 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         },
         [activeMergeSessionId]
     )
+
+    const handleResolveMergeInAgentSession = useCallback(async () => {
+        const sessionName = mergeDialogState.sessionName
+        const preview = mergeDialogState.preview
+        if (!sessionName || !preview) {
+            return
+        }
+
+        const session = allSessions.find(candidate => candidate.info.session_id === sessionName)
+        if (!session) {
+            return
+        }
+
+        const conflictingPaths = preview.conflictingPaths
+        const parentBranch = preview.parentBranch || session.info.parent_branch || session.info.base_branch || 'main'
+        const agentType = session.info.original_agent_type ?? undefined
+        const { useBracketedPaste, needsDelayedSubmit } = getPasteSubmissionOptions(agentType)
+        const baseTerminalId = (
+            selection.kind === 'session'
+            && selection.payload === sessionName
+            && terminals.top
+        )
+            ? terminals.top
+            : stableSessionTerminalId(sessionName, 'top')
+        const terminalId = getActiveAgentTerminalId(sessionName) ?? baseTerminalId
+        const conflictList = conflictingPaths.length > 0
+            ? conflictingPaths.map(path => `- ${path}`).join('\n')
+            : '- Run `git status` to inspect conflicted files'
+        const prompt = [
+            `Resolve the rebase conflicts in this session onto ${parentBranch}.`,
+            '',
+            'Conflicting files:',
+            conflictList,
+            '',
+            'After resolving the conflicts, run:',
+            'git rebase --continue',
+        ].join('\n')
+
+        try {
+            await setSelection({ kind: 'session', payload: sessionName }, false, true)
+            await invoke(TauriCommands.PasteAndSubmitTerminal, {
+                id: terminalId,
+                data: prompt,
+                useBracketedPaste,
+                needsDelayedSubmit,
+            })
+            setFocusForSession(sessionName, 'claude')
+            setCurrentFocus('claude')
+            closeMergeDialog()
+        } catch (error) {
+            logger.error('[Sidebar] Failed to route merge conflict into agent session', error)
+            pushToast({
+                tone: 'error',
+                title: 'Unable to route conflicts to agent',
+                description: getErrorMessage(error),
+            })
+        }
+    }, [
+        allSessions,
+        closeMergeDialog,
+        mergeDialogState.preview,
+        mergeDialogState.sessionName,
+        pushToast,
+        selection.kind,
+        selection.payload,
+        setCurrentFocus,
+        setFocusForSession,
+        setSelection,
+        terminals.top,
+    ])
+
     const sidebarRef = useRef<HTMLDivElement>(null)
     const sessionListRef = useRef<HTMLDivElement>(null)
     const sessionScrollTopRef = useRef(0)
@@ -2182,6 +2257,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                         void confirmMerge(mergeDialogState.sessionName, mode, commitMessage)
                     }
                 }}
+                onResolveInAgentSession={() => { void handleResolveMergeInAgentSession() }}
                 autoCancelEnabled={autoCancelAfterMerge}
                 onToggleAutoCancel={(next) => { void updateAutoCancelAfterMerge(next) }}
                 prefillMode={mergeDialogState.prefillMode}

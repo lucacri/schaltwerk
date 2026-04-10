@@ -17,7 +17,7 @@ import { isTerminalStartingOrStarted, clearTerminalStartState, markTerminalStart
 import { startSessionTop, computeProjectOrchestratorId } from '../../common/agentSpawn'
 import { releaseSessionTerminals } from '../../terminal/registry/terminalRegistry'
 import { logger } from '../../utils/logger'
-import { getErrorMessage } from '../../types/errors'
+import { getErrorMessage, isSchaltError } from '../../types/errors'
 import { closePreview } from '../../features/preview/previewIframeRegistry'
 import { buildPreviewKey, clearPreviewStateActionAtom } from './preview'
 import { countLogicalRunningSessions } from '../../utils/sessionVersions'
@@ -207,6 +207,33 @@ function defaultMergeDialogState(): MergeDialogState {
         sessionName: null,
         preview: null,
         error: null,
+    }
+}
+
+function normalizeMergePreviewForDialog(preview: MergePreviewResponse): MergePreviewResponse {
+    if (!preview.hasConflicts && preview.conflictingPaths.length === 0) {
+        return preview
+    }
+
+    return {
+        ...preview,
+        hasConflicts: false,
+        conflictingPaths: [],
+    }
+}
+
+function applyMergeConflictToPreview(
+    preview: MergePreviewResponse | null,
+    conflictingPaths: string[],
+): MergePreviewResponse | null {
+    if (!preview) {
+        return null
+    }
+
+    return {
+        ...preview,
+        hasConflicts: true,
+        conflictingPaths,
     }
 }
 
@@ -1990,7 +2017,9 @@ export const openMergeDialogActionAtom = atom(
         })
 
         try {
-            const preview = await invoke<MergePreviewResponse>(TauriCommands.SchaltwerkCoreGetMergePreviewWithWorktree, { name: sessionId })
+            const preview = normalizeMergePreviewForDialog(
+                await invoke<MergePreviewResponse>(TauriCommands.SchaltwerkCoreGetMergePreviewWithWorktree, { name: sessionId })
+            )
             set(mergeDialogStateAtom, {
                 isOpen: true,
                 status: 'ready',
@@ -2001,14 +2030,6 @@ export const openMergeDialogActionAtom = atom(
             })
 
             mergePreviewCache.set(sessionId, preview)
-
-            if (preview?.hasConflicts) {
-                set(mergeStatusesStateAtom, (prev) => {
-                    const next = new Map(prev)
-                    next.set(sessionId, 'conflict')
-                    return next
-                })
-            }
         } catch (error) {
             logger.error(`Failed to prepare merge for session ${sessionId}`, error)
             set(mergeDialogStateAtom, {
@@ -2053,6 +2074,28 @@ export const confirmMergeActionAtom = atom(
 
             set(mergeDialogStateAtom, defaultMergeDialogState())
         } catch (error) {
+            if (isSchaltError(error) && error.type === 'MergeConflict') {
+                const conflictingPaths = [...error.data.files]
+                set(mergeStatusesStateAtom, (prev) => {
+                    const next = new Map(prev)
+                    next.set(input.sessionId, 'conflict')
+                    return next
+                })
+                set(mergeDialogStateAtom, (prev) => {
+                    const nextPreview = applyMergeConflictToPreview(prev.preview, conflictingPaths)
+                    if (nextPreview) {
+                        mergePreviewCache.set(input.sessionId, nextPreview)
+                    }
+                    return {
+                        ...prev,
+                        status: 'ready',
+                        error: null,
+                        preview: nextPreview,
+                    }
+                })
+                return
+            }
+
             const message = getErrorMessage(error)
             logger.error(`Confirm merge failed for ${input.sessionId}`, error)
             set(mergeDialogStateAtom, (prev) => ({
@@ -2095,7 +2138,9 @@ export const shortcutMergeActionAtom = atom(
 
         let preview: MergePreviewResponse
         try {
-            preview = await invoke<MergePreviewResponse>(TauriCommands.SchaltwerkCoreGetMergePreviewWithWorktree, { name: sessionId })
+            preview = normalizeMergePreviewForDialog(
+                await invoke<MergePreviewResponse>(TauriCommands.SchaltwerkCoreGetMergePreviewWithWorktree, { name: sessionId })
+            )
             mergePreviewCache.set(sessionId, preview)
         } catch (error) {
             return { status: 'error', message: getErrorMessage(error) }
@@ -2109,18 +2154,6 @@ export const shortcutMergeActionAtom = atom(
                 preview,
                 error: null,
             })
-        }
-
-        if (preview.hasConflicts) {
-            set(mergeStatusesStateAtom, (prev) => {
-                const next = new Map(prev)
-                next.set(sessionId, 'conflict')
-                return next
-            })
-
-            openMergeDialogWithPreview()
-
-            return { status: 'needs-modal', reason: 'conflict' }
         }
 
         if (preview.isUpToDate) {

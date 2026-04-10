@@ -833,6 +833,7 @@
     "commitMessage": "提交消息",
     "commitPlaceholder": "描述此会话中的更改",
     "resolveConflicts": "请先解决合并冲突再继续。",
+    "resolveInAgentSession": "在代理会话中解决",
     "conflictsBody": "使用 {parentBranch} 更新 {sessionBranch} 会产生冲突。",
     "conflictingPaths": "冲突路径：{paths}。",
     "nothingToMerge": "无需合并",

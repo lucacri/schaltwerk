@@ -557,7 +557,15 @@ describe('sessions atoms', () => {
         expect(store.get(mergeDialogAtom).isOpen).toBe(false)
 
         await store.set(openMergeDialogActionAtom, 'conflict')
-        expect(store.get(mergeStatusSelectorAtom)('conflict')).toBe('conflict')
+        expect(store.get(mergeStatusSelectorAtom)('conflict')).toBe(undefined)
+        expect(store.get(mergeDialogAtom)).toMatchObject({
+            isOpen: true,
+            sessionName: 'conflict',
+            preview: {
+                hasConflicts: false,
+                conflictingPaths: [],
+            },
+        })
 
         store.set(closeMergeDialogActionAtom)
         expect(store.get(mergeDialogAtom).isOpen).toBe(false)
@@ -629,8 +637,15 @@ describe('sessions atoms', () => {
         })
 
         const result = await store.set(shortcutMergeActionAtom, { sessionId: 'conflict', commitMessage: null })
-        expect(result).toMatchObject({ status: 'needs-modal', reason: 'conflict' })
-        expect(store.get(mergeDialogAtom)).toMatchObject({ isOpen: true, sessionName: 'conflict' })
+        expect(result).toMatchObject({ status: 'needs-modal', reason: 'confirm' })
+        expect(store.get(mergeDialogAtom)).toMatchObject({
+            isOpen: true,
+            sessionName: 'conflict',
+            preview: {
+                hasConflicts: false,
+                conflictingPaths: [],
+            },
+        })
     })
 
     it('blocks the shortcut merge when the selection is a spec', async () => {
@@ -1009,6 +1024,48 @@ describe('sessions atoms', () => {
         const updated = store.get(allSessionsAtom)[0]
         expect(updated.info.merge_has_conflicts).toBe(true)
         expect(updated.info.merge_conflicting_paths).toEqual(['src/foo.ts'])
+        expect(store.get(mergeStatusSelectorAtom)('merge-session')).toBe('conflict')
+    })
+
+    it('keeps merge dialog open on structured merge conflict', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreGetMergePreviewWithWorktree) {
+                return {
+                    sessionBranch: 'feature/merge-session',
+                    parentBranch: 'main',
+                    squashCommands: ['git reset --soft main', 'git commit -m "merge"'],
+                    reapplyCommands: ['git rebase main'],
+                    defaultCommitMessage: 'Merge merge-session into main',
+                    hasConflicts: false,
+                    conflictingPaths: [],
+                    isUpToDate: false,
+                    commitsAheadCount: 2,
+                    commits: [],
+                }
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreMergeSessionToMain) {
+                throw {
+                    type: 'MergeConflict',
+                    data: {
+                        files: ['src/conflict.ts', 'src/other.ts'],
+                        message: 'Merge conflicts detected while updating main. Conflicting paths: src/conflict.ts, src/other.ts',
+                    },
+                }
+            }
+            return undefined
+        })
+
+        await store.set(openMergeDialogActionAtom, 'merge-session')
+        await store.set(confirmMergeActionAtom, { sessionId: 'merge-session', mode: 'reapply' })
+
+        const dialog = store.get(mergeDialogAtom)
+        expect(dialog.isOpen).toBe(true)
+        expect(dialog.status).toBe('ready')
+        expect(dialog.error).toBeNull()
+        expect(dialog.preview?.hasConflicts).toBe(true)
+        expect(dialog.preview?.conflictingPaths).toEqual(['src/conflict.ts', 'src/other.ts'])
         expect(store.get(mergeStatusSelectorAtom)('merge-session')).toBe('conflict')
     })
 

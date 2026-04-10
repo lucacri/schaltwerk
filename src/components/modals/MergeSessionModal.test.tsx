@@ -41,6 +41,7 @@ function renderModal(
 ) {
   const onConfirm = vi.fn()
   const onClose = vi.fn()
+  const onResolveInAgentSession = vi.fn()
   const {
     autoCancelEnabled = false,
     onToggleAutoCancel = vi.fn(),
@@ -56,6 +57,7 @@ function renderModal(
         preview={preview}
         onClose={onClose}
         onConfirm={onConfirm}
+        onResolveInAgentSession={onResolveInAgentSession}
         autoCancelEnabled={autoCancelEnabled}
         onToggleAutoCancel={onToggleAutoCancel}
         {...rest}
@@ -63,7 +65,7 @@ function renderModal(
     </ModalProvider>
   )
 
-  return { onConfirm, onClose, onToggleAutoCancel }
+  return { onConfirm, onClose, onToggleAutoCancel, onResolveInAgentSession }
 }
 
 function findConfirmButton(): HTMLButtonElement {
@@ -103,6 +105,24 @@ describe('MergeSessionModal', () => {
     expect(confirm).not.toBeDisabled()
     fireEvent.click(confirm)
     expect(onConfirm).toHaveBeenCalledWith('reapply' as MergeModeOption)
+  })
+
+  it('renders resolve-in-agent action for conflict state', () => {
+    const { onResolveInAgentSession } = renderModal({
+      preview: {
+        ...preview,
+        hasConflicts: true,
+        conflictingPaths: ['src/conflict.ts'],
+      },
+    })
+
+    const confirm = findConfirmButton()
+    expect(confirm).toBeDisabled()
+
+    const resolve = screen.getByRole('button', { name: 'Resolve in agent session' })
+    fireEvent.click(resolve)
+
+    expect(onResolveInAgentSession).toHaveBeenCalledTimes(1)
   })
 
   it('renders auto-cancel toggle reflecting disabled state', () => {

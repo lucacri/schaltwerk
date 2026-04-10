@@ -25,6 +25,7 @@ use lucode::services::{
     build_login_shell_invocation_with_shell, get_effective_shell, sh_quote_string,
     shell_invocation_to_posix,
 };
+use std::collections::BTreeSet;
 use lucode::utils::env_adapter::EnvAdapter;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -69,6 +70,80 @@ fn summarize_error(message: &str) -> String {
         .unwrap_or(message)
         .trim()
         .to_string()
+}
+
+fn extract_conflicting_paths(message: &str) -> Vec<String> {
+    let marker = "Conflicting paths:";
+    let Some((_, tail)) = message.rsplit_once(marker) else {
+        return Vec::new();
+    };
+
+    let first_line = tail.lines().next().unwrap_or(tail);
+    first_line
+        .split(',')
+        .map(|part| {
+            part.trim()
+                .trim_end_matches('.')
+                .trim()
+                .to_string()
+        })
+        .filter(|path| !path.is_empty())
+        .collect()
+}
+
+fn collect_conflicting_paths_from_worktree(worktree_path: &Path) -> Vec<String> {
+    let Ok(repo) = git2::Repository::open(worktree_path) else {
+        return Vec::new();
+    };
+    let Ok(index) = repo.index() else {
+        return Vec::new();
+    };
+    if !index.has_conflicts() {
+        return Vec::new();
+    }
+
+    let Ok(conflicts_iter) = index.conflicts() else {
+        return Vec::new();
+    };
+
+    let mut seen = BTreeSet::new();
+
+    for conflict in conflicts_iter.flatten() {
+        let path = conflict
+            .our
+            .as_ref()
+            .and_then(|entry| std::str::from_utf8(&entry.path).ok())
+            .or_else(|| {
+                conflict
+                    .their
+                    .as_ref()
+                    .and_then(|entry| std::str::from_utf8(&entry.path).ok())
+            })
+            .or_else(|| {
+                conflict
+                    .ancestor
+                    .as_ref()
+                    .and_then(|entry| std::str::from_utf8(&entry.path).ok())
+            });
+
+        if let Some(path) = path.map(str::trim).filter(|path| !path.is_empty())
+            && path != ".lucode"
+            && !path.starts_with(".lucode/")
+        {
+            seen.insert(path.to_string());
+        }
+    }
+
+    seen.into_iter().collect()
+}
+
+fn resolve_conflicting_paths(message: &str, worktree_path: &Path) -> Vec<String> {
+    let parsed = extract_conflicting_paths(message);
+    if !parsed.is_empty() {
+        return parsed;
+    }
+
+    collect_conflicting_paths_from_worktree(worktree_path)
 }
 
 fn format_agent_start_error(message: &str) -> String {
@@ -698,6 +773,7 @@ pub async fn schaltwerk_core_get_merge_preview_with_worktree(
 pub struct MergeCommandError {
     pub message: String,
     pub conflict: bool,
+    pub conflicting_paths: Vec<String>,
 }
 
 pub async fn merge_session_with_events(
@@ -712,6 +788,7 @@ pub async fn merge_session_with_events(
             return Err(MergeCommandError {
                 message: e,
                 conflict: false,
+                conflicting_paths: Vec::new(),
             });
         }
     };
@@ -722,6 +799,7 @@ pub async fn merge_session_with_events(
     let session = manager.get_session(name).map_err(|e| MergeCommandError {
         message: e.to_string(),
         conflict: false,
+        conflicting_paths: Vec::new(),
     })?;
 
     events::emit_git_operation_started(
@@ -751,6 +829,11 @@ pub async fn merge_session_with_events(
         Err(err) => {
             let raw_message = err.to_string();
             let conflict = is_conflict_error(&raw_message);
+            let conflicting_paths = if conflict {
+                resolve_conflicting_paths(&raw_message, &session.worktree_path)
+            } else {
+                Vec::new()
+            };
             let summary = summarize_error(&raw_message);
             let message = if conflict {
                 format!(
@@ -773,6 +856,11 @@ pub async fn merge_session_with_events(
                     let preview = service.preview_with_worktree(name).ok();
                     let mut merge_snapshot = MergeStateSnapshot::from_preview(preview.as_ref());
                     merge_snapshot.merge_has_conflicts = Some(true);
+                    if merge_snapshot.merge_conflicting_paths.is_none()
+                        && !conflicting_paths.is_empty()
+                    {
+                        merge_snapshot.merge_conflicting_paths = Some(conflicting_paths.clone());
+                    }
 
                     let payload = lucode::domains::sessions::activity::SessionGitStatsUpdated {
                         session_id: session.id.clone(),
@@ -810,7 +898,11 @@ pub async fn merge_session_with_events(
                 if conflict { "conflict" } else { "error" },
                 &message,
             );
-            Err(MergeCommandError { message, conflict })
+            Err(MergeCommandError {
+                message,
+                conflict,
+                conflicting_paths,
+            })
         }
     }
 }
@@ -821,11 +913,23 @@ pub async fn schaltwerk_core_merge_session_to_main(
     name: String,
     mode: MergeMode,
     commit_message: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), SchaltError> {
     merge_session_with_events(&app, &name, mode, commit_message)
         .await
         .map(|_| ())
-        .map_err(|err| err.message)
+        .map_err(|err| {
+            if err.conflict {
+                SchaltError::MergeConflict {
+                    files: err.conflicting_paths,
+                    message: err.message,
+                }
+            } else {
+                SchaltError::GitOperationFailed {
+                    operation: "merge_session_to_main".to_string(),
+                    message: err.message,
+                }
+            }
+        })
 }
 
 #[tauri::command]
@@ -3277,6 +3381,24 @@ mod tests {
     use super::*;
     use lucode::schaltwerk_core::Database;
     use lucode::services::AgentLaunchSpec;
+    use tempfile::TempDir;
+
+    fn run_git(current_dir: &Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(current_dir)
+            .status()
+            .expect("git command should start");
+        assert!(status.success(), "git {:?} failed in {}", args, current_dir.display());
+    }
+
+    fn write_file(path: &Path, relative_path: &str, contents: &str) {
+        let file_path = path.join(relative_path);
+        if let Some(parent) = file_path.parent() {
+            std::fs::create_dir_all(parent).expect("parent directory should be created");
+        }
+        std::fs::write(file_path, contents).expect("file should be written");
+    }
 
     #[test]
     fn test_codex_flag_normalization_integration() {
@@ -3368,6 +3490,51 @@ mod tests {
         .await;
 
         assert_eq!(result.unwrap_err(), "launch failed".to_string());
+    }
+
+    #[test]
+    fn resolve_conflicting_paths_prefers_explicit_marker() {
+        let paths = resolve_conflicting_paths(
+            "Merge failed. Conflicting paths: src/lib.rs, src/main.rs",
+            Path::new("/tmp/does-not-need-to-exist"),
+        );
+
+        assert_eq!(paths, vec!["src/lib.rs".to_string(), "src/main.rs".to_string()]);
+    }
+
+    #[test]
+    fn resolve_conflicting_paths_falls_back_to_worktree_index() {
+        let temp_dir = TempDir::new().expect("temp dir should be created");
+        let repo_path = temp_dir.path();
+
+        run_git(repo_path, &["init"]);
+        run_git(repo_path, &["config", "user.email", "test@example.com"]);
+        run_git(repo_path, &["config", "user.name", "Test User"]);
+
+        write_file(repo_path, "conflict.txt", "base\n");
+        run_git(repo_path, &["add", "conflict.txt"]);
+        run_git(repo_path, &["commit", "-m", "base"]);
+        run_git(repo_path, &["branch", "-M", "main"]);
+        run_git(repo_path, &["checkout", "-b", "feature"]);
+
+        write_file(repo_path, "conflict.txt", "feature\n");
+        run_git(repo_path, &["add", "conflict.txt"]);
+        run_git(repo_path, &["commit", "-m", "feature"]);
+
+        run_git(repo_path, &["checkout", "main"]);
+        write_file(repo_path, "conflict.txt", "main\n");
+        run_git(repo_path, &["add", "conflict.txt"]);
+        run_git(repo_path, &["commit", "-m", "main"]);
+
+        let output = std::process::Command::new("git")
+            .args(["merge", "feature"])
+            .current_dir(repo_path)
+            .output()
+            .expect("merge command should run");
+        assert!(!output.status.success(), "merge should conflict");
+
+        let paths = resolve_conflicting_paths("Merge failed without explicit path marker", repo_path);
+        assert_eq!(paths, vec!["conflict.txt".to_string()]);
     }
 }
 

@@ -4355,7 +4355,11 @@ async fn merge_session(
     let outcome =
         match merge_session_with_events(&app, name, mode, payload.commit_message.clone()).await {
             Ok(outcome) => outcome,
-            Err(MergeCommandError { message, conflict }) => {
+            Err(MergeCommandError {
+                message,
+                conflict,
+                ..
+            }) => {
                 let status = if conflict {
                     StatusCode::CONFLICT
                 } else {

@@ -17,6 +17,7 @@ import { listen } from '@tauri-apps/api/event'
 import type { Event as TauriEvent } from '@tauri-apps/api/event'
 import { __getSessionsEventHandlerForTest } from '../../store/atoms/sessions'
 import { SchaltEvent } from '../../common/events'
+import { stableSessionTerminalId } from '../../common/terminalIdentity'
 
 
 
@@ -208,6 +209,106 @@ describe('Sidebar status indicators and actions', () => {
 
     await waitFor(() => {
       expect(eventSpy).toHaveBeenCalled()
+    })
+  })
+
+  it('routes merge conflicts into the agent terminal', async () => {
+    const mergePreview = {
+      sessionBranch: 'para/s2',
+      parentBranch: 'main',
+      squashCommands: ['git reset --soft main', 'git commit -m "message"'],
+      reapplyCommands: ['git rebase main'],
+      defaultCommitMessage: 'Merge s2 into main',
+      hasConflicts: false,
+      conflictingPaths: [],
+      isUpToDate: false,
+      commitsAheadCount: 2,
+      commits: [],
+    }
+
+    const reviewedSessions: EnrichedSession[] = [
+      {
+        info: {
+          session_id: 's2',
+          branch: 'para/s2',
+          worktree_path: '/p/s2',
+          base_branch: 'main',
+          status: 'active',
+          is_current: false,
+          session_type: 'worktree',
+          ready_to_merge: true,
+          session_state: 'reviewed',
+          original_agent_type: 'codex',
+        },
+        terminals: [],
+      },
+    ]
+
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) return reviewedSessions
+      if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
+      if (cmd === TauriCommands.SchaltwerkCoreGetMergePreviewWithWorktree) return mergePreview
+      if (cmd === TauriCommands.SchaltwerkCoreMergeSessionToMain) {
+        throw {
+          type: 'MergeConflict',
+          data: {
+            files: ['src/conflict.ts', 'src/other.ts'],
+            message: 'Merge conflicts detected while updating main. Conflicting paths: src/conflict.ts, src/other.ts',
+          },
+        }
+      }
+      if (cmd === TauriCommands.PasteAndSubmitTerminal) return undefined
+      if (cmd === TauriCommands.GetCurrentDirectory) return '/cwd'
+      if (cmd === TauriCommands.TerminalExists) return false
+      if (cmd === TauriCommands.CreateTerminal) return true
+      if (cmd === TauriCommands.GetProjectSessionsSettings) {
+        return { filter_mode: 'all', sort_mode: 'name' }
+      }
+      if (cmd === TauriCommands.SetProjectSessionsSettings) {
+        return undefined
+      }
+      return undefined
+    })
+
+    render(<TestProviders><Sidebar /></TestProviders>)
+
+    await waitFor(() => {
+      expect(screen.getByTitle('Show reviewed agents')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTitle('Show reviewed agents'))
+
+    await waitFor(() => {
+      expect(getSessionRow('s2')).toBeTruthy()
+    })
+
+    const sessionRow = getSessionRow('s2') as HTMLElement
+    fireEvent.click(sessionRow)
+    fireEvent.click(within(sessionRow).getByRole('button', { name: /Merge session/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reapply commits' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Merge session/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Resolve in agent session' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve in agent session' }))
+
+    await waitFor(() => {
+      const pasteCall = vi.mocked(invoke).mock.calls.find(([cmd]) => cmd === TauriCommands.PasteAndSubmitTerminal)
+      expect(pasteCall).toBeDefined()
+      expect(pasteCall?.[1]).toMatchObject({
+        id: stableSessionTerminalId('s2', 'top'),
+        useBracketedPaste: true,
+        needsDelayedSubmit: false,
+      })
+      expect((pasteCall?.[1] as { data: string }).data).toContain('src/conflict.ts')
+      expect((pasteCall?.[1] as { data: string }).data).toContain('src/other.ts')
+      expect((pasteCall?.[1] as { data: string }).data).toContain('git rebase --continue')
     })
   })
 

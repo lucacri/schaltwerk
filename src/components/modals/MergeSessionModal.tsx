@@ -39,6 +39,7 @@ interface MergeSessionModalProps {
   error?: string | null
   onClose: () => void
   onConfirm: (mode: MergeModeOption, commitMessage?: string) => void
+  onResolveInAgentSession?: () => void
   cachedCommitMessage?: string
   onCommitMessageChange?: (value: string) => void
   autoCancelEnabled: boolean
@@ -69,6 +70,7 @@ export function MergeSessionModal({
   error,
   onClose,
   onConfirm,
+  onResolveInAgentSession,
   cachedCommitMessage,
   onCommitMessageChange,
   autoCancelEnabled,
@@ -444,6 +446,22 @@ export function MergeSessionModal({
                       <span> {t.mergeSessionModal.conflictingPaths.replace('{paths}', conflictingPaths.join(', '))}</span>
                     )}
                   </p>
+                  {onResolveInAgentSession && (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={onResolveInAgentSession}
+                        className="px-3 py-2 text-sm rounded border"
+                        style={{
+                          backgroundColor: 'var(--color-bg-elevated)',
+                          borderColor: 'var(--color-accent-red-border)',
+                          color: 'var(--color-text-primary)',
+                        }}
+                      >
+                        {t.mergeSessionModal.resolveInAgentSession}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 

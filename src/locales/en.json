@@ -833,6 +833,7 @@
     "commitMessage": "Commit message",
     "commitPlaceholder": "Describe the changes that landed in this session",
     "resolveConflicts": "Resolve merge conflicts before proceeding.",
+    "resolveInAgentSession": "Resolve in agent session",
     "conflictsBody": "Updating {sessionBranch} with {parentBranch} would conflict.",
     "conflictingPaths": "Conflicting paths: {paths}.",
     "nothingToMerge": "Nothing to merge",

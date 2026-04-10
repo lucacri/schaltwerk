@@ -60,11 +60,8 @@ impl MergeStateSnapshot {
         match state {
             Some(state) => Self {
                 merge_has_conflicts: Some(state.has_conflicts),
-                merge_conflicting_paths: if state.conflicting_paths.is_empty() {
-                    None
-                } else {
-                    Some(state.conflicting_paths)
-                },
+                merge_conflicting_paths: (!state.conflicting_paths.is_empty())
+                    .then_some(state.conflicting_paths),
                 merge_is_up_to_date: Some(state.is_up_to_date),
             },
             None => Self::default(),
@@ -75,11 +72,8 @@ impl MergeStateSnapshot {
         match preview {
             Some(preview) => Self {
                 merge_has_conflicts: Some(preview.has_conflicts),
-                merge_conflicting_paths: if preview.conflicting_paths.is_empty() {
-                    None
-                } else {
-                    Some(preview.conflicting_paths.clone())
-                },
+                merge_conflicting_paths: (!preview.conflicting_paths.is_empty())
+                    .then_some(preview.conflicting_paths.clone()),
                 merge_is_up_to_date: Some(preview.is_up_to_date),
             },
             None => Self::default(),
@@ -131,7 +125,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_from_state_normalizes_conflict_paths() {
+    fn snapshot_from_state_preserves_conflict_paths() {
         let state = MergeState {
             has_conflicts: true,
             conflicting_paths: vec!["a.txt".into(), "b.rs".into()],
@@ -145,7 +139,6 @@ mod tests {
             Some(vec!["a.txt".into(), "b.rs".into()])
         );
 
-        // Empty conflict list should normalize to None
         let no_conflict_snapshot = MergeStateSnapshot::from_state(Some(MergeState {
             conflicting_paths: Vec::new(),
             ..state

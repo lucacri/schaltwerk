@@ -835,6 +835,7 @@ export interface Translations {
     commitMessage: string
     commitPlaceholder: string
     resolveConflicts: string
+    resolveInAgentSession: string
     conflictsBody: string
     conflictingPaths: string
     nothingToMerge: string
