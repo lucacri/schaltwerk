@@ -65,7 +65,7 @@ Use the current consolidation session branch as the destination branch.
    - `reason`: a concise explanation of why this version won and what it absorbed from siblings
    - `winner_session_id`: the session ID of the source version you chose as the strongest base (take it from the session list that was injected into your prompt)
 
-The promote call transplants the consolidated commits onto the winner's branch so that session survives with the merged work. The consolidation session and the losing source versions are cancelled automatically. If promotion reports failures, surface them clearly.
+The promote call transplants the consolidated commits onto the winner's branch so that session survives with the merged work. After `lucode_promote` returns, the consolidation session remains open so the user can review its reason and diff in the UI, and should be closed manually when that review is done. The losing source versions are cancelled automatically. If promotion reports failures, surface them clearly.
 
 ## Step 7: Report
 

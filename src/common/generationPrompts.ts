@@ -87,7 +87,7 @@ Instructions:
 5. Incorporate any valuable improvements from the other versions
 6. Run the project's test suite to verify everything passes
 7. Create a single squashed commit with the consolidated result
-8. Call lucode_promote on the current consolidation session with winner_session_id set to the session ID of the source version you chose as the base — the consolidated commits will be transplanted onto that session's branch so it survives, while the consolidation session and the losing source versions are cancelled automatically.`,
+8. Call lucode_promote on the current consolidation session with winner_session_id set to the session ID of the source version you chose as the base — the consolidated commits will be transplanted onto that session's branch so it survives, while the losing source versions are cancelled automatically. After lucode_promote returns, leave the consolidation session open so the user can review its reason and diff in the UI and close it manually when done.`,
   review_pr_prompt: 'Review the following pull request:\n\nTitle: {{pr.title}}\nAuthor: {{pr.author}}\nSource: {{pr.sourceBranch}} -> {{pr.targetBranch}}\nURL: {{pr.url}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}\n\nFetch and review the diff using the CLI (e.g., `gh pr diff {{pr.number}}` or `git diff {{pr.targetBranch}}...{{pr.sourceBranch}}`).',
   plan_issue_prompt: 'Create an implementation plan for the following issue:\n\nTitle: {{issue.title}}\n\nDescription:\n{{issue.description}}\n\nLabels: {{issue.labels}}',
   issue_prompt: [

@@ -1024,11 +1024,10 @@ where
             )
         })?;
 
-    let mut to_cancel: Vec<Session> = siblings
+    let to_cancel: Vec<Session> = siblings
         .into_iter()
         .filter(|candidate| candidate.id != winner.id)
         .collect();
-    to_cancel.push(consolidation.clone());
 
     let mut siblings_cancelled = Vec::new();
     let mut failures = Vec::new();
@@ -2545,7 +2544,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn promote_session_logic_transplants_winner_branch_and_cancels_consolidation() {
+    async fn promote_session_logic_transplants_winner_branch_without_cancelling_consolidation() {
         let (_tmp, repo_path) = init_test_repo();
         let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
         let manager = SessionManager::new(db.clone(), repo_path.clone());
@@ -2625,11 +2624,13 @@ mod tests {
             "winner worktree should contain the consolidated file after reset"
         );
 
-        // Consolidation session and loser source session were cancelled; winner was not
+        assert_eq!(outcome.response.siblings_cancelled, vec![v2.name.clone()]);
+
+        // Only the losing source session was cancelled; winner and consolidation were not
         let cancelled_names = cancelled.lock().unwrap().clone();
-        assert!(cancelled_names.contains(&"feature-consolidation".to_string()));
         assert!(cancelled_names.contains(&v2.name));
         assert!(!cancelled_names.contains(&v1.name));
+        assert!(!cancelled_names.contains(&consolidation.name));
 
         // promotion_reason stored on the winner, not the consolidation
         let winner_after = db
@@ -2710,9 +2711,96 @@ mod tests {
         assert_eq!(v2_after_oid, consolidated_oid);
 
         let cancelled_names = cancelled.lock().unwrap().clone();
-        assert!(cancelled_names.contains(&"feature-consolidation".to_string()));
         assert!(cancelled_names.contains(&v1.name));
         assert!(!cancelled_names.contains(&v2.name));
+        assert!(!cancelled_names.contains(&consolidation.name));
+        assert_eq!(outcome.response.siblings_cancelled, vec![v1.name.clone()]);
+    }
+
+    #[tokio::test]
+    async fn promote_consolidation_winner_leaves_consolidation_session_alive() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+
+        let v1 = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, None, Some(1))
+            .expect("create v1");
+        let v2 = manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, None, Some(2))
+            .expect("create v2");
+
+        let consolidation = manager
+            .create_session_with_agent(lucode::domains::sessions::service::SessionCreationParams {
+                name: "feature-consolidation",
+                prompt: None,
+                base_branch: None,
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: None,
+                version_number: None,
+                epic_id: None,
+                agent_type: None,
+                skip_permissions: None,
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+            })
+            .expect("create consolidation session");
+
+        commit_in_worktree(
+            &consolidation.worktree_path,
+            "merged.txt",
+            "merged result",
+            "consolidated change",
+        );
+
+        let db_for_cancel = db.clone();
+        let repo_for_cancel = repo_path.clone();
+
+        let outcome = execute_session_promotion(
+            &manager,
+            &consolidation.name,
+            "v1 had the cleanest base; absorbed v2's tests",
+            Some(v1.id.as_str()),
+            || Ok(()),
+            |name| {
+                let name = name.to_string();
+                let db = db_for_cancel.clone();
+                let repo_path = repo_for_cancel.clone();
+                async move {
+                    let cancel_manager = SessionManager::new(db, repo_path);
+                    cancel_manager.fast_cancel_session(&name).await
+                }
+            },
+        )
+        .await
+        .expect("promotion should succeed");
+
+        assert_eq!(outcome.status, StatusCode::OK);
+        assert_eq!(outcome.response.session_name, v1.name);
+        assert_eq!(outcome.response.siblings_cancelled, vec![v2.name.clone()]);
+
+        let winner_after = db
+            .get_session_by_name(Path::new(&repo_path), &v1.name)
+            .expect("load winner after promote");
+        assert_eq!(winner_after.status, SessionStatus::Active);
+
+        let loser_after = db
+            .get_session_by_name(Path::new(&repo_path), &v2.name)
+            .expect("load loser after promote");
+        assert_eq!(loser_after.status, SessionStatus::Cancelled);
+
+        let consolidation_after = db
+            .get_session_by_name(Path::new(&repo_path), &consolidation.name)
+            .expect("load consolidation after promote");
+        assert_eq!(consolidation_after.status, SessionStatus::Active);
+        assert!(
+            consolidation_after.worktree_path.exists(),
+            "consolidation worktree should remain on disk after promote"
+        );
     }
 
     #[tokio::test]

@@ -823,7 +823,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "lucode_promote",
-        description: `Promote a winning session version and automatically clean up its siblings. Use this after consolidating the best changes into one session and provide a concise reason describing why it won. When promoting a consolidation session, pass winner_session_id so the consolidated result is transplanted onto the winning source version's branch — the consolidation session itself is then cancelled and the winner survives.`,
+        description: `Promote a winning session version and automatically clean up its siblings. Use this after consolidating the best changes into one session and provide a concise reason describing why it won. When promoting a consolidation session, pass winner_session_id so the consolidated result is transplanted onto the winning source version's branch — the winner survives, the losing source versions are cancelled, and the consolidation session remains open for manual review and cleanup after promote returns.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -837,7 +837,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             winner_session_id: {
               type: "string",
-              description: "Optional. When session_name is a consolidation session, pass the session ID of the source version chosen as the strongest base. The consolidation commits will be transplanted onto that winner's branch, the winner session survives, and the consolidation session plus other source versions are cancelled."
+              description: "Optional. When session_name is a consolidation session, pass the session ID of the source version chosen as the strongest base. The consolidation commits will be transplanted onto that winner's branch, the winner session survives, the losing source versions are cancelled, and the consolidation session remains open for manual review and cleanup."
             }
           },
           required: ["session_name", "reason"],
