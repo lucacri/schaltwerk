@@ -3,6 +3,7 @@ use crate::shared::terminal_id::{terminal_id_for_session_bottom, terminal_id_for
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use log::{info, warn};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use which::which;
@@ -97,6 +98,41 @@ fn compute_commits_ahead_count(
 ) -> Option<u32> {
     let repo = git2::Repository::open(worktree_path).ok()?;
     compute_commits_ahead_count_with_repo(&repo, session_branch, parent_branch)
+}
+
+const FORCE_RESTART_CONTINUATION_PREAMBLE: &str = concat!(
+    "This is a continuation of prior work in this worktree, not a fresh start.\n",
+    "There are already committed and/or uncommitted changes in this worktree. Before doing anything else, inspect the current state with git status and git diff and continue from what is already there instead of redoing completed work.\n\n",
+    "The original spec follows below.\n\n",
+);
+
+fn build_force_restart_prompt<'a>(
+    worktree_path: &Path,
+    session_branch: &str,
+    parent_branch: &str,
+    initial_prompt: Option<&'a str>,
+) -> Option<Cow<'a, str>> {
+    let prompt = initial_prompt?;
+    let has_uncommitted_changes = match git::has_uncommitted_changes(worktree_path) {
+        Ok(value) => value,
+        Err(err) => {
+            warn!(
+                "Failed to inspect uncommitted changes for force-restart prompt in '{}': {err}",
+                worktree_path.display()
+            );
+            false
+        }
+    };
+    let commits_ahead_count =
+        compute_commits_ahead_count(worktree_path, session_branch, parent_branch).unwrap_or(0);
+
+    if !has_uncommitted_changes && commits_ahead_count == 0 {
+        return Some(Cow::Borrowed(prompt));
+    }
+
+    Some(Cow::Owned(format!(
+        "{FORCE_RESTART_CONTINUATION_PREAMBLE}{prompt}"
+    )))
 }
 
 /// Info needed for session cancellation (extracted with brief lock, then released)
@@ -333,6 +369,139 @@ mod service_unified_tests {
             consolidation_sources: None,
             promotion_reason: None,
         }
+    }
+
+    const RESTART_CONTINUATION_MARKER: &str =
+        "This is a continuation of prior work in this worktree, not a fresh start.";
+    const RESTART_CONTINUATION_GIT_GUIDANCE: &str =
+        "inspect the current state with git status and git diff";
+    const RESTART_CONTINUATION_SPEC_MARKER: &str = "The original spec follows below.";
+
+    fn run_git(dir: &Path, args: &[&str]) {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {:?} failed in {}: {}",
+            args,
+            dir.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn init_git_repo(repo: &Path) {
+        run_git(repo, &["init"]);
+        run_git(repo, &["config", "user.email", "test@example.com"]);
+        run_git(repo, &["config", "user.name", "Test User"]);
+        std::fs::write(repo.join("README.md"), "Initial").unwrap();
+        run_git(repo, &["add", "."]);
+        run_git(repo, &["commit", "-m", "init"]);
+    }
+
+    fn create_running_spec_session_with_agent(
+        manager: &SessionManager,
+        temp_dir: &TempDir,
+        spec_name: &str,
+        spec_content: &str,
+        agent_type: &str,
+    ) -> Session {
+        let repo = temp_dir.path().join("repo");
+        init_git_repo(&repo);
+        manager.create_spec_session(spec_name, spec_content).unwrap();
+        manager
+            .start_spec_session_with_config(spec_name, None, None, None, Some(agent_type))
+            .unwrap()
+    }
+
+    fn build_force_restart_command(
+        manager: &SessionManager,
+        session_name: &str,
+    ) -> AgentLaunchSpec {
+        manager
+            .start_claude_in_session_with_restart_and_binary(AgentLaunchParams {
+                session_name,
+                force_restart: true,
+                binary_paths: &HashMap::new(),
+                amp_mcp_servers: None,
+                agent_type_override: None,
+                skip_prompt: false,
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn restart_prompt_force_restart_keeps_clean_worktree_prompt_plain() {
+        let (manager, temp_dir) = create_test_session_manager();
+        let spec_content = "Implement restart handling";
+        let session = create_running_spec_session_with_agent(
+            &manager,
+            &temp_dir,
+            "restart-clean",
+            spec_content,
+            "droid",
+        );
+
+        let command = build_force_restart_command(&manager, &session.name);
+
+        assert!(command.shell_command.contains(spec_content));
+        assert!(!command.shell_command.contains(RESTART_CONTINUATION_MARKER));
+    }
+
+    #[test]
+    fn restart_prompt_force_restart_prepends_context_for_uncommitted_worktree_changes() {
+        let (manager, temp_dir) = create_test_session_manager();
+        let spec_content = "Implement restart handling";
+        let session = create_running_spec_session_with_agent(
+            &manager,
+            &temp_dir,
+            "restart-dirty-codex",
+            spec_content,
+            "codex",
+        );
+
+        std::fs::write(session.worktree_path.join("dirty.txt"), "pending work").unwrap();
+
+        let command = build_force_restart_command(&manager, &session.name);
+
+        assert!(command.shell_command.contains(RESTART_CONTINUATION_MARKER));
+        assert!(
+            command
+                .shell_command
+                .contains(RESTART_CONTINUATION_GIT_GUIDANCE)
+        );
+        assert!(command.shell_command.contains(RESTART_CONTINUATION_SPEC_MARKER));
+        assert!(command.shell_command.contains(spec_content));
+    }
+
+    #[test]
+    fn restart_prompt_force_restart_prepends_context_for_commits_ahead_of_parent() {
+        let (manager, temp_dir) = create_test_session_manager();
+        let spec_content = "Implement restart handling";
+        let session = create_running_spec_session_with_agent(
+            &manager,
+            &temp_dir,
+            "restart-ahead-droid",
+            spec_content,
+            "droid",
+        );
+
+        std::fs::write(session.worktree_path.join("ahead.txt"), "already committed").unwrap();
+        run_git(&session.worktree_path, &["add", "."]);
+        run_git(&session.worktree_path, &["commit", "-m", "ahead"]);
+
+        let command = build_force_restart_command(&manager, &session.name);
+
+        assert!(command.shell_command.contains(RESTART_CONTINUATION_MARKER));
+        assert!(
+            command
+                .shell_command
+                .contains(RESTART_CONTINUATION_GIT_GUIDANCE)
+        );
+        assert!(command.shell_command.contains(RESTART_CONTINUATION_SPEC_MARKER));
+        assert!(command.shell_command.contains(spec_content));
     }
 
     #[test]
@@ -3048,6 +3217,16 @@ impl SessionManager {
         let agent_type = resolve_launch_agent(&requested_agent_type, binary_paths)?;
 
         let registry = crate::domains::agents::unified::AgentRegistry::new();
+        let force_restart_prompt = if force_restart {
+            build_force_restart_prompt(
+                &session.worktree_path,
+                &session.branch,
+                &session.parent_branch,
+                session.initial_prompt.as_deref(),
+            )
+        } else {
+            None
+        };
 
         // Special handling for Claude's session resumption logic
         if agent_type == "claude" {
@@ -3083,13 +3262,18 @@ impl SessionManager {
             } else {
                 session.initial_prompt.as_deref()
             };
+            let effective_force_restart_prompt = if skip_prompt {
+                None
+            } else {
+                force_restart_prompt.as_deref()
+            };
 
             let (session_id_to_use, prompt_to_use, did_start_fresh) = if force_restart {
                 // Explicit restart - always use initial prompt (if not skipped), no session resumption
                 log::info!(
                     "Session manager: Force restarting Claude session '{session_name}' with initial_prompt={effective_initial_prompt:?}, skip_prompt={skip_prompt}"
                 );
-                (None, effective_initial_prompt, true)
+                (None, effective_force_restart_prompt, true)
             } else if let Some(session_id) = resumable_session_id {
                 // Session exists with actual conversation content and not forcing restart - resume with session ID
                 let worktree = session.worktree_path.display();
@@ -3189,7 +3373,7 @@ impl SessionManager {
                     session_name,
                     session.initial_prompt
                 );
-                (None, session.initial_prompt.as_deref(), true)
+                (None, force_restart_prompt.as_deref(), true)
             } else if let (Some(path), Some(session_id)) =
                 (resume_path.as_ref(), resume_session_id_from_path.clone())
             {
@@ -3300,7 +3484,7 @@ impl SessionManager {
                     session_name,
                     session.initial_prompt
                 );
-                (None, session.initial_prompt.as_deref(), true)
+                (None, force_restart_prompt.as_deref(), true)
             } else if let Some(info) = resume_info.as_ref().filter(|info| info.has_history) {
                 log::info!(
                     "Session manager: Resuming OpenCode session '{}' via --session {}",
@@ -3360,7 +3544,11 @@ impl SessionManager {
         if agent_type == "amp" {
             self.cache_manager
                 .mark_session_prompted(&session.worktree_path);
-            let prompt_to_use = session.initial_prompt.as_deref();
+            let prompt_to_use = if force_restart {
+                force_restart_prompt.as_deref()
+            } else {
+                session.initial_prompt.as_deref()
+            };
 
             let binary_path = self.utils.get_effective_binary_path_with_override(
                 &agent_type,
@@ -3408,6 +3596,8 @@ impl SessionManager {
 
         let prompt_to_use = if session_id.is_some() {
             None
+        } else if force_restart {
+            force_restart_prompt.as_deref()
         } else {
             session.initial_prompt.as_deref()
         };
