@@ -6,6 +6,7 @@ import {
   parseVersionFromSessionName,
   getBaseSessionName,
   countLogicalRunningSessions,
+  calculateLogicalSessionCounts,
   selectBestVersionAndCleanup,
   type EnrichedSession
 } from './sessionVersions'
@@ -277,28 +278,223 @@ describe('sessionVersions', () => {
       expect(countLogicalRunningSessions(sessions)).toBe(2)
     })
 
-    it('excludes sessions needing attention when needsAttention callback is provided', () => {
+    it('excludes groups where all versions are idle', () => {
       const sessions = [
-        createMockSession('idle-standalone', undefined, { session_state: 'running' }),
-        createMockSession('attention-standalone', undefined, {
+        createMockSession('idle-standalone', undefined, {
           session_state: 'running',
           attention_required: true,
         }),
-        createMockSession('feature', undefined, {
-          version_group_id: 'group-1',
-          version_number: 1,
-          session_state: 'running',
-          ready_to_merge: true,
-        }),
-        createMockSession('feature_v2', undefined, {
-          version_group_id: 'group-1',
-          version_number: 2,
-          session_state: 'running',
-          attention_required: true,
-        }),
+        createMockSession('active-standalone', undefined, { session_state: 'running' }),
       ]
 
-      expect(countLogicalRunningSessions(sessions, s => s.info.attention_required === true)).toBe(2)
+      expect(countLogicalRunningSessions(sessions)).toBe(1)
+    })
+  })
+
+  describe('getSessionVersionGroupAggregate with consolidation and idle', () => {
+    it('returns idle state when all versions need attention', () => {
+      const groups = groupSessionsByVersion([
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'running', attention_required: true,
+        }),
+        createMockSession('feature_v2', undefined, {
+          version_group_id: 'g1', version_number: 2, session_state: 'running', attention_required: true,
+        }),
+      ])
+      const agg = getSessionVersionGroupAggregate(groups[0])
+      expect(agg.state).toBe('idle')
+      expect(agg.idleVersions).toBe(2)
+      expect(agg.runningVersions).toBe(0)
+    })
+
+    it('returns running state when any version is actively running', () => {
+      const groups = groupSessionsByVersion([
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'running', attention_required: true,
+        }),
+        createMockSession('feature_v2', undefined, {
+          version_group_id: 'g1', version_number: 2, session_state: 'running',
+        }),
+      ])
+      const agg = getSessionVersionGroupAggregate(groups[0])
+      expect(agg.state).toBe('running')
+    })
+
+    it('uses consolidation session as controlling version when present', () => {
+      const groups = groupSessionsByVersion([
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'running',
+        }),
+        createMockSession('feature_consol', undefined, {
+          version_group_id: 'g1', version_number: 2, session_state: 'running',
+          is_consolidation: true, attention_required: true,
+        }),
+      ])
+      const agg = getSessionVersionGroupAggregate(groups[0])
+      expect(agg.state).toBe('idle')
+      expect(agg.totalVersions).toBe(1)
+    })
+
+    it('active consolidation overrides idle source versions', () => {
+      const groups = groupSessionsByVersion([
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'running', attention_required: true,
+        }),
+        createMockSession('feature_consol', undefined, {
+          version_group_id: 'g1', version_number: 2, session_state: 'running',
+          is_consolidation: true,
+        }),
+      ])
+      const agg = getSessionVersionGroupAggregate(groups[0])
+      expect(agg.state).toBe('running')
+    })
+
+    it('spec sessions are not counted as idle', () => {
+      const groups = groupSessionsByVersion([
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'spec', status: 'spec',
+          attention_required: true,
+        }),
+      ])
+      const agg = getSessionVersionGroupAggregate(groups[0])
+      expect(agg.idleVersions).toBe(0)
+      expect(agg.specVersions).toBe(1)
+      expect(agg.state).toBe('spec')
+    })
+
+    it('ready_to_merge is orthogonal to idle state', () => {
+      const groups = groupSessionsByVersion([
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'running',
+          ready_to_merge: true,
+        }),
+      ])
+      const agg = getSessionVersionGroupAggregate(groups[0])
+      expect(agg.state).toBe('running')
+      expect(agg.readyVersions).toBe(1)
+    })
+  })
+
+  describe('calculateLogicalSessionCounts', () => {
+    it('counts idle groups separately from running groups', () => {
+      const sessions = [
+        createMockSession('active', undefined, { session_state: 'running' }),
+        createMockSession('idle', undefined, { session_state: 'running', attention_required: true }),
+        createMockSession('spec', undefined, { session_state: 'spec', status: 'spec' }),
+      ]
+      const counts = calculateLogicalSessionCounts(sessions)
+      expect(counts.runningCount).toBe(1)
+      expect(counts.idleCount).toBe(1)
+      expect(counts.specsCount).toBe(1)
+    })
+
+    it('all-idle version group counts as one idle unit', () => {
+      const sessions = [
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'running', attention_required: true,
+        }),
+        createMockSession('feature_v2', undefined, {
+          version_group_id: 'g1', version_number: 2, session_state: 'running', attention_required: true,
+        }),
+      ]
+      const counts = calculateLogicalSessionCounts(sessions)
+      expect(counts.runningCount).toBe(0)
+      expect(counts.idleCount).toBe(1)
+    })
+
+    it('consolidation idle makes entire group idle', () => {
+      const sessions = [
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'running',
+        }),
+        createMockSession('feature_consol', undefined, {
+          version_group_id: 'g1', version_number: 2, session_state: 'running',
+          is_consolidation: true, attention_required: true,
+        }),
+      ]
+      const counts = calculateLogicalSessionCounts(sessions)
+      expect(counts.runningCount).toBe(0)
+      expect(counts.idleCount).toBe(1)
+    })
+
+    it('consolidation active makes group running', () => {
+      const sessions = [
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'running',
+          attention_required: true,
+        }),
+        createMockSession('feature_consol', undefined, {
+          version_group_id: 'g1', version_number: 2, session_state: 'running',
+          is_consolidation: true,
+        }),
+      ]
+      const counts = calculateLogicalSessionCounts(sessions)
+      expect(counts.runningCount).toBe(1)
+      expect(counts.idleCount).toBe(0)
+    })
+
+    it('accepts custom idle resolver for cross-project attention maps', () => {
+      const attentionMap = new Map([['feature', true]])
+      const sessions = [
+        createMockSession('feature', undefined, { session_state: 'running' }),
+        createMockSession('active', undefined, { session_state: 'running' }),
+      ]
+      const counts = calculateLogicalSessionCounts(
+        sessions,
+        session => attentionMap.get(session.info.session_id) === true,
+      )
+      expect(counts.runningCount).toBe(1)
+      expect(counts.idleCount).toBe(1)
+    })
+
+    it('mixes standalone and grouped sessions correctly', () => {
+      const sessions = [
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'running',
+        }),
+        createMockSession('feature_consol', undefined, {
+          version_group_id: 'g1', version_number: 2, session_state: 'running',
+          is_consolidation: true,
+        }),
+        createMockSession('solo-idle', undefined, {
+          session_state: 'running', attention_required: true,
+        }),
+        createMockSession('solo-active', undefined, { session_state: 'running' }),
+        createMockSession('my-spec', undefined, { session_state: 'spec', status: 'spec' }),
+      ]
+      const counts = calculateLogicalSessionCounts(sessions)
+      expect(counts.runningCount).toBe(2)
+      expect(counts.idleCount).toBe(1)
+      expect(counts.specsCount).toBe(1)
+    })
+  })
+
+  describe('countLogicalRunningSessions with consolidation', () => {
+    it('consolidation idle makes entire group not running', () => {
+      const sessions = [
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'running',
+        }),
+        createMockSession('feature_v2', undefined, {
+          version_group_id: 'g1', version_number: 2, session_state: 'running',
+          is_consolidation: true, attention_required: true,
+        }),
+      ]
+      expect(countLogicalRunningSessions(sessions)).toBe(0)
+    })
+
+    it('consolidation active makes group running', () => {
+      const sessions = [
+        createMockSession('feature', undefined, {
+          version_group_id: 'g1', version_number: 1, session_state: 'running',
+          attention_required: true,
+        }),
+        createMockSession('feature_v2', undefined, {
+          version_group_id: 'g1', version_number: 2, session_state: 'running',
+          is_consolidation: true,
+        }),
+      ]
+      expect(countLogicalRunningSessions(sessions)).toBe(1)
     })
   })
 

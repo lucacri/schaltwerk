@@ -2,7 +2,7 @@ import { EnrichedSession } from '../types/session'
 import { TauriCommands } from '../common/tauriCommands'
 import { logger } from '../utils/logger'
 import { getSessionDisplayName } from './sessionDisplayName'
-import { getSessionLifecycleState, isSpec } from './sessionState'
+import { getSessionLifecycleState } from './sessionState'
 
 export { type EnrichedSession }
 
@@ -18,16 +18,25 @@ export interface SessionVersionGroup {
   isVersionGroup: boolean // true if multiple versions exist
 }
 
-export type SessionVersionGroupUiState = 'spec' | 'running'
+export type SessionVersionGroupUiState = 'spec' | 'running' | 'idle'
+
+export interface LogicalSessionCounts {
+  specsCount: number
+  runningCount: number
+  idleCount: number
+}
 
 export interface SessionVersionGroupAggregate {
   state: SessionVersionGroupUiState
   hasAttention: boolean
   runningVersions: number
+  idleVersions: number
   readyVersions: number
   specVersions: number
   totalVersions: number
 }
+
+type SessionIdleResolver = (session: EnrichedSession) => boolean
 
 /**
  * Extracts version number from session name if it follows the _v{n} pattern
@@ -132,12 +141,26 @@ export function groupSessionsByVersion(sessions: EnrichedSession[]): SessionVers
 }
 
 export function getSessionVersionGroupAggregate(group: SessionVersionGroup): SessionVersionGroupAggregate {
-  const counts = group.versions.reduce((acc, version) => {
+  return getSessionVersionGroupAggregateWithResolver(group, session => session.info.attention_required === true)
+}
+
+function getSessionVersionGroupAggregateWithResolver(
+  group: SessionVersionGroup,
+  isIdle: SessionIdleResolver,
+): SessionVersionGroupAggregate {
+  const controllingVersions = getControllingVersions(group)
+
+  const counts = controllingVersions.reduce((acc, version) => {
     const state = getSessionLifecycleState(version.session.info)
+    const idle = state !== 'spec' && isIdle(version.session)
     const ready = Boolean(version.session.info.ready_to_merge)
 
     if (state === 'running' || state === 'processing') {
-      acc.runningVersions += 1
+      if (idle) {
+        acc.idleVersions += 1
+      } else {
+        acc.runningVersions += 1
+      }
       if (ready) {
         acc.readyVersions += 1
       }
@@ -145,7 +168,7 @@ export function getSessionVersionGroupAggregate(group: SessionVersionGroup): Ses
       acc.specVersions += 1
     }
 
-    if (version.session.info.attention_required) {
+    if (idle) {
       acc.hasAttention = true
     }
 
@@ -153,6 +176,7 @@ export function getSessionVersionGroupAggregate(group: SessionVersionGroup): Ses
   }, {
     hasAttention: false,
     runningVersions: 0,
+    idleVersions: 0,
     readyVersions: 0,
     specVersions: 0,
   })
@@ -161,28 +185,54 @@ export function getSessionVersionGroupAggregate(group: SessionVersionGroup): Ses
 
   if (counts.runningVersions > 0) {
     state = 'running'
+  } else if (counts.idleVersions > 0) {
+    state = 'idle'
   }
 
   return {
     state,
     hasAttention: counts.hasAttention,
     runningVersions: counts.runningVersions,
+    idleVersions: counts.idleVersions,
     readyVersions: counts.readyVersions,
     specVersions: counts.specVersions,
-    totalVersions: group.versions.length,
+    totalVersions: controllingVersions.length,
   }
+}
+
+function getControllingVersions(group: SessionVersionGroup): SessionVersion[] {
+  const consolidationVersion = group.versions.find(version => version.session.info.is_consolidation)
+  return consolidationVersion ? [consolidationVersion] : group.versions
+}
+
+export function calculateLogicalSessionCounts(
+  sessions: EnrichedSession[],
+  isIdle: SessionIdleResolver = session => session.info.attention_required === true,
+): LogicalSessionCounts {
+  return groupSessionsByVersion(sessions).reduce((counts, group) => {
+    const aggregate = getSessionVersionGroupAggregateWithResolver(group, isIdle)
+
+    if (aggregate.state === 'spec') {
+      counts.specsCount += 1
+    } else if (aggregate.state === 'idle') {
+      counts.idleCount += 1
+    } else {
+      counts.runningCount += 1
+    }
+
+    return counts
+  }, {
+    specsCount: 0,
+    runningCount: 0,
+    idleCount: 0,
+  })
 }
 
 export function countLogicalRunningSessions(
   sessions: EnrichedSession[],
   needsAttention?: (session: EnrichedSession) => boolean,
 ): number {
-  return groupSessionsByVersion(sessions).filter(group => {
-    return group.versions.some(version => {
-      if (isSpec(version.session.info)) return false
-      return needsAttention ? !needsAttention(version.session) : true
-    })
-  }).length
+  return calculateLogicalSessionCounts(sessions, needsAttention).runningCount
 }
 
 /**

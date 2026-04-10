@@ -1,7 +1,7 @@
 import { EnrichedSession } from '../types/session'
 import { isSpec } from './sessionState'
 import { getSessionDisplayName } from './sessionDisplayName'
-import { getSessionVersionGroupAggregate, groupSessionsByVersion } from './sessionVersions'
+import { calculateLogicalSessionCounts } from './sessionVersions'
 
 export { isSpec }
 
@@ -9,20 +9,8 @@ export { isSpec }
  * Calculate filter counts for sessions
  */
 export function calculateFilterCounts(sessions: EnrichedSession[]) {
-    return groupSessionsByVersion(sessions).reduce((counts, group) => {
-        const aggregate = getSessionVersionGroupAggregate(group)
-
-        if (aggregate.state === 'spec') {
-            counts.specsCount += 1
-        } else {
-            counts.runningCount += 1
-        }
-
-        return counts
-    }, {
-        specsCount: 0,
-        runningCount: 0,
-    })
+    const { specsCount, runningCount } = calculateLogicalSessionCounts(sessions)
+    return { specsCount, runningCount }
 }
 
 /**

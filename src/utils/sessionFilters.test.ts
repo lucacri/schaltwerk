@@ -117,6 +117,80 @@ describe('calculateFilterCounts', () => {
         expect(counts.specsCount).toBe(0)
         expect(counts.runningCount).toBe(1)
     })
+    it('counts idle group (all attention_required) as not running', () => {
+        const sessions = [
+            createMockSession({
+                session_id: 'feature',
+                version_group_id: 'g1',
+                version_number: 1,
+                session_state: 'running',
+                attention_required: true,
+            }),
+            createMockSession({
+                session_id: 'feature_v2',
+                version_group_id: 'g1',
+                version_number: 2,
+                session_state: 'running',
+                attention_required: true,
+            }),
+        ]
+        const counts = calculateFilterCounts(sessions)
+        expect(counts.runningCount).toBe(0)
+    })
+
+    it('counts group with idle consolidation as not running', () => {
+        const sessions = [
+            createMockSession({
+                session_id: 'feature',
+                version_group_id: 'g1',
+                version_number: 1,
+                session_state: 'running',
+            }),
+            createMockSession({
+                session_id: 'feature_consol',
+                version_group_id: 'g1',
+                version_number: 2,
+                session_state: 'running',
+                is_consolidation: true,
+                attention_required: true,
+            }),
+        ]
+        const counts = calculateFilterCounts(sessions)
+        expect(counts.runningCount).toBe(0)
+    })
+
+    it('counts group with active consolidation as running', () => {
+        const sessions = [
+            createMockSession({
+                session_id: 'feature',
+                version_group_id: 'g1',
+                version_number: 1,
+                session_state: 'running',
+                attention_required: true,
+            }),
+            createMockSession({
+                session_id: 'feature_consol',
+                version_group_id: 'g1',
+                version_number: 2,
+                session_state: 'running',
+                is_consolidation: true,
+            }),
+        ]
+        const counts = calculateFilterCounts(sessions)
+        expect(counts.runningCount).toBe(1)
+    })
+
+    it('standalone idle session not counted as running', () => {
+        const sessions = [
+            createMockSession({
+                session_id: 'solo-idle',
+                session_state: 'running',
+                attention_required: true,
+            }),
+        ]
+        const counts = calculateFilterCounts(sessions)
+        expect(counts.runningCount).toBe(0)
+    })
 })
 
 describe('searchSessions', () => {

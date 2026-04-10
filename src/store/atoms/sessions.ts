@@ -20,7 +20,7 @@ import { logger } from '../../utils/logger'
 import { getErrorMessage, isSchaltError } from '../../types/errors'
 import { closePreview } from '../../features/preview/previewIframeRegistry'
 import { buildPreviewKey, clearPreviewStateActionAtom } from './preview'
-import { countLogicalRunningSessions } from '../../utils/sessionVersions'
+import { calculateLogicalSessionCounts, groupSessionsByVersion } from '../../utils/sessionVersions'
 import { getSessionLifecycleState, isSpec } from '../../utils/sessionState'
 
 type MergeModeOption = 'squash' | 'reapply'
@@ -189,13 +189,24 @@ function sortSessionsByCreationDate(sessions: EnrichedSession[]): EnrichedSessio
 }
 
 function filterSessions(sessions: EnrichedSession[], filterMode: FilterMode): EnrichedSession[] {
+    const runningSessionIds = new Set(
+        groupSessionsByVersion(sessions)
+            .filter(group => {
+                const aggregate = calculateLogicalSessionCounts(
+                    group.versions.map(v => v.session),
+                )
+                return aggregate.runningCount > 0
+            })
+            .flatMap(group => group.versions.map(version => version.session.info.session_id)),
+    )
+
     switch (filterMode) {
         case FilterMode.Spec:
             return sessions.filter(session => isSpec(session.info))
         case FilterMode.Running:
-            return sessions.filter(session => !isSpec(session.info))
+            return sessions.filter(session => runningSessionIds.has(session.info.session_id))
         default:
-            return sessions.filter(session => !isSpec(session.info))
+            return sessions.filter(session => runningSessionIds.has(session.info.session_id))
     }
 }
 
@@ -782,18 +793,15 @@ function cacheCrossProjectSnapshot(set: Setter, projectPath: string, sessions: E
 function recomputeCrossProjectCounts(projectPath: string): { attention: number; running: number } {
     const sessions = projectSessionsSnapshotCache.get(projectPath) ?? []
     const attentionMap = crossProjectAttention.get(projectPath) ?? new Map()
+    const logicalCounts = calculateLogicalSessionCounts(
+        sessions,
+        session => attentionMap.get(session.info.session_id) === true,
+    )
 
-    let attention = 0
-    for (const session of sessions) {
-        const isReadyToMerge = session.info.ready_to_merge === true
-        const needsAttention = attentionMap.get(session.info.session_id) === true
-
-        if (needsAttention && !isReadyToMerge) attention++
+    return {
+        attention: logicalCounts.idleCount,
+        running: logicalCounts.runningCount,
     }
-
-    const running = countLogicalRunningSessions(sessions, session => attentionMap.get(session.info.session_id) === true)
-
-    return { attention, running }
 }
 
 function stripAttentionState(sessions: EnrichedSession[]): EnrichedSession[] {

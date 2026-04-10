@@ -84,7 +84,7 @@ import { useGithubIntegrationContext } from './contexts/GithubIntegrationContext
 import { resolveOpenPathForOpenButton } from './utils/resolveOpenPath'
 import { TauriCommands } from './common/tauriCommands'
 import { validatePanelPercentage } from './utils/panel'
-import { countLogicalRunningSessions } from './utils/sessionVersions'
+import { calculateLogicalSessionCounts } from './utils/sessionVersions'
 import { loadGenerationPrompts, renderGenerationPrompt } from './common/generationPrompts'
 import {
   UiEvent,
@@ -872,13 +872,26 @@ function AppContent() {
 
   useEffect(() => {
     if (!projectPath) return
-    const cachedRunningCount = crossProjectCounts[projectPath]?.running
-    const count = activeSessionsHydratedFromCache && cachedRunningCount != null
-      ? cachedRunningCount
-      : countLogicalRunningSessions(allSessions, session => session.info.attention_required === true)
+    const cachedCounts = crossProjectCounts[projectPath]
+    const liveCounts = calculateLogicalSessionCounts(
+      allSessions,
+      session => session.info.attention_required === true,
+    )
+    const counts = activeSessionsHydratedFromCache && cachedCounts != null
+      ? cachedCounts
+      : {
+          attention: liveCounts.idleCount,
+          running: liveCounts.runningCount,
+        }
+
+    setAttentionCounts(prev => {
+      if (prev[projectPath] === counts.attention) return prev
+      return { ...prev, [projectPath]: counts.attention }
+    })
+
     setRunningCounts(prev => {
-      if (prev[projectPath] === count) return prev
-      return { ...prev, [projectPath]: count }
+      if (prev[projectPath] === counts.running) return prev
+      return { ...prev, [projectPath]: counts.running }
     })
   }, [activeSessionsHydratedFromCache, allSessions, crossProjectCounts, projectPath])
 

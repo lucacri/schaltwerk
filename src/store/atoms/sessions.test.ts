@@ -1975,7 +1975,7 @@ describe('sessions atoms', () => {
             ],
         })
 
-        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 1, running: 1 })
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 0, running: 1 })
     })
 
     it('resets cached cross-project counts when switching away from an empty project', async () => {
@@ -2069,6 +2069,92 @@ describe('sessions atoms', () => {
 
         const counts = store.get(crossProjectCountsAtom)
         expect(counts['/projects/alpha']).toEqual({ attention: 0, running: 1 })
+    })
+
+    it('counts all-idle multi-version group as one attention unit, not running', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                const activeProject = store.get(projectPathAtom)
+                if (activeProject === '/projects/alpha') {
+                    return [
+                        createSession({
+                            session_id: 'feature_v1',
+                            worktree_path: '/tmp/feature-v1',
+                            version_number: 1,
+                            attention_required: true,
+                        }),
+                        createSession({
+                            session_id: 'feature_v2',
+                            worktree_path: '/tmp/feature-v2',
+                            version_number: 2,
+                            attention_required: true,
+                        }),
+                    ]
+                }
+                if (activeProject === '/projects/beta') {
+                    return [createSession({ session_id: 'beta-session', worktree_path: '/tmp/beta' })]
+                }
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 1, running: 0 })
+    })
+
+    it('consolidation session controls group running/idle state for cross-project counts', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                return [createSession({ session_id: 'beta-session', worktree_path: '/tmp/beta' })]
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(projectPathAtom, '/projects/beta')
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:sessions-refreshed']?.({
+            projectPath: '/projects/alpha',
+            sessions: [
+                createSession({
+                    session_id: 'feature_v1',
+                    worktree_path: '/tmp/feature-v1',
+                    version_group_id: 'g1',
+                    version_number: 1,
+                    session_state: SessionState.Running,
+                }),
+                createSession({
+                    session_id: 'feature-consolidation',
+                    worktree_path: '/tmp/feature-consol',
+                    version_group_id: 'g1',
+                    version_number: 2,
+                    session_state: SessionState.Running,
+                    is_consolidation: true,
+                    attention_required: true,
+                }),
+            ],
+        })
+
+        expect(store.get(crossProjectCountsAtom)['/projects/alpha']).toEqual({ attention: 1, running: 0 })
     })
 
     it('clears cross-project attention when needs_attention becomes false', async () => {
