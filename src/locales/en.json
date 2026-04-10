@@ -195,6 +195,8 @@
       "pressNewShortcut": "Press the new shortcut for {label} or press Escape to cancel."
     },
     "projectGeneral": {
+      "specClarificationAgent": "Spec clarification agent",
+      "specClarificationAgentDesc": "Choose which installed agent opens when you clarify specs in this project.",
       "branchPrefix": "Branch Prefix",
       "branchPrefixDesc": "Configure the default Git branch prefix used when creating new Lucode sessions. Leave empty to use session names directly as branch names. Use slashes to nest groups. Spaces will be converted to hyphens automatically.",
       "worktreeBaseDirectory": "Worktree Base Directory",

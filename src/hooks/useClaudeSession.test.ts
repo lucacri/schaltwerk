@@ -78,4 +78,25 @@ describe('useClaudeSession', () => {
 
     consoleErrorSpy.mockRestore()
   })
+
+  it('gets and sets spec clarification agent type with defaults on error', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    mockInvoke.mockResolvedValueOnce('codex')
+    const { result } = renderHook(() => useClaudeSession())
+
+    const agent = await result.current.getSpecClarificationAgentType()
+    expect(agent).toBe('codex')
+
+    mockInvoke.mockRejectedValueOnce(new Error('kapow'))
+    const agentOnError = await result.current.getSpecClarificationAgentType()
+    expect(agentOnError).toBe('claude')
+
+    mockInvoke.mockResolvedValueOnce(undefined)
+    const setOk = await result.current.setSpecClarificationAgentType('gemini')
+    expect(setOk).toBe(true)
+    expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetSpecClarificationAgentType, { agentType: 'gemini' })
+
+    consoleErrorSpy.mockRestore()
+  })
 })

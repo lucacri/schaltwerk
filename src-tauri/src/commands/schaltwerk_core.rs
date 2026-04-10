@@ -236,9 +236,21 @@ fn build_spec_clarification_prompt(spec: &lucode::domains::sessions::entity::Spe
     )
 }
 
+fn resolve_spec_clarification_agent_type(
+    db: &impl AppConfigMethods,
+    agent_type: Option<String>,
+) -> String {
+    agent_type.unwrap_or_else(|| {
+        db.get_spec_clarification_agent_type()
+            .unwrap_or_else(|_| "claude".to_string())
+    })
+}
+
 #[cfg(test)]
 mod spec_clarification_prompt_tests {
-    use super::build_spec_clarification_prompt;
+    use super::{build_spec_clarification_prompt, resolve_spec_clarification_agent_type};
+    use lucode::infrastructure::database::Database;
+    use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
     use chrono::Utc;
     use std::path::PathBuf;
 
@@ -267,6 +279,17 @@ mod spec_clarification_prompt_tests {
         assert!(prompt.contains("lucode_spec_set_attention"));
         assert!(prompt.contains("## Problem"));
         assert!(prompt.contains("## Goal"));
+    }
+
+    #[test]
+    fn resolve_spec_clarification_agent_type_uses_db_default_when_override_missing() {
+        let db = Database::new(None).expect("Failed to create database");
+        db.set_spec_clarification_agent_type("gemini")
+            .expect("Failed to set spec clarification agent type");
+
+        let resolved = resolve_spec_clarification_agent_type(&db, None);
+
+        assert_eq!(resolved, "gemini");
     }
 }
 
@@ -2496,17 +2519,18 @@ pub async fn schaltwerk_core_start_spec_orchestrator(
     rows: Option<u16>,
     agent_type: Option<String>,
 ) -> Result<String, String> {
-    let agent_label = agent_type.as_deref().unwrap_or("claude");
-    log::info!(
-        "[AGENT_LAUNCH_TRACE] Starting {agent_label} for spec orchestrator '{spec_name}' in terminal: {terminal_id}"
-    );
-
     let core = get_core_read().await.map_err(|e| {
         log::error!("Failed to get schaltwerk_core for spec orchestrator: {e}");
         format!("Failed to initialize spec orchestrator: {e}")
     })?;
 
     let db = core.db.clone();
+    let resolved_agent_type = resolve_spec_clarification_agent_type(&db, agent_type);
+    let agent_label = resolved_agent_type.as_str();
+    log::info!(
+        "[AGENT_LAUNCH_TRACE] Starting {agent_label} for spec orchestrator '{spec_name}' in terminal: {terminal_id}"
+    );
+
     let repo_path = core.repo_path.clone();
     let manager = core.session_manager();
     let spec = manager
@@ -2521,7 +2545,7 @@ pub async fn schaltwerk_core_start_spec_orchestrator(
     };
 
     let command_spec = manager
-        .start_agent_in_orchestrator(&binary_paths, agent_type.as_deref(), initial_prompt.as_deref())
+        .start_agent_in_orchestrator(&binary_paths, Some(agent_label), initial_prompt.as_deref())
         .map_err(|e| {
             log::error!("Failed to build spec orchestrator command: {e}");
             format!("Failed to start {agent_label} for spec '{spec_name}': {e}")
@@ -2642,6 +2666,29 @@ pub async fn schaltwerk_core_get_orchestrator_agent_type() -> Result<String, Str
     core.db
         .get_orchestrator_agent_type()
         .map_err(|e| format!("Failed to get orchestrator agent type: {e}"))
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_set_spec_clarification_agent_type(
+    app: tauri::AppHandle,
+    agent_type: String,
+) -> Result<(), String> {
+    let core = get_core_write().await?;
+    core.db
+        .set_spec_clarification_agent_type(&agent_type)
+        .map_err(|e| format!("Failed to set spec clarification agent type: {e}"))?;
+
+    events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SessionLifecycle);
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_get_spec_clarification_agent_type() -> Result<String, String> {
+    let core = get_core_read().await?;
+    core.db
+        .get_spec_clarification_agent_type()
+        .map_err(|e| format!("Failed to get spec clarification agent type: {e}"))
 }
 
 #[tauri::command]

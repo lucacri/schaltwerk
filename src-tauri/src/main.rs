@@ -1364,6 +1364,8 @@ fn main() {
             schaltwerk_core_get_agent_type,
             schaltwerk_core_set_orchestrator_agent_type,
             schaltwerk_core_get_orchestrator_agent_type,
+            schaltwerk_core_set_spec_clarification_agent_type,
+            schaltwerk_core_get_spec_clarification_agent_type,
             schaltwerk_core_get_font_sizes,
             schaltwerk_core_set_font_sizes,
             schaltwerk_core_get_theme,

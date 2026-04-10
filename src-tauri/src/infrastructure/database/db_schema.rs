@@ -69,6 +69,7 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             id INTEGER PRIMARY KEY CHECK (id = 1),
             agent_type TEXT DEFAULT 'claude',
             orchestrator_agent_type TEXT DEFAULT 'claude',
+            spec_clarification_agent_type TEXT DEFAULT 'claude',
             default_open_app TEXT DEFAULT NULL,
             default_base_branch TEXT,
             terminal_font_size INTEGER DEFAULT 13,
@@ -86,12 +87,13 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             id,
             agent_type,
             orchestrator_agent_type,
+            spec_clarification_agent_type,
             default_open_app,
             terminal_font_size,
             ui_font_size,
             tutorial_completed,
             dev_error_toasts_enabled
-        ) VALUES (1, 'claude', 'claude', NULL, 13, 12, FALSE, FALSE)",
+        ) VALUES (1, 'claude', 'claude', 'claude', NULL, 13, 12, FALSE, FALSE)",
         [],
     )?;
 
@@ -234,6 +236,10 @@ fn apply_app_config_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()
     );
     let _ = conn.execute(
         "ALTER TABLE app_config ADD COLUMN orchestrator_agent_type TEXT DEFAULT 'claude'",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE app_config ADD COLUMN spec_clarification_agent_type TEXT DEFAULT 'claude'",
         [],
     );
     let _ = conn.execute(

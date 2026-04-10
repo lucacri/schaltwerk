@@ -2,9 +2,11 @@ use crate::{
     domains::git::service as git,
     domains::sessions::db_sessions::SessionMethods,
     domains::sessions::entity::{Epic, Session, SessionState, SessionStatus, Spec},
-    infrastructure::database::{AppConfigMethods, Database, EpicMethods, ProjectConfigMethods, SpecMethods},
+    infrastructure::database::{
+        AppConfigMethods, Database, EpicMethods, ProjectConfigMethods, SpecMethods,
+    },
 };
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use git2::Repository;
 use log::{debug, warn};
@@ -398,11 +400,7 @@ impl SessionDbManager {
         Ok(result)
     }
 
-    pub fn set_session_original_settings(
-        &self,
-        session_id: &str,
-        agent_type: &str,
-    ) -> Result<()> {
+    pub fn set_session_original_settings(&self, session_id: &str, agent_type: &str) -> Result<()> {
         self.db
             .set_session_original_settings(session_id, agent_type)
             .map_err(|e| anyhow!("Failed to set session original settings: {e}"))
@@ -503,6 +501,12 @@ impl SessionDbManager {
             .map_err(|e| anyhow!("Failed to get orchestrator agent type: {e}"))
     }
 
+    pub fn get_spec_clarification_agent_type(&self) -> Result<String> {
+        self.db
+            .get_spec_clarification_agent_type()
+            .map_err(|e| anyhow!("Failed to get spec clarification agent type: {e}"))
+    }
+
     pub fn set_agent_type(&self, agent_type: &str) -> Result<()> {
         self.db
             .set_agent_type(agent_type)
@@ -513,6 +517,12 @@ impl SessionDbManager {
         self.db
             .set_orchestrator_agent_type(agent_type)
             .map_err(|e| anyhow!("Failed to set orchestrator agent type: {e}"))
+    }
+
+    pub fn set_spec_clarification_agent_type(&self, agent_type: &str) -> Result<()> {
+        self.db
+            .set_spec_clarification_agent_type(agent_type)
+            .map_err(|e| anyhow!("Failed to set spec clarification agent type: {e}"))
     }
 
     pub fn session_exists(&self, name: &str) -> bool {

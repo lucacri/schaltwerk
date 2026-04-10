@@ -861,6 +861,48 @@ mod service_unified_tests {
     }
 
     #[test]
+    fn list_enriched_sessions_uses_spec_clarification_agent_type_for_specs() {
+        let (manager, temp_dir) = create_test_session_manager();
+        manager
+            .db_manager
+            .set_spec_clarification_agent_type("gemini")
+            .expect("spec clarification agent type should be set");
+        let now = Utc::now();
+        manager
+            .db_manager
+            .create_spec(&Spec {
+                id: Uuid::new_v4().to_string(),
+                name: "spec-agent-pref".to_string(),
+                display_name: None,
+                epic_id: None,
+                issue_number: None,
+                issue_url: None,
+                pr_number: None,
+                pr_url: None,
+                repository_path: temp_dir.path().join("repo"),
+                repository_name: "test-repo".to_string(),
+                content: "Clarify this spec".to_string(),
+                stage: SpecStage::Draft,
+                attention_required: false,
+                clarification_started: false,
+                created_at: now,
+                updated_at: now,
+            })
+            .expect("spec should be created");
+
+        let enriched = manager
+            .list_enriched_sessions()
+            .expect("listing enriched sessions should succeed");
+
+        let spec_session = enriched
+            .iter()
+            .find(|session| session.info.session_id == "spec-agent-pref")
+            .expect("spec should be present in enriched sessions");
+
+        assert_eq!(spec_session.info.original_agent_type.as_deref(), Some("gemini"));
+    }
+
+    #[test]
     #[serial_test::serial]
     fn test_start_spec_with_config_uses_codex_and_prompt_without_resume() {
         use std::process::Command;
@@ -2642,6 +2684,7 @@ impl SessionManager {
         );
 
         let default_agent_type = self.db_manager.get_agent_type().ok();
+        let spec_clarification_agent_type = self.db_manager.get_spec_clarification_agent_type().ok();
 
         let mut enriched = Vec::new();
         let mut git_tasks = Vec::new();
@@ -2682,7 +2725,7 @@ impl SessionManager {
                 is_current: false,
                 session_type: SessionType::Worktree,
                 container_status: None,
-                original_agent_type: default_agent_type.clone(),
+                original_agent_type: spec_clarification_agent_type.clone(),
                 current_task: None,
                 diff_stats: None,
                 ready_to_merge: false,

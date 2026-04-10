@@ -197,6 +197,8 @@ export interface Translations {
       pressNewShortcut: string
     }
     projectGeneral: {
+      specClarificationAgent: string
+      specClarificationAgentDesc: string
       branchPrefix: string
       branchPrefixDesc: string
       worktreeBaseDirectory: string

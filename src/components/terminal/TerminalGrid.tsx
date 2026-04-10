@@ -84,7 +84,7 @@ const TerminalGridComponent = () => {
     const selectionIsSpec = selection.kind === 'session' && (isSpec || selection.sessionState === 'spec')
     const { getFocusForSession, setFocusForSession, currentFocus } = useFocus()
     const { addRunningSession, removeRunningSession } = useRun()
-    const { getAgentType, getOrchestratorAgentType } = useClaudeSession()
+    const { getAgentType, getOrchestratorAgentType, getSpecClarificationAgentType } = useClaudeSession()
     const { actionButtons } = useActionButtons()
     const { sessions } = useSessions()
     const { isAnyModalOpen } = useModal()
@@ -102,13 +102,6 @@ const TerminalGridComponent = () => {
         [selection, terminals.workingDirectory, sessions],
     )
 
-    const selectedSpec = useMemo(
-        () => selection.kind === 'session' && selection.payload
-            ? sessions.find(session => session.info.session_id === selection.payload) ?? null
-            : null,
-        [selection, sessions],
-    )
-
     // Get dynamic shortcut for Focus Claude
     const focusClaudeShortcut = useShortcutDisplay(KeyboardShortcutAction.FocusClaude)
     const { config: keyboardShortcutConfig } = useKeyboardShortcutsConfig()
@@ -119,6 +112,7 @@ const TerminalGridComponent = () => {
     
     const [terminalKey, setTerminalKey] = useState(0)
     const [specStartRequestNonces, setSpecStartRequestNonces] = useState<Record<string, number>>({})
+    const [specAgentTypeReady, setSpecAgentTypeReady] = useState(!selectionIsSpec)
     const [pendingRefineRequest, setPendingRefineRequest] = useState<{
         sessionName: string
         displayName: string
@@ -575,6 +569,30 @@ const TerminalGridComponent = () => {
 
     // Fetch agent type based on selection
     useEffect(() => {
+        let cancelled = false
+
+        if (selectionIsSpec && selection.payload) {
+            setSpecAgentTypeReady(false)
+            getSpecClarificationAgentType()
+                .then(type => {
+                    if (cancelled) return
+                    const normalized = (type as AgentType) || 'claude'
+                    setAgentType(normalized)
+                    setSpecAgentTypeReady(true)
+                })
+                .catch(error => {
+                    if (cancelled) return
+                    logger.error('Failed to get spec clarification agent type:', error)
+                    setAgentType('claude')
+                    setSpecAgentTypeReady(true)
+                })
+            return () => {
+                cancelled = true
+            }
+        }
+
+        setSpecAgentTypeReady(true)
+
         // For sessions, get the session-specific agent type
         if (selection.kind === 'session' && selection.payload) {
             const session = sessions.find(s => s.info.session_id === selection.payload)
@@ -608,7 +626,11 @@ const TerminalGridComponent = () => {
                 setAgentType('claude')
             })
         }
-    }, [selection.kind, selection.payload, sessions, getAgentType, getOrchestratorAgentType, setAgentType])
+
+        return () => {
+            cancelled = true
+        }
+    }, [selectionIsSpec, selection.kind, selection.payload, sessions, getAgentType, getOrchestratorAgentType, getSpecClarificationAgentType, setAgentType])
 
     // Keep primary tab label/agentType in sync with current agentType
     useEffect(() => {
@@ -1504,7 +1526,7 @@ const TerminalGridComponent = () => {
                             style={{ background: 'linear-gradient(to right, transparent, rgba(var(--color-border-strong-rgb), 0.302), transparent)' }}
                         />
                         <div className="flex-1 min-h-0">
-                            {shouldRenderTerminals && terminals.top && (
+                            {shouldRenderTerminals && terminals.top && specAgentTypeReady && (
                                 <TerminalErrorBoundary terminalId={terminals.top}>
                                     <Terminal
                                         key={`spec-top-terminal-${terminalKey}-${terminals.top}`}
@@ -1514,7 +1536,7 @@ const TerminalGridComponent = () => {
                                         sessionName={specName}
                                         specOrchestratorSessionName={specName}
                                         startAgentRequestNonce={startAgentRequestNonce}
-                                        agentType={selectedSpec?.info.original_agent_type ?? agentType}
+                                        agentType={agentType}
                                         onTerminalClick={handleClaudeSessionClick}
                                         workingDirectory={effectiveWorkingDirectory}
                                     />

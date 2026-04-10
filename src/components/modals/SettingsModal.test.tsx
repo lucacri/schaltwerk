@@ -62,6 +62,29 @@ vi.mock('../specs/MarkdownEditor', async () => {
   return { MarkdownEditor: MockMarkdownEditor }
 })
 
+vi.mock('../inputs/ModelSelector', () => ({
+  ModelSelector: ({
+    value,
+    onChange,
+    allowedAgents,
+  }: {
+    value: string
+    onChange: (value: string) => void
+    allowedAgents?: readonly string[]
+  }) => (
+    <select
+      aria-label="Spec clarification agent"
+      data-testid="spec-clarification-agent-selector"
+      value={value}
+      onChange={event => onChange(event.target.value)}
+    >
+      {(allowedAgents ?? []).map((agent) => (
+        <option key={agent} value={agent}>{agent}</option>
+      ))}
+    </select>
+  )
+}))
+
 const baseInvokeImplementation = async (command: string, _args?: unknown) => {
   switch (command) {
     case TauriCommands.GetAllAgentBinaryConfigs:
@@ -707,6 +730,38 @@ describe('SettingsModal project settings navigation', () => {
     })
 
     confirmSpy.mockRestore()
+  })
+
+  it('loads and saves the project spec clarification agent preference', async () => {
+    const saveAllSettings = vi.fn().mockResolvedValue({ success: true, savedSettings: [], failedSettings: [] })
+    useSettingsMock.mockReturnValue({
+      ...createDefaultUseSettingsValue(),
+      saveAllSettings,
+    })
+
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === TauriCommands.GetActiveProjectPath) return Promise.resolve('/tmp/project')
+      if (command === TauriCommands.SchaltwerkCoreGetSpecClarificationAgentType) return Promise.resolve('codex')
+      if (command === TauriCommands.SchaltwerkCoreSetSpecClarificationAgentType) return Promise.resolve(undefined)
+      return baseInvokeImplementation(command, args)
+    })
+
+    renderWithProviders(<SettingsModal open={true} onClose={() => {}} />)
+    const user = userEvent.setup()
+
+    const projectNavButton = await screen.findByRole('button', { name: 'Project Settings' })
+    await user.click(projectNavButton)
+
+    const selector = await screen.findByTestId('spec-clarification-agent-selector')
+    expect(selector).toHaveValue('codex')
+
+    await user.selectOptions(selector, 'gemini')
+    await user.click(await screen.findByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(saveAllSettings).toHaveBeenCalledTimes(1)
+      expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetSpecClarificationAgentType, { agentType: 'gemini' })
+    })
   })
 })
 

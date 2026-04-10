@@ -71,11 +71,32 @@ export function useClaudeSession() {
         }
     }, [])
 
+    const getSpecClarificationAgentType = useCallback(async (): Promise<string> => {
+        try {
+            return await invoke<string>(TauriCommands.SchaltwerkCoreGetSpecClarificationAgentType)
+        } catch (error) {
+            logger.error('Failed to get spec clarification agent type:', error)
+            return DEFAULT_AGENT
+        }
+    }, [])
+
+    const setSpecClarificationAgentType = useCallback(async (agentType: string): Promise<boolean> => {
+        try {
+            await invoke(TauriCommands.SchaltwerkCoreSetSpecClarificationAgentType, { agentType })
+            return true
+        } catch (error) {
+            logger.error('Failed to set spec clarification agent type:', error)
+            return false
+        }
+    }, [])
+
     return {
         startClaude,
         getAgentType,
         setAgentType,
         getOrchestratorAgentType,
         setOrchestratorAgentType,
+        getSpecClarificationAgentType,
+        setSpecClarificationAgentType,
     }
 }

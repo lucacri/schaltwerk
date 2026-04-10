@@ -17,6 +17,7 @@ import { LanguageSettings } from '../settings/LanguageSettings'
 import { useTranslation } from '../../common/i18n/useTranslation'
 import { logger } from '../../utils/logger'
 import { FontPicker } from './FontPicker'
+import { ModelSelector } from '../inputs/ModelSelector'
 import { GithubProjectIntegrationCard } from '../settings/GithubProjectIntegrationCard'
 import { GitlabProjectIntegrationCard } from '../settings/GitlabProjectIntegrationCard'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
@@ -55,6 +56,7 @@ import {
 import { DEFAULT_AUTONOMY_PROMPT_TEMPLATE } from '../../common/autonomyPrompt'
 import { loadContextualActionsAtom } from '../../store/atoms/contextualActions'
 import { setEnabledAgentsAtom } from '../../store/atoms/enabledAgents'
+import { useClaudeSession } from '../../hooks/useClaudeSession'
 
 const shortcutArraysEqual = (a: string[] = [], b: string[] = []) => {
     if (a.length !== b.length) return false
@@ -400,6 +402,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const [agentCommandPrefix, setAgentCommandPrefix] = useState<string>('')
     const [initialAgentCommandPrefix, setInitialAgentCommandPrefix] = useState<string>('')
     const [generationAgent, setGenerationAgent] = useState<string>('')
+    const [specClarificationAgentType, setSpecClarificationAgentType] = useState<AgentType>(DEFAULT_AGENT)
     const [generationCliArgs, setGenerationCliArgs] = useState<string>('')
     const [generationPrompts, setGenerationPrompts] = useState<DefaultGenerationPrompts>(EMPTY_DEFAULT_GENERATION_PROMPTS)
     const [defaultGenerationPrompts, setDefaultGenerationPrompts] = useState<DefaultGenerationPrompts>(EMPTY_DEFAULT_GENERATION_PROMPTS)
@@ -531,6 +534,13 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         () => AGENT_TYPES.filter(agent => enabledAgents[agent]),
         [enabledAgents]
     )
+    const specClarificationAllowedAgents = useMemo(() => {
+        const enabledNonTerminalAgents = AGENT_TYPES.filter(agent => agent !== 'terminal' && enabledAgents[agent])
+        if (specClarificationAgentType !== 'terminal' && !enabledNonTerminalAgents.includes(specClarificationAgentType)) {
+            return [specClarificationAgentType, ...enabledNonTerminalAgents]
+        }
+        return enabledNonTerminalAgents.length > 0 ? enabledNonTerminalAgents : [DEFAULT_AGENT]
+    }, [enabledAgents, specClarificationAgentType])
     const projectCategories = useMemo(() => {
         if (!projectAvailable) return []
         return PROJECT_CATEGORY_ORDER.map(id => CATEGORIES.find(category => category.id === id)).filter(
@@ -538,6 +548,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         )
     }, [projectAvailable])
     const hasAutoSelectedProject = useRef(false)
+    const initialSpecClarificationAgentTypeRef = useRef<AgentType>(DEFAULT_AGENT)
 
     const {
         loading,
@@ -556,6 +567,10 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         saveKeyboardShortcuts,
         loadInstalledFonts
     } = useSettings()
+    const {
+        getSpecClarificationAgentType,
+        setSpecClarificationAgentType: persistSpecClarificationAgentType,
+    } = useClaudeSession()
     const setStoredEnabledAgents = useSetAtom(setEnabledAgentsAtom)
     
     const {
@@ -785,6 +800,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         let loadedTerminalSettings: TerminalSettings = { shell: null, shellArgs: [], fontFamily: null, webglEnabled: true }
         let loadedRunScript: RunScript = { command: '', workingDirectory: '', environmentVariables: {} }
         let loadedMergePreferences: ProjectMergePreferences = { autoCancelAfterMerge: true, autoCancelAfterPr: false }
+        let loadedSpecClarificationAgentType: AgentType = DEFAULT_AGENT
         let loadedDevErrorToasts = true
         
         try {
@@ -792,7 +808,8 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                 loadProjectSettings(),
                 loadTerminalSettings(),
                 loadRunScript(),
-                loadMergePreferences()
+                loadMergePreferences(),
+                getSpecClarificationAgentType(),
             ])
             
             if (results[0].status === 'fulfilled') {
@@ -806,6 +823,13 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
             }
             if (results[3].status === 'fulfilled') {
                 loadedMergePreferences = results[3].value
+            }
+            if (
+                results[4].status === 'fulfilled'
+                && AGENT_TYPES.includes(results[4].value as AgentType)
+                && results[4].value !== 'terminal'
+            ) {
+                loadedSpecClarificationAgentType = results[4].value as AgentType
             }
         } catch (error) {
             // Project settings not available (likely no project open) - use defaults
@@ -872,6 +896,8 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         setAgentCommandPrefix(loadedCommandPrefix)
         setInitialAgentCommandPrefix(loadedCommandPrefix)
         setGenerationAgent(loadedGenerationAgent)
+        setSpecClarificationAgentType(loadedSpecClarificationAgentType)
+        initialSpecClarificationAgentTypeRef.current = loadedSpecClarificationAgentType
         setGenerationCliArgs(loadedGenerationCliArgs)
         setGenerationPrompts(loadedGenerationPrompts)
         setDefaultGenerationPrompts(loadedDefaultPrompts)
@@ -889,7 +915,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         applyShortcutOverrides(normalizedShortcuts)
         
         void loadBinaryConfigs()
-    }, [loadEnvVars, loadCliArgs, loadAgentPreferences, loadEnabledAgents, loadSessionPreferences, loadKeyboardShortcuts, loadProjectSettings, loadTerminalSettings, loadRunScript, loadMergePreferences, loadBinaryConfigs, applyShortcutOverrides])
+    }, [loadEnvVars, loadCliArgs, loadAgentPreferences, loadEnabledAgents, loadSessionPreferences, loadKeyboardShortcuts, loadProjectSettings, loadTerminalSettings, loadRunScript, loadMergePreferences, getSpecClarificationAgentType, loadBinaryConfigs, applyShortcutOverrides])
 
     useEffect(() => {
         if (!open) return
@@ -1198,6 +1224,21 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
             }
         }
 
+        if (projectAvailable && specClarificationAgentType !== initialSpecClarificationAgentTypeRef.current) {
+            try {
+                const saved = await persistSpecClarificationAgentType(specClarificationAgentType)
+                if (!saved) {
+                    result.failedSettings.push('spec clarification agent')
+                } else {
+                    result.savedSettings.push('spec clarification agent')
+                    initialSpecClarificationAgentTypeRef.current = specClarificationAgentType
+                }
+            } catch (error) {
+                logger.error('Failed to save spec clarification agent type:', error)
+                result.failedSettings.push('spec clarification agent')
+            }
+        }
+
         // Save run script
         try {
             await invoke(TauriCommands.SetProjectRunScript, { runScript })
@@ -1278,6 +1319,20 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                         title={t.settings.categories.projectGeneral ?? t.settings.projectGeneral.branchPrefix}
                         description={t.settings.projectGeneral.worktreeBaseDirectoryDesc}
                     />
+
+                    <FormGroup
+                        label={t.settings.projectGeneral.specClarificationAgent}
+                        help={t.settings.projectGeneral.specClarificationAgentDesc}
+                    >
+                        <ModelSelector
+                            value={specClarificationAgentType}
+                            onChange={(value) => {
+                                setSpecClarificationAgentType(value)
+                                setHasUnsavedChanges(true)
+                            }}
+                            allowedAgents={specClarificationAllowedAgents}
+                        />
+                    </FormGroup>
 
                     <FormGroup
                         label={t.settings.projectGeneral.branchPrefix}

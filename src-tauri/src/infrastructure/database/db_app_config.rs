@@ -7,6 +7,8 @@ pub trait AppConfigMethods {
     fn set_agent_type(&self, agent_type: &str) -> Result<()>;
     fn get_orchestrator_agent_type(&self) -> Result<String>;
     fn set_orchestrator_agent_type(&self, agent_type: &str) -> Result<()>;
+    fn get_spec_clarification_agent_type(&self) -> Result<String>;
+    fn set_spec_clarification_agent_type(&self, agent_type: &str) -> Result<()>;
     fn get_font_sizes(&self) -> Result<(i32, i32)>;
     fn set_font_sizes(&self, terminal_font_size: i32, ui_font_size: i32) -> Result<()>;
     fn get_default_base_branch(&self) -> Result<Option<String>>;
@@ -78,6 +80,33 @@ impl AppConfigMethods for Database {
             Ok(_) => Ok(()),
             Err(_) => self.set_agent_type(agent_type),
         }
+    }
+
+    fn get_spec_clarification_agent_type(&self) -> Result<String> {
+        let result: rusqlite::Result<String> = {
+            let conn = self.get_conn()?;
+            conn.query_row(
+                "SELECT spec_clarification_agent_type FROM app_config WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+        };
+
+        match result {
+            Ok(value) => Ok(value),
+            Err(_) => Ok("claude".to_string()),
+        }
+    }
+
+    fn set_spec_clarification_agent_type(&self, agent_type: &str) -> Result<()> {
+        let conn = self.get_conn()?;
+
+        conn.execute(
+            "UPDATE app_config SET spec_clarification_agent_type = ?1 WHERE id = 1",
+            params![agent_type],
+        )?;
+
+        Ok(())
     }
 
     fn get_font_sizes(&self) -> Result<(i32, i32)> {
@@ -246,11 +275,12 @@ mod tests {
                 id,
                 agent_type,
                 orchestrator_agent_type,
+                spec_clarification_agent_type,
                 default_open_app,
                 terminal_font_size,
                 ui_font_size,
                 tutorial_completed
-            ) VALUES (1, 'claude', 'claude', 'finder', 13, 12, FALSE)",
+            ) VALUES (1, 'claude', 'claude', 'claude', 'finder', 13, 12, FALSE)",
             [],
         )
         .expect("Failed to initialize app_config");
@@ -288,13 +318,10 @@ mod tests {
         let db = create_test_database();
         let mut overrides = std::collections::HashMap::new();
         overrides.insert(".rs".to_string(), "cursor".to_string());
-        db.set_editor_overrides(&overrides)
-            .expect("Failed to set");
+        db.set_editor_overrides(&overrides).expect("Failed to set");
         db.set_editor_overrides(&std::collections::HashMap::new())
             .expect("Failed to clear");
-        let result = db
-            .get_editor_overrides()
-            .expect("Failed to get");
+        let result = db.get_editor_overrides().expect("Failed to get");
         assert!(result.is_empty());
     }
 
@@ -338,6 +365,31 @@ mod tests {
             .get_tutorial_completed()
             .expect("Failed to get tutorial completion");
         assert!(!result, "Tutorial should be marked as not completed");
+    }
+
+    #[test]
+    fn test_get_spec_clarification_agent_type_defaults_to_claude() {
+        let db = create_test_database();
+
+        let result = db
+            .get_spec_clarification_agent_type()
+            .expect("Failed to get spec clarification agent type");
+
+        assert_eq!(result, "claude");
+    }
+
+    #[test]
+    fn test_set_and_get_spec_clarification_agent_type() {
+        let db = create_test_database();
+
+        db.set_spec_clarification_agent_type("codex")
+            .expect("Failed to set spec clarification agent type");
+
+        let result = db
+            .get_spec_clarification_agent_type()
+            .expect("Failed to get spec clarification agent type");
+
+        assert_eq!(result, "codex");
     }
 
     #[test]
@@ -404,11 +456,12 @@ mod tests {
                     id,
                     agent_type,
                     orchestrator_agent_type,
+                    spec_clarification_agent_type,
                     default_open_app,
                     terminal_font_size,
                     ui_font_size,
                     tutorial_completed
-                ) VALUES (1, 'claude', 'claude', 'finder', 13, 12, FALSE)",
+                ) VALUES (1, 'claude', 'claude', 'claude', 'finder', 13, 12, FALSE)",
                 [],
             )
             .expect("Failed to seed app_config");

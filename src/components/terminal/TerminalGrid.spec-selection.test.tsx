@@ -10,7 +10,7 @@ import type { MockTauriInvokeArgs } from '../../types/testing'
 import type { RawSession } from '../../types/session'
 import { invoke } from '@tauri-apps/api/core'
 import { useSelection } from '../../hooks/useSelection'
-import { specOrchestratorTerminalId } from '../../common/terminalIdentity'
+import { specOrchestratorTerminalId, stableSessionTerminalId } from '../../common/terminalIdentity'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn()
@@ -24,13 +24,16 @@ vi.mock('./Terminal', () => ({
   Terminal: ({
     terminalId,
     startAgentRequestNonce,
+    agentType,
   }: {
     terminalId: string
     startAgentRequestNonce?: number
+    agentType?: string
   }) => (
     <div
       data-testid={`terminal-${terminalId}`}
       data-start-agent-request-nonce={startAgentRequestNonce ?? 0}
+      data-agent-type={agentType ?? ''}
     />
   )
 }))
@@ -238,5 +241,243 @@ describe('TerminalGrid spec selection layout', () => {
     })
 
     expect(terminal).toHaveAttribute('data-start-agent-request-nonce', '1')
+  })
+
+  it('uses the dedicated spec clarification agent preference for spec terminals', async () => {
+    const spec = mockEnrichedSession('spec-pref', 'spec', false)
+    spec.info.stable_id = 'spec-pref-stable-id'
+    spec.info.spec_stage = 'draft'
+    spec.info.original_agent_type = 'claude'
+    setSessionData([spec])
+
+    mockedInvoke.mockImplementation(async (command: string, args?: MockTauriInvokeArgs) => {
+      switch (command) {
+        case TauriCommands.SchaltwerkCoreListEnrichedSessions:
+          return currentSessions
+        case TauriCommands.SchaltwerkCoreListSessionsByState:
+          return []
+        case TauriCommands.SchaltwerkCoreGetSession: {
+          const sessionName = (args as { name?: string } | undefined)?.name
+          if (!sessionName) return null
+          return rawSessions[sessionName] ?? null
+        }
+        case TauriCommands.SchaltwerkCoreGetSpecClarificationAgentType:
+          return 'gemini'
+        case TauriCommands.GetProjectSessionsSettings:
+          return { filter_mode: 'all', sort_mode: 'name' }
+        case TauriCommands.SetProjectSessionsSettings:
+          return undefined
+        case TauriCommands.GetProjectActionButtons:
+          return []
+        case TauriCommands.GetCurrentDirectory:
+          return '/tmp/project'
+        case TauriCommands.TerminalExists:
+          return false
+        case TauriCommands.CreateTerminal:
+        case TauriCommands.CreateTerminalWithSize:
+        case TauriCommands.CloseTerminal:
+        case TauriCommands.ResizeTerminal:
+        case TauriCommands.WriteTerminal:
+        case TauriCommands.SchaltwerkCoreUpdateSpecContent:
+        case TauriCommands.SchaltwerkCoreArchiveSpecSession:
+          return undefined
+        case TauriCommands.SchaltwerkCoreGetFontSizes:
+          return [13, 14]
+        default:
+          return undefined
+      }
+    })
+
+    render(
+      <TestProviders>
+        <SelectionDriver onReady={(c) => { controller = c }} />
+        <TerminalGrid />
+      </TestProviders>
+    )
+
+    await waitFor(() => {
+      expect(controller).not.toBeNull()
+    }, { timeout: 10000 })
+
+    await act(async () => {
+      await controller!.setSelection({
+        kind: 'session',
+        payload: 'spec-pref',
+        sessionState: 'spec',
+        stableId: 'spec-pref-stable-id',
+      }, false, true)
+    })
+
+    const terminal = await screen.findByTestId(`terminal-${specOrchestratorTerminalId('spec-pref-stable-id')}`)
+    expect(terminal).toHaveAttribute('data-agent-type', 'gemini')
+  })
+
+  it('waits for the clarification preference before starting the spec agent', async () => {
+    const spec = mockEnrichedSession('spec-race', 'spec', false)
+    spec.info.stable_id = 'spec-race-stable-id'
+    spec.info.spec_stage = 'draft'
+    setSessionData([spec])
+
+    let resolveAgentType: ((value: string) => void) | null = null
+    mockedInvoke.mockImplementation(async (command: string, args?: MockTauriInvokeArgs) => {
+      switch (command) {
+        case TauriCommands.SchaltwerkCoreListEnrichedSessions:
+          return currentSessions
+        case TauriCommands.SchaltwerkCoreListSessionsByState:
+          return []
+        case TauriCommands.SchaltwerkCoreGetSession: {
+          const sessionName = (args as { name?: string } | undefined)?.name
+          if (!sessionName) return null
+          return rawSessions[sessionName] ?? null
+        }
+        case TauriCommands.SchaltwerkCoreGetSpecClarificationAgentType:
+          return await new Promise<string>((resolve) => {
+            resolveAgentType = resolve
+          })
+        case TauriCommands.GetProjectSessionsSettings:
+          return { filter_mode: 'all', sort_mode: 'name' }
+        case TauriCommands.SetProjectSessionsSettings:
+          return undefined
+        case TauriCommands.GetProjectActionButtons:
+          return []
+        case TauriCommands.GetCurrentDirectory:
+          return '/tmp/project'
+        case TauriCommands.TerminalExists:
+          return false
+        case TauriCommands.CreateTerminal:
+        case TauriCommands.CreateTerminalWithSize:
+        case TauriCommands.CloseTerminal:
+        case TauriCommands.ResizeTerminal:
+        case TauriCommands.WriteTerminal:
+        case TauriCommands.SchaltwerkCoreUpdateSpecContent:
+        case TauriCommands.SchaltwerkCoreArchiveSpecSession:
+          return undefined
+        case TauriCommands.SchaltwerkCoreGetFontSizes:
+          return [13, 14]
+        default:
+          return undefined
+      }
+    })
+
+    render(
+      <TestProviders>
+        <SelectionDriver onReady={(c) => { controller = c }} />
+        <TerminalGrid />
+      </TestProviders>
+    )
+
+    await waitFor(() => {
+      expect(controller).not.toBeNull()
+    }, { timeout: 10000 })
+
+    await act(async () => {
+      await controller!.setSelection({
+        kind: 'session',
+        payload: 'spec-race',
+        sessionState: 'spec',
+        stableId: 'spec-race-stable-id',
+      }, false, true)
+    })
+
+    await act(async () => {
+      screen.getByRole('button', { name: /clarify/i }).click()
+    })
+
+    expect(screen.queryByTestId(`terminal-${specOrchestratorTerminalId('spec-race-stable-id')}`)).toBeNull()
+
+    await act(async () => {
+      resolveAgentType?.('gemini')
+    })
+
+    const terminal = await screen.findByTestId(`terminal-${specOrchestratorTerminalId('spec-race-stable-id')}`)
+    expect(terminal).toHaveAttribute('data-agent-type', 'gemini')
+    expect(terminal).toHaveAttribute('data-start-agent-request-nonce', '1')
+  })
+
+  it('ignores a late spec agent lookup after switching away', async () => {
+    const spec = mockEnrichedSession('spec-switch', 'spec', false)
+    spec.info.stable_id = 'spec-switch-stable-id'
+    spec.info.spec_stage = 'draft'
+
+    const running = mockEnrichedSession('session-live', 'running', false)
+    running.info.original_agent_type = 'codex'
+    setSessionData([spec, running])
+
+    let resolveAgentType: ((value: string) => void) | null = null
+    mockedInvoke.mockImplementation(async (command: string, args?: MockTauriInvokeArgs) => {
+      switch (command) {
+        case TauriCommands.SchaltwerkCoreListEnrichedSessions:
+          return currentSessions
+        case TauriCommands.SchaltwerkCoreListSessionsByState:
+          return []
+        case TauriCommands.SchaltwerkCoreGetSession: {
+          const sessionName = (args as { name?: string } | undefined)?.name
+          if (!sessionName) return null
+          return rawSessions[sessionName] ?? null
+        }
+        case TauriCommands.SchaltwerkCoreGetSpecClarificationAgentType:
+          return await new Promise<string>((resolve) => {
+            resolveAgentType = resolve
+          })
+        case TauriCommands.GetProjectSessionsSettings:
+          return { filter_mode: 'all', sort_mode: 'name' }
+        case TauriCommands.SetProjectSessionsSettings:
+          return undefined
+        case TauriCommands.GetProjectActionButtons:
+          return []
+        case TauriCommands.GetCurrentDirectory:
+          return '/tmp/project'
+        case TauriCommands.TerminalExists:
+          return false
+        case TauriCommands.CreateTerminal:
+        case TauriCommands.CreateTerminalWithSize:
+        case TauriCommands.CloseTerminal:
+        case TauriCommands.ResizeTerminal:
+        case TauriCommands.WriteTerminal:
+        case TauriCommands.SchaltwerkCoreUpdateSpecContent:
+        case TauriCommands.SchaltwerkCoreArchiveSpecSession:
+          return undefined
+        case TauriCommands.SchaltwerkCoreGetFontSizes:
+          return [13, 14]
+        default:
+          return undefined
+      }
+    })
+
+    render(
+      <TestProviders>
+        <SelectionDriver onReady={(c) => { controller = c }} />
+        <TerminalGrid />
+      </TestProviders>
+    )
+
+    await waitFor(() => {
+      expect(controller).not.toBeNull()
+    }, { timeout: 10000 })
+
+    await act(async () => {
+      await controller!.setSelection({
+        kind: 'session',
+        payload: 'spec-switch',
+        sessionState: 'spec',
+        stableId: 'spec-switch-stable-id',
+      }, false, true)
+    })
+
+    await act(async () => {
+      await controller!.setSelection({
+        kind: 'session',
+        payload: 'session-live',
+        sessionState: 'running',
+        stableId: 'session-live-stable-id',
+      }, false, true)
+    })
+
+    await act(async () => {
+      resolveAgentType?.('gemini')
+    })
+
+    const terminal = await screen.findByTestId(`terminal-${stableSessionTerminalId('session-live', 'top')}`)
+    expect(terminal).toHaveAttribute('data-agent-type', 'codex')
   })
 })
