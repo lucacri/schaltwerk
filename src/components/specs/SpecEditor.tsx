@@ -31,6 +31,7 @@ import { useSpecLineSelection } from '../../hooks/useSpecLineSelection'
 import { useClaudeSession } from '../../hooks/useClaudeSession'
 import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
 import { getPasteSubmissionOptions } from '../../common/terminalPaste'
+import { specOrchestratorTerminalId } from '../../common/terminalIdentity'
 import { useReviewComments } from '../../hooks/useReviewComments'
 import type { SpecReviewComment } from '../../types/specReview'
 import { VscSend } from 'react-icons/vsc'
@@ -368,15 +369,18 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
 
     const reviewText = formatSpecReviewForPrompt(reviewComments, sessionName, displayName)
 
-    let agentType: string | undefined
-    try {
-      agentType = await getOrchestratorAgentType()
-    } catch (err) {
-      logger.error('[SpecEditor] Failed to get orchestrator agent type', err)
+    let agentType: string | undefined = selectedSession?.info.original_agent_type
+    if (!agentType) {
+      try {
+        agentType = await getOrchestratorAgentType()
+      } catch (err) {
+        logger.error('[SpecEditor] Failed to get fallback agent type for spec review', err)
+      }
     }
 
     const { useBracketedPaste, needsDelayedSubmit } = getPasteSubmissionOptions(agentType)
-    const terminalId = getActiveAgentTerminalId('orchestrator') ?? 'orchestrator-top'
+    const stableSpecId = selectedSession?.info.stable_id ?? sessionName
+    const terminalId = getActiveAgentTerminalId(sessionName) ?? specOrchestratorTerminalId(stableSpecId)
 
     try {
       await invoke(TauriCommands.PasteAndSubmitTerminal, {
@@ -386,14 +390,14 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
         needsDelayedSubmit,
       })
 
-      void setSelection({ kind: 'orchestrator' }, false, true)
+      void setSelection({ kind: 'session', payload: sessionName, sessionState: 'spec' }, false, true)
       handleExitReviewMode()
-      logger.info('[SpecEditor] Finished review, pasted to orchestrator')
+      logger.info('[SpecEditor] Finished review, pasted to spec clarification agent', { terminalId, sessionName })
     } catch (err) {
       logger.error('[SpecEditor] Failed to paste review to terminal', err)
-      setError('Failed to send review to orchestrator')
+      setError('Failed to send review to clarification agent')
     }
-  }, [reviewComments, formatSpecReviewForPrompt, sessionName, displayName, getOrchestratorAgentType, setSelection, handleExitReviewMode])
+  }, [reviewComments, formatSpecReviewForPrompt, sessionName, displayName, selectedSession, getOrchestratorAgentType, setSelection, handleExitReviewMode])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

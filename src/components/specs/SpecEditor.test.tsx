@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, waitFor, act, screen, fireEvent } from '@testing-library/react'
 import { TauriCommands } from '../../common/tauriCommands'
+import { specOrchestratorTerminalId } from '../../common/terminalIdentity'
+import type { EnrichedSession } from '../../types/session'
 
 const mockFocusEnd = vi.fn()
 const updateSessionSpecContentMock = vi.hoisted(() => vi.fn())
+const setSelectionMock = vi.hoisted(() => vi.fn())
+const getOrchestratorAgentTypeMock = vi.hoisted(() => vi.fn())
 
 interface SpecContentMock {
   content: string
@@ -17,7 +21,7 @@ let specContentMock: SpecContentMock = {
   hasData: true
 }
 
-let sessionsMock: Array<{ info: { session_id: string; spec_stage?: 'draft' | 'clarified'; epic?: null } }> = []
+let sessionsMock: EnrichedSession[] = []
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(), UnlistenFn: vi.fn() }))
@@ -42,6 +46,42 @@ vi.mock('../../hooks/useSessions', () => ({
     sessions: sessionsMock,
     updateSessionSpecContent: updateSessionSpecContentMock,
   }),
+}))
+
+vi.mock('../../hooks/useSelection', () => ({
+  useSelection: () => ({
+    setSelection: setSelectionMock,
+  }),
+}))
+
+vi.mock('../../hooks/useClaudeSession', () => ({
+  useClaudeSession: () => ({
+    getOrchestratorAgentType: getOrchestratorAgentTypeMock,
+  }),
+}))
+
+vi.mock('./SpecReviewEditor', () => ({
+  SpecReviewEditor: ({
+    specId,
+    selection,
+    onLineClick,
+    onLineMouseUp,
+  }: {
+    specId: string
+    selection: { startLine: number; endLine: number; specId: string } | null
+    onLineClick: (lineNum: number, specId: string) => void
+    onLineMouseUp?: (event: MouseEvent) => void
+  }) => (
+    <div data-testid="spec-review-editor">
+      <button onClick={() => onLineClick(2, specId)}>Select line</button>
+      <button
+        disabled={!selection}
+        onClick={() => onLineMouseUp?.(new MouseEvent('mouseup', { clientX: 24, clientY: 48 }))}
+      >
+        Open comment form
+      </button>
+    </div>
+  ),
 }))
 
 vi.mock('./MarkdownEditor', async () => {
@@ -85,6 +125,10 @@ describe('SpecEditor keyboard shortcuts', () => {
     sessionsMock = []
     Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (Macintosh)', configurable: true })
     updateSessionSpecContentMock.mockReset()
+    setSelectionMock.mockReset()
+    setSelectionMock.mockResolvedValue(undefined)
+    getOrchestratorAgentTypeMock.mockReset()
+    getOrchestratorAgentTypeMock.mockResolvedValue('claude')
 
     vi.mocked(invoke).mockImplementation(async (cmd) => {
       if (cmd === TauriCommands.SchaltwerkCoreGetSessionAgentContent) {
@@ -168,8 +212,15 @@ describe('SpecEditor keyboard shortcuts', () => {
         info: {
           session_id: 'clarified-spec',
           spec_stage: 'clarified',
-          epic: null,
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
         },
+        terminals: [],
       },
     ]
 
@@ -261,5 +312,76 @@ describe('SpecEditor keyboard shortcuts', () => {
     await waitFor(() => {
       expect(mockFocusEnd).not.toHaveBeenCalled()
     })
+  })
+
+  it('routes spec review comments to the spec clarification terminal and keeps the spec selected', async () => {
+    const sessionName = 'review-spec'
+    const stableId = 'spec-stable-123'
+
+    specContentMock = {
+      content: 'Line one\nLine two\nLine three',
+      displayName: 'Review Spec',
+      hasData: true,
+    }
+
+    sessionsMock = [
+      {
+        info: {
+          session_id: sessionName,
+          stable_id: stableId,
+          spec_stage: 'draft',
+          original_agent_type: 'droid',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName={sessionName} />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select line' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Open comment form' })).toBeEnabled()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open comment form' }))
+
+    const commentInput = await screen.findByPlaceholderText('Write your comment...')
+    fireEvent.change(commentInput, { target: { value: 'Please tighten the goal statement.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    fireEvent.click(await screen.findByRole('button', { name: /finish review/i }))
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        TauriCommands.PasteAndSubmitTerminal,
+        expect.objectContaining({
+          id: specOrchestratorTerminalId(stableId),
+          useBracketedPaste: false,
+          needsDelayedSubmit: true,
+        })
+      )
+    })
+
+    await waitFor(() => {
+      expect(setSelectionMock).toHaveBeenCalledWith(
+        { kind: 'session', payload: sessionName, sessionState: 'spec' },
+        false,
+        true,
+      )
+    })
+
+    expect(getOrchestratorAgentTypeMock).not.toHaveBeenCalled()
   })
 })
