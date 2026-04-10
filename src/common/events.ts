@@ -260,7 +260,6 @@ export type EventPayloadMap = {
     last_modified?: string
     epic?: Epic
     agent_type?: string
-    skip_permissions?: boolean
     is_consolidation?: boolean
     consolidation_sources?: string[]
   }

@@ -548,7 +548,6 @@ mod tests {
                     version_number: None,
                     epic_id: None,
                     agent_type: None,
-                    skip_permissions: None,
                     pr_number: None,
                     is_consolidation: false,
                     consolidation_source_ids: None,

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import userEvent from '@testing-library/user-event'
 import { ModelSelector } from './ModelSelector'
-import { AgentType, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../../types/session'
+import { AgentType } from '../../types/session'
 
 // Mock the useAgentAvailability hook
 vi.mock('../../hooks/useAgentAvailability', () => ({
@@ -29,35 +29,21 @@ vi.mock('../../hooks/useAgentAvailability', () => ({
 function setup(options: {
   initial?: AgentType
   disabled?: boolean
-  skipPermissions?: boolean
-  onSkipPermissionsChange?: (skip: boolean) => void
   allowedAgents?: AgentType[]
 } = {}) {
   const {
     initial = 'claude',
     disabled = false,
-    skipPermissions,
-    onSkipPermissionsChange,
     allowedAgents,
   } = options
   const onChange = vi.fn()
 
   function Wrapper() {
     const [value, setValue] = useState<AgentType>(initial)
-    const [skip, setSkip] = useState<boolean | undefined>(skipPermissions)
 
     const handleChange = (next: AgentType) => {
       setValue(next)
       onChange(next)
-      if (skip !== undefined && !AGENT_SUPPORTS_SKIP_PERMISSIONS[next]) {
-        setSkip(false)
-        onSkipPermissionsChange?.(false)
-      }
-    }
-
-    const handleSkipChange = (next: boolean) => {
-      setSkip(next)
-      onSkipPermissionsChange?.(next)
     }
 
     return (
@@ -65,13 +51,7 @@ function setup(options: {
         value={value}
         onChange={handleChange}
         disabled={disabled}
-        skipPermissions={skip}
         allowedAgents={allowedAgents}
-        onSkipPermissionsChange={
-          typeof skip === 'boolean' || onSkipPermissionsChange
-            ? handleSkipChange
-            : undefined
-        }
       />
     )
   }
@@ -181,10 +161,10 @@ describe('ModelSelector', () => {
   test('can select Gemini model', async () => {
     const user = userEvent.setup()
     const { onChange } = setup()
-    
+
     await user.click(screen.getByRole('button', { name: /Claude/i }))
     await user.click(screen.getByRole('button', { name: 'Gemini' }))
-    
+
     expect(onChange).toHaveBeenCalledWith('gemini')
   })
 
@@ -272,34 +252,5 @@ describe('ModelSelector', () => {
     const opencodeOption = screen.getByRole('button', { name: 'OpenCode' })
     // Check that the option exists and is rendered
     expect(opencodeOption).toBeInTheDocument()
-  })
-
-  test('exposes permission toggle when supported', async () => {
-    const onSkipPermissionsChange = vi.fn()
-    setup({ skipPermissions: false, onSkipPermissionsChange })
-
-    const enableSkip = await screen.findByRole('button', { name: /Skip permissions/i })
-    expect(enableSkip).toHaveAttribute('aria-pressed', 'false')
-
-    await userEvent.click(enableSkip)
-
-    expect(onSkipPermissionsChange).toHaveBeenCalledWith(true)
-  })
-
-  test('hides permission toggle when agent does not support it', () => {
-    setup({ initial: 'opencode', skipPermissions: false, onSkipPermissionsChange: vi.fn() })
-
-    expect(screen.queryByRole('button', { name: /Skip permissions/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Require permissions/i })).not.toBeInTheDocument()
-  })
-
-  test('updates toggle visibility when selecting unsupported agent', async () => {
-    const onSkipPermissionsChange = vi.fn()
-    setup({ skipPermissions: false, onSkipPermissionsChange })
-
-    await userEvent.click(screen.getByRole('button', { name: /Claude/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'OpenCode' }))
-
-    expect(screen.queryByRole('button', { name: /Skip permissions/i })).not.toBeInTheDocument()
   })
 })

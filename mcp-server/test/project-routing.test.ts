@@ -155,7 +155,7 @@ describe('LucodeBridge project routing', () => {
       fetchMock.mockResolvedValueOnce(createResponse({}))
 
       const bridge = new LucodeBridge()
-      await bridge.createSession('test', 'prompt', undefined, undefined, undefined, undefined, undefined, overrideDir)
+      await bridge.createSession('test', 'prompt', undefined, undefined, undefined, undefined, overrideDir)
 
       const createHeaders = headersFromCall(0)
       const webhookHeaders = headersFromCall(1)

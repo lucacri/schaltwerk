@@ -344,7 +344,6 @@ impl AgentRegistry {
         worktree_path: &Path,
         session_id: Option<&str>,
         initial_prompt: Option<&str>,
-        skip_permissions: bool,
         binary_override: Option<&str>,
     ) -> Option<AgentLaunchSpec> {
         let adapter = self.get(agent_type)?;
@@ -354,7 +353,7 @@ impl AgentRegistry {
             worktree_path,
             session_id,
             initial_prompt,
-            skip_permissions,
+            skip_permissions: manifest.supports_skip_permissions,
             binary_override,
             manifest,
         };
@@ -413,7 +412,6 @@ mod tests {
             Path::new("/test/path"),
             None,
             Some("test prompt"),
-            false,
             None,
         );
 

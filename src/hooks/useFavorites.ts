@@ -53,9 +53,7 @@ function summarizeVariant(variant: AgentVariant): string {
 }
 
 function summarizePreset(preset: AgentPreset): string {
-    const countLabel = `${preset.slots.length} agent${preset.slots.length === 1 ? '' : 's'}`
-    const hasSkipPermissions = preset.slots.some(slot => slot.skipPermissions)
-    return hasSkipPermissions ? `${countLabel} · skip` : countLabel
+    return `${preset.slots.length} agent${preset.slots.length === 1 ? '' : 's'}`
 }
 
 function sortFavorites(items: FavoriteItem[], favoriteOrder: string[]): FavoriteItem[] {

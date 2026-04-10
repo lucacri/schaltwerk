@@ -1010,11 +1010,7 @@
     "noModels": "No models available",
     "selectReasoning": "Select reasoning effort",
     "noReasoningOptions": "No reasoning options available",
-    "requirePermissions": "Require permissions",
-    "skipPermissions": "Skip permissions",
     "fullAutonomous": "Full autonomous",
-    "requirePermissionsTitle": "Require macOS permission prompts when starting the agent",
-    "skipPermissionsTitle": "Skip macOS permission prompts when starting the agent",
     "fullAutonomousTitle": "Append the shared autonomy instruction template when this session is created"
   },
   "githubMenu": {

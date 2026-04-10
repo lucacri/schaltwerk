@@ -344,7 +344,6 @@ fn json_error_response(status: StatusCode, message: String) -> Response<String> 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ResolvedPresetSlot {
     agent_type: String,
-    skip_permissions: Option<bool>,
     autonomy_enabled: bool,
 }
 
@@ -430,7 +429,6 @@ fn resolve_preset(selector: &str, presets: &[AgentPreset]) -> Result<ResolvedPre
             .iter()
             .map(|slot| ResolvedPresetSlot {
                 agent_type: slot.agent_type.clone(),
-                skip_permissions: slot.skip_permissions,
                 autonomy_enabled: slot.autonomy_enabled.unwrap_or(false),
             })
             .collect(),
@@ -440,12 +438,9 @@ fn resolve_preset(selector: &str, presets: &[AgentPreset]) -> Result<ResolvedPre
 fn validate_preset_request_conflicts(
     preset: Option<&str>,
     agent_type: Option<&str>,
-    skip_permissions: Option<bool>,
 ) -> Result<(), String> {
-    if preset.is_some() && (agent_type.is_some() || skip_permissions.is_some()) {
-        return Err(
-            "'preset' is mutually exclusive with 'agent_type' and 'skip_permissions'".to_string(),
-        );
+    if preset.is_some() && agent_type.is_some() {
+        return Err("'preset' is mutually exclusive with 'agent_type'".to_string());
     }
 
     Ok(())
@@ -577,7 +572,6 @@ async fn create_sessions_from_preset_launch(
             version_number: Some(version_number),
             epic_id: options.epic_id,
             agent_type: Some(slot.agent_type.as_str()),
-            skip_permissions: slot.skip_permissions,
             pr_number: options.pr_number,
             is_consolidation: options.is_consolidation,
             consolidation_source_ids: options.consolidation_source_ids.clone(),
@@ -1442,15 +1436,10 @@ mod tests {
         }
     }
 
-    fn make_preset_slot(
-        agent_type: &str,
-        skip_permissions: Option<bool>,
-        autonomy_enabled: Option<bool>,
-    ) -> AgentPresetSlot {
+    fn make_preset_slot(agent_type: &str, autonomy_enabled: Option<bool>) -> AgentPresetSlot {
         AgentPresetSlot {
             agent_type: agent_type.to_string(),
             variant_id: Some(format!("{agent_type}-variant")),
-            skip_permissions,
             autonomy_enabled,
         }
     }
@@ -1480,7 +1469,7 @@ mod tests {
         let preset = make_preset(
             "preset-smarts",
             "Smarts",
-            vec![make_preset_slot("claude", Some(true), Some(true))],
+            vec![make_preset_slot("claude", Some(true))],
         );
 
         let resolved = resolve_preset("preset-smarts", &[preset]).expect("preset resolves");
@@ -1489,7 +1478,6 @@ mod tests {
         assert_eq!(resolved.name, "Smarts");
         assert_eq!(resolved.slots.len(), 1);
         assert_eq!(resolved.slots[0].agent_type, "claude");
-        assert_eq!(resolved.slots[0].skip_permissions, Some(true));
         assert!(resolved.slots[0].autonomy_enabled);
     }
 
@@ -1498,7 +1486,7 @@ mod tests {
         let preset = make_preset(
             "preset-smarts",
             "Smarts",
-            vec![make_preset_slot("codex", Some(false), None)],
+            vec![make_preset_slot("codex", None)],
         );
 
         let resolved = resolve_preset("sMaRtS", &[preset]).expect("preset resolves");
@@ -1506,7 +1494,6 @@ mod tests {
         assert_eq!(resolved.id, "preset-smarts");
         assert_eq!(resolved.name, "Smarts");
         assert_eq!(resolved.slots[0].agent_type, "codex");
-        assert_eq!(resolved.slots[0].skip_permissions, Some(false));
         assert!(!resolved.slots[0].autonomy_enabled);
     }
 
@@ -1517,7 +1504,7 @@ mod tests {
             &[make_preset(
                 "preset-smarts",
                 "Smarts",
-                vec![make_preset_slot("claude", None, None)],
+                vec![make_preset_slot("claude", None)],
             )],
         )
         .expect_err("unknown preset should fail");
@@ -1538,7 +1525,7 @@ mod tests {
         let presets = vec![make_preset(
             "preset-smarts",
             "Smarts",
-            vec![make_preset_slot("claude", None, None)],
+            vec![make_preset_slot("claude", None)],
         )];
         let err = resolve_preset("   ", &presets).expect_err("empty selector should fail");
         assert!(err.contains("empty"));
@@ -1550,12 +1537,12 @@ mod tests {
             make_preset(
                 "Smarts",
                 "First",
-                vec![make_preset_slot("claude", None, None)],
+                vec![make_preset_slot("claude", None)],
             ),
             make_preset(
                 "preset-2",
                 "Smarts",
-                vec![make_preset_slot("codex", None, None)],
+                vec![make_preset_slot("codex", None)],
             ),
         ];
         let resolved =
@@ -1565,13 +1552,9 @@ mod tests {
     }
 
     #[test]
-    fn validate_preset_request_conflicts_rejects_agent_or_skip_permissions() {
-        let err = validate_preset_request_conflicts(
-            Some("Smarts"),
-            Some("claude"),
-            Some(true),
-        )
-        .expect_err("preset conflicts should fail");
+    fn validate_preset_request_conflicts_rejects_agent_with_preset() {
+        let err = validate_preset_request_conflicts(Some("Smarts"), Some("claude"))
+            .expect_err("preset conflicts should fail");
 
         assert!(err.contains("mutually exclusive"));
     }
@@ -1587,12 +1570,10 @@ mod tests {
             slots: vec![
                 ResolvedPresetSlot {
                     agent_type: "claude".to_string(),
-                    skip_permissions: Some(true),
                     autonomy_enabled: false,
                 },
                 ResolvedPresetSlot {
                     agent_type: "codex".to_string(),
-                    skip_permissions: Some(false),
                     autonomy_enabled: false,
                 },
             ],
@@ -1647,7 +1628,6 @@ mod tests {
             name: "Smarts".to_string(),
             slots: vec![ResolvedPresetSlot {
                 agent_type: "claude".to_string(),
-                skip_permissions: Some(true),
                 autonomy_enabled: true,
             }],
         };
@@ -1697,7 +1677,6 @@ mod tests {
             name: "Smarts".to_string(),
             slots: vec![ResolvedPresetSlot {
                 agent_type: "codex".to_string(),
-                skip_permissions: Some(true),
                 autonomy_enabled: false,
             }],
         };
@@ -1749,12 +1728,10 @@ mod tests {
             slots: vec![
                 ResolvedPresetSlot {
                     agent_type: "claude".to_string(),
-                    skip_permissions: Some(true),
                     autonomy_enabled: false,
                 },
                 ResolvedPresetSlot {
                     agent_type: "codex".to_string(),
-                    skip_permissions: Some(false),
                     autonomy_enabled: false,
                 },
             ],
@@ -2023,19 +2000,17 @@ mod tests {
         assert!(payload.agent_type.is_none());
         assert!(payload.prompt.is_none());
         assert!(payload.skip_prompt.is_none());
-        assert!(payload.skip_permissions.is_none());
     }
 
     #[test]
     fn reset_session_request_parses_optional_fields() {
         let payload: ResetSessionRequest = serde_json::from_slice(
-            br#"{ "agent_type": "claude", "prompt": "hi", "skip_prompt": true, "skip_permissions": false }"#,
+            br#"{ "agent_type": "claude", "prompt": "hi", "skip_prompt": true }"#,
         )
         .expect("payload");
         assert_eq!(payload.agent_type.as_deref(), Some("claude"));
         assert_eq!(payload.prompt.as_deref(), Some("hi"));
         assert_eq!(payload.skip_prompt, Some(true));
-        assert_eq!(payload.skip_permissions, Some(false));
     }
 
     #[test]
@@ -2046,7 +2021,6 @@ mod tests {
         assert!(payload.agent_type.is_none());
         assert!(payload.prompt.is_none());
         assert!(payload.skip_prompt.is_none());
-        assert!(payload.skip_permissions.is_none());
     }
 
     #[test]
@@ -2447,7 +2421,6 @@ mod tests {
                 version_number: None,
                 epic_id: None,
                 agent_type: None,
-                skip_permissions: None,
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
@@ -2569,7 +2542,6 @@ mod tests {
                 version_number: None,
                 epic_id: None,
                 agent_type: None,
-                skip_permissions: None,
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
@@ -2671,7 +2643,6 @@ mod tests {
                 version_number: None,
                 epic_id: None,
                 agent_type: None,
-                skip_permissions: None,
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.name.clone(), v2.name.clone()]),
@@ -2743,7 +2714,6 @@ mod tests {
                 version_number: None,
                 epic_id: None,
                 agent_type: None,
-                skip_permissions: None,
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
@@ -2832,7 +2802,6 @@ mod tests {
                 version_number: None,
                 epic_id: None,
                 agent_type: None,
-                skip_permissions: None,
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
@@ -2884,7 +2853,6 @@ mod tests {
                 version_number: None,
                 epic_id: None,
                 agent_type: None,
-                skip_permissions: None,
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
@@ -2962,7 +2930,6 @@ mod tests {
                 version_number: None,
                 epic_id: None,
                 agent_type: None,
-                skip_permissions: None,
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
@@ -3044,7 +3011,6 @@ mod tests {
         assert_eq!(payload.selection.as_deref(), Some("session"));
         assert_eq!(payload.session_name.as_deref(), Some("my-session"));
         assert_eq!(payload.skip_prompt, Some(true));
-        assert!(payload.skip_permissions.is_none());
     }
 
     #[test]
@@ -3205,7 +3171,6 @@ async fn create_draft(
     };
     let content = payload["content"].as_str().unwrap_or("");
     let agent_type = payload["agent_type"].as_str();
-    let _skip_permissions = payload["skip_permissions"].as_bool();
     let epic_id = payload["epic_id"].as_str();
     let issue_number = payload["issueNumber"]
         .as_i64()
@@ -3707,7 +3672,6 @@ async fn start_spec_session(
 
     let base_branch = payload["base_branch"].as_str().map(|s| s.to_string());
     let agent_type = payload["agent_type"].as_str();
-    let skip_permissions = payload["skip_permissions"].as_bool();
     let version_group_id = payload["version_group_id"].as_str().map(|s| s.to_string());
     let version_number = payload["version_number"].as_i64().map(|n| n as i32);
     let preset = payload["preset"].as_str().map(|s| s.to_string());
@@ -3715,7 +3679,6 @@ async fn start_spec_session(
     if let Err(message) = validate_preset_request_conflicts(
         preset.as_deref(),
         agent_type,
-        skip_permissions,
     ) {
         return Ok(json_error_response(StatusCode::BAD_REQUEST, message));
     }
@@ -3791,7 +3754,6 @@ async fn start_spec_session(
         version_group_id.as_deref(),
         version_number,
         agent_type,
-        skip_permissions,
     ) {
         Ok(_session) => {
             info!("Started spec session via API: {name}");
@@ -3880,7 +3842,6 @@ async fn create_session(
     let use_existing_branch = payload["use_existing_branch"].as_bool().unwrap_or(false);
     let user_edited_name = payload["user_edited_name"].as_bool();
     let agent_type = payload["agent_type"].as_str().map(|s| s.to_string());
-    let skip_permissions = payload["skip_permissions"].as_bool();
     let epic_id = payload["epic_id"].as_str().map(|s| s.to_string());
     let version_group_id = payload["versionGroupId"]
         .as_str()
@@ -3923,7 +3884,6 @@ async fn create_session(
     if let Err(message) = validate_preset_request_conflicts(
         preset.as_deref(),
         agent_type.as_deref(),
-        skip_permissions,
     ) {
         return Ok(json_error_response(StatusCode::BAD_REQUEST, message));
     }
@@ -4019,7 +3979,6 @@ async fn create_session(
         version_number,
         epic_id: epic_id.as_deref(),
         agent_type: agent_type.as_deref(),
-        skip_permissions,
         pr_number,
         is_consolidation,
         consolidation_source_ids,
@@ -5473,8 +5432,6 @@ struct ResetSessionRequest {
     prompt: Option<String>,
     #[serde(default)]
     skip_prompt: Option<bool>,
-    #[serde(default)]
-    skip_permissions: Option<bool>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -5490,8 +5447,6 @@ struct ResetSelectionRequest {
     prompt: Option<String>,
     #[serde(default)]
     skip_prompt: Option<bool>,
-    #[serde(default)]
-    skip_permissions: Option<bool>,
 }
 
 fn parse_reset_selection_request(
@@ -5504,7 +5459,6 @@ fn parse_reset_selection_request(
             agent_type: None,
             prompt: None,
             skip_prompt: None,
-            skip_permissions: None,
         });
     }
     serde_json::from_slice::<ResetSelectionRequest>(body_bytes).map_err(|e| {
@@ -5544,7 +5498,6 @@ async fn reset_selection(
                     agent_type: payload.agent_type,
                     prompt: payload.prompt,
                     skip_prompt: payload.skip_prompt,
-                    skip_permissions: payload.skip_permissions,
                 },
                 app,
             )
@@ -5579,11 +5532,6 @@ async fn reset_orchestrator(
         && let Err(e) = manager.set_orchestrator_agent_type(agent_type)
     {
         warn!("Failed to set orchestrator agent type: {e}");
-    }
-    if let Some(skip) = payload.skip_permissions
-        && let Err(e) = manager.set_orchestrator_skip_permissions(skip)
-    {
-        warn!("Failed to set orchestrator skip permissions: {e}");
     }
 
     let effective_agent_type = payload.agent_type.clone().unwrap_or_else(|| {
@@ -5672,25 +5620,15 @@ async fn reset_session_with_payload(
     if let Ok(core) = get_core_write().await {
         let manager = core.session_manager();
         if let Some(agent_type) = payload.agent_type.as_deref() {
-            let skip = payload.skip_permissions.unwrap_or(false);
-            if let Err(e) = manager.set_session_original_settings(name, agent_type, skip) {
+            if let Err(e) = manager.set_session_original_settings(name, agent_type) {
                 warn!("Failed to update session agent settings for '{name}': {e}");
-            } else {
-                request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
-            }
-        } else if let Some(skip) = payload.skip_permissions
-            && let Ok(session) = manager.get_session(name)
-        {
-            let agent = session.original_agent_type.as_deref().unwrap_or("claude");
-            if let Err(e) = manager.set_session_original_settings(name, agent, skip) {
-                warn!("Failed to update session skip permissions for '{name}': {e}");
             } else {
                 request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
             }
         }
     }
 
-    if payload.agent_type.is_some() || payload.skip_permissions.is_some() {
+    if payload.agent_type.is_some() {
         request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
     }
 
@@ -5705,7 +5643,6 @@ async fn reset_session_with_payload(
             agent_type: payload.agent_type,
             prompt: payload.prompt,
             skip_prompt: payload.skip_prompt,
-            skip_permissions: payload.skip_permissions,
         },
     )
     .await;
@@ -5727,7 +5664,6 @@ async fn reset_session(
             agent_type: None,
             prompt: None,
             skip_prompt: None,
-            skip_permissions: None,
         }
     } else {
         match serde_json::from_slice(&body_bytes) {

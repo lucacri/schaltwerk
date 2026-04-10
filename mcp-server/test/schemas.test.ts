@@ -194,7 +194,6 @@ const sampleStructuredOutputs: Record<string, any> = {
     session: 'alpha_spec',
     started: true,
     agent_type: 'claude',
-    skip_permissions: false,
     base_branch: 'main',
   },
   lucode_draft_list: {

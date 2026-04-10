@@ -66,10 +66,8 @@ vi.mock('../shared/SessionConfigurationPanel', () => ({
     SessionConfigurationPanel: ({
         onBaseBranchChange,
         onAgentTypeChange,
-        onSkipPermissionsChange,
         initialBaseBranch,
         initialAgentType,
-        initialSkipPermissions,
         codexModel,
         codexModelOptions,
         onCodexModelChange,
@@ -78,10 +76,8 @@ vi.mock('../shared/SessionConfigurationPanel', () => ({
     }: {
         onBaseBranchChange?: (branch: string) => void
         onAgentTypeChange?: (type: string) => void
-        onSkipPermissionsChange?: (skip: boolean) => void
         initialBaseBranch?: string
         initialAgentType?: string
-        initialSkipPermissions?: boolean
         codexModel?: string
         codexModelOptions?: string[]
         onCodexModelChange?: (model: string) => void
@@ -104,7 +100,6 @@ vi.mock('../shared/SessionConfigurationPanel', () => ({
             <div data-testid="session-config-panel">
                 <div data-testid="initial-branch">{initialBaseBranch || ''}</div>
                 <div data-testid="initial-agent">{initialAgentType || 'claude'}</div>
-                <div data-testid="initial-skip-perms">{initialSkipPermissions?.toString() || 'false'}</div>
                 <div data-testid="codex-model-value">{codexModel || ''}</div>
                 <div data-testid="codex-reasoning-value">{codexReasoningEffort || ''}</div>
                 <button
@@ -130,12 +125,6 @@ vi.mock('../shared/SessionConfigurationPanel', () => ({
                     data-testid="change-codex-model"
                 >
                     Change Codex Model
-                </button>
-                <button
-                    onClick={() => onSkipPermissionsChange?.(true)}
-                    data-testid="change-permissions"
-                >
-                    Change Permissions
                 </button>
                 <button
                     onClick={() => onCodexReasoningChange?.(nextReasoning)}
@@ -168,8 +157,6 @@ function defaultInvokeHandler(command: string, args?: unknown) {
             return Promise.resolve(null)
         case TauriCommands.GetProjectDefaultBranch:
             return Promise.resolve('main')
-        case TauriCommands.SchaltwerkCoreGetSkipPermissions:
-            return Promise.resolve(false)
         case TauriCommands.SchaltwerkCoreGetAgentType:
             return Promise.resolve('claude')
         case TauriCommands.GetAgentEnvVars:
@@ -371,7 +358,7 @@ describe('NewSessionModal Integration with SessionConfigurationPanel', () => {
         // With persisted defaults loaded, initial branch should be 'main'
         expect(screen.getByTestId('initial-branch')).toHaveTextContent('main')
         expect(screen.getByTestId('initial-agent')).toHaveTextContent('claude')
-        expect(screen.getByTestId('initial-skip-perms')).toHaveTextContent('false')
+
     })
 
     test('normalizes persisted Codex preferences using discovered models', async () => {
@@ -643,7 +630,7 @@ describe('NewSessionModal Integration with SessionConfigurationPanel', () => {
         // With persisted defaults loaded, initial branch should be 'main'
         expect(screen.getByTestId('initial-branch')).toHaveTextContent('main')
         expect(screen.getByTestId('initial-agent')).toHaveTextContent('claude')
-        expect(screen.getByTestId('initial-skip-perms')).toHaveTextContent('false')
+
     })
 
     test('updates modal state when SessionConfigurationPanel values change', async () => {
@@ -668,7 +655,6 @@ describe('NewSessionModal Integration with SessionConfigurationPanel', () => {
             await fireAsync(() => fireEvent.click(screen.getByTestId('change-branch')))
         })
         await fireAsync(() => fireEvent.click(screen.getByTestId('change-agent')))
-        await fireAsync(() => fireEvent.click(screen.getByTestId('change-permissions')))
 
         // Fill in required fields
         const nameInput = screen.getByDisplayValue('test_session')
@@ -782,8 +768,7 @@ describe('NewSessionModal Integration with SessionConfigurationPanel', () => {
             await fireAsync(() => fireEvent.click(screen.getByTestId('change-agent')))
         })
         await act(async () => {
-            await fireAsync(() => fireEvent.click(screen.getByTestId('change-permissions')))
-        })
+            })
 
         const nameInput = screen.getByDisplayValue('test_session')
         await act(async () => {
@@ -1135,8 +1120,6 @@ describe('NewSessionModal GitHub issue prompt source', () => {
                     return Promise.resolve(['main'])
                 case TauriCommands.GetProjectDefaultBaseBranch:
                     return Promise.resolve('main')
-                case TauriCommands.SchaltwerkCoreGetSkipPermissions:
-                    return Promise.resolve(false)
                 case TauriCommands.SchaltwerkCoreGetAgentType:
                     return Promise.resolve('claude')
                 case TauriCommands.GetAgentEnvVars:
@@ -1247,8 +1230,6 @@ describe('NewSessionModal GitHub issue prompt source', () => {
                     return Promise.resolve(['main'])
                 case TauriCommands.GetProjectDefaultBaseBranch:
                     return Promise.resolve('main')
-                case TauriCommands.SchaltwerkCoreGetSkipPermissions:
-                    return Promise.resolve(false)
                 case TauriCommands.SchaltwerkCoreGetAgentType:
                     return Promise.resolve('claude')
                 case TauriCommands.GetAgentEnvVars:
@@ -1413,8 +1394,6 @@ describe('NewSessionModal GitHub PR prompt source', () => {
                     return Promise.resolve('main')
                 case TauriCommands.GetProjectDefaultBranch:
                     return Promise.resolve('main')
-                case TauriCommands.SchaltwerkCoreGetSkipPermissions:
-                    return Promise.resolve(false)
                 case TauriCommands.SchaltwerkCoreGetAgentType:
                     return Promise.resolve('claude')
                 case TauriCommands.GetAgentEnvVars:
@@ -1535,8 +1514,6 @@ describe('NewSessionModal GitHub PR prompt source', () => {
                     return Promise.resolve('main')
                 case TauriCommands.GetProjectDefaultBranch:
                     return Promise.resolve('main')
-                case TauriCommands.SchaltwerkCoreGetSkipPermissions:
-                    return Promise.resolve(false)
                 case TauriCommands.SchaltwerkCoreGetAgentType:
                     return Promise.resolve('claude')
                 case TauriCommands.GetAgentEnvVars:

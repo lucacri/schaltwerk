@@ -25,7 +25,6 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             initial_prompt TEXT,
             ready_to_merge BOOLEAN DEFAULT FALSE,
             original_agent_type TEXT,
-            original_skip_permissions BOOLEAN,
             pending_name_generation BOOLEAN DEFAULT FALSE,
             was_auto_generated BOOLEAN DEFAULT FALSE,
             spec_content TEXT,
@@ -68,9 +67,7 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS app_config (
             id INTEGER PRIMARY KEY CHECK (id = 1),
-            skip_permissions BOOLEAN DEFAULT FALSE,
             agent_type TEXT DEFAULT 'claude',
-            orchestrator_skip_permissions BOOLEAN DEFAULT FALSE,
             orchestrator_agent_type TEXT DEFAULT 'claude',
             default_open_app TEXT DEFAULT NULL,
             default_base_branch TEXT,
@@ -87,16 +84,14 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
     conn.execute(
         "INSERT OR IGNORE INTO app_config (
             id,
-            skip_permissions,
             agent_type,
-            orchestrator_skip_permissions,
             orchestrator_agent_type,
             default_open_app,
             terminal_font_size,
             ui_font_size,
             tutorial_completed,
             dev_error_toasts_enabled
-        ) VALUES (1, FALSE, 'claude', FALSE, 'claude', NULL, 13, 12, FALSE, FALSE)",
+        ) VALUES (1, 'claude', 'claude', NULL, 13, 12, FALSE, FALSE)",
         [],
     )?;
 
@@ -238,10 +233,6 @@ fn apply_app_config_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()
         [],
     );
     let _ = conn.execute(
-        "ALTER TABLE app_config ADD COLUMN orchestrator_skip_permissions BOOLEAN DEFAULT FALSE",
-        [],
-    );
-    let _ = conn.execute(
         "ALTER TABLE app_config ADD COLUMN orchestrator_agent_type TEXT DEFAULT 'claude'",
         [],
     );
@@ -285,10 +276,6 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
     );
     let _ = conn.execute(
         "ALTER TABLE sessions ADD COLUMN original_agent_type TEXT",
-        [],
-    );
-    let _ = conn.execute(
-        "ALTER TABLE sessions ADD COLUMN original_skip_permissions BOOLEAN",
         [],
     );
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN display_name TEXT", []);
@@ -620,7 +607,7 @@ mod tests {
         conn.execute(
             "CREATE TABLE app_config (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
-                skip_permissions BOOLEAN DEFAULT FALSE
+                agent_type TEXT DEFAULT 'claude'
             )",
             [],
         )
@@ -629,8 +616,8 @@ mod tests {
         super::apply_app_config_migrations(&conn).unwrap();
 
         conn.execute(
-            "INSERT INTO app_config (id, skip_permissions, agent_type, tutorial_completed, archive_max_entries)
-             VALUES (1, FALSE, 'claude', FALSE, 50)",
+            "INSERT INTO app_config (id, agent_type, tutorial_completed, archive_max_entries)
+             VALUES (1, 'claude', FALSE, 50)",
             [],
         )
         .unwrap();
@@ -660,7 +647,7 @@ mod tests {
         conn.execute(
             "CREATE TABLE app_config (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
-                skip_permissions BOOLEAN DEFAULT FALSE
+                agent_type TEXT DEFAULT 'claude'
             )",
             [],
         )

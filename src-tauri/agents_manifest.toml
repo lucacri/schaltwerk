@@ -9,6 +9,7 @@ binary_name = "claude"
 default_binary_path = "claude"
 auto_send_initial_command = false
 supports_resume = true
+supports_skip_permissions = true
 
 [agents.codex]
 id = "codex"
@@ -17,6 +18,7 @@ binary_name = "codex"
 default_binary_path = "codex"
 auto_send_initial_command = false
 supports_resume = true
+supports_skip_permissions = true
 
 [agents.copilot]
 id = "copilot"
@@ -25,6 +27,7 @@ binary_name = "copilot"
 default_binary_path = "copilot"
 auto_send_initial_command = true
 supports_resume = true
+supports_skip_permissions = true
 
 [agents.gemini]
 id = "gemini"
@@ -33,6 +36,7 @@ binary_name = "gemini"
 default_binary_path = "gemini"
 auto_send_initial_command = false
 supports_resume = true
+supports_skip_permissions = true
 
 [agents.opencode]
 id = "opencode"
@@ -41,6 +45,7 @@ binary_name = "opencode"
 default_binary_path = "opencode"
 auto_send_initial_command = true
 supports_resume = true
+supports_skip_permissions = false
 
 [agents.droid]
 id = "droid"
@@ -49,6 +54,7 @@ binary_name = "droid"
 default_binary_path = "/Users/marius.wichtner/.local/bin/droid"
 auto_send_initial_command = true
 supports_resume = true
+supports_skip_permissions = true
 ready_marker = "You are standing in an open terminal. An AI awaits your commands."
 
 [agents.qwen]
@@ -58,6 +64,7 @@ binary_name = "qwen"
 default_binary_path = "qwen"
 auto_send_initial_command = false
 supports_resume = false
+supports_skip_permissions = true
 
 [agents.amp]
 id = "amp"
@@ -66,6 +73,7 @@ binary_name = "amp"
 default_binary_path = "amp"
 auto_send_initial_command = false
 supports_resume = false
+supports_skip_permissions = true
 
 [agents.kilocode]
 id = "kilocode"
@@ -74,6 +82,7 @@ binary_name = "kilocode"
 default_binary_path = "kilocode"
 auto_send_initial_command = false
 supports_resume = true
+supports_skip_permissions = false
 
 [agents.terminal]
 id = "terminal"
@@ -82,3 +91,4 @@ binary_name = "sh"
 default_binary_path = "/bin/sh"
 auto_send_initial_command = false
 supports_resume = false
+supports_skip_permissions = false

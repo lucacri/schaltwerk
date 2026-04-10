@@ -71,7 +71,6 @@ describe('LucodeBridge port discovery', () => {
           draft_content: null,
           spec_content: null,
           original_agent_type: null,
-          original_skip_permissions: null,
           pending_name_generation: false,
           was_auto_generated: false
         }
@@ -98,7 +97,6 @@ describe('LucodeBridge port discovery', () => {
         spec_content: undefined,
         ready_to_merge: false,
         original_agent_type: undefined,
-        original_skip_permissions: undefined,
         pending_name_generation: false,
         was_auto_generated: false
       }

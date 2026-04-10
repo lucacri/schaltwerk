@@ -24,7 +24,6 @@ export interface Session {
   spec_content?: string
   ready_to_merge: boolean
   original_agent_type?: string
-  original_skip_permissions?: boolean
   epic_id?: string | null
   pending_name_generation: boolean
   was_auto_generated: boolean
@@ -558,7 +557,6 @@ export class LucodeBridge {
           spec_content?: string;
           ready_to_merge?: boolean;
           original_agent_type?: string;
-          original_skip_permissions?: boolean;
           pending_name_generation?: boolean;
           was_auto_generated?: boolean;
         };
@@ -584,7 +582,6 @@ export class LucodeBridge {
         spec_content: es.info.spec_content || undefined,
         ready_to_merge: es.info.ready_to_merge || false,
         original_agent_type: es.info.original_agent_type ?? undefined,
-        original_skip_permissions: es.info.original_skip_permissions ?? undefined,
         pending_name_generation: es.info.pending_name_generation ?? false,
         was_auto_generated: es.info.was_auto_generated ?? false
       }))
@@ -651,7 +648,7 @@ export class LucodeBridge {
     return epic
   }
 
-  async createSession(name: string, prompt?: string, baseBranch?: string, useExistingBranch?: boolean, agentType?: string, skipPermissions?: boolean, epicId?: string, projectPath?: string, preset?: string): Promise<Session | PresetLaunchResult> {
+  async createSession(name: string, prompt?: string, baseBranch?: string, useExistingBranch?: boolean, agentType?: string, epicId?: string, projectPath?: string, preset?: string): Promise<Session | PresetLaunchResult> {
     try {
       const response = await this.fetchWithAutoPort('/api/sessions', {
         method: 'POST',
@@ -666,7 +663,6 @@ export class LucodeBridge {
           custom_branch: useExistingBranch ? baseBranch : undefined,
           use_existing_branch: useExistingBranch,
           agent_type: agentType,
-          skip_permissions: skipPermissions,
           user_edited_name: false,
           epic_id: epicId,
           preset,
@@ -1247,7 +1243,7 @@ export class LucodeBridge {
     }
   }
 
-  async startDraftSession(sessionName: string, agentType?: string, skipPermissions?: boolean, baseBranch?: string, projectPath?: string, preset?: string): Promise<void | PresetDraftStartResult> {
+  async startDraftSession(sessionName: string, agentType?: string, baseBranch?: string, projectPath?: string, preset?: string): Promise<void | PresetDraftStartResult> {
     try {
       const response = await this.fetchWithAutoPort(`/api/specs/${encodeURIComponent(sessionName)}/start`, {
         method: 'POST',
@@ -1257,7 +1253,6 @@ export class LucodeBridge {
         },
         body: JSON.stringify({
           agent_type: agentType,
-          skip_permissions: skipPermissions,
           base_branch: baseBranch,
           preset,
         })
@@ -1454,7 +1449,6 @@ export class LucodeBridge {
           spec_content?: string;
           ready_to_merge?: boolean;
           original_agent_type?: string;
-          original_skip_permissions?: boolean;
           pending_name_generation?: boolean;
           was_auto_generated?: boolean;
         };
@@ -1480,7 +1474,6 @@ export class LucodeBridge {
         spec_content: es.info.spec_content || undefined,
         ready_to_merge: es.info.ready_to_merge || false,
         original_agent_type: es.info.original_agent_type ?? undefined,
-        original_skip_permissions: es.info.original_skip_permissions ?? undefined,
         pending_name_generation: es.info.pending_name_generation ?? false,
         was_auto_generated: es.info.was_auto_generated ?? false
       }))

@@ -1269,13 +1269,11 @@ mod tests {
                 AgentPresetSlot {
                     agent_type: "claude".to_string(),
                     variant_id: None,
-                    skip_permissions: Some(true),
                     autonomy_enabled: Some(true),
                 },
                 AgentPresetSlot {
                     agent_type: "codex".to_string(),
                     variant_id: Some("variant-opus-high".to_string()),
-                    skip_permissions: None,
                     autonomy_enabled: None,
                 },
             ],

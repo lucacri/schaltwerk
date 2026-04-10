@@ -6,15 +6,13 @@ import { DEFAULT_AGENT } from '../constants/agents'
 export interface PersistedSessionDefaults {
   baseBranch: string
   agentType: AgentType
-  skipPermissions: boolean
 }
 
 export async function getPersistedSessionDefaults(): Promise<PersistedSessionDefaults> {
   try {
-    const [savedDefaultBranch, gitDefaultBranch, storedSkipPerms, storedAgentType] = await Promise.all([
+    const [savedDefaultBranch, gitDefaultBranch, storedAgentType] = await Promise.all([
       invoke<string | null>(TauriCommands.GetProjectDefaultBaseBranch),
       invoke<string>(TauriCommands.GetProjectDefaultBranch),
-      invoke<boolean>(TauriCommands.SchaltwerkCoreGetSkipPermissions),
       invoke<string>(TauriCommands.SchaltwerkCoreGetAgentType)
     ])
 
@@ -26,9 +24,8 @@ export async function getPersistedSessionDefaults(): Promise<PersistedSessionDef
     return {
       baseBranch: defaultBranch,
       agentType,
-      skipPermissions: !!storedSkipPerms,
     }
   } catch (_e) {
-    return { baseBranch: '', agentType: DEFAULT_AGENT, skipPermissions: false }
+    return { baseBranch: '', agentType: DEFAULT_AGENT }
   }
 }

@@ -112,7 +112,6 @@ export interface SessionInfo {
     spec_stage?: SpecStage
     clarification_started?: boolean
     original_agent_type?: AgentType
-    original_skip_permissions?: boolean | null
     diff_stats?: DiffStats
     top_uncommitted_paths?: string[]
     attention_required?: boolean
@@ -168,7 +167,6 @@ export interface RawSession {
     initial_prompt?: string
     ready_to_merge: boolean
     original_agent_type?: AgentType
-    original_skip_permissions?: boolean
     pending_name_generation: boolean
     was_auto_generated: boolean
     spec_content?: string

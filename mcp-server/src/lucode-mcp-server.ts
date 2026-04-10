@@ -23,7 +23,6 @@ interface LucodeStartArgs {
   agent_type?: 'claude' | 'opencode' | 'gemini' | 'codex' | 'qwen' | 'droid' | 'amp' | 'kilocode'
   base_branch?: string
   use_existing_branch?: boolean
-  skip_permissions?: boolean
   is_draft?: boolean
   draft_content?: string
   epic_id?: string
@@ -67,7 +66,6 @@ interface LucodeDraftUpdateArgs {
 interface LucodeDraftStartArgs {
   session_name: string
   agent_type?: 'claude' | 'opencode' | 'gemini' | 'codex' | 'qwen' | 'droid' | 'amp' | 'kilocode'
-  skip_permissions?: boolean
   base_branch?: string
   preset?: string
 }
@@ -410,17 +408,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "boolean",
               description: "When true, use the base_branch directly instead of creating a new branch from it. The branch must exist and not be checked out in another worktree. Useful for continuing work on an existing PR branch."
             },
-            skip_permissions: {
-              type: "boolean",
-              description: "Skip permission warnings for autonomous operation (use with caution)"
-            },
             epic_id: {
               type: "string",
               description: "Optional epic ID to assign the session to"
             },
             preset: {
               type: "string",
-              description: "Preset id or name to expand into one or more launch slots. Mutually exclusive with agent_type and skip_permissions."
+              description: "Preset id or name to expand into one or more launch slots. Mutually exclusive with agent_type."
             }
           },
           required: ["name", "prompt"]
@@ -757,18 +751,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             enum: ["claude", "opencode", "gemini", "codex", "qwen", "droid", "amp", "kilocode"],
             description: "AI agent type to use (default: claude)"
             },
-            skip_permissions: {
-              type: "boolean",
-              description: "Skip permission checks for autonomous operation",
-              default: false
-            },
             base_branch: {
               type: "string",
               description: "Override base branch if needed"
             },
             preset: {
               type: "string",
-              description: "Preset id or name to expand into one or more launch slots. Mutually exclusive with agent_type and skip_permissions."
+              description: "Preset id or name to expand into one or more launch slots. Mutually exclusive with agent_type."
             }
           },
           required: ["session_name"]
@@ -1269,10 +1258,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           )
         }
 
-        if (createArgs.preset && (createArgs.agent_type || createArgs.skip_permissions !== undefined)) {
+        if (createArgs.preset && createArgs.agent_type) {
           throw new McpError(
             ErrorCode.InvalidParams,
-            "'preset' is mutually exclusive with 'agent_type' and 'skip_permissions'."
+            "'preset' is mutually exclusive with 'agent_type'."
           )
         }
 
@@ -1313,7 +1302,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
             createArgs.base_branch,
             createArgs.use_existing_branch,
             createArgs.agent_type,
-            createArgs.skip_permissions,
             createArgs.epic_id,
             projectPath,
             createArgs.preset
@@ -1585,17 +1573,16 @@ ${session.initial_prompt ? `- Initial Prompt: ${session.initial_prompt}` : ''}`
       case "lucode_draft_start": {
         const draftStartArgs = args as unknown as LucodeDraftStartArgs
 
-        if (draftStartArgs.preset && (draftStartArgs.agent_type || draftStartArgs.skip_permissions !== undefined)) {
+        if (draftStartArgs.preset && draftStartArgs.agent_type) {
           throw new McpError(
             ErrorCode.InvalidParams,
-            "'preset' is mutually exclusive with 'agent_type' and 'skip_permissions'."
+            "'preset' is mutually exclusive with 'agent_type'."
           )
         }
 
         const startResult = await bridge.startDraftSession(
           draftStartArgs.session_name,
           draftStartArgs.agent_type,
-          draftStartArgs.skip_permissions,
           draftStartArgs.base_branch,
           projectPath,
           draftStartArgs.preset
@@ -1621,13 +1608,11 @@ ${presetStart.sessions
           session: draftStartArgs.session_name,
           started: true,
           agent_type: draftStartArgs.agent_type || DEFAULT_AGENT,
-          skip_permissions: draftStartArgs.skip_permissions || false,
           base_branch: draftStartArgs.base_branch || null
         }
 
         const summary = `Spec '${draftStartArgs.session_name}' started successfully:
 - Agent Type: ${draftStartArgs.agent_type || DEFAULT_AGENT}
-- Skip Permissions: ${draftStartArgs.skip_permissions || false}
 - Status: Active (worktree created, agent ready)`
         response = buildStructuredResponse(structured, { summaryText: summary })
         break
@@ -1746,9 +1731,6 @@ ${presetStart.sessions
           }
           if (includeAll || requestedFields.includes('agent_type')) {
             agent.agent_type = t.original_agent_type || DEFAULT_AGENT
-          }
-          if (includeAll || requestedFields.includes('skip_permissions')) {
-            agent.skip_permissions = t.original_skip_permissions ?? null
           }
           if (includeAll || requestedFields.includes('epic_id')) {
             agent.epic_id = t.epic_id ?? null

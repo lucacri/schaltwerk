@@ -41,7 +41,6 @@ mod session_sorting_tests {
             initial_prompt: Some(format!("Test agent for {}", name)),
             ready_to_merge,
             original_agent_type: Some("claude".to_string()),
-            original_skip_permissions: Some(false),
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: if state == SessionState::Spec {

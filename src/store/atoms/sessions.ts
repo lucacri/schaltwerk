@@ -1806,7 +1806,6 @@ export const initializeSessionsEventsActionAtom = atom(
                 agent_type?: string
                 is_consolidation?: boolean
                 consolidation_sources?: string[]
-                skip_permissions?: boolean
             }
 
             const previousStatesSnapshot = new Map(previousSessionStates)
@@ -1843,7 +1842,6 @@ export const initializeSessionsEventsActionAtom = atom(
                     todo_percentage: undefined,
                     is_blocked: undefined,
                     original_agent_type: agentTypeFromEvent ?? pendingStartup?.agentType,
-                    original_skip_permissions: event.skip_permissions,
                     is_consolidation: event.is_consolidation ?? false,
                     consolidation_sources: event.consolidation_sources ?? undefined,
                     diff_stats: undefined,

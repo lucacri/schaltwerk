@@ -10,7 +10,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../common/tauriCommands'
 import { logger } from '../utils/logger'
 import { displayNameForAgent } from '../components/shared/agentDefaults'
-import { AgentType, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../types/session'
+import { AgentType } from '../types/session'
 import { clearTerminalStartState } from '../common/terminalStartState'
 import { removeTerminalInstance } from '../terminal/registry/terminalRegistry'
 import {
@@ -28,7 +28,6 @@ type StartAgentFn = (params: {
 }) => Promise<void>
 
 type AddAgentTabOptions = {
-    skipPermissions?: boolean
     label?: string
     freshSession?: boolean
 }
@@ -172,9 +171,8 @@ export const useAgentTabs = (
 
             if (newTerminalId) {
                 logger.info(
-                    `[useAgentTabs] Starting new agent tab ${newTabArrayIndex} (idx=${newTabNumericIndex}) with ${agentType} in ${newTerminalId}, skipPermissions=${options?.skipPermissions}, freshSession=${options?.freshSession}`
+                    `[useAgentTabs] Starting new agent tab ${newTabArrayIndex} (idx=${newTabNumericIndex}) with ${agentType} in ${newTerminalId}, freshSession=${options?.freshSession}`
                 )
-                const effectiveSkipPermissions = !AGENT_SUPPORTS_SKIP_PERMISSIONS[agentType] ? false : options?.skipPermissions
                 const starter = startAgent
                     ? startAgent({
                           sessionId,
@@ -189,7 +187,6 @@ export const useAgentTabs = (
                               terminalId: newTerminalId,
                               agentType: agentType,
                               skipPrompt: true,
-                              skipPermissions: effectiveSkipPermissions,
                           },
                       })
 

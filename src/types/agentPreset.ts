@@ -3,7 +3,6 @@ import type { AgentType } from './session'
 export interface AgentPresetSlot {
     agentType: AgentType
     variantId?: string
-    skipPermissions?: boolean
     autonomyEnabled?: boolean
 }
 

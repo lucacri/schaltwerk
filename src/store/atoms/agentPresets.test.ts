@@ -33,7 +33,7 @@ describe('agentPresets atoms', () => {
             {
                 id: 'p1', name: 'The Duo', isBuiltIn: false,
                 slots: [
-                    { agentType: 'claude', skipPermissions: true, autonomyEnabled: true },
+                    { agentType: 'claude', autonomyEnabled: true },
                     { agentType: 'codex', autonomyEnabled: false },
                 ],
             }

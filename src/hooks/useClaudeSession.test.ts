@@ -37,32 +37,6 @@ describe('useClaudeSession', () => {
     expect(out).toEqual({ success: false, error: 'Invalid options' })
   })
 
-  it('gets and sets skip permissions', async () => {
-    mockInvoke.mockResolvedValueOnce(true)
-    mockInvoke.mockResolvedValueOnce(undefined)
-
-    const { result } = renderHook(() => useClaudeSession())
-    const val = await result.current.getSkipPermissions()
-    expect(val).toBe(true)
-
-    const setOk = await result.current.setSkipPermissions(false)
-    expect(setOk).toBe(true)
-    expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetSkipPermissions, { enabled: false })
-  })
-
-  it('gets and sets orchestrator skip permissions', async () => {
-    mockInvoke.mockResolvedValueOnce(true)
-    mockInvoke.mockResolvedValueOnce(undefined)
-
-    const { result } = renderHook(() => useClaudeSession())
-    const val = await result.current.getOrchestratorSkipPermissions()
-    expect(val).toBe(true)
-
-    const setOk = await result.current.setOrchestratorSkipPermissions(true)
-    expect(setOk).toBe(true)
-    expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetOrchestratorSkipPermissions, { enabled: true })
-  })
-
   it('gets and sets agent type with defaults on error', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     

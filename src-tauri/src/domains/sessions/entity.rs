@@ -91,8 +91,6 @@ pub struct Session {
     pub ready_to_merge: bool,
     // If present, captures the agent type that originally opened this session (e.g., "claude" or "opencode")
     pub original_agent_type: Option<String>,
-    // If present, captures whether skip-permissions/force was enabled when the session was originally opened
-    pub original_skip_permissions: Option<bool>,
     // Internal flag to decide whether we should auto-generate a display name post-start
     pub pending_name_generation: bool,
     // True if the session name was auto-generated (e.g., docker-style names)

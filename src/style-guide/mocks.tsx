@@ -64,7 +64,7 @@ export const STYLE_GUIDE_AGENT_PRESETS: AgentPreset[] = [
     name: 'Review Squad',
     slots: [
       { agentType: 'claude', variantId: 'variant-claude-opus' },
-      { agentType: 'codex', variantId: 'variant-codex-fast', skipPermissions: true },
+      { agentType: 'codex', variantId: 'variant-codex-fast' },
       { agentType: 'gemini', autonomyEnabled: true },
     ],
     isBuiltIn: false,
@@ -74,7 +74,7 @@ export const STYLE_GUIDE_AGENT_PRESETS: AgentPreset[] = [
     name: 'UI Pass',
     slots: [
       { agentType: 'claude' },
-      { agentType: 'copilot', skipPermissions: true },
+      { agentType: 'copilot' },
     ],
     isBuiltIn: false,
   },

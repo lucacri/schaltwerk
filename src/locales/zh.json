@@ -1010,11 +1010,7 @@
     "noModels": "没有可用的模型",
     "selectReasoning": "选择推理力度",
     "noReasoningOptions": "没有可用的推理选项",
-    "requirePermissions": "需要权限",
-    "skipPermissions": "跳过权限",
     "fullAutonomous": "完全自主",
-    "requirePermissionsTitle": "启动代理时需要 macOS 权限提示",
-    "skipPermissionsTitle": "启动代理时跳过 macOS 权限提示",
     "fullAutonomousTitle": "创建会话时追加共享的自主执行指令模板"
   },
   "githubMenu": {

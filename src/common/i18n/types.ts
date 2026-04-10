@@ -1012,11 +1012,7 @@ export interface Translations {
     noModels: string
     selectReasoning: string
     noReasoningOptions: string
-    requirePermissions: string
-    skipPermissions: string
     fullAutonomous: string
-    requirePermissionsTitle: string
-    skipPermissionsTitle: string
     fullAutonomousTitle: string
   }
   githubMenu: {

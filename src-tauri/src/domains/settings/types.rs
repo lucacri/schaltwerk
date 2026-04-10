@@ -374,8 +374,6 @@ pub struct AgentPresetSlot {
     #[serde(default)]
     pub variant_id: Option<String>,
     #[serde(default)]
-    pub skip_permissions: Option<bool>,
-    #[serde(default)]
     pub autonomy_enabled: Option<bool>,
 }
 

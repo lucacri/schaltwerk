@@ -8,7 +8,7 @@ import { useClaudeSession } from '../../hooks/useClaudeSession'
 import { invoke } from '@tauri-apps/api/core'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
-import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../../types/session'
+import { AgentType, AGENT_TYPES } from '../../types/session'
 import { FALLBACK_CODEX_MODELS, CodexModelMetadata } from '../../common/codexModels'
 import { useTranslation } from '../../common/i18n'
 import { Checkbox, FormGroup, TextInput } from '../ui'
@@ -18,13 +18,11 @@ interface SessionConfigurationPanelProps {
     layout?: 'default' | 'branch-row'
     onBaseBranchChange?: (branch: string) => void
     onAgentTypeChange?: (agentType: AgentType) => void
-    onSkipPermissionsChange?: (enabled: boolean) => void
     onAutonomyChange?: (enabled: boolean) => void
     onCustomBranchChange?: (branch: string) => void
     onUseExistingBranchChange?: (useExisting: boolean) => void
     initialBaseBranch?: string
     initialAgentType?: AgentType
-    initialSkipPermissions?: boolean
     initialAutonomyEnabled?: boolean
     initialCustomBranch?: string
     initialUseExistingBranch?: boolean
@@ -47,7 +45,6 @@ interface SessionConfigurationPanelProps {
 export interface SessionConfiguration {
     baseBranch: string
     agentType: AgentType
-    skipPermissions: boolean
     autonomyEnabled: boolean
     isValid: boolean
 }
@@ -57,13 +54,11 @@ export function SessionConfigurationPanel({
     layout = 'default',
     onBaseBranchChange,
     onAgentTypeChange,
-    onSkipPermissionsChange,
     onAutonomyChange,
     onCustomBranchChange,
     onUseExistingBranchChange,
     initialBaseBranch = '',
     initialAgentType = 'claude',
-    initialSkipPermissions = false,
     initialAutonomyEnabled = false,
     initialCustomBranch = '',
     initialUseExistingBranch = false,
@@ -88,29 +83,23 @@ export function SessionConfigurationPanel({
     const [loadingBranches, setLoadingBranches] = useState(false)
     const [isValidBranch, setIsValidBranch] = useState(true)
     const [agentType, setAgentType] = useState<AgentType>(initialAgentType)
-    const [skipPermissions, setSkipPermissions] = useState(initialSkipPermissions)
     const [autonomyEnabled, setAutonomyEnabled] = useState(initialAutonomyEnabled)
     const [customBranch, setCustomBranch] = useState(initialCustomBranch)
     const [useExistingBranch, setUseExistingBranch] = useState(initialUseExistingBranch)
     const [branchPrefix, setBranchPrefix] = useState<string>('schaltwerk')
-    const { getSkipPermissions, setSkipPermissions: saveSkipPermissions, getAgentType, setAgentType: saveAgentType } = useClaudeSession()
+    const { getAgentType, setAgentType: saveAgentType } = useClaudeSession()
 
     const onBaseBranchChangeRef = useRef(onBaseBranchChange)
     const onAgentTypeChangeRef = useRef(onAgentTypeChange)
-    const onSkipPermissionsChangeRef = useRef(onSkipPermissionsChange)
     const onAutonomyChangeRef = useRef(onAutonomyChange)
     const onCustomBranchChangeRef = useRef(onCustomBranchChange)
     const onUseExistingBranchChangeRef = useRef(onUseExistingBranchChange)
     const baseBranchValueRef = useRef(initialBaseBranch)
     const userEditedBranchRef = useRef(false)
-    const skipPermissionsTouchedRef = useRef(false)
     const agentTypeTouchedRef = useRef(false)
-    const initialSkipPermissionsRef = useRef(initialSkipPermissions)
     const initialAgentTypeRef = useRef(initialAgentType)
-    const getSkipPermissionsRef = useRef(getSkipPermissions)
     const getAgentTypeRef = useRef(getAgentType)
     const saveAgentTypeRef = useRef(saveAgentType)
-    const saveSkipPermissionsRef = useRef(saveSkipPermissions)
     const prevInitialBaseBranchRef = useRef(initialBaseBranch)
     const agentSelectionDisabled = agentControlsDisabled
     const selectableAgents = useMemo(
@@ -120,14 +109,11 @@ export function SessionConfigurationPanel({
 
     useEffect(() => { onBaseBranchChangeRef.current = onBaseBranchChange }, [onBaseBranchChange])
     useEffect(() => { onAgentTypeChangeRef.current = onAgentTypeChange }, [onAgentTypeChange])
-    useEffect(() => { onSkipPermissionsChangeRef.current = onSkipPermissionsChange }, [onSkipPermissionsChange])
     useEffect(() => { onAutonomyChangeRef.current = onAutonomyChange }, [onAutonomyChange])
     useEffect(() => { onCustomBranchChangeRef.current = onCustomBranchChange }, [onCustomBranchChange])
     useEffect(() => { onUseExistingBranchChangeRef.current = onUseExistingBranchChange }, [onUseExistingBranchChange])
-    useEffect(() => { getSkipPermissionsRef.current = getSkipPermissions }, [getSkipPermissions])
     useEffect(() => { getAgentTypeRef.current = getAgentType }, [getAgentType])
     useEffect(() => { saveAgentTypeRef.current = saveAgentType }, [saveAgentType])
-    useEffect(() => { saveSkipPermissionsRef.current = saveSkipPermissions }, [saveSkipPermissions])
 
     useEffect(() => {
         baseBranchValueRef.current = baseBranch
@@ -136,11 +122,10 @@ export function SessionConfigurationPanel({
     const loadConfiguration = useCallback(async () => {
         setLoadingBranches(true)
         try {
-            const [branchList, savedDefaultBranch, gitDefaultBranch, storedSkipPerms, storedAgentType, projectSettings] = await Promise.all([
+            const [branchList, savedDefaultBranch, gitDefaultBranch, storedAgentType, projectSettings] = await Promise.all([
                 invoke<string[]>(TauriCommands.ListProjectBranches),
                 invoke<string | null>(TauriCommands.GetProjectDefaultBaseBranch),
                 invoke<string>(TauriCommands.GetProjectDefaultBranch),
-                getSkipPermissionsRef.current(),
                 getAgentTypeRef.current(),
                 invoke<{ branch_prefix: string }>(TauriCommands.GetProjectSettings).catch(() => ({ branch_prefix: '' }))
             ])
@@ -167,22 +152,6 @@ export function SessionConfigurationPanel({
                     : 'claude'
             const fallbackAgent = selectableAgents[0] ?? 'claude'
             const sanitizedType = selectableAgents.includes(normalizedType) ? normalizedType : fallbackAgent
-
-            const supportsSkip = AGENT_SUPPORTS_SKIP_PERMISSIONS[sanitizedType]
-            const normalizedSkip = supportsSkip ? storedSkipPerms : false
-
-            if (!skipPermissionsTouchedRef.current && !initialSkipPermissionsRef.current) {
-                setSkipPermissions(normalizedSkip)
-                onSkipPermissionsChangeRef.current?.(normalizedSkip)
-
-                if (!supportsSkip && storedSkipPerms) {
-                    try {
-                        await saveSkipPermissionsRef.current?.(false)
-                    } catch (err) {
-                        logger.warn('Failed to reset skip permissions for unsupported agent:', err)
-                    }
-                }
-            }
 
             if (!ignorePersistedAgentType && !agentTypeTouchedRef.current && initialAgentTypeRef.current === 'claude') {
                 setAgentType(sanitizedType)
@@ -229,13 +198,6 @@ export function SessionConfigurationPanel({
         }
     }, [branches])
 
-    const handleSkipPermissionsChange = useCallback(async (enabled: boolean) => {
-        skipPermissionsTouchedRef.current = true
-        setSkipPermissions(enabled)
-        onSkipPermissionsChangeRef.current?.(enabled)
-        await saveSkipPermissions(enabled)
-    }, [saveSkipPermissions])
-
     const handleAutonomyChange = useCallback((enabled: boolean) => {
         setAutonomyEnabled(enabled)
         onAutonomyChangeRef.current?.(enabled)
@@ -246,11 +208,7 @@ export function SessionConfigurationPanel({
         setAgentType(type)
         onAgentTypeChangeRef.current?.(type)
         await saveAgentType(type)
-
-        if (!AGENT_SUPPORTS_SKIP_PERMISSIONS[type] && skipPermissions) {
-            await handleSkipPermissionsChange(false)
-        }
-    }, [saveAgentType, skipPermissions, handleSkipPermissionsChange])
+    }, [saveAgentType])
 
     const handleCustomBranchChange = useCallback((branch: string) => {
         setCustomBranch(branch)
@@ -305,15 +263,6 @@ export function SessionConfigurationPanel({
     }, [initialBaseBranch])
 
     useEffect(() => {
-        if (initialSkipPermissions !== undefined && initialSkipPermissions !== skipPermissions) {
-            initialSkipPermissionsRef.current = initialSkipPermissions
-            skipPermissionsTouchedRef.current = false
-            const supports = AGENT_SUPPORTS_SKIP_PERMISSIONS[agentType]
-            setSkipPermissions(supports ? initialSkipPermissions : false)
-        }
-    }, [initialSkipPermissions, skipPermissions, agentType])
-
-    useEffect(() => {
         if (initialAutonomyEnabled !== autonomyEnabled) {
             setAutonomyEnabled(initialAutonomyEnabled)
         }
@@ -337,10 +286,6 @@ export function SessionConfigurationPanel({
         const fallbackAgent = selectableAgents[0] ?? 'claude'
         setAgentType(fallbackAgent)
         onAgentTypeChangeRef.current?.(fallbackAgent)
-        if (!AGENT_SUPPORTS_SKIP_PERMISSIONS[fallbackAgent]) {
-            setSkipPermissions(false)
-            onSkipPermissionsChangeRef.current?.(false)
-        }
     }, [agentType, selectableAgents])
 
     useEffect(() => {
@@ -394,8 +339,6 @@ export function SessionConfigurationPanel({
                             onChange={(type) => { void handleAgentTypeChange(type) }}
                             disabled={disabled}
                             agentSelectionDisabled={agentSelectionDisabled}
-                            skipPermissions={skipPermissions}
-                            onSkipPermissionsChange={(enabled) => { void handleSkipPermissionsChange(enabled) }}
                             autonomyEnabled={autonomyEnabled}
                             onAutonomyChange={handleAutonomyChange}
                             showShortcutHint={shouldShowShortcutHint}
@@ -491,8 +434,6 @@ export function SessionConfigurationPanel({
                     onChange={(type) => { void handleAgentTypeChange(type) }}
                     disabled={disabled}
                     agentSelectionDisabled={agentSelectionDisabled}
-                    skipPermissions={skipPermissions}
-                    onSkipPermissionsChange={(enabled) => { void handleSkipPermissionsChange(enabled) }}
                     autonomyEnabled={autonomyEnabled}
                     onAutonomyChange={handleAutonomyChange}
                     showShortcutHint={shouldShowShortcutHint}
@@ -746,7 +687,6 @@ export function useSessionConfiguration(): [SessionConfiguration, (config: Parti
     const [config, setConfig] = useState<SessionConfiguration>({
         baseBranch: '',
         agentType: 'claude',
-        skipPermissions: false,
         autonomyEnabled: false,
         isValid: false
     })

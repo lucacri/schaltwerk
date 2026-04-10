@@ -161,58 +161,6 @@ describe('useAgentTabs', () => {
             )
         })
 
-        it('passes skipPermissions option to backend', async () => {
-            const { result } = renderTabsHook('session-1', 'term-1')
-
-            act(() => {
-                result.current.ensureInitialized('claude')
-            })
-
-            await act(async () => {
-                await result.current.addTab('codex', { skipPermissions: true })
-            })
-
-            expect(mockInvoke).toHaveBeenCalledWith(
-                TauriCommands.SchaltwerkCoreStartSessionAgentWithRestart,
-                {
-                    params: {
-                        sessionName: 'session-1',
-                        forceRestart: false,
-                        terminalId: 'term-1-1',
-                        agentType: 'codex',
-                        skipPrompt: true,
-                        skipPermissions: true,
-                    },
-                }
-            )
-        })
-
-        it('passes skipPermissions=false when explicitly set', async () => {
-            const { result } = renderTabsHook('session-1', 'term-1')
-
-            act(() => {
-                result.current.ensureInitialized('claude')
-            })
-
-            await act(async () => {
-                await result.current.addTab('codex', { skipPermissions: false })
-            })
-
-            expect(mockInvoke).toHaveBeenCalledWith(
-                TauriCommands.SchaltwerkCoreStartSessionAgentWithRestart,
-                {
-                    params: {
-                        sessionName: 'session-1',
-                        forceRestart: false,
-                        terminalId: 'term-1-1',
-                        agentType: 'codex',
-                        skipPrompt: true,
-                        skipPermissions: false,
-                    },
-                }
-            )
-        })
-
         it('keeps the first tab agent when defaults change', async () => {
             const { result } = renderTabsHook('session-1', 'term-1')
 

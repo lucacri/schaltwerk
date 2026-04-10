@@ -33,44 +33,6 @@ export function useClaudeSession() {
         }
     }, [])
 
-    const getSkipPermissions = useCallback(async (): Promise<boolean> => {
-        try {
-            return await invoke<boolean>(TauriCommands.SchaltwerkCoreGetSkipPermissions)
-        } catch (error) {
-            logger.error('Failed to get skip permissions:', error)
-            return false
-        }
-    }, [])
-
-    const setSkipPermissions = useCallback(async (enabled: boolean): Promise<boolean> => {
-        try {
-            await invoke(TauriCommands.SchaltwerkCoreSetSkipPermissions, { enabled })
-            return true
-        } catch (error) {
-            logger.error('Failed to set skip permissions:', error)
-            return false
-        }
-    }, [])
-
-    const getOrchestratorSkipPermissions = useCallback(async (): Promise<boolean> => {
-        try {
-            return await invoke<boolean>(TauriCommands.SchaltwerkCoreGetOrchestratorSkipPermissions)
-        } catch (error) {
-            logger.error('Failed to get orchestrator skip permissions:', error)
-            return false
-        }
-    }, [])
-
-    const setOrchestratorSkipPermissions = useCallback(async (enabled: boolean): Promise<boolean> => {
-        try {
-            await invoke(TauriCommands.SchaltwerkCoreSetOrchestratorSkipPermissions, { enabled })
-            return true
-        } catch (error) {
-            logger.error('Failed to set orchestrator skip permissions:', error)
-            return false
-        }
-    }, [])
-
     const getAgentType = useCallback(async (): Promise<string> => {
         try {
             return await invoke<string>(TauriCommands.SchaltwerkCoreGetAgentType)
@@ -111,10 +73,6 @@ export function useClaudeSession() {
 
     return {
         startClaude,
-        getSkipPermissions,
-        setSkipPermissions,
-        getOrchestratorSkipPermissions,
-        setOrchestratorSkipPermissions,
         getAgentType,
         setAgentType,
         getOrchestratorAgentType,

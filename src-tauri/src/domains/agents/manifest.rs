@@ -11,6 +11,8 @@ pub struct AgentDefinition {
     pub auto_send_initial_command: bool,
     pub supports_resume: bool,
     #[serde(default)]
+    pub supports_skip_permissions: bool,
+    #[serde(default)]
     pub ready_marker: Option<String>,
 }
 

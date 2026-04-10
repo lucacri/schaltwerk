@@ -39,12 +39,7 @@ pub trait SessionMethods {
     fn append_spec_content(&self, id: &str, content: &str) -> Result<()>;
     fn update_session_initial_prompt(&self, id: &str, prompt: &str) -> Result<()>;
     fn set_pending_name_generation(&self, id: &str, pending: bool) -> Result<()>;
-    fn set_session_original_settings(
-        &self,
-        session_id: &str,
-        agent_type: &str,
-        skip_permissions: bool,
-    ) -> Result<()>;
+    fn set_session_original_settings(&self, session_id: &str, agent_type: &str) -> Result<()>;
     fn clear_session_run_state(&self, session_id: &str) -> Result<()>;
     fn set_session_resume_allowed(&self, id: &str, allowed: bool) -> Result<()>;
     fn set_session_amp_thread_id(&self, id: &str, thread_id: &str) -> Result<()>;
@@ -113,7 +108,6 @@ struct SessionSummaryRow {
     last_activity: Option<chrono::DateTime<Utc>>,
     ready_to_merge: bool,
     original_agent_type: Option<String>,
-    original_skip_permissions: Option<bool>,
     pending_name_generation: bool,
     was_auto_generated: bool,
     session_state: SessionState,
@@ -169,7 +163,6 @@ impl Database {
                     initial_prompt,
                     ready_to_merge: summary.ready_to_merge,
                     original_agent_type: summary.original_agent_type,
-                    original_skip_permissions: summary.original_skip_permissions,
                     pending_name_generation: summary.pending_name_generation,
                     was_auto_generated: summary.was_auto_generated,
                     spec_content,
@@ -233,9 +226,9 @@ impl SessionMethods for Database {
                 repository_path, repository_name,
                 branch, parent_branch, original_parent_branch, worktree_path,
                 status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
-                original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
+                original_agent_type, pending_name_generation, was_auto_generated,
                 spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
             params![
                 session.id,
                 session.name,
@@ -256,7 +249,6 @@ impl SessionMethods for Database {
                 session.initial_prompt,
                 session.ready_to_merge,
                 session.original_agent_type,
-                session.original_skip_permissions,
                 session.pending_name_generation,
                 session.was_auto_generated,
                 session.spec_content,
@@ -286,7 +278,7 @@ impl SessionMethods for Database {
             "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
-                    original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
+                    original_agent_type, pending_name_generation, was_auto_generated,
                     spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
              FROM sessions
              WHERE repository_path = ?1 AND name = ?2"
@@ -316,28 +308,27 @@ impl SessionMethods for Database {
                 initial_prompt: row.get(16)?,
                 ready_to_merge: row.get(17).unwrap_or(false),
                 original_agent_type: row.get(18).ok(),
-                original_skip_permissions: row.get(19).ok(),
-                pending_name_generation: row.get(20).unwrap_or(false),
-                was_auto_generated: row.get(21).unwrap_or(false),
-                spec_content: row.get(22).ok(),
+                pending_name_generation: row.get(19).unwrap_or(false),
+                was_auto_generated: row.get(20).unwrap_or(false),
+                spec_content: row.get(21).ok(),
                 session_state: row
-                    .get::<_, String>(23)
+                    .get::<_, String>(22)
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(SessionState::Running),
-                resume_allowed: row.get(24).unwrap_or(true),
-                amp_thread_id: row.get(25).ok(),
-                issue_number: row.get(26).ok(),
-                issue_url: row.get(27).ok(),
-                pr_number: row.get(28).ok(),
-                pr_url: row.get(29).ok(),
-                is_consolidation: row.get(30).unwrap_or(false),
+                resume_allowed: row.get(23).unwrap_or(true),
+                amp_thread_id: row.get(24).ok(),
+                issue_number: row.get(25).ok(),
+                issue_url: row.get(26).ok(),
+                pr_number: row.get(27).ok(),
+                pr_url: row.get(28).ok(),
+                is_consolidation: row.get(29).unwrap_or(false),
                 consolidation_sources: row
-                    .get::<_, Option<String>>(31)
+                    .get::<_, Option<String>>(30)
                     .ok()
                     .flatten()
                     .and_then(|s| serde_json::from_str(&s).ok()),
-                promotion_reason: row.get(32).ok(),
+                promotion_reason: row.get(31).ok(),
             })
         })?;
 
@@ -351,7 +342,7 @@ impl SessionMethods for Database {
             "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
-                    original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
+                    original_agent_type, pending_name_generation, was_auto_generated,
                     spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
              FROM sessions
              WHERE id = ?1"
@@ -381,28 +372,27 @@ impl SessionMethods for Database {
                 initial_prompt: row.get(16)?,
                 ready_to_merge: row.get(17).unwrap_or(false),
                 original_agent_type: row.get(18).ok(),
-                original_skip_permissions: row.get(19).ok(),
-                pending_name_generation: row.get(20).unwrap_or(false),
-                was_auto_generated: row.get(21).unwrap_or(false),
-                spec_content: row.get(22).ok(),
+                pending_name_generation: row.get(19).unwrap_or(false),
+                was_auto_generated: row.get(20).unwrap_or(false),
+                spec_content: row.get(21).ok(),
                 session_state: row
-                    .get::<_, String>(23)
+                    .get::<_, String>(22)
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(SessionState::Running),
-                resume_allowed: row.get(24).unwrap_or(true),
-                amp_thread_id: row.get(25).ok(),
-                issue_number: row.get(26).ok(),
-                issue_url: row.get(27).ok(),
-                pr_number: row.get(28).ok(),
-                pr_url: row.get(29).ok(),
-                is_consolidation: row.get(30).unwrap_or(false),
+                resume_allowed: row.get(23).unwrap_or(true),
+                amp_thread_id: row.get(24).ok(),
+                issue_number: row.get(25).ok(),
+                issue_url: row.get(26).ok(),
+                pr_number: row.get(27).ok(),
+                pr_url: row.get(28).ok(),
+                is_consolidation: row.get(29).unwrap_or(false),
                 consolidation_sources: row
-                    .get::<_, Option<String>>(31)
+                    .get::<_, Option<String>>(30)
                     .ok()
                     .flatten()
                     .and_then(|s| serde_json::from_str(&s).ok()),
-                promotion_reason: row.get(32).ok(),
+                promotion_reason: row.get(31).ok(),
             })
         })?;
 
@@ -443,7 +433,7 @@ impl SessionMethods for Database {
                 "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
-                        original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
+                        original_agent_type, pending_name_generation, was_auto_generated,
                         session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
                  FROM sessions
                  WHERE repository_path = ?1
@@ -473,23 +463,22 @@ impl SessionMethods for Database {
                     last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(15)?),
                     ready_to_merge: row.get(16).unwrap_or(false),
                     original_agent_type: row.get(17).ok(),
-                    original_skip_permissions: row.get(18).ok(),
-                    pending_name_generation: row.get(19).unwrap_or(false),
-                    was_auto_generated: row.get(20).unwrap_or(false),
+                    pending_name_generation: row.get(18).unwrap_or(false),
+                    was_auto_generated: row.get(19).unwrap_or(false),
                     session_state: row
-                        .get::<_, String>(21)
+                        .get::<_, String>(20)
                         .ok()
                         .and_then(|s| s.parse().ok())
                         .unwrap_or(SessionState::Running),
-                    resume_allowed: row.get(22).unwrap_or(true),
-                    amp_thread_id: row.get(23).ok(),
-                    issue_number: row.get(24).ok(),
-                    issue_url: row.get(25).ok(),
-                    pr_number: row.get(26).ok(),
-                    pr_url: row.get(27).ok(),
-                    is_consolidation: row.get(28).unwrap_or(false),
-                    consolidation_sources: row.get(29).ok(),
-                    promotion_reason: row.get(30).ok(),
+                    resume_allowed: row.get(21).unwrap_or(true),
+                    amp_thread_id: row.get(22).ok(),
+                    issue_number: row.get(23).ok(),
+                    issue_url: row.get(24).ok(),
+                    pr_number: row.get(25).ok(),
+                    pr_url: row.get(26).ok(),
+                    is_consolidation: row.get(27).unwrap_or(false),
+                    consolidation_sources: row.get(28).ok(),
+                    promotion_reason: row.get(29).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -518,7 +507,7 @@ impl SessionMethods for Database {
                 "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
-                        original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
+                        original_agent_type, pending_name_generation, was_auto_generated,
                         session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
                  FROM sessions
                  WHERE status = 'active'
@@ -548,23 +537,22 @@ impl SessionMethods for Database {
                     last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(15)?),
                     ready_to_merge: row.get(16).unwrap_or(false),
                     original_agent_type: row.get(17).ok(),
-                    original_skip_permissions: row.get(18).ok(),
-                    pending_name_generation: row.get(19).unwrap_or(false),
-                    was_auto_generated: row.get(20).unwrap_or(false),
+                    pending_name_generation: row.get(18).unwrap_or(false),
+                    was_auto_generated: row.get(19).unwrap_or(false),
                     session_state: row
-                        .get::<_, String>(21)
+                        .get::<_, String>(20)
                         .ok()
                         .and_then(|s| s.parse().ok())
                         .unwrap_or(SessionState::Running),
-                    resume_allowed: row.get(22).unwrap_or(true),
-                    amp_thread_id: row.get(23).ok(),
-                    issue_number: row.get(24).ok(),
-                    issue_url: row.get(25).ok(),
-                    pr_number: row.get(26).ok(),
-                    pr_url: row.get(27).ok(),
-                    is_consolidation: row.get(28).unwrap_or(false),
-                    consolidation_sources: row.get(29).ok(),
-                    promotion_reason: row.get(30).ok(),
+                    resume_allowed: row.get(21).unwrap_or(true),
+                    amp_thread_id: row.get(22).ok(),
+                    issue_number: row.get(23).ok(),
+                    issue_url: row.get(24).ok(),
+                    pr_number: row.get(25).ok(),
+                    pr_url: row.get(26).ok(),
+                    is_consolidation: row.get(27).unwrap_or(false),
+                    consolidation_sources: row.get(28).ok(),
+                    promotion_reason: row.get(29).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -690,7 +678,7 @@ impl SessionMethods for Database {
                 "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
-                        original_agent_type, original_skip_permissions, pending_name_generation, was_auto_generated,
+                        original_agent_type, pending_name_generation, was_auto_generated,
                         session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
                  FROM sessions
                  WHERE repository_path = ?1 AND session_state = ?2
@@ -724,23 +712,22 @@ impl SessionMethods for Database {
                         ),
                         ready_to_merge: row.get(16).unwrap_or(false),
                         original_agent_type: row.get(17).ok(),
-                        original_skip_permissions: row.get(18).ok(),
-                        pending_name_generation: row.get(19).unwrap_or(false),
-                        was_auto_generated: row.get(20).unwrap_or(false),
+                        pending_name_generation: row.get(18).unwrap_or(false),
+                        was_auto_generated: row.get(19).unwrap_or(false),
                         session_state: row
-                            .get::<_, String>(21)
+                            .get::<_, String>(20)
                             .ok()
                             .and_then(|s| s.parse().ok())
                             .unwrap_or(SessionState::Running),
-                        resume_allowed: row.get(22).unwrap_or(true),
-                        amp_thread_id: row.get(23).ok(),
-                        issue_number: row.get(24).ok(),
-                        issue_url: row.get(25).ok(),
-                        pr_number: row.get(26).ok(),
-                        pr_url: row.get(27).ok(),
-                        is_consolidation: row.get(28).unwrap_or(false),
-                        consolidation_sources: row.get(29).ok(),
-                        promotion_reason: row.get(30).ok(),
+                        resume_allowed: row.get(21).unwrap_or(true),
+                        amp_thread_id: row.get(22).ok(),
+                        issue_number: row.get(23).ok(),
+                        issue_url: row.get(24).ok(),
+                        pr_number: row.get(25).ok(),
+                        pr_url: row.get(26).ok(),
+                        is_consolidation: row.get(27).unwrap_or(false),
+                        consolidation_sources: row.get(28).ok(),
+                        promotion_reason: row.get(29).ok(),
                     })
                 },
             )?;
@@ -819,16 +806,11 @@ impl SessionMethods for Database {
         Ok(())
     }
 
-    fn set_session_original_settings(
-        &self,
-        session_id: &str,
-        agent_type: &str,
-        skip_permissions: bool,
-    ) -> Result<()> {
+    fn set_session_original_settings(&self, session_id: &str, agent_type: &str) -> Result<()> {
         let conn = self.get_conn()?;
         conn.execute(
-            "UPDATE sessions SET original_agent_type = ?1, original_skip_permissions = ?2 WHERE id = ?3",
-            params![agent_type, skip_permissions, session_id],
+            "UPDATE sessions SET original_agent_type = ?1 WHERE id = ?2",
+            params![agent_type, session_id],
         )?;
         Ok(())
     }
@@ -850,7 +832,7 @@ impl SessionMethods for Database {
     fn clear_session_run_state(&self, session_id: &str) -> Result<()> {
         let conn = self.get_conn()?;
         conn.execute(
-            "UPDATE sessions SET last_activity = NULL, original_agent_type = NULL, original_skip_permissions = NULL WHERE id = ?1",
+            "UPDATE sessions SET last_activity = NULL, original_agent_type = NULL WHERE id = ?1",
             params![session_id],
         )?;
         // Also delete git stats since specs don't have worktrees
@@ -1039,7 +1021,7 @@ mod tests {
             initial_prompt: None,
             ready_to_merge: false,
             original_agent_type: None,
-            original_skip_permissions: None,
+
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
@@ -1094,7 +1076,7 @@ mod tests {
             initial_prompt: None,
             ready_to_merge: false,
             original_agent_type: None,
-            original_skip_permissions: None,
+
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
@@ -1147,7 +1129,7 @@ mod tests {
             initial_prompt: None,
             ready_to_merge: false,
             original_agent_type: None,
-            original_skip_permissions: None,
+
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
@@ -1276,7 +1258,7 @@ mod tests {
             initial_prompt: Some("Initial prompt text".to_string()),
             ready_to_merge: false,
             original_agent_type: Some("claude".to_string()),
-            original_skip_permissions: None,
+
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: Some("# Spec Content\nThis is the spec description".to_string()),
@@ -1336,7 +1318,7 @@ mod tests {
             initial_prompt: None,
             ready_to_merge: false,
             original_agent_type: None,
-            original_skip_permissions: None,
+
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
@@ -1415,7 +1397,7 @@ mod tests {
             initial_prompt: None,
             ready_to_merge: false,
             original_agent_type: None,
-            original_skip_permissions: None,
+
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,

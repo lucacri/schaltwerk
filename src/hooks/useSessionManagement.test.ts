@@ -198,7 +198,6 @@ describe('useSessionManagement', () => {
             const selection = { kind: 'orchestrator' as const }
 
             mockInvoke
-                .mockResolvedValueOnce(undefined) // schaltwerk_core_set_orchestrator_skip_permissions
                 .mockResolvedValueOnce(undefined) // schaltwerk_core_set_orchestrator_agent_type
                 .mockResolvedValueOnce(true) // terminal_exists
                 .mockImplementationOnce(async () => { // close_terminal
@@ -217,16 +216,11 @@ describe('useSessionManagement', () => {
             await act(async () => {
                 await result.current!.switchModel(
                     'gemini',
-                    true,
                     selection,
                     mockTerminals,
                     mockClearTerminalTracking,
                     mockClearTerminalStartedTracking
                 )
-            })
-
-            expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetOrchestratorSkipPermissions, {
-                enabled: true
             })
             expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetOrchestratorAgentType, {
                 agentType: 'gemini'
@@ -247,7 +241,6 @@ describe('useSessionManagement', () => {
             }
 
             mockInvoke
-                .mockResolvedValueOnce(undefined) // schaltwerk_core_set_skip_permissions
                 .mockResolvedValueOnce(undefined) // schaltwerk_core_set_session_agent_type
                 .mockResolvedValueOnce(true) // terminal_exists
                 .mockImplementationOnce(async () => { // close_terminal
@@ -264,16 +257,11 @@ describe('useSessionManagement', () => {
             await act(async () => {
                 await result.current!.switchModel(
                     'opencode',
-                    false,
                     selection,
                     mockTerminals,
                     mockClearTerminalTracking,
                     mockClearTerminalStartedTracking
                 )
-            })
-
-            expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetSkipPermissions, {
-                enabled: false
             })
             expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetSessionAgentType, {
                 sessionName: 'test-session',
@@ -295,7 +283,6 @@ describe('useSessionManagement', () => {
             const selection = { kind: 'session' as const, payload: 'test-session' }
 
             mockInvoke
-                .mockResolvedValueOnce(undefined) // schaltwerk_core_set_skip_permissions
                 .mockResolvedValueOnce(undefined) // schaltwerk_core_set_session_agent_type
                 .mockResolvedValueOnce(true) // terminal_exists
                 .mockImplementationOnce(async () => { // close_terminal
@@ -312,7 +299,6 @@ describe('useSessionManagement', () => {
             await act(async () => {
                 await result.current!.switchModel(
                     'claude',
-                    false,
                     selection,
                     mockTerminals,
                     mockClearTerminalTracking,
@@ -341,7 +327,6 @@ describe('useSessionManagement', () => {
             const selection = { kind: 'session' as const, payload: 'test-session' }
 
             mockInvoke
-                .mockResolvedValueOnce(undefined) // schaltwerk_core_set_skip_permissions
                 .mockResolvedValueOnce(undefined) // schaltwerk_core_set_session_agent_type
                 .mockResolvedValueOnce(true) // terminal_exists
                 .mockImplementationOnce(async () => { // close_terminal
@@ -358,7 +343,6 @@ describe('useSessionManagement', () => {
             await act(async () => {
                 await result.current!.switchModel(
                     'gemini',
-                    false,
                     selection,
                     mockTerminals,
                     mockClearTerminalTracking,
@@ -391,7 +375,6 @@ describe('useSessionManagement', () => {
             })
 
             mockInvoke
-                .mockResolvedValueOnce(undefined) // schaltwerk_core_set_skip_permissions
                 .mockResolvedValueOnce(undefined) // schaltwerk_core_set_session_agent_type
                 .mockImplementationOnce(async () => { // schaltwerk_core_start_session_agent_with_restart
                     const tev = TauriEvent as unknown as { __emit: (event: string, payload: unknown) => void }
@@ -402,7 +385,6 @@ describe('useSessionManagement', () => {
             await act(async () => {
                 await result.current!.switchModel(
                     'opencode',
-                    false,
                     selection,
                     mockTerminals,
                     mockClearTerminalTracking,
@@ -424,7 +406,6 @@ describe('useSessionManagement', () => {
             const selection = { kind: 'orchestrator' as const }
 
             mockInvoke
-                .mockResolvedValueOnce(undefined) // schaltwerk_core_set_orchestrator_skip_permissions
                 .mockResolvedValueOnce(undefined) // schaltwerk_core_set_orchestrator_agent_type
                 .mockResolvedValueOnce(false) // terminal_exists returns false
                 .mockResolvedValueOnce(undefined) // schaltwerk_core_start_claude_orchestrator
@@ -432,7 +413,6 @@ describe('useSessionManagement', () => {
             await act(async () => {
                 await result.current!.switchModel(
                     'claude',
-                    false,
                     selection,
                     mockTerminals,
                     mockClearTerminalTracking,
@@ -441,9 +421,6 @@ describe('useSessionManagement', () => {
             })
 
             expect(mockInvoke).not.toHaveBeenCalledWith(TauriCommands.CloseTerminal, expect.any(Object))
-            expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetOrchestratorSkipPermissions, {
-                enabled: false
-            })
             expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreStartClaudeOrchestrator, {
                 terminalId: 'test-terminal-top'
             })
@@ -457,7 +434,6 @@ describe('useSessionManagement', () => {
             await act(async () => {
                 await result.current!.switchModel(
                     'opencode',
-                    false,
                     selection,
                     mockTerminals,
                     mockClearTerminalTracking,
@@ -471,45 +447,6 @@ describe('useSessionManagement', () => {
                     detail: { kind: 'orchestrator' },
                 })
             )
-        })
-    })
-
-    describe('error handling', () => {
-        it('should handle errors in resetSession and reset state', async () => {
-            const { result } = renderHook(() => useSessionManagement())
-            
-            const selection = { kind: 'orchestrator' as const }
-            
-            mockInvoke.mockRejectedValueOnce(new Error('Test error'))
-
-            await act(async () => {
-                await expect(
-                    result.current.resetSession(selection, mockTerminals)
-                ).rejects.toThrow('Test error')
-            })
-
-            expect(result.current.isResetting).toBe(false)
-        })
-
-        it('should handle errors in switchModel', async () => {
-            const { result } = renderHook(() => useSessionManagement())
-            
-            const selection = { kind: 'orchestrator' as const }
-            
-            mockInvoke.mockRejectedValueOnce(new Error('Switch error'))
-
-            await act(async () => {
-                await expect(
-                    result.current!.switchModel(
-                        'claude',
-                        false,
-                        selection,
-                        mockTerminals,
-                        mockClearTerminalTracking,
-                        mockClearTerminalStartedTracking
-                    )
-                ).rejects.toThrow('Switch error')
-            })
         })
     })
 
@@ -591,168 +528,6 @@ describe('useSessionManagement', () => {
             })
         })
 
-        describe('terminal operations edge cases', () => {
-            it('should handle terminal existence check failure', async () => {
-                const { result } = renderHook(() => useSessionManagement())
-
-                const selection = {
-                    kind: 'session' as const,
-                    payload: 'test-session'
-                }
-
-                backendMocks.terminalExistsBackend.mockRejectedValueOnce(new Error('Terminal check failed'))
-
-                await act(async () => {
-                    await expect(
-                        result.current.resetSession(selection, mockTerminals)
-                    ).rejects.toThrow('Terminal check failed')
-                })
-
-                expect(result.current.isResetting).toBe(false)
-            })
-
-            it('should handle close terminal failure', async () => {
-                const { result } = renderHook(() => useSessionManagement())
-
-                const selection = {
-                    kind: 'session' as const,
-                    payload: 'test-session'
-                }
-
-                backendMocks.terminalExistsBackend.mockResolvedValueOnce(true)
-                backendMocks.closeTerminalBackend.mockRejectedValueOnce(new Error('Close terminal failed'))
-
-                await act(async () => {
-                    await expect(
-                        result.current.resetSession(selection, mockTerminals)
-                    ).rejects.toThrow('Close terminal failed')
-                })
-
-                expect(result.current.isResetting).toBe(false)
-            })
-
-            it('should handle restart claude failure', async () => {
-                const { result } = renderHook(() => useSessionManagement())
-
-                const selection = {
-                    kind: 'session' as const,
-                    payload: 'test-session'
-                }
-
-                backendMocks.terminalExistsBackend.mockResolvedValueOnce(true)
-                backendMocks.closeTerminalBackend.mockResolvedValueOnce(undefined)
-                mockInvoke.mockRejectedValueOnce(new Error('Restart failed')) // schaltwerk_core_start_claude fails
-
-                await act(async () => {
-                    await expect(
-                        result.current.resetSession(selection, mockTerminals)
-                    ).rejects.toThrow('Restart failed')
-                })
-
-                expect(result.current.isResetting).toBe(false)
-            })
-        })
-
-        describe('switchModel error scenarios', () => {
-            it('should handle agent type update failure', async () => {
-                const { result } = renderHook(() => useSessionManagement())
-
-                const selection = { kind: 'orchestrator' as const }
-
-                mockInvoke
-                    .mockResolvedValueOnce(undefined) // schaltwerk_core_set_skip_permissions
-                    .mockRejectedValueOnce(new Error('Agent type update failed'))
-
-                await act(async () => {
-                    await expect(
-                        result.current.switchModel(
-                            'claude',
-                            false,
-                            selection,
-                            mockTerminals,
-                            mockClearTerminalTracking,
-                            mockClearTerminalStartedTracking
-                        )
-                    ).rejects.toThrow('Agent type update failed')
-                })
-            })
-
-            it('should handle terminal existence check failure in switchModel', async () => {
-                const { result } = renderHook(() => useSessionManagement())
-
-                const selection = { kind: 'orchestrator' as const }
-
-                mockInvoke
-                    .mockResolvedValueOnce(undefined) // schaltwerk_core_set_skip_permissions
-                    .mockResolvedValueOnce(undefined) // schaltwerk_core_set_agent_type
-                    .mockRejectedValueOnce(new Error('Terminal check failed')) // terminal_exists fails
-
-                await act(async () => {
-                    await expect(
-                        result.current.switchModel(
-                            'claude',
-                            false,
-                            selection,
-                            mockTerminals,
-                            mockClearTerminalTracking,
-                            mockClearTerminalStartedTracking
-                        )
-                    ).rejects.toThrow('Terminal check failed')
-                })
-            })
-
-            it('should handle close terminal failure in switchModel', async () => {
-                const { result } = renderHook(() => useSessionManagement())
-
-                const selection = { kind: 'orchestrator' as const }
-
-                mockInvoke
-                    .mockResolvedValueOnce(undefined) // schaltwerk_core_set_skip_permissions
-                    .mockResolvedValueOnce(undefined) // schaltwerk_core_set_agent_type
-                    .mockResolvedValueOnce(true) // terminal_exists
-                    .mockRejectedValueOnce(new Error('Close terminal failed')) // close_terminal fails
-
-                await act(async () => {
-                    await expect(
-                        result.current.switchModel(
-                            'claude',
-                            false,
-                            selection,
-                            mockTerminals,
-                            mockClearTerminalTracking,
-                            mockClearTerminalStartedTracking
-                        )
-                    ).rejects.toThrow('Close terminal failed')
-                })
-            })
-
-            it('should handle orchestrator restart failure', async () => {
-                const { result } = renderHook(() => useSessionManagement())
-
-                const selection = { kind: 'orchestrator' as const }
-
-                mockInvoke.mockImplementation(async (command) => {
-                    if (command === TauriCommands.TerminalExists) return true
-                    if (command === TauriCommands.SchaltwerkCoreStartClaudeOrchestrator) {
-                        throw new Error('Orchestrator restart failed')
-                    }
-                    return undefined
-                })
-
-                await act(async () => {
-                    await expect(
-                        result.current.switchModel(
-                            'claude',
-                            false,
-                            selection,
-                            mockTerminals,
-                            mockClearTerminalTracking,
-                            mockClearTerminalStartedTracking
-                        )
-                    ).rejects.toThrow('Orchestrator restart failed')
-                })
-            })
-        })
     })
 
     describe('state management edge cases', () => {

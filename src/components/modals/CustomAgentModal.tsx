@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ModelSelector } from '../inputs/ModelSelector'
 import { useEnabledAgents } from '../../hooks/useEnabledAgents'
-import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../../types/session'
+import { AgentType, AGENT_TYPES } from '../../types/session'
 import { useTranslation } from '../../common/i18n'
 import { ModalPortal } from '../shared/ModalPortal'
 import { Button } from '../ui/Button'
@@ -9,9 +9,8 @@ import { Button } from '../ui/Button'
 interface Props {
     open: boolean
     onClose: () => void
-    onSelect: (options: { agentType: AgentType; skipPermissions: boolean }) => void | Promise<void>
+    onSelect: (options: { agentType: AgentType }) => void | Promise<void>
     initialAgentType?: AgentType
-    initialSkipPermissions?: boolean
 }
 
 const ALLOWED_AGENTS: AgentType[] = AGENT_TYPES.filter(
@@ -24,12 +23,10 @@ export function CustomAgentModal({
     onClose,
     onSelect,
     initialAgentType,
-    initialSkipPermissions,
 }: Props) {
     const { t } = useTranslation()
     const { filterAgents, loading: enabledAgentsLoading } = useEnabledAgents()
     const [agentType, setAgentType] = useState<AgentType>(DEFAULT_AGENT)
-    const [skipPermissions, setSkipPermissions] = useState(false)
     const [isSelecting, setIsSelecting] = useState(false)
     const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false)
     const selectRef = useRef<() => void>(() => {})
@@ -41,7 +38,7 @@ export function CustomAgentModal({
 
         setIsSelecting(true)
         try {
-            await Promise.resolve(onSelect({ agentType, skipPermissions }))
+            await Promise.resolve(onSelect({ agentType }))
             onClose()
         } finally {
             setIsSelecting(false)
@@ -60,13 +57,10 @@ export function CustomAgentModal({
             const fallbackAgent = selectableAgents[0] ?? DEFAULT_AGENT
             const sanitized = selectableAgents.includes(normalized) ? normalized : fallbackAgent
             setAgentType(sanitized)
-            const supports = AGENT_SUPPORTS_SKIP_PERMISSIONS[sanitized]
-            setSkipPermissions(supports ? Boolean(initialSkipPermissions) : false)
         } else {
             setAgentType(selectableAgents[0] ?? DEFAULT_AGENT)
-            setSkipPermissions(false)
         }
-    }, [open, initialAgentType, initialSkipPermissions, selectableAgents])
+    }, [open, initialAgentType, selectableAgents])
 
     useEffect(() => {
         if (!open) return
@@ -108,8 +102,6 @@ export function CustomAgentModal({
                             value={agentType}
                             onChange={setAgentType}
                             disabled={isSelecting || enabledAgentsLoading}
-                            skipPermissions={skipPermissions}
-                            onSkipPermissionsChange={(value) => setSkipPermissions(value)}
                             onDropdownOpenChange={setIsModelSelectorOpen}
                             allowedAgents={selectableAgents}
                         />

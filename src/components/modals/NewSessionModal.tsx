@@ -11,7 +11,7 @@ import { getPersistedSessionDefaults } from '../../utils/sessionConfig'
 import { Dropdown } from '../inputs/Dropdown'
 import { logger } from '../../utils/logger'
 import { useModal } from '../../contexts/ModalContext'
-import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS, createAgentRecord } from '../../types/session'
+import { AgentType, AGENT_TYPES, createAgentRecord } from '../../types/session'
 import { UiEvent, listenUiEvent, NewSessionPrefillDetail } from '../../common/uiEvents'
 import { useAgentAvailability } from '../../hooks/useAgentAvailability'
 import {
@@ -74,7 +74,6 @@ interface FavoriteConfigSnapshot {
     customBranch: string
     useExistingBranch: boolean
     agentType: AgentType
-    skipPermissions: boolean
     autonomyEnabled: boolean
     versionCount: number
     multiAgentMode: boolean
@@ -146,7 +145,6 @@ interface Props {
         agentType?: AgentType
         agentTypes?: AgentType[]
         agentSlots?: AgentLaunchSlot[]
-        skipPermissions?: boolean
         autonomyEnabled?: boolean
         issueNumber?: number
         issueUrl?: string
@@ -177,7 +175,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [customBranch, setCustomBranch] = useState('')
     const [useExistingBranch, setUseExistingBranch] = useState(false)
     const [agentType, setAgentType] = useState<AgentType>('claude')
-    const [skipPermissions, setSkipPermissions] = useState(false)
     const [autonomyEnabled, setAutonomyEnabled] = useState(false)
     const [validationError, setValidationError] = useState('')
     const [creating, setCreating] = useState(false)
@@ -234,7 +231,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const lastAgentTypeRef = useRef<AgentType>('claude')
     const lastFavoriteIdRef = useRef<string | null>(null)
     const hasAgentOverrideRef = useRef(false)
-    const lastSupportedSkipPermissionsRef = useRef(false)
     const lastOpenStateRef = useRef(false)
     const githubPromptReady = githubIntegration.canCreatePr && !githubIntegration.loading
     const preferencesInitializedRef = useRef(false)
@@ -274,7 +270,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         customBranch,
         useExistingBranch,
         agentType,
-        skipPermissions,
         autonomyEnabled,
         versionCount,
         multiAgentMode,
@@ -291,7 +286,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         customBranch,
         useExistingBranch,
         agentType,
-        skipPermissions,
         autonomyEnabled,
         versionCount,
         multiAgentMode,
@@ -315,7 +309,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         setCustomBranch(config.customBranch)
         setUseExistingBranch(config.useExistingBranch)
         setAgentType(config.agentType)
-        setSkipPermissions(config.skipPermissions)
         setAutonomyEnabled(config.autonomyEnabled)
         setVersionCount(config.versionCount)
         setMultiAgentMode(config.multiAgentMode)
@@ -329,9 +322,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         setIgnorePersistedAgentType(true)
         lastAgentTypeRef.current = config.agentType
         hasAgentOverrideRef.current = true
-        if (AGENT_SUPPORTS_SKIP_PERMISSIONS[config.agentType]) {
-            lastSupportedSkipPermissionsRef.current = config.skipPermissions
-        }
     }, [])
 
     const buildVariantFavoriteConfig = useCallback((config: FavoriteConfigSnapshot, variant: AgentVariant): FavoriteConfigSnapshot => {
@@ -372,7 +362,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
         let nextConfig: FavoriteConfigSnapshot = {
             ...config,
             agentType: primaryAgentType,
-            skipPermissions: primarySlot?.skipPermissions ?? config.skipPermissions,
             autonomyEnabled: primarySlot?.autonomyEnabled ?? config.autonomyEnabled,
             versionCount: Math.max(1, preset.slots.length),
             multiAgentMode: false,
@@ -621,54 +610,21 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     }
 
     const handleAgentTypeChange = useCallback((type: AgentType) => {
-        const previousAgent = lastAgentTypeRef.current
-        if (AGENT_SUPPORTS_SKIP_PERMISSIONS[previousAgent]) {
-            lastSupportedSkipPermissionsRef.current = skipPermissions
-        }
-
         logger.info(`[NewSessionModal] Agent type change requested ${JSON.stringify({
             nextType: type,
-            previousType: previousAgent,
+            previousType: lastAgentTypeRef.current,
             overrideBefore: hasAgentOverrideRef.current
         })}`)
 
         setAgentType(type)
         lastAgentTypeRef.current = type
         hasAgentOverrideRef.current = true
-        let nextSkipState = skipPermissions
-        if (AGENT_SUPPORTS_SKIP_PERMISSIONS[type]) {
-            const restoredPreference = lastSupportedSkipPermissionsRef.current
-            setSkipPermissions(restoredPreference)
-            nextSkipState = restoredPreference
-            logger.info('[NewSessionModal] Restored skip permissions preference for supported agent', {
-                agentType: type,
-                restoredPreference
-            })
-        } else if (skipPermissions) {
-            setSkipPermissions(false)
-            nextSkipState = false
-            logger.info('[NewSessionModal] Cleared skip permissions for unsupported agent', { agentType: type })
-        }
 
         logger.info(`[NewSessionModal] Agent type change applied ${JSON.stringify({
             lastAgentType: lastAgentTypeRef.current,
             overrideAfter: hasAgentOverrideRef.current,
-            skipPermissions: nextSkipState
         })}`)
-    }, [skipPermissions])
-
-    const handleSkipPermissionsChange = (enabled: boolean) => {
-        setSkipPermissions(enabled)
-        if (AGENT_SUPPORTS_SKIP_PERMISSIONS[lastAgentTypeRef.current]) {
-            lastSupportedSkipPermissionsRef.current = enabled
-        }
-    }
-
-    useEffect(() => {
-        if (AGENT_SUPPORTS_SKIP_PERMISSIONS[agentType]) {
-            lastSupportedSkipPermissionsRef.current = skipPermissions
-        }
-    }, [agentType, skipPermissions])
+    }, [])
 
     const persistAgentCliArgs = useCallback(async (agent: AgentType, value: string) => {
         try {
@@ -914,7 +870,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             const presetAgentSlots = selectedPreset
                 ? selectedPreset.slots.map(slot => ({
                     agentType: slot.agentType as AgentType,
-                    skipPermissions: slot.skipPermissions,
                     autonomyEnabled: slot.autonomyEnabled,
                 }))
                 : null
@@ -974,7 +929,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 draftContent: createAsDraft ? currentPrompt : undefined,
                 versionCount: effectiveVersionCount,
                 agentType: primaryAgentType,
-                skipPermissions: createAsDraft ? skipPermissions : (usePreset ? undefined : skipPermissions),
                 autonomyEnabled: createAsDraft ? undefined : (usePreset ? undefined : effectiveAutonomyEnabled),
                 epicId,
                 versionGroupId,
@@ -1014,7 +968,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setValidationError(errorMessage)
             setCreating(false)
         }
-    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, skipPermissions, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, versionGroupId, selectedPresetId, agentPresetsList, prefillPrNumber, prefillPrUrl, prefillIssueNumber, prefillIssueUrl])
+    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, versionGroupId, selectedPresetId, agentPresetsList, prefillPrNumber, prefillPrUrl, prefillIssueNumber, prefillIssueUrl])
 
     // Keep ref in sync immediately on render to avoid stale closures in tests
     createRef.current = () => { void handleCreate() }
@@ -1299,7 +1253,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 setAgentType(lastAgentTypeRef.current)
                 // Initialize configuration from persisted state to reflect real settings
                 getPersistedSessionDefaults()
-                    .then(({ baseBranch, agentType, skipPermissions }) => {
+                    .then(({ baseBranch, agentType }) => {
                         if (baseBranch) setBaseBranch(baseBranch)
                         if (!shouldIgnorePersisted) {
                             logger.info(`[NewSessionModal] Using persisted agent type from defaults ${JSON.stringify({ persistedAgentType: agentType })}`)
@@ -1311,9 +1265,8 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                 lastAgentType: lastAgentTypeRef.current
                             })}`)
                         }
-                        setSkipPermissions(skipPermissions)
                         setPersistedDefaultsLoaded(true)
-                        logger.info('[NewSessionModal] Initialized config from persisted state:', { baseBranch, agentType, skipPermissions })
+                        logger.info('[NewSessionModal] Initialized config from persisted state:', { baseBranch, agentType })
                     })
                     .catch(e => {
                         logger.warn('[NewSessionModal] Failed loading persisted config, falling back to child init:', e)
@@ -1323,7 +1276,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                             setAgentType('claude')
                             lastAgentTypeRef.current = 'claude'
                         }
-                        setSkipPermissions(false)
                         setPersistedDefaultsLoaded(true)
                     })
             } else {
@@ -1382,7 +1334,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setCreating(false)
             setBaseBranch('')
             setAgentType(lastAgentTypeRef.current)
-            setSkipPermissions(false)
             setAutonomyEnabled(false)
             setVersionCount(1)
             setShowVersionMenu(false)
@@ -2249,7 +2200,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                         hideAgentType={presetTabActive}
                                         onBaseBranchChange={handleBranchChange}
                                         onAgentTypeChange={handleAgentTypeChange}
-                                        onSkipPermissionsChange={handleSkipPermissionsChange}
                                         onAutonomyChange={setAutonomyEnabled}
                                         onCustomBranchChange={(branch) => {
                                             setCustomBranch(branch)
@@ -2265,7 +2215,6 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                                         }}
                                         initialBaseBranch={baseBranch}
                                         initialAgentType={agentType}
-                                        initialSkipPermissions={skipPermissions}
                                         initialAutonomyEnabled={autonomyEnabled}
                                         initialCustomBranch={customBranch}
                                         initialUseExistingBranch={useExistingBranch}

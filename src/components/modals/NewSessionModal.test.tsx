@@ -97,19 +97,13 @@ vi.mock('../specs/MarkdownEditor', async () => {
 })
 
 // Expose spies so tests can assert persistence/saves
-const mockGetSkipPermissions = vi.fn().mockResolvedValue(false)
-const mockSetSkipPermissions = vi.fn().mockResolvedValue(true)
 const mockGetAgentType = vi.fn().mockResolvedValue('claude')
 const mockSetAgentType = vi.fn().mockResolvedValue(true)
 
 vi.mock('../../hooks/useClaudeSession', () => ({
   useClaudeSession: () => ({
-    getSkipPermissions: mockGetSkipPermissions,
-    setSkipPermissions: mockSetSkipPermissions,
     getAgentType: mockGetAgentType,
     setAgentType: mockSetAgentType,
-    getOrchestratorSkipPermissions: vi.fn().mockResolvedValue(false),
-    setOrchestratorSkipPermissions: vi.fn().mockResolvedValue(true),
     getOrchestratorAgentType: vi.fn().mockResolvedValue('claude'),
     setOrchestratorAgentType: vi.fn().mockResolvedValue(true),
   })
@@ -151,7 +145,6 @@ const mockAgentPresets = vi.fn((): {
     slots: Array<{
       agentType: string
       variantId?: string
-      skipPermissions?: boolean
       autonomyEnabled?: boolean
     }>
     isBuiltIn: boolean
@@ -223,8 +216,6 @@ const defaultInvokeImplementation = (cmd: string) => {
       return Promise.resolve()
     case TauriCommands.SchaltwerkCoreListProjectFiles:
       return Promise.resolve(['README.md', 'src/index.ts'])
-    case TauriCommands.SchaltwerkCoreGetSkipPermissions:
-      return Promise.resolve(false)
     case TauriCommands.SchaltwerkCoreGetAgentType:
       return Promise.resolve('claude')
     default:
@@ -319,8 +310,6 @@ describe('NewSessionModal', () => {
     vi.mocked(invoke).mockImplementation(defaultInvokeImplementation)
     markdownFocus.focus.mockClear()
     markdownFocus.focusEnd.mockClear()
-    mockGetSkipPermissions.mockClear()
-    mockSetSkipPermissions.mockClear()
     mockGetAgentType.mockClear()
     mockGetAgentType.mockResolvedValue('claude')
     mockSetAgentType.mockClear()
@@ -442,17 +431,6 @@ describe('NewSessionModal', () => {
     // Wait until the initial configuration has been applied (Claude by default)
     const agentDropdown = await screen.findByRole('button', { name: /Claude/i })
     expect(agentDropdown).toBeInTheDocument()
-    let skipToggle = screen.queryByRole('button', { name: /Skip permissions/i })
-    if (!skipToggle) {
-      fireEvent.click(agentDropdown)
-      const claudeOption = await screen.findByRole('button', { name: /^claude$/i })
-      fireEvent.click(claudeOption)
-      skipToggle = await screen.findByRole('button', { name: /Skip permissions/i })
-    }
-    expect(skipToggle).toBeInTheDocument()
-    expect(skipToggle).toHaveAttribute('aria-pressed', 'false')
-    const requireToggle = screen.getByRole('button', { name: /Require permissions/i })
-    expect(requireToggle).toHaveAttribute('aria-pressed', 'true')
 
     // Wait for button to be enabled (branches loaded, session config initialized)
     await waitFor(() => {
@@ -563,57 +541,6 @@ describe('NewSessionModal', () => {
     expect(nameInput.value).toBe(specName)
   })
 
-  // Skipping edge-case validation UI assertion to avoid flakiness in CI
-
-  it('toggles agent type and skip permissions', async () => {
-    openModal()
-    
-    // Wait for SessionConfigurationPanel to load
-    const agentDropdown = await screen.findByRole('button', { name: /Claude/i })
-    expect(agentDropdown).toBeInTheDocument()
-
-    fireEvent.click(agentDropdown)
-
-    const opencodeOptionButtons = await screen.findAllByRole('button', { name: /OpenCode/i })
-    const opencodeOption = opencodeOptionButtons[opencodeOptionButtons.length - 1]
-    fireEvent.click(opencodeOption)
-
-    expect(screen.queryByLabelText(/Skip permissions/i)).toBeNull()
-  })
-
-  it('restores skip permissions preference after selecting unsupported agents', async () => {
-    openModal()
-
-    const agentDropdown = await screen.findByRole('button', { name: /Claude/i })
-    const skipButton = await screen.findByRole('button', { name: /Skip permissions/i })
-
-    // Enable skip permissions for the default agent
-    fireEvent.click(skipButton)
-    await waitFor(() => {
-      expect(skipButton).toHaveAttribute('aria-pressed', 'true')
-    })
-
-    // Switch to an agent without skip-permissions support
-    fireEvent.click(agentDropdown)
-    const opencodeOptions = await screen.findAllByRole('button', { name: /^OpenCode$/i })
-    const opencodeOption = opencodeOptions[opencodeOptions.length - 1]
-    fireEvent.click(opencodeOption)
-
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /Skip permissions/i })).toBeNull()
-    })
-
-    // Return to an agent that supports skip permissions
-    const openCodeDropdown = await screen.findByRole('button', { name: /OpenCode/i })
-    fireEvent.click(openCodeDropdown)
-    const claudeOptions = await screen.findAllByRole('button', { name: /^Claude$/i })
-    const claudeOption = claudeOptions[claudeOptions.length - 1]
-    fireEvent.click(claudeOption)
-
-    const restoredSkipButton = await screen.findByRole('button', { name: /Skip permissions/i })
-    expect(restoredSkipButton).toHaveAttribute('aria-pressed', 'true')
-  })
-
   it('shows autonomy toggle for supported agents and hides it for terminal', async () => {
     openModal()
 
@@ -653,8 +580,8 @@ describe('NewSessionModal', () => {
           name: 'Autonomy Duo',
           isBuiltIn: false,
           slots: [
-            { agentType: 'claude', skipPermissions: true, autonomyEnabled: true },
-            { agentType: 'codex', skipPermissions: false, autonomyEnabled: false },
+            { agentType: 'claude', autonomyEnabled: true },
+            { agentType: 'codex', autonomyEnabled: false },
           ],
         },
       ],
@@ -683,8 +610,8 @@ describe('NewSessionModal', () => {
     await waitFor(() => expect(onCreate).toHaveBeenCalled())
     expect(onCreate.mock.calls[0][0]).toEqual(expect.objectContaining({
       agentSlots: [
-        { agentType: 'claude', skipPermissions: true, autonomyEnabled: true },
-        { agentType: 'codex', skipPermissions: false, autonomyEnabled: false },
+        { agentType: 'claude', autonomyEnabled: true },
+        { agentType: 'codex', autonomyEnabled: false },
       ],
     }))
     expect(onCreate.mock.calls[0][0].agentTypes).toBeUndefined()
@@ -952,27 +879,6 @@ describe('NewSessionModal', () => {
       const [agentButton] = screen.getAllByRole('button', { name: 'Claude' })
       expect(agentButton).not.toBeDisabled()
     })
-  })
-
-  it('keeps skip permissions toggle active in multi-agent mode', async () => {
-    render(
-      <ModalProvider>
-        <NewSessionModal open={true} onClose={vi.fn()} onCreate={vi.fn()} />
-      </ModalProvider>
-    )
-
-    await waitFor(() => expect(screen.getByTestId('version-selector')).toBeInTheDocument())
-    const skipButton = await screen.findByRole('button', { name: /Skip permissions/i })
-    expect(skipButton).toBeInTheDocument()
-
-    fireEvent.click(screen.getByTestId('version-selector'))
-    const menu = await screen.findByTestId('version-selector-menu')
-    fireEvent.click(within(menu).getByRole('button', { name: 'Use Multiple Agents' }))
-
-    const skipButtonInMultiMode = await screen.findByRole('button', { name: /Skip permissions/i })
-    expect(skipButtonInMultiMode).not.toBeDisabled()
-    fireEvent.click(skipButtonInMultiMode)
-    await waitFor(() => expect(skipButtonInMultiMode).toHaveAttribute('aria-pressed', 'true'))
   })
 
   it('disables start when multi-agent mode has no allocations', async () => {
@@ -1277,9 +1183,6 @@ describe('NewSessionModal', () => {
       }
       if (cmd === TauriCommands.GetProjectDefaultBranch) {
         return Promise.resolve('main')
-      }
-      if (cmd === TauriCommands.SchaltwerkCoreGetSkipPermissions) {
-        return Promise.resolve(false)
       }
       if (cmd === TauriCommands.SchaltwerkCoreGetAgentType) {
         return Promise.resolve('claude')
@@ -1756,10 +1659,10 @@ describe('NewSessionModal', () => {
         expect(getFavoriteCard(/Codex Fast/i)).toHaveAttribute('aria-pressed', 'true')
       }, { timeout: 3000 })
 
-      // Toggle skip-permissions inside Customize to dirty the favorite-backed config
+      // Toggle autonomy inside Customize to dirty the favorite-backed config
       fireEvent.click(screen.getByRole('button', { name: /Customize/i }))
-      const skipToggle = await screen.findByRole('button', { name: /Skip permissions/i })
-      fireEvent.click(skipToggle)
+      const autonomyToggle = await screen.findByRole('button', { name: /Full autonomous/i })
+      fireEvent.click(autonomyToggle)
 
       await waitFor(() => {
         expect(screen.getByText(/modified/i)).toBeInTheDocument()

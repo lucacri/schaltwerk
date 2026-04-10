@@ -47,7 +47,7 @@ describe('useFavorites', () => {
 
         mockUseAgentPresets.mockReturnValue({
             presets: [
-                { id: 'preset-review', name: 'Review Squad', slots: [{ agentType: 'claude' }, { agentType: 'codex', skipPermissions: true }], isBuiltIn: false },
+                { id: 'preset-review', name: 'Review Squad', slots: [{ agentType: 'claude' }, { agentType: 'codex' }], isBuiltIn: false },
                 { id: 'preset-triage', name: 'Triage', slots: [{ agentType: 'gemini' }], isBuiltIn: false },
             ],
             loading: false,
@@ -97,7 +97,7 @@ describe('useFavorites', () => {
             const preset = result.current.favorites.find(favorite => favorite.id === 'preset-review')
 
             expect(variant?.summary).toBe('GPT-5.4 · high')
-            expect(preset?.summary).toBe('2 agents · skip')
+            expect(preset?.summary).toBe('2 agents')
         })
     })
 })

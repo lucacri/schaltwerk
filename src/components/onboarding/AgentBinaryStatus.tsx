@@ -47,7 +47,6 @@ export function AgentBinaryStatus() {
     setSelectedDefault(agent)
     await switchModel(
       agent,
-      false,
       { kind: 'orchestrator' },
       terminals,
       clearTerminalTracking,

@@ -216,13 +216,6 @@ export function AgentPresetsSettings({ onNotification, enabledAgents }: AgentPre
                                             </FormGroup>
                                             <div className="md:pb-[1px]">
                                                 <Checkbox
-                                                    checked={slot.skipPermissions ?? false}
-                                                    onChange={checked => handleSlotUpdate(preset.id, idx, { skipPermissions: checked || undefined })}
-                                                    label={'Skip'}
-                                                />
-                                            </div>
-                                            <div className="md:pb-[1px]">
-                                                <Checkbox
                                                     checked={slot.autonomyEnabled ?? false}
                                                     onChange={checked => handleSlotUpdate(preset.id, idx, { autonomyEnabled: checked || undefined })}
                                                     label={'Full autonomous'}

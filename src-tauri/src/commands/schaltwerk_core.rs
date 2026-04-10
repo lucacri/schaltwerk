@@ -1147,7 +1147,6 @@ pub struct CreateSessionParams {
     version_number: Option<i32>,
     epic_id: Option<String>,
     agent_type: Option<String>,
-    skip_permissions: Option<bool>,
     autonomy_enabled: Option<bool>,
     issue_number: Option<i64>,
     issue_url: Option<String>,
@@ -1171,7 +1170,6 @@ pub async fn schaltwerk_core_create_session(
     version_number: Option<i32>,
     epic_id: Option<String>,
     agent_type: Option<String>,
-    skip_permissions: Option<bool>,
     autonomy_enabled: Option<bool>,
     issue_number: Option<i64>,
     issue_url: Option<String>,
@@ -1191,7 +1189,6 @@ pub async fn schaltwerk_core_create_session(
         version_number,
         epic_id,
         agent_type,
-        skip_permissions,
         autonomy_enabled,
         issue_number,
         issue_url,
@@ -1232,7 +1229,6 @@ pub async fn schaltwerk_core_create_session(
         version_number: params.version_number,
         epic_id: params.epic_id.as_deref(),
         agent_type: params.agent_type.as_deref(),
-        skip_permissions: params.skip_permissions,
         pr_number: params.pr_number,
         is_consolidation: params.is_consolidation.unwrap_or(false),
         consolidation_source_ids: params.consolidation_source_ids,
@@ -1288,8 +1284,6 @@ pub async fn schaltwerk_core_create_session(
         #[serde(skip_serializing_if = "Option::is_none")]
         epic: Option<lucode::domains::sessions::entity::Epic>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        skip_permissions: Option<bool>,
-        #[serde(skip_serializing_if = "Option::is_none")]
         agent_type: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         is_consolidation: Option<bool>,
@@ -1308,7 +1302,6 @@ pub async fn schaltwerk_core_create_session(
             last_modified: session.last_activity.map(|ts| ts.to_rfc3339()),
             epic,
             agent_type: session.original_agent_type.clone(),
-            skip_permissions: session.original_skip_permissions,
             is_consolidation: session.is_consolidation.then_some(true),
             consolidation_sources: session.consolidation_sources.clone(),
         },
@@ -1895,7 +1888,6 @@ pub struct StartAgentParams {
     #[serde(default)]
     pub prompt: Option<String>,
     pub skip_prompt: Option<bool>,
-    pub skip_permissions: Option<bool>,
 }
 
 #[tauri::command]
@@ -1916,7 +1908,6 @@ pub async fn schaltwerk_core_start_session_agent(
             agent_type: None,
             prompt: None,
             skip_prompt: None,
-            skip_permissions: None,
         },
     )
     .await
@@ -1940,7 +1931,6 @@ pub async fn schaltwerk_core_start_claude_with_restart(
             terminal_id_override: None,
             agent_type_override: None,
             skip_prompt: false,
-            skip_permissions_override: None,
         },
     )
     .await
@@ -1954,7 +1944,6 @@ struct AgentStartParams {
     terminal_id_override: Option<String>,
     agent_type_override: Option<String>,
     skip_prompt: bool,
-    skip_permissions_override: Option<bool>,
 }
 
 async fn schaltwerk_core_start_agent_in_terminal(
@@ -1969,10 +1958,9 @@ async fn schaltwerk_core_start_agent_in_terminal(
         terminal_id_override,
         agent_type_override,
         skip_prompt,
-        skip_permissions_override,
     } = params;
     log::info!(
-        "Starting agent for session: {session_name}, terminal_id_override={terminal_id_override:?}, agent_type_override={agent_type_override:?}, skip_prompt={skip_prompt}, skip_permissions_override={skip_permissions_override:?}"
+        "Starting agent for session: {session_name}, terminal_id_override={terminal_id_override:?}, agent_type_override={agent_type_override:?}, skip_prompt={skip_prompt}"
     );
 
     // We only need read access to the core snapshot; avoid write lock to prevent launch deadlocks
@@ -2039,7 +2027,6 @@ async fn schaltwerk_core_start_agent_in_terminal(
             amp_mcp_servers: amp_mcp_servers.as_ref(),
             agent_type_override: agent_type_override.as_deref(),
             skip_prompt,
-            skip_permissions_override,
         })
         .map_err(|e| {
             log::error!("Failed to build {agent_type} command for session {session_name}: {e}");
@@ -2352,10 +2339,9 @@ pub async fn schaltwerk_core_start_session_agent_with_restart(
         agent_type,
         prompt,
         skip_prompt,
-        skip_permissions,
     } = params;
     log::info!(
-        "[AGENT_LAUNCH_TRACE] schaltwerk_core_start_session_agent_with_restart called: session={session_name}, force_restart={force_restart}, terminal_id={terminal_id:?}, agent_type={agent_type:?}, skip_prompt={skip_prompt:?}, skip_permissions={skip_permissions:?}, prompt_override={}",
+        "[AGENT_LAUNCH_TRACE] schaltwerk_core_start_session_agent_with_restart called: session={session_name}, force_restart={force_restart}, terminal_id={terminal_id:?}, agent_type={agent_type:?}, skip_prompt={skip_prompt:?}, prompt_override={}",
         prompt.is_some()
     );
     if let Some(prompt) = prompt.as_ref() {
@@ -2375,7 +2361,6 @@ pub async fn schaltwerk_core_start_session_agent_with_restart(
             terminal_id_override: terminal_id,
             agent_type_override: agent_type,
             skip_prompt: skip_prompt.unwrap_or(false),
-            skip_permissions_override: skip_permissions,
         },
     )
     .await
@@ -2585,40 +2570,6 @@ pub async fn schaltwerk_core_start_spec_orchestrator(
 }
 
 #[tauri::command]
-pub async fn schaltwerk_core_set_skip_permissions(enabled: bool) -> Result<(), String> {
-    let core = get_core_write().await?;
-    core.db
-        .set_skip_permissions(enabled)
-        .map_err(|e| format!("Failed to set skip permissions: {e}"))
-}
-
-#[tauri::command]
-pub async fn schaltwerk_core_get_skip_permissions() -> Result<bool, String> {
-    let core = get_core_read().await?;
-    core.db
-        .get_skip_permissions()
-        .map_err(|e| format!("Failed to get skip permissions: {e}"))
-}
-
-#[tauri::command]
-pub async fn schaltwerk_core_set_orchestrator_skip_permissions(
-    enabled: bool,
-) -> Result<(), String> {
-    let core = get_core_write().await?;
-    core.db
-        .set_orchestrator_skip_permissions(enabled)
-        .map_err(|e| format!("Failed to set orchestrator skip permissions: {e}"))
-}
-
-#[tauri::command]
-pub async fn schaltwerk_core_get_orchestrator_skip_permissions() -> Result<bool, String> {
-    let core = get_core_read().await?;
-    core.db
-        .get_orchestrator_skip_permissions()
-        .map_err(|e| format!("Failed to get orchestrator skip permissions: {e}"))
-}
-
-#[tauri::command]
 pub async fn schaltwerk_core_set_agent_type(agent_type: String) -> Result<(), String> {
     let core = get_core_write().await?;
     core.db
@@ -2645,15 +2596,9 @@ pub async fn schaltwerk_core_set_session_agent_type(
         .get_session_by_name(&core.repo_path, &session_name)
         .map_err(|e| format!("Failed to find session {session_name}: {e}"))?;
 
-    // Get current skip permissions setting
-    let skip_permissions = core
-        .db
-        .get_skip_permissions()
-        .map_err(|e| format!("Failed to get skip permissions: {e}"))?;
-
     // Update session's original settings to use the new agent type
     core.db
-        .set_session_original_settings(&session.id, &agent_type, skip_permissions)
+        .set_session_original_settings(&session.id, &agent_type)
         .map_err(|e| format!("Failed to update session agent type: {e}"))?;
 
     log::info!(
@@ -2891,7 +2836,6 @@ pub async fn schaltwerk_core_create_spec_session(
     name: String,
     spec_content: String,
     agent_type: Option<String>,
-    skip_permissions: Option<bool>,
     epic_id: Option<String>,
     issue_number: Option<i64>,
     issue_url: Option<String>,
@@ -2900,7 +2844,6 @@ pub async fn schaltwerk_core_create_spec_session(
     user_edited_name: Option<bool>,
 ) -> Result<Session, String> {
     log::info!("Creating spec: {name} with agent_type={agent_type:?}");
-    let _ = skip_permissions;
 
     let core = get_core_write().await?;
     let manager = core.session_manager();

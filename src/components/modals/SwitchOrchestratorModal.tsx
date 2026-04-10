@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ModelSelector } from '../inputs/ModelSelector'
 import { useClaudeSession } from '../../hooks/useClaudeSession'
 import { useEnabledAgents } from '../../hooks/useEnabledAgents'
-import { AgentType, AGENT_TYPES, AGENT_SUPPORTS_SKIP_PERMISSIONS } from '../../types/session'
+import { AgentType, AGENT_TYPES } from '../../types/session'
 import { logger } from '../../utils/logger'
 import { useTranslation } from '../../common/i18n'
 import { ModalPortal } from '../shared/ModalPortal'
@@ -10,10 +10,9 @@ import { ModalPortal } from '../shared/ModalPortal'
 interface Props {
   open: boolean
   onClose: () => void
-  onSwitch: (options: { agentType: AgentType; skipPermissions: boolean }) => void | Promise<void>
+  onSwitch: (options: { agentType: AgentType }) => void | Promise<void>
   scope?: 'orchestrator' | 'session'
   initialAgentType?: AgentType
-  initialSkipPermissions?: boolean
   targetSessionId?: string | null
 }
 
@@ -29,19 +28,15 @@ export function SwitchOrchestratorModal({
   onSwitch,
   scope,
   initialAgentType,
-  initialSkipPermissions,
   targetSessionId,
 }: Props) {
   const { t } = useTranslation()
   const [agentType, setAgentType] = useState<AgentType>('claude')
-  const [skipPermissions, setSkipPermissions] = useState(false)
   const [switching, setSwitching] = useState(false)
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false)
   const {
     getOrchestratorAgentType,
-    getOrchestratorSkipPermissions,
     getAgentType,
-    getSkipPermissions,
   } = useClaudeSession()
   const { filterAgents, loading: enabledAgentsLoading } = useEnabledAgents()
   const switchRef = useRef<() => void>(() => {})
@@ -66,7 +61,7 @@ export function SwitchOrchestratorModal({
 
     setSwitching(true)
     try {
-      await Promise.resolve(onSwitch({ agentType, skipPermissions }))
+      await Promise.resolve(onSwitch({ agentType }))
     } finally {
       setSwitching(false)
     }
@@ -86,26 +81,18 @@ export function SwitchOrchestratorModal({
       const fallbackAgent = selectableAgents[0] ?? DEFAULT_AGENT
       const sanitized = selectableAgents.includes(normalized) ? normalized : fallbackAgent
       setAgentType(sanitized)
-      const supports = AGENT_SUPPORTS_SKIP_PERMISSIONS[sanitized]
-      setSkipPermissions(supports ? Boolean(initialSkipPermissions) : false)
       return
     }
 
     const loadAgentType = isOrchestrator ? getOrchestratorAgentType : getAgentType
-    const loadSkipPermissions = isOrchestrator
-      ? getOrchestratorSkipPermissions
-      : getSkipPermissions
-
-    Promise.all([loadAgentType(), loadSkipPermissions()])
-      .then(([type, skip]) => {
+    Promise.resolve(loadAgentType())
+      .then((type) => {
         const normalized = AGENT_TYPES.includes(type as AgentType)
           ? (type as AgentType)
           : DEFAULT_AGENT
         const fallbackAgent = selectableAgents[0] ?? DEFAULT_AGENT
         const sanitized = selectableAgents.includes(normalized) ? normalized : fallbackAgent
         setAgentType(sanitized)
-        const supports = AGENT_SUPPORTS_SKIP_PERMISSIONS[sanitized]
-        setSkipPermissions(supports ? Boolean(skip) : false)
       })
       .catch((error) => {
         logger.warn('[SwitchOrchestratorModal] Failed to load agent configuration:', error)
@@ -113,13 +100,10 @@ export function SwitchOrchestratorModal({
   }, [
     open,
     initialAgentType,
-    initialSkipPermissions,
     selectableAgents,
     isOrchestrator,
     getAgentType,
-    getSkipPermissions,
     getOrchestratorAgentType,
-    getOrchestratorSkipPermissions,
   ])
 
   useEffect(() => {
@@ -172,8 +156,6 @@ export function SwitchOrchestratorModal({
               value={agentType}
               onChange={setAgentType}
               disabled={switching || enabledAgentsLoading}
-              skipPermissions={skipPermissions}
-              onSkipPermissionsChange={(value) => setSkipPermissions(value)}
               onDropdownOpenChange={setIsModelSelectorOpen}
               allowedAgents={selectableAgents}
             />

@@ -102,11 +102,6 @@ const TerminalGridComponent = () => {
         [selection, terminals.workingDirectory, sessions],
     )
 
-    const currentSessionSkipPermissions = useMemo(() => {
-        if (selection.kind !== 'session' || !selection.payload) return false
-        const session = sessions.find(s => s.info.session_id === selection.payload)
-        return Boolean(session?.info && (session.info as { original_skip_permissions?: boolean }).original_skip_permissions)
-    }, [selection, sessions])
     const selectedSpec = useMemo(
         () => selection.kind === 'session' && selection.payload
             ? sessions.find(session => session.info.session_id === selection.payload) ?? null
@@ -300,7 +295,7 @@ const TerminalGridComponent = () => {
     const [configureAgentsOpen, setConfigureAgentsOpen] = useState(false)
     const [customAgentModalOpen, setCustomAgentModalOpen] = useState(false)
 
-    const handleConfigureAgentsSwitch = useCallback(async ({ agentType: nextAgent, skipPermissions }: { agentType: AgentType; skipPermissions: boolean }) => {
+    const handleConfigureAgentsSwitch = useCallback(async ({ agentType: nextAgent }: { agentType: AgentType }) => {
         try {
             const targetSelection = selection.kind === 'session'
                 ? selection
@@ -308,7 +303,6 @@ const TerminalGridComponent = () => {
 
             await switchModel(
                 nextAgent,
-                skipPermissions,
                 targetSelection,
                 terminals,
                 clearTerminalTracking,
@@ -331,9 +325,9 @@ const TerminalGridComponent = () => {
         }
     }, [selection, switchModel, terminals, pushToast, updatePrimaryAgentType, setAgentType, clearTerminalTracking, agentType])
 
-    const handleCustomAgentSelect = useCallback(async ({ agentType: nextAgent, skipPermissions }: { agentType: AgentType; skipPermissions: boolean }) => {
+    const handleCustomAgentSelect = useCallback(async ({ agentType: nextAgent }: { agentType: AgentType }) => {
         try {
-            await addAgentTab(nextAgent, { skipPermissions })
+            await addAgentTab(nextAgent)
         } catch (error) {
             logger.error('[TerminalGrid] Failed to add custom agent tab:', error)
             pushToast({
@@ -351,7 +345,7 @@ const TerminalGridComponent = () => {
         setPendingRefineRequest(null)
     }, [])
 
-    const handlePendingRefineSwitch = useCallback(async ({ agentType: nextAgent, skipPermissions }: { agentType: AgentType; skipPermissions: boolean }) => {
+    const handlePendingRefineSwitch = useCallback(async ({ agentType: nextAgent }: { agentType: AgentType }) => {
         if (!pendingRefineRequest) {
             return
         }
@@ -363,7 +357,6 @@ const TerminalGridComponent = () => {
         )
         const terminalId = addAgentTab(nextAgent, {
             label: `Refine: ${displayName}`,
-            skipPermissions,
             freshSession: true,
         })
         if (!terminalId) {
@@ -1933,7 +1926,6 @@ const TerminalGridComponent = () => {
                 onClose={() => setCustomAgentModalOpen(false)}
                 onSelect={handleCustomAgentSelect}
                 initialAgentType={agentType as AgentType}
-                initialSkipPermissions={currentSessionSkipPermissions}
             />
         </div>
     )

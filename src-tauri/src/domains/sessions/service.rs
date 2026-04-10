@@ -192,7 +192,6 @@ pub struct SessionCreationParams<'a> {
     pub version_number: Option<i32>,
     pub epic_id: Option<&'a str>,
     pub agent_type: Option<&'a str>,
-    pub skip_permissions: Option<bool>,
     /// When set, fetch the PR's changes and create the session from those changes.
     /// This is used for fork PRs where the branch doesn't exist locally.
     pub pr_number: Option<i64>,
@@ -207,7 +206,6 @@ pub struct AgentLaunchParams<'a> {
     pub amp_mcp_servers: Option<&'a HashMap<String, crate::domains::settings::McpServerConfig>>,
     pub agent_type_override: Option<&'a str>,
     pub skip_prompt: bool,
-    pub skip_permissions_override: Option<bool>,
 }
 
 use crate::{
@@ -316,7 +314,6 @@ mod service_unified_tests {
             initial_prompt: Some("test prompt".to_string()),
             ready_to_merge: false,
             original_agent_type: Some(agent_type.to_string()),
-            original_skip_permissions: Some(true),
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
@@ -455,7 +452,6 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
-                skip_permissions_override: None,
             })
             .unwrap();
         let shell1 = &cmd1.shell_command;
@@ -472,7 +468,6 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
-                skip_permissions_override: None,
             })
             .unwrap();
         let shell2 = &cmd2.shell_command;
@@ -524,7 +519,6 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
-                skip_permissions_override: None,
             });
 
             // Should succeed for all supported agents
@@ -557,15 +551,13 @@ mod service_unified_tests {
 
     #[test]
     #[serial_test::serial]
-    fn test_codex_sandbox_mode_handling_preserved() {
+    fn test_codex_sandbox_mode_derived_from_manifest() {
         let (manager, temp_dir) = create_test_session_manager();
         let home_dir = tempfile::TempDir::new().unwrap();
         let prev_home = std::env::var("HOME").ok();
         EnvAdapter::set_var("HOME", &home_dir.path().to_string_lossy());
 
-        // Test with skip_permissions = true
-        let mut session = create_test_session(&temp_dir, "codex", "danger");
-        session.original_skip_permissions = Some(true);
+        let session = create_test_session(&temp_dir, "codex", "danger");
         manager.db_manager.create_session(&session).unwrap();
 
         let binary_paths = HashMap::new();
@@ -576,7 +568,6 @@ mod service_unified_tests {
             amp_mcp_servers: None,
             agent_type_override: None,
             skip_prompt: false,
-            skip_permissions_override: None,
         });
 
         assert!(result.is_ok());
@@ -584,28 +575,9 @@ mod service_unified_tests {
         assert!(
             command
                 .shell_command
-                .contains("--sandbox danger-full-access")
+                .contains("--sandbox danger-full-access"),
+            "codex should always use danger-full-access sandbox from manifest"
         );
-
-        // Test with skip_permissions = false
-        session.id = Uuid::new_v4().to_string();
-        session.name = "test-session-safe".to_string();
-        session.original_skip_permissions = Some(false);
-        manager.db_manager.create_session(&session).unwrap();
-
-        let result = manager.start_claude_in_session_with_restart_and_binary(AgentLaunchParams {
-            session_name: &session.name,
-            force_restart: false,
-            binary_paths: &binary_paths,
-            amp_mcp_servers: None,
-            agent_type_override: None,
-            skip_prompt: false,
-            skip_permissions_override: None,
-        });
-
-        assert!(result.is_ok());
-        let command = result.unwrap();
-        assert!(command.shell_command.contains("--sandbox workspace-write"));
 
         if let Some(prev) = prev_home {
             EnvAdapter::set_var("HOME", &prev);
@@ -619,7 +591,6 @@ mod service_unified_tests {
         let (manager, temp_dir) = create_test_session_manager();
         let mut session = create_test_session(&temp_dir, "amp", "resume");
         session.amp_thread_id = Some("thread-42".to_string());
-        session.original_skip_permissions = Some(false);
         manager.db_manager.create_session(&session).unwrap();
 
         let spec = manager
@@ -630,7 +601,6 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
-                skip_permissions_override: None,
             })
             .expect("Amp launch spec should build");
 
@@ -715,7 +685,6 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
-                skip_permissions_override: None,
             })
             .expect("expected OpenCode command");
         let shell_command = &cmd.shell_command;
@@ -767,7 +736,6 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
-                skip_permissions_override: None,
             })
             .expect("expected OpenCode command");
         let first_shell = &cmd_first.shell_command;
@@ -802,7 +770,6 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
-                skip_permissions_override: None,
             })
             .expect("expected OpenCode command");
         let second_shell = &cmd_second.shell_command;
@@ -931,7 +898,7 @@ mod service_unified_tests {
             .unwrap();
 
         let running = manager
-            .start_spec_session_with_config(spec_name, None, None, None, Some("codex"), Some(true))
+            .start_spec_session_with_config(spec_name, None, None, None, Some("codex"))
             .unwrap();
 
         // Build the start command (unified start handles correct agent based on original settings)
@@ -948,7 +915,7 @@ mod service_unified_tests {
         );
         assert!(
             shell_command.contains("--sandbox danger-full-access"),
-            "expected danger sandbox when skip_permissions=true: {}",
+            "expected danger sandbox from agent manifest: {}",
             shell_command
         );
         assert!(
@@ -1040,7 +1007,6 @@ mod service_unified_tests {
 
         // Seed globals to known defaults and ensure they remain unchanged
         manager.set_global_agent_type("claude").unwrap();
-        manager.set_global_skip_permissions(false).unwrap();
 
         let spec_name = "codex_spec_isolated_globals";
         let spec_content = "Implement feature Z with Codex";
@@ -1049,7 +1015,7 @@ mod service_unified_tests {
             .unwrap();
 
         let running = manager
-            .start_spec_session_with_config(spec_name, None, None, None, Some("codex"), Some(true))
+            .start_spec_session_with_config(spec_name, None, None, None, Some("codex"))
             .unwrap();
 
         let stored = manager
@@ -1057,10 +1023,8 @@ mod service_unified_tests {
             .get_session_by_name(&running.name)
             .expect("session should be persisted");
         assert_eq!(stored.original_agent_type.as_deref(), Some("codex"));
-        assert_eq!(stored.original_skip_permissions, Some(true));
 
         assert_eq!(manager.db_manager.get_agent_type().unwrap(), "claude");
-        assert!(!manager.db_manager.get_skip_permissions().unwrap());
     }
 
     #[test]
@@ -1104,7 +1068,7 @@ mod service_unified_tests {
             .unwrap();
 
         let running = manager
-            .start_spec_session_with_config(spec_name, None, None, None, Some("droid"), None)
+            .start_spec_session_with_config(spec_name, None, None, None, Some("droid"))
             .unwrap();
 
         let cmd = manager
@@ -1170,7 +1134,7 @@ mod service_unified_tests {
             .unwrap();
 
         let running = manager
-            .start_spec_session_with_config(spec_name, None, None, None, Some("droid"), None)
+            .start_spec_session_with_config(spec_name, None, None, None, Some("droid"))
             .unwrap();
 
         let home_dir = tempfile::TempDir::new().unwrap();
@@ -1276,7 +1240,6 @@ mod service_unified_tests {
                 Some(group_id),
                 Some(1),
                 Some("codex"),
-                Some(false),
             )
             .unwrap();
         assert_eq!(running.version_group_id.as_deref(), Some(group_id));
@@ -1581,7 +1544,6 @@ mod service_unified_tests {
             amp_mcp_servers: None,
             agent_type_override: None,
             skip_prompt: false,
-            skip_permissions_override: None,
         });
 
         // Should return an error with supported agent types listed
@@ -1648,7 +1610,6 @@ mod service_unified_tests {
             version_number: None,
             epic_id: None,
             agent_type: Some("claude"),
-            skip_permissions: Some(true),
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
@@ -1726,7 +1687,6 @@ mod service_unified_tests {
             version_number: None,
             epic_id: None,
             agent_type: Some("opencode"),
-            skip_permissions: Some(false),
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
@@ -1790,7 +1750,6 @@ mod service_unified_tests {
             version_number: None,
             epic_id: None,
             agent_type: None,
-            skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
@@ -1858,7 +1817,6 @@ mod service_unified_tests {
             version_number: None,
             epic_id: None,
             agent_type: None,
-            skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
@@ -1915,7 +1873,6 @@ mod service_unified_tests {
             version_number: None,
             epic_id: None,
             agent_type: Some("gemini"),
-            skip_permissions: Some(true),
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
@@ -1930,11 +1887,6 @@ mod service_unified_tests {
             Some("gemini"),
             "returned session should reflect override agent type"
         );
-        assert_eq!(
-            session.original_skip_permissions,
-            Some(true),
-            "returned session should reflect requested skip permissions"
-        );
 
         let persisted = manager
             .db_manager
@@ -1945,11 +1897,6 @@ mod service_unified_tests {
             persisted.original_agent_type.as_deref(),
             Some("gemini"),
             "persisted session should keep override agent type"
-        );
-        assert_eq!(
-            persisted.original_skip_permissions,
-            Some(true),
-            "persisted session should keep override skip permissions"
         );
     }
 
@@ -2205,7 +2152,6 @@ impl SessionManager {
             version_number,
             epic_id: None,
             agent_type: None,
-            skip_permissions: None,
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
@@ -2328,13 +2274,10 @@ impl SessionManager {
             .db_manager
             .get_agent_type()
             .unwrap_or_else(|_| "claude".to_string());
-        let global_skip_default = self.db_manager.get_skip_permissions().unwrap_or(false);
-
         let effective_agent_type = params
             .agent_type
             .map(|s| s.to_string())
             .unwrap_or_else(|| default_agent_type.clone());
-        let effective_skip_permissions = params.skip_permissions.unwrap_or(global_skip_default);
         let should_copy_claude_locals = effective_agent_type.eq_ignore_ascii_case("claude");
 
         self.ensure_repository_initialized(&parent_branch)?;
@@ -2383,7 +2326,6 @@ impl SessionManager {
             initial_prompt: params.prompt.map(String::from),
             ready_to_merge: false,
             original_agent_type: Some(effective_agent_type.clone()),
-            original_skip_permissions: Some(effective_skip_permissions),
             pending_name_generation: params.was_auto_generated,
             was_auto_generated: params.was_auto_generated,
             spec_content: None,
@@ -2416,11 +2358,10 @@ impl SessionManager {
             }
         };
 
-        if let Err(e) = self.db_manager.set_session_original_settings(
-            &session.id,
-            &effective_agent_type,
-            effective_skip_permissions,
-        ) {
+        if let Err(e) = self
+            .db_manager
+            .set_session_original_settings(&session.id, &effective_agent_type)
+        {
             log::warn!("Failed to set original agent settings: {e}");
         }
 
@@ -2993,7 +2934,6 @@ impl SessionManager {
             amp_mcp_servers: None,
             agent_type_override: None,
             skip_prompt: false,
-            skip_permissions_override: None,
         })
     }
 
@@ -3009,7 +2949,6 @@ impl SessionManager {
             amp_mcp_servers: None,
             agent_type_override: None,
             skip_prompt: false,
-            skip_permissions_override: None,
         })
     }
 
@@ -3034,7 +2973,6 @@ impl SessionManager {
             amp_mcp_servers: None,
             agent_type_override: None,
             skip_prompt: false,
-            skip_permissions_override: None,
         })
     }
 
@@ -3049,14 +2987,8 @@ impl SessionManager {
             amp_mcp_servers: _amp_mcp_servers,
             agent_type_override,
             skip_prompt,
-            skip_permissions_override,
         } = params;
         let session = self.db_manager.get_session_by_name(session_name)?;
-        let skip_permissions = skip_permissions_override.unwrap_or_else(|| {
-            session
-                .original_skip_permissions
-                .unwrap_or(self.db_manager.get_skip_permissions().unwrap_or(false))
-        });
         let requested_agent_type = agent_type_override
             .map(|s| s.to_string())
             .unwrap_or_else(|| {
@@ -3157,7 +3089,6 @@ impl SessionManager {
                 &session.worktree_path,
                 session_id_to_use.as_deref(),
                 prompt_to_use,
-                skip_permissions,
                 Some(&binary_path),
             ) {
                 return Ok(spec);
@@ -3280,7 +3211,6 @@ impl SessionManager {
                 &session.worktree_path,
                 session_id_to_use.as_deref(),
                 prompt_to_use,
-                skip_permissions,
                 Some(&binary_path),
             ) {
                 return Ok(spec);
@@ -3372,7 +3302,6 @@ impl SessionManager {
                 &session.worktree_path,
                 session_id_to_use.as_deref(),
                 prompt_to_use,
-                skip_permissions,
                 Some(&binary_path),
             ) {
                 return Ok(spec);
@@ -3394,11 +3323,13 @@ impl SessionManager {
                 binary_path: Some(binary_path.clone()),
             };
 
+            let supports_skip = crate::domains::agents::manifest::AgentManifest::get("amp")
+                .is_some_and(|m| m.supports_skip_permissions);
             let command = crate::domains::agents::amp::build_amp_command_with_config(
                 &session.worktree_path,
                 session.amp_thread_id.as_deref(),
                 prompt_to_use,
-                skip_permissions,
+                supports_skip,
                 Some(&config),
             );
 
@@ -3438,7 +3369,6 @@ impl SessionManager {
             &session.worktree_path,
             session_id.as_deref(),
             prompt_to_use,
-            skip_permissions,
             Some(&binary_path),
         ) {
             if did_start_fresh && !session.resume_allowed {
@@ -3538,7 +3468,6 @@ impl SessionManager {
             ));
         }
 
-        let skip_permissions = self.db_manager.get_orchestrator_skip_permissions()?;
         let requested_agent_type = match agent_type_override {
             Some(override_type) => override_type.to_string(),
             None => self.db_manager.get_orchestrator_agent_type()?,
@@ -3546,13 +3475,12 @@ impl SessionManager {
         let agent_type = resolve_launch_agent(&requested_agent_type, binary_paths)?;
 
         log::info!(
-            "Orchestrator agent type: {agent_type}, skip_permissions: {skip_permissions}, resume: {resume_session}, prompt_override={}",
+            "Orchestrator agent type: {agent_type}, resume: {resume_session}, prompt_override={}",
             initial_prompt.is_some()
         );
 
         self.build_orchestrator_command(
             &agent_type,
-            skip_permissions,
             binary_paths,
             resume_session,
             initial_prompt,
@@ -3562,7 +3490,6 @@ impl SessionManager {
     fn build_orchestrator_command(
         &self,
         agent_type: &str,
-        skip_permissions: bool,
         binary_paths: &HashMap<String, String>,
         resume_session: bool,
         initial_prompt: Option<&str>,
@@ -3602,7 +3529,6 @@ impl SessionManager {
                 &self.repo_path,
                 session_id_to_use.as_deref(),
                 initial_prompt,
-                skip_permissions,
                 Some(&binary_path),
             ) {
                 return Ok(spec);
@@ -3628,7 +3554,6 @@ impl SessionManager {
             &self.repo_path,
             session_id.as_deref(),
             initial_prompt,
-            skip_permissions,
             Some(&binary_path),
         ) {
             Ok(spec)
@@ -3682,38 +3607,20 @@ impl SessionManager {
         version_group_id: Option<&str>,
         version_number: Option<i32>,
         agent_type: Option<&str>,
-        skip_permissions: Option<bool>,
     ) -> Result<Session> {
         // Start the draft session first
         let mut session =
             self.start_spec_session(session_name, base_branch, version_group_id, version_number)?;
 
         // Apply session-scoped original settings without mutating globals
-        if agent_type.is_some() || skip_permissions.is_some() {
-            let default_agent = self
+        if let Some(agent) = agent_type {
+            if let Err(e) = self
                 .db_manager
-                .get_agent_type()
-                .unwrap_or_else(|_| "claude".to_string());
-            let default_skip = self.db_manager.get_skip_permissions().unwrap_or(false);
-
-            let effective_agent = agent_type
-                .map(|a| a.to_string())
-                .or_else(|| session.original_agent_type.clone())
-                .unwrap_or(default_agent);
-
-            let effective_skip = skip_permissions
-                .or(session.original_skip_permissions)
-                .unwrap_or(default_skip);
-
-            if let Err(e) = self.db_manager.set_session_original_settings(
-                &session.id,
-                &effective_agent,
-                effective_skip,
-            ) {
+                .set_session_original_settings(&session.id, agent)
+            {
                 warn!("Failed to set session-scoped settings for '{session_name}': {e}");
             } else {
-                session.original_agent_type = Some(effective_agent);
-                session.original_skip_permissions = Some(effective_skip);
+                session.original_agent_type = Some(agent.to_string());
             }
 
             // Refresh the session to include persisted values (resume flags, etc.)
@@ -3910,7 +3817,6 @@ impl SessionManager {
             initial_prompt: None,
             ready_to_merge: false,
             original_agent_type: None,
-            original_skip_permissions: None,
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: Some(spec.content),
@@ -3947,7 +3853,6 @@ impl SessionManager {
         Ok(session)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn create_and_start_spec_session_with_config(
         &self,
         name: &str,
@@ -3956,7 +3861,6 @@ impl SessionManager {
         version_group_id: Option<&str>,
         version_number: Option<i32>,
         agent_type: Option<&str>,
-        skip_permissions: Option<bool>,
     ) -> Result<Session> {
         // Reuse the existing flow to create and start
         let session = self.create_and_start_spec_session(
@@ -3968,19 +3872,12 @@ impl SessionManager {
         )?;
 
         // Override original settings if provided, otherwise keep globals already stored
-        if agent_type.is_some() || skip_permissions.is_some() {
-            let agent = agent_type.map(|s| s.to_string()).unwrap_or_else(|| {
-                self.db_manager
-                    .get_agent_type()
-                    .unwrap_or_else(|_| "claude".to_string())
-            });
-            let skip = skip_permissions
-                .unwrap_or_else(|| self.db_manager.get_skip_permissions().unwrap_or(false));
+        if let Some(agent) = agent_type {
             let _ = self
                 .db_manager
-                .set_session_original_settings(&session.id, &agent, skip);
+                .set_session_original_settings(&session.id, agent);
             log::info!(
-                "create_and_start_spec_session_with_config: set original settings for '{name}' to agent='{agent}', skip_permissions={skip}"
+                "create_and_start_spec_session_with_config: set original settings for '{name}' to agent='{agent}'"
             );
         }
 
@@ -4122,16 +4019,8 @@ impl SessionManager {
         self.db_manager.set_agent_type(agent_type)
     }
 
-    pub fn set_global_skip_permissions(&self, skip: bool) -> Result<()> {
-        self.db_manager.set_skip_permissions(skip)
-    }
-
     pub fn set_orchestrator_agent_type(&self, agent_type: &str) -> Result<()> {
         self.db_manager.set_orchestrator_agent_type(agent_type)
-    }
-
-    pub fn set_orchestrator_skip_permissions(&self, skip: bool) -> Result<()> {
-        self.db_manager.set_orchestrator_skip_permissions(skip)
     }
 
     pub fn update_spec_content(&self, session_name: &str, content: &str) -> Result<()> {
@@ -4386,11 +4275,10 @@ impl SessionManager {
         &self,
         session_name: &str,
         agent_type: &str,
-        skip_permissions: bool,
     ) -> Result<()> {
         let session = self.db_manager.get_session_by_name(session_name)?;
         self.db_manager
-            .set_session_original_settings(&session.id, agent_type, skip_permissions)
+            .set_session_original_settings(&session.id, agent_type)
     }
 
     pub fn update_session_initial_prompt(&self, session_name: &str, prompt: &str) -> Result<()> {

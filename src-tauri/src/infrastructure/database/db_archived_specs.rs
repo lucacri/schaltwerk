@@ -134,11 +134,10 @@ mod tests {
         let conn = db.get_conn().expect("Failed to borrow connection");
         conn.execute(
             "INSERT OR REPLACE INTO app_config (
-                id, skip_permissions, agent_type,
-                orchestrator_skip_permissions, orchestrator_agent_type,
+                id, agent_type, orchestrator_agent_type,
                 default_open_app, terminal_font_size, ui_font_size,
                 tutorial_completed, archive_max_entries
-            ) VALUES (1, FALSE, 'claude', FALSE, 'claude', 'finder', 13, 12, FALSE, 50)",
+            ) VALUES (1, 'claude', 'claude', 'finder', 13, 12, FALSE, 50)",
             [],
         )
         .expect("Failed to initialize app_config");

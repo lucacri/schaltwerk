@@ -172,9 +172,8 @@ type OnCreatePayload = {
   agentType?: string
   isSpec?: boolean
   userEditedName?: boolean
-  skipPermissions?: boolean
   agentTypes?: string[]
-  agentSlots?: Array<{ agentType: string; skipPermissions?: boolean; autonomyEnabled?: boolean }>
+  agentSlots?: Array<{ agentType: string; autonomyEnabled?: boolean }>
   autonomyEnabled?: boolean
   draftContent?: string
   issueNumber?: number
@@ -1544,8 +1543,8 @@ describe('validatePanelPercentage', () => {
       prompt: 'Implement feature',
       baseBranch: 'main',
       agentSlots: [
-        { agentType: 'claude', skipPermissions: true, autonomyEnabled: true },
-        { agentType: 'codex', skipPermissions: false, autonomyEnabled: false },
+        { agentType: 'claude', autonomyEnabled: true },
+        { agentType: 'codex', autonomyEnabled: false },
       ],
       userEditedName: true,
     })
@@ -1558,13 +1557,11 @@ describe('validatePanelPercentage', () => {
     expect(createCalls[0]?.[1]).toEqual(expect.objectContaining({
       name: 'feature_v1',
       agentType: 'claude',
-      skipPermissions: true,
       autonomyEnabled: true,
     }))
     expect(createCalls[1]?.[1]).toEqual(expect.objectContaining({
       name: 'feature_v2',
       agentType: 'codex',
-      skipPermissions: false,
       autonomyEnabled: false,
     }))
 

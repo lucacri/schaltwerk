@@ -72,7 +72,6 @@ mod tests {
             initial_prompt: Some("do something".into()),
             ready_to_merge: false,
             original_agent_type: None,
-            original_skip_permissions: None,
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,

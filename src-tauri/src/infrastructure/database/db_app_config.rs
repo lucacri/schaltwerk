@@ -3,12 +3,8 @@ use anyhow::Result;
 use rusqlite::params;
 
 pub trait AppConfigMethods {
-    fn get_skip_permissions(&self) -> Result<bool>;
-    fn set_skip_permissions(&self, enabled: bool) -> Result<()>;
     fn get_agent_type(&self) -> Result<String>;
     fn set_agent_type(&self, agent_type: &str) -> Result<()>;
-    fn get_orchestrator_skip_permissions(&self) -> Result<bool>;
-    fn set_orchestrator_skip_permissions(&self, enabled: bool) -> Result<()>;
     fn get_orchestrator_agent_type(&self) -> Result<String>;
     fn set_orchestrator_agent_type(&self, agent_type: &str) -> Result<()>;
     fn get_font_sizes(&self) -> Result<(i32, i32)>;
@@ -27,63 +23,6 @@ pub trait AppConfigMethods {
 }
 
 impl AppConfigMethods for Database {
-    fn get_skip_permissions(&self) -> Result<bool> {
-        let conn = self.get_conn()?;
-
-        let result: rusqlite::Result<bool> = conn.query_row(
-            "SELECT skip_permissions FROM app_config WHERE id = 1",
-            [],
-            |row| row.get(0),
-        );
-
-        match result {
-            Ok(value) => Ok(value),
-            Err(_) => Ok(false),
-        }
-    }
-
-    fn set_skip_permissions(&self, enabled: bool) -> Result<()> {
-        let conn = self.get_conn()?;
-
-        conn.execute(
-            "UPDATE app_config SET skip_permissions = ?1 WHERE id = 1",
-            params![enabled],
-        )?;
-
-        Ok(())
-    }
-
-    fn get_orchestrator_skip_permissions(&self) -> Result<bool> {
-        let result: rusqlite::Result<bool> = {
-            let conn = self.get_conn()?;
-            conn.query_row(
-                "SELECT orchestrator_skip_permissions FROM app_config WHERE id = 1",
-                [],
-                |row| row.get(0),
-            )
-        };
-
-        match result {
-            Ok(value) => Ok(value),
-            Err(_) => self.get_skip_permissions(),
-        }
-    }
-
-    fn set_orchestrator_skip_permissions(&self, enabled: bool) -> Result<()> {
-        let result = {
-            let conn = self.get_conn()?;
-            conn.execute(
-                "UPDATE app_config SET orchestrator_skip_permissions = ?1 WHERE id = 1",
-                params![enabled],
-            )
-        };
-
-        match result {
-            Ok(_) => Ok(()),
-            Err(_) => self.set_skip_permissions(enabled),
-        }
-    }
-
     fn get_agent_type(&self) -> Result<String> {
         let conn = self.get_conn()?;
 
@@ -305,15 +244,13 @@ mod tests {
         conn.execute(
             "INSERT OR REPLACE INTO app_config (
                 id,
-                skip_permissions,
                 agent_type,
-                orchestrator_skip_permissions,
                 orchestrator_agent_type,
                 default_open_app,
                 terminal_font_size,
                 ui_font_size,
                 tutorial_completed
-            ) VALUES (1, FALSE, 'claude', FALSE, 'claude', 'finder', 13, 12, FALSE)",
+            ) VALUES (1, 'claude', 'claude', 'finder', 13, 12, FALSE)",
             [],
         )
         .expect("Failed to initialize app_config");
@@ -465,15 +402,13 @@ mod tests {
             conn.execute(
                 "INSERT OR REPLACE INTO app_config (
                     id,
-                    skip_permissions,
                     agent_type,
-                    orchestrator_skip_permissions,
                     orchestrator_agent_type,
                     default_open_app,
                     terminal_font_size,
                     ui_font_size,
                     tutorial_completed
-                ) VALUES (1, FALSE, 'claude', FALSE, 'claude', 'finder', 13, 12, FALSE)",
+                ) VALUES (1, 'claude', 'claude', 'finder', 13, 12, FALSE)",
                 [],
             )
             .expect("Failed to seed app_config");

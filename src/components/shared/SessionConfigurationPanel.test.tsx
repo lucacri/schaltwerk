@@ -24,10 +24,6 @@ vi.mock('../../utils/logger', () => ({
 // Mock useClaudeSession hook
 vi.mock('../../hooks/useClaudeSession', () => ({
     useClaudeSession: () => ({
-        getSkipPermissions: vi.fn().mockResolvedValue(false),
-        setSkipPermissions: vi.fn().mockResolvedValue(true),
-        getOrchestratorSkipPermissions: vi.fn().mockResolvedValue(false),
-        setOrchestratorSkipPermissions: vi.fn().mockResolvedValue(true),
         getAgentType: vi.fn().mockResolvedValue('claude'),
         setAgentType: vi.fn().mockResolvedValue(true),
         getOrchestratorAgentType: vi.fn().mockResolvedValue('claude'),
@@ -77,20 +73,15 @@ vi.mock('../inputs/ModelSelector', () => ({
         value,
         onChange,
         disabled,
-        skipPermissions,
-        onSkipPermissionsChange,
         autonomyEnabled,
         onAutonomyChange
     }: {
         value?: string
         onChange?: (value: string) => void
         disabled?: boolean
-        skipPermissions?: boolean
-        onSkipPermissionsChange?: (skip: boolean) => void
         autonomyEnabled?: boolean
         onAutonomyChange?: (enabled: boolean) => void
     }) => {
-        const supportsPermissions = value !== 'opencode'
         const supportsAutonomy = value !== 'terminal'
         return (
             <div data-testid="model-selector">
@@ -105,16 +96,6 @@ vi.mock('../inputs/ModelSelector', () => ({
                     <option value="codex">Codex</option>
                     <option value="terminal">Terminal</option>
                 </select>
-                {supportsPermissions && onSkipPermissionsChange ? (
-                    <button
-                        type="button"
-                        data-testid="toggle-skip-permissions"
-                        onClick={() => onSkipPermissionsChange(!skipPermissions)}
-                        disabled={disabled}
-                    >
-                        Toggle Skip
-                    </button>
-                ) : null}
                 {supportsAutonomy && onAutonomyChange ? (
                     <button
                         type="button"
@@ -162,7 +143,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="modal"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
                 codexModels={FALLBACK_CODEX_MODELS}
             />
         )
@@ -170,7 +151,6 @@ describe('SessionConfigurationPanel', () => {
         await waitFor(() => {
             expect(screen.getByTestId('branch-autocomplete')).toBeInTheDocument()
             expect(screen.getByTestId('model-selector')).toBeInTheDocument()
-            expect(screen.getByTestId('toggle-skip-permissions')).toBeInTheDocument()
         })
 
         expect(screen.getByText('Base branch')).toBeInTheDocument()
@@ -183,7 +163,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="modal"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
                 codexModels={FALLBACK_CODEX_MODELS}
             />
         )
@@ -201,7 +181,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="modal"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
                 initialAgentType="codex"
                 codexModel="gpt-5.3-codex"
                 codexModelOptions={['gpt-5.3-codex', 'gpt-5.3-codex-spark', 'gpt-5.4']}
@@ -237,7 +217,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="compact"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
                 codexModels={FALLBACK_CODEX_MODELS}
                 hideLabels={false}
             />
@@ -258,7 +238,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="compact"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
                 hideLabels={true}
             />
         )
@@ -279,7 +259,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="modal"
                 onBaseBranchChange={onBaseBranchChange}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
             />
         )
 
@@ -301,7 +281,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="modal"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={onAgentTypeChange}
-                onSkipPermissionsChange={vi.fn()}
+
             />
         )
 
@@ -316,28 +296,6 @@ describe('SessionConfigurationPanel', () => {
         expect(onAgentTypeChange).toHaveBeenCalledWith('opencode')
     })
 
-    test('calls onSkipPermissionsChange when toggle is clicked', async () => {
-        const onSkipPermissionsChange = vi.fn()
-        
-        render(
-            <SessionConfigurationPanel 
-                variant="modal"
-                onBaseBranchChange={vi.fn()}
-                onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={onSkipPermissionsChange}
-            />
-        )
-
-        await waitFor(() => {
-            expect(screen.getByTestId('toggle-skip-permissions')).toBeInTheDocument()
-        })
-
-        const toggle = screen.getByTestId('toggle-skip-permissions')
-        fireEvent.click(toggle)
-
-        expect(onSkipPermissionsChange).toHaveBeenCalledWith(true)
-    })
-
     test('does not refetch branches on every base branch change', async () => {
         const Harness = () => {
             const [baseBranch, setBaseBranch] = useState('')
@@ -347,7 +305,7 @@ describe('SessionConfigurationPanel', () => {
                     initialBaseBranch={baseBranch}
                     onBaseBranchChange={setBaseBranch}
                     onAgentTypeChange={vi.fn()}
-                    onSkipPermissionsChange={vi.fn()}
+    
                 />
             )
         }
@@ -379,7 +337,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="modal"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
                 disabled={true}
             />
         )
@@ -389,29 +347,8 @@ describe('SessionConfigurationPanel', () => {
         })
 
         const input = await screen.findByDisplayValue('main')
-        const toggle = screen.getByTestId('toggle-skip-permissions') as HTMLButtonElement
-        
+
         expect(input).toBeDisabled()
-        expect(toggle).toBeDisabled()
-    })
-
-    test('hides skip permissions for opencode agent', async () => {
-        render(
-            <SessionConfigurationPanel 
-                variant="modal"
-                onBaseBranchChange={vi.fn()}
-                onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
-                initialAgentType="opencode"
-            />
-        )
-
-        await waitFor(() => {
-            expect(screen.getByTestId('model-selector')).toBeInTheDocument()
-        })
-
-        expect(screen.queryByTestId('toggle-skip-permissions')).not.toBeInTheDocument()
-        expect(screen.getByTestId('toggle-autonomy')).toBeInTheDocument()
     })
 
     test('shows autonomy toggle for supported agents', async () => {
@@ -420,7 +357,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="modal"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
                 onAutonomyChange={vi.fn()}
                 initialAgentType="claude"
             />
@@ -439,7 +376,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="modal"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
                 onAutonomyChange={vi.fn()}
                 initialAgentType="terminal"
             />
@@ -460,7 +397,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="modal"
                 onBaseBranchChange={onBaseBranchChange}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
             />
         )
 
@@ -483,7 +420,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="modal"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
             />
         )
 
@@ -514,7 +451,7 @@ describe('SessionConfigurationPanel', () => {
                 variant="modal"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
             />
         )
 
@@ -537,7 +474,6 @@ describe('useSessionConfiguration', () => {
                 <div>
                     <div data-testid="base-branch">{config.baseBranch}</div>
                     <div data-testid="agent-type">{config.agentType}</div>
-                    <div data-testid="skip-permissions">{config.skipPermissions.toString()}</div>
                     <div data-testid="is-valid">{config.isValid.toString()}</div>
                     <button
                         onClick={() => updateConfig({ baseBranch: 'develop', isValid: true })}
@@ -553,7 +489,6 @@ describe('useSessionConfiguration', () => {
 
         expect(screen.getByTestId('base-branch')).toHaveTextContent('')
         expect(screen.getByTestId('agent-type')).toHaveTextContent('claude')
-        expect(screen.getByTestId('skip-permissions')).toHaveTextContent('false')
         expect(screen.getByTestId('is-valid')).toHaveTextContent('false')
 
         fireEvent.click(screen.getByTestId('update-config'))
@@ -569,12 +504,12 @@ describe('useSessionConfiguration', () => {
             return (
                 <div>
                     <div data-testid="agent-type">{config.agentType}</div>
-                    <div data-testid="skip-permissions">{config.skipPermissions.toString()}</div>
+                    <div data-testid="autonomy">{config.autonomyEnabled.toString()}</div>
                     <button
-                        onClick={() => updateConfig({ skipPermissions: true })}
-                        data-testid="update-skip-permissions"
+                        onClick={() => updateConfig({ autonomyEnabled: true })}
+                        data-testid="update-autonomy"
                     >
-                        Update Skip Permissions
+                        Update Autonomy
                     </button>
                 </div>
             )
@@ -583,12 +518,12 @@ describe('useSessionConfiguration', () => {
         render(<TestComponent />)
 
         expect(screen.getByTestId('agent-type')).toHaveTextContent('claude')
-        expect(screen.getByTestId('skip-permissions')).toHaveTextContent('false')
+        expect(screen.getByTestId('autonomy')).toHaveTextContent('false')
 
-        fireEvent.click(screen.getByTestId('update-skip-permissions'))
+        fireEvent.click(screen.getByTestId('update-autonomy'))
 
-        expect(screen.getByTestId('agent-type')).toHaveTextContent('claude') // Preserved
-        expect(screen.getByTestId('skip-permissions')).toHaveTextContent('true') // Updated
+        expect(screen.getByTestId('agent-type')).toHaveTextContent('claude')
+        expect(screen.getByTestId('autonomy')).toHaveTextContent('true')
     })
 })
 
@@ -622,7 +557,7 @@ describe('SessionConfigurationPanel with empty branch prefix', () => {
                 sessionName="my-feature"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
             />
         )
 
@@ -641,7 +576,7 @@ describe('SessionConfigurationPanel with empty branch prefix', () => {
                 layout="branch-row"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
             />
         )
 
@@ -657,7 +592,7 @@ describe('SessionConfigurationPanel with empty branch prefix', () => {
                 variant="modal"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
             />
         )
 
@@ -675,7 +610,7 @@ describe('SessionConfigurationPanel with empty branch prefix', () => {
                 hideAgentType={true}
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
             />
         )
 
@@ -693,7 +628,7 @@ describe('SessionConfigurationPanel with empty branch prefix', () => {
                 sessionName="test-session"
                 onBaseBranchChange={vi.fn()}
                 onAgentTypeChange={vi.fn()}
-                onSkipPermissionsChange={vi.fn()}
+
             />
         )
 

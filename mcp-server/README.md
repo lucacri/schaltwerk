@@ -128,7 +128,6 @@ Use lucode_create to start a new session:
 - prompt: "implement user authentication with JWT"
 - agent_type: "claude" (supported: claude, opencode, gemini, codex, droid, qwen, amp, kilocode, terminal)
 - base_branch: "main" (optional)
-- skip_permissions: true (for autonomous operation)
 
 Note: Use agent_type "terminal" for manual work without AI agents - opens only a usable terminal without starting an agent.
 ```

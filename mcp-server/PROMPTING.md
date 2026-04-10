@@ -99,7 +99,7 @@ Be specific and detailed in your prompts:
 #### Agent Type Selection
 - Use `"claude"` for general development agents (default)
 - Use `"terminal"` for manual work without AI agents - opens only a usable terminal
-- Set `skip_permissions: true` for fully autonomous operation (not applicable to terminal mode)
+- Supported agents automatically start with permission bypass enabled; terminal mode remains manual.
 
 ### Monitoring Sessions
 
@@ -212,8 +212,8 @@ When acting as an orchestrator managing multiple AI agents:
 
 1. **Create Sessions for Each Agent**
    ```
-   lucode_create(name: "agent1-agent", prompt: "...", skip_permissions: true)
-   lucode_create(name: "agent2-agent", prompt: "...", skip_permissions: true)
+   lucode_create(name: "agent1-agent", prompt: "...")
+   lucode_create(name: "agent2-agent", prompt: "...")
    ```
 
 2. **Monitor Progress**

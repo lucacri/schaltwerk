@@ -92,7 +92,7 @@ vi.mock('../modals/SwitchOrchestratorModal', () => ({
   }: {
     open: boolean
     onClose: () => void
-    onSwitch: (options: { agentType: AgentType; skipPermissions: boolean }) => void | Promise<void>
+    onSwitch: (options: { agentType: AgentType }) => void | Promise<void>
   }) => {
     if (!open) {
       return null
@@ -105,7 +105,6 @@ vi.mock('../modals/SwitchOrchestratorModal', () => ({
           onClick={() => {
             void onSwitch({
               agentType: modalMockState.selectedAgentType as AgentType,
-              skipPermissions: false,
             })
           }}
         >

@@ -111,7 +111,7 @@ import { AGENT_START_TIMEOUT_MESSAGE } from './common/agentSpawn'
 import { beginSplitDrag, endSplitDrag } from './utils/splitDragCoordinator'
 import { useOptionalToast } from './common/toast/ToastProvider'
 import { AppUpdateResultPayload, ForgeConnectionIssuePayload } from './common/events'
-import { RawSession, RawSpec, AGENT_SUPPORTS_SKIP_PERMISSIONS, AgentType, SessionState } from './types/session'
+import { RawSession, RawSpec, SessionState } from './types/session'
 import { specOrchestratorTerminalId } from './common/terminalIdentity'
 import {
   refreshKeepAwakeStateActionAtom,
@@ -1845,7 +1845,6 @@ function AppContent() {
     draftContent?: string
     versionCount?: number
     agentType?: string
-    skipPermissions?: boolean
     agentTypes?: string[]
     agentSlots?: AgentLaunchSlot[]
     autonomyEnabled?: boolean
@@ -1871,14 +1870,10 @@ function AppContent() {
       await preserveSelection(async () => {
         if (data.isSpec) {
           // Create spec session
-          const specSkipPermissions = data.agentType && !AGENT_SUPPORTS_SKIP_PERMISSIONS[data.agentType as AgentType]
-            ? false
-            : data.skipPermissions
           await invoke(TauriCommands.SchaltwerkCoreCreateSpecSession, {
             name: data.name,
             specContent: data.draftContent || '',
             agentType: data.agentType,
-            skipPermissions: specSkipPermissions,
             epicId: data.epicId ?? null,
             issueNumber: data.issueNumber ?? null,
             issueUrl: data.issueUrl ?? null,
@@ -1951,9 +1946,6 @@ function AppContent() {
 
             // For single sessions, use userEditedName flag as provided
             // For multiple versions, don't mark as user-edited so they can be renamed as a group
-            const versionSkipPermissions = agentTypeForVersion && !AGENT_SUPPORTS_SKIP_PERMISSIONS[agentTypeForVersion as AgentType]
-              ? false
-              : agentSlotForVersion?.skipPermissions ?? data.skipPermissions
             const versionAutonomyEnabled = agentTypeForVersion === 'terminal'
               ? false
               : agentSlotForVersion?.autonomyEnabled ?? data.autonomyEnabled
@@ -1969,7 +1961,6 @@ function AppContent() {
               versionNumber: i,
               epicId: data.epicId ?? null,
               agentType: agentTypeForVersion,
-              skipPermissions: versionSkipPermissions,
               autonomyEnabled: versionAutonomyEnabled,
               issueNumber: data.issueNumber || null,
               issueUrl: data.issueUrl || null,

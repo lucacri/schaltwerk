@@ -403,10 +403,9 @@ impl SessionDbManager {
         &self,
         session_id: &str,
         agent_type: &str,
-        skip_permissions: bool,
     ) -> Result<()> {
         self.db
-            .set_session_original_settings(session_id, agent_type, skip_permissions)
+            .set_session_original_settings(session_id, agent_type)
             .map_err(|e| anyhow!("Failed to set session original settings: {e}"))
     }
 
@@ -499,40 +498,16 @@ impl SessionDbManager {
             .map_err(|e| anyhow!("Failed to get agent type: {e}"))
     }
 
-    pub fn get_skip_permissions(&self) -> Result<bool> {
-        self.db
-            .get_skip_permissions()
-            .map_err(|e| anyhow!("Failed to get skip permissions: {e}"))
-    }
-
     pub fn get_orchestrator_agent_type(&self) -> Result<String> {
         self.db
             .get_orchestrator_agent_type()
             .map_err(|e| anyhow!("Failed to get orchestrator agent type: {e}"))
     }
 
-    pub fn get_orchestrator_skip_permissions(&self) -> Result<bool> {
-        self.db
-            .get_orchestrator_skip_permissions()
-            .map_err(|e| anyhow!("Failed to get orchestrator skip permissions: {e}"))
-    }
-
-    pub fn set_skip_permissions(&self, skip: bool) -> Result<()> {
-        self.db
-            .set_skip_permissions(skip)
-            .map_err(|e| anyhow!("Failed to set skip permissions: {e}"))
-    }
-
     pub fn set_agent_type(&self, agent_type: &str) -> Result<()> {
         self.db
             .set_agent_type(agent_type)
             .map_err(|e| anyhow!("Failed to set agent type: {e}"))
-    }
-
-    pub fn set_orchestrator_skip_permissions(&self, skip: bool) -> Result<()> {
-        self.db
-            .set_orchestrator_skip_permissions(skip)
-            .map_err(|e| anyhow!("Failed to set orchestrator skip permissions: {e}"))
     }
 
     pub fn set_orchestrator_agent_type(&self, agent_type: &str) -> Result<()> {

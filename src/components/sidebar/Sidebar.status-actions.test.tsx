@@ -490,7 +490,6 @@ describe('Sidebar status indicators and actions', () => {
               initial_prompt: null,
               ready_to_merge: false,
               original_agent_type: null,
-              original_skip_permissions: null,
               pending_name_generation: false,
               was_auto_generated: false,
               spec_content: '# spec',

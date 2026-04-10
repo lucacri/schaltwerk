@@ -172,7 +172,6 @@ describe('LucodeBridge untested methods', () => {
         undefined,
         undefined,
         undefined,
-        undefined,
         'Smarts',
       )
 
@@ -339,7 +338,6 @@ describe('LucodeBridge untested methods', () => {
       const bridge = new LucodeBridge()
       const result = await bridge.startDraftSession(
         'mcp-preset-support',
-        undefined,
         undefined,
         undefined,
         undefined,
