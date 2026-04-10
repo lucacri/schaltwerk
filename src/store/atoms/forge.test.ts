@@ -11,7 +11,7 @@ vi.mock('../../utils/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), debug: vi.fn(), info: vi.fn() },
 }))
 
-import { forgeBaseAtom, projectForgeAtom, refreshForgeAtom } from './forge'
+import { forgeBaseAtom, forgeIssuesFilterModeAtom, projectForgeAtom, refreshForgeAtom } from './forge'
 
 describe('forge atoms', () => {
   let store: ReturnType<typeof createStore>
@@ -24,6 +24,7 @@ describe('forge atoms', () => {
   it('defaults to unknown', () => {
     expect(store.get(forgeBaseAtom)).toBe('unknown')
     expect(store.get(projectForgeAtom)).toBe('unknown')
+    expect(store.get(forgeIssuesFilterModeAtom)).toBe('my')
   })
 
   it('updates forge type on successful detection', async () => {
@@ -53,5 +54,10 @@ describe('forge atoms', () => {
   it('projectForgeAtom derives from forgeBaseAtom', () => {
     store.set(forgeBaseAtom, 'gitlab')
     expect(store.get(projectForgeAtom)).toBe('gitlab')
+  })
+
+  it('updates the issues filter mode in memory', () => {
+    store.set(forgeIssuesFilterModeAtom, 'all')
+    expect(store.get(forgeIssuesFilterModeAtom)).toBe('all')
   })
 })

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor, render } from '@testing-library/react'
+import { Provider, createStore } from 'jotai'
 import { ForgeIssuesTab } from './ForgeIssuesTab'
 import { renderWithProviders } from '../../tests/test-utils'
 import type { ForgeIssueSummary, ForgeIssueDetails, ForgeSourceConfig } from '../../types/forgeTypes'
+import { ForgeIntegrationContext, type ForgeIntegrationContextValue } from '../../contexts/ForgeIntegrationContext'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -44,6 +46,56 @@ function makeDetails(overrides: Partial<ForgeIssueDetails> = {}): ForgeIssueDeta
   }
 }
 
+function renderWithForgeStore(
+  forgeOverrides: Partial<ForgeIntegrationContextValue>,
+  store = createStore()
+) {
+  const value: ForgeIntegrationContextValue = {
+    status: null,
+    loading: false,
+    forgeType: 'unknown',
+    sources: [],
+    hasRepository: false,
+    hasSources: false,
+    refreshStatus: async () => {},
+    searchIssues: async () => [],
+    getIssueDetails: async () => {
+      throw new Error('getIssueDetails not configured')
+    },
+    searchPrs: async () => [],
+    getPrDetails: async () => {
+      throw new Error('getPrDetails not configured')
+    },
+    createSessionPr: async () => {
+      throw new Error('createSessionPr not configured')
+    },
+    getReviewComments: async () => [],
+    approvePr: async () => {
+      throw new Error('approvePr not configured')
+    },
+    mergePr: async () => {
+      throw new Error('mergePr not configured')
+    },
+    commentOnPr: async () => {
+      throw new Error('commentOnPr not configured')
+    },
+    getPipelineStatus: async () => null,
+    getPipelineJobs: async () => [],
+    ...forgeOverrides,
+  }
+
+  return {
+    store,
+    ...render(
+      <Provider store={store}>
+        <ForgeIntegrationContext.Provider value={value}>
+          <ForgeIssuesTab />
+        </ForgeIntegrationContext.Provider>
+      </Provider>
+    ),
+  }
+}
+
 describe('ForgeIssuesTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -51,8 +103,8 @@ describe('ForgeIssuesTab', () => {
 
   it('renders issues from search results', async () => {
     const searchIssues = vi.fn().mockResolvedValue([
-      makeSummary({ id: '1', title: 'First issue' }),
-      makeSummary({ id: '2', title: 'Second issue' }),
+      makeSummary({ id: '1', title: 'First issue', assignees: ['octocat'] }),
+      makeSummary({ id: '2', title: 'Second issue', assignees: ['octocat'] }),
     ])
 
     renderWithProviders(<ForgeIssuesTab />, {
@@ -60,6 +112,7 @@ describe('ForgeIssuesTab', () => {
         hasSources: true,
         sources: [testSource],
         searchIssues,
+        status: { forgeType: 'github', installed: true, authenticated: true, userLogin: 'octocat' },
       },
     })
 
@@ -70,13 +123,14 @@ describe('ForgeIssuesTab', () => {
   })
 
   it('shows #id prefix for each issue', async () => {
-    const searchIssues = vi.fn().mockResolvedValue([makeSummary({ id: '42' })])
+    const searchIssues = vi.fn().mockResolvedValue([makeSummary({ id: '42', assignees: ['octocat'] })])
 
     renderWithProviders(<ForgeIssuesTab />, {
       forgeOverrides: {
         hasSources: true,
         sources: [testSource],
         searchIssues,
+        status: { forgeType: 'github', installed: true, authenticated: true, userLogin: 'octocat' },
       },
     })
 
@@ -87,8 +141,8 @@ describe('ForgeIssuesTab', () => {
 
   it('shows state badges (Open/Closed)', async () => {
     const searchIssues = vi.fn().mockResolvedValue([
-      makeSummary({ id: '1', title: 'Open issue', state: 'OPEN' }),
-      makeSummary({ id: '2', title: 'Closed issue', state: 'CLOSED' }),
+      makeSummary({ id: '1', title: 'Open issue', state: 'OPEN', assignees: ['octocat'] }),
+      makeSummary({ id: '2', title: 'Closed issue', state: 'CLOSED', assignees: ['octocat'] }),
     ])
 
     renderWithProviders(<ForgeIssuesTab />, {
@@ -96,6 +150,7 @@ describe('ForgeIssuesTab', () => {
         hasSources: true,
         sources: [testSource],
         searchIssues,
+        status: { forgeType: 'github', installed: true, authenticated: true, userLogin: 'octocat' },
       },
     })
 
@@ -111,8 +166,8 @@ describe('ForgeIssuesTab', () => {
 
   it('search input filters immediately', async () => {
     const searchIssues = vi.fn().mockResolvedValue([
-      makeSummary({ id: '1', title: 'Login bug' }),
-      makeSummary({ id: '2', title: 'Signup issue' }),
+      makeSummary({ id: '1', title: 'Login bug', assignees: ['octocat'] }),
+      makeSummary({ id: '2', title: 'Signup issue', assignees: ['octocat'] }),
     ])
 
     renderWithProviders(<ForgeIssuesTab />, {
@@ -120,6 +175,7 @@ describe('ForgeIssuesTab', () => {
         hasSources: true,
         sources: [testSource],
         searchIssues,
+        status: { forgeType: 'github', installed: true, authenticated: true, userLogin: 'octocat' },
       },
     })
 
@@ -151,6 +207,179 @@ describe('ForgeIssuesTab', () => {
       expect(screen.getByText('No issues found')).toBeTruthy()
     })
     expect(screen.getByText('Try adjusting your search')).toBeTruthy()
+  })
+
+  it('defaults to showing only issues assigned to the current user', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([
+      makeSummary({ id: '1', title: 'Assigned to me', assignees: ['octocat'] }),
+      makeSummary({ id: '2', title: 'Assigned elsewhere', assignees: ['someone-else'] }),
+      makeSummary({ id: '3', title: 'Unassigned', assignees: [] }),
+    ])
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchIssues,
+        status: { forgeType: 'github', installed: true, authenticated: true, userLogin: 'octocat' },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Assigned to me')).toBeTruthy()
+    })
+
+    expect(screen.getByRole('button', { name: 'My Issues' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'All Issues' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.queryByText('Assigned elsewhere')).toBeNull()
+    expect(screen.queryByText('Unassigned')).toBeNull()
+  })
+
+  it('can switch to showing all issues', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([
+      makeSummary({ id: '1', title: 'Assigned to me', assignees: ['octocat'] }),
+      makeSummary({ id: '2', title: 'Assigned elsewhere', assignees: ['someone-else'] }),
+    ])
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchIssues,
+        status: { forgeType: 'github', installed: true, authenticated: true, userLogin: 'octocat' },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Assigned to me')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'All Issues' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Assigned elsewhere')).toBeTruthy()
+    })
+
+    expect(screen.getByRole('button', { name: 'My Issues' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'All Issues' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('toggles back to my issues after viewing all', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([
+      makeSummary({ id: '1', title: 'Assigned to me', assignees: ['octocat'] }),
+      makeSummary({ id: '2', title: 'Assigned elsewhere', assignees: ['someone-else'] }),
+    ])
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchIssues,
+        status: { forgeType: 'github', installed: true, authenticated: true, userLogin: 'octocat' },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Assigned to me')).toBeTruthy()
+    })
+    expect(screen.queryByText('Assigned elsewhere')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'All Issues' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Assigned elsewhere')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'My Issues' }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Assigned elsewhere')).toBeNull()
+    })
+    expect(screen.getByText('Assigned to me')).toBeTruthy()
+  })
+
+  it('shows empty state when filter yields no results', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([
+      makeSummary({ id: '1', title: 'Other issue', assignees: ['alice'] }),
+    ])
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchIssues,
+        status: { forgeType: 'github', installed: true, authenticated: true, userLogin: 'octocat' },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('No issues found')).toBeTruthy()
+    })
+  })
+
+  it('hides the filter toggle and shows all issues when no current user is available', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([
+      makeSummary({ id: '1', title: 'Assigned elsewhere', assignees: ['someone-else'] }),
+      makeSummary({ id: '2', title: 'Unassigned', assignees: [] }),
+    ])
+
+    renderWithProviders(<ForgeIssuesTab />, {
+      forgeOverrides: {
+        hasSources: true,
+        sources: [testSource],
+        searchIssues,
+        status: { forgeType: 'github', installed: true, authenticated: false },
+      },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Assigned elsewhere')).toBeTruthy()
+    })
+
+    expect(screen.getByText('Unassigned')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'My Issues' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'All Issues' })).toBeNull()
+  })
+
+  it('preserves the selected filter across remounts in the same app session', async () => {
+    const searchIssues = vi.fn().mockResolvedValue([
+      makeSummary({ id: '1', title: 'Assigned to me', assignees: ['octocat'] }),
+      makeSummary({ id: '2', title: 'Assigned elsewhere', assignees: ['someone-else'] }),
+    ])
+    const store = createStore()
+
+    const firstRender = renderWithForgeStore({
+      hasSources: true,
+      sources: [testSource],
+      searchIssues,
+      status: { forgeType: 'github', installed: true, authenticated: true, userLogin: 'octocat' },
+    }, store)
+
+    await waitFor(() => {
+      expect(screen.getByText('Assigned to me')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'All Issues' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Assigned elsewhere')).toBeTruthy()
+    })
+
+    firstRender.unmount()
+
+    renderWithForgeStore({
+      hasSources: true,
+      sources: [testSource],
+      searchIssues,
+      status: { forgeType: 'github', installed: true, authenticated: true, userLogin: 'octocat' },
+    }, store)
+
+    await waitFor(() => {
+      expect(screen.getByText('Assigned elsewhere')).toBeTruthy()
+    })
+
+    expect(screen.getByRole('button', { name: 'All Issues' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'My Issues' })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('shows error banner', async () => {

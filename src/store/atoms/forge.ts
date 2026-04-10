@@ -4,8 +4,10 @@ import { TauriCommands } from '../../common/tauriCommands'
 import { logger } from '../../utils/logger'
 
 export type ForgeType = 'github' | 'gitlab' | 'unknown'
+export type ForgeIssuesFilterMode = 'my' | 'all'
 
 export const forgeBaseAtom = atom<ForgeType>('unknown')
+export const forgeIssuesFilterModeAtom = atom<ForgeIssuesFilterMode>('my')
 
 export const projectForgeAtom = atom(get => get(forgeBaseAtom))
 

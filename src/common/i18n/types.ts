@@ -1315,6 +1315,9 @@ export interface Translations {
   }
   forgeIssueTab: {
     searchPlaceholder: string
+    filterLabel: string
+    myIssues: string
+    allIssues: string
     loading: string
     noIssuesFound: string
     adjustSearch: string

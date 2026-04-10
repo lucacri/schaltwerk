@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useAtom } from 'jotai'
 import { VscClose, VscInfo, VscSearch, VscRefresh } from 'react-icons/vsc'
 import { ForgeErrorDetailModal } from './ForgeErrorDetailModal'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
@@ -12,11 +13,17 @@ import { formatRelativeDate } from '../../utils/time'
 import { logger } from '../../utils/logger'
 import { buildForgeSourcesIdentity } from '../../utils/forgeSourcesIdentity'
 import { filterSourcesForIssues } from '../../utils/forgeSourceFilters'
+import { forgeIssuesFilterModeAtom } from '../../store/atoms/forge'
 import { LoadingSkeleton } from '../shared/LoadingSkeleton'
 import type { ForgeIssueSummary, ForgeIssueDetails, ForgeSourceConfig } from '../../types/forgeTypes'
 
 function isOpen(state: string): boolean {
   return state.toUpperCase() === 'OPEN' || state === 'opened'
+}
+
+function isAssignedToCurrentUser(issue: ForgeIssueSummary, currentUserLogin: string): boolean {
+  const normalizedCurrentUserLogin = currentUserLogin.toLowerCase()
+  return (issue.assignees ?? []).some((assignee) => assignee.toLowerCase() === normalizedCurrentUserLogin)
 }
 
 function IssueRow({
@@ -124,6 +131,7 @@ function IssueRow({
 export function ForgeIssuesTab() {
   const { t } = useTranslation()
   const forge = useForgeIntegrationContext()
+  const [filterMode, setFilterMode] = useAtom(forgeIssuesFilterModeAtom)
   const issueSources = useMemo(() => filterSourcesForIssues(forge.sources), [forge.sources])
 
   const search = useForgeSearch<ForgeIssueSummary, ForgeIssueDetails>({
@@ -155,6 +163,16 @@ export function ForgeIssuesTab() {
     setSelectedSource(undefined)
     setLoadingDetails(false)
   }, [sourcesIdentity])
+
+  const currentUserLogin = forge.status?.userLogin?.trim() || null
+  const showFilterToggle = Boolean(currentUserLogin)
+  const visibleResults = useMemo(() => {
+    if (!currentUserLogin || filterMode === 'all') {
+      return search.results
+    }
+
+    return search.results.filter((issue) => isAssignedToCurrentUser(issue, currentUserLogin))
+  }, [currentUserLogin, filterMode, search.results])
 
   const loadDetails = useCallback((id: string, source?: ForgeSourceConfig) => {
     setLoadingDetails(true)
@@ -247,6 +265,51 @@ export function ForgeIssuesTab() {
             fontFamily: theme.fontFamily.sans,
           }}
         />
+        {showFilterToggle && (
+          <div
+            role="group"
+            aria-label={t.forgeIssueTab.filterLabel}
+            className="flex items-center p-0.5"
+            style={{
+              border: '1px solid var(--color-border-default)',
+              borderRadius: 6,
+              backgroundColor: 'var(--color-bg-elevated)',
+            }}
+          >
+            <button
+              type="button"
+              aria-pressed={filterMode === 'my'}
+              onClick={() => setFilterMode('my')}
+              className="px-2 py-1"
+              style={{
+                fontSize: theme.fontSize.caption,
+                fontFamily: theme.fontFamily.sans,
+                borderRadius: 5,
+                color: filterMode === 'my' ? 'var(--color-accent-blue)' : 'var(--color-text-muted)',
+                backgroundColor: filterMode === 'my' ? 'var(--color-accent-blue-bg)' : 'transparent',
+                fontWeight: filterMode === 'my' ? 600 : 500,
+              }}
+            >
+              {t.forgeIssueTab.myIssues}
+            </button>
+            <button
+              type="button"
+              aria-pressed={filterMode === 'all'}
+              onClick={() => setFilterMode('all')}
+              className="px-2 py-1"
+              style={{
+                fontSize: theme.fontSize.caption,
+                fontFamily: theme.fontFamily.sans,
+                borderRadius: 5,
+                color: filterMode === 'all' ? 'var(--color-accent-blue)' : 'var(--color-text-muted)',
+                backgroundColor: filterMode === 'all' ? 'var(--color-accent-blue-bg)' : 'transparent',
+                fontWeight: filterMode === 'all' ? 600 : 500,
+              }}
+            >
+              {t.forgeIssueTab.allIssues}
+            </button>
+          </div>
+        )}
         {search.query && (
           <button
             type="button"
@@ -312,7 +375,7 @@ export function ForgeIssuesTab() {
       <div className="flex-1 overflow-y-auto">
         {search.loading && search.results.length === 0 ? (
           <LoadingSkeleton lines={5} className="py-4 px-3" />
-        ) : search.results.length === 0 ? (
+        ) : visibleResults.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 gap-1">
             <span style={{ fontSize: theme.fontSize.caption, color: 'var(--color-text-muted)' }}>
               {t.forgeIssueTab.noIssuesFound}
@@ -322,13 +385,13 @@ export function ForgeIssuesTab() {
             </span>
           </div>
         ) : (
-          search.results.map((issue) => (
+          visibleResults.map((issue) => (
             <IssueRow
               key={buildSourceItemKey(search.getSourceForItem(issue), issue.id)}
               issue={issue}
               onSelect={handleSelect}
               showSource={multiSource}
-              currentUserLogin={forge.status?.userLogin ?? undefined}
+              currentUserLogin={currentUserLogin ?? undefined}
             />
           ))
         )}

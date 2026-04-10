@@ -1305,6 +1305,9 @@
   },
   "forgeIssueTab": {
     "searchPlaceholder": "Search issues...",
+    "filterLabel": "Issue filter",
+    "myIssues": "My Issues",
+    "allIssues": "All Issues",
     "loading": "Loading issues...",
     "noIssuesFound": "No issues found",
     "adjustSearch": "Try adjusting your search",

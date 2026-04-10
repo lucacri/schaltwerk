@@ -1305,6 +1305,9 @@
   },
   "forgeIssueTab": {
     "searchPlaceholder": "搜索议题...",
+    "filterLabel": "议题筛选",
+    "myIssues": "我的议题",
+    "allIssues": "全部议题",
     "loading": "正在加载议题...",
     "noIssuesFound": "未找到议题",
     "adjustSearch": "尝试调整您的搜索",
