@@ -154,6 +154,9 @@ interface Props {
         versionGroupId?: string
         isConsolidation?: boolean
         consolidationSourceIds?: string[]
+        consolidationRoundId?: string
+        consolidationRole?: 'candidate' | 'judge'
+        consolidationConfirmationMode?: 'confirm' | 'auto-promote'
     }) => void | Promise<void>
 }
 
@@ -188,6 +191,9 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
     const [isConsolidation, setIsConsolidation] = useState(false)
     const [consolidationSourceIds, setConsolidationSourceIds] = useState<string[]>([])
     const [versionGroupId, setVersionGroupId] = useState<string | undefined>(undefined)
+    const [consolidationRoundId, setConsolidationRoundId] = useState<string | undefined>(undefined)
+    const [consolidationRole, setConsolidationRole] = useState<'candidate' | 'judge'>('candidate')
+    const [consolidationConfirmationMode, setConsolidationConfirmationMode] = useState<'confirm' | 'auto-promote'>('confirm')
     const [prefillPrNumber, setPrefillPrNumber] = useState<number | null>(null)
     const [prefillPrUrl, setPrefillPrUrl] = useState<string | null>(null)
     const [prefillIssueNumber, setPrefillIssueNumber] = useState<number | null>(null)
@@ -934,7 +940,15 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 versionGroupId,
                 ...issueInfo,
                 ...prInfo,
-                ...(isConsolidation ? { isConsolidation: true, consolidationSourceIds } : {}),
+                ...(isConsolidation
+                    ? {
+                        isConsolidation: true,
+                        consolidationSourceIds,
+                        consolidationRoundId,
+                        consolidationRole,
+                        consolidationConfirmationMode,
+                    }
+                    : {}),
             }
             if (agentSlotsPayload) {
                 createData.agentSlots = agentSlotsPayload
@@ -968,7 +982,7 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setValidationError(errorMessage)
             setCreating(false)
         }
-    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, versionGroupId, selectedPresetId, agentPresetsList, prefillPrNumber, prefillPrUrl, prefillIssueNumber, prefillIssueUrl])
+    }, [creating, name, taskContent, baseBranch, customBranch, useExistingBranch, onCreate, validateSessionName, createAsDraft, versionCount, agentType, autonomyEnabled, epicId, promptSource, githubIssueSelection, githubPrSelection, multiAgentMode, normalizedAgentTypes, isConsolidation, consolidationSourceIds, consolidationRoundId, consolidationRole, consolidationConfirmationMode, versionGroupId, selectedPresetId, agentPresetsList, prefillPrNumber, prefillPrUrl, prefillIssueNumber, prefillIssueUrl])
 
     // Keep ref in sync immediately on render to avoid stale closures in tests
     createRef.current = () => { void handleCreate() }
@@ -1235,6 +1249,9 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
                 setEpicId(null)
                 setIsConsolidation(false)
                 setConsolidationSourceIds([])
+                setConsolidationRoundId(undefined)
+                setConsolidationRole('candidate')
+                setConsolidationConfirmationMode('confirm')
                 setVersionGroupId(undefined)
                 setPrefillPrNumber(null)
                 setPrefillPrUrl(null)
@@ -1339,6 +1356,9 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setShowVersionMenu(false)
             setIsConsolidation(false)
             setConsolidationSourceIds([])
+            setConsolidationRoundId(undefined)
+            setConsolidationRole('candidate')
+            setConsolidationConfirmationMode('confirm')
             setVersionGroupId(undefined)
             setSelectedFavoriteId(null)
             setFavoriteBaseline(null)
@@ -1494,6 +1514,15 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             if (detail.consolidationSourceIds) {
                 setConsolidationSourceIds(detail.consolidationSourceIds)
             }
+            if (detail.consolidationRoundId) {
+                setConsolidationRoundId(detail.consolidationRoundId)
+            }
+            if (detail.consolidationRole) {
+                setConsolidationRole(detail.consolidationRole)
+            }
+            if (detail.consolidationConfirmationMode) {
+                setConsolidationConfirmationMode(detail.consolidationConfirmationMode)
+            }
             if (detail.agentType) {
                 const validAgent = AGENT_TYPES.find(a => a === detail.agentType) as AgentType | undefined
                 if (validAgent) {
@@ -1530,6 +1559,9 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
             setIsPrefillPending(true)
             setIsConsolidation(false)
             setConsolidationSourceIds([])
+            setConsolidationRoundId(undefined)
+            setConsolidationRole('candidate')
+            setConsolidationConfirmationMode('confirm')
             setVersionGroupId(undefined)
         }
         
@@ -1902,6 +1934,43 @@ export function NewSessionModal({ open, initialIsDraft = false, cachedPrompt = '
 	                        />
 	                    </div>
 	                    </div>
+
+                    {isConsolidation && (
+                        <div className="rounded-md border p-3" style={{ borderColor: 'var(--color-accent-purple-border)', backgroundColor: 'var(--color-accent-purple-bg)' }}>
+                            <div className="text-sm font-medium mb-2" style={{ color: 'var(--color-text-primary)' }}>
+                                Consolidation confirmation
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setConsolidationConfirmationMode('confirm')}
+                                    className="px-3 py-1.5 rounded text-sm border"
+                                    style={{
+                                        borderColor: consolidationConfirmationMode === 'confirm' ? 'var(--color-accent-purple-border)' : 'var(--color-border-subtle)',
+                                        backgroundColor: consolidationConfirmationMode === 'confirm' ? 'rgb(var(--color-accent-purple-rgb) / 0.18)' : 'var(--color-bg-elevated)',
+                                        color: 'var(--color-text-primary)',
+                                    }}
+                                >
+                                    Confirm
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setConsolidationConfirmationMode('auto-promote')}
+                                    className="px-3 py-1.5 rounded text-sm border"
+                                    style={{
+                                        borderColor: consolidationConfirmationMode === 'auto-promote' ? 'var(--color-accent-purple-border)' : 'var(--color-border-subtle)',
+                                        backgroundColor: consolidationConfirmationMode === 'auto-promote' ? 'rgb(var(--color-accent-purple-rgb) / 0.18)' : 'var(--color-bg-elevated)',
+                                        color: 'var(--color-text-primary)',
+                                    }}
+                                >
+                                    Auto-promote
+                                </button>
+                            </div>
+                            <div className="mt-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                                Confirm keeps candidate sessions alive until you approve or override the judge recommendation. Auto-promote accepts the latest judge recommendation immediately.
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex flex-col gap-2">
                         <div className="overflow-x-auto">

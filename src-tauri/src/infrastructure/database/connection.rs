@@ -19,7 +19,7 @@ pub struct Database {
 }
 
 #[derive(Clone)]
-pub(crate) struct SqliteConnectionManager {
+pub struct SqliteConnectionManager {
     config: SqliteConfig,
 }
 
@@ -130,7 +130,7 @@ impl Database {
         Ok(db)
     }
 
-    pub(crate) fn get_conn(&self) -> Result<PooledConnection<SqliteConnectionManager>> {
+    pub fn get_conn(&self) -> Result<PooledConnection<SqliteConnectionManager>> {
         let wait_start = Instant::now();
         let conn = self
             .pool

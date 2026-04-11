@@ -202,6 +202,8 @@ export const TauriCommands = {
   SchaltwerkCoreStartClaudeWithRestart: 'schaltwerk_core_start_claude_with_restart',
   SchaltwerkCoreStartSessionAgent: 'schaltwerk_core_start_session_agent',
   SchaltwerkCoreStartSessionAgentWithRestart: 'schaltwerk_core_start_session_agent_with_restart',
+  SchaltwerkCoreTriggerConsolidationJudge: 'schaltwerk_core_trigger_consolidation_judge',
+  SchaltwerkCoreConfirmConsolidationWinner: 'schaltwerk_core_confirm_consolidation_winner',
   SchaltwerkCoreUpdateSpecContent: 'schaltwerk_core_update_spec_content',
   SchaltwerkCoreMergeSessionToMain: 'schaltwerk_core_merge_session_to_main',
   SchaltwerkCoreUpdateSessionFromParent: 'schaltwerk_core_update_session_from_parent',

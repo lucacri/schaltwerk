@@ -1636,6 +1636,12 @@ describe('sessions atoms', () => {
             agent_type: 'claude',
             is_consolidation: true,
             consolidation_sources: ['feature_v1', 'feature_v2'],
+            consolidation_round_id: 'round-1',
+            consolidation_role: 'candidate',
+            consolidation_report: '## Decision\nKeep v1 as base.',
+            consolidation_base_session_id: 'feature_v1',
+            consolidation_recommended_session_id: 'session-merge',
+            consolidation_confirmation_mode: 'confirm',
             created_at: '2024-01-01T00:05:00.000Z',
             last_modified: '2024-01-01T00:05:00.000Z',
         })
@@ -1647,6 +1653,12 @@ describe('sessions atoms', () => {
         const session = store.get(allSessionsAtom).find(candidate => candidate.info.session_id === 'session-merge')
         expect(session?.info.is_consolidation).toBe(true)
         expect(session?.info.consolidation_sources).toEqual(['feature_v1', 'feature_v2'])
+        expect(session?.info.consolidation_round_id).toBe('round-1')
+        expect(session?.info.consolidation_role).toBe('candidate')
+        expect(session?.info.consolidation_report).toBe('## Decision\nKeep v1 as base.')
+        expect(session?.info.consolidation_base_session_id).toBe('feature_v1')
+        expect(session?.info.consolidation_recommended_session_id).toBe('session-merge')
+        expect(session?.info.consolidation_confirmation_mode).toBe('confirm')
     })
 
     it('clears terminal start state when SessionRemoved fires to allow session recreation with same name', async () => {

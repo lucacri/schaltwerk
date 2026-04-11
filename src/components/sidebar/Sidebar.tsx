@@ -1137,6 +1137,48 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }
 
+    const handleTriggerConsolidationJudge = useCallback(async (roundId: string, early = false) => {
+        try {
+            await invoke(TauriCommands.SchaltwerkCoreTriggerConsolidationJudge, {
+                roundId,
+                early,
+            })
+            pushToast({
+                tone: 'success',
+                title: 'Consolidation judge started',
+                description: early ? 'Judge launched before all candidates completed.' : 'Judge launched for completed consolidation candidates.',
+            })
+        } catch (error) {
+            logger.error('Failed to trigger consolidation judge:', error)
+            pushToast({
+                tone: 'error',
+                title: 'Failed to start judge',
+                description: String(error),
+            })
+        }
+    }, [pushToast])
+
+    const handleConfirmConsolidationWinner = useCallback(async (roundId: string, winnerSessionId: string) => {
+        try {
+            await invoke(TauriCommands.SchaltwerkCoreConfirmConsolidationWinner, {
+                roundId,
+                winnerSessionId,
+            })
+            pushToast({
+                tone: 'success',
+                title: 'Consolidation winner confirmed',
+                description: `Confirmed ${winnerSessionId} for round ${roundId}.`,
+            })
+        } catch (error) {
+            logger.error('Failed to confirm consolidation winner:', error)
+            pushToast({
+                tone: 'error',
+                title: 'Failed to confirm winner',
+                description: String(error),
+            })
+        }
+    }, [pushToast])
+
     const handlePromoteSelectedVersion = () => {
         if (selection.kind !== 'session' || !selection.payload) {
             return // No session selected
@@ -1886,6 +1928,12 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                             if (detail) {
                                                 emitUiEvent(UiEvent.ConsolidateVersionGroup, detail)
                                             }
+                                        }}
+                                        onTriggerConsolidationJudge={(roundId, early) => {
+                                            void handleTriggerConsolidationJudge(roundId, early)
+                                        }}
+                                        onConfirmConsolidationWinner={(roundId, winnerSessionId) => {
+                                            void handleConfirmConsolidationWinner(roundId, winnerSessionId)
                                         }}
                                         onTerminateAll={(group) => {
                                             const runningSessions = group.versions

@@ -4,6 +4,11 @@ use crate::{
     get_settings_manager,
     get_terminal_manager,
 };
+use crate::mcp_api::{
+    ConfirmConsolidationWinnerResponse, TriggerConsolidationJudgeResponse,
+    confirm_consolidation_winner_inner, trigger_consolidation_judge_inner,
+    upsert_consolidation_round,
+};
 use lucode::infrastructure::attention_bridge::clear_session_attention_state;
 use lucode::infrastructure::database::db_specs::SpecMethods as _;
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
@@ -1176,6 +1181,9 @@ pub struct CreateSessionParams {
     pr_number: Option<i64>,
     is_consolidation: Option<bool>,
     consolidation_source_ids: Option<Vec<String>>,
+    consolidation_round_id: Option<String>,
+    consolidation_role: Option<String>,
+    consolidation_confirmation_mode: Option<String>,
 }
 
 #[tauri::command]
@@ -1199,6 +1207,9 @@ pub async fn schaltwerk_core_create_session(
     pr_number: Option<i64>,
     is_consolidation: Option<bool>,
     consolidation_source_ids: Option<Vec<String>>,
+    consolidation_round_id: Option<String>,
+    consolidation_role: Option<String>,
+    consolidation_confirmation_mode: Option<String>,
 ) -> Result<Session, SchaltError> {
     let params = CreateSessionParams {
         name,
@@ -1218,6 +1229,9 @@ pub async fn schaltwerk_core_create_session(
         pr_number,
         is_consolidation,
         consolidation_source_ids,
+        consolidation_round_id,
+        consolidation_role,
+        consolidation_confirmation_mode,
     };
     let was_user_edited = params.user_edited_name.unwrap_or(false);
     let was_auto_generated = !was_user_edited;
@@ -1255,6 +1269,9 @@ pub async fn schaltwerk_core_create_session(
         pr_number: params.pr_number,
         is_consolidation: params.is_consolidation.unwrap_or(false),
         consolidation_source_ids: params.consolidation_source_ids,
+        consolidation_round_id: params.consolidation_round_id.as_deref(),
+        consolidation_role: params.consolidation_role.as_deref(),
+        consolidation_confirmation_mode: params.consolidation_confirmation_mode.as_deref(),
     };
     let (session, epic) = {
         let core = get_core_write()
@@ -1296,6 +1313,27 @@ pub async fn schaltwerk_core_create_session(
     let session_name_clone = session.name.clone();
     let app_handle = app.clone();
 
+    if session.is_consolidation
+        && let (Some(round_id), Some(group_id), Some(source_ids), Some(mode)) = (
+            session.consolidation_round_id.as_deref(),
+            session.version_group_id.as_deref(),
+            session.consolidation_sources.as_ref(),
+            session.consolidation_confirmation_mode.as_deref(),
+        )
+        && let Err(err) = upsert_consolidation_round(
+            &get_core_read().await.map_err(|e| SchaltError::DatabaseError { message: e.to_string() })?.db,
+            session.repository_path.as_path(),
+            round_id,
+            group_id,
+            source_ids,
+            mode,
+        )
+    {
+        return Err(SchaltError::DatabaseError {
+            message: format!("Failed to persist consolidation round: {err}"),
+        })
+    }
+
     #[derive(serde::Serialize, Clone)]
     struct SessionAddedPayload {
         session_name: String,
@@ -1312,6 +1350,18 @@ pub async fn schaltwerk_core_create_session(
         is_consolidation: Option<bool>,
         #[serde(skip_serializing_if = "Option::is_none")]
         consolidation_sources: Option<Vec<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        consolidation_round_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        consolidation_role: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        consolidation_report: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        consolidation_base_session_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        consolidation_recommended_session_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        consolidation_confirmation_mode: Option<String>,
     }
     let _ = emit_event(
         &app,
@@ -1327,6 +1377,14 @@ pub async fn schaltwerk_core_create_session(
             agent_type: session.original_agent_type.clone(),
             is_consolidation: session.is_consolidation.then_some(true),
             consolidation_sources: session.consolidation_sources.clone(),
+            consolidation_round_id: session.consolidation_round_id.clone(),
+            consolidation_role: session.consolidation_role.clone(),
+            consolidation_report: session.consolidation_report.clone(),
+            consolidation_base_session_id: session.consolidation_base_session_id.clone(),
+            consolidation_recommended_session_id: session
+                .consolidation_recommended_session_id
+                .clone(),
+            consolidation_confirmation_mode: session.consolidation_confirmation_mode.clone(),
         },
     );
 
@@ -1348,6 +1406,35 @@ pub async fn schaltwerk_core_create_session(
     }
 
     Ok(session)
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_trigger_consolidation_judge(
+    app: tauri::AppHandle,
+    round_id: String,
+    early: Option<bool>,
+) -> Result<TriggerConsolidationJudgeResponse, String> {
+    trigger_consolidation_judge_inner(&app, &round_id, early.unwrap_or(false))
+        .await
+        .map_err(|(_, message)| message)
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_confirm_consolidation_winner(
+    app: tauri::AppHandle,
+    round_id: String,
+    winner_session_id: String,
+    override_reason: Option<String>,
+) -> Result<ConfirmConsolidationWinnerResponse, String> {
+    confirm_consolidation_winner_inner(
+        &app,
+        &round_id,
+        &winner_session_id,
+        override_reason.as_deref(),
+        "user",
+    )
+    .await
+    .map_err(|(_, message)| message)
 }
 
 #[tauri::command]

@@ -119,8 +119,8 @@ describe('generationPrompts', () => {
     const prompts = await loadGenerationPrompts()
 
     expect(prompts.consolidation_prompt).toContain('{sessionList}')
-    expect(prompts.consolidation_prompt).toContain('After lucode_promote returns, leave the consolidation session open')
-    expect(prompts.consolidation_prompt).not.toContain('consolidation session and the losing source versions are cancelled automatically')
+    expect(prompts.consolidation_prompt).toContain('lucode_consolidation_report')
+    expect(prompts.consolidation_prompt).toContain('Do not call lucode_promote directly for a multi-agent consolidation round')
     expect(prompts.review_pr_prompt).toContain('{{pr.title}}')
     expect(prompts.review_pr_prompt).toContain('{{pr.number}}')
     expect(prompts.review_pr_prompt).toContain('gh pr diff {{pr.number}}')

@@ -95,6 +95,24 @@ interface LucodePromoteArgs {
   winner_session_id?: string | null
 }
 
+interface LucodeConsolidationReportArgs {
+  session_name: string
+  report: string
+  base_session_id?: string | null
+  recommended_session_id?: string | null
+}
+
+interface LucodeTriggerConsolidationJudgeArgs {
+  round_id: string
+  early?: boolean
+}
+
+interface LucodeConfirmConsolidationWinnerArgs {
+  round_id: string
+  winner_session_id: string
+  override_reason?: string | null
+}
+
 interface LucodeCreatePrArgs {
   session_name: string
   pr_title: string
@@ -814,6 +832,51 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false
         },
         outputSchema: toolOutputSchemas.lucode_promote
+      },
+      {
+        name: "lucode_consolidation_report",
+        description: `Persist the durable consolidation report for a candidate or judge session. Candidate sessions must file a report and base_session_id when they finish. Judge sessions must file a report and recommended_session_id instead of calling lucode_promote directly. Filing the final candidate report may auto-trigger the judge; filing a judge report may auto-promote when the round is configured for auto-promote mode.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            session_name: { type: 'string', description: 'Consolidation candidate or judge session name.' },
+            report: { type: 'string', description: 'Structured consolidation report to persist.' },
+            base_session_id: { type: 'string', description: 'Candidate only. Source session ID or name chosen as the conceptual base.' },
+            recommended_session_id: { type: 'string', description: 'Judge only. Candidate session ID or name recommended as the round winner.' },
+          },
+          required: ['session_name', 'report'],
+          additionalProperties: false,
+        },
+        outputSchema: toolOutputSchemas.lucode_consolidation_report,
+      },
+      {
+        name: "lucode_trigger_consolidation_judge",
+        description: `Launch a judge session for an existing consolidation round. By default the judge waits until all candidates have filed reports; set early: true to force an early or repeat judging pass before confirmation.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            round_id: { type: 'string', description: 'Consolidation round ID.' },
+            early: { type: 'boolean', description: 'Allow judge launch before every candidate has reported.' },
+          },
+          required: ['round_id'],
+          additionalProperties: false,
+        },
+        outputSchema: toolOutputSchemas.lucode_trigger_consolidation_judge,
+      },
+      {
+        name: "lucode_confirm_consolidation_winner",
+        description: `Confirm or override the winner for a consolidation round. This promotes the chosen candidate through Lucode's existing promotion pipeline and cancels the losing candidate sessions afterward.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            round_id: { type: 'string', description: 'Consolidation round ID.' },
+            winner_session_id: { type: 'string', description: 'Candidate session ID or name to confirm as the winner.' },
+            override_reason: { type: 'string', description: 'Optional user override reason to store as the promotion reason.' },
+          },
+          required: ['round_id', 'winner_session_id'],
+          additionalProperties: false,
+        },
+        outputSchema: toolOutputSchemas.lucode_confirm_consolidation_winner,
       },
       {
         name: "lucode_convert_to_spec",
@@ -1783,6 +1846,85 @@ ${presetStart.sessions
           : ''
         const summary = `Session '${promoteResult.sessionName}' promoted. Reason: ${promoteResult.reason}\n- Siblings cancelled: ${cancelledList}${failureNote}`
         response = buildStructuredResponse(structured, { summaryText: summary, jsonFirst: true })
+        break
+      }
+
+      case "lucode_consolidation_report": {
+        const reportArgs = args as unknown as LucodeConsolidationReportArgs
+        if (!reportArgs.session_name || typeof reportArgs.session_name !== 'string') {
+          throw new Error('session_name is required when invoking lucode_consolidation_report.')
+        }
+        if (!reportArgs.report || typeof reportArgs.report !== 'string' || reportArgs.report.trim().length === 0) {
+          throw new Error('report is required when invoking lucode_consolidation_report.')
+        }
+
+        const result = await bridge.updateConsolidationReport(reportArgs.session_name, reportArgs.report, {
+          baseSessionId: reportArgs.base_session_id ?? undefined,
+          recommendedSessionId: reportArgs.recommended_session_id ?? undefined,
+          projectPath,
+        })
+
+        const structured = {
+          session: result.sessionName,
+          round_id: result.roundId,
+          role: result.role,
+          auto_judge_triggered: result.autoJudgeTriggered,
+          auto_promoted: result.autoPromoted,
+        }
+        response = buildStructuredResponse(structured, {
+          summaryText: `Stored consolidation report for '${result.sessionName}' (${result.role}). Auto judge: ${result.autoJudgeTriggered ? 'yes' : 'no'}. Auto promote: ${result.autoPromoted ? 'yes' : 'no'}.`,
+          jsonFirst: true,
+        })
+        break
+      }
+
+      case "lucode_trigger_consolidation_judge": {
+        const judgeArgs = args as unknown as LucodeTriggerConsolidationJudgeArgs
+        if (!judgeArgs.round_id || typeof judgeArgs.round_id !== 'string') {
+          throw new Error('round_id is required when invoking lucode_trigger_consolidation_judge.')
+        }
+
+        const result = await bridge.triggerConsolidationJudge(judgeArgs.round_id, {
+          early: judgeArgs.early,
+          projectPath,
+        })
+
+        const structured = {
+          round_id: result.roundId,
+          judge_session: result.judgeSessionName,
+        }
+        response = buildStructuredResponse(structured, {
+          summaryText: `Started consolidation judge '${result.judgeSessionName}' for round '${result.roundId}'.`,
+          jsonFirst: true,
+        })
+        break
+      }
+
+      case "lucode_confirm_consolidation_winner": {
+        const confirmArgs = args as unknown as LucodeConfirmConsolidationWinnerArgs
+        if (!confirmArgs.round_id || typeof confirmArgs.round_id !== 'string') {
+          throw new Error('round_id is required when invoking lucode_confirm_consolidation_winner.')
+        }
+        if (!confirmArgs.winner_session_id || typeof confirmArgs.winner_session_id !== 'string') {
+          throw new Error('winner_session_id is required when invoking lucode_confirm_consolidation_winner.')
+        }
+
+        const result = await bridge.confirmConsolidationWinner(confirmArgs.round_id, confirmArgs.winner_session_id, {
+          overrideReason: confirmArgs.override_reason ?? undefined,
+          projectPath,
+        })
+
+        const structured = {
+          round_id: result.roundId,
+          winner_session: result.winnerSessionName,
+          promoted_session: result.promotedSessionName,
+          candidate_sessions_cancelled: result.candidateSessionsCancelled,
+          source_sessions_cancelled: result.sourceSessionsCancelled,
+        }
+        response = buildStructuredResponse(structured, {
+          summaryText: `Confirmed consolidation winner '${result.winnerSessionName}' for round '${result.roundId}'. Promoted session: '${result.promotedSessionName}'.`,
+          jsonFirst: true,
+        })
         break
       }
 

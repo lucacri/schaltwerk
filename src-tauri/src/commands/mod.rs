@@ -38,6 +38,7 @@ pub use pty::*;
 pub use schaltwerk_core::{
     schaltwerk_core_append_spec_content, schaltwerk_core_archive_spec_session,
     schaltwerk_core_cancel_session, schaltwerk_core_cleanup_orphaned_worktrees,
+    schaltwerk_core_confirm_consolidation_winner,
     schaltwerk_core_convert_session_to_draft, schaltwerk_core_create_session,
     schaltwerk_core_create_spec_session, schaltwerk_core_generate_commit_message,
     schaltwerk_core_generate_session_name, schaltwerk_core_delete_archived_spec,
@@ -76,6 +77,7 @@ pub use schaltwerk_core::{
     schaltwerk_core_start_fresh_orchestrator, schaltwerk_core_start_session_agent,
     schaltwerk_core_start_spec_orchestrator,
     schaltwerk_core_start_session_agent_with_restart,
+    schaltwerk_core_trigger_consolidation_judge,
     schaltwerk_core_update_git_stats, schaltwerk_core_update_session_state,
     schaltwerk_core_update_spec_content,
     schaltwerk_core_update_epic,

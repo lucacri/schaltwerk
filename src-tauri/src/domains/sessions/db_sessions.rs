@@ -5,7 +5,7 @@ use crate::infrastructure::database::timestamps::{
 use crate::infrastructure::database::Database;
 use anyhow::Result;
 use chrono::Utc;
-use rusqlite::{Result as SqlResult, ToSql, params};
+use rusqlite::{params, Result as SqlResult, ToSql};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -23,7 +23,7 @@ pub trait SessionMethods {
     fn list_sessions(&self, repo_path: &Path) -> Result<Vec<Session>>;
     fn list_all_active_sessions(&self) -> Result<Vec<Session>>;
     fn list_sessions_by_state(&self, repo_path: &Path, state: SessionState)
-    -> Result<Vec<Session>>;
+        -> Result<Vec<Session>>;
     fn update_session_status(&self, id: &str, status: SessionStatus) -> Result<()>;
     fn set_session_activity(
         &self,
@@ -119,6 +119,12 @@ struct SessionSummaryRow {
     pr_url: Option<String>,
     is_consolidation: bool,
     consolidation_sources: Option<String>,
+    consolidation_round_id: Option<String>,
+    consolidation_role: Option<String>,
+    consolidation_report: Option<String>,
+    consolidation_base_session_id: Option<String>,
+    consolidation_recommended_session_id: Option<String>,
+    consolidation_confirmation_mode: Option<String>,
     promotion_reason: Option<String>,
 }
 
@@ -177,6 +183,13 @@ impl Database {
                     consolidation_sources: summary
                         .consolidation_sources
                         .and_then(|s| serde_json::from_str(&s).ok()),
+                    consolidation_round_id: summary.consolidation_round_id,
+                    consolidation_role: summary.consolidation_role,
+                    consolidation_report: summary.consolidation_report,
+                    consolidation_base_session_id: summary.consolidation_base_session_id,
+                    consolidation_recommended_session_id: summary
+                        .consolidation_recommended_session_id,
+                    consolidation_confirmation_mode: summary.consolidation_confirmation_mode,
                     promotion_reason: summary.promotion_reason,
                 }
             })
@@ -227,8 +240,8 @@ impl SessionMethods for Database {
                 branch, parent_branch, original_parent_branch, worktree_path,
                 status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                 original_agent_type, pending_name_generation, was_auto_generated,
-                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
+                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38)",
             params![
                 session.id,
                 session.name,
@@ -264,6 +277,12 @@ impl SessionMethods for Database {
                     .consolidation_sources
                     .as_ref()
                     .and_then(|v| serde_json::to_string(v).ok()),
+                session.consolidation_round_id,
+                session.consolidation_role,
+                session.consolidation_report,
+                session.consolidation_base_session_id,
+                session.consolidation_recommended_session_id,
+                session.consolidation_confirmation_mode,
                 session.promotion_reason,
             ],
         )?;
@@ -279,7 +298,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason
              FROM sessions
              WHERE repository_path = ?1 AND name = ?2"
         )?;
@@ -328,7 +347,13 @@ impl SessionMethods for Database {
                     .ok()
                     .flatten()
                     .and_then(|s| serde_json::from_str(&s).ok()),
-                promotion_reason: row.get(31).ok(),
+                consolidation_round_id: row.get(31).ok(),
+                consolidation_role: row.get(32).ok(),
+                consolidation_report: row.get(33).ok(),
+                consolidation_base_session_id: row.get(34).ok(),
+                consolidation_recommended_session_id: row.get(35).ok(),
+                consolidation_confirmation_mode: row.get(36).ok(),
+                promotion_reason: row.get(37).ok(),
             })
         })?;
 
@@ -343,7 +368,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason
              FROM sessions
              WHERE id = ?1"
         )?;
@@ -392,7 +417,13 @@ impl SessionMethods for Database {
                     .ok()
                     .flatten()
                     .and_then(|s| serde_json::from_str(&s).ok()),
-                promotion_reason: row.get(31).ok(),
+                consolidation_round_id: row.get(31).ok(),
+                consolidation_role: row.get(32).ok(),
+                consolidation_report: row.get(33).ok(),
+                consolidation_base_session_id: row.get(34).ok(),
+                consolidation_recommended_session_id: row.get(35).ok(),
+                consolidation_confirmation_mode: row.get(36).ok(),
+                promotion_reason: row.get(37).ok(),
             })
         })?;
 
@@ -434,7 +465,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason
                  FROM sessions
                  WHERE repository_path = ?1
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -478,7 +509,13 @@ impl SessionMethods for Database {
                     pr_url: row.get(26).ok(),
                     is_consolidation: row.get(27).unwrap_or(false),
                     consolidation_sources: row.get(28).ok(),
-                    promotion_reason: row.get(29).ok(),
+                    consolidation_round_id: row.get(29).ok(),
+                    consolidation_role: row.get(30).ok(),
+                    consolidation_report: row.get(31).ok(),
+                    consolidation_base_session_id: row.get(32).ok(),
+                    consolidation_recommended_session_id: row.get(33).ok(),
+                    consolidation_confirmation_mode: row.get(34).ok(),
+                    promotion_reason: row.get(35).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -508,7 +545,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason
                  FROM sessions
                  WHERE status = 'active'
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -552,7 +589,13 @@ impl SessionMethods for Database {
                     pr_url: row.get(26).ok(),
                     is_consolidation: row.get(27).unwrap_or(false),
                     consolidation_sources: row.get(28).ok(),
-                    promotion_reason: row.get(29).ok(),
+                    consolidation_round_id: row.get(29).ok(),
+                    consolidation_role: row.get(30).ok(),
+                    consolidation_report: row.get(31).ok(),
+                    consolidation_base_session_id: row.get(32).ok(),
+                    consolidation_recommended_session_id: row.get(33).ok(),
+                    consolidation_confirmation_mode: row.get(34).ok(),
+                    promotion_reason: row.get(35).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -679,7 +722,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, promotion_reason
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason
                  FROM sessions
                  WHERE repository_path = ?1 AND session_state = ?2
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -727,7 +770,13 @@ impl SessionMethods for Database {
                         pr_url: row.get(26).ok(),
                         is_consolidation: row.get(27).unwrap_or(false),
                         consolidation_sources: row.get(28).ok(),
-                        promotion_reason: row.get(29).ok(),
+                        consolidation_round_id: row.get(29).ok(),
+                        consolidation_role: row.get(30).ok(),
+                        consolidation_report: row.get(31).ok(),
+                        consolidation_base_session_id: row.get(32).ok(),
+                        consolidation_recommended_session_id: row.get(33).ok(),
+                        consolidation_confirmation_mode: row.get(34).ok(),
+                        promotion_reason: row.get(35).ok(),
                     })
                 },
             )?;
@@ -878,10 +927,7 @@ impl SessionMethods for Database {
         }
 
         // Calculate new worktree path based on new session name
-        let new_worktree_path = repo_path
-            .join(".lucode")
-            .join("worktrees")
-            .join(new_name);
+        let new_worktree_path = repo_path.join(".lucode").join("worktrees").join(new_name);
 
         // Update the session name and worktree path
         conn.execute(
@@ -1034,10 +1080,17 @@ mod tests {
             pr_url: None,
             is_consolidation: false,
             consolidation_sources: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
             promotion_reason: None,
         };
 
-        db.create_session(&session).expect("failed to create session");
+        db.create_session(&session)
+            .expect("failed to create session");
 
         let conn = db.get_conn().expect("failed to borrow connection");
         conn.execute(
@@ -1046,7 +1099,9 @@ mod tests {
         )
         .expect("failed to update timestamps to millis");
 
-        let sessions = db.list_sessions(&repo_path).expect("failed to list sessions");
+        let sessions = db
+            .list_sessions(&repo_path)
+            .expect("failed to list sessions");
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].created_at.timestamp(), created_at.timestamp());
         assert_eq!(sessions[0].updated_at.timestamp(), updated_at.timestamp());
@@ -1089,10 +1144,17 @@ mod tests {
             pr_url: Some("https://github.com/owner/repo/pull/142".to_string()),
             is_consolidation: false,
             consolidation_sources: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
             promotion_reason: None,
         };
 
-        db.create_session(&session).expect("failed to create session");
+        db.create_session(&session)
+            .expect("failed to create session");
 
         let loaded = db
             .get_session_by_id("test-session-1")
@@ -1142,13 +1204,24 @@ mod tests {
             pr_url: None,
             is_consolidation: false,
             consolidation_sources: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
             promotion_reason: None,
         };
 
-        db.create_session(&session).expect("failed to create session");
+        db.create_session(&session)
+            .expect("failed to create session");
 
-        db.update_session_pr_info("test-session-2", Some(99), Some("https://github.com/owner/repo/pull/99"))
-            .expect("failed to update PR info");
+        db.update_session_pr_info(
+            "test-session-2",
+            Some(99),
+            Some("https://github.com/owner/repo/pull/99"),
+        )
+        .expect("failed to update PR info");
 
         let loaded = db
             .get_session_by_id("test-session-2")
@@ -1271,12 +1344,21 @@ mod tests {
             pr_url: None,
             is_consolidation: false,
             consolidation_sources: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
             promotion_reason: None,
         };
 
-        db.create_session(&session).expect("failed to create session");
+        db.create_session(&session)
+            .expect("failed to create session");
 
-        let sessions = db.list_sessions(&repo_path).expect("failed to list sessions");
+        let sessions = db
+            .list_sessions(&repo_path)
+            .expect("failed to list sessions");
         assert_eq!(sessions.len(), 1);
 
         let loaded = &sessions[0];
@@ -1331,6 +1413,12 @@ mod tests {
             pr_url: None,
             is_consolidation: true,
             consolidation_sources: Some(sources.clone()),
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
             promotion_reason: None,
         };
 
@@ -1410,21 +1498,112 @@ mod tests {
             pr_url: None,
             is_consolidation: false,
             consolidation_sources: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
             promotion_reason: None,
         };
 
-        db.create_session(&session).expect("failed to create session");
+        db.create_session(&session)
+            .expect("failed to create session");
 
-        let loaded = db.get_session_by_id("promote-test").expect("failed to load");
+        let loaded = db
+            .get_session_by_id("promote-test")
+            .expect("failed to load");
         assert_eq!(loaded.promotion_reason, None);
 
         db.update_session_promotion_reason("promote-test", Some("Best test coverage"))
             .expect("failed to update promotion reason");
 
-        let loaded = db.get_session_by_id("promote-test").expect("failed to load");
-        assert_eq!(loaded.promotion_reason, Some("Best test coverage".to_string()));
+        let loaded = db
+            .get_session_by_id("promote-test")
+            .expect("failed to load");
+        assert_eq!(
+            loaded.promotion_reason,
+            Some("Best test coverage".to_string())
+        );
 
         let listed = db.list_sessions(&repo_path).expect("failed to list");
-        assert_eq!(listed[0].promotion_reason, Some("Best test coverage".to_string()));
+        assert_eq!(
+            listed[0].promotion_reason,
+            Some("Best test coverage".to_string())
+        );
+    }
+
+    #[test]
+    fn test_consolidation_round_fields_persist() {
+        let db = Database::new_in_memory().expect("failed to build in-memory database");
+        let repo_path = PathBuf::from("/tmp/repo");
+        let now = Utc::now();
+
+        let session = Session {
+            id: "round-fields".to_string(),
+            name: "round-fields".to_string(),
+            display_name: None,
+            version_group_id: Some("group-1".to_string()),
+            version_number: Some(3),
+            epic_id: None,
+            repository_path: repo_path.clone(),
+            repository_name: "repo".to_string(),
+            branch: "lucode/round-fields".to_string(),
+            parent_branch: "main".to_string(),
+            original_parent_branch: Some("main".to_string()),
+            worktree_path: repo_path.join(".lucode/worktrees/round-fields"),
+            status: SessionStatus::Active,
+            created_at: now,
+            updated_at: now,
+            last_activity: None,
+            initial_prompt: Some("compare candidates".to_string()),
+            ready_to_merge: false,
+            original_agent_type: Some("claude".to_string()),
+            pending_name_generation: false,
+            was_auto_generated: false,
+            spec_content: None,
+            session_state: SessionState::Running,
+            resume_allowed: true,
+            amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
+            pr_number: None,
+            pr_url: None,
+            is_consolidation: true,
+            consolidation_sources: Some(vec!["feature_v1".to_string(), "feature_v2".to_string()]),
+            consolidation_round_id: Some("round-1".to_string()),
+            consolidation_role: Some("candidate".to_string()),
+            consolidation_report: Some("## Decision\nKeep v1 base and port v2 tests.".to_string()),
+            consolidation_base_session_id: Some("feature_v1".to_string()),
+            consolidation_recommended_session_id: Some("feature-merge-1".to_string()),
+            consolidation_confirmation_mode: Some("confirm".to_string()),
+            promotion_reason: None,
+        };
+
+        db.create_session(&session)
+            .expect("failed to create session");
+
+        let loaded = db
+            .get_session_by_name(&repo_path, "round-fields")
+            .expect("failed to load session");
+
+        assert_eq!(loaded.consolidation_round_id.as_deref(), Some("round-1"));
+        assert_eq!(loaded.consolidation_role.as_deref(), Some("candidate"));
+        assert_eq!(
+            loaded.consolidation_report.as_deref(),
+            Some("## Decision\nKeep v1 base and port v2 tests.")
+        );
+        assert_eq!(
+            loaded.consolidation_base_session_id.as_deref(),
+            Some("feature_v1")
+        );
+        assert_eq!(
+            loaded.consolidation_recommended_session_id.as_deref(),
+            Some("feature-merge-1")
+        );
+        assert_eq!(
+            loaded.consolidation_confirmation_mode.as_deref(),
+            Some("confirm")
+        );
     }
 }

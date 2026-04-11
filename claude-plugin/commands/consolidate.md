@@ -59,12 +59,12 @@ Use the current consolidation session branch as the destination branch.
    3. If the rebase is clean, re-run the project's verification commands. They must pass before proceeding to promote.
    4. If the rebase produces conflicts, resolve them in the worktree using the full context of what was just consolidated from every sibling branch. Use `git add` for resolved paths, then `git rebase --continue`. Repeat until the rebase finishes. After a clean finish, re-run the project's verification commands. They must pass before proceeding to promote.
    5. Do not call `lucode_promote` until the rebase is clean **and** verification is green on the rebased branch.
-7. Call `lucode_promote` with:
+7. Call `lucode_consolidation_report` with:
    - `session_name`: the current consolidation session name
-   - `reason`: a concise explanation of why this version won and what it absorbed from siblings
-   - `winner_session_id`: the session ID of the source version you chose as the strongest base (take it from the session list that was injected into your prompt)
+   - `report`: a structured explanation of which candidate base you chose, what you kept from each sibling, and any trade-offs
+   - `base_session_id`: the session ID of the source version you chose as the strongest base (take it from the session list that was injected into your prompt)
 
-The promote call transplants the consolidated commits onto the winner's branch so that session survives with the merged work. After `lucode_promote` returns, the consolidation session remains open so the user can review its reason and diff in the UI, and should be closed manually when that review is done. The losing source versions are cancelled automatically. If promotion reports failures, surface them clearly.
+Lucode uses the filed report as the durable completion signal for the round. When every candidate files a report, Lucode will trigger the judge automatically by default, or the user can trigger and confirm it from the UI. Do not call `lucode_promote` directly for a multi-agent consolidation round. If report filing fails, surface that clearly.
 
 ## Step 7: Report
 

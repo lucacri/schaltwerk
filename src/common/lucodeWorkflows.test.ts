@@ -60,10 +60,10 @@ describe('Lucode workflow publishing', () => {
       }
 
       const content = readFileSync(workflowFile, 'utf8')
-      expect(content).toContain('lucode_promote')
+      expect(content).toContain('lucode_consolidation_report')
       expect(content).toContain('current consolidation session branch')
-      expect(content).toContain('consolidation session remains open')
-      expect(content).not.toContain('consolidation session and the losing source versions are cancelled automatically')
+      expect(content).toContain('durable completion signal for the round')
+      expect(content).toContain('Do not call `lucode_promote` directly for a multi-agent consolidation round')
       expect(content).not.toContain('one of the existing versioned session worktrees')
       expect(content).not.toContain('Call `mcp__lucode__lucode_create`')
     }

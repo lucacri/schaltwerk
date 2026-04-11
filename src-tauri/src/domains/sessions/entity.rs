@@ -111,6 +111,12 @@ pub struct Session {
     pub pr_url: Option<String>,
     pub is_consolidation: bool,
     pub consolidation_sources: Option<Vec<String>>,
+    pub consolidation_round_id: Option<String>,
+    pub consolidation_role: Option<String>,
+    pub consolidation_report: Option<String>,
+    pub consolidation_base_session_id: Option<String>,
+    pub consolidation_recommended_session_id: Option<String>,
+    pub consolidation_confirmation_mode: Option<String>,
     pub promotion_reason: Option<String>,
 }
 
@@ -361,6 +367,18 @@ pub struct SessionInfo {
     pub is_consolidation: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consolidation_sources: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consolidation_round_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consolidation_role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consolidation_report: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consolidation_base_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consolidation_recommended_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consolidation_confirmation_mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub promotion_reason: Option<String>,
 }

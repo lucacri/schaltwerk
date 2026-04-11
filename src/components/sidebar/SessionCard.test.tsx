@@ -464,4 +464,27 @@ describe('SessionCard promoted badge', () => {
 
     expect(screen.queryByText(/Promoted/i)).toBeNull()
   })
+
+  it('shows consolidation report text for consolidation sessions', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              is_consolidation: true,
+              consolidation_report: '## Decision\nKeep v1 base and port v2 tests.',
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByText('## Decision Keep v1 base and port v2 tests.')).toBeInTheDocument()
+  })
 })

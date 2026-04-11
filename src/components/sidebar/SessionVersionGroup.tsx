@@ -26,6 +26,8 @@ interface SessionVersionGroupProps {
   getMergeStatus?: (sessionId: string) => MergeStatus
   isSessionBusy?: (sessionId: string) => boolean
   onConsolidate?: (group: SessionVersionGroupType) => void
+  onTriggerConsolidationJudge?: (roundId: string, early?: boolean) => void
+  onConfirmConsolidationWinner?: (roundId: string, winnerSessionId: string) => void
   onTerminateAll?: (group: SessionVersionGroupType) => void
 }
 
@@ -44,6 +46,8 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   getMergeStatus,
   isSessionBusy,
   onConsolidate,
+  onTriggerConsolidationJudge,
+  onConfirmConsolidationWinner,
   onTerminateAll
 }) => {
   const [isExpanded, setIsExpanded] = useState(true)
@@ -86,11 +90,30 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     v => selection.kind === 'session' && selection.payload === v.session.info.session_id
   )
   const hasSelectedVersion = !!selectedVersionInGroup
-  const hasConsolidationVersion = group.versions.some(v => v.session.info.is_consolidation)
-  const consolidationVersion = group.versions.find(v => v.session.info.is_consolidation)
+  const consolidationSessions = group.versions.filter(v => v.session.info.is_consolidation)
+  const consolidationCandidates = consolidationSessions.filter(v => v.session.info.consolidation_role !== 'judge')
+  const judgeSessions = consolidationSessions.filter(v => v.session.info.consolidation_role === 'judge')
+  const hasConsolidationVersion = consolidationCandidates.length > 0
   const sourceVersions = group.versions.filter(v => !v.session.info.is_consolidation)
   const siblingInfos = group.versions.map(v => v.session.info)
   const hoveredSession = group.versions.find(v => v.session.info.session_id === hoveredSessionId)?.session.info
+  const latestJudge = [...judgeSessions]
+    .sort((a, b) => {
+      const aTs = a.session.info.last_modified_ts
+        ?? (Date.parse(a.session.info.last_modified ?? a.session.info.created_at ?? '') || 0)
+      const bTs = b.session.info.last_modified_ts
+        ?? (Date.parse(b.session.info.last_modified ?? b.session.info.created_at ?? '') || 0)
+      return bTs - aTs
+    })
+    .find(v => v.session.info.consolidation_recommended_session_id)
+  const activeRoundId = consolidationCandidates[0]?.session.info.consolidation_round_id
+  const selectedCandidate = selectedVersionInGroup?.session.info.is_consolidation
+    && selectedVersionInGroup.session.info.consolidation_role !== 'judge'
+      ? selectedVersionInGroup.session.info
+      : null
+  const confirmWinnerSessionId = latestJudge
+    ? (selectedCandidate?.session_id ?? latestJudge.session.info.consolidation_recommended_session_id ?? null)
+    : null
 
   const hasMultipleVersions = group.versions.length >= 2
   const activeVersionCount = sourceVersions.filter(v => {
@@ -280,6 +303,42 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                 </svg>
               </button>
             )}
+            {activeRoundId && onTriggerConsolidationJudge && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onTriggerConsolidationJudge(activeRoundId, consolidationCandidates.some(candidate => !candidate.session.info.consolidation_report))
+                }}
+                className="p-1 rounded transition-colors"
+                style={{ color: 'var(--color-text-secondary)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-accent-purple-light)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
+                title={latestJudge ? 'Re-run consolidation judge' : 'Run consolidation judge'}
+                data-testid="trigger-consolidation-judge-button"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 1.5a3.5 3.5 0 0 0-3.328 2.422l-.11.328H3.25a2.75 2.75 0 0 0 0 5.5h1.5v-1.5h-1.5a1.25 1.25 0 1 1 0-2.5h2.408l.17-.504A2 2 0 1 1 9.5 6h-1l2.25 2.25L13 6h-1a4 4 0 0 0-4-4.5ZM5 10h6v1.5H5zm0 3h6v1.5H5z" />
+                </svg>
+              </button>
+            )}
+            {activeRoundId && confirmWinnerSessionId && onConfirmConsolidationWinner && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onConfirmConsolidationWinner(activeRoundId, confirmWinnerSessionId)
+                }}
+                className="p-1 rounded transition-colors"
+                style={{ color: 'var(--color-text-secondary)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-accent-green-light)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-secondary)' }}
+                title={selectedCandidate ? 'Confirm selected consolidation winner' : 'Confirm judge recommendation'}
+                data-testid="confirm-consolidation-winner-button"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M13.78 3.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 8.28a.75.75 0 1 1 1.06-1.06L6 9.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
+                </svg>
+              </button>
+            )}
             {hasRunning && onTerminateAll && (
               <button
                 onClick={(e) => {
@@ -314,7 +373,25 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
               </div>
             )}
 
-            {consolidationVersion && (
+            {latestJudge?.session.info.consolidation_recommended_session_id && (
+              <div className={clsx(sourceVersions.length > 0 && 'mt-3')}>
+                <div
+                  className="rounded-md px-3 py-2 text-xs"
+                  style={{
+                    border: '1px solid var(--color-accent-purple-border)',
+                    backgroundColor: 'rgb(var(--color-accent-purple-rgb) / 0.08)',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  Judge recommends{' '}
+                  <span style={{ color: 'var(--color-text-primary)' }}>
+                    {latestJudge.session.info.consolidation_recommended_session_id}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {consolidationCandidates.length > 0 && (
               <div className={clsx(sourceVersions.length > 0 && 'mt-3')}>
                 {sourceVersions.length > 0 && (
                   <div
@@ -331,7 +408,9 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                     backgroundColor: 'rgb(var(--color-accent-purple-rgb) / 0.05)',
                   }}
                 >
-                  {renderVersionRow(consolidationVersion, sourceVersions.length, true)}
+                  <div className="space-y-2 py-1">
+                    {consolidationCandidates.map((candidate, index) => renderVersionRow(candidate, sourceVersions.length + index, true))}
+                  </div>
                 </div>
               </div>
             )}

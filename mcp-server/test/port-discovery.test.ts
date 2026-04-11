@@ -98,7 +98,16 @@ describe('LucodeBridge port discovery', () => {
         ready_to_merge: false,
         original_agent_type: undefined,
         pending_name_generation: false,
-        was_auto_generated: false
+        was_auto_generated: false,
+        is_consolidation: false,
+        consolidation_sources: undefined,
+        consolidation_round_id: undefined,
+        consolidation_role: undefined,
+        consolidation_report: undefined,
+        consolidation_base_session_id: undefined,
+        consolidation_recommended_session_id: undefined,
+        consolidation_confirmation_mode: undefined,
+        promotion_reason: undefined,
       }
     ]
 

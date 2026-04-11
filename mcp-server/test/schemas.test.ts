@@ -295,6 +295,24 @@ const sampleStructuredOutputs: Record<string, any> = {
     session: 'alpha',
     modal_triggered: true,
   },
+  lucode_consolidation_report: {
+    session: 'candidate-1',
+    round_id: 'round-abc',
+    role: 'candidate',
+    auto_judge_triggered: false,
+    auto_promoted: false,
+  },
+  lucode_trigger_consolidation_judge: {
+    round_id: 'round-abc',
+    judge_session: 'judge-1',
+  },
+  lucode_confirm_consolidation_winner: {
+    round_id: 'round-abc',
+    winner_session: 'candidate-1',
+    promoted_session: 'feature_v2',
+    candidate_sessions_cancelled: ['candidate-2'],
+    source_sessions_cancelled: ['feature_v1'],
+  },
 }
 
 describe('MCP output schemas', () => {

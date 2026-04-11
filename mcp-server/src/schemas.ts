@@ -617,6 +617,45 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
+  lucode_consolidation_report: {
+    $schema: draft2020,
+    type: 'object',
+    properties: {
+      session: { type: 'string' },
+      round_id: { type: 'string' },
+      role: { type: 'string' },
+      auto_judge_triggered: { type: 'boolean' },
+      auto_promoted: { type: 'boolean' },
+    },
+    required: ['session', 'round_id', 'role', 'auto_judge_triggered', 'auto_promoted'],
+    additionalProperties: false,
+  },
+
+  lucode_trigger_consolidation_judge: {
+    $schema: draft2020,
+    type: 'object',
+    properties: {
+      round_id: { type: 'string' },
+      judge_session: { type: 'string' },
+    },
+    required: ['round_id', 'judge_session'],
+    additionalProperties: false,
+  },
+
+  lucode_confirm_consolidation_winner: {
+    $schema: draft2020,
+    type: 'object',
+    properties: {
+      round_id: { type: 'string' },
+      winner_session: { type: 'string' },
+      promoted_session: { type: 'string' },
+      candidate_sessions_cancelled: { type: 'array', items: { type: 'string' } },
+      source_sessions_cancelled: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['round_id', 'winner_session', 'promoted_session', 'candidate_sessions_cancelled', 'source_sessions_cancelled'],
+    additionalProperties: false,
+  },
+
   lucode_convert_to_spec: {
     $schema: draft2020,
     type: 'object',

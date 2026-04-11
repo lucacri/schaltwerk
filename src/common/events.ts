@@ -262,6 +262,12 @@ export type EventPayloadMap = {
     agent_type?: string
     is_consolidation?: boolean
     consolidation_sources?: string[]
+    consolidation_round_id?: string | null
+    consolidation_role?: 'candidate' | 'judge' | null
+    consolidation_report?: string | null
+    consolidation_base_session_id?: string | null
+    consolidation_recommended_session_id?: string | null
+    consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null
   }
   [SchaltEvent.SessionRemoved]: { session_name: string }
   [SchaltEvent.ArchiveUpdated]: { repo: string, count: number }

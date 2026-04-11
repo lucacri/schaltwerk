@@ -28,6 +28,12 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             pending_name_generation BOOLEAN DEFAULT FALSE,
             was_auto_generated BOOLEAN DEFAULT FALSE,
             spec_content TEXT,
+            consolidation_round_id TEXT DEFAULT NULL,
+            consolidation_role TEXT DEFAULT NULL,
+            consolidation_report TEXT DEFAULT NULL,
+            consolidation_base_session_id TEXT DEFAULT NULL,
+            consolidation_recommended_session_id TEXT DEFAULT NULL,
+            consolidation_confirmation_mode TEXT DEFAULT NULL,
             promotion_reason TEXT DEFAULT NULL,
             UNIQUE(repository_path, name)
         )",
@@ -105,6 +111,32 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
         "CREATE INDEX IF NOT EXISTS idx_sessions_epic ON sessions(repository_path, epic_id)",
         [],
     );
+    let _ = conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_consolidation_round ON sessions(repository_path, consolidation_round_id)",
+        [],
+    );
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS consolidation_rounds (
+            id TEXT PRIMARY KEY,
+            repository_path TEXT NOT NULL,
+            version_group_id TEXT NOT NULL,
+            confirmation_mode TEXT NOT NULL,
+            status TEXT NOT NULL,
+            source_session_ids TEXT NOT NULL,
+            recommended_session_id TEXT,
+            recommended_by_session_id TEXT,
+            confirmed_session_id TEXT,
+            confirmed_by TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_consolidation_rounds_repo_group ON consolidation_rounds(repository_path, version_group_id)",
+        [],
+    )?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS epics (
@@ -337,6 +369,30 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
     // Consolidation source session IDs
     let _ = conn.execute(
         "ALTER TABLE sessions ADD COLUMN consolidation_sources TEXT DEFAULT NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN consolidation_round_id TEXT DEFAULT NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN consolidation_role TEXT DEFAULT NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN consolidation_report TEXT DEFAULT NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN consolidation_base_session_id TEXT DEFAULT NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN consolidation_recommended_session_id TEXT DEFAULT NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN consolidation_confirmation_mode TEXT DEFAULT NULL",
         [],
     );
     // Promotion reason — non-null means this session was promoted (winner of consolidation)

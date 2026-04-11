@@ -57,6 +57,12 @@ mod session_sorting_tests {
             pr_url: None,
             is_consolidation: false,
             consolidation_sources: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
             promotion_reason: None,
         }
     }

@@ -821,6 +821,73 @@ describe('LucodeBridge untested methods', () => {
     })
   })
 
+  describe('consolidation round methods', () => {
+    it('posts consolidation reports to the report endpoint', async () => {
+      fetchMock.mockResolvedValue(createResponse({
+        session_name: 'feature-consolidation-a',
+        round_id: 'round-1',
+        role: 'candidate',
+        auto_judge_triggered: true,
+        auto_promoted: false,
+      }))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.updateConsolidationReport('feature-consolidation-a', 'report body', {
+        baseSessionId: 'feature_v1',
+      })
+
+      expect(result).toEqual({
+        sessionName: 'feature-consolidation-a',
+        roundId: 'round-1',
+        role: 'candidate',
+        autoJudgeTriggered: true,
+        autoPromoted: false,
+      })
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/sessions/feature-consolidation-a/consolidation-report')
+      expect(JSON.parse(String(init?.body))).toEqual({ report: 'report body', base_session_id: 'feature_v1' })
+    })
+
+    it('posts judge trigger requests to the round endpoint', async () => {
+      fetchMock.mockResolvedValue(createResponse({
+        round_id: 'round-1',
+        judge_session_name: 'feature-consolidation-judge',
+      }))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.triggerConsolidationJudge('round-1', { early: true })
+
+      expect(result).toEqual({ roundId: 'round-1', judgeSessionName: 'feature-consolidation-judge' })
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/consolidation-rounds/round-1/judge')
+      expect(JSON.parse(String(init?.body))).toEqual({ early: true })
+    })
+
+    it('posts winner confirmations to the round confirm endpoint', async () => {
+      fetchMock.mockResolvedValue(createResponse({
+        round_id: 'round-1',
+        winner_session_name: 'feature-consolidation-a',
+        promoted_session_name: 'feature_v1',
+        candidate_sessions_cancelled: ['feature-consolidation-b'],
+        source_sessions_cancelled: ['feature_v2'],
+      }))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.confirmConsolidationWinner('round-1', 'feature-consolidation-a')
+
+      expect(result).toEqual({
+        roundId: 'round-1',
+        winnerSessionName: 'feature-consolidation-a',
+        promotedSessionName: 'feature_v1',
+        candidateSessionsCancelled: ['feature-consolidation-b'],
+        sourceSessionsCancelled: ['feature_v2'],
+      })
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/consolidation-rounds/round-1/confirm')
+      expect(JSON.parse(String(init?.body))).toEqual({ winner_session_id: 'feature-consolidation-a' })
+    })
+  })
+
   describe('linkSessionToPr', () => {
     it('posts PR metadata to the link-pr endpoint', async () => {
       const payload = {

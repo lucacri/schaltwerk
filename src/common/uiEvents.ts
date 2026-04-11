@@ -113,6 +113,9 @@ export interface NewSessionPrefillDetail {
   epicId?: string | null
   isConsolidation?: boolean
   consolidationSourceIds?: string[]
+  consolidationRoundId?: string
+  consolidationRole?: 'candidate' | 'judge'
+  consolidationConfirmationMode?: 'confirm' | 'auto-promote'
   agentType?: string
   variantId?: string
   presetId?: string

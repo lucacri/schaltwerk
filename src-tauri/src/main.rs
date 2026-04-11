@@ -749,6 +749,18 @@ async fn start_webhook_server(app: tauri::AppHandle) -> bool {
                             is_consolidation: Option<bool>,
                             #[serde(skip_serializing_if = "Option::is_none")]
                             consolidation_sources: Option<Vec<String>>,
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            consolidation_round_id: Option<String>,
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            consolidation_role: Option<String>,
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            consolidation_report: Option<String>,
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            consolidation_base_session_id: Option<String>,
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            consolidation_recommended_session_id: Option<String>,
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            consolidation_confirmation_mode: Option<String>,
                         }
 
                         let session_payload = SessionAddedPayload {
@@ -791,6 +803,36 @@ async fn start_webhook_server(app: tauri::AppHandle) -> bool {
                                         .filter_map(|value| value.as_str().map(str::to_owned))
                                         .collect()
                                 }),
+                            consolidation_round_id: payload
+                                .get("consolidation_round_id")
+                                .or_else(|| payload.get("consolidationRoundId"))
+                                .and_then(|v| v.as_str())
+                                .map(str::to_owned),
+                            consolidation_role: payload
+                                .get("consolidation_role")
+                                .or_else(|| payload.get("consolidationRole"))
+                                .and_then(|v| v.as_str())
+                                .map(str::to_owned),
+                            consolidation_report: payload
+                                .get("consolidation_report")
+                                .or_else(|| payload.get("consolidationReport"))
+                                .and_then(|v| v.as_str())
+                                .map(str::to_owned),
+                            consolidation_base_session_id: payload
+                                .get("consolidation_base_session_id")
+                                .or_else(|| payload.get("consolidationBaseSessionId"))
+                                .and_then(|v| v.as_str())
+                                .map(str::to_owned),
+                            consolidation_recommended_session_id: payload
+                                .get("consolidation_recommended_session_id")
+                                .or_else(|| payload.get("consolidationRecommendedSessionId"))
+                                .and_then(|v| v.as_str())
+                                .map(str::to_owned),
+                            consolidation_confirmation_mode: payload
+                                .get("consolidation_confirmation_mode")
+                                .or_else(|| payload.get("consolidationConfirmationMode"))
+                                .and_then(|v| v.as_str())
+                                .map(str::to_owned),
                         };
 
                         if let Err(e) =
@@ -1339,6 +1381,8 @@ fn main() {
             schaltwerk_core_get_spec,
             schaltwerk_core_get_session_agent_content,
             schaltwerk_core_cancel_session,
+            schaltwerk_core_trigger_consolidation_judge,
+            schaltwerk_core_confirm_consolidation_winner,
             schaltwerk_core_convert_session_to_draft,
             schaltwerk_core_update_git_stats,
             schaltwerk_core_cleanup_orphaned_worktrees,

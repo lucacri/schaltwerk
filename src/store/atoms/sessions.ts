@@ -1810,6 +1810,12 @@ export const initializeSessionsEventsActionAtom = atom(
                 agent_type?: string
                 is_consolidation?: boolean
                 consolidation_sources?: string[]
+                consolidation_round_id?: string | null
+                consolidation_role?: 'candidate' | 'judge' | null
+                consolidation_report?: string | null
+                consolidation_base_session_id?: string | null
+                consolidation_recommended_session_id?: string | null
+                consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null
             }
 
             const previousStatesSnapshot = new Map(previousSessionStates)
@@ -1848,6 +1854,12 @@ export const initializeSessionsEventsActionAtom = atom(
                     original_agent_type: agentTypeFromEvent ?? pendingStartup?.agentType,
                     is_consolidation: event.is_consolidation ?? false,
                     consolidation_sources: event.consolidation_sources ?? undefined,
+                    consolidation_round_id: event.consolidation_round_id ?? undefined,
+                    consolidation_role: event.consolidation_role ?? undefined,
+                    consolidation_report: event.consolidation_report ?? undefined,
+                    consolidation_base_session_id: event.consolidation_base_session_id ?? undefined,
+                    consolidation_recommended_session_id: event.consolidation_recommended_session_id ?? undefined,
+                    consolidation_confirmation_mode: event.consolidation_confirmation_mode ?? undefined,
                     diff_stats: undefined,
                     ready_to_merge: false,
                 }

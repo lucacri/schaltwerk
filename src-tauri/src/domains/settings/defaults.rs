@@ -21,7 +21,8 @@ Instructions:
 5. Incorporate any valuable improvements from the other versions
 6. Run the project's test suite to verify everything passes
 7. Create a single squashed commit with the consolidated result
-8. Call lucode_promote on the current consolidation session with winner_session_id set to the session ID of the source version you chose as the base — the consolidated commits will be transplanted onto that session's branch so it survives, while the losing source versions are cancelled automatically. After lucode_promote returns, leave the consolidation session open so the user can review its reason and diff in the UI and close it manually when done."#
+8. File a durable consolidation report with lucode_consolidation_report. Include the source session ID you chose as base in base_session_id and summarize what you kept from each version.
+9. Do not call lucode_promote directly for a multi-agent consolidation round. Lucode will trigger the judge automatically when every candidate has filed a report, or the user can trigger or confirm it from the UI."#
         .to_string()
 }
 

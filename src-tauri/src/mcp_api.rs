@@ -8,7 +8,7 @@ use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use url::form_urlencoded;
 use uuid::Uuid;
 
@@ -197,6 +197,24 @@ async fn handle_mcp_request_inner(
             let name = extract_session_name_for_action(path, "/promote");
             promote_session(req, &name, app).await
         }
+        (&Method::POST, path)
+            if path.starts_with("/api/sessions/") && path.ends_with("/consolidation-report") =>
+        {
+            let name = extract_session_name_for_action(path, "/consolidation-report");
+            update_consolidation_report(req, &name, app).await
+        }
+        (&Method::POST, path)
+            if path.starts_with("/api/consolidation-rounds/") && path.ends_with("/judge") =>
+        {
+            let round_id = extract_round_id_for_action(path, "/judge");
+            trigger_consolidation_judge(req, &round_id, app).await
+        }
+        (&Method::POST, path)
+            if path.starts_with("/api/consolidation-rounds/") && path.ends_with("/confirm") =>
+        {
+            let round_id = extract_round_id_for_action(path, "/confirm");
+            confirm_consolidation_winner(req, &round_id, app).await
+        }
         (&Method::POST, path) if path.starts_with("/api/sessions/") && path.ends_with("/reset") => {
             let name = extract_session_name_for_action(path, "/reset");
             reset_session(req, &name, app).await
@@ -262,6 +280,14 @@ fn extract_session_name_for_action(path: &str, action: &str) -> String {
     let name = &path[prefix.len()..path.len() - suffix.len()];
     urlencoding::decode(name)
         .unwrap_or(std::borrow::Cow::Borrowed(name))
+        .to_string()
+}
+
+fn extract_round_id_for_action(path: &str, action: &str) -> String {
+    let prefix = "/api/consolidation-rounds/";
+    let round_id = &path[prefix.len()..path.len() - action.len()];
+    urlencoding::decode(round_id)
+        .unwrap_or(std::borrow::Cow::Borrowed(round_id))
         .to_string()
 }
 
@@ -361,6 +387,9 @@ struct PresetLaunchOptions<'a> {
     version_group_id: Option<&'a str>,
     is_consolidation: bool,
     consolidation_source_ids: Option<Vec<String>>,
+    consolidation_round_id: Option<&'a str>,
+    consolidation_role: Option<&'a str>,
+    consolidation_confirmation_mode: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -538,6 +567,16 @@ async fn create_sessions_from_preset_launch(
         .version_group_id
         .map(ToString::to_string)
         .unwrap_or_else(|| Uuid::new_v4().to_string());
+    let consolidation_round_id = if options.is_consolidation {
+        Some(
+            options
+                .consolidation_round_id
+                .map(ToString::to_string)
+                .unwrap_or_else(|| Uuid::new_v4().to_string()),
+        )
+    } else {
+        None
+    };
     let total_slots = preset.slots.len();
     let mut created_sessions = Vec::new();
     let mut created_session_names = Vec::new();
@@ -569,6 +608,9 @@ async fn create_sessions_from_preset_launch(
             pr_number: options.pr_number,
             is_consolidation: options.is_consolidation,
             consolidation_source_ids: options.consolidation_source_ids.clone(),
+            consolidation_round_id: consolidation_round_id.as_deref(),
+            consolidation_role: options.consolidation_role,
+            consolidation_confirmation_mode: options.consolidation_confirmation_mode,
         };
 
         let session = match manager.create_session_with_agent(params) {
@@ -606,6 +648,24 @@ async fn create_sessions_from_preset_launch(
 
         created_session_names.push(session.name.clone());
         created_sessions.push(session);
+    }
+
+    if options.is_consolidation
+        && let (Some(round_id), Some(source_ids), Some(mode)) = (
+            consolidation_round_id.as_deref(),
+            options.consolidation_source_ids.as_ref(),
+            options.consolidation_confirmation_mode,
+        )
+    {
+        upsert_consolidation_round(
+            db,
+            manager.repo_path(),
+            round_id,
+            &version_group_id,
+            source_ids,
+            mode,
+        )
+        .map_err(|err| format!("Failed to persist consolidation round: {err}"))?;
     }
 
     Ok(build_preset_launch_response(
@@ -700,6 +760,66 @@ struct PromoteSessionResponse {
 struct PromoteSessionOutcome {
     status: StatusCode,
     response: PromoteSessionResponse,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ConsolidationRoundRecord {
+    id: String,
+    repository_path: String,
+    version_group_id: String,
+    confirmation_mode: String,
+    status: String,
+    source_session_ids: Vec<String>,
+    recommended_session_id: Option<String>,
+    recommended_by_session_id: Option<String>,
+    confirmed_session_id: Option<String>,
+    confirmed_by: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateConsolidationReportRequest {
+    report: String,
+    #[serde(default)]
+    base_session_id: Option<String>,
+    #[serde(default)]
+    recommended_session_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct UpdateConsolidationReportResponse {
+    session_name: String,
+    round_id: String,
+    role: String,
+    auto_judge_triggered: bool,
+    auto_promoted: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct TriggerConsolidationJudgeRequest {
+    #[serde(default)]
+    early: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct TriggerConsolidationJudgeResponse {
+    round_id: String,
+    judge_session_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ConfirmConsolidationWinnerRequest {
+    winner_session_id: String,
+    #[serde(default)]
+    override_reason: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ConfirmConsolidationWinnerResponse {
+    round_id: String,
+    winner_session_name: String,
+    promoted_session_name: String,
+    candidate_sessions_cancelled: Vec<String>,
+    source_sessions_cancelled: Vec<String>,
 }
 
 fn strip_version_suffix(name: &str) -> &str {
@@ -814,6 +934,13 @@ where
         return Err((
             StatusCode::BAD_REQUEST,
             format!("Session '{name}' is a spec and cannot be promoted"),
+        ));
+    }
+
+    if session.consolidation_role.as_deref() == Some("judge") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Judge consolidation session '{name}' cannot be promoted"),
         ));
     }
 
@@ -1055,6 +1182,109 @@ fn promote_outcome_response(name: &str, outcome: PromoteSessionOutcome) -> Respo
     });
 
     json_response(outcome.status, json)
+}
+
+pub(crate) fn upsert_consolidation_round(
+    db: &Database,
+    repo_path: &Path,
+    round_id: &str,
+    version_group_id: &str,
+    source_session_ids: &[String],
+    confirmation_mode: &str,
+) -> anyhow::Result<()> {
+    let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
+    repo.upsert_consolidation_round(round_id, version_group_id, source_session_ids, confirmation_mode)
+}
+
+fn get_consolidation_round(
+    db: &Database,
+    repo_path: &Path,
+    round_id: &str,
+) -> anyhow::Result<ConsolidationRoundRecord> {
+    let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
+    let round = repo.get_consolidation_round(round_id)?;
+    Ok(ConsolidationRoundRecord {
+        id: round.id,
+        repository_path: round.repository_path,
+        version_group_id: round.version_group_id,
+        confirmation_mode: round.confirmation_mode,
+        status: round.status,
+        source_session_ids: round.source_session_ids,
+        recommended_session_id: round.recommended_session_id,
+        recommended_by_session_id: round.recommended_by_session_id,
+        confirmed_session_id: round.confirmed_session_id,
+        confirmed_by: round.confirmed_by,
+    })
+}
+
+fn update_consolidation_round_recommendation(
+    db: &Database,
+    round_id: &str,
+    recommended_session_id: Option<&str>,
+    recommended_by_session_id: Option<&str>,
+    status: &str,
+) -> anyhow::Result<()> {
+    let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), PathBuf::new());
+    repo.update_consolidation_round_recommendation(round_id, recommended_session_id, recommended_by_session_id, status)
+}
+
+fn update_consolidation_round_confirmation(
+    db: &Database,
+    round_id: &str,
+    confirmed_session_id: &str,
+    confirmed_by: &str,
+) -> anyhow::Result<()> {
+    let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), PathBuf::new());
+    repo.update_consolidation_round_confirmation(round_id, confirmed_session_id, confirmed_by)
+}
+
+fn update_session_consolidation_report(
+    db: &Database,
+    repo_path: &Path,
+    session_name: &str,
+    report: &str,
+    base_session_id: Option<&str>,
+    recommended_session_id: Option<&str>,
+) -> anyhow::Result<()> {
+    let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
+    repo.update_session_consolidation_report(session_name, report, base_session_id, recommended_session_id)
+}
+
+fn list_round_sessions(manager: &SessionManager, round_id: &str) -> anyhow::Result<Vec<Session>> {
+    Ok(manager
+        .list_sessions()?
+        .into_iter()
+        .filter(|session| session.consolidation_round_id.as_deref() == Some(round_id))
+        .collect())
+}
+
+fn build_judge_prompt(candidate_sessions: &[Session], source_session_ids: &[String]) -> String {
+    let mut prompt = String::from(
+        "Review every consolidation candidate for this Lucode consolidation round.\n\n",
+    );
+    prompt.push_str("Source sessions:\n");
+    for source in source_session_ids {
+        prompt.push_str(&format!("- {source}\n"));
+    }
+    prompt.push_str("\nCandidates:\n");
+    for candidate in candidate_sessions {
+        let report = candidate
+            .consolidation_report
+            .as_deref()
+            .unwrap_or("<missing report>");
+        let base = candidate
+            .consolidation_base_session_id
+            .as_deref()
+            .unwrap_or("<missing base>");
+        prompt.push_str(&format!(
+            "- {}\n  base_session_id: {}\n  report:\n{}\n\n",
+            candidate.name, base, report
+        ));
+    }
+    prompt.push_str(
+        "Choose the strongest consolidation candidate. File your reasoning through lucode_consolidation_report with recommended_session_id set to the winning candidate session ID. Do not call lucode_promote directly.",
+    );
+    prompt
 }
 
 async fn diff_summary(req: Request<Incoming>) -> Result<Response<String>, hyper::Error> {
@@ -1367,6 +1597,7 @@ mod tests {
     use chrono::Utc;
     use git2::Repository;
     use hyper::HeaderMap;
+    use lucode::domains::sessions::service::SessionCreationParams;
     use lucode::domains::settings::{AgentPreset, AgentPresetSlot};
     use lucode::schaltwerk_core::Database;
     use std::cell::RefCell;
@@ -2305,6 +2536,95 @@ mod tests {
         assert!(json.get("failures").is_none());
     }
 
+    #[test]
+    fn consolidation_round_upsert_and_load() {
+        let temp = TempDir::new().expect("temp dir");
+        let repo_path = temp.path().join("repo");
+        std::fs::create_dir_all(&repo_path).expect("create repo dir");
+        let db = Database::new(Some(temp.path().join("test.db"))).expect("db");
+
+        upsert_consolidation_round(
+            &db,
+            &repo_path,
+            "round-1",
+            "group-1",
+            &["feature_v1".to_string(), "feature_v2".to_string()],
+            "confirm",
+        )
+        .expect("upsert round");
+
+        let round = get_consolidation_round(&db, &repo_path, "round-1").expect("load round");
+        assert_eq!(round.id, "round-1");
+        assert_eq!(round.version_group_id, "group-1");
+        assert_eq!(round.confirmation_mode, "confirm");
+        assert_eq!(round.status, "running");
+        assert_eq!(round.source_session_ids, vec!["feature_v1", "feature_v2"]);
+    }
+
+    #[test]
+    fn update_session_consolidation_report_persists_report_fields() {
+        let temp = TempDir::new().expect("temp dir");
+        let repo_path = temp.path().join("repo");
+        std::fs::create_dir_all(&repo_path).expect("create repo dir");
+        let db = Database::new(Some(temp.path().join("test.db"))).expect("db");
+        let now = chrono::Utc::now();
+        let session = Session {
+            id: "candidate-1".to_string(),
+            name: "candidate-1".to_string(),
+            display_name: None,
+            version_group_id: Some("group-1".to_string()),
+            version_number: None,
+            epic_id: None,
+            repository_path: repo_path.clone(),
+            repository_name: "repo".to_string(),
+            branch: "lucode/candidate-1".to_string(),
+            parent_branch: "main".to_string(),
+            original_parent_branch: Some("main".to_string()),
+            worktree_path: repo_path.join(".lucode/worktrees/candidate-1"),
+            status: SessionStatus::Active,
+            created_at: now,
+            updated_at: now,
+            last_activity: None,
+            initial_prompt: None,
+            ready_to_merge: false,
+            original_agent_type: Some("claude".to_string()),
+            pending_name_generation: false,
+            was_auto_generated: false,
+            spec_content: None,
+            session_state: SessionState::Running,
+            resume_allowed: true,
+            amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
+            pr_number: None,
+            pr_url: None,
+            is_consolidation: true,
+            consolidation_sources: Some(vec!["feature_v1".to_string(), "feature_v2".to_string()]),
+            consolidation_round_id: Some("round-1".to_string()),
+            consolidation_role: Some("candidate".to_string()),
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: Some("confirm".to_string()),
+            promotion_reason: None,
+        };
+        db.create_session(&session).expect("create session");
+
+        update_session_consolidation_report(
+            &db,
+            &repo_path,
+            "candidate-1",
+            "## Decision\nKeep v1 base.",
+            Some("feature_v1"),
+            None,
+        )
+        .expect("update report");
+
+        let updated = db.get_session_by_name(&repo_path, "candidate-1").expect("load updated");
+        assert_eq!(updated.consolidation_report.as_deref(), Some("## Decision\nKeep v1 base."));
+        assert_eq!(updated.consolidation_base_session_id.as_deref(), Some("feature_v1"));
+    }
+
     #[tokio::test]
     async fn promote_session_logic_promotes_version_group_and_cancels_siblings() {
         let (_tmp, repo_path) = init_test_repo();
@@ -2418,6 +2738,9 @@ mod tests {
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+                consolidation_round_id: None,
+                consolidation_role: None,
+                consolidation_confirmation_mode: None,
             })
             .expect("create consolidation session");
 
@@ -2486,6 +2809,56 @@ mod tests {
         assert!(err.1.contains("is a spec"));
     }
 
+    #[tokio::test]
+    async fn promote_session_logic_rejects_judge_consolidation_sessions() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+
+        let v1 = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, Some("group-1"), Some(1))
+            .expect("create v1");
+        let _v2 = manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, Some("group-1"), Some(2))
+            .expect("create v2");
+
+        let judge = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "judge-session",
+                prompt: None,
+                base_branch: None,
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some("group-1"),
+                version_number: None,
+                epic_id: None,
+                agent_type: None,
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![v1.name.clone()]),
+                consolidation_round_id: Some("round-1"),
+                consolidation_role: Some("judge"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create judge");
+
+        let err = execute_session_promotion(
+            &manager,
+            &judge.name,
+            "Pick this one",
+            None,
+            || Ok(()),
+            |_| std::future::ready(Ok(())),
+        )
+        .await
+        .expect_err("promotion should fail for judge sessions");
+
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.contains("Judge consolidation session"));
+    }
+
     fn commit_in_worktree(worktree_path: &Path, file: &str, contents: &str, message: &str) {
         std::fs::write(worktree_path.join(file), contents).expect("write file");
         let repo = Repository::open(worktree_path).expect("open worktree");
@@ -2539,6 +2912,9 @@ mod tests {
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+                consolidation_round_id: None,
+                consolidation_role: None,
+                consolidation_confirmation_mode: None,
             })
             .expect("create consolidation session");
 
@@ -2640,6 +3016,9 @@ mod tests {
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.name.clone(), v2.name.clone()]),
+                consolidation_round_id: None,
+                consolidation_role: None,
+                consolidation_confirmation_mode: None,
             })
             .expect("create consolidation session");
 
@@ -2711,6 +3090,9 @@ mod tests {
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+                consolidation_round_id: None,
+                consolidation_role: None,
+                consolidation_confirmation_mode: None,
             })
             .expect("create consolidation session");
 
@@ -2799,6 +3181,9 @@ mod tests {
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+                consolidation_round_id: None,
+                consolidation_role: None,
+                consolidation_confirmation_mode: None,
             })
             .expect("create consolidation session");
 
@@ -2850,6 +3235,9 @@ mod tests {
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+                consolidation_round_id: None,
+                consolidation_role: None,
+                consolidation_confirmation_mode: None,
             })
             .expect("create consolidation session");
 
@@ -2927,6 +3315,9 @@ mod tests {
                 pr_number: None,
                 is_consolidation: true,
                 consolidation_source_ids: Some(vec![v1.id.clone(), v2.id.clone()]),
+                consolidation_round_id: None,
+                consolidation_role: None,
+                consolidation_confirmation_mode: None,
             })
             .expect("create consolidation session");
 
@@ -3860,6 +4251,18 @@ async fn create_session(
                 .collect::<Vec<_>>()
         })
         .filter(|values| !values.is_empty());
+    let consolidation_round_id = payload["consolidationRoundId"]
+        .as_str()
+        .or_else(|| payload["consolidation_round_id"].as_str())
+        .map(|s| s.to_string());
+    let consolidation_role = payload["consolidationRole"]
+        .as_str()
+        .or_else(|| payload["consolidation_role"].as_str())
+        .map(|s| s.to_string());
+    let consolidation_confirmation_mode = payload["consolidationConfirmationMode"]
+        .as_str()
+        .or_else(|| payload["consolidation_confirmation_mode"].as_str())
+        .map(|s| s.to_string());
     let issue_number = payload["issueNumber"]
         .as_i64()
         .or_else(|| payload["issue_number"].as_i64());
@@ -3921,6 +4324,9 @@ async fn create_session(
             version_group_id: version_group_id.as_deref(),
             is_consolidation,
             consolidation_source_ids: consolidation_source_ids.clone(),
+            consolidation_round_id: consolidation_round_id.as_deref(),
+            consolidation_role: consolidation_role.as_deref(),
+            consolidation_confirmation_mode: consolidation_confirmation_mode.as_deref(),
         };
 
         return match create_sessions_from_preset_launch(
@@ -3976,10 +4382,35 @@ async fn create_session(
         pr_number,
         is_consolidation,
         consolidation_source_ids,
+        consolidation_round_id: consolidation_round_id.as_deref(),
+        consolidation_role: consolidation_role.as_deref(),
+        consolidation_confirmation_mode: consolidation_confirmation_mode.as_deref(),
     };
 
     match manager.create_session_with_agent(params) {
         Ok(session) => {
+            if session.is_consolidation
+                && let (Some(round_id), Some(group_id), Some(source_ids), Some(mode)) = (
+                    session.consolidation_round_id.as_deref(),
+                    session.version_group_id.as_deref(),
+                    session.consolidation_sources.as_ref(),
+                    session.consolidation_confirmation_mode.as_deref(),
+                )
+                && let Err(err) = upsert_consolidation_round(
+                    &core.db,
+                    session.repository_path.as_path(),
+                    round_id,
+                    group_id,
+                    source_ids,
+                    mode,
+                )
+            {
+                error!("Failed to upsert consolidation round {round_id}: {err}");
+                return Ok(error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to persist consolidation round: {err}"),
+                ));
+            }
             if let Err(err) = persist_session_metadata(
                 &core.db,
                 &session.id,
@@ -4894,6 +5325,512 @@ async fn promote_session(
     .await
     {
         Ok(outcome) => Ok(promote_outcome_response(name, outcome)),
+        Err((status, message)) => Ok(json_error_response(status, message)),
+    }
+}
+
+fn candidate_sessions_for_round(round_sessions: &[Session]) -> Vec<Session> {
+    round_sessions
+        .iter()
+        .filter(|session| session.consolidation_role.as_deref() == Some("candidate"))
+        .cloned()
+        .collect()
+}
+
+fn judge_sessions_for_round(round_sessions: &[Session]) -> Vec<Session> {
+    round_sessions
+        .iter()
+        .filter(|session| session.consolidation_role.as_deref() == Some("judge"))
+        .cloned()
+        .collect()
+}
+
+fn all_candidates_reported(candidate_sessions: &[Session]) -> bool {
+    !candidate_sessions.is_empty()
+        && candidate_sessions.iter().all(|session| {
+            session
+                .consolidation_report
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|report| !report.is_empty())
+                && session
+                    .consolidation_base_session_id
+                    .as_deref()
+                    .map(str::trim)
+                    .is_some_and(|base| !base.is_empty())
+        })
+}
+
+fn confirmation_reason(
+    round_sessions: &[Session],
+    winner: &Session,
+    override_reason: Option<&str>,
+) -> String {
+    if let Some(reason) = override_reason.map(str::trim).filter(|reason| !reason.is_empty()) {
+        return reason.to_string();
+    }
+
+    if let Some(judge_report) = judge_sessions_for_round(round_sessions)
+        .into_iter()
+        .rev()
+        .find_map(|session| session.consolidation_report)
+        .and_then(|report| report.lines().find(|line| !line.trim().is_empty()).map(str::trim).map(str::to_string))
+    {
+        return judge_report;
+    }
+
+    format!("Confirmed consolidation winner {}", winner.name)
+}
+
+async fn create_and_start_judge_session(
+    app: &tauri::AppHandle,
+    manager: &SessionManager,
+    round: &ConsolidationRoundRecord,
+) -> Result<Session, String> {
+    let round_sessions = list_round_sessions(manager, &round.id).map_err(|err| err.to_string())?;
+    let candidate_sessions = candidate_sessions_for_round(&round_sessions);
+    if candidate_sessions.is_empty() {
+        return Err("No consolidation candidates found for this round".to_string());
+    }
+
+    let judge_name = format!(
+        "{}-judge-{}",
+        candidate_sessions[0].name,
+        chrono::Utc::now().timestamp_millis()
+    );
+    let candidate_names = candidate_sessions
+        .iter()
+        .map(|session| session.name.clone())
+        .collect::<Vec<_>>();
+    let prompt = build_judge_prompt(&candidate_sessions, &round.source_session_ids);
+    let agent_type = candidate_sessions
+        .iter()
+        .find_map(|session| session.original_agent_type.clone());
+
+    let session = manager
+        .create_session_with_agent(lucode::domains::sessions::service::SessionCreationParams {
+            name: &judge_name,
+            prompt: Some(&prompt),
+            base_branch: Some(candidate_sessions[0].parent_branch.as_str()),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(&round.version_group_id),
+            version_number: None,
+            epic_id: None,
+            agent_type: agent_type.as_deref(),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: Some(candidate_names),
+            consolidation_round_id: Some(&round.id),
+            consolidation_role: Some("judge"),
+            consolidation_confirmation_mode: Some(&round.confirmation_mode),
+        })
+        .map_err(|err| err.to_string())?;
+
+    request_sessions_refresh(app, SessionsRefreshReason::SessionLifecycle);
+
+    schaltwerk_core_start_session_agent_with_restart(
+        app.clone(),
+        StartAgentParams {
+            session_name: session.name.clone(),
+            force_restart: false,
+            cols: None,
+            rows: None,
+            terminal_id: None,
+            agent_type: session.original_agent_type.clone(),
+            prompt: None,
+            skip_prompt: Some(false),
+        },
+    )
+    .await
+    .map_err(|err| err.to_string())?;
+
+    Ok(session)
+}
+
+pub(crate) async fn confirm_consolidation_winner_inner(
+    app: &tauri::AppHandle,
+    round_id: &str,
+    winner_session_id: &str,
+    override_reason: Option<&str>,
+    confirmed_by: &str,
+) -> Result<ConfirmConsolidationWinnerResponse, (StatusCode, String)> {
+    let core = get_core_write().await.map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Internal error: {err}"),
+        )
+    })?;
+    let manager = core.session_manager();
+    let round = get_consolidation_round(&core.db, manager.repo_path(), round_id).map_err(|err| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Consolidation round '{round_id}' not found: {err}"),
+        )
+    })?;
+    let round_sessions = list_round_sessions(&manager, round_id).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list round sessions: {err}"),
+        )
+    })?;
+
+    let candidate_sessions = candidate_sessions_for_round(&round_sessions);
+    let winner = candidate_sessions
+        .iter()
+        .find(|session| session.id == winner_session_id || session.name == winner_session_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!("Winner session '{winner_session_id}' is not a candidate in round '{round_id}'"),
+            )
+        })?;
+
+    let base_session_id = winner
+        .consolidation_base_session_id
+        .as_deref()
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!("Candidate '{}' has not recorded consolidation_base_session_id", winner.name),
+            )
+        })?;
+
+    if round.status != "awaiting_confirmation" || round.recommended_session_id.is_none() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Consolidation round '{round_id}' has no judge recommendation to confirm yet"),
+        ));
+    }
+
+    let reason = confirmation_reason(&round_sessions, &winner, override_reason);
+    let manager_ref = &manager;
+    let outcome = execute_session_promotion(
+        &manager,
+        &winner.name,
+        &reason,
+        Some(base_session_id),
+        || {
+            request_sessions_refresh(app, SessionsRefreshReason::MergeWorkflow);
+            Ok(())
+        },
+        move |sibling_name| {
+            let sibling_name = sibling_name.to_string();
+            async move { manager_ref.fast_cancel_session(&sibling_name).await }
+        },
+    )
+    .await?;
+
+    let mut candidate_sessions_cancelled = Vec::new();
+    for candidate in candidate_sessions {
+        if candidate.id == winner.id || candidate.status != SessionStatus::Active {
+            continue;
+        }
+        manager.fast_cancel_session(&candidate.name).await.map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to cancel losing consolidation candidate '{}': {err}", candidate.name),
+            )
+        })?;
+        candidate_sessions_cancelled.push(candidate.name);
+    }
+
+    update_consolidation_round_confirmation(&core.db, round_id, &winner.id, confirmed_by).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to update consolidation round confirmation: {err}"),
+        )
+    })?;
+
+    request_sessions_refresh(app, SessionsRefreshReason::SessionLifecycle);
+
+    Ok(ConfirmConsolidationWinnerResponse {
+        round_id: round.id,
+        winner_session_name: winner.name,
+        promoted_session_name: outcome.response.session_name,
+        candidate_sessions_cancelled,
+        source_sessions_cancelled: outcome.response.siblings_cancelled,
+    })
+}
+
+pub(crate) async fn trigger_consolidation_judge_inner(
+    app: &tauri::AppHandle,
+    round_id: &str,
+    early: bool,
+) -> Result<TriggerConsolidationJudgeResponse, (StatusCode, String)> {
+    let core = get_core_write().await.map_err(|error| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Internal error: {error}"),
+        )
+    })?;
+    let manager = core.session_manager();
+    let round = get_consolidation_round(&core.db, manager.repo_path(), round_id).map_err(|err| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Consolidation round '{round_id}' not found: {err}"),
+        )
+    })?;
+    let candidate_sessions = list_round_sessions(&manager, round_id)
+        .map(|sessions| candidate_sessions_for_round(&sessions))
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to list round sessions: {err}"),
+            )
+        })?;
+
+    if round.status == "promoted" {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Consolidation round '{round_id}' is already confirmed and cannot be judged again"),
+        ));
+    }
+
+    if !early && !all_candidates_reported(&candidate_sessions) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Not all consolidation candidates have filed reports yet".to_string(),
+        ));
+    }
+
+    let session = create_and_start_judge_session(app, &manager, &round)
+        .await
+        .map_err(|message| (StatusCode::INTERNAL_SERVER_ERROR, message))?;
+
+    Ok(TriggerConsolidationJudgeResponse {
+        round_id: round.id,
+        judge_session_name: session.name,
+    })
+}
+
+async fn update_consolidation_report(
+    req: Request<Incoming>,
+    name: &str,
+    app: tauri::AppHandle,
+) -> Result<Response<String>, hyper::Error> {
+    let body_bytes = req.into_body().collect().await?.to_bytes();
+    let payload: UpdateConsolidationReportRequest = match serde_json::from_slice(&body_bytes) {
+        Ok(payload) => payload,
+        Err(error) => {
+            return Ok(json_error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Invalid JSON payload: {error}"),
+            ));
+        }
+    };
+
+    let trimmed_report = payload.report.trim();
+    if trimmed_report.is_empty() {
+        return Ok(json_error_response(
+            StatusCode::BAD_REQUEST,
+            "report is required".to_string(),
+        ));
+    }
+
+    let core = match get_core_write().await {
+        Ok(core) => core,
+        Err(error) => {
+            return Ok(json_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Internal error: {error}"),
+            ));
+        }
+    };
+    let manager = core.session_manager();
+    let session = match manager.get_session(name) {
+        Ok(session) => session,
+        Err(error) => {
+            return Ok(json_error_response(
+                StatusCode::NOT_FOUND,
+                format!("Session '{name}' not found: {error}"),
+            ));
+        }
+    };
+    let round_id = match session.consolidation_round_id.as_deref() {
+        Some(round_id) => round_id,
+        None => {
+            return Ok(json_error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Session '{name}' is not attached to a consolidation round"),
+            ));
+        }
+    };
+
+    if let Err(err) = update_session_consolidation_report(
+        &core.db,
+        manager.repo_path(),
+        name,
+        trimmed_report,
+        payload.base_session_id.as_deref(),
+        payload.recommended_session_id.as_deref(),
+    ) {
+        return Ok(json_error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to update consolidation report: {err}"),
+        ));
+    }
+
+    let round = match get_consolidation_round(&core.db, manager.repo_path(), round_id) {
+        Ok(round) => round,
+        Err(err) => {
+            return Ok(json_error_response(
+                StatusCode::NOT_FOUND,
+                format!("Consolidation round '{round_id}' not found: {err}"),
+            ));
+        }
+    };
+    let round_sessions = match list_round_sessions(&manager, round_id) {
+        Ok(sessions) => sessions,
+        Err(err) => {
+            return Ok(json_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to list round sessions: {err}"),
+            ));
+        }
+    };
+    let role = session
+        .consolidation_role
+        .clone()
+        .unwrap_or_else(|| "candidate".to_string());
+    let mut auto_judge_triggered = false;
+    let mut auto_promoted = false;
+
+    if round.status == "promoted" {
+        return Ok(json_error_response(
+            StatusCode::BAD_REQUEST,
+            format!("Consolidation round '{round_id}' is already confirmed"),
+        ));
+    }
+
+    if role == "judge" {
+        if payload.recommended_session_id.is_none() {
+            return Ok(json_error_response(
+                StatusCode::BAD_REQUEST,
+                "Judge reports must include recommended_session_id".to_string(),
+            ));
+        }
+
+        if let Err(err) = update_consolidation_round_recommendation(
+            &core.db,
+            round_id,
+            payload.recommended_session_id.as_deref(),
+            Some(&session.id),
+            "awaiting_confirmation",
+        ) {
+            return Ok(json_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to update consolidation recommendation: {err}"),
+            ));
+        }
+
+        if round.confirmation_mode == "auto-promote" {
+            match confirm_consolidation_winner_inner(
+                &app,
+                round_id,
+                payload.recommended_session_id.as_deref().unwrap_or_default(),
+                None,
+                "judge",
+            )
+            .await
+            {
+                Ok(_) => auto_promoted = true,
+                Err((status, message)) => return Ok(json_error_response(status, message)),
+            }
+        }
+    } else {
+        if payload.base_session_id.is_none() {
+            return Ok(json_error_response(
+                StatusCode::BAD_REQUEST,
+                "Candidate reports must include base_session_id".to_string(),
+            ));
+        }
+        let candidate_sessions = candidate_sessions_for_round(&round_sessions);
+        let judge_sessions = judge_sessions_for_round(&round_sessions);
+        if round.status == "running" && judge_sessions.is_empty() && all_candidates_reported(&candidate_sessions) {
+            if let Err(message) = create_and_start_judge_session(&app, &manager, &round).await {
+                return Ok(json_error_response(StatusCode::INTERNAL_SERVER_ERROR, message));
+            }
+            auto_judge_triggered = true;
+        }
+    }
+
+    request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
+    let response = UpdateConsolidationReportResponse {
+        session_name: name.to_string(),
+        round_id: round_id.to_string(),
+        role,
+        auto_judge_triggered,
+        auto_promoted,
+    };
+
+    Ok(json_response(
+        StatusCode::OK,
+        serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string()),
+    ))
+}
+
+async fn trigger_consolidation_judge(
+    req: Request<Incoming>,
+    round_id: &str,
+    app: tauri::AppHandle,
+) -> Result<Response<String>, hyper::Error> {
+    let body_bytes = req.into_body().collect().await?.to_bytes();
+    let payload: TriggerConsolidationJudgeRequest = if body_bytes.is_empty() {
+        TriggerConsolidationJudgeRequest { early: false }
+    } else {
+        match serde_json::from_slice(&body_bytes) {
+            Ok(payload) => payload,
+            Err(error) => {
+                return Ok(json_error_response(
+                    StatusCode::BAD_REQUEST,
+                    format!("Invalid JSON payload: {error}"),
+                ));
+            }
+        }
+    };
+
+    match trigger_consolidation_judge_inner(&app, round_id, payload.early).await {
+        Ok(response) => Ok(json_response(
+            StatusCode::CREATED,
+            serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string()),
+        )),
+        Err((status, message)) => Ok(json_error_response(status, message)),
+    }
+}
+
+async fn confirm_consolidation_winner(
+    req: Request<Incoming>,
+    round_id: &str,
+    app: tauri::AppHandle,
+) -> Result<Response<String>, hyper::Error> {
+    let body_bytes = req.into_body().collect().await?.to_bytes();
+    let payload: ConfirmConsolidationWinnerRequest = match serde_json::from_slice(&body_bytes) {
+        Ok(payload) => payload,
+        Err(error) => {
+            return Ok(json_error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Invalid JSON payload: {error}"),
+            ));
+        }
+    };
+
+    match confirm_consolidation_winner_inner(
+        &app,
+        round_id,
+        &payload.winner_session_id,
+        payload.override_reason.as_deref(),
+        "user",
+    )
+    .await
+    {
+        Ok(response) => Ok(json_response(
+            StatusCode::OK,
+            serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string()),
+        )),
         Err((status, message)) => Ok(json_error_response(status, message)),
     }
 }

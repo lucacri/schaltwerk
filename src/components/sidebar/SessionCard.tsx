@@ -216,6 +216,7 @@ export const SessionCard = memo<SessionCardProps>(
     const isBlocked = (activity?.is_blocked ?? s.is_blocked) || false;
     const isReadyToMerge = s.ready_to_merge || false;
     const promotionReason = s.promotionReason?.trim() || s.promotion_reason?.trim();
+    const consolidationReport = s.consolidation_report?.replace(/\s+/g, ' ').trim();
     const sessionState = getSessionLifecycleState(s);
     const isSpecClarificationStarted = sessionState === "spec" && s.clarification_started === true;
     const specNotStarted = sessionState === "spec" && !isSpecClarificationStarted;
@@ -700,6 +701,15 @@ export const SessionCard = memo<SessionCardProps>(
                     style={{ color: "var(--color-text-secondary)" }}
                   >
                     {promotionReason}
+                  </span>
+                )}
+                {s.is_consolidation && consolidationReport && (
+                  <span
+                    className="truncate max-w-[260px]"
+                    title={s.consolidation_report ?? consolidationReport}
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >
+                    {consolidationReport}
                   </span>
                 )}
                 <span className="truncate max-w-[120px]" title={s.branch}>

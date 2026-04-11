@@ -27,6 +27,15 @@ export interface Session {
   epic_id?: string | null
   pending_name_generation: boolean
   was_auto_generated: boolean
+  is_consolidation?: boolean
+  consolidation_sources?: string[]
+  consolidation_round_id?: string | null
+  consolidation_role?: 'candidate' | 'judge' | null
+  consolidation_report?: string | null
+  consolidation_base_session_id?: string | null
+  consolidation_recommended_session_id?: string | null
+  consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null
+  promotion_reason?: string | null
 }
 
 export interface Epic {
@@ -134,6 +143,27 @@ export interface PromoteSessionResult {
   siblingsCancelled: string[]
   reason: string
   failures: string[]
+}
+
+export interface ConsolidationReportResult {
+  sessionName: string
+  roundId: string
+  role: string
+  autoJudgeTriggered: boolean
+  autoPromoted: boolean
+}
+
+export interface TriggerConsolidationJudgeResult {
+  roundId: string
+  judgeSessionName: string
+}
+
+export interface ConfirmConsolidationWinnerResult {
+  roundId: string
+  winnerSessionName: string
+  promotedSessionName: string
+  candidateSessionsCancelled: string[]
+  sourceSessionsCancelled: string[]
 }
 
 export interface MergeSessionResult {
@@ -541,26 +571,35 @@ export class LucodeBridge {
       }
       
       // The response will be EnrichedSession objects from the backend
-      const enrichedSessions = await response.json() as Array<{
-        info: {
-          session_id: string;
-          display_name?: string;
-          branch: string;
-          base_branch: string;
-          worktree_path: string;
-          session_state: string;
-          created_at?: string;
-          updated_at?: string;
-          last_activity?: string;
-          initial_prompt?: string;
-          draft_content?: string;
-          spec_content?: string;
-          ready_to_merge?: boolean;
-          original_agent_type?: string;
-          pending_name_generation?: boolean;
-          was_auto_generated?: boolean;
-        };
-      }>
+        const enrichedSessions = await response.json() as Array<{
+          info: {
+            session_id: string;
+            display_name?: string;
+            branch: string;
+            base_branch: string;
+            worktree_path: string;
+            session_state: string;
+            created_at?: string;
+            updated_at?: string;
+            last_activity?: string;
+            initial_prompt?: string;
+            draft_content?: string;
+            spec_content?: string;
+            ready_to_merge?: boolean;
+            original_agent_type?: string;
+            pending_name_generation?: boolean;
+            was_auto_generated?: boolean;
+            is_consolidation?: boolean;
+            consolidation_sources?: string[];
+            consolidation_round_id?: string | null;
+            consolidation_role?: 'candidate' | 'judge' | null;
+            consolidation_report?: string | null;
+            consolidation_base_session_id?: string | null;
+            consolidation_recommended_session_id?: string | null;
+            consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null;
+            promotion_reason?: string | null;
+          };
+        }>
       
       // Convert EnrichedSession to Session format
       const sessions: Session[] = enrichedSessions.map(es => ({
@@ -583,7 +622,16 @@ export class LucodeBridge {
         ready_to_merge: es.info.ready_to_merge || false,
         original_agent_type: es.info.original_agent_type ?? undefined,
         pending_name_generation: es.info.pending_name_generation ?? false,
-        was_auto_generated: es.info.was_auto_generated ?? false
+        was_auto_generated: es.info.was_auto_generated ?? false,
+        is_consolidation: es.info.is_consolidation ?? false,
+        consolidation_sources: es.info.consolidation_sources ?? undefined,
+        consolidation_round_id: es.info.consolidation_round_id ?? undefined,
+        consolidation_role: es.info.consolidation_role ?? undefined,
+        consolidation_report: es.info.consolidation_report ?? undefined,
+        consolidation_base_session_id: es.info.consolidation_base_session_id ?? undefined,
+        consolidation_recommended_session_id: es.info.consolidation_recommended_session_id ?? undefined,
+        consolidation_confirmation_mode: es.info.consolidation_confirmation_mode ?? undefined,
+        promotion_reason: es.info.promotion_reason ?? undefined,
       }))
       
       return sessions
@@ -1546,6 +1594,106 @@ export class LucodeBridge {
       siblingsCancelled: payload.siblings_cancelled,
       reason: payload.reason,
       failures: payload.failures ?? [],
+    }
+  }
+
+  async updateConsolidationReport(
+    sessionName: string,
+    report: string,
+    options: {
+      baseSessionId?: string | null
+      recommendedSessionId?: string | null
+      projectPath?: string
+    } = {}
+  ): Promise<ConsolidationReportResult> {
+    const response = await this.fetchWithAutoPort(`/api/sessions/${encodeURIComponent(sessionName)}/consolidation-report`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getProjectHeaders(options.projectPath)
+      },
+      body: JSON.stringify({
+        report,
+        base_session_id: options.baseSessionId ?? undefined,
+        recommended_session_id: options.recommendedSessionId ?? undefined,
+      })
+    })
+
+    const payload = await this.parseJsonResponse<{
+      session_name: string
+      round_id: string
+      role: string
+      auto_judge_triggered: boolean
+      auto_promoted: boolean
+    }>(response, 'consolidation report update')
+    if (!payload) {
+      throw new Error('Consolidation report update payload missing')
+    }
+
+    return {
+      sessionName: payload.session_name,
+      roundId: payload.round_id,
+      role: payload.role,
+      autoJudgeTriggered: payload.auto_judge_triggered,
+      autoPromoted: payload.auto_promoted,
+    }
+  }
+
+  async triggerConsolidationJudge(roundId: string, options: { early?: boolean; projectPath?: string } = {}): Promise<TriggerConsolidationJudgeResult> {
+    const response = await this.fetchWithAutoPort(`/api/consolidation-rounds/${encodeURIComponent(roundId)}/judge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getProjectHeaders(options.projectPath)
+      },
+      body: JSON.stringify({ early: Boolean(options.early) })
+    })
+
+    const payload = await this.parseJsonResponse<{ round_id: string; judge_session_name: string }>(response, 'trigger consolidation judge')
+    if (!payload) {
+      throw new Error('Trigger consolidation judge payload missing')
+    }
+
+    return {
+      roundId: payload.round_id,
+      judgeSessionName: payload.judge_session_name,
+    }
+  }
+
+  async confirmConsolidationWinner(
+    roundId: string,
+    winnerSessionId: string,
+    options: { overrideReason?: string | null; projectPath?: string } = {}
+  ): Promise<ConfirmConsolidationWinnerResult> {
+    const response = await this.fetchWithAutoPort(`/api/consolidation-rounds/${encodeURIComponent(roundId)}/confirm`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getProjectHeaders(options.projectPath)
+      },
+      body: JSON.stringify({
+        winner_session_id: winnerSessionId,
+        override_reason: options.overrideReason ?? undefined,
+      })
+    })
+
+    const payload = await this.parseJsonResponse<{
+      round_id: string
+      winner_session_name: string
+      promoted_session_name: string
+      candidate_sessions_cancelled: string[]
+      source_sessions_cancelled: string[]
+    }>(response, 'confirm consolidation winner')
+    if (!payload) {
+      throw new Error('Confirm consolidation winner payload missing')
+    }
+
+    return {
+      roundId: payload.round_id,
+      winnerSessionName: payload.winner_session_name,
+      promotedSessionName: payload.promoted_session_name,
+      candidateSessionsCancelled: payload.candidate_sessions_cancelled,
+      sourceSessionsCancelled: payload.source_sessions_cancelled,
     }
   }
 

@@ -1668,6 +1668,9 @@ function AppContent() {
             versionGroupId,
             lockName: false,
             isConsolidation: true,
+            consolidationRoundId: globalThis.crypto?.randomUUID?.() ?? `${baseName}-consolidation-round-${Date.now()}`,
+            consolidationRole: 'candidate',
+            consolidationConfirmationMode: 'confirm',
             epicId: groupEpicId,
             consolidationSourceIds: sourceIds,
           })
@@ -1869,6 +1872,9 @@ function AppContent() {
     versionGroupId?: string
     isConsolidation?: boolean
     consolidationSourceIds?: string[]
+    consolidationRoundId?: string
+    consolidationRole?: 'candidate' | 'judge'
+    consolidationConfirmationMode?: 'confirm' | 'auto-promote'
     }) => {
     const shouldCloseOptimistically =
       !data.isSpec &&
@@ -1980,6 +1986,9 @@ function AppContent() {
               prNumber: data.prNumber || null,
               isConsolidation: data.isConsolidation || null,
               consolidationSourceIds: data.consolidationSourceIds || null,
+              consolidationRoundId: data.consolidationRoundId || null,
+              consolidationRole: data.consolidationRole || null,
+              consolidationConfirmationMode: data.consolidationConfirmationMode || null,
             })
 
             const actualSessionName = createdSession?.name ?? versionName

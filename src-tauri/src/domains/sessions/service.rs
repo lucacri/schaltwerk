@@ -238,6 +238,9 @@ pub struct SessionCreationParams<'a> {
     pub pr_number: Option<i64>,
     pub is_consolidation: bool,
     pub consolidation_source_ids: Option<Vec<String>>,
+    pub consolidation_round_id: Option<&'a str>,
+    pub consolidation_role: Option<&'a str>,
+    pub consolidation_confirmation_mode: Option<&'a str>,
 }
 
 pub struct AgentLaunchParams<'a> {
@@ -367,6 +370,12 @@ mod service_unified_tests {
             pr_url: None,
             is_consolidation: false,
             consolidation_sources: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
             promotion_reason: None,
         }
     }
@@ -1829,6 +1838,9 @@ mod service_unified_tests {
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_confirmation_mode: None,
         };
 
         let session = manager
@@ -1906,6 +1918,9 @@ mod service_unified_tests {
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_confirmation_mode: None,
         };
 
         let session = manager
@@ -1969,6 +1984,9 @@ mod service_unified_tests {
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_confirmation_mode: None,
         };
 
         let session = manager
@@ -2036,6 +2054,9 @@ mod service_unified_tests {
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_confirmation_mode: None,
         };
 
         let session = manager
@@ -2092,6 +2113,9 @@ mod service_unified_tests {
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_confirmation_mode: None,
         };
 
         let session = manager
@@ -2159,6 +2183,10 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
+    pub fn repo_path(&self) -> &Path {
+        &self.repo_path
+    }
+
     fn resolve_parent_branch(&self, requested: Option<&str>) -> Result<String> {
         let candidate = if let Some(branch) = requested {
             let trimmed = branch.trim();
@@ -2371,6 +2399,9 @@ impl SessionManager {
             pr_number: None,
             is_consolidation: false,
             consolidation_source_ids: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_confirmation_mode: None,
         };
         self.create_session_with_agent(params)
     }
@@ -2554,6 +2585,14 @@ impl SessionManager {
             pr_url: None,
             is_consolidation: params.is_consolidation,
             consolidation_sources: params.consolidation_source_ids,
+            consolidation_round_id: params.consolidation_round_id.map(str::to_string),
+            consolidation_role: params.consolidation_role.map(str::to_string),
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: params
+                .consolidation_confirmation_mode
+                .map(str::to_string),
             promotion_reason: None,
         };
 
@@ -2908,6 +2947,12 @@ impl SessionManager {
                 pr_url: spec.pr_url.clone(),
                 is_consolidation: false,
                 consolidation_sources: None,
+                consolidation_round_id: None,
+                consolidation_role: None,
+                consolidation_report: None,
+                consolidation_base_session_id: None,
+                consolidation_recommended_session_id: None,
+                consolidation_confirmation_mode: None,
                 promotion_reason: None,
             };
 
@@ -2967,6 +3012,16 @@ impl SessionManager {
                     pr_url: session.pr_url.clone(),
                     is_consolidation: session.is_consolidation,
                     consolidation_sources: session.consolidation_sources.clone(),
+                    consolidation_round_id: session.consolidation_round_id.clone(),
+                    consolidation_role: session.consolidation_role.clone(),
+                    consolidation_report: session.consolidation_report.clone(),
+                    consolidation_base_session_id: session.consolidation_base_session_id.clone(),
+                    consolidation_recommended_session_id: session
+                        .consolidation_recommended_session_id
+                        .clone(),
+                    consolidation_confirmation_mode: session
+                        .consolidation_confirmation_mode
+                        .clone(),
                     promotion_reason: session.promotion_reason.clone(),
                 };
 
@@ -3054,6 +3109,16 @@ impl SessionManager {
                 pr_url: session.pr_url.clone(),
                 is_consolidation: session.is_consolidation,
                 consolidation_sources: session.consolidation_sources.clone(),
+                consolidation_round_id: session.consolidation_round_id.clone(),
+                consolidation_role: session.consolidation_role.clone(),
+                consolidation_report: session.consolidation_report.clone(),
+                consolidation_base_session_id: session.consolidation_base_session_id.clone(),
+                consolidation_recommended_session_id: session
+                    .consolidation_recommended_session_id
+                    .clone(),
+                consolidation_confirmation_mode: session
+                    .consolidation_confirmation_mode
+                    .clone(),
                 promotion_reason: session.promotion_reason.clone(),
             };
 
@@ -3996,6 +4061,12 @@ impl SessionManager {
             amp_thread_id: None,
             is_consolidation: false,
             consolidation_sources: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
             promotion_reason: None,
         }
     }

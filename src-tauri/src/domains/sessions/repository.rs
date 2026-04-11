@@ -10,7 +10,22 @@ use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use git2::Repository;
 use log::{debug, warn};
+use rusqlite::params;
 use std::path::PathBuf;
+
+#[derive(Debug, Clone)]
+pub struct ConsolidationRoundRecord {
+    pub id: String,
+    pub repository_path: String,
+    pub version_group_id: String,
+    pub confirmation_mode: String,
+    pub status: String,
+    pub source_session_ids: Vec<String>,
+    pub recommended_session_id: Option<String>,
+    pub recommended_by_session_id: Option<String>,
+    pub confirmed_session_id: Option<String>,
+    pub confirmed_by: Option<String>,
+}
 
 #[derive(Clone)]
 pub struct SessionDbManager {
@@ -531,6 +546,142 @@ impl SessionDbManager {
         }
 
         self.get_spec_by_name(name).is_ok()
+    }
+
+    pub fn upsert_consolidation_round(
+        &self,
+        round_id: &str,
+        version_group_id: &str,
+        source_session_ids: &[String],
+        confirmation_mode: &str,
+    ) -> Result<()> {
+        let conn = self.db.get_conn()?;
+        let now = Utc::now().timestamp();
+        conn.execute(
+            "INSERT INTO consolidation_rounds (
+                id, repository_path, version_group_id, confirmation_mode, status, source_session_ids, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, 'running', ?5, ?6, ?6)
+            ON CONFLICT(id) DO UPDATE SET
+                confirmation_mode = excluded.confirmation_mode,
+                source_session_ids = excluded.source_session_ids,
+                updated_at = excluded.updated_at",
+            params![
+                round_id,
+                self.repo_path.to_string_lossy().to_string(),
+                version_group_id,
+                confirmation_mode,
+                serde_json::to_string(source_session_ids)?,
+                now,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_consolidation_round(&self, round_id: &str) -> Result<ConsolidationRoundRecord> {
+        let conn = self.db.get_conn()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, repository_path, version_group_id, confirmation_mode, status, source_session_ids,
+                    recommended_session_id, recommended_by_session_id, confirmed_session_id, confirmed_by
+             FROM consolidation_rounds
+             WHERE repository_path = ?1 AND id = ?2",
+        )?;
+        let round = stmt.query_row(
+            params![self.repo_path.to_string_lossy().to_string(), round_id],
+            |row| {
+                let source_ids: String = row.get(5)?;
+                Ok(ConsolidationRoundRecord {
+                    id: row.get(0)?,
+                    repository_path: row.get(1)?,
+                    version_group_id: row.get(2)?,
+                    confirmation_mode: row.get(3)?,
+                    status: row.get(4)?,
+                    source_session_ids: serde_json::from_str(&source_ids).unwrap_or_default(),
+                    recommended_session_id: row.get(6).ok(),
+                    recommended_by_session_id: row.get(7).ok(),
+                    confirmed_session_id: row.get(8).ok(),
+                    confirmed_by: row.get(9).ok(),
+                })
+            },
+        )?;
+        Ok(round)
+    }
+
+    pub fn update_consolidation_round_recommendation(
+        &self,
+        round_id: &str,
+        recommended_session_id: Option<&str>,
+        recommended_by_session_id: Option<&str>,
+        status: &str,
+    ) -> Result<()> {
+        let conn = self.db.get_conn()?;
+        conn.execute(
+            "UPDATE consolidation_rounds
+             SET recommended_session_id = ?1,
+                 recommended_by_session_id = ?2,
+                 status = ?3,
+                 updated_at = ?4
+             WHERE id = ?5",
+            params![
+                recommended_session_id,
+                recommended_by_session_id,
+                status,
+                Utc::now().timestamp(),
+                round_id,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_consolidation_round_confirmation(
+        &self,
+        round_id: &str,
+        confirmed_session_id: &str,
+        confirmed_by: &str,
+    ) -> Result<()> {
+        let conn = self.db.get_conn()?;
+        conn.execute(
+            "UPDATE consolidation_rounds
+             SET confirmed_session_id = ?1,
+                 confirmed_by = ?2,
+                 status = 'promoted',
+                 updated_at = ?3
+             WHERE id = ?4",
+            params![
+                confirmed_session_id,
+                confirmed_by,
+                Utc::now().timestamp(),
+                round_id
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_session_consolidation_report(
+        &self,
+        session_name: &str,
+        report: &str,
+        base_session_id: Option<&str>,
+        recommended_session_id: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.db.get_conn()?;
+        conn.execute(
+            "UPDATE sessions
+             SET consolidation_report = ?1,
+                 consolidation_base_session_id = COALESCE(?2, consolidation_base_session_id),
+                 consolidation_recommended_session_id = COALESCE(?3, consolidation_recommended_session_id),
+                 updated_at = ?4,
+                 last_activity = ?4
+             WHERE repository_path = ?5 AND name = ?6",
+            params![
+                report,
+                base_session_id,
+                recommended_session_id,
+                Utc::now().timestamp(),
+                self.repo_path.to_string_lossy().to_string(),
+                session_name,
+            ],
+        )?;
+        Ok(())
     }
 }
 
