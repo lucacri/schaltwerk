@@ -23,16 +23,13 @@ vi.mock('@tauri-apps/api/event', () => ({
 vi.mock('./Terminal', () => ({
   Terminal: ({
     terminalId,
-    startAgentRequestNonce,
     agentType,
   }: {
     terminalId: string
-    startAgentRequestNonce?: number
     agentType?: string
   }) => (
     <div
       data-testid={`terminal-${terminalId}`}
-      data-start-agent-request-nonce={startAgentRequestNonce ?? 0}
       data-agent-type={agentType ?? ''}
     />
   )
@@ -51,16 +48,14 @@ vi.mock('./RunTerminal', () => ({
 vi.mock('../specs/SpecEditor', () => ({
   SpecEditor: ({
     sessionName,
-    onStart,
+    allowClarificationControls,
   }: {
     sessionName: string
-    onStart?: () => void
+    allowClarificationControls?: boolean
   }) => (
-    <div data-testid="spec-editor">
+    <div data-testid="spec-editor" data-allow-clarification-controls={allowClarificationControls ? 'true' : 'false'}>
       <span>{sessionName}</span>
-      <button type="button" onClick={() => onStart?.()}>
-        Clarify
-      </button>
+      {allowClarificationControls && <button type="button">Clarify</button>}
     </div>
   )
 }))
@@ -200,6 +195,7 @@ describe('TerminalGrid spec selection layout', () => {
       expect(screen.getByTestId('spec-editor')).toHaveTextContent('spec-2')
     }, { timeout: 10000 })
 
+    expect(screen.getByTestId('spec-editor')).toHaveAttribute('data-allow-clarification-controls', 'true')
     expect(screen.queryByTestId('spec-placeholder')).toBeNull()
     expect(
       screen.getByTestId(`terminal-${specOrchestratorTerminalId('spec-2-stable-id')}`)
@@ -207,7 +203,7 @@ describe('TerminalGrid spec selection layout', () => {
     expect(screen.queryByTestId('run-terminal-spec-2')).toBeNull()
   })
 
-  it('keeps the spec terminal idle until Clarify is clicked', async () => {
+  it('does not mutate the dedicated clarification terminal when Clarify is clicked', async () => {
     const spec = mockEnrichedSession('spec-manual', 'spec', false)
     spec.info.stable_id = 'spec-manual-stable-id'
     spec.info.spec_stage = 'draft'
@@ -234,13 +230,13 @@ describe('TerminalGrid spec selection layout', () => {
     })
 
     const terminal = await screen.findByTestId(`terminal-${specOrchestratorTerminalId('spec-manual-stable-id')}`)
-    expect(terminal).toHaveAttribute('data-start-agent-request-nonce', '0')
+    const initialTerminalMarkup = terminal.outerHTML
 
     await act(async () => {
       screen.getByRole('button', { name: /clarify/i }).click()
     })
 
-    expect(terminal).toHaveAttribute('data-start-agent-request-nonce', '1')
+    expect(screen.getByTestId(`terminal-${specOrchestratorTerminalId('spec-manual-stable-id')}`).outerHTML).toBe(initialTerminalMarkup)
   })
 
   it('uses the dedicated spec clarification agent preference for spec terminals', async () => {
@@ -379,10 +375,6 @@ describe('TerminalGrid spec selection layout', () => {
       }, false, true)
     })
 
-    await act(async () => {
-      screen.getByRole('button', { name: /clarify/i }).click()
-    })
-
     expect(screen.queryByTestId(`terminal-${specOrchestratorTerminalId('spec-race-stable-id')}`)).toBeNull()
 
     await act(async () => {
@@ -391,7 +383,6 @@ describe('TerminalGrid spec selection layout', () => {
 
     const terminal = await screen.findByTestId(`terminal-${specOrchestratorTerminalId('spec-race-stable-id')}`)
     expect(terminal).toHaveAttribute('data-agent-type', 'gemini')
-    expect(terminal).toHaveAttribute('data-start-agent-request-nonce', '1')
   })
 
   it('ignores a late spec agent lookup after switching away', async () => {

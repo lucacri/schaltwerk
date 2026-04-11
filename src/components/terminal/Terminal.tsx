@@ -105,7 +105,6 @@ export interface TerminalProps {
     className?: string;
     sessionName?: string;
     specOrchestratorSessionName?: string;
-    startAgentRequestNonce?: number;
     isCommander?: boolean;
     agentType?: string;
     readOnly?: boolean;
@@ -139,7 +138,7 @@ const isPathWithinBase = (basePath: string, candidatePath: string) => {
     return candidateNormalized === baseNormalized || candidateNormalized.startsWith(baseWithSlash);
 };
 
-const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalId, className = '', sessionName, specOrchestratorSessionName, startAgentRequestNonce, isCommander = false, agentType, readOnly = false, onTerminalClick, onReady, inputFilter, workingDirectory, previewKey, autoPreviewConfig }, ref) => {
+const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalId, className = '', sessionName, specOrchestratorSessionName, isCommander = false, agentType, readOnly = false, onTerminalClick, onReady, inputFilter, workingDirectory, previewKey, autoPreviewConfig }, ref) => {
     const { addEventListener, addResizeObserver } = useCleanupRegistry();
     const { resolveEditorAppId } = useOpenInEditor({ sessionNameOverride: sessionName ?? null, isCommander })
     const { isAnyModalOpen } = useModal();
@@ -411,7 +410,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
     const mountedRef = useRef<boolean>(false);
     const startingTerminals = useRef<Map<string, boolean>>(new Map());
     const previousTerminalId = useRef<string>(terminalId);
-    const lastSpecStartRequestNonceRef = useRef(startAgentRequestNonce ?? 0);
     const rendererReadyRef = useRef<boolean>(false); // Renderer readiness flag
     const [fontsFullyLoaded, setFontsFullyLoaded] = useState(false);
     const fontsLoadedRef = useRef(false);
@@ -1948,7 +1946,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
 
         const isSpecOrchestratorTop = Boolean(specOrchestratorSessionName && terminalId.endsWith('-top'));
         const isProjectOrchestratorTop = !isSpecOrchestratorTop && (isCommander || (terminalId.includes('orchestrator') && terminalId.endsWith('-top')));
-        if (!isProjectOrchestratorTop) return;
+        if (!isProjectOrchestratorTop && !isSpecOrchestratorTop) return;
 
         const start = async () => {
             if (startingTerminals.current.get(terminalId)) {
@@ -1970,8 +1968,18 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                 } catch (e) {
                     logger.warn(`[Terminal ${terminalId}] Failed to measure size before orchestrator start:`, e);
                 }
-                logger.info(`[Terminal ${terminalId}] Auto-starting orchestrator at ${new Date().toISOString()}`);
-                await startOrchestratorTop({ terminalId, measured });
+                if (isSpecOrchestratorTop && specOrchestratorSessionName) {
+                    logger.info(`[Terminal ${terminalId}] Auto-starting spec clarification agent at ${new Date().toISOString()}`);
+                    await startSpecOrchestratorTop({
+                        terminalId,
+                        specName: specOrchestratorSessionName,
+                        measured,
+                        agentType,
+                    });
+                } else {
+                    logger.info(`[Terminal ${terminalId}] Auto-starting orchestrator at ${new Date().toISOString()}`);
+                    await startOrchestratorTop({ terminalId, measured });
+                }
                 terminalEverStartedRef.current = true;
                 safeTerminalFocusImmediate(() => {
                     terminal.current?.focus();
@@ -2015,69 +2023,6 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             cancelled = true;
         };
     }, [agentType, hydrated, terminalId, isCommander, isAnyModalOpen, agentStopped, specOrchestratorSessionName]);
-
-    useEffect(() => {
-        if (!terminal.current) return;
-        if (agentType === 'terminal') return;
-        if (!terminalId.endsWith('-top')) return;
-        if (!specOrchestratorSessionName) return;
-
-        const nextNonce = startAgentRequestNonce ?? 0;
-        if (nextNonce === lastSpecStartRequestNonceRef.current) {
-            return;
-        }
-        lastSpecStartRequestNonceRef.current = nextNonce;
-
-        if (nextNonce <= 0) {
-            return;
-        }
-
-        const start = async () => {
-            if (startingTerminals.current.get(terminalId)) {
-                return;
-            }
-            if (isTerminalStartingOrStarted(terminalId)) {
-                return;
-            }
-
-            startingTerminals.current.set(terminalId, true);
-            setAgentLoading(true);
-            sessionStorage.removeItem(`schaltwerk:agent-stopped:${terminalId}`);
-            setAgentStopped(false);
-            clearTerminalStartedTracking([terminalId]);
-
-            try {
-                let measured: { cols?: number; rows?: number } | undefined;
-                try {
-                    if (fitAddon.current && terminal.current) {
-                        const proposer = fitAddon.current as unknown as { proposeDimensions?: () => { cols: number; rows: number } | undefined };
-                        const proposed = proposer.proposeDimensions?.();
-                        if (proposed) {
-                            const mCols = calculateEffectiveColumns(proposed.cols);
-                            measured = { cols: mCols, rows: proposed.rows };
-                        }
-                    }
-                } catch (e) {
-                    logger.warn(`[Terminal ${terminalId}] Failed to measure size before manual spec start:`, e);
-                }
-
-                logger.info(`[Terminal ${terminalId}] Starting spec clarification agent at ${new Date().toISOString()}`);
-                await startSpecOrchestratorTop({ terminalId, specName: specOrchestratorSessionName, measured, agentType });
-                terminalEverStartedRef.current = true;
-                safeTerminalFocusImmediate(() => {
-                    terminal.current?.focus();
-                }, isAnyModalOpen);
-            } catch (e) {
-                clearTerminalStartState([terminalId]);
-                logger.error(`[Terminal ${terminalId}] Failed to start spec clarification agent:`, e);
-            } finally {
-                setAgentLoading(false);
-                startingTerminals.current.set(terminalId, false);
-            }
-        };
-
-        void start();
-    }, [agentType, hydrated, isAnyModalOpen, specOrchestratorSessionName, startAgentRequestNonce, terminalId]);
 
     useEffect(() => {
         if (!terminal.current || !resolvedFontFamily) {

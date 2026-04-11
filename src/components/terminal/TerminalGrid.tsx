@@ -111,7 +111,6 @@ const TerminalGridComponent = () => {
     const shouldShowActionButtons = (selection.kind === 'orchestrator' || selection.kind === 'session') && actionButtons.length > 0
     
     const [terminalKey, setTerminalKey] = useState(0)
-    const [specStartRequestNonces, setSpecStartRequestNonces] = useState<Record<string, number>>({})
     const [specAgentTypeReady, setSpecAgentTypeReady] = useState(!selectionIsSpec)
     const [pendingRefineRequest, setPendingRefineRequest] = useState<{
         sessionName: string
@@ -1487,7 +1486,6 @@ const TerminalGridComponent = () => {
 
     if (selectionIsSpec) {
         const specName = selection.payload ?? ''
-        const startAgentRequestNonce = specStartRequestNonces[specName] ?? 0
         return (
             <div className="h-full relative px-0 py-2">
                 <Split
@@ -1498,15 +1496,7 @@ const TerminalGridComponent = () => {
                     gutterSize={SPLIT_GUTTER_SIZE}
                 >
                     <div className="bg-panel rounded border border-border-subtle overflow-hidden min-h-0 h-full">
-                        <SpecEditor
-                            sessionName={specName}
-                            onStart={() => {
-                                setSpecStartRequestNonces(previous => ({
-                                    ...previous,
-                                    [specName]: (previous[specName] ?? 0) + 1,
-                                }))
-                            }}
-                        />
+                        <SpecEditor sessionName={specName} allowClarificationControls />
                     </div>
                     <div
                         className="bg-panel rounded overflow-hidden min-h-0 flex flex-col border-2"
@@ -1535,7 +1525,6 @@ const TerminalGridComponent = () => {
                                         className="h-full w-full"
                                         sessionName={specName}
                                         specOrchestratorSessionName={specName}
-                                        startAgentRequestNonce={startAgentRequestNonce}
                                         agentType={agentType}
                                         onTerminalClick={handleClaudeSessionClick}
                                         workingDirectory={effectiveWorkingDirectory}

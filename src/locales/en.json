@@ -917,6 +917,7 @@
     "comment": "Comment",
     "exitReviewMode": "Exit review mode",
     "exitReview": "Exit Review",
+    "resetClarificationAgent": "Reset clarification agent",
     "runAgent": "Run agent",
     "runAgentButton": "Run Agent",
     "copyContent": "Copy content",

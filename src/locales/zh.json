@@ -917,6 +917,7 @@
     "comment": "评论",
     "exitReviewMode": "退出审核模式",
     "exitReview": "退出审核",
+    "resetClarificationAgent": "重置澄清代理",
     "runAgent": "运行代理",
     "runAgentButton": "运行代理",
     "copyContent": "复制内容",

@@ -124,6 +124,50 @@ async fn test_command_functions_exist_and_callable() {
     }
 }
 
+#[tokio::test]
+async fn test_submit_spec_clarification_prompt_requires_project() {
+    let result = crate::commands::schaltwerk_core::submit_spec_clarification_prompt_impl(
+        None,
+        "test-spec-terminal".to_string(),
+        "draft-spec".to_string(),
+        None,
+    )
+    .await;
+
+    assert!(result.is_err(), "Submitting clarification should fail without project");
+    let error = result.unwrap_err().to_string();
+    assert!(
+        error.contains("No active project")
+            || error.contains("No project is currently open")
+            || error.contains("Failed to initialize spec orchestrator"),
+        "Submit clarification error should mention project issue: {}",
+        error
+    );
+}
+
+#[tokio::test]
+async fn test_reset_spec_orchestrator_requires_project() {
+    let result = crate::commands::schaltwerk_core::reset_spec_orchestrator_impl(
+        None,
+        "test-spec-terminal".to_string(),
+        "draft-spec".to_string(),
+        None,
+        None,
+        None,
+    )
+    .await;
+
+    assert!(result.is_err(), "Spec reset should fail without project");
+    let error = result.unwrap_err().to_string();
+    assert!(
+        error.contains("No active project")
+            || error.contains("No project is currently open")
+            || error.contains("Failed to initialize spec orchestrator"),
+        "Spec reset error should mention project issue: {}",
+        error
+    );
+}
+
 #[cfg(target_os = "macos")]
 #[tokio::test]
 async fn test_clipboard_write_text_sets_content() {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
-import { VscCopy, VscPlay, VscEye, VscEdit, VscComment } from 'react-icons/vsc'
+import { VscCopy, VscPlay, VscEye, VscEdit, VscComment, VscDiscard, VscSend } from 'react-icons/vsc'
 import { AnimatedText } from '../common/AnimatedText'
 import { logger } from '../../utils/logger'
 import { MarkdownEditor, type MarkdownEditorRef } from './MarkdownEditor'
@@ -32,9 +32,10 @@ import { useClaudeSession } from '../../hooks/useClaudeSession'
 import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
 import { getPasteSubmissionOptions } from '../../common/terminalPaste'
 import { specOrchestratorTerminalId } from '../../common/terminalIdentity'
+import { UiEvent, emitUiEvent, listenUiEvent } from '../../common/uiEvents'
 import { useReviewComments } from '../../hooks/useReviewComments'
 import type { SpecReviewComment } from '../../types/specReview'
-import { VscSend } from 'react-icons/vsc'
+import { getTerminalAgentType, getTerminalStartState } from '../../common/terminalStartState'
 
 const specText = {
   title: {
@@ -73,21 +74,30 @@ const specText = {
 
 interface Props {
   sessionName: string
-  onStart?: () => void
+  allowClarificationControls?: boolean
   disableFocusShortcut?: boolean
   onReviewModeChange?: (isReviewing: boolean) => void
 }
 
-export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false, onReviewModeChange }: Props) {
+export function SpecEditor({
+  sessionName,
+  allowClarificationControls = false,
+  disableFocusShortcut = false,
+  onReviewModeChange,
+}: Props) {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copying, setCopying] = useState(false)
-  const [starting, setStarting] = useState(false)
+  const [clarifying, setClarifying] = useState(false)
+  const [resettingAgent, setResettingAgent] = useState(false)
+  const [clarificationAgentReady, setClarificationAgentReady] = useState(false)
+  const [clarificationAgentType, setClarificationAgentType] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState<string | null>(null)
   const markdownEditorRef = useRef<MarkdownEditorRef>(null)
   const saveCountRef = useRef(0)
+  const latestSavePromiseRef = useRef<Promise<void> | null>(null)
   type TimeoutHandle = ReturnType<typeof setTimeout> | number
   const saveTimeoutRef = useRef<TimeoutHandle | null>(null)
   const shouldFocusAfterModeSwitch = useRef(false)
@@ -100,9 +110,9 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
   const { sessions, updateSessionSpecContent } = useSessions()
   const { setItemEpic } = useEpics()
   const [currentContent, setCurrentContent] = useAtom(specEditorContentAtomFamily(sessionName))
+  const [savedContent, setSavedContent] = useAtom(specEditorSavedContentAtomFamily(sessionName))
   const [viewMode, setViewMode] = useAtom(specEditorViewModeAtomFamily(sessionName))
   const markSessionSaved = useSetAtom(markSpecEditorSessionSavedAtom)
-  const setSavedContent = useSetAtom(specEditorSavedContentAtomFamily(sessionName))
   const selectedSession = useMemo(() => sessions.find(session => session.info.session_id === sessionName) ?? null, [sessions, sessionName])
   const selectedEpic = selectedSession?.info.epic ?? null
   const specStage = selectedSession?.info.spec_stage ?? 'draft'
@@ -114,7 +124,7 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
   const [commentFormPosition, setCommentFormPosition] = useState<{ x: number; y: number } | null>(null)
   const commentTextareaRef = useRef<HTMLTextAreaElement>(null)
   const lineSelection = useSpecLineSelection()
-  const { getOrchestratorAgentType } = useClaudeSession()
+  const { getOrchestratorAgentType, getSpecClarificationAgentType } = useClaudeSession()
   const { getConfirmationMessage } = useReviewComments()
 
   useEffect(() => {
@@ -208,6 +218,55 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
     }
   }, [showCommentForm])
 
+  const trackSavePromise = useCallback((savePromise: Promise<void>) => {
+    latestSavePromiseRef.current = savePromise
+    void savePromise.finally(() => {
+      if (latestSavePromiseRef.current === savePromise) {
+        latestSavePromiseRef.current = null
+      }
+    })
+    return savePromise
+  }, [])
+
+  const persistSpecContent = useCallback(async (content: string) => {
+    saveCountRef.current++
+    setSaving(true)
+    try {
+      await invoke(TauriCommands.SchaltwerkCoreUpdateSpecContent, {
+        name: sessionName,
+        content,
+      })
+      setSavedContent(content)
+      logger.info('[SpecEditor] Spec saved automatically')
+      updateSessionSpecContent(sessionName, content)
+    } catch (e) {
+      logger.error('[SpecEditor] Failed to save spec:', e)
+      setError(String(e))
+      throw e
+    } finally {
+      saveCountRef.current--
+      if (saveCountRef.current === 0) {
+        setSaving(false)
+        markSessionSaved(sessionName)
+      }
+    }
+  }, [markSessionSaved, sessionName, setSavedContent, updateSessionSpecContent])
+
+  const flushPendingSave = useCallback(async () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = null
+    }
+
+    if (latestSavePromiseRef.current) {
+      await latestSavePromiseRef.current
+    }
+
+    if (currentContent !== savedContent) {
+      await trackSavePromise(persistSpecContent(currentContent))
+    }
+  }, [currentContent, persistSpecContent, savedContent, trackSavePromise])
+
   const handleContentChange = (newContent: string) => {
     setCurrentContent(newContent)
 
@@ -217,26 +276,8 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
 
     setSaving(true)
     saveTimeoutRef.current = window.setTimeout(() => {
-      void (async () => {
-        saveCountRef.current++
-        try {
-          await invoke(TauriCommands.SchaltwerkCoreUpdateSpecContent, {
-            name: sessionName,
-            content: newContent
-          })
-          logger.info('[SpecEditor] Spec saved automatically')
-          updateSessionSpecContent(sessionName, newContent)
-        } catch (e) {
-          logger.error('[SpecEditor] Failed to save spec:', e)
-          setError(String(e))
-        } finally {
-          saveCountRef.current--
-          if (saveCountRef.current === 0) {
-            setSaving(false)
-            markSessionSaved(sessionName)
-          }
-        }
-      })()
+      saveTimeoutRef.current = null
+      void trackSavePromise(persistSpecContent(newContent))
     }, 400)
   }
 
@@ -251,19 +292,97 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
     }
   }, [currentContent])
 
+  const specTerminalId = useMemo(() => {
+    const stableSpecId = selectedSession?.info.stable_id ?? sessionName
+    return specOrchestratorTerminalId(stableSpecId)
+  }, [selectedSession?.info.stable_id, sessionName])
+
+  useEffect(() => {
+    if (!allowClarificationControls) {
+      setClarificationAgentReady(false)
+      setClarificationAgentType(null)
+      return
+    }
+
+    setClarificationAgentReady(getTerminalStartState(specTerminalId) === 'started')
+    setClarificationAgentType(getTerminalAgentType(specTerminalId))
+
+    return listenUiEvent(UiEvent.AgentLifecycle, detail => {
+      if (!detail || detail.terminalId !== specTerminalId) return
+
+      if (detail.agentType) {
+        setClarificationAgentType(detail.agentType)
+      }
+
+      if (detail.state === 'ready') {
+        setClarificationAgentReady(true)
+        return
+      }
+
+      if (detail.state === 'spawned' || detail.state === 'failed') {
+        setClarificationAgentReady(false)
+      }
+    })
+  }, [allowClarificationControls, specTerminalId])
+
+  const canClarify = allowClarificationControls && clarificationAgentReady && !clarifying && !resettingAgent
+
   const handleRun = useCallback(async () => {
-    if (!onStart) return
+    if (!canClarify) return
+
     try {
-      setStarting(true)
+      setClarifying(true)
       setError(null)
-      onStart()
+      await flushPendingSave()
+      await invoke(TauriCommands.SchaltwerkCoreSubmitSpecClarificationPrompt, {
+        terminalId: specTerminalId,
+        specName: sessionName,
+        ...(clarificationAgentType ? { agentType: clarificationAgentType } : {}),
+      })
     } catch (e: unknown) {
-      logger.error('[SpecEditor] Failed to start spec:', e)
+      logger.error('[SpecEditor] Failed to submit spec clarification prompt:', e)
       setError(String(e))
     } finally {
-      setStarting(false)
+      setClarifying(false)
     }
-  }, [onStart])
+  }, [canClarify, clarificationAgentType, flushPendingSave, sessionName, specTerminalId])
+
+  const handleResetClarificationAgent = useCallback(async () => {
+    if (!allowClarificationControls || clarifying || resettingAgent) return
+
+    const previousReady = clarificationAgentReady
+    const previousAgentType = clarificationAgentType
+    try {
+      setResettingAgent(true)
+      setClarificationAgentReady(false)
+      setError(null)
+      const nextAgentType = await getSpecClarificationAgentType()
+      await invoke(TauriCommands.SchaltwerkCoreResetSpecOrchestrator, {
+        terminalId: specTerminalId,
+        specName: sessionName,
+        ...(nextAgentType ? { agentType: nextAgentType } : {}),
+      })
+      setClarificationAgentType(nextAgentType)
+      setClarificationAgentReady(true)
+      emitUiEvent(UiEvent.TerminalReset, { kind: 'session', sessionId: sessionName })
+    } catch (e: unknown) {
+      logger.error('[SpecEditor] Failed to reset spec clarification agent:', e)
+      setClarificationAgentReady(previousReady)
+      setClarificationAgentType(previousAgentType)
+      setError(String(e))
+    } finally {
+      setResettingAgent(false)
+    }
+  }, [
+    allowClarificationControls,
+    clarificationAgentReady,
+    clarificationAgentType,
+    clarifying,
+    getSpecClarificationAgentType,
+    resettingAgent,
+    sessionName,
+    specTerminalId,
+  ])
 
   const handleSetStage = useCallback(async (stage: 'draft' | 'clarified') => {
     try {
@@ -419,7 +538,7 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
           void handleFinishReview()
           return
         }
-        if (viewMode !== 'review' && !starting) {
+        if (viewMode !== 'review' && canClarify) {
           e.preventDefault()
           void handleRun()
           return
@@ -442,7 +561,7 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleRun, handleFinishReview, reviewComments.length, starting, keyboardShortcutConfig, platform, disableFocusShortcut, viewMode, sessionName, setViewMode, showCommentForm, handleCancelComment, handleExitReviewMode])
+  }, [canClarify, handleRun, handleFinishReview, reviewComments.length, keyboardShortcutConfig, platform, disableFocusShortcut, viewMode, sessionName, setViewMode, showCommentForm, handleCancelComment, handleExitReviewMode])
 
   if (loading) {
     return (
@@ -542,6 +661,18 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
                   {t.specEditor.markClarified}
                 </button>
               )}
+              {allowClarificationControls && (
+                <button
+                  onClick={() => { void handleResetClarificationAgent() }}
+                  disabled={clarifying || resettingAgent}
+                  className="px-2 py-1 rounded bg-bg-hover hover:bg-bg-hover text-text-primary flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={specText.toolbarButton}
+                  title={t.specEditor.resetClarificationAgent}
+                >
+                  <VscDiscard />
+                  {t.specEditor.resetClarificationAgent}
+                </button>
+              )}
             </>
           ) : (
             <button
@@ -554,20 +685,22 @@ export function SpecEditor({ sessionName, onStart, disableFocusShortcut = false,
               {t.specEditor.exitReview}
             </button>
           )}
-          <button
-            onClick={() => { void handleRun() }}
-            disabled={starting || !onStart}
-            className="px-3 py-1 rounded bg-accent-green hover:bg-[var(--color-accent-green-light)] text-text-primary flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-            style={specText.toolbarButton}
-            title={t.specEditor.refine}
-          >
-            <VscPlay />
-            {starting ? (
-              <AnimatedText text="loading" size="xs" />
-            ) : (
-              t.specEditor.refine
-            )}
-          </button>
+          {allowClarificationControls && (
+            <button
+              onClick={() => { void handleRun() }}
+              disabled={!canClarify}
+              className="px-3 py-1 rounded bg-accent-green hover:bg-[var(--color-accent-green-light)] text-text-primary flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={specText.toolbarButton}
+              title={t.specEditor.refine}
+            >
+              <VscPlay />
+              {clarifying ? (
+                <AnimatedText text="loading" size="xs" />
+              ) : (
+                t.specEditor.refine
+              )}
+            </button>
+          )}
           <button
             onClick={() => { void handleCopy() }}
             disabled={copying || !currentContent}

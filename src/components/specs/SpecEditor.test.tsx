@@ -3,11 +3,15 @@ import { render, waitFor, act, screen, fireEvent } from '@testing-library/react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { specOrchestratorTerminalId } from '../../common/terminalIdentity'
 import type { EnrichedSession } from '../../types/session'
+import { UiEvent, emitUiEvent } from '../../common/uiEvents'
 
 const mockFocusEnd = vi.fn()
 const updateSessionSpecContentMock = vi.hoisted(() => vi.fn())
 const setSelectionMock = vi.hoisted(() => vi.fn())
 const getOrchestratorAgentTypeMock = vi.hoisted(() => vi.fn())
+const getSpecClarificationAgentTypeMock = vi.hoisted(() => vi.fn())
+const getTerminalStartStateMock = vi.hoisted(() => vi.fn(() => 'started'))
+const getTerminalAgentTypeMock = vi.hoisted(() => vi.fn(() => 'claude'))
 
 interface SpecContentMock {
   content: string
@@ -57,8 +61,22 @@ vi.mock('../../hooks/useSelection', () => ({
 vi.mock('../../hooks/useClaudeSession', () => ({
   useClaudeSession: () => ({
     getOrchestratorAgentType: getOrchestratorAgentTypeMock,
+    getSpecClarificationAgentType: getSpecClarificationAgentTypeMock,
   }),
 }))
+
+vi.mock('../../common/terminalStartState', () => ({
+  getTerminalStartState: getTerminalStartStateMock,
+  getTerminalAgentType: getTerminalAgentTypeMock,
+}))
+
+vi.mock('../../common/uiEvents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../common/uiEvents')>()
+  return {
+    ...actual,
+    emitUiEvent: vi.fn(),
+  }
+})
 
 vi.mock('./SpecReviewEditor', () => ({
   SpecReviewEditor: ({
@@ -91,7 +109,16 @@ vi.mock('./MarkdownEditor', async () => {
       if (ref && typeof ref === 'object' && 'current' in ref) {
         ref.current = { focusEnd: mockFocusEnd }
       }
-      return <div data-testid="markdown-editor">{props.value}</div>
+      return (
+        <div>
+          <textarea
+            data-testid="markdown-editor-input"
+            value={props.value}
+            onChange={(event) => props.onChange(event.target.value)}
+          />
+          <div data-testid="markdown-editor">{props.value}</div>
+        </div>
+      )
     })
   }
 })
@@ -129,6 +156,12 @@ describe('SpecEditor keyboard shortcuts', () => {
     setSelectionMock.mockResolvedValue(undefined)
     getOrchestratorAgentTypeMock.mockReset()
     getOrchestratorAgentTypeMock.mockResolvedValue('claude')
+    getSpecClarificationAgentTypeMock.mockReset()
+    getSpecClarificationAgentTypeMock.mockResolvedValue('claude')
+    getTerminalStartStateMock.mockReset()
+    getTerminalStartStateMock.mockReturnValue('started')
+    getTerminalAgentTypeMock.mockReset()
+    getTerminalAgentTypeMock.mockReturnValue('claude')
 
     vi.mocked(invoke).mockImplementation(async (cmd) => {
       if (cmd === TauriCommands.SchaltwerkCoreGetSessionAgentContent) {
@@ -172,20 +205,259 @@ describe('SpecEditor keyboard shortcuts', () => {
     expect(screen.queryByRole('button', { name: 'Refine' })).toBeNull()
   })
 
-  it('renders a Clarify action and calls onStart when clicked', async () => {
-    const onStart = vi.fn()
+  it('hides clarification controls outside the selected spec terminal layout', async () => {
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="plain-spec-editor" />
+      </TestProviders>
+    )
+
+    await screen.findByText('draft')
+    expect(screen.queryByRole('button', { name: /clarify/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /reset clarification agent/i })).toBeNull()
+  })
+
+  it('submits the clarification prompt to the spec terminal when Clarify is clicked', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'clarify-spec',
+          stable_id: 'clarify-spec-stable-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
 
     render(
       <TestProviders>
-        <SpecEditor sessionName="clarify-spec" onStart={onStart} />
+        <SpecEditor sessionName="clarify-spec" allowClarificationControls />
       </TestProviders>
     )
 
     const button = await screen.findByRole('button', { name: /clarify/i })
     fireEvent.click(button)
 
-    expect(onStart).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole('button', { name: /run agent/i })).toBeNull()
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        TauriCommands.SchaltwerkCoreSubmitSpecClarificationPrompt,
+        {
+          agentType: 'claude',
+          terminalId: specOrchestratorTerminalId('clarify-spec-stable-id'),
+          specName: 'clarify-spec',
+        }
+      )
+    })
+  })
+
+  it('flushes pending spec edits before submitting Clarify', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'clarify-save',
+          stable_id: 'clarify-save-stable-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="clarify-save" allowClarificationControls />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByTitle('Edit markdown'))
+    fireEvent.change(screen.getByTestId('markdown-editor-input'), {
+      target: { value: 'Updated draft for clarify' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /clarify/i }))
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreUpdateSpecContent, {
+        name: 'clarify-save',
+        content: 'Updated draft for clarify',
+      })
+      expect(invoke).toHaveBeenCalledWith(
+        TauriCommands.SchaltwerkCoreSubmitSpecClarificationPrompt,
+        {
+          terminalId: specOrchestratorTerminalId('clarify-save-stable-id'),
+          specName: 'clarify-save',
+          agentType: 'claude',
+        }
+      )
+    })
+
+    const commandCalls = vi.mocked(invoke).mock.calls.map(([command]) => command)
+    const saveCallIndex = commandCalls.indexOf(TauriCommands.SchaltwerkCoreUpdateSpecContent)
+    const clarifyCallIndex = commandCalls.indexOf(TauriCommands.SchaltwerkCoreSubmitSpecClarificationPrompt)
+
+    expect(saveCallIndex).toBeGreaterThanOrEqual(0)
+    expect(clarifyCallIndex).toBeGreaterThan(saveCallIndex)
+  })
+
+  it('keeps Clarify disabled until the spec clarification agent reports ready', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'clarify-gated',
+          stable_id: 'clarify-gated-stable-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+    getTerminalStartStateMock.mockReturnValue('starting')
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="clarify-gated" allowClarificationControls />
+      </TestProviders>
+    )
+
+    const button = await screen.findByRole('button', { name: /clarify/i })
+    expect(button).toBeDisabled()
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(String(UiEvent.AgentLifecycle), {
+        detail: {
+          terminalId: specOrchestratorTerminalId('clarify-gated-stable-id'),
+          sessionName: 'clarify-gated',
+          agentType: 'claude',
+          state: 'ready',
+        },
+      }))
+    })
+
+    await waitFor(() => {
+      expect(button).not.toBeDisabled()
+    })
+  })
+
+  it('does not run the Clarify shortcut until the spec clarification agent is ready', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'clarify-shortcut',
+          stable_id: 'clarify-shortcut-stable-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+    getTerminalStartStateMock.mockReturnValue('starting')
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="clarify-shortcut" allowClarificationControls />
+      </TestProviders>
+    )
+
+    await pressKey('Enter', { metaKey: true })
+    expect(invoke).not.toHaveBeenCalledWith(
+      TauriCommands.SchaltwerkCoreSubmitSpecClarificationPrompt,
+      expect.anything()
+    )
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(String(UiEvent.AgentLifecycle), {
+        detail: {
+          terminalId: specOrchestratorTerminalId('clarify-shortcut-stable-id'),
+          sessionName: 'clarify-shortcut',
+          agentType: 'claude',
+          state: 'ready',
+        },
+      }))
+    })
+
+    await pressKey('Enter', { metaKey: true })
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        TauriCommands.SchaltwerkCoreSubmitSpecClarificationPrompt,
+        {
+          terminalId: specOrchestratorTerminalId('clarify-shortcut-stable-id'),
+          specName: 'clarify-shortcut',
+          agentType: 'claude',
+        }
+      )
+    })
+  })
+
+  it('resets the clarification agent from the editor toolbar', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'clarify-reset',
+          stable_id: 'clarify-reset-stable-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="clarify-reset" allowClarificationControls />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /reset clarification agent/i }))
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        TauriCommands.SchaltwerkCoreResetSpecOrchestrator,
+        {
+          terminalId: specOrchestratorTerminalId('clarify-reset-stable-id'),
+          specName: 'clarify-reset',
+          agentType: 'claude',
+        }
+      )
+    })
+
+    expect(emitUiEvent).toHaveBeenCalledWith(UiEvent.TerminalReset, {
+      kind: 'session',
+      sessionId: 'clarify-reset',
+    })
+
+    expect(screen.getByRole('button', { name: /clarify/i })).not.toBeDisabled()
+    expect(getSpecClarificationAgentTypeMock).toHaveBeenCalled()
   })
 
   it('marks a draft spec clarified from the editor', async () => {

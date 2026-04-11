@@ -613,7 +613,7 @@ describe('Terminal', () => {
     })
   })
 
-  it('does not auto-start the spec clarification agent when a spec terminal mounts', async () => {
+  it('auto-starts the spec clarification agent when a spec terminal mounts', async () => {
     renderTerminal({
       terminalId: 'spec-clarify-top',
       sessionName: 'spec-clarify',
@@ -627,7 +627,11 @@ describe('Terminal', () => {
     })
 
     await waitFor(() => {
-      expect(startSpecOrchestratorTop).not.toHaveBeenCalled()
+      expect(startSpecOrchestratorTop).toHaveBeenCalledWith(expect.objectContaining({
+        terminalId: 'spec-clarify-top',
+        specName: 'spec-clarify',
+        agentType: 'claude',
+      }))
     })
   })
 

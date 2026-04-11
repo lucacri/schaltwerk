@@ -919,6 +919,7 @@ export interface Translations {
     comment: string
     exitReviewMode: string
     exitReview: string
+    resetClarificationAgent: string
     runAgent: string
     runAgentButton: string
     copyContent: string

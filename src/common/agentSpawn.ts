@@ -139,7 +139,7 @@ export async function startSessionTop(params: {
     logger.info(`[AGENT_LAUNCH_TRACE] startSessionTop skipped - already inflight or started: ${topId}`)
     return
   }
-  markTerminalStarting(topId)
+  markTerminalStarting(topId, agentType)
   try {
     const { cols, rows } = computeSpawnSize({ topId, measured, projectOrchestratorId })
     const timeoutMs = determineStartTimeoutMs(agentType)
@@ -208,7 +208,7 @@ export async function startOrchestratorTop(params: {
   const timeoutMs = determineStartTimeoutMs(agentType)
   const command = TauriCommands.SchaltwerkCoreStartClaudeOrchestrator
 
-  markTerminalStarting(terminalId)
+  markTerminalStarting(terminalId, agentType)
   const spawnedAt = Date.now()
   recordAgentLifecycle({ ...lifecycleBase, state: 'spawned', whenMs: spawnedAt })
   emitUiEvent(UiEvent.AgentLifecycle, { ...lifecycleBase, state: 'spawned', occurredAtMs: spawnedAt })
@@ -282,7 +282,7 @@ export async function startSpecOrchestratorTop(params: {
   const timeoutMs = determineStartTimeoutMs(agentType)
   const command = TauriCommands.SchaltwerkCoreStartSpecOrchestrator
 
-  markTerminalStarting(terminalId)
+  markTerminalStarting(terminalId, agentType)
   const spawnedAt = Date.now()
   recordAgentLifecycle({ ...lifecycleBase, state: 'spawned', whenMs: spawnedAt })
   emitUiEvent(UiEvent.AgentLifecycle, { ...lifecycleBase, state: 'spawned', occurredAtMs: spawnedAt })

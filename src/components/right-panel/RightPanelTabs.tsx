@@ -563,11 +563,6 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
                 onOpenPicker={() => setShowSpecPicker(true)}
                 showPicker={showSpecPicker}
                 onPickerClose={() => setShowSpecPicker(false)}
-                onStart={(specId) => {
-                  logger.info('[RightPanelTabs] Starting spec agent:', specId)
-                  closeSpecTab(specId)
-                  emitUiEvent(UiEvent.StartAgentFromSpec, { name: specId })
-                }}
                 onReviewModeChange={handleSpecReviewModeChange}
               />
             ) : activeTab === 'agent' ? (

@@ -220,7 +220,7 @@ describe('agentSpawn', () => {
         topId: 'session-test-top'
       })
 
-      expect(markTerminalStarting).toHaveBeenCalledWith('session-test-top')
+      expect(markTerminalStarting).toHaveBeenCalledWith('session-test-top', 'claude')
       expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreStartSessionAgent, {
         sessionName: 'test-session',
         cols: 118, // 120 - 2

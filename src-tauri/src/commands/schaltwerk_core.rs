@@ -2608,6 +2608,25 @@ pub async fn schaltwerk_core_start_spec_orchestrator(
     rows: Option<u16>,
     agent_type: Option<String>,
 ) -> Result<String, String> {
+    start_spec_orchestrator_impl(
+        Some(app),
+        terminal_id,
+        spec_name,
+        cols,
+        rows,
+        agent_type,
+    )
+    .await
+}
+
+pub async fn start_spec_orchestrator_impl(
+    app: Option<tauri::AppHandle>,
+    terminal_id: String,
+    spec_name: String,
+    cols: Option<u16>,
+    rows: Option<u16>,
+    agent_type: Option<String>,
+) -> Result<String, String> {
     let core = get_core_read().await.map_err(|e| {
         log::error!("Failed to get schaltwerk_core for spec orchestrator: {e}");
         format!("Failed to initialize spec orchestrator: {e}")
@@ -2627,18 +2646,21 @@ pub async fn schaltwerk_core_start_spec_orchestrator(
         .map_err(|e| format!("Failed to load spec '{spec_name}': {e}"))?;
     let binary_paths = load_cached_agent_binary_paths().await;
 
-    let initial_prompt = if spec.clarification_started {
-        None
+    let command_spec = if spec.clarification_started {
+        manager
+            .start_agent_in_orchestrator(&binary_paths, Some(agent_label), None)
+            .map_err(|e| {
+                log::error!("Failed to build resumable spec orchestrator command: {e}");
+                format!("Failed to resume {agent_label} for spec '{spec_name}': {e}")
+            })?
     } else {
-        Some(build_spec_clarification_prompt(&spec))
+        manager
+            .start_fresh_agent_in_orchestrator(&binary_paths, Some(agent_label))
+            .map_err(|e| {
+                log::error!("Failed to build fresh spec orchestrator command: {e}");
+                format!("Failed to start fresh {agent_label} for spec '{spec_name}': {e}")
+            })?
     };
-
-    let command_spec = manager
-        .start_agent_in_orchestrator(&binary_paths, Some(agent_label), initial_prompt.as_deref())
-        .map_err(|e| {
-            log::error!("Failed to build spec orchestrator command: {e}");
-            format!("Failed to start {agent_label} for spec '{spec_name}': {e}")
-        })?;
 
     drop(core);
 
@@ -2655,15 +2677,9 @@ pub async fn schaltwerk_core_start_spec_orchestrator(
 
     match launch_result {
         Ok(_) => {
-            if !spec.clarification_started
-                && let Err(err) = db.update_spec_clarification_started(&spec.id, true)
-            {
-                log::warn!(
-                    "Failed to persist clarification_started for spec '{}': {err}",
-                    spec.name
-                );
+            if let Some(app_handle) = app.as_ref() {
+                emit_terminal_agent_started(app_handle, &terminal_id, Some(&spec.name));
             }
-            emit_terminal_agent_started(&app, &terminal_id, Some(&spec.name));
             Ok("spec-orchestrator-started".to_string())
         }
         Err(err) => {
@@ -2680,6 +2696,125 @@ pub async fn schaltwerk_core_start_spec_orchestrator(
             Err(err)
         }
     }
+}
+
+fn request_spec_sessions_refresh(app: Option<&tauri::AppHandle>) {
+    if let Some(app_handle) = app {
+        events::request_sessions_refreshed(app_handle, events::SessionsRefreshReason::SpecSync);
+    }
+}
+
+pub async fn submit_spec_clarification_prompt_impl(
+    app: Option<tauri::AppHandle>,
+    terminal_id: String,
+    spec_name: String,
+    agent_type: Option<String>,
+) -> Result<String, String> {
+    let core = get_core_read().await.map_err(|e| {
+        log::error!("Failed to get schaltwerk_core for spec clarification submit: {e}");
+        format!("Failed to initialize spec orchestrator: {e}")
+    })?;
+
+    let db = core.db.clone();
+    let resolved_agent_type = resolve_spec_clarification_agent_type(&db, agent_type);
+    let manager = core.session_manager();
+    let spec = manager
+        .get_spec(&spec_name)
+        .map_err(|e| format!("Failed to load spec '{spec_name}': {e}"))?;
+
+    drop(core);
+
+    let prompt = build_spec_clarification_prompt(&spec);
+    let (use_bracketed_paste, needs_delayed_submit) =
+        lucode::domains::terminal::submission::submission_options_for_agent(Some(
+            resolved_agent_type.as_str(),
+        ));
+
+    let terminal_manager = get_terminal_manager().await?;
+    let terminal_exists = terminal_manager
+        .terminal_exists(&terminal_id)
+        .await
+        .map_err(|err| format!("Failed to verify terminal {terminal_id}: {err}"))?;
+
+    if !terminal_exists {
+        return Err(format!(
+            "Clarification terminal {terminal_id} is not running for spec '{spec_name}'"
+        ));
+    }
+
+    terminal_manager
+        .paste_and_submit_terminal(
+            terminal_id.clone(),
+            prompt.into_bytes(),
+            use_bracketed_paste,
+            needs_delayed_submit,
+        )
+        .await
+        .map_err(|err| format!("Failed to submit clarification prompt to {terminal_id}: {err}"))?;
+
+    if !spec.clarification_started {
+        db.update_spec_clarification_started(&spec.id, true)
+            .map_err(|e| format!("Failed to update clarification_started for '{spec_name}': {e}"))?;
+        request_spec_sessions_refresh(app.as_ref());
+    }
+
+    Ok("spec-clarification-prompt-submitted".to_string())
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_submit_spec_clarification_prompt(
+    app: tauri::AppHandle,
+    terminal_id: String,
+    spec_name: String,
+    agent_type: Option<String>,
+) -> Result<String, String> {
+    submit_spec_clarification_prompt_impl(Some(app), terminal_id, spec_name, agent_type).await
+}
+
+pub async fn reset_spec_orchestrator_impl(
+    app: Option<tauri::AppHandle>,
+    terminal_id: String,
+    spec_name: String,
+    cols: Option<u16>,
+    rows: Option<u16>,
+    agent_type: Option<String>,
+) -> Result<String, String> {
+    log::info!("Resetting spec orchestrator '{spec_name}' for terminal: {terminal_id}");
+
+    let terminal_manager = get_terminal_manager().await?;
+    if let Err(err) = terminal_manager.close_terminal(terminal_id.clone()).await {
+        log::warn!("Failed to close spec orchestrator terminal {terminal_id}: {err}");
+    }
+
+    let core = get_core_read().await.map_err(|e| {
+        log::error!("Failed to get schaltwerk_core for spec orchestrator reset: {e}");
+        format!("Failed to initialize spec orchestrator: {e}")
+    })?;
+    let db = core.db.clone();
+    let session_manager = core.session_manager();
+    let spec = session_manager
+        .get_spec(&spec_name)
+        .map_err(|e| format!("Failed to load spec '{spec_name}': {e}"))?;
+
+    drop(core);
+
+    db.update_spec_clarification_started(&spec.id, false)
+        .map_err(|e| format!("Failed to reset clarification_started for '{spec_name}': {e}"))?;
+    request_spec_sessions_refresh(app.as_ref());
+
+    start_spec_orchestrator_impl(app, terminal_id, spec_name, cols, rows, agent_type).await
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_reset_spec_orchestrator(
+    app: tauri::AppHandle,
+    terminal_id: String,
+    spec_name: String,
+    cols: Option<u16>,
+    rows: Option<u16>,
+    agent_type: Option<String>,
+) -> Result<String, String> {
+    reset_spec_orchestrator_impl(Some(app), terminal_id, spec_name, cols, rows, agent_type).await
 }
 
 #[tauri::command]

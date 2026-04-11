@@ -463,19 +463,6 @@ describe('SettingsModal initial tab handling', () => {
 
 }) 
 
-describe('SettingsModal version settings', () => {
-  beforeEach(() => {
-    useSettingsMock.mockReset()
-    useSettingsMock.mockReturnValue(createDefaultUseSettingsValue())
-    useSessionsMock.mockReset()
-    useSessionsMock.mockReturnValue(createDefaultUseSessionsValue())
-    invokeMock.mockClear()
-    invokeMock.mockImplementation(baseInvokeImplementation)
-    requestDockBounceMock.mockReset()
-  })
-
-})
-
 describe('SettingsModal appearance settings', () => {
   beforeEach(() => {
     useSettingsMock.mockReset()
