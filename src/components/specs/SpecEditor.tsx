@@ -27,7 +27,7 @@ import {
 } from '../../store/atoms/specEditor'
 import { EpicSelect } from '../shared/EpicSelect'
 import { SpecReviewEditor } from './SpecReviewEditor'
-import { useSpecLineSelection } from '../../hooks/useSpecLineSelection'
+import { useSpecLineSelection, type SpecLineSelection } from '../../hooks/useSpecLineSelection'
 import { useClaudeSession } from '../../hooks/useClaudeSession'
 import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
 import { getPasteSubmissionOptions } from '../../common/terminalPaste'
@@ -120,9 +120,11 @@ export function SpecEditor({
   const [reviewComments, setReviewComments] = useState<SpecReviewComment[]>([])
   const [showCommentForm, setShowCommentForm] = useState(false)
   const [commentText, setCommentText] = useState('')
-  const [isDraggingSelection, setIsDraggingSelection] = useState(false)
   const [commentFormPosition, setCommentFormPosition] = useState<{ x: number; y: number } | null>(null)
   const commentTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const isDraggingSelectionRef = useRef(false)
+  const dragSelectionStartRef = useRef<SpecLineSelection | null>(null)
+  const dragStartedInsideSelectionRef = useRef(false)
   const lineSelection = useSpecLineSelection()
   const { getOrchestratorAgentType, getSpecClarificationAgentType } = useClaudeSession()
   const { getConfirmationMessage } = useReviewComments()
@@ -397,6 +399,9 @@ export function SpecEditor({
   const handleEnterReviewMode = useCallback(() => {
     setReviewComments([])
     lineSelection.clearSelection()
+    isDraggingSelectionRef.current = false
+    dragSelectionStartRef.current = null
+    dragStartedInsideSelectionRef.current = false
     setShowCommentForm(false)
     setViewMode('review')
     onReviewModeChange?.(true)
@@ -406,6 +411,9 @@ export function SpecEditor({
   const handleExitReviewMode = useCallback(() => {
     setReviewComments([])
     lineSelection.clearSelection()
+    isDraggingSelectionRef.current = false
+    dragSelectionStartRef.current = null
+    dragStartedInsideSelectionRef.current = false
     setShowCommentForm(false)
     setViewMode('preview')
     onReviewModeChange?.(false)
@@ -413,23 +421,44 @@ export function SpecEditor({
   }, [lineSelection, setViewMode, onReviewModeChange])
 
   const handleLineClick = useCallback((lineNum: number, specId: string, event?: React.MouseEvent) => {
-    setIsDraggingSelection(true)
+    const selectionAtDragStart = lineSelection.getSelection()
+    dragSelectionStartRef.current = selectionAtDragStart
+    dragStartedInsideSelectionRef.current = Boolean(
+      selectionAtDragStart &&
+      selectionAtDragStart.specId === specId &&
+      lineNum >= selectionAtDragStart.startLine &&
+      lineNum <= selectionAtDragStart.endLine
+    )
+    isDraggingSelectionRef.current = true
     lineSelection.handleLineClick(lineNum, specId, event)
   }, [lineSelection])
 
   const handleLineMouseEnter = useCallback((lineNum: number) => {
-    if (isDraggingSelection && lineSelection.selection) {
+    if (!isDraggingSelectionRef.current) {
+      return
+    }
+
+    if (!lineSelection.getSelection() && dragStartedInsideSelectionRef.current && dragSelectionStartRef.current) {
+      lineSelection.setSelectionDirect(dragSelectionStartRef.current)
+    }
+
+    if (lineSelection.getSelection()) {
       lineSelection.extendSelection(lineNum, sessionName)
     }
-  }, [isDraggingSelection, lineSelection, sessionName])
+  }, [lineSelection, sessionName])
 
   const handleLineMouseUp = useCallback((event: MouseEvent) => {
-    setIsDraggingSelection(false)
-    if (lineSelection.selection) {
+    isDraggingSelectionRef.current = false
+    const currentSelection = lineSelection.getSelection()
+
+    if (currentSelection) {
       setCommentFormPosition({ x: event.clientX, y: event.clientY })
       setShowCommentForm(true)
     }
-  }, [lineSelection.selection])
+
+    dragSelectionStartRef.current = null
+    dragStartedInsideSelectionRef.current = false
+  }, [lineSelection])
 
   const handleSubmitComment = useCallback(() => {
     if (!lineSelection.selection || !commentText.trim()) return
@@ -453,6 +482,9 @@ export function SpecEditor({
 
     setReviewComments(prev => [...prev, newComment])
     lineSelection.clearSelection()
+    isDraggingSelectionRef.current = false
+    dragSelectionStartRef.current = null
+    dragStartedInsideSelectionRef.current = false
     setShowCommentForm(false)
     setCommentFormPosition(null)
     setCommentText('')
@@ -462,6 +494,9 @@ export function SpecEditor({
   
   const handleCancelComment = useCallback(() => {
     lineSelection.clearSelection()
+    isDraggingSelectionRef.current = false
+    dragSelectionStartRef.current = null
+    dragStartedInsideSelectionRef.current = false
     setShowCommentForm(false)
     setCommentFormPosition(null)
     setCommentText('')

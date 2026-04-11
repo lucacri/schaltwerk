@@ -78,29 +78,75 @@ vi.mock('../../common/uiEvents', async (importOriginal) => {
   }
 })
 
-vi.mock('./SpecReviewEditor', () => ({
-  SpecReviewEditor: ({
-    specId,
-    selection,
-    onLineClick,
-    onLineMouseUp,
-  }: {
-    specId: string
-    selection: { startLine: number; endLine: number; specId: string } | null
-    onLineClick: (lineNum: number, specId: string) => void
-    onLineMouseUp?: (event: MouseEvent) => void
-  }) => (
-    <div data-testid="spec-review-editor">
-      <button onClick={() => onLineClick(2, specId)}>Select line</button>
-      <button
-        disabled={!selection}
-        onClick={() => onLineMouseUp?.(new MouseEvent('mouseup', { clientX: 24, clientY: 48 }))}
-      >
-        Open comment form
-      </button>
-    </div>
-  ),
-}))
+vi.mock('./SpecReviewEditor', async () => {
+  const React = await import('react')
+
+  return {
+    SpecReviewEditor: ({
+      specId,
+      selection,
+      onLineClick,
+      onLineMouseEnter,
+      onLineMouseUp,
+    }: {
+      specId: string
+      selection: { startLine: number; endLine: number; specId: string } | null
+      onLineClick: (lineNum: number, specId: string, event?: React.MouseEvent) => void
+      onLineMouseEnter?: (lineNum: number) => void
+      onLineMouseUp?: (event: MouseEvent) => void
+    }) => {
+      const onLineClickRef = React.useRef(onLineClick)
+      const onLineMouseEnterRef = React.useRef(onLineMouseEnter)
+      const onLineMouseUpRef = React.useRef(onLineMouseUp)
+
+      React.useEffect(() => {
+        onLineClickRef.current = onLineClick
+        onLineMouseEnterRef.current = onLineMouseEnter
+        onLineMouseUpRef.current = onLineMouseUp
+      }, [onLineClick, onLineMouseEnter, onLineMouseUp])
+
+      return (
+        <div data-testid="spec-review-editor">
+          <button onClick={() => onLineClick(2, specId)}>Select line</button>
+          <button
+            disabled={!selection}
+            onClick={() => onLineMouseUp?.(new MouseEvent('mouseup', { clientX: 24, clientY: 48 }))}
+          >
+            Open comment form
+          </button>
+          <button
+            onClick={() => {
+              onLineClickRef.current(2, specId)
+              onLineMouseUpRef.current?.(new MouseEvent('mouseup', { clientX: 24, clientY: 48 }))
+            }}
+          >
+            Select line and open comment form
+          </button>
+          <button
+            onClick={() => {
+              onLineClickRef.current(2, specId)
+              onLineMouseEnterRef.current?.(4)
+              onLineMouseUpRef.current?.(new MouseEvent('mouseup', { clientX: 24, clientY: 48 }))
+            }}
+          >
+            Drag select and open comment form
+          </button>
+          <button
+            onClick={() => {
+              onLineClickRef.current(2, specId)
+              onLineClickRef.current(4, specId, { shiftKey: true } as React.MouseEvent)
+              onLineClickRef.current(3, specId)
+              onLineMouseEnterRef.current?.(5)
+              onLineMouseUpRef.current?.(new MouseEvent('mouseup', { clientX: 24, clientY: 48 }))
+            }}
+          >
+            Drag existing selection and open comment form
+          </button>
+        </div>
+      )
+    },
+  }
+})
 
 vi.mock('./MarkdownEditor', async () => {
   const React = await import('react')
@@ -655,5 +701,65 @@ describe('SpecEditor keyboard shortcuts', () => {
     })
 
     expect(getOrchestratorAgentTypeMock).not.toHaveBeenCalled()
+  })
+
+  it('opens the comment form when selection and mouseup happen in the same interaction', async () => {
+    specContentMock = {
+      content: 'Line one\nLine two\nLine three',
+      displayName: 'Review Spec',
+      hasData: true,
+    }
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="review-single-line" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select line and open comment form' }))
+
+    expect(await screen.findByPlaceholderText('Write your comment...')).toBeInTheDocument()
+    expect(screen.getByText('Line 2')).toBeInTheDocument()
+  })
+
+  it('opens the comment form after dragging across multiple lines in one interaction', async () => {
+    specContentMock = {
+      content: 'Line one\nLine two\nLine three\nLine four',
+      displayName: 'Review Spec',
+      hasData: true,
+    }
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="review-range" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Drag select and open comment form' }))
+
+    expect(await screen.findByPlaceholderText('Write your comment...')).toBeInTheDocument()
+    expect(screen.getByText('Lines 2-4')).toBeInTheDocument()
+  })
+
+  it('keeps extending an existing selection when dragging starts inside the selected range', async () => {
+    specContentMock = {
+      content: 'Line one\nLine two\nLine three\nLine four\nLine five',
+      displayName: 'Review Spec',
+      hasData: true,
+    }
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="review-existing-selection" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Drag existing selection and open comment form' }))
+
+    expect(await screen.findByPlaceholderText('Write your comment...')).toBeInTheDocument()
+    expect(screen.getByText('Lines 2-5')).toBeInTheDocument()
   })
 })
