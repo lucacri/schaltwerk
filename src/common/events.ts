@@ -29,7 +29,7 @@ export enum SchaltEvent {
   GitLabStatusChanged = 'schaltwerk:gitlab-status-changed',
   ForgeStatusChanged = 'schaltwerk:forge-status-changed',
   ForgeConnectionIssue = 'schaltwerk:forge-connection-issue',
-  AppUpdateResult = 'schaltwerk:app-update-result',
+  NewerBuildAvailable = 'schaltwerk:newer-build-available',
   DevBackendError = 'schaltwerk:dev-backend-error',
   SetupScriptRequested = 'schaltwerk:setup-script-request',
   CloneProgress = 'schaltwerk:clone-progress',
@@ -153,18 +153,9 @@ export interface GitHubPrPayload {
   url: string
 }
 
-export type UpdateResultStatus = 'updated' | 'upToDate' | 'error' | 'busy'
-export type UpdateInitiator = 'auto' | 'manual'
-export type UpdateErrorKind = 'network' | 'permission' | 'signature' | 'unknown'
-
-export interface AppUpdateResultPayload {
-  status: UpdateResultStatus
-  initiatedBy: UpdateInitiator
-  currentVersion: string
-  newVersion?: string
-  notes?: string | null
-  errorKind?: UpdateErrorKind
-  errorMessage?: string
+export interface NewerBuildAvailablePayload {
+  runningVersion: string
+  installedVersion: string
 }
 
 export interface DevBackendErrorPayload {
@@ -302,7 +293,7 @@ export type EventPayloadMap = {
   [SchaltEvent.GitLabStatusChanged]: GitLabStatusPayload
   [SchaltEvent.ForgeStatusChanged]: ForgeStatusPayload
   [SchaltEvent.ForgeConnectionIssue]: ForgeConnectionIssuePayload
-  [SchaltEvent.AppUpdateResult]: AppUpdateResultPayload
+  [SchaltEvent.NewerBuildAvailable]: NewerBuildAvailablePayload
   [SchaltEvent.DevBackendError]: DevBackendErrorPayload
   [SchaltEvent.SetupScriptRequested]: SetupScriptRequestPayload
   [SchaltEvent.CloneProgress]: CloneProgressPayload

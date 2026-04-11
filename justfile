@@ -18,6 +18,31 @@
 
 pm := "node scripts/package-manager.mjs"
 
+# Stamp a calver version (YYYY.MDD.Hmm) into all version files for install builds.
+# Saves backups so _restore-version can put them back even with uncommitted changes.
+_stamp-calver:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cp src-tauri/tauri.conf.json src-tauri/tauri.conf.json.bak
+    cp src-tauri/Cargo.toml src-tauri/Cargo.toml.bak
+    cp package.json package.json.bak
+    YEAR=$(date +%Y)
+    MONTH_DAY=$(date +%-m%d)
+    HOUR_MIN=$(date +%-H%M)
+    VERSION="${YEAR}.${MONTH_DAY}.${HOUR_MIN}"
+    echo "Stamping calver: $VERSION"
+    sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.json
+    sed -i '' "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
+    node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version='${VERSION}';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');"
+
+# Restore version files from backups created by _stamp-calver
+_restore-version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for f in src-tauri/tauri.conf.json src-tauri/Cargo.toml package.json; do
+        if [ -f "${f}.bak" ]; then mv "${f}.bak" "$f"; fi
+    done
+
 # Clear all caches (build and application)
 clear:
     rm -rf node_modules/.vite dist dist-ssr src-tauri/target/debug/incremental src-tauri/target/debug/deps src-tauri/target/debug/build
@@ -26,89 +51,6 @@ clear:
     rm -rf ~/Library/Caches/lucode* ~/Library/WebKit/lucode* /tmp/lucode* 2>/dev/null || true
     pkill -f "lucode" || true
     rm -rf .parcel-cache .turbo
-
-# Release a new version (automatically bumps version, commits, tags, and pushes)
-release version="patch":
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    echo "Starting release process..."
-
-    # Get current version from tauri.conf.json
-    CURRENT_VERSION=$(grep '"version"' src-tauri/tauri.conf.json | head -1 | sed 's/.*"version": "\(.*\)".*/\1/')
-    echo "Current version: $CURRENT_VERSION"
-
-    # Calculate new version based on argument (patch, minor, major, or specific version)
-    if [[ "{{version}}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        NEW_VERSION="{{version}}"
-    else
-        IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-        case "{{version}}" in
-            major)
-                NEW_VERSION="$((MAJOR + 1)).0.0"
-                ;;
-            minor)
-                NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
-                ;;
-            patch|*)
-                NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
-                ;;
-        esac
-    fi
-
-    echo "New version: $NEW_VERSION"
-
-    # Update version in tauri.conf.json
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" src-tauri/tauri.conf.json
-    else
-        sed -i "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" src-tauri/tauri.conf.json
-    fi
-
-    # Update version in Cargo.toml
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" src-tauri/Cargo.toml
-    else
-        sed -i "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" src-tauri/Cargo.toml
-    fi
-
-    # Update version in package.json
-    NEW_VERSION="$NEW_VERSION" node <<'NODE'
-    const fs = require('fs');
-    const path = 'package.json';
-    const version = process.env.NEW_VERSION;
-    if (!version) {
-        throw new Error('Missing NEW_VERSION environment variable');
-    }
-    const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
-    pkg.version = version;
-    fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
-    NODE
-
-    # Update Cargo.lock
-    cd src-tauri && cargo update -p lucode && cd ..
-
-    # Commit version bump
-    git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
-    git commit -m "chore: bump version to $NEW_VERSION"
-
-    # Create and push tag
-    git tag "v$NEW_VERSION"
-
-    echo "Pushing to remote..."
-    git push origin HEAD
-    git push origin "v$NEW_VERSION"
-
-    echo "Release v$NEW_VERSION created successfully!"
-    echo ""
-    echo "GitHub Actions will now:"
-    echo "  - Build universal macOS binary"
-    echo "  - Build Linux DEB, RPM, and AppImage packages"
-    echo "  - Create GitHub release"
-    echo "  - Update Homebrew tap"
-    echo ""
-    echo "Monitor progress at:"
-    echo "  https://github.com/lucacri/lucode/actions"
 
 # Setup dependencies for development
 setup:
@@ -133,6 +75,9 @@ install:
     set -euo pipefail
 
     echo "Building Lucode for macOS..."
+
+    just _stamp-calver
+    trap 'just _restore-version' EXIT
 
     # Check if node_modules exists, if not run setup first
     if [ ! -d "node_modules" ]; then
@@ -229,6 +174,9 @@ install-fast:
     set -euo pipefail
 
     echo "Building Lucode for macOS (fast mode: thin LTO)..."
+
+    just _stamp-calver
+    trap 'just _restore-version' EXIT
 
     # Check if node_modules exists, if not run setup first
     if [ ! -d "node_modules" ]; then

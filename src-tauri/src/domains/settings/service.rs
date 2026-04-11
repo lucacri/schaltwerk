@@ -403,15 +403,6 @@ impl SettingsService {
         self.save()
     }
 
-    pub fn get_auto_update_enabled(&self) -> bool {
-        self.settings.updater.auto_update_enabled
-    }
-
-    pub fn set_auto_update_enabled(&mut self, enabled: bool) -> Result<(), SettingsServiceError> {
-        self.settings.updater.auto_update_enabled = enabled;
-        self.save()
-    }
-
     pub fn get_dev_error_toasts_enabled(&self) -> bool {
         self.settings.dev_error_toasts_enabled
     }
@@ -665,28 +656,6 @@ mod tests {
             *self.state.lock().unwrap() = settings.clone();
             Ok(())
         }
-    }
-
-    #[test]
-    fn auto_update_defaults_to_enabled() {
-        let repo = InMemoryRepository::default();
-        let service = SettingsService::new(Box::new(repo));
-
-        assert!(service.get_auto_update_enabled());
-    }
-
-    #[test]
-    fn set_auto_update_enabled_persists_value() {
-        let repo = InMemoryRepository::default();
-        let repo_handle = repo.clone();
-        let mut service = SettingsService::new(Box::new(repo));
-
-        assert!(service.set_auto_update_enabled(false).is_ok());
-        assert!(!service.get_auto_update_enabled());
-        assert!(!repo_handle.snapshot().updater.auto_update_enabled);
-
-        assert!(service.set_auto_update_enabled(true).is_ok());
-        assert!(repo_handle.snapshot().updater.auto_update_enabled);
     }
 
     #[test]

@@ -501,20 +501,6 @@ pub async fn set_session_preferences(
 }
 
 #[tauri::command]
-pub async fn get_auto_update_enabled(app: AppHandle) -> Result<bool, String> {
-    let settings_manager = get_settings_manager(&app).await?;
-    let manager = settings_manager.lock().await;
-    Ok(manager.get_auto_update_enabled())
-}
-
-#[tauri::command]
-pub async fn set_auto_update_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let settings_manager = get_settings_manager(&app).await?;
-    let mut manager = settings_manager.lock().await;
-    manager.set_auto_update_enabled(enabled)
-}
-
-#[tauri::command]
 pub async fn get_restore_open_projects(app: AppHandle) -> Result<bool, String> {
     let settings_manager = get_settings_manager(&app).await?;
     let manager = settings_manager.lock().await;

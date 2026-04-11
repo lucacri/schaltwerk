@@ -36,8 +36,6 @@ import { detectPlatformSafe, getDisplayLabelForSegment, splitShortcutBinding } f
 import { useKeyboardShortcutsConfig } from '../../contexts/KeyboardShortcutsContext'
 import { getAllCodexModels } from '../../common/codexModels'
 import { emitUiEvent, UiEvent } from '../../common/uiEvents'
-import { useOptionalToast } from '../../common/toast/ToastProvider'
-import { AppUpdateResultPayload } from '../../common/events'
 import type { SettingsCategory } from '../../types/settings'
 import { requestDockBounce } from '../../utils/attentionBridge'
 import { MarkdownEditor } from '../specs/MarkdownEditor'
@@ -520,12 +518,8 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         visible: false
     })
     const [appVersion, setAppVersion] = useState<string>('')
-    const toast = useOptionalToast()
     const [restoreOpenProjects, setRestoreOpenProjects] = useState<boolean>(true)
     const [loadingRestoreOpenProjects, setLoadingRestoreOpenProjects] = useState<boolean>(true)
-    const [autoUpdateEnabled, setAutoUpdateEnabled] = useState<boolean>(true)
-    const [loadingAutoUpdate, setLoadingAutoUpdate] = useState<boolean>(true)
-    const [checkingUpdate, setCheckingUpdate] = useState<boolean>(false)
 
 
     const [selectedSpec, setSelectedSpec] = useState<{ name: string; content: string } | null>(null)
@@ -630,33 +624,6 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         return defaults
     }, [])
 
-    const handleAutoUpdateToggle = useCallback(async () => {
-        const previous = autoUpdateEnabled
-        const next = !previous
-        setAutoUpdateEnabled(next)
-        setLoadingAutoUpdate(true)
-
-        try {
-            await invoke(TauriCommands.SetAutoUpdateEnabled, { enabled: next })
-            toast?.pushToast({
-                tone: 'success',
-                title: next ? t.toasts.autoUpdatesEnabled : t.toasts.autoUpdatesDisabled,
-                durationMs: 2400,
-            })
-        } catch (error) {
-            logger.error('Failed to update automatic update preference:', error)
-            setAutoUpdateEnabled(previous)
-            toast?.pushToast({
-                tone: 'error',
-                title: t.toasts.updatePreferenceFailed,
-                description: t.toasts.updatePreferenceFailedDesc,
-                durationMs: 5000,
-            })
-        } finally {
-            setLoadingAutoUpdate(false)
-        }
-    }, [autoUpdateEnabled, toast])
-
     const handleRestoreOpenProjectsToggle = useCallback(async () => {
         const previous = restoreOpenProjects
         const next = !previous
@@ -672,23 +639,6 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         }
     }, [restoreOpenProjects])
 
-    const handleManualUpdateCheck = useCallback(async () => {
-        setCheckingUpdate(true)
-        try {
-            await invoke<AppUpdateResultPayload>(TauriCommands.CheckForUpdatesNow)
-        } catch (error) {
-            logger.error('Failed to start manual update check:', error)
-            toast?.pushToast({
-                tone: 'error',
-                title: t.toasts.checkUpdatesFailed,
-                description: t.toasts.checkUpdatesFailedDesc,
-                durationMs: 5000,
-            })
-        } finally {
-            setCheckingUpdate(false)
-        }
-    }, [toast, t])
-    
     // JS normalizers removed; native fix handles inputs globally.
 
 
@@ -708,19 +658,6 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
             }
 
             try {
-                const enabled = await invoke<boolean>(TauriCommands.GetAutoUpdateEnabled)
-                if (!cancelled) {
-                    setAutoUpdateEnabled(enabled)
-                }
-            } catch (error) {
-                logger.warn('Failed to load auto update preference:', error)
-            } finally {
-                if (!cancelled) {
-                    setLoadingAutoUpdate(false)
-                }
-            }
-
-            try {
                 const restoreEnabled = await invoke<boolean>(TauriCommands.GetRestoreOpenProjects)
                 if (!cancelled) setRestoreOpenProjects(restoreEnabled)
             } catch (error) {
@@ -730,7 +667,6 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
             }
         }
 
-        setLoadingAutoUpdate(true)
         void loadMetadata()
 
         return () => {
@@ -3007,36 +2943,6 @@ fi`}
                                         {loadingRestoreOpenProjects ? t.settings.common.loading : restoreOpenProjects ? t.settings.common.enabled : t.settings.common.disabled}
                                     </span>
                                 </label>
-                            </div>
-                            <div className="flex items-center justify-between py-3 px-4 bg-bg-elevated/50 rounded-lg">
-                                <div className="flex flex-col">
-                                    <span className="text-body font-medium text-text-primary">{t.settings.version.autoUpdates}</span>
-                                    <span className="text-caption text-text-tertiary mt-1">
-                                        {t.settings.version.autoUpdatesDesc}
-                                    </span>
-                                </div>
-                                <label className="flex items-center gap-3" htmlFor="auto-update-toggle">
-                                    <Toggle
-                                        checked={autoUpdateEnabled}
-                                        disabled={loadingAutoUpdate}
-                                        onChange={() => { void handleAutoUpdateToggle() }}
-                                        label="Automatically install updates"
-                                    />
-                                    <span className="text-caption text-text-secondary">
-                                        {loadingAutoUpdate ? 'Loading...' : autoUpdateEnabled ? 'Enabled' : 'Disabled'}
-                                    </span>
-                                </label>
-                            </div>
-                            <div className="flex items-center justify-between py-3 px-4 bg-bg-elevated/50 rounded-lg">
-                                <div className="flex flex-col">
-                                    <span className="text-body font-medium text-text-primary">{t.settings.version.manualCheck}</span>
-                                    <span className="text-caption text-text-tertiary mt-1">
-                                        {t.settings.version.manualCheckDesc}
-                                    </span>
-                                </div>
-                                <Button onClick={() => { void handleManualUpdateCheck() }} disabled={checkingUpdate}>
-                                    {checkingUpdate ? t.settings.version.checking : t.settings.version.checkForUpdates}
-                                </Button>
                             </div>
                         </div>
                     </div>

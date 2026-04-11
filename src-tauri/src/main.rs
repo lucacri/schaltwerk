@@ -24,8 +24,7 @@ mod mcp_api;
 mod permissions;
 mod projects;
 mod startup;
-mod updater;
-
+mod version_check;
 use crate::commands::sessions_refresh::{SessionsRefreshReason, request_sessions_refresh};
 use crate::errors::SchaltError;
 use clap::Parser;
@@ -50,8 +49,6 @@ use tokio::sync::{Mutex, OnceCell, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, 
 use tokio::task_local;
 use tokio::time::timeout;
 use uuid::Uuid;
-
-const UPDATER_PUBLIC_KEY: &str = include_str!("../updater-public.pem");
 
 #[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
@@ -1255,12 +1252,7 @@ fn main() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_os::init())
-        .plugin(
-            tauri_plugin_updater::Builder::new()
-                .pubkey(UPDATER_PUBLIC_KEY.trim())
-                .build(),
-        );
+        .plugin(tauri_plugin_os::init());
 
     #[cfg(target_os = "macos")]
     let builder = builder
@@ -1354,7 +1346,6 @@ fn main() {
             get_environment_variable,
             get_app_version,
             clipboard_write_text,
-            check_for_updates_now,
             restart_app,
             report_attention_snapshot,
             schaltwerk_core_log_frontend_message,
@@ -1507,9 +1498,7 @@ fn main() {
             set_diff_view_preferences,
             get_session_preferences,
             set_session_preferences,
-            get_auto_update_enabled,
             get_dev_error_toasts_enabled,
-            set_auto_update_enabled,
             set_dev_error_toasts_enabled,
             get_restore_open_projects,
             set_restore_open_projects,
@@ -1711,21 +1700,17 @@ fn main() {
                     Ok(arc_mgr) => {
                         log::info!("Settings manager initialized successfully");
 
-                        // Propagate terminal shell preferences to the domain layer and schedule updater
-                        let (auto_update_enabled, shell, args) = {
+                        let (shell, args) = {
                             let mgr = arc_mgr.lock().await;
                             let term = mgr.get_terminal_settings();
                             let shell = term.shell.unwrap_or_else(|| {
                                 std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
                             });
-                            (mgr.get_auto_update_enabled(), shell, term.shell_args)
+                            (shell, term.shell_args)
                         };
                         lucode::domains::terminal::put_terminal_shell_override(shell, args);
 
-                        let updater_handle = settings_handle.clone();
-                        tauri::async_runtime::spawn(async move {
-                            updater::run_auto_update(&updater_handle, auto_update_enabled).await;
-                        });
+                        version_check::check_and_notify(&settings_handle);
                     }
                     Err(e) => {
                         log::error!("Failed to initialize settings manager: {e}");
@@ -1787,7 +1772,11 @@ fn main() {
 
             Ok(())
         })
-        .on_window_event(|_window, event| {
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(true) = event {
+                let handle = window.app_handle().clone();
+                tauri::async_runtime::spawn_blocking(move || version_check::check_and_notify(&handle));
+            }
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 // Kill all terminal child processes synchronously before exit
                 tauri::async_runtime::block_on(async {

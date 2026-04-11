@@ -34,24 +34,6 @@ This guide covers common issues you might encounter and how to resolve them.
     Then try launching again.
   </Accordion>
 
-  <Accordion title="Homebrew installation fails">
-    **Symptom:** `brew install --cask lucacri/tap/lucode` fails
-
-    **Solution:**
-    1. Update Homebrew:
-       ```bash
-       brew update
-       ```
-    2. Try installation again:
-       ```bash
-       brew install --cask lucacri/tap/lucode
-       ```
-    3. If still failing, manually add tap first:
-       ```bash
-       brew tap 2mawi2/tap
-       brew install --cask lucode
-       ```
-  </Accordion>
 </AccordionGroup>
 
 ## Session Issues
@@ -504,9 +486,9 @@ If you can't resolve an issue:
 
   <Card title="Keep Updated" icon="arrow-up">
     ```bash
-    brew upgrade --cask lucode
+    just install-fast
     ```
-    Updates include bug fixes
+    Rebuild regularly for bug fixes
   </Card>
 
   <Card title="Backup Important Work" icon="floppy-disk">

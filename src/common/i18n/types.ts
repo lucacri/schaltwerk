@@ -184,12 +184,6 @@ export interface Translations {
       title: string
       versionLabel: string
       versionDesc: string
-      autoUpdates: string
-      autoUpdatesDesc: string
-      manualCheck: string
-      manualCheckDesc: string
-      checkForUpdates: string
-      checking: string
     }
     keyboard: {
       unsavedChanges: string
@@ -1250,13 +1244,6 @@ export interface Translations {
     pasteTooLargeDesc: string
     failedToOpenLink: string
     failedToOpenLinkDesc: string
-    // Updates (SettingsModal)
-    autoUpdatesEnabled: string
-    autoUpdatesDisabled: string
-    updatePreferenceFailed: string
-    updatePreferenceFailedDesc: string
-    checkUpdatesFailed: string
-    checkUpdatesFailedDesc: string
     // Session actions
     noPrLinked: string
     noPrLinkedDesc: string

@@ -11,44 +11,22 @@ description: 'Get Lucode running on your system'
 
 <Tabs>
   <Tab title="macOS">
-    ### Quick Install (Homebrew)
+    ### Source Install
 
     <Steps>
-      <Step title="Install Lucode">
+      <Step title="Build and install Lucode">
         ```bash
-        brew install --cask lucacri/tap/lucode
+        git clone https://github.com/lucacri/lucode.git
+        cd lucode
+        bun install
+        just install-fast
         ```
       </Step>
 
       <Step title="Launch the app">
         ```bash
-        open -a Lucode
+        open /Applications/Lucode.app
         ```
-      </Step>
-    </Steps>
-
-    ### Manual Installation
-
-    <Steps>
-      <Step title="Download the application">
-        Go to the [Releases page](https://github.com/lucacri/lucode/releases) and download `Lucode-<version>-macos-universal.app.tar.gz`
-      </Step>
-
-      <Step title="Extract and install">
-        ```bash
-        # Extract the archive
-        tar -xzf Lucode-*-macos-universal.app.tar.gz
-
-        # Move to Applications folder
-        mv Lucode.app /Applications/
-
-        # Remove quarantine attribute
-        xattr -cr /Applications/Lucode.app
-        ```
-      </Step>
-
-      <Step title="Launch from Applications">
-        Open Finder, navigate to Applications, and double-click Lucode
       </Step>
     </Steps>
 
@@ -85,16 +63,21 @@ description: 'Get Lucode running on your system'
 
   <Tab title="Windows">
     <Warning>
-      **WSL not yet supported** - Lucode runs natively on Windows. WSL (Windows Subsystem for Linux) support is planned for a future release.
+      **WSL not yet supported**. This fork does not ship packaged Windows releases; build it from source on native Windows.
     </Warning>
 
     <Steps>
-      <Step title="Download the installer">
-        Go to the [Releases page](https://github.com/lucacri/lucode/releases) and download `Lucode-<version>-windows-x64.msi` or `Lucode-<version>-windows-x64.exe`
+      <Step title="Build from source">
+        ```bash
+        git clone https://github.com/lucacri/lucode.git
+        cd lucode
+        bun install
+        bun run tauri:build
+        ```
       </Step>
 
-      <Step title="Run the installer">
-        Double-click the downloaded file and follow the installation wizard
+      <Step title="Install the built app">
+        Use the generated installer or app bundle from `src-tauri/target/release/bundle/`.
       </Step>
 
       <Step title="Launch Lucode">
@@ -121,27 +104,24 @@ description: 'Get Lucode running on your system'
 
   <Tab title="Linux">
     <Info>
-      Linux builds are currently in beta. Download from the releases page.
+      Linux is supported from source builds in this fork.
     </Info>
 
     <Steps>
-      <Step title="Download the package">
-        Go to the [Releases page](https://github.com/lucacri/lucode/releases) and download the appropriate package for your distribution:
-        - `.deb` for Debian/Ubuntu
-        - `.rpm` for Fedora/RHEL
-        - `.AppImage` for universal compatibility
+      <Step title="Build the package from source">
+        ```bash
+        git clone https://github.com/lucacri/lucode.git
+        cd lucode
+        bun install
+        bun run tauri:build
+        ```
       </Step>
 
       <Step title="Install the package">
         ```bash
-        # Debian/Ubuntu
-        sudo dpkg -i Lucode-*.deb
-
-        # Fedora/RHEL
-        sudo rpm -i Lucode-*.rpm
-
-        # AppImage (make executable)
-        chmod +x Lucode-*.AppImage
+        # Choose the artifact under src-tauri/target/release/bundle/
+        # For example on Debian/Ubuntu:
+        sudo dpkg -i src-tauri/target/release/bundle/deb/*.deb
         ```
       </Step>
 
@@ -159,19 +139,16 @@ description: 'Get Lucode running on your system'
   **Next step:** [Your First Session](/first-session) to create and run an agent
 </Tip>
 
-## Automatic Updates
+## Local Build Notifications
 
-Lucode checks for updates on startup and applies them automatically by default. You can:
+`just install` and `just install-fast` stamp a unique calver version into each macOS app bundle they produce. If Lucode is already running when you install a newer `/Applications/Lucode.app`, the running instance detects the newer local build and shows a restart toast.
 
-- Toggle automatic installs in **Settings → Version**
-- Trigger a manual check at any time with the "Check for updates" button
-
-A toast notification appears once an update has been installed—restart Lucode to launch the new build.
+`just run` is excluded from this flow and keeps the normal development version.
 
 <Accordion title="Troubleshooting update failures">
-  **macOS:** If an update fails because the system cannot replace the existing bundle, reopen Lucode directly from `/Applications` or reinstall from the latest tarball.
+  **macOS:** If install replacement fails, rerun `just install` or `just install-fast`, then reopen Lucode from `/Applications`.
 
-  **Windows:** If an update fails, try running the installer again as Administrator, or download the latest installer from the releases page.
+  **Windows/Linux:** Rebuild from source and reinstall the new bundle or package from `src-tauri/target/release/bundle/`.
 </Accordion>
 
 ## Where Lucode Stores Data
@@ -241,7 +218,7 @@ bun run tauri:dev
 # or: npm run tauri:dev
 ```
 
-Use `bun run test` (or `npm run test`) to run the full validation suite (TypeScript linting, `cargo clippy`, `cargo test`, and a release build check).
+Use `bun run test` (or `npm run test`) to run the full validation suite.
 
 ## Troubleshooting
 
@@ -259,13 +236,6 @@ Use `bun run test` (or `npm run test`) to run the full validation suite (TypeScr
         Re-sign the application:
         ```bash
         codesign --force --deep -s - /Applications/Lucode.app
-        ```
-      </Accordion>
-
-      <Accordion title="App doesn't appear in Applications after Homebrew install">
-        Check if it was installed to the Homebrew prefix:
-        ```bash
-        ls -la $(brew --prefix)/bin/lucode
         ```
       </Accordion>
 
@@ -350,12 +320,7 @@ Use `bun run test` (or `npm run test`) to run the full validation suite (TypeScr
 ## Uninstallation
 
 <Tabs>
-  <Tab title="macOS (Homebrew)">
-    ```bash
-    brew uninstall lucode
-    ```
-  </Tab>
-  <Tab title="macOS (Manual)">
+  <Tab title="macOS">
     ```bash
     # Remove the application
     rm -rf /Applications/Lucode.app

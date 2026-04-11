@@ -234,20 +234,6 @@ impl Default for SessionPreferences {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct UpdaterPreferences {
-    #[serde(default = "default_true")]
-    pub auto_update_enabled: bool,
-}
-
-impl Default for UpdaterPreferences {
-    fn default() -> Self {
-        Self {
-            auto_update_enabled: true,
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct GenerationSettings {
     #[serde(default)]
@@ -460,8 +446,6 @@ pub struct Settings {
     pub diff_view: DiffViewPreferences,
     pub session: SessionPreferences,
     #[serde(default)]
-    pub updater: UpdaterPreferences,
-    #[serde(default)]
     pub keyboard_shortcuts: HashMap<String, Vec<String>>,
     #[serde(default)]
     pub tutorial_completed: bool,
@@ -503,7 +487,6 @@ impl Default for Settings {
             agent_binaries: AgentBinaryConfigs::default(),
             diff_view: DiffViewPreferences::default(),
             session: SessionPreferences::default(),
-            updater: UpdaterPreferences::default(),
             keyboard_shortcuts: HashMap::new(),
             tutorial_completed: false,
             amp_mcp_servers: HashMap::new(),

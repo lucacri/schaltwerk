@@ -4,7 +4,7 @@
 Tauri-based desktop app for managing AI coding sessions using git worktrees. Each session gets an isolated branch/worktree where AI agents (Claude, GitHub Copilot CLI, Kilo Code, Gemini, OpenCode, Codex, Factory Droid, etc.) can work without affecting the main codebase.
 
 ## Platform Support
-- macOS 11+ supported; Linux beta builds ship via releases.
+- macOS 11+ supported; Linux builds are supported from source.
 - Windows 10 version 1903+ supported (ConPTY required); WSL not yet supported.
 
 > **Tooling Note:** Examples in this guide default to `bun`. Replace them with the equivalent `npm` commands (`npm install`, `npm run …`, etc.) if you prefer npm.
@@ -110,40 +110,9 @@ bun run test:rust       # Rust tests only (cargo nextest)
 just run                # Start app (ONLY when user requests testing)
 bun run tauri:build     # Build production app
 
-# Release Management (3-Step Process)
-# Step 1: Create draft release
-just release            # Create patch release (0.0.x) - creates DRAFT
-just release minor      # Create minor release (0.x.0) - creates DRAFT
-just release major      # Create major release (x.0.0) - creates DRAFT
-
-# Step 2: Generate and review release notes
-# User asks: "Generate release notes for vX.Y.Z"
-# I fetch last published (non-draft) release to anchor the range:
-# LAST_RELEASE=$(gh release list --exclude-drafts --limit 1 | awk '{print $3}')
-# LAST_RELEASE_COMMIT=$(git rev-list -n1 "$LAST_RELEASE")
-# I run: git log ${LAST_RELEASE_COMMIT}..vX.Y.Z, analyze commits, categorize changes
-# I run: gh release edit vX.Y.Z --notes "generated notes"
-# User reviews notes (can ask for edits)
-
-# Release Notes Format:
-## What's New in vX.Y.Z
-
-### Features
-- **Feature name** - Brief description (only if notable features)
-
-### Improvements
-- User-visible enhancements
-
-### Fixes
-- Fixed [specific issue]
-
-### Maintenance
-- Dependency updates (if any)
-
-# Step 3: Publish release
-# User asks: "Publish the release" OR clicks button on GitHub
-# I run: gh release edit vX.Y.Z --draft=false
-# This triggers Homebrew tap update automatically
+# Local Install Builds
+just install            # Full optimized app build stamped with a unique calver version
+just install-fast       # Faster app build stamped with a unique calver version
 ```
 
 ### Command Context
@@ -386,21 +355,11 @@ macOS: `~/Library/Application Support/lucode/logs/lucode-{timestamp}.log`
 - All operations through `src-tauri/src/mcp_api.rs`
 - Rebuild after changes: `cd mcp-server && bun run build`
 
-## Release Process
+## Local Build Versioning
 
-```bash
-just release        # Patch release
-just release minor  # Minor release
-just release major  # Major release
-```
-
-Automatically updates versions, commits, tags, and triggers GitHub Actions.
-
-### Release Notes Checklist
-- Base commit: Query latest published release (exclude drafts)
-- Capture all commits: dependencies, infrastructure, features
-- Use format from Step 2 above (Features/Improvements/Fixes/Maintenance)
-- No installation instructions in release body
+- `just install` and `just install-fast` stamp a unique semver-safe calver into the app build before bundling.
+- The running macOS app compares its own version with `/Applications/Lucode.app` and emits a restart toast when a newer local build is installed.
+- `just run` stays in development mode and does not stamp versions.
 
 ## Development Workflow
 

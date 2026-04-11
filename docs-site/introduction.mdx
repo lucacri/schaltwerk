@@ -22,8 +22,9 @@ Run multiple AI agents on the same codebase—safely. Each agent works in an iso
 <Steps>
   <Step title="Install">
     ```bash
-    brew install --cask lucacri/tap/lucode
-    open -a Lucode
+    git clone https://github.com/lucacri/lucode.git
+    cd lucode && bun install && just install-fast
+    open /Applications/Lucode.app
     ```
   </Step>
 

@@ -110,7 +110,7 @@ import { useSelectionPreserver } from './hooks/useSelectionPreserver'
 import { AGENT_START_TIMEOUT_MESSAGE } from './common/agentSpawn'
 import { beginSplitDrag, endSplitDrag } from './utils/splitDragCoordinator'
 import { useOptionalToast } from './common/toast/ToastProvider'
-import { AppUpdateResultPayload, ForgeConnectionIssuePayload } from './common/events'
+import { ForgeConnectionIssuePayload, NewerBuildAvailablePayload } from './common/events'
 import { RawSession, RawSpec, SessionState } from './types/session'
 import { specOrchestratorTerminalId } from './common/terminalIdentity'
 import {
@@ -463,97 +463,31 @@ function AppContent() {
 
     let disposed = false
     let unlisten: (() => void) | null = null
+    let notified = false
 
     const subscribe = async () => {
       try {
-        const stop = await listenEvent(SchaltEvent.AppUpdateResult, (payload: AppUpdateResultPayload) => {
-          logger.info('[Updater] Received result', payload)
-          if (!toast) return
-
-          if (payload.status === 'updated') {
-            const versionLabel = payload.newVersion ?? payload.currentVersion
-            if (payload.initiatedBy === 'auto' && payload.newVersion) {
-              if (lastAutoUpdateVersionRef.current === payload.newVersion) {
-                return
-              }
-              lastAutoUpdateVersionRef.current = payload.newVersion
-            }
-
+        const stop = await listenEvent(
+          SchaltEvent.NewerBuildAvailable,
+          (payload: NewerBuildAvailablePayload) => {
+            if (notified) return
+            notified = true
+            logger.info('[VersionCheck] Newer build detected', payload)
             toast.pushToast({
-              tone: 'success',
-              title: `Lucode updated to ${versionLabel}`,
-              description: 'Restart to finish applying the update.',
-              durationMs: 10000,
+              tone: 'info',
+              title: 'Newer build available',
+              description: `v${payload.installedVersion} is installed. Restart to use it.`,
+              durationMs: 0,
               action: {
                 label: 'Restart',
-                onClick: () => {
-                  void invoke(TauriCommands.RestartApp)
-                },
+                onClick: () => { void invoke(TauriCommands.RestartApp) },
               },
             })
-            return
           }
-
-          if (payload.status === 'upToDate') {
-            if (payload.initiatedBy === 'manual') {
-              toast.pushToast({
-                tone: 'info',
-                title: `You're up to date`,
-                description: `Lucode ${payload.currentVersion} is the latest release.`,
-                durationMs: 3500,
-              })
-            }
-            return
-          }
-
-          if (payload.status === 'busy') {
-            if (payload.initiatedBy === 'manual') {
-              toast.pushToast({
-                tone: 'warning',
-                title: 'Update already running',
-                description: 'Please wait for the current check to finish.',
-                durationMs: 3500,
-              })
-            }
-            return
-          }
-
-          if (payload.status === 'error') {
-            const kind = payload.errorKind ?? 'unknown'
-            if (payload.initiatedBy === 'auto' && kind !== 'permission') {
-              logger.warn('[Updater] Auto update failed without user action required', payload)
-              return
-            }
-
-            const description = (() => {
-              switch (kind) {
-                case 'network':
-                  return 'Connect to the internet and try again.'
-                case 'permission':
-                  return 'Lucode could not replace the application. Open it directly from /Applications or reinstall from the latest DMG.'
-                case 'signature':
-                  return 'The downloaded update failed verification. A fresh build will be published shortly.'
-                default:
-                  return payload.errorMessage ?? 'Unexpected updater error.'
-              }
-            })()
-
-            toast.pushToast({
-              tone: 'error',
-              title: 'Update failed',
-              description,
-              durationMs: 7000,
-            })
-          }
-        })
-
-        if (disposed) {
-          stop()
-        } else {
-          unlisten = stop
-        }
+        )
+        if (disposed) { stop() } else { unlisten = stop }
       } catch (error) {
-        logger.error('[Updater] Failed to attach listener', error)
+        logger.error('[VersionCheck] Failed to attach listener', error)
       }
     }
 
@@ -561,13 +495,7 @@ function AppContent() {
 
     return () => {
       disposed = true
-      if (unlisten) {
-        try {
-          unlisten()
-        } catch (error) {
-          logger.warn('[App] Failed to remove backend error listener', error)
-        }
-      }
+      unlisten?.()
     }
   }, [toast])
 
@@ -639,7 +567,6 @@ function AppContent() {
   const prevLeftCollapsedRef = useRef<boolean | null>(null)
   const inlineReformatEnabledRef = useRef<boolean | null>(null)
   const previousFocusRef = useRef<Element | null>(null)
-  const lastAutoUpdateVersionRef = useRef<string | null>(null)
   const { config: keyboardShortcutConfig } = useKeyboardShortcutsConfig()
   const platform = useMemo(() => detectPlatformSafe(), [])
   const isMac = platform === 'mac'

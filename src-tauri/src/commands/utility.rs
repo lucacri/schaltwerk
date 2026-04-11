@@ -2,7 +2,13 @@ use crate::get_project_manager;
 use std::path::Path;
 use std::process::ExitStatus;
 
+use tauri::AppHandle;
 use url::Url;
+
+#[tauri::command]
+pub fn restart_app(app: AppHandle) {
+    app.restart();
+}
 
 #[tauri::command]
 pub fn path_exists(path: String) -> Result<bool, String> {

@@ -66,7 +66,6 @@ export const TauriCommands = {
   GetFavoriteOrder: 'get_favorite_order',
   GetAllAgentBinaryConfigs: 'get_all_agent_binary_configs',
   GetAppVersion: 'get_app_version',
-  GetAutoUpdateEnabled: 'get_auto_update_enabled',
   GetOpenTabsState: 'get_open_tabs_state',
   GetDevErrorToastsEnabled: 'get_dev_error_toasts_enabled',
   GetBaseBranchName: 'get_base_branch_name',
@@ -234,7 +233,6 @@ export const TauriCommands = {
   SetRestoreOpenProjects: 'set_restore_open_projects',
   SetProjectMergePreferences: 'set_project_merge_preferences',
   SetSessionPreferences: 'set_session_preferences',
-  SetAutoUpdateEnabled: 'set_auto_update_enabled',
   EnableGlobalKeepAwake: 'enable_global_keep_awake',
   DisableGlobalKeepAwake: 'disable_global_keep_awake',
   SetDevErrorToastsEnabled: 'set_dev_error_toasts_enabled',
@@ -255,7 +253,6 @@ export const TauriCommands = {
    // Clipboard operations
    ClipboardWriteText: 'clipboard_write_text',
   ClipboardReadText: 'clipboard_read_text',
-  CheckForUpdatesNow: 'check_for_updates_now',
   RestartApp: 'restart_app',
   RestartSessionTerminals: 'restart_session_terminals',
 } as const

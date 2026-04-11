@@ -105,24 +105,10 @@ const baseInvokeImplementation = async (command: string, _args?: unknown) => {
       }
     case TauriCommands.GetAppVersion:
       return '0.2.2'
-    case TauriCommands.GetAutoUpdateEnabled:
-      return true
-    case TauriCommands.SetAutoUpdateEnabled:
-      return null
     case TauriCommands.GetDevErrorToastsEnabled:
       return false
     case TauriCommands.SetDevErrorToastsEnabled:
       return null
-    case TauriCommands.CheckForUpdatesNow:
-      return {
-        status: 'upToDate',
-        initiatedBy: 'manual',
-        currentVersion: '0.2.2',
-        newVersion: null,
-        notes: null,
-        errorKind: null,
-        errorMessage: null,
-      }
     default:
       return null
   }
@@ -488,48 +474,6 @@ describe('SettingsModal version settings', () => {
     requestDockBounceMock.mockReset()
   })
 
-  it('loads auto update preference on mount', async () => {
-    renderWithProviders(
-      <SettingsModal
-        open={true}
-        onClose={() => {}}
-      />
-    )
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith(TauriCommands.GetAutoUpdateEnabled)
-    })
-  })
-
-  it('allows toggling automatic updates from the version tab', async () => {
-    renderWithProviders(
-      <SettingsModal
-        open={true}
-        onClose={() => {}}
-      />
-    )
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Version' }))
-    const toggle = await screen.findByRole('switch', { name: /Automatically install updates/i })
-    await userEvent.click(toggle)
-
-    expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SetAutoUpdateEnabled, { enabled: false })
-  })
-
-  it('invokes manual update check command', async () => {
-    renderWithProviders(
-      <SettingsModal
-        open={true}
-        onClose={() => {}}
-      />
-    )
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Version' }))
-    const checkButton = await screen.findByRole('button', { name: /Check for updates/i })
-    await userEvent.click(checkButton)
-
-    expect(invokeMock).toHaveBeenCalledWith(TauriCommands.CheckForUpdatesNow)
-  })
 })
 
 describe('SettingsModal appearance settings', () => {

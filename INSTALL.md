@@ -1,18 +1,20 @@
 # Lucode Installation Guide
 
-## Quick Install (Homebrew)
-
-For users with access to the private repository:
+## Quick Install (Local Source Build)
 
 ```bash
-# 1. Add the private Homebrew tap (one-time setup)
-brew tap lucacri/tap https://github.com/2mawi2/homebrew-tap
+# 1. Clone the repository
+git clone https://github.com/lucacri/lucode.git
+cd lucode
 
-# 2. Install Lucode
-brew install --cask lucode
+# 2. Install dependencies
+bun install
 
-# 3. Launch the application
-open -a Lucode
+# 3. Build and install Lucode into /Applications
+just install-fast
+
+# 4. Launch the application
+open /Applications/Lucode.app
 ```
 
 ## First Launch Setup
@@ -44,19 +46,15 @@ The application will now launch and work normally. This approval is only needed 
 
 ## Manual Installation
 
-If you prefer to install manually or can't use Homebrew:
+If you prefer to build the app bundle yourself without the `just` helper:
 
-### Download the Application
-1. Go to the [Releases page](https://github.com/lucacri/lucode/releases)
-2. Download `Lucode-<version>-macos-universal.app.tar.gz`
-
-### Install the Application
+### Build the Application
 ```bash
-# 1. Extract the archive
-tar -xzf Lucode-*-macos-universal.app.tar.gz
+# 1. Build the frontend and app bundle
+bun run tauri:build
 
-# 2. Move to Applications folder
-mv Lucode.app /Applications/
+# 2. Copy the built app bundle into /Applications
+cp -R src-tauri/target/release/bundle/macos/Lucode.app /Applications/
 
 # 3. Remove quarantine attribute (optional, helps with Gatekeeper)
 xattr -cr /Applications/Lucode.app
@@ -73,12 +71,11 @@ codesign --force --deep -s - /Applications/Lucode.app
 
 ## Troubleshooting
 
-## Automatic Updates
+## Local Build Detection
 
-- Lucode checks GitHub releases on startup and installs new versions silently when "Automatic updates" is enabled (default).
-- You can toggle this behavior in **Settings → Version** and run a manual check with the "Check for updates" button. Manual checks work even when automatic updates are disabled.
-- Updates require internet connectivity and the ability to overwrite the existing `/Applications/Lucode.app`. If macOS prevents the update, reopen the app directly from `/Applications` or reinstall from the latest DMG/tarball.
-- After an update is applied you will be prompted with a toast; restart Lucode to launch the new build.
+- `just install` and `just install-fast` stamp a unique calver version into the built app bundle before copying it into `/Applications`.
+- A running Lucode app compares its own version with `/Applications/Lucode.app` and shows a toast when a newer local build is installed.
+- Restart Lucode after that toast to launch the newer build.
 
 ### "Lucode is damaged and can't be opened"
 This usually means the quarantine attribute needs to be removed:
@@ -116,9 +113,9 @@ kill -9 <PID>
 
 ## Uninstallation
 
-### Via Homebrew
+### Via Local Install
 ```bash
-brew uninstall lucode
+rm -rf /Applications/Lucode.app
 ```
 
 ### Manual Uninstallation
@@ -152,8 +149,8 @@ cd lucode
 # 2. Install dependencies
 bun install        # or: npm install
 
-# 3. Build the application
-bun run tauri build    # or: npm run tauri build
+# 3. Build and install the application
+just install-fast
 
 # 4. The built app will be in:
 # src-tauri/target/release/bundle/macos/Lucode.app
@@ -182,6 +179,6 @@ Lucode is distributed without an Apple Developer certificate ($99/year) to keep 
 ## Support
 
 For issues or questions:
-1. Check the [GitHub Issues](https://github.com/lucacri/lucode/issues)
-2. Review the [CLAUDE.md](./CLAUDE.md) for development guidelines
-3. Contact the maintainer through the private repository
+1. Review the [CLAUDE.md](./CLAUDE.md) for development guidelines
+2. Rebuild with `just install-fast`
+3. Check the local terminal/log output for bundle or permission failures

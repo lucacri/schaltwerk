@@ -181,13 +181,7 @@
     "version": {
       "title": "应用程序信息",
       "versionLabel": "版本",
-      "versionDesc": "当前应用程序版本",
-      "autoUpdates": "自动更新",
-      "autoUpdatesDesc": "在启动时安装更新以保持 Lucode 最新。",
-      "manualCheck": "手动检查更新",
-      "manualCheckDesc": "从 GitHub 获取最新版本信息，如有可用立即安装。",
-      "checkForUpdates": "检查更新",
-      "checking": "检查中..."
+      "versionDesc": "当前应用程序版本"
     },
     "keyboard": {
       "unsavedChanges": "未保存的快捷键更改",
@@ -1244,12 +1238,6 @@
     "pasteTooLargeDesc": "粘贴大小限制为 {limit} 个字符。请缩短内容后再粘贴。",
     "failedToOpenLink": "打开链接失败",
     "failedToOpenLinkDesc": "无法打开链接",
-    "autoUpdatesEnabled": "已启用自动更新",
-    "autoUpdatesDisabled": "已禁用自动更新",
-    "updatePreferenceFailed": "无法更新偏好设置",
-    "updatePreferenceFailedDesc": "请重试或重启 Lucode。",
-    "checkUpdatesFailed": "无法检查更新",
-    "checkUpdatesFailedDesc": "请稍后再试。",
     "noPrLinked": "未关联 PR",
     "noPrLinkedDesc": "请先关联 PR 再获取评论",
     "prCreated": "拉取请求已创建",
