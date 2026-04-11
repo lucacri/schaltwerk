@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { VscDiscard, VscComment, VscLinkExternal, VscTerminal } from 'react-icons/vsc'
+import { VscDiscard, VscComment, VscLinkExternal } from 'react-icons/vsc'
 import type { EnrichedSession } from '../../types/session'
 import { TauriCommands } from '../../common/tauriCommands'
 import { ConfirmResetDialog } from '../common/ConfirmResetDialog'
@@ -8,7 +8,6 @@ import { logger } from '../../utils/logger'
 import { UiEvent, emitUiEvent } from '../../common/uiEvents'
 import { usePrComments } from '../../hooks/usePrComments'
 import { useTranslation } from '../../common/i18n'
-import { useToast } from '../../common/toast/ToastProvider'
 
 type DiffSessionActionsRenderProps = {
   headerActions: ReactNode
@@ -33,35 +32,12 @@ export function DiffSessionActions({
   children
 }: DiffSessionActionsProps) {
   const { t } = useTranslation()
-  const { pushToast } = useToast()
   const { fetchingComments, fetchAndPasteToTerminal } = usePrComments()
   const [isResetting, setIsResetting] = useState(false)
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
 
   const prNumber = targetSession?.info.pr_number
   const prUrl = targetSession?.info.pr_url
-
-  const handleRestartTerminals = useCallback(async () => {
-    if (!sessionName) return
-    try {
-      await invoke(TauriCommands.RestartSessionTerminals, {
-        sessionName,
-      })
-      pushToast({
-        tone: 'info',
-        title: 'Terminals restarting',
-        description: 'Terminals for this session are being restarted.',
-        durationMs: 3000,
-      })
-    } catch (error) {
-      logger.error('Failed to restart terminals:', error)
-      pushToast({
-        tone: 'error',
-        title: 'Failed to restart terminals',
-        description: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }, [sessionName, pushToast])
 
   const handleConfirmReset = useCallback(async () => {
     if (!sessionName) return
@@ -112,14 +88,6 @@ export function DiffSessionActions({
           </>
         )}
         <button
-          onClick={() => { void handleRestartTerminals() }}
-          className="px-2 py-1 bg-slate-700/80 hover:bg-slate-700 rounded-md text-sm font-medium flex items-center gap-2"
-          title={t.diffSessionActions.restartTerminals}
-        >
-          <VscTerminal className="text-lg" />
-          {t.diffSessionActions.restartTerminals}
-        </button>
-        <button
           onClick={() => setConfirmResetOpen(true)}
           className="px-2 py-1 bg-red-600/80 hover:bg-red-600 rounded-md text-sm font-medium flex items-center gap-2"
           title={t.diffSessionActions.discardAllChanges}
@@ -130,7 +98,7 @@ export function DiffSessionActions({
         </button>
       </>
     )
-  }, [t, isSessionSelection, isResetting, prNumber, prUrl, fetchingComments, handleFetchAndPasteComments, handleRestartTerminals])
+  }, [t, isSessionSelection, isResetting, prNumber, prUrl, fetchingComments, handleFetchAndPasteComments])
 
   const dialogs = useMemo(() => (
     <ConfirmResetDialog

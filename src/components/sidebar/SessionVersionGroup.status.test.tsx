@@ -95,7 +95,6 @@ const mockActions: SessionCardActions = {
   onRefineSpec: vi.fn(),
   onDeleteSpec: vi.fn(),
   onReset: vi.fn(),
-  onRestartTerminals: vi.fn(),
   onSwitchModel: vi.fn(),
   onCreatePullRequest: vi.fn(),
   onCreateGitlabMr: vi.fn(),

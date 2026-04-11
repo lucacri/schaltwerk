@@ -1055,27 +1055,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }, [])
 
-    const handleRestartTerminals = useCallback(async (sessionId: string) => {
-        try {
-            await invoke(TauriCommands.RestartSessionTerminals, {
-                sessionName: sessionId
-            })
-            pushToast({
-                tone: 'info',
-                title: 'Terminals restarting',
-                description: 'Terminals for this session are being restarted.',
-                durationMs: 3000,
-            })
-        } catch (error) {
-            logger.error('Failed to restart terminals:', error)
-            pushToast({
-                tone: 'error',
-                title: 'Failed to restart terminals',
-                description: error instanceof Error ? error.message : String(error),
-            })
-        }
-    }, [pushToast])
-
     const handleLinkPr = useCallback(async (sessionId: string, prNumber: number, prUrl: string) => {
         try {
             await invoke(TauriCommands.SchaltwerkCoreLinkSessionToPr, {
@@ -1575,7 +1554,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 await resetSession(currentSelection, terminals)
             })()
         },
-        onRestartTerminals: (sessionId) => { void handleRestartTerminals(sessionId) },
         onSwitchModel: (sessionId) => {
             setSwitchModelSessionId(sessionId)
             const session = sessions.find(s => s.info.session_id === sessionId)

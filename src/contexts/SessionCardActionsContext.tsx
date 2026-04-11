@@ -8,7 +8,6 @@ export interface SessionCardActions {
   onRefineSpec: (sessionId: string) => void
   onDeleteSpec: (sessionId: string) => void
   onReset: (sessionId: string) => void
-  onRestartTerminals: (sessionId: string) => void
   onSwitchModel: (sessionId: string) => void
   onCreatePullRequest: (sessionId: string) => void
   onCreateGitlabMr: (sessionId: string) => void
@@ -43,7 +42,6 @@ export function SessionCardActionsProvider({ actions, children }: ProviderProps)
     onRefineSpec: (...args) => ref.current.onRefineSpec(...args),
     onDeleteSpec: (...args) => ref.current.onDeleteSpec(...args),
     onReset: (...args) => ref.current.onReset(...args),
-    onRestartTerminals: (...args) => ref.current.onRestartTerminals(...args),
     onSwitchModel: (...args) => ref.current.onSwitchModel(...args),
     onCreatePullRequest: (...args) => ref.current.onCreatePullRequest(...args),
     onCreateGitlabMr: (...args) => ref.current.onCreateGitlabMr(...args),

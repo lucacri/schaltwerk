@@ -70,7 +70,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   const {
     onSelect, onCancel,
     onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec,
-    onReset, onRestartTerminals, onSwitchModel,
+    onReset, onSwitchModel,
     onCreatePullRequest, onCreateGitlabMr,
     onMerge, onQuickMerge, onLinkPr,
   } = useSessionCardActions()
@@ -466,7 +466,6 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                 onPromoteVersionHover={onPromoteVersionHover}
                 onPromoteVersionHoverEnd={onPromoteVersionHoverEnd}
                 onReset={onReset}
-                onRestartTerminals={onRestartTerminals}
                 onSwitchModel={onSwitchModel}
                 isResetting={isResetting}
                 onMerge={onMerge}

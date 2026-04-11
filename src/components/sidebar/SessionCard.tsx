@@ -162,7 +162,7 @@ export const SessionCard = memo<SessionCardProps>(
     const {
       onSelect, onCancel,
       onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec,
-      onReset, onRestartTerminals, onSwitchModel,
+      onReset, onSwitchModel,
       onCreatePullRequest, onCreateGitlabMr,
       onMerge, onQuickMerge, onRename, onLinkPr,
     } = useSessionCardActions()
@@ -756,7 +756,6 @@ export const SessionCard = memo<SessionCardProps>(
             onPromoteVersionHover={onPromoteVersionHover}
             onPromoteVersionHoverEnd={onPromoteVersionHoverEnd}
             onReset={onReset}
-            onRestartTerminals={onRestartTerminals}
             onSwitchModel={onSwitchModel}
             isResetting={isResetting}
             onMerge={onMerge}

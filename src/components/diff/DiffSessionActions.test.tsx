@@ -106,9 +106,9 @@ describe('DiffSessionActions', () => {
     mockInvoke.mockResolvedValue(undefined)
   })
 
-  it('renders restart terminals button for session selection', () => {
+  it('does not render a restart terminals button for session selection', () => {
     renderActions()
-    expect(screen.getByText('Restart Terminals')).toBeTruthy()
+    expect(screen.queryByText('Restart Terminals')).toBeNull()
   })
 
   it('renders reset session button for session selection', () => {
@@ -120,40 +120,6 @@ describe('DiffSessionActions', () => {
     renderActions({ isSessionSelection: false })
     expect(screen.queryByText('Restart Terminals')).toBeNull()
     expect(screen.queryByText('Reset Session')).toBeNull()
-  })
-
-  it('calls invoke to restart terminals when restart button clicked', async () => {
-    renderActions()
-    fireEvent.click(screen.getByText('Restart Terminals'))
-
-    await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.RestartSessionTerminals, {
-        sessionName: 'test-session',
-      })
-    })
-  })
-
-  it('shows toast after restarting terminals', async () => {
-    renderActions()
-    fireEvent.click(screen.getByText('Restart Terminals'))
-
-    await waitFor(() => {
-      expect(mockPushToast).toHaveBeenCalledWith(
-        expect.objectContaining({ tone: 'info', title: 'Terminals restarting' })
-      )
-    })
-  })
-
-  it('shows error toast when restart terminals fails', async () => {
-    mockInvoke.mockRejectedValueOnce(new Error('restart failed'))
-    renderActions()
-    fireEvent.click(screen.getByText('Restart Terminals'))
-
-    await waitFor(() => {
-      expect(mockPushToast).toHaveBeenCalledWith(
-        expect.objectContaining({ tone: 'error', title: 'Failed to restart terminals' })
-      )
-    })
   })
 
   it('opens confirm reset dialog when reset button clicked', () => {

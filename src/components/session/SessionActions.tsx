@@ -12,7 +12,6 @@ import {
   VscWarning,
   VscBeaker,
   VscComment,
-  VscDebugRestart,
 } from 'react-icons/vsc';
 import { FaGithub, FaGitlab } from 'react-icons/fa'
 import { IconButton } from '../common/IconButton';
@@ -55,7 +54,6 @@ interface SessionActionsProps {
   onPromoteVersionHover?: () => void;
   onPromoteVersionHoverEnd?: () => void;
   onReset?: (sessionId: string) => void;
-  onRestartTerminals?: (sessionId: string) => void;
   onSwitchModel?: (sessionId: string) => void;
   isResetting?: boolean;
   onMerge?: (sessionId: string) => void;
@@ -88,7 +86,6 @@ export function SessionActions({
   onPromoteVersionHover,
   onPromoteVersionHoverEnd,
   onReset,
-  onRestartTerminals,
   onSwitchModel,
   onMerge,
   onQuickMerge,
@@ -303,14 +300,6 @@ export function SessionActions({
               onClick={() => onSwitchModel(sessionId)}
               ariaLabel="Switch model"
               tooltip="Switch model (⌘P)"
-            />
-          )}
-          {onRestartTerminals && (
-            <IconButton
-              icon={<VscDebugRestart />}
-              onClick={() => onRestartTerminals(sessionId)}
-              ariaLabel={t.sessionActions.restartTerminals}
-              tooltip={t.sessionActions.restartTerminals}
             />
           )}
           {onReset && (

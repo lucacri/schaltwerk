@@ -302,4 +302,24 @@ describe('SessionActions – Running state', () => {
 
     expect(screen.queryByRole('button', { name: /review/i })).not.toBeInTheDocument()
   })
+
+  it('does not render restart terminals alongside the remaining session controls', () => {
+    render(
+      <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+        <GithubIntegrationContext.Provider value={mockGithub}>
+          <SessionActions
+            sessionState="running"
+            isReadyToMerge={true}
+            sessionId="session-123"
+            onReset={vi.fn()}
+            onSwitchModel={vi.fn()}
+          />
+        </GithubIntegrationContext.Provider>
+      </GitlabIntegrationContext.Provider>
+    )
+
+    expect(screen.getByLabelText('Reset session')).toBeInTheDocument()
+    expect(screen.getByLabelText('Switch model')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Restart terminals')).not.toBeInTheDocument()
+  })
 })
