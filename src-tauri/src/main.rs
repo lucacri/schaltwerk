@@ -743,6 +743,10 @@ async fn start_webhook_server(app: tauri::AppHandle) -> bool {
                             created_at: String,
                             last_modified: Option<String>,
                             #[serde(skip_serializing_if = "Option::is_none")]
+                            version_group_id: Option<String>,
+                            #[serde(skip_serializing_if = "Option::is_none")]
+                            version_number: Option<i32>,
+                            #[serde(skip_serializing_if = "Option::is_none")]
                             is_consolidation: Option<bool>,
                             #[serde(skip_serializing_if = "Option::is_none")]
                             consolidation_sources: Option<Vec<String>>,
@@ -786,6 +790,16 @@ async fn start_webhook_server(app: tauri::AppHandle) -> bool {
                                 .get("last_modified")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string()),
+                            version_group_id: payload
+                                .get("version_group_id")
+                                .or_else(|| payload.get("versionGroupId"))
+                                .and_then(|v| v.as_str())
+                                .map(str::to_owned),
+                            version_number: payload
+                                .get("version_number")
+                                .or_else(|| payload.get("versionNumber"))
+                                .and_then(|v| v.as_i64())
+                                .and_then(|value| i32::try_from(value).ok()),
                             is_consolidation: payload
                                 .get("is_consolidation")
                                 .and_then(|v| v.as_bool())

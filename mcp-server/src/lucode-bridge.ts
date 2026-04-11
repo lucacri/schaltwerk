@@ -9,6 +9,8 @@ export interface Session {
   id: string
   name: string
   display_name?: string
+  version_group_id?: string
+  version_number?: number
   repository_path: string
   repository_name: string
   branch: string
@@ -1152,7 +1154,9 @@ export class LucodeBridge {
         session_name: session.name,
         branch: session.branch,
         worktree_path: session.worktree_path,
-        parent_branch: session.parent_branch
+        parent_branch: session.parent_branch,
+        version_group_id: session.version_group_id,
+        version_number: session.version_number,
       }
 
       await this.fetchWithAutoPort('/webhook/session-added', {

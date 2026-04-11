@@ -182,6 +182,68 @@ fn emit_terminal_agent_started(
     }
 }
 
+#[derive(serde::Serialize, Clone)]
+struct SessionAddedPayload {
+    session_name: String,
+    branch: String,
+    worktree_path: String,
+    parent_branch: String,
+    created_at: String,
+    last_modified: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version_group_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version_number: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    epic: Option<lucode::domains::sessions::entity::Epic>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    is_consolidation: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    consolidation_sources: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    consolidation_round_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    consolidation_role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    consolidation_report: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    consolidation_base_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    consolidation_recommended_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    consolidation_confirmation_mode: Option<String>,
+}
+
+fn build_session_added_payload(
+    session: &Session,
+    epic: Option<lucode::domains::sessions::entity::Epic>,
+) -> SessionAddedPayload {
+    SessionAddedPayload {
+        session_name: session.name.clone(),
+        branch: session.branch.clone(),
+        worktree_path: session.worktree_path.to_string_lossy().to_string(),
+        parent_branch: session.parent_branch.clone(),
+        created_at: session.created_at.to_rfc3339(),
+        last_modified: session.last_activity.map(|ts| ts.to_rfc3339()),
+        version_group_id: session.version_group_id.clone(),
+        version_number: session.version_number,
+        epic,
+        agent_type: session.original_agent_type.clone(),
+        is_consolidation: session.is_consolidation.then_some(true),
+        consolidation_sources: session.consolidation_sources.clone(),
+        consolidation_round_id: session.consolidation_round_id.clone(),
+        consolidation_role: session.consolidation_role.clone(),
+        consolidation_report: session.consolidation_report.clone(),
+        consolidation_base_session_id: session.consolidation_base_session_id.clone(),
+        consolidation_recommended_session_id: session
+            .consolidation_recommended_session_id
+            .clone(),
+        consolidation_confirmation_mode: session.consolidation_confirmation_mode.clone(),
+    }
+}
+
 async fn get_agent_env_and_cli_args_async(
     agent_type: &str,
 ) -> (
@@ -1336,58 +1398,10 @@ pub async fn schaltwerk_core_create_session(
         })
     }
 
-    #[derive(serde::Serialize, Clone)]
-    struct SessionAddedPayload {
-        session_name: String,
-        branch: String,
-        worktree_path: String,
-        parent_branch: String,
-        created_at: String,
-        last_modified: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        epic: Option<lucode::domains::sessions::entity::Epic>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        agent_type: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        is_consolidation: Option<bool>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        consolidation_sources: Option<Vec<String>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        consolidation_round_id: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        consolidation_role: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        consolidation_report: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        consolidation_base_session_id: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        consolidation_recommended_session_id: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        consolidation_confirmation_mode: Option<String>,
-    }
     let _ = emit_event(
         &app,
         SchaltEvent::SessionAdded,
-        &SessionAddedPayload {
-            session_name: session.name.clone(),
-            branch: session.branch.clone(),
-            worktree_path: session.worktree_path.to_string_lossy().to_string(),
-            parent_branch: session.parent_branch.clone(),
-            created_at: session.created_at.to_rfc3339(),
-            last_modified: session.last_activity.map(|ts| ts.to_rfc3339()),
-            epic,
-            agent_type: session.original_agent_type.clone(),
-            is_consolidation: session.is_consolidation.then_some(true),
-            consolidation_sources: session.consolidation_sources.clone(),
-            consolidation_round_id: session.consolidation_round_id.clone(),
-            consolidation_role: session.consolidation_role.clone(),
-            consolidation_report: session.consolidation_report.clone(),
-            consolidation_base_session_id: session.consolidation_base_session_id.clone(),
-            consolidation_recommended_session_id: session
-                .consolidation_recommended_session_id
-                .clone(),
-            consolidation_confirmation_mode: session.consolidation_confirmation_mode.clone(),
-        },
+        &build_session_added_payload(&session, epic),
     );
 
     // Only trigger auto-rename for standalone sessions (not part of a version group).
@@ -3511,8 +3525,10 @@ pub async fn schaltwerk_core_start_fresh_orchestrator(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
     use lucode::schaltwerk_core::Database;
     use lucode::services::AgentLaunchSpec;
+    use serde_json::Value;
     use tempfile::TempDir;
 
     fn run_git(current_dir: &Path, args: &[&str]) {
@@ -3667,6 +3683,57 @@ mod tests {
 
         let paths = resolve_conflicting_paths("Merge failed without explicit path marker", repo_path);
         assert_eq!(paths, vec!["conflict.txt".to_string()]);
+    }
+
+    #[test]
+    fn session_added_payload_includes_version_metadata() {
+        let payload = build_session_added_payload(
+            &Session {
+                id: "session-1".to_string(),
+                name: "feature-consolidation".to_string(),
+                display_name: None,
+                version_group_id: Some("group-1".to_string()),
+                version_number: Some(2),
+                epic_id: None,
+                repository_path: std::path::PathBuf::from("/tmp/repo"),
+                repository_name: "repo".to_string(),
+                branch: "schaltwerk/feature-consolidation".to_string(),
+                parent_branch: "main".to_string(),
+                original_parent_branch: None,
+                worktree_path: std::path::PathBuf::from("/tmp/repo/.lucode/worktrees/feature-consolidation"),
+                status: lucode::domains::sessions::entity::SessionStatus::Active,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                last_activity: Some(Utc::now()),
+                initial_prompt: None,
+                ready_to_merge: false,
+                original_agent_type: Some("claude".to_string()),
+                pending_name_generation: false,
+                was_auto_generated: false,
+                spec_content: None,
+                session_state: SessionState::Running,
+                resume_allowed: true,
+                amp_thread_id: None,
+                issue_number: None,
+                issue_url: None,
+                pr_number: None,
+                pr_url: None,
+                is_consolidation: true,
+                consolidation_sources: Some(vec!["feature_v1".to_string(), "feature_v2".to_string()]),
+                consolidation_round_id: Some("round-1".to_string()),
+                consolidation_role: Some("candidate".to_string()),
+                consolidation_report: None,
+                consolidation_base_session_id: Some("feature_v1".to_string()),
+                consolidation_recommended_session_id: None,
+                consolidation_confirmation_mode: Some("confirm".to_string()),
+                promotion_reason: None,
+            },
+            None,
+        );
+
+        let serialized = serde_json::to_value(payload).expect("payload should serialize");
+        assert_eq!(serialized.get("version_group_id"), Some(&Value::String("group-1".to_string())));
+        assert_eq!(serialized.get("version_number"), Some(&Value::from(2)));
     }
 }
 

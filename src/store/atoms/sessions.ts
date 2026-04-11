@@ -1855,6 +1855,8 @@ export const initializeSessionsEventsActionAtom = atom(
                 parent_branch?: string
                 created_at?: string
                 last_modified?: string
+                version_group_id?: string | null
+                version_number?: number | null
                 epic?: Epic
                 agent_type?: string
                 is_consolidation?: boolean
@@ -1883,6 +1885,8 @@ export const initializeSessionsEventsActionAtom = atom(
                 const lastModifiedIso = event.last_modified ?? createdAtIso
                 const info: SessionInfo = {
                     session_id: event.session_name,
+                    version_group_id: event.version_group_id ?? undefined,
+                    version_number: event.version_number ?? undefined,
                     branch: event.branch ?? '',
                     worktree_path: event.worktree_path ?? '',
                     base_branch: event.parent_branch ?? '',

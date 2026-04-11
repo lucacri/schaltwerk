@@ -114,6 +114,31 @@ describe('LucodeBridge project routing', () => {
     expect(headers['X-Project-Path']).toBe(expected['X-Project-Path'])
   })
 
+  it('includes version metadata in session-added webhook notifications', async () => {
+    fetchMock.mockResolvedValue(createResponse({}))
+
+    const bridge = new LucodeBridge()
+    // @ts-ignore - access private method for testing
+    await bridge.notifySessionAdded({
+      name: 'test_v2',
+      branch: 'lucode/test_v2',
+      worktree_path: '/tmp/test_v2',
+      parent_branch: 'main',
+      version_group_id: 'group-1',
+      version_number: 2,
+    })
+
+    const init = fetchMock.mock.calls[0][1] as { body?: string }
+    expect(JSON.parse(String(init?.body))).toEqual({
+      session_name: 'test_v2',
+      branch: 'lucode/test_v2',
+      worktree_path: '/tmp/test_v2',
+      parent_branch: 'main',
+      version_group_id: 'group-1',
+      version_number: 2,
+    })
+  })
+
   it('sends project headers in updateDraftContent', async () => {
     fetchMock.mockResolvedValueOnce(createResponse({}))
     const bridge = new LucodeBridge()

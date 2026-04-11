@@ -130,6 +130,7 @@ import { singleflight as singleflightMock } from '../../utils/singleflight'
 import { stableSessionTerminalId } from '../../common/terminalIdentity'
 import { clearTerminalStartState } from '../../common/terminalStartState'
 import { closePreview } from '../../features/preview/previewIframeRegistry'
+import { groupSessionsByVersion } from '../../utils/sessionVersions'
 import {
     adjustPreviewZoomActionAtom,
     buildPreviewKey,
@@ -1841,6 +1842,66 @@ describe('sessions atoms', () => {
         expect(session?.info.consolidation_base_session_id).toBe('feature_v1')
         expect(session?.info.consolidation_recommended_session_id).toBe('session-merge')
         expect(session?.info.consolidation_confirmation_mode).toBe('confirm')
+    })
+
+    it('hydrates version grouping metadata from SessionAdded', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd, _args) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                return [
+                    createSession({
+                        session_id: 'feature_v1',
+                        branch: 'schaltwerk/feature_v1',
+                        worktree_path: '/tmp/feature-v1',
+                        version_group_id: 'group-1',
+                        version_number: 1,
+                    }),
+                ]
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreGetSession) {
+                return {
+                    name: 'feature-consolidation',
+                    branch: 'schaltwerk/feature-consolidation',
+                    worktree_path: '/tmp/feature-consolidation',
+                }
+            }
+            return undefined
+        })
+
+        store.set(projectPathAtom, '/project')
+        await store.set(initializeSessionsEventsActionAtom)
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:session-added']?.({
+            session_name: 'feature-consolidation',
+            branch: 'schaltwerk/feature-consolidation',
+            worktree_path: '/tmp/feature-consolidation',
+            parent_branch: 'main',
+            version_group_id: 'group-1',
+            version_number: 2,
+            is_consolidation: true,
+            created_at: '2024-01-01T00:05:00.000Z',
+            last_modified: '2024-01-01T00:05:00.000Z',
+        })
+
+        await vi.waitFor(() => {
+            const session = store.get(allSessionsAtom).find(candidate => candidate.info.session_id === 'feature-consolidation')
+            expect(session).toBeDefined()
+            expect(session?.info.version_group_id).toBe('group-1')
+            expect(session?.info.version_number).toBe(2)
+        })
+
+        const versionGroups = groupSessionsByVersion(store.get(allSessionsAtom))
+        expect(versionGroups).toHaveLength(1)
+        expect(versionGroups[0]?.id).toBe('group-1')
+        expect(versionGroups[0]?.versions.map(version => version.session.info.session_id)).toEqual([
+            'feature_v1',
+            'feature-consolidation',
+        ])
     })
 
     it('clears terminal start state when SessionRemoved fires to allow session recreation with same name', async () => {

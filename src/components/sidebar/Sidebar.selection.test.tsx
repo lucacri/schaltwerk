@@ -221,6 +221,58 @@ describe('Ready session cancellation focus preservation', () => {
     })
   })
 
+  it('shows a new versioned session inside its sidebar group immediately after SessionAdded', async () => {
+    const baseSession: TestSession = {
+      ...mockEnrichedSession('session-merge', SessionState.Running, false),
+      info: {
+        ...mockEnrichedSession('session-merge', SessionState.Running, false).info,
+        version_group_id: 'group-123',
+        version_number: 1,
+      },
+    }
+
+    currentSessions = [baseSession]
+    ;(globalThis as { __testCurrentSessions?: TestSession[] }).__testCurrentSessions = currentSessions
+
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: MockTauriInvokeArgs) => {
+      const sessions = (globalThis as { __testCurrentSessions?: TestSession[] }).__testCurrentSessions || currentSessions
+      if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) return sessions
+      if (cmd === TauriCommands.SchaltwerkCoreGetSession) {
+        const name = (args as { name?: string })?.name
+        const match = sessions.find(s => s.info.session_id === name)
+        return match ? toRawSession(match) : null
+      }
+      if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'running', sort_mode: 'name' }
+      if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
+      return undefined
+    })
+
+    render(<TestProviders><Sidebar /></TestProviders>)
+
+    await waitFor(() => {
+      expect(screen.getByText('session-merge')).toBeInTheDocument()
+    })
+
+    await emitEvent(SchaltEvent.SessionAdded, {
+      session_name: 'consolidation-candidate',
+      branch: 'branch-consolidation-candidate',
+      worktree_path: '/path/to/consolidation-candidate',
+      parent_branch: 'main',
+      version_group_id: 'group-123',
+      version_number: 2,
+      created_at: '2024-01-01T00:05:00.000Z',
+      last_modified: '2024-01-01T00:05:00.000Z',
+    })
+
+    await waitFor(() => {
+      const groupHeader = screen.getByText('session-merge').closest('button')
+      expect(groupHeader).toBeTruthy()
+      expect(groupHeader).toHaveTextContent('2x')
+      expect(screen.getByLabelText('Select session consolidation-candidate')).toBeInTheDocument()
+    })
+  })
+
   it('continues normal auto-selection behavior for non-ready session cancellation', async () => {
     const runningSession = mockEnrichedSession('running-session', SessionState.Running, false)
     const anotherRunning = mockEnrichedSession('another-running', SessionState.Running, false)

@@ -251,6 +251,8 @@ export type EventPayloadMap = {
     parent_branch: string
     created_at: string
     last_modified?: string
+    version_group_id?: string | null
+    version_number?: number | null
     epic?: Epic
     agent_type?: string
     is_consolidation?: boolean
