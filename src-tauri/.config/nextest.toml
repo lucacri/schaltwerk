@@ -1,6 +1,6 @@
 [profile.default]
 test-threads = "num-cpus"
-fail-fast = false
+fail-fast = true
 slow-timeout = { period = "5s", terminate-after = 3 }
 status-level = "fail"
 final-status-level = "fail"

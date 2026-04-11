@@ -41,3 +41,6 @@ coverage/
 # OpenCode configuration file
 opencode.json
 updater-private.key*
+
+# Test tracking (session-scoped, per-worktree)
+.tracked-tests

@@ -538,6 +538,11 @@ test:
     {{pm}} run deps:rust && ok "Cargo shear passed"
     {{pm}} run deps:check && ok "Knip passed"
 
+    if [[ -s .tracked-tests ]]; then
+        step "Tracked tests"
+        scripts/tracked-tests.sh run-tracked && ok "Tracked tests passed"
+    fi
+
     step "Test: Frontend"
     {{pm}} run test:frontend && ok "Frontend tests passed"
 
@@ -553,6 +558,18 @@ test:
 # Run only frontend tests (TypeScript, linting, unit tests)
 test-frontend:
     {{pm}} run lint && {{pm}} run lint:ts && {{pm}} run test:frontend
+
+# Track and immediately run a targeted test file
+test-track path:
+    scripts/tracked-tests.sh track "{{path}}"
+
+# Stop tracking a targeted test file
+test-untrack path:
+    scripts/tracked-tests.sh untrack "{{path}}"
+
+# Clear all tracked test files
+test-clear:
+    scripts/tracked-tests.sh clear
 
 # Run Rust tests with nextest while silencing warnings for cleaner output
 test-rust *ARGS:
