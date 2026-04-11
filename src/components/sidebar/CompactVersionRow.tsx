@@ -126,6 +126,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
     isReadyToMerge,
     isRunning: statusState.isActivelyRunning,
     isIdle: statusState.isIdle,
+    isWaitingForInput: statusState.isWaitingForInput,
     hasFollowUpMessage,
     willBeDeleted,
     isPromotionPreview,
@@ -164,7 +165,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
     if (statusState.primaryStatus === 'waiting') {
       return (
         <span
-          data-testid="compact-row-status-idle"
+          data-testid="compact-row-status-waiting"
           className="inline-flex items-center px-1.5 py-[1px] rounded border"
           style={{
             ...sessionText.badge,
@@ -185,9 +186,9 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
           className="inline-flex items-center px-1.5 py-[1px] rounded border"
           style={{
             ...sessionText.badge,
-            backgroundColor: 'var(--color-accent-amber-bg)',
-            color: 'var(--color-accent-amber-light)',
-            borderColor: 'var(--color-accent-amber-border)',
+            backgroundColor: 'var(--color-accent-yellow-bg)',
+            color: 'var(--color-accent-yellow-light)',
+            borderColor: 'var(--color-accent-yellow-border)',
           }}
         >
           {t.session.idle}

@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { SessionRailCard } from './SessionRailCard'
@@ -24,5 +24,27 @@ describe('SessionRailCard', () => {
 
     expect(container.querySelector('.progress-dot-1')).toBeTruthy()
     expect(container.querySelector('[title="Spec"]')).toBeNull()
+  })
+
+  it('shows waiting for input for running sessions with waiting attention kind', () => {
+    const session = mockEnrichedSession('waiting-session', 'running', false)
+    session.info.attention_required = true
+    session.info.attention_kind = 'waiting_for_input'
+
+    render(
+      <TestProviders>
+        <SessionRailCard
+          session={session}
+          index={0}
+          isSelected={false}
+          hasFollowUpMessage={false}
+          isRunning={false}
+          onSelect={vi.fn()}
+        />
+      </TestProviders>
+    )
+
+    expect(screen.getByLabelText(/waiting for input/i)).toBeInTheDocument()
+    expect(screen.queryByText(/idle/i)).toBeNull()
   })
 })

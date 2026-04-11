@@ -118,6 +118,15 @@ pub async fn launch_in_terminal(
                 .await?;
         }
 
+        match agent_kind {
+            agent_ctx::AgentKind::Claude | agent_ctx::AgentKind::Gemini => {
+                manager
+                    .configure_attention_profile(&terminal_id, agent_kind.manifest_key())
+                    .await?;
+            }
+            _ => {}
+        }
+
         Ok::<_, String>(launch_spec.shell_command)
     };
 

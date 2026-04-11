@@ -234,7 +234,7 @@ pub(super) async fn cleanup_dead_terminal(id: String, deps: &LifecycleDeps) {
 
     if is_top_terminal && let Some(session_id) = session_id {
         handle_terminal_attention(session_id.clone(), false);
-        update_session_attention_state(session_id, false);
+        update_session_attention_state(session_id, false, None);
     }
 
     info!("Dead terminal cleanup completed");

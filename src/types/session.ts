@@ -11,6 +11,7 @@ export const AGENT_TYPES = [
     'terminal'
 ] as const
 export type AgentType = (typeof AGENT_TYPES)[number]
+export type SessionAttentionKind = 'idle' | 'waiting_for_input'
 
 export type EnabledAgents = Record<AgentType, boolean>
 
@@ -127,6 +128,7 @@ export interface SessionInfo {
     diff_stats?: DiffStats
     top_uncommitted_paths?: string[]
     attention_required?: boolean
+    attention_kind?: SessionAttentionKind
     issue_number?: number
     issue_url?: string
     pr_number?: number
@@ -163,6 +165,7 @@ export interface EnrichedSession {
     status?: SessionMonitorStatus
     terminals: string[]
     attention_required?: boolean
+    attention_kind?: SessionAttentionKind
 }
 
 // Raw Session type returned from Tauri backend (from schaltwerk_core_get_session)

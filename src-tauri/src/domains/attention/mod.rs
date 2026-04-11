@@ -56,22 +56,46 @@ impl AttentionStateRegistry {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionAttentionKind {
+    Idle,
+    WaitingForInput,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SessionAttentionStatus {
+    pub needs_attention: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<SessionAttentionKind>,
+}
+
 #[derive(Debug, Default)]
 pub struct SessionAttentionState {
-    states: HashMap<String, bool>,
+    states: HashMap<String, SessionAttentionStatus>,
 }
 
 impl SessionAttentionState {
-    pub fn update(&mut self, session_id: &str, needs_attention: bool) {
-        self.states
-            .insert(session_id.to_string(), needs_attention);
+    pub fn update(
+        &mut self,
+        session_id: &str,
+        needs_attention: bool,
+        kind: Option<SessionAttentionKind>,
+    ) {
+        self.states.insert(
+            session_id.to_string(),
+            SessionAttentionStatus {
+                needs_attention,
+                kind,
+            },
+        );
     }
 
-    pub fn get(&self, session_id: &str) -> Option<bool> {
+    pub fn get(&self, session_id: &str) -> Option<SessionAttentionStatus> {
         self.states.get(session_id).copied()
     }
 
-    pub fn get_all(&self) -> &HashMap<String, bool> {
+    pub fn get_all(&self) -> &HashMap<String, SessionAttentionStatus> {
         &self.states
     }
 
@@ -121,14 +145,20 @@ mod tests {
 
         assert_eq!(state.get("session-1"), None);
 
-        state.update("session-1", true);
-        assert_eq!(state.get("session-1"), Some(true));
+        state.update("session-1", true, None);
+        assert_eq!(
+            state.get("session-1").map(|entry| entry.needs_attention),
+            Some(true)
+        );
 
-        state.update("session-2", true);
+        state.update("session-2", true, None);
         assert_eq!(state.get_all().len(), 2);
 
-        state.update("session-1", false);
-        assert_eq!(state.get("session-1"), Some(false));
+        state.update("session-1", false, None);
+        assert_eq!(
+            state.get("session-1").map(|entry| entry.needs_attention),
+            Some(false)
+        );
         assert_eq!(state.get_all().len(), 2);
 
         state.clear_session("session-1");
@@ -137,5 +167,36 @@ mod tests {
 
         state.clear_session("session-2");
         assert_eq!(state.get_all().len(), 0);
+    }
+
+    #[test]
+    fn session_attention_state_tracks_attention_kind() {
+        use super::{SessionAttentionKind, SessionAttentionState};
+
+        let mut state = SessionAttentionState::default();
+
+        state.update(
+            "session-1",
+            true,
+            Some(SessionAttentionKind::WaitingForInput),
+        );
+        let stored = state
+            .get("session-1")
+            .expect("attention state should exist");
+        assert!(stored.needs_attention);
+        assert_eq!(stored.kind, Some(SessionAttentionKind::WaitingForInput));
+
+        state.update("session-1", true, Some(SessionAttentionKind::Idle));
+        let stored = state
+            .get("session-1")
+            .expect("attention state should exist");
+        assert_eq!(stored.kind, Some(SessionAttentionKind::Idle));
+
+        state.update("session-1", false, None);
+        let stored = state
+            .get("session-1")
+            .expect("attention state should still exist");
+        assert!(!stored.needs_attention);
+        assert_eq!(stored.kind, None);
     }
 }

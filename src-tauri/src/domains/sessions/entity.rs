@@ -389,6 +389,8 @@ pub struct SessionInfo {
     pub consolidation_confirmation_mode: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub promotion_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attention_kind: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -398,6 +400,8 @@ pub struct EnrichedSession {
     pub terminals: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attention_required: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attention_kind: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

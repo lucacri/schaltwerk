@@ -4516,15 +4516,35 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
                     let mut spec_attention_updates = Vec::new();
                     for session in &mut sessions {
                         let previous_attention = session.attention_required;
-                        let Some(attention_required) = guard.get(&session.info.session_id) else {
+                        let Some(attention) = guard.get(&session.info.session_id) else {
                             continue;
                         };
-                        session.attention_required = Some(attention_required);
+                        session.attention_required = Some(attention.needs_attention);
+                        session.attention_kind = attention.kind.map(|kind| match kind {
+                            lucode::domains::attention::SessionAttentionKind::Idle => {
+                                "idle".to_string()
+                            }
+                            lucode::domains::attention::SessionAttentionKind::WaitingForInput => {
+                                "waiting_for_input".to_string()
+                            }
+                        });
                         if session.info.session_state == SessionState::Spec
-                            && previous_attention != Some(attention_required)
                             && let Some(stable_id) = session.info.stable_id.as_deref()
                         {
-                            spec_attention_updates.push((stable_id.to_string(), attention_required));
+                            let persisted_attention = match attention.kind {
+                                Some(lucode::domains::attention::SessionAttentionKind::WaitingForInput) => {
+                                    Some(true)
+                                }
+                                Some(lucode::domains::attention::SessionAttentionKind::Idle) => Some(false),
+                                None if !attention.needs_attention => Some(false),
+                                None => Some(attention.needs_attention),
+                            };
+
+                            if let Some(persisted_attention) = persisted_attention
+                                && previous_attention != Some(persisted_attention)
+                            {
+                                spec_attention_updates.push((stable_id.to_string(), persisted_attention));
+                            }
                         }
                     }
                     drop(guard);

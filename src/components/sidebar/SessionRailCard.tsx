@@ -38,10 +38,17 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
   const sessionName = getSessionDisplayName(info)
   const sessionState = info.session_state
   const lifecycleState = getSessionLifecycleState(info)
-  const isIdle = Boolean((info as SessionInfo & { attention_required?: boolean }).attention_required)
-  const isRunningState = (lifecycleState === 'running' || isRunning) && !isIdle
+  const specWaitingForInput = lifecycleState === SessionState.Spec
+    && info.clarification_started === true
+    && info.attention_required === true
+    && info.attention_kind !== 'idle'
+  const isWaitingForInput = lifecycleState === SessionState.Spec
+    ? specWaitingForInput
+    : info.attention_required === true && info.attention_kind === 'waiting_for_input'
+  const isIdle = info.attention_required === true && !isWaitingForInput
+  const isRunningState = (lifecycleState === 'running' || isRunning) && !isIdle && !isWaitingForInput
   const isReadyState = Boolean(info.ready_to_merge)
-  const accessibleState = isIdle ? 'idle' : (isReadyState ? 'ready' : lifecycleState)
+  const accessibleState = isWaitingForInput ? 'waiting for input' : (isIdle ? 'idle' : (isReadyState ? 'ready' : lifecycleState))
   const shortcuts = useMultipleShortcutDisplays([
     KeyboardShortcutAction.SwitchToSession1,
     KeyboardShortcutAction.SwitchToSession2,
@@ -79,7 +86,8 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
     isSelected,
     isReadyToMerge: isReadyState,
     isRunning,
-    isIdle: !!info.attention_required,
+    isIdle,
+    isWaitingForInput,
     hasFollowUpMessage,
   })
 
@@ -125,6 +133,20 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
         {/* State icon row */}
         <div className="flex items-center justify-center w-full">
           {isRunningState && <ProgressIndicator className="scale-75" size="sm" />}
+          {!isRunningState && isWaitingForInput && (
+          <span
+            style={{
+              fontSize: theme.fontSize.label,
+              lineHeight: theme.lineHeight.compact,
+              fontFamily: theme.fontFamily.sans,
+              fontWeight: 600,
+              color: 'var(--color-accent-amber-light)'
+            }}
+            title={t.session.waitingForInput}
+          >
+            ✋ {t.session.waitingForInput}
+          </span>
+          )}
           {!isRunningState && isIdle && (
           <span
             style={{

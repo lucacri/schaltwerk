@@ -81,8 +81,16 @@ impl<B: SessionsBackend> SessionsServiceImpl<B> {
             match registry.try_lock() {
                 Ok(guard) => {
                     for session in &mut sessions {
-                        if let Some(attention_required) = guard.get(&session.info.session_id) {
-                            session.attention_required = Some(attention_required);
+                        if let Some(attention) = guard.get(&session.info.session_id) {
+                            session.attention_required = Some(attention.needs_attention);
+                            session.attention_kind = attention.kind.map(|kind| match kind {
+                                crate::domains::attention::SessionAttentionKind::Idle => {
+                                    "idle".to_string()
+                                }
+                                crate::domains::attention::SessionAttentionKind::WaitingForInput => {
+                                    "waiting_for_input".to_string()
+                                }
+                            });
                         }
                     }
                 }
@@ -173,17 +181,37 @@ impl SessionsBackend for ProjectSessionsBackend {
 
                     for session in &mut sessions {
                         let previous_attention = session.attention_required;
-                        let Some(attention_required) = guard.get(&session.info.session_id) else {
+                        let Some(attention) = guard.get(&session.info.session_id) else {
                             continue;
                         };
 
-                        session.attention_required = Some(attention_required);
+                        session.attention_required = Some(attention.needs_attention);
+                        session.attention_kind = attention.kind.map(|kind| match kind {
+                            crate::domains::attention::SessionAttentionKind::Idle => {
+                                "idle".to_string()
+                            }
+                            crate::domains::attention::SessionAttentionKind::WaitingForInput => {
+                                "waiting_for_input".to_string()
+                            }
+                        });
 
                         if session.info.session_state == crate::domains::sessions::entity::SessionState::Spec
-                            && previous_attention != Some(attention_required)
                             && let Some(stable_id) = session.info.stable_id.as_deref()
                         {
-                            spec_attention_updates.push((stable_id.to_string(), attention_required));
+                            let persisted_attention = match attention.kind {
+                                Some(crate::domains::attention::SessionAttentionKind::WaitingForInput) => {
+                                    Some(true)
+                                }
+                                Some(crate::domains::attention::SessionAttentionKind::Idle) => Some(false),
+                                None if !attention.needs_attention => Some(false),
+                                None => Some(attention.needs_attention),
+                            };
+
+                            if let Some(persisted_attention) = persisted_attention
+                                && previous_attention != Some(persisted_attention)
+                            {
+                                spec_attention_updates.push((stable_id.to_string(), persisted_attention));
+                            }
                         }
                     }
 
@@ -296,10 +324,12 @@ mod tests {
                 consolidation_recommended_session_id: None,
                 consolidation_confirmation_mode: None,
                 promotion_reason: None,
+                attention_kind: None,
             },
             status: None,
             terminals: vec![],
             attention_required: None,
+            attention_kind: None,
         }
     }
 
@@ -355,8 +385,11 @@ mod tests {
     #[tokio::test]
     async fn hydrates_runtime_attention_from_registry() {
         let registry = init_attention_registry();
-        registry.lock().await.update("one", true);
-        registry.lock().await.update("two", false);
+        registry
+            .lock()
+            .await
+            .update("one", true, Some(crate::domains::attention::SessionAttentionKind::Idle));
+        registry.lock().await.update("two", false, None);
 
         let backend = SuccessBackend {
             sessions: vec![sample_session("one"), sample_session("two")],
@@ -372,5 +405,30 @@ mod tests {
 
         assert_eq!(sessions[0].attention_required, Some(true));
         assert_eq!(sessions[1].attention_required, Some(false));
+        assert_eq!(sessions[0].attention_kind.as_deref(), Some("idle"));
+        assert_eq!(sessions[1].attention_kind, None);
+    }
+
+    #[tokio::test]
+    async fn hydrates_waiting_for_input_attention_kind_from_registry() {
+        let registry = init_attention_registry();
+        registry.lock().await.update(
+            "one",
+            true,
+            Some(crate::domains::attention::SessionAttentionKind::WaitingForInput),
+        );
+
+        let backend = SuccessBackend {
+            sessions: vec![sample_session("one")],
+        };
+        let service = SessionsServiceImpl::new(backend);
+
+        let sessions = service
+            .list_enriched_sessions()
+            .await
+            .expect("expected successful session listing");
+
+        assert_eq!(sessions[0].attention_required, Some(true));
+        assert_eq!(sessions[0].attention_kind.as_deref(), Some("waiting_for_input"));
     }
 }

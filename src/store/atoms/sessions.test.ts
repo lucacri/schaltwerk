@@ -410,6 +410,70 @@ describe('sessions atoms', () => {
         expect(session?.info.attention_required).toBe(true)
     })
 
+    it('stores attention_kind from TerminalAttention events', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                return [createSession({ session_id: 'kind-session', worktree_path: '/tmp/kind' })]
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'kind-session',
+            terminal_id: stableSessionTerminalId('kind-session', 'top'),
+            needs_attention: true,
+            attention_kind: 'waiting_for_input',
+        })
+
+        const session = store.get(allSessionsAtom).find(s => s.info.session_id === 'kind-session')
+        expect(session?.info.attention_required).toBe(true)
+        expect(session?.info.attention_kind).toBe('waiting_for_input')
+    })
+
+    it('preserves live attention_kind when snapshots do not include it yet', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                return [createSession({ session_id: 'kind-race', worktree_path: '/tmp/kind-race' })]
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(projectPathAtom, '/projects/alpha')
+        await store.set(refreshSessionsActionAtom)
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'kind-race',
+            terminal_id: stableSessionTerminalId('kind-race', 'top'),
+            needs_attention: true,
+            attention_kind: 'waiting_for_input',
+        })
+
+        listeners['schaltwerk:sessions-refreshed']?.({
+            projectPath: '/projects/alpha',
+            sessions: [createSession({ session_id: 'kind-race', worktree_path: '/tmp/kind-race' })],
+        })
+
+        await vi.advanceTimersByTimeAsync(0)
+
+        const session = store.get(allSessionsAtom).find(s => s.info.session_id === 'kind-race')
+        expect(session?.info.attention_kind).toBe('waiting_for_input')
+    })
+
     it('cleans up cached sessions when closing a background project', async () => {
         const { invoke } = await import('@tauri-apps/api/core')
         vi.mocked(invoke).mockImplementation(async (cmd) => {

@@ -42,6 +42,8 @@ export enum SchaltEvent {
   SelectAllRequested = 'schaltwerk:select-all-requested',
 }
 
+export type SessionAttentionKind = 'idle' | 'waiting_for_input'
+
 
 export interface SessionActivityUpdated {
   session_id: string
@@ -268,7 +270,7 @@ export type EventPayloadMap = {
 
   [SchaltEvent.SessionActivity]: SessionActivityUpdated
   [SchaltEvent.SessionGitStats]: SessionGitStatsUpdated
-  [SchaltEvent.TerminalAttention]: { session_id: string, terminal_id: string, needs_attention: boolean }
+  [SchaltEvent.TerminalAttention]: { session_id: string, terminal_id: string, needs_attention: boolean, attention_kind?: SessionAttentionKind }
   [SchaltEvent.TerminalClosed]: { terminal_id: string }
   [SchaltEvent.TerminalAgentStarted]: { terminal_id: string, session_name?: string }
   [SchaltEvent.TerminalForceScroll]: { terminal_id: string }

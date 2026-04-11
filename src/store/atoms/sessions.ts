@@ -650,8 +650,18 @@ async function applySessionsSnapshot(
     const previousMap = new Map(previousSessionsSnapshot.map(session => [session.info.session_id, session]))
     const withSnapshots = sessions.map(session => {
         const merged = attachMergeSnapshot(session, previousMap)
-        if (merged.attention_required != null && merged.info.attention_required == null) {
-            return { ...merged, info: { ...merged.info, attention_required: merged.attention_required } }
+        if (
+            (merged.attention_required != null && merged.info.attention_required == null)
+            || (merged.attention_kind != null && merged.info.attention_kind == null)
+        ) {
+            return {
+                ...merged,
+                info: {
+                    ...merged.info,
+                    attention_required: merged.attention_required ?? merged.info.attention_required,
+                    attention_kind: merged.attention_kind ?? merged.info.attention_kind,
+                },
+            }
         }
         return merged
     })
@@ -706,20 +716,30 @@ async function applySessionsSnapshot(
     let resolved = deduped
     set(allSessionsAtom, (current) => {
         const liveAttention = new Map<string, boolean>()
+        const liveAttentionKinds = new Map<string, EnrichedSession['info']['attention_kind']>()
         for (const s of current) {
             if (s.info.attention_required != null) {
                 liveAttention.set(s.info.session_id, s.info.attention_required)
             }
+            if (s.info.attention_kind != null) {
+                liveAttentionKinds.set(s.info.session_id, s.info.attention_kind)
+            }
         }
-        if (liveAttention.size === 0) {
+        if (liveAttention.size === 0 && liveAttentionKinds.size === 0) {
             return deduped
         }
         resolved = deduped.map(session => {
             const live = liveAttention.get(session.info.session_id)
-            if (live != null && session.info.attention_required == null) {
+            const liveKind = liveAttentionKinds.get(session.info.session_id)
+            if ((live != null && session.info.attention_required == null)
+                || (liveKind != null && session.info.attention_kind == null)) {
                 return {
                     ...session,
-                    info: { ...session.info, attention_required: live },
+                    info: {
+                        ...session.info,
+                        attention_required: live ?? session.info.attention_required,
+                        attention_kind: liveKind ?? session.info.attention_kind,
+                    },
                 }
             }
             return session
@@ -1682,7 +1702,12 @@ export const initializeSessionsEventsActionAtom = atom(
         })
 
         await register(SchaltEvent.TerminalAttention, (payload) => {
-            const event = payload as { session_id: string; terminal_id: string; needs_attention?: boolean }
+            const event = payload as {
+                session_id: string
+                terminal_id: string
+                needs_attention?: boolean
+                attention_kind?: EnrichedSession['info']['attention_kind']
+            }
             if (!isTopTerminalId(event.terminal_id)) {
                 logger.debug('[SessionsAtoms] Ignoring attention event from non-top terminal', event)
                 return
@@ -1702,7 +1727,9 @@ export const initializeSessionsEventsActionAtom = atom(
                     }
                     const target = prev[targetIndex]
                     const nextAttention = needsAttention ? true : undefined
-                    if (target.info.attention_required === nextAttention) {
+                    const nextAttentionKind = needsAttention ? event.attention_kind : undefined
+                    if (target.info.attention_required === nextAttention
+                        && target.info.attention_kind === nextAttentionKind) {
                         return prev
                     }
                     const updated = [...prev]
@@ -1711,6 +1738,7 @@ export const initializeSessionsEventsActionAtom = atom(
                         info: {
                             ...target.info,
                             attention_required: nextAttention,
+                            attention_kind: nextAttentionKind,
                         },
                     }
                     return updated

@@ -53,6 +53,7 @@ type SessionCardSurfaceOptions = {
   isReadyToMerge: boolean
   isRunning: boolean
   isIdle: boolean
+  isWaitingForInput?: boolean
   hasFollowUpMessage?: boolean
   willBeDeleted?: boolean
   isPromotionPreview?: boolean
@@ -76,6 +77,7 @@ export function getSessionCardSurfaceClasses({
   isReadyToMerge: _isReadyToMerge,
   isRunning,
   isIdle,
+  isWaitingForInput,
   hasFollowUpMessage,
   willBeDeleted,
   isPromotionPreview,
@@ -121,7 +123,11 @@ export function getSessionCardSurfaceClasses({
   }
 
   if (!willBeDeleted && !isSelected) {
-    if (isIdle) {
+    if (isWaitingForInput) {
+      style['--session-card-bg'] = 'var(--color-accent-amber-bg)'
+      style['--session-card-hover-bg'] = 'var(--color-accent-amber-bg)'
+      style['--session-card-border'] = 'var(--color-accent-amber-border)'
+    } else if (isIdle) {
       style['--session-card-bg'] = 'var(--color-accent-yellow-bg)'
       style['--session-card-hover-bg'] = 'var(--color-accent-yellow-bg)'
       style['--session-card-border'] = 'var(--color-accent-yellow-border)'
@@ -253,6 +259,7 @@ export const SessionCard = memo<SessionCardProps>(
       isReadyToMerge,
       isRunning: statusState.isActivelyRunning,
       isIdle: statusState.isIdle,
+      isWaitingForInput: statusState.isWaitingForInput,
       hasFollowUpMessage,
       willBeDeleted,
       isPromotionPreview,
@@ -417,7 +424,7 @@ export const SessionCard = memo<SessionCardProps>(
                 className="flex-shrink-0"
                 style={{
                   ...sessionText.badge,
-                  color: "var(--color-accent-yellow-light)",
+                  color: "var(--color-accent-amber-light)",
                 }}
               >
                 {t.session.waitingForInput}

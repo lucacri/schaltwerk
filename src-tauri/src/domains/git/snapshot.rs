@@ -158,9 +158,7 @@ mod tests {
 
         fs::write(dir.path().join("staged.txt"), "content").unwrap();
         let mut index = repo.index().unwrap();
-        index
-            .add_path(std::path::Path::new("staged.txt"))
-            .unwrap();
+        index.add_path(std::path::Path::new("staged.txt")).unwrap();
         index.write().unwrap();
 
         let snap = WorktreeSnapshot::capture(&repo).unwrap();

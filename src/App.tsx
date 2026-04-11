@@ -802,7 +802,7 @@ function AppContent() {
     const cachedCounts = crossProjectCounts[projectPath]
     const liveCounts = calculateLogicalSessionCounts(
       allSessions,
-      session => session.info.attention_required === true,
+      session => session.info.attention_required === true && session.info.attention_kind !== 'waiting_for_input',
     )
     const counts = activeSessionsHydratedFromCache && cachedCounts != null
       ? cachedCounts

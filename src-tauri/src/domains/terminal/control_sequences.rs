@@ -17,6 +17,14 @@ pub struct SanitizedOutput {
     pub cursor_query_offsets: Vec<usize>,
     pub window_size_requests: Vec<WindowSizeRequest>,
     pub responses: Vec<SequenceResponse>,
+    pub notifications: Vec<TerminalNotification>,
+    pub window_titles: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalNotification {
+    pub kind: u32,
+    pub payload: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,6 +123,8 @@ pub fn sanitize_control_sequences(input: &[u8]) -> SanitizedOutput {
     let mut cursor_query_offsets = Vec::new();
     let mut window_size_requests = Vec::new();
     let mut responses = Vec::new();
+    let mut notifications = Vec::new();
+    let mut window_titles = Vec::new();
 
     let mut i = 0;
     while i < input.len() {
@@ -228,7 +238,9 @@ pub fn sanitize_control_sequences(input: &[u8]) -> SanitizedOutput {
                 let mut cursor = i + 2;
                 let mut terminator_index = None;
                 while cursor < input.len() {
-                    if input[cursor] == 0x1b && cursor + 1 < input.len() && input[cursor + 1] == b'\\'
+                    if input[cursor] == 0x1b
+                        && cursor + 1 < input.len()
+                        && input[cursor + 1] == b'\\'
                     {
                         terminator_index = Some(cursor);
                         break;
@@ -289,10 +301,27 @@ pub fn sanitize_control_sequences(input: &[u8]) -> SanitizedOutput {
                         } else if text.starts_with("8;") {
                             data.extend_from_slice(&input[i..=term_idx + terminator_len - 1]);
                             i = term_idx + terminator_len;
+                        } else if let Some(title) =
+                            text.strip_prefix("0;").or_else(|| text.strip_prefix("2;"))
+                        {
+                            window_titles.push(title.to_string());
+                            data.extend_from_slice(&input[i..=term_idx + terminator_len - 1]);
+                            i = term_idx + terminator_len;
+                        } else if let Some(payload) = text.strip_prefix("9;") {
+                            notifications.push(TerminalNotification {
+                                kind: 9,
+                                payload: payload.to_string(),
+                            });
+                            data.extend_from_slice(&input[i..=term_idx + terminator_len - 1]);
+                            i = term_idx + terminator_len;
                         } else {
-                            let osc_code = text.split(';').next().and_then(|s| s.parse::<u32>().ok());
+                            let osc_code =
+                                text.split(';').next().and_then(|s| s.parse::<u32>().ok());
                             const KNOWN_OSC_CODES: &[u32] = &[0, 1, 2, 4, 7, 9, 52, 133, 1337];
-                            if !osc_code.map(|c| KNOWN_OSC_CODES.contains(&c)).unwrap_or(false) {
+                            if !osc_code
+                                .map(|c| KNOWN_OSC_CODES.contains(&c))
+                                .unwrap_or(false)
+                            {
                                 log::debug!("Unknown OSC sequence passing through: {text:?}");
                             }
                             data.extend_from_slice(&input[i..=term_idx + terminator_len - 1]);
@@ -329,12 +358,14 @@ pub fn sanitize_control_sequences(input: &[u8]) -> SanitizedOutput {
         cursor_query_offsets,
         window_size_requests,
         responses,
+        notifications,
+        window_titles,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{SanitizedOutput, SequenceResponse, WindowSizeRequest, sanitize_control_sequences};
+    use super::{sanitize_control_sequences, SanitizedOutput, SequenceResponse, WindowSizeRequest};
 
     #[test]
     fn handles_cursor_position_queries() {
@@ -347,6 +378,8 @@ mod tests {
                 cursor_query_offsets: vec![3],
                 window_size_requests: Vec::new(),
                 responses: Vec::new(),
+                notifications: Vec::new(),
+                window_titles: Vec::new(),
             }
         );
     }
@@ -567,6 +600,39 @@ mod tests {
         assert!(result.remainder.is_none());
         assert!(result.cursor_query_offsets.is_empty());
         assert!(result.responses.is_empty());
+    }
+
+    #[test]
+    fn captures_osc9_notifications_without_stripping_them() {
+        let result = sanitize_control_sequences(
+            b"pre\x1b]9;Gemini CLI needs your attention | Action required | Open Gemini CLI to continue.\x07post",
+        );
+
+        assert_eq!(
+            result.data,
+            b"pre\x1b]9;Gemini CLI needs your attention | Action required | Open Gemini CLI to continue.\x07post"
+        );
+        assert_eq!(result.notifications.len(), 1);
+        assert_eq!(result.notifications[0].kind, 9);
+        assert!(result.notifications[0]
+            .payload
+            .starts_with("Gemini CLI needs your attention"));
+    }
+
+    #[test]
+    fn captures_window_title_updates_without_stripping_them() {
+        let result = sanitize_control_sequences(
+            b"pre\x1b]0;\xE2\x9C\x8B  Action Required (workspace)\x07post",
+        );
+
+        assert_eq!(
+            result.data,
+            b"pre\x1b]0;\xE2\x9C\x8B  Action Required (workspace)\x07post"
+        );
+        assert_eq!(
+            result.window_titles,
+            vec!["✋  Action Required (workspace)".to_string()]
+        );
     }
 
     #[test]

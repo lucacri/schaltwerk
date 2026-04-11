@@ -1955,10 +1955,12 @@ mod service_unified_tests {
             copied_settings.exists(),
             "expected settings.local.json to be copied"
         );
-        assert_eq!(
-            std::fs::read_to_string(copied_settings).unwrap(),
-            "{\"key\":\"value\"}"
-        );
+        let parsed: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(&copied_settings).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(parsed["key"], serde_json::Value::String("value".to_string()));
+        assert!(parsed["hooks"]["Notification"].is_array());
     }
 
     #[test]
@@ -3050,6 +3052,7 @@ impl SessionManager {
                 consolidation_recommended_session_id: None,
                 consolidation_confirmation_mode: None,
                 promotion_reason: None,
+                attention_kind: None,
             };
 
             enriched.push(EnrichedSession {
@@ -3057,6 +3060,7 @@ impl SessionManager {
                 status: None,
                 terminals: Vec::new(),
                 attention_required: Some(spec.attention_required),
+                attention_kind: None,
             });
         }
 
@@ -3120,6 +3124,7 @@ impl SessionManager {
                         .consolidation_confirmation_mode
                         .clone(),
                     promotion_reason: session.promotion_reason.clone(),
+                    attention_kind: None,
                 };
 
                 enriched.push(EnrichedSession {
@@ -3127,6 +3132,7 @@ impl SessionManager {
                     status: None,
                     terminals: Vec::new(),
                     attention_required: None,
+                    attention_kind: None,
                 });
 
                 continue;
@@ -3226,6 +3232,7 @@ impl SessionManager {
                     .consolidation_confirmation_mode
                     .clone(),
                 promotion_reason: session.promotion_reason.clone(),
+                attention_kind: None,
             };
 
             let terminals = vec![
@@ -3238,6 +3245,7 @@ impl SessionManager {
                 status: None,
                 terminals,
                 attention_required: None,
+                attention_kind: None,
             });
 
             if worktree_exists {

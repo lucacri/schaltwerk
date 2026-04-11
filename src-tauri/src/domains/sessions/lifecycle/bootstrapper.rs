@@ -2,7 +2,110 @@ use crate::domains::git::service as git;
 use crate::domains::sessions::utils::SessionUtils;
 use anyhow::{Context, Result, anyhow};
 use log::{info, warn};
+use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
+
+const CLAUDE_WAITING_ENTER_PAYLOAD: &str = "lucode:waiting_for_input:enter";
+const CLAUDE_WAITING_CLEAR_PAYLOAD: &str = "lucode:waiting_for_input:clear";
+
+fn claude_hook_command(payload: &str) -> Value {
+    json!({
+        "type": "command",
+        "command": format!("printf '\\033]9;{payload}\\a' > /dev/tty"),
+    })
+}
+
+fn lucode_claude_hook_groups() -> Vec<(&'static str, Value)> {
+    vec![
+        (
+            "PermissionRequest",
+            json!({
+                "hooks": [claude_hook_command(CLAUDE_WAITING_ENTER_PAYLOAD)],
+            }),
+        ),
+        (
+            "Elicitation",
+            json!({
+                "hooks": [claude_hook_command(CLAUDE_WAITING_ENTER_PAYLOAD)],
+            }),
+        ),
+        (
+            "Notification",
+            json!({
+                "matcher": "permission_prompt|idle_prompt|elicitation_dialog",
+                "hooks": [claude_hook_command(CLAUDE_WAITING_ENTER_PAYLOAD)],
+            }),
+        ),
+        (
+            "UserPromptSubmit",
+            json!({
+                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
+            }),
+        ),
+        (
+            "ElicitationResult",
+            json!({
+                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
+            }),
+        ),
+        (
+            "PostToolUse",
+            json!({
+                "matcher": "*",
+                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
+            }),
+        ),
+        (
+            "PostToolUseFailure",
+            json!({
+                "matcher": "*",
+                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
+            }),
+        ),
+        (
+            "Stop",
+            json!({
+                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
+            }),
+        ),
+        (
+            "StopFailure",
+            json!({
+                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
+            }),
+        ),
+    ]
+}
+
+fn merge_claude_settings_local(existing: Option<&str>) -> Result<String> {
+    let mut root = match existing {
+        Some(contents) if !contents.trim().is_empty() => serde_json::from_str::<Value>(contents)
+            .context("Failed to parse existing Claude settings.local.json")?,
+        _ => json!({}),
+    };
+
+    let root_object = root
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("Claude settings.local.json must contain a JSON object"))?;
+    let hooks_value = root_object.entry("hooks").or_insert_with(|| json!({}));
+    let hooks_object = hooks_value
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("Claude hooks config must contain a JSON object"))?;
+
+    for (event_name, hook_group) in lucode_claude_hook_groups() {
+        let groups_value = hooks_object
+            .entry(event_name.to_string())
+            .or_insert_with(|| json!([]));
+        let groups = groups_value
+            .as_array_mut()
+            .ok_or_else(|| anyhow!("Claude hook event '{event_name}' must be an array"))?;
+        if !groups.iter().any(|existing_group| existing_group == &hook_group) {
+            groups.push(hook_group);
+        }
+    }
+
+    serde_json::to_string_pretty(&root).context("Failed to serialize Claude settings.local.json")
+}
 
 pub struct WorktreeBootstrapper<'a> {
     repo_path: &'a Path,
@@ -307,6 +410,73 @@ impl<'a> WorktreeBootstrapper<'a> {
                 Err(e) => warn!("Failed to copy Claude local override: {e}"),
             }
         }
+
+        if let Err(err) = self.ensure_lucode_claude_hooks(worktree_path) {
+            warn!("Failed to configure Lucode Claude hooks: {err}");
+        }
+    }
+
+    fn ensure_lucode_claude_hooks(&self, worktree_path: &Path) -> Result<()> {
+        let claude_dir = worktree_path.join(".claude");
+        std::fs::create_dir_all(&claude_dir)
+            .with_context(|| format!("Failed to create {}", claude_dir.display()))?;
+
+        let settings_path = claude_dir.join("settings.local.json");
+        let existing = if settings_path.exists() {
+            Some(
+                std::fs::read_to_string(&settings_path)
+                    .with_context(|| format!("Failed to read {}", settings_path.display()))?,
+            )
+        } else {
+            None
+        };
+
+        let merged = merge_claude_settings_local(existing.as_deref())?;
+        std::fs::write(&settings_path, merged)
+            .with_context(|| format!("Failed to write {}", settings_path.display()))?;
+
+        self.ensure_worktree_git_exclude(worktree_path, ".claude/settings.local.json")?;
+        Ok(())
+    }
+
+    fn ensure_worktree_git_exclude(&self, worktree_path: &Path, entry: &str) -> Result<()> {
+        let repo = git2::Repository::open(worktree_path)
+            .with_context(|| format!("Failed to open worktree repo {}", worktree_path.display()))?;
+        let mut exclude_paths = vec![repo.path().join("info").join("exclude")];
+        let common_exclude = repo.commondir().join("info").join("exclude");
+        if !exclude_paths.iter().any(|path| path == &common_exclude) {
+            exclude_paths.push(common_exclude);
+        }
+
+        for exclude_path in exclude_paths {
+            if let Some(parent) = exclude_path.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("Failed to create {}", parent.display()))?;
+            }
+
+            let existing = if exclude_path.exists() {
+                std::fs::read_to_string(&exclude_path)
+                    .with_context(|| format!("Failed to read {}", exclude_path.display()))?
+            } else {
+                String::new()
+            };
+
+            if existing.lines().any(|line| line.trim() == entry) {
+                continue;
+            }
+
+            let mut next = existing;
+            if !next.is_empty() && !next.ends_with('\n') {
+                next.push('\n');
+            }
+            next.push_str(entry);
+            next.push('\n');
+
+            std::fs::write(&exclude_path, next)
+                .with_context(|| format!("Failed to write {}", exclude_path.display()))?;
+        }
+
+        Ok(())
     }
 }
 
@@ -316,6 +486,7 @@ mod tests {
     use crate::domains::sessions::cache::SessionCacheManager;
     use crate::domains::sessions::repository::SessionDbManager;
     use crate::infrastructure::database::Database;
+    use serde_json::Value;
     use serial_test::serial;
     use std::process::Command;
     use tempfile::TempDir;
@@ -496,8 +667,33 @@ mod tests {
 
         let copied_settings = worktree_path.join(".claude").join("settings.local.json");
         assert!(copied_settings.exists());
-        let settings_content = std::fs::read_to_string(copied_settings).unwrap();
-        assert_eq!(settings_content, "{\"key\":\"value\"}");
+        let settings_content = std::fs::read_to_string(&copied_settings).unwrap();
+        let parsed: Value = serde_json::from_str(&settings_content).unwrap();
+        assert_eq!(parsed["key"], Value::String("value".to_string()));
+        assert!(parsed["hooks"]["Notification"]
+            .as_array()
+            .expect("notification hooks should be an array")
+            .iter()
+            .any(|group| group["matcher"] == Value::String("permission_prompt|idle_prompt|elicitation_dialog".to_string())));
+        assert!(parsed["hooks"]["PermissionRequest"].is_array());
+        assert!(parsed["hooks"]["Elicitation"].is_array());
+
+        let repo = git2::Repository::open(&worktree_path).unwrap();
+        let exclude = std::fs::read_to_string(repo.path().join("info").join("exclude")).unwrap();
+        assert!(exclude.contains(".claude/settings.local.json"));
+    }
+
+    #[test]
+    fn merge_claude_settings_local_preserves_existing_keys() {
+        let merged = merge_claude_settings_local(Some("{\"key\":\"value\"}"))
+            .expect("merge should succeed");
+        let parsed: Value = serde_json::from_str(&merged).expect("merged JSON should parse");
+
+        assert_eq!(parsed["key"], Value::String("value".to_string()));
+        assert!(parsed["hooks"]["UserPromptSubmit"].is_array());
+        assert!(parsed["hooks"]["Stop"].is_array());
+        assert!(parsed["hooks"]["PermissionRequest"].is_array());
+        assert!(parsed["hooks"]["Elicitation"].is_array());
     }
 
     #[test]

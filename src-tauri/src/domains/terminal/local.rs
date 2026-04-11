@@ -26,6 +26,94 @@ const DEFAULT_MAX_BUFFER_SIZE: usize = 512 * 1024;
 const AGENT_MAX_BUFFER_SIZE: usize = 512 * 1024;
 const MAX_HYDRATION_SNAPSHOT_BYTES: usize = 512 * 1024;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AttentionProfile {
+    Claude,
+    Gemini,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TerminalAttentionKind {
+    Idle,
+    WaitingForInput,
+}
+
+fn attention_kind_to_status(kind: TerminalAttentionKind) -> (bool, Option<TerminalAttentionKind>) {
+    match kind {
+        TerminalAttentionKind::Idle => (true, Some(TerminalAttentionKind::Idle)),
+        TerminalAttentionKind::WaitingForInput => {
+            (true, Some(TerminalAttentionKind::WaitingForInput))
+        }
+    }
+}
+
+fn last_claude_signal(
+    notifications: &[super::control_sequences::TerminalNotification],
+) -> Option<TerminalAttentionKind> {
+    notifications.iter().rev().find_map(|notification| match notification.payload.as_str() {
+        "lucode:waiting_for_input:enter" => Some(TerminalAttentionKind::WaitingForInput),
+        "lucode:waiting_for_input:clear" => Some(TerminalAttentionKind::Idle),
+        _ => None,
+    })
+}
+
+fn last_gemini_notification_signal(
+    notifications: &[super::control_sequences::TerminalNotification],
+) -> Option<TerminalAttentionKind> {
+    notifications.iter().rev().find_map(|notification| {
+        if notification.payload.starts_with("Gemini CLI needs your attention") {
+            Some(TerminalAttentionKind::WaitingForInput)
+        } else if notification.payload.starts_with("Gemini CLI session complete") {
+            Some(TerminalAttentionKind::Idle)
+        } else {
+            None
+        }
+    })
+}
+
+fn last_gemini_title_signal(window_titles: &[String]) -> Option<TerminalAttentionKind> {
+    window_titles.iter().rev().find_map(|title| {
+        if title.starts_with("✋  Action Required") {
+            Some(TerminalAttentionKind::WaitingForInput)
+        } else if title.starts_with("◇") || title.starts_with("✦") {
+            Some(TerminalAttentionKind::Idle)
+        } else {
+            None
+        }
+    })
+}
+
+fn attention_update_for_signals(
+    profile: Option<AttentionProfile>,
+    notifications: &[super::control_sequences::TerminalNotification],
+    window_titles: &[String],
+) -> Option<(bool, Option<TerminalAttentionKind>)> {
+    match profile {
+        Some(AttentionProfile::Claude) => last_claude_signal(notifications).map(|kind| match kind {
+            TerminalAttentionKind::Idle => (false, None),
+            _ => attention_kind_to_status(kind),
+        }),
+        Some(AttentionProfile::Gemini) => {
+            let notification_signal = last_gemini_notification_signal(notifications);
+            let title_signal = last_gemini_title_signal(window_titles);
+            let resolved = match (notification_signal, title_signal) {
+                (Some(left), Some(right)) if left == right => Some(left),
+                (Some(TerminalAttentionKind::Idle), Some(_))
+                | (Some(_), Some(TerminalAttentionKind::Idle)) => Some(TerminalAttentionKind::Idle),
+                (Some(kind), None) | (None, Some(kind)) => Some(kind),
+                (Some(kind), Some(_)) => Some(kind),
+                (None, None) => None,
+            };
+
+            resolved.map(|kind| match kind {
+                TerminalAttentionKind::Idle => (false, None),
+                _ => attention_kind_to_status(kind),
+            })
+        }
+        None => None,
+    }
+}
+
 pub(crate) fn max_buffer_size_for_terminal(terminal_id: &str) -> usize {
     if lifecycle::is_agent_terminal(terminal_id) {
         AGENT_MAX_BUFFER_SIZE
@@ -42,6 +130,23 @@ pub(super) struct TerminalState {
     pub(super) screen: VisibleScreen,
     pub(super) idle_detector: IdleDetector,
     pub(super) session_id: Option<String>,
+    attention_profile: Option<AttentionProfile>,
+    attention_kind: Option<TerminalAttentionKind>,
+    pending_notifications: Vec<super::control_sequences::TerminalNotification>,
+    pending_window_titles: Vec<String>,
+}
+
+fn trim_pending_attention_signals(state: &mut TerminalState) {
+    const MAX_PENDING_SIGNALS: usize = 8;
+
+    if state.pending_notifications.len() > MAX_PENDING_SIGNALS {
+        let start = state.pending_notifications.len() - MAX_PENDING_SIGNALS;
+        state.pending_notifications.drain(0..start);
+    }
+    if state.pending_window_titles.len() > MAX_PENDING_SIGNALS {
+        let start = state.pending_window_titles.len() - MAX_PENDING_SIGNALS;
+        state.pending_window_titles.drain(0..start);
+    }
 }
 
 impl TerminalState {
@@ -211,6 +316,19 @@ impl Default for LocalPtyAdapter {
 }
 
 impl LocalPtyAdapter {
+    fn reader_state(&self) -> ReaderState {
+        ReaderState {
+            terminals: Arc::clone(&self.terminals),
+            pty_children: Arc::clone(&self.pty_children),
+            pty_masters: Arc::clone(&self.pty_masters),
+            pty_writers: Arc::clone(&self.pty_writers),
+            coalescing_state: self.coalescing_state.clone(),
+            pending_control_sequences: Arc::clone(&self.pending_control_sequences),
+            initial_commands: Arc::clone(&self.initial_commands),
+            output_event_sender: Arc::clone(&self.output_event_sender),
+        }
+    }
+
     fn lifecycle_deps(&self) -> LifecycleDeps {
         LifecycleDeps {
             terminals: Arc::clone(&self.terminals),
@@ -290,6 +408,10 @@ impl LocalPtyAdapter {
             screen: VisibleScreen::new(rows, cols, id.clone()),
             idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
             session_id: session_id.clone(),
+            attention_profile: None,
+            attention_kind: None,
+            pending_notifications: Vec::new(),
+            pending_window_titles: Vec::new(),
         };
 
         self.terminals.write().await.insert(id.clone(), state);
@@ -382,6 +504,10 @@ impl LocalPtyAdapter {
                             continue;
                         }
 
+                        if state.attention_kind == Some(TerminalAttentionKind::WaitingForInput) {
+                            continue;
+                        }
+
                         if !state.idle_detector.needs_tick() {
                             continue;
                         }
@@ -393,6 +519,11 @@ impl LocalPtyAdapter {
                             let needs_attention = match transition {
                                 IdleTransition::BecameIdle => true,
                                 IdleTransition::BecameActive => false,
+                            };
+                            state.attention_kind = if needs_attention {
+                                Some(TerminalAttentionKind::Idle)
+                            } else {
+                                None
                             };
                             transitions.push((
                                 state.session_id.clone().unwrap(),
@@ -412,7 +543,8 @@ impl LocalPtyAdapter {
                         let payload = serde_json::json!({
                             "session_id": session_id,
                             "terminal_id": terminal_id,
-                            "needs_attention": needs_attention
+                            "needs_attention": needs_attention,
+                            "attention_kind": if needs_attention { Some("idle") } else { None::<&str> }
                         });
                         if let Err(e) =
                             emit_event(&handle, SchaltEvent::TerminalAttention, &payload)
@@ -421,7 +553,15 @@ impl LocalPtyAdapter {
                         }
 
                         handle_terminal_attention(session_id.clone(), needs_attention);
-                        update_session_attention_state(session_id, needs_attention);
+                        update_session_attention_state(
+                            session_id,
+                            needs_attention,
+                            if needs_attention {
+                                Some("idle".to_string())
+                            } else {
+                                None
+                            },
+                        );
                     }
                 }
             }
@@ -504,6 +644,8 @@ impl LocalPtyAdapter {
             cursor_query_offsets,
             window_size_requests,
             responses,
+            notifications,
+            window_titles,
         } = sanitize_control_sequences(&data);
 
         if !responses.is_empty() {
@@ -542,6 +684,7 @@ impl LocalPtyAdapter {
         let mut cursor_responses: Vec<Vec<u8>> = Vec::new();
         let mut window_size_responses: Vec<Vec<u8>> = Vec::new();
         let mut current_seq: Option<u64> = None;
+        let mut attention_update: Option<(bool, Option<TerminalAttentionKind>)> = None;
 
         {
             let mut terminals = reader_state.terminals.write().await;
@@ -604,8 +747,41 @@ impl LocalPtyAdapter {
                     }
                 }
 
+                if state.attention_profile.is_none() {
+                    if !notifications.is_empty() {
+                        state.pending_notifications.extend(notifications.iter().cloned());
+                    }
+                    if !window_titles.is_empty() {
+                        state.pending_window_titles.extend(window_titles.iter().cloned());
+                    }
+                    trim_pending_attention_signals(state);
+                }
+
+                attention_update = attention_update_for_signals(
+                    state.attention_profile,
+                    &notifications,
+                    &window_titles,
+                );
+                if let Some((needs_attention, attention_kind)) = attention_update {
+                    state.attention_kind = if needs_attention { attention_kind } else { None };
+                    state.pending_notifications.clear();
+                    state.pending_window_titles.clear();
+                }
+
                 current_seq = Some(state.seq);
             }
+        }
+
+        if let Some((needs_attention, attention_kind)) = attention_update
+            && let Some(session_id) = reader_state
+                .terminals
+                .read()
+                .await
+                .get(id)
+                .and_then(|state| state.session_id.clone())
+        {
+            Self::emit_attention_update(reader_state, id, session_id, needs_attention, attention_kind)
+                .await;
         }
 
         if let Some(seq) = current_seq
@@ -712,16 +888,7 @@ impl LocalPtyAdapter {
         let reader_handle = Self::start_reader(
             id.to_string(),
             reader,
-            ReaderState {
-                terminals: Arc::clone(&self.terminals),
-                pty_children: Arc::clone(&self.pty_children),
-                pty_masters: Arc::clone(&self.pty_masters),
-                pty_writers: Arc::clone(&self.pty_writers),
-                coalescing_state: self.coalescing_state.clone(),
-                pending_control_sequences: Arc::clone(&self.pending_control_sequences),
-                initial_commands: Arc::clone(&self.initial_commands),
-                output_event_sender: Arc::clone(&self.output_event_sender),
-            },
+            self.reader_state(),
         );
 
         self.reader_handles
@@ -902,6 +1069,10 @@ impl TerminalBackend for LocalPtyAdapter {
                 screen: VisibleScreen::new(rows, cols, id.clone()),
                 idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
                 session_id: session_id.clone(),
+                attention_profile: None,
+                attention_kind: None,
+                pending_notifications: Vec::new(),
+                pending_window_titles: Vec::new(),
             };
 
             let creating_clone = Arc::clone(&self.creating);
@@ -975,6 +1146,10 @@ impl TerminalBackend for LocalPtyAdapter {
             screen: VisibleScreen::new(rows, cols, id.clone()),
             idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
             session_id: session_id.clone(),
+            attention_profile: None,
+            attention_kind: None,
+            pending_notifications: Vec::new(),
+            pending_window_titles: Vec::new(),
         };
 
         self.terminals.write().await.insert(id.clone(), state);
@@ -1287,6 +1462,88 @@ impl TerminalBackend for LocalPtyAdapter {
         info!("All terminals force killed");
         Ok(())
     }
+
+}
+
+impl LocalPtyAdapter {
+    async fn emit_attention_update(
+        reader_state: &ReaderState,
+        terminal_id: &str,
+        session_id: String,
+        needs_attention: bool,
+        attention_kind: Option<TerminalAttentionKind>,
+    ) {
+        if !is_session_top_terminal_id(terminal_id) {
+            return;
+        }
+
+        let payload = serde_json::json!({
+            "session_id": session_id,
+            "terminal_id": terminal_id,
+            "needs_attention": needs_attention,
+            "attention_kind": attention_kind.map(|kind| match kind {
+                TerminalAttentionKind::Idle => "idle",
+                TerminalAttentionKind::WaitingForInput => "waiting_for_input",
+            }),
+        });
+
+        let handle_guard = reader_state.coalescing_state.app_handle.lock().await;
+        if let Some(handle) = handle_guard.as_ref()
+            && let Err(err) = emit_event(handle, SchaltEvent::TerminalAttention, &payload)
+        {
+            error!("Failed to emit TerminalAttention event: {err}");
+        }
+        drop(handle_guard);
+
+        handle_terminal_attention(session_id.clone(), needs_attention);
+        update_session_attention_state(
+            session_id,
+            needs_attention,
+            attention_kind.map(|kind| match kind {
+                TerminalAttentionKind::Idle => "idle".to_string(),
+                TerminalAttentionKind::WaitingForInput => "waiting_for_input".to_string(),
+            }),
+        );
+    }
+
+    pub async fn configure_attention_profile(&self, id: &str, agent_type: &str) -> Result<(), String> {
+        let (attention_update, session_id) = {
+            let mut terminals = self.terminals.write().await;
+            let Some(state) = terminals.get_mut(id) else {
+                return Err(format!("Terminal {id} not found"));
+            };
+
+            state.attention_profile = match agent_type {
+                "claude" => Some(AttentionProfile::Claude),
+                "gemini" => Some(AttentionProfile::Gemini),
+                _ => None,
+            };
+
+            let attention_update = attention_update_for_signals(
+                state.attention_profile,
+                &state.pending_notifications,
+                &state.pending_window_titles,
+            );
+            let mut session_id = None;
+            if let Some((needs_attention, attention_kind)) = attention_update {
+                state.attention_kind = if needs_attention { attention_kind } else { None };
+                state.pending_notifications.clear();
+                state.pending_window_titles.clear();
+                session_id = state.session_id.clone();
+            }
+            (attention_update, session_id)
+        };
+
+        if let Some((needs_attention, attention_kind)) = attention_update
+            && let Some(session_id) = session_id
+        {
+            let reader_state = self.reader_state();
+            Self::emit_attention_update(&reader_state, id, session_id, needs_attention, attention_kind)
+                .await;
+        }
+
+        Ok(())
+    }
 }
 
 fn session_id_from_terminal_id(id: &str) -> Option<String> {
@@ -1329,12 +1586,13 @@ fn clear_attention_for_top_terminal(session_id: Option<&str>, terminal_id: &str)
 
     let session_id = session_id.to_string();
     handle_terminal_attention(session_id.clone(), false);
-    update_session_attention_state(session_id, false);
+    update_session_attention_state(session_id, false, None);
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::ApplicationSpec;
+    use super::super::control_sequences::TerminalNotification;
     use super::*;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1759,6 +2017,10 @@ mod tests {
             screen: VisibleScreen::new(24, 80, id.to_string()),
             idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.to_string()),
             session_id: None,
+            attention_profile: None,
+            attention_kind: None,
+            pending_notifications: Vec::new(),
+            pending_window_titles: Vec::new(),
         }
     }
 
@@ -1866,5 +2128,177 @@ mod tests {
     #[test]
     fn prompt_detection_empty_buffer() {
         assert!(!buffer_tail_contains_prompt(b""));
+    }
+
+    #[test]
+    fn detects_gemini_waiting_and_clear_signals() {
+        let waiting = attention_update_for_signals(
+            Some(AttentionProfile::Gemini),
+            &[TerminalNotification {
+                kind: 9,
+                payload: "Gemini CLI needs your attention | Action required | Open Gemini CLI to continue.".to_string(),
+            }],
+            &[],
+        );
+        assert_eq!(
+            waiting,
+            Some((true, Some(TerminalAttentionKind::WaitingForInput)))
+        );
+
+        let cleared = attention_update_for_signals(
+            Some(AttentionProfile::Gemini),
+            &[],
+            &["◇ Ready".to_string()],
+        );
+        assert_eq!(cleared, Some((false, None)));
+    }
+
+    #[test]
+    fn detects_claude_waiting_and_clear_signals() {
+        let waiting = attention_update_for_signals(
+            Some(AttentionProfile::Claude),
+            &[TerminalNotification {
+                kind: 9,
+                payload: "lucode:waiting_for_input:enter".to_string(),
+            }],
+            &[],
+        );
+        assert_eq!(
+            waiting,
+            Some((true, Some(TerminalAttentionKind::WaitingForInput)))
+        );
+
+        let cleared = attention_update_for_signals(
+            Some(AttentionProfile::Claude),
+            &[TerminalNotification {
+                kind: 9,
+                payload: "lucode:waiting_for_input:clear".to_string(),
+            }],
+            &[],
+        );
+        assert_eq!(cleared, Some((false, None)));
+    }
+
+    #[test]
+    fn latest_claude_signal_wins_within_one_batch() {
+        let update = attention_update_for_signals(
+            Some(AttentionProfile::Claude),
+            &[
+                TerminalNotification {
+                    kind: 9,
+                    payload: "lucode:waiting_for_input:enter".to_string(),
+                },
+                TerminalNotification {
+                    kind: 9,
+                    payload: "lucode:waiting_for_input:clear".to_string(),
+                },
+            ],
+            &[],
+        );
+
+        assert_eq!(update, Some((false, None)));
+    }
+
+    #[test]
+    fn latest_gemini_signal_wins_within_one_batch() {
+        let update = attention_update_for_signals(
+            Some(AttentionProfile::Gemini),
+            &[
+                TerminalNotification {
+                    kind: 9,
+                    payload: "Gemini CLI needs your attention | Action required | Open Gemini CLI to continue.".to_string(),
+                },
+                TerminalNotification {
+                    kind: 9,
+                    payload: "Gemini CLI session complete | Ready for the next prompt.".to_string(),
+                },
+            ],
+            &[],
+        );
+
+        assert_eq!(update, Some((false, None)));
+    }
+
+    #[tokio::test]
+    async fn configure_attention_profile_applies_pending_signals() {
+        let adapter = LocalPtyAdapter::new();
+        let id = unique_id("pending-attention");
+
+        {
+            let mut terminals = adapter.terminals.write().await;
+            terminals.insert(
+                id.clone(),
+                TerminalState {
+                    buffer: Vec::new(),
+                    seq: 0,
+                    start_seq: 0,
+                    last_output: SystemTime::now(),
+                    screen: VisibleScreen::new(24, 80, id.clone()),
+                    idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
+                    session_id: Some("pending-session".to_string()),
+                    attention_profile: None,
+                    attention_kind: None,
+                    pending_notifications: vec![TerminalNotification {
+                        kind: 9,
+                        payload: "lucode:waiting_for_input:enter".to_string(),
+                    }],
+                    pending_window_titles: Vec::new(),
+                },
+            );
+        }
+
+        adapter
+            .configure_attention_profile(&id, "claude")
+            .await
+            .expect("profile configuration should succeed");
+
+        let terminals = adapter.terminals.read().await;
+        let state = terminals.get(&id).expect("terminal state should exist");
+        assert_eq!(
+            state.attention_kind,
+            Some(TerminalAttentionKind::WaitingForInput)
+        );
+        assert!(state.pending_notifications.is_empty());
+    }
+
+    #[tokio::test]
+    async fn control_sequence_only_chunks_still_update_attention_state() {
+        let adapter = LocalPtyAdapter::new();
+        let id = unique_id("attention-osc-only");
+
+        {
+            let mut terminals = adapter.terminals.write().await;
+            terminals.insert(
+                id.clone(),
+                TerminalState {
+                    buffer: Vec::new(),
+                    seq: 0,
+                    start_seq: 0,
+                    last_output: SystemTime::now(),
+                    screen: VisibleScreen::new(24, 80, id.clone()),
+                    idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
+                    session_id: Some("osc-only-session".to_string()),
+                    attention_profile: Some(AttentionProfile::Claude),
+                    attention_kind: None,
+                    pending_notifications: Vec::new(),
+                    pending_window_titles: Vec::new(),
+                },
+            );
+        }
+
+        LocalPtyAdapter::handle_reader_data(
+            &id,
+            b"\x1b]9;lucode:waiting_for_input:enter\x07".to_vec(),
+            &adapter.reader_state(),
+        )
+        .await
+        .expect("reader data should be handled");
+
+        let terminals = adapter.terminals.read().await;
+        let state = terminals.get(&id).expect("terminal state should exist");
+        assert_eq!(
+            state.attention_kind,
+            Some(TerminalAttentionKind::WaitingForInput)
+        );
     }
 }

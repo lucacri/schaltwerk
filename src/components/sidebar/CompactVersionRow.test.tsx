@@ -180,8 +180,9 @@ describe('CompactVersionRow', () => {
       },
     })
 
-    expect(screen.getByTestId('compact-row-status-idle')).toBeInTheDocument()
+    expect(screen.getByTestId('compact-row-status-waiting')).toBeInTheDocument()
     expect(screen.getByText(/waiting for input/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('compact-row-status-running')).toBeNull()
   })
 
   it('renders ready state when session is ready to merge', () => {

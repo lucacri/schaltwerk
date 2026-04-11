@@ -4,7 +4,7 @@ import { getSessionLifecycleState } from '../../utils/sessionState'
 
 type SidebarSessionStatusSource = Pick<
   SessionInfo,
-  'status' | 'session_state' | 'clarification_started' | 'attention_required' | 'ready_to_merge'
+  'status' | 'session_state' | 'clarification_started' | 'attention_required' | 'attention_kind' | 'ready_to_merge'
 >
 
 export type SidebarPrimaryStatus =
@@ -21,6 +21,7 @@ export interface SidebarSessionStatus {
   isSpecClarificationStarted: boolean
   specNotStarted: boolean
   specWaitingForInput: boolean
+  isWaitingForInput: boolean
   isIdle: boolean
   isActivelyRunning: boolean
   primaryStatus: SidebarPrimaryStatus
@@ -36,20 +37,26 @@ export function getSidebarSessionStatus(
   const isSpecClarificationStarted =
     sessionState === SessionState.Spec && info.clarification_started === true
   const specNotStarted = sessionState === SessionState.Spec && !isSpecClarificationStarted
-  const specWaitingForInput = isSpecClarificationStarted && info.attention_required === true
+  const specWaitingForInput = isSpecClarificationStarted
+    && info.attention_required === true
+    && info.attention_kind !== 'idle'
+  const runningWaitingForInput = sessionState !== SessionState.Spec
+    && info.attention_required === true
+    && info.attention_kind === 'waiting_for_input'
+  const isWaitingForInput = specWaitingForInput || runningWaitingForInput
   const isIdle =
     sessionState === SessionState.Spec
-      ? specWaitingForInput
-      : info.attention_required === true
+      ? info.attention_required === true && !specWaitingForInput
+      : info.attention_required === true && !runningWaitingForInput
   const isActivelyRunning =
-    !isIdle && (
+    !isIdle && !isWaitingForInput && (
       isSpecClarificationStarted
       || (sessionState === SessionState.Running && (info.ready_to_merge !== true || isRunning))
     )
 
   const primaryStatus: SidebarPrimaryStatus = isBlocked
     ? 'blocked'
-    : specWaitingForInput
+    : isWaitingForInput
       ? 'waiting'
       : isIdle
         ? 'idle'
@@ -66,6 +73,7 @@ export function getSidebarSessionStatus(
     isSpecClarificationStarted,
     specNotStarted,
     specWaitingForInput,
+    isWaitingForInput,
     isIdle,
     isActivelyRunning,
     primaryStatus,

@@ -329,6 +329,87 @@ describe('SessionCard spec stage badges', () => {
     const card = screen.getByRole('button', { name: /selected session/i })
     expect(card.querySelector('.w-\\[3px\\]')).toBeInTheDocument()
     expect(screen.getByText(/waiting for input/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^running$/i)).toBeNull()
+  })
+
+  it('keeps started specs with idle attention in the idle state', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              session_state: 'spec',
+              status: 'spec',
+              spec_stage: 'draft',
+              worktree_path: '',
+              attention_required: true,
+              attention_kind: 'idle',
+              clarification_started: true,
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByText(/idle/i)).toBeInTheDocument()
+    expect(screen.queryByText(/waiting for input/i)).toBeNull()
+  })
+
+  it('shows waiting for input state for running sessions with waiting attention kind', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              attention_required: true,
+              attention_kind: 'waiting_for_input',
+              session_state: 'running',
+              status: 'active',
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByText(/waiting for input/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^idle$/i)).toBeNull()
+  })
+
+  it('keeps the idle state for running sessions with idle attention kind', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              attention_required: true,
+              attention_kind: 'idle',
+              session_state: 'running',
+              status: 'active',
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByText(/idle/i)).toBeInTheDocument()
   })
 })
 

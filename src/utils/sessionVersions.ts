@@ -141,7 +141,10 @@ export function groupSessionsByVersion(sessions: EnrichedSession[]): SessionVers
 }
 
 export function getSessionVersionGroupAggregate(group: SessionVersionGroup): SessionVersionGroupAggregate {
-  return getSessionVersionGroupAggregateWithResolver(group, session => session.info.attention_required === true)
+  return getSessionVersionGroupAggregateWithResolver(
+    group,
+    session => session.info.attention_required === true && session.info.attention_kind !== 'waiting_for_input'
+  )
 }
 
 function getSessionVersionGroupAggregateWithResolver(
@@ -207,7 +210,7 @@ function getControllingVersions(group: SessionVersionGroup): SessionVersion[] {
 
 export function calculateLogicalSessionCounts(
   sessions: EnrichedSession[],
-  isIdle: SessionIdleResolver = session => session.info.attention_required === true,
+  isIdle: SessionIdleResolver = session => session.info.attention_required === true && session.info.attention_kind !== 'waiting_for_input',
 ): LogicalSessionCounts {
   return groupSessionsByVersion(sessions).reduce((counts, group) => {
     const aggregate = getSessionVersionGroupAggregateWithResolver(group, isIdle)

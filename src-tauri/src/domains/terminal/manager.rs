@@ -181,6 +181,16 @@ impl TerminalManager {
         Ok(())
     }
 
+    pub async fn configure_attention_profile(
+        &self,
+        terminal_id: &str,
+        agent_type: &str,
+    ) -> Result<(), String> {
+        self.backend
+            .configure_attention_profile(terminal_id, agent_type)
+            .await
+    }
+
     pub async fn create_terminal(&self, id: String, cwd: String) -> Result<(), String> {
         let start = std::time::Instant::now();
         let result = self.create_terminal_with_env(id.clone(), cwd, vec![]).await;
