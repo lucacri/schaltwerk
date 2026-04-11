@@ -138,7 +138,7 @@ describe('Sidebar selection transitions', () => {
     })
   })
 
-  it('keeps the current selection when the session becomes ready under Running filter', async () => {
+  it('keeps the current selection when the session becomes ready in the unified list', async () => {
     const sessionA = createEnrichedSession('session-a', '/worktrees/a', SessionState.Running, false)
     const sessionB = createEnrichedSession('session-b', '/worktrees/b', SessionState.Running, false)
     enrichedSessions = [sessionA, sessionB]
@@ -155,7 +155,7 @@ describe('Sidebar selection transitions', () => {
     })
 
     await waitFor(() => {
-      expect(result.current.sessionsCtx.filterMode).toBe(FilterMode.Running)
+      expect(result.current.sessionsCtx.filterMode).toBe(FilterMode.All)
     })
 
     await act(async () => {
@@ -212,7 +212,7 @@ describe('Sidebar selection transitions', () => {
       expect(result.current.sessionsCtx.sessions.length).toBeGreaterThan(0)
     })
 
-    // Start in Running filter automatically (mock settings) and select the running session
+    // Start in the unified list and select the running session.
     await act(async () => {
       await result.current.selectionCtx.setSelection({
         kind: 'session',

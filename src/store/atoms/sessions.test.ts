@@ -193,7 +193,7 @@ describe('sessions atoms', () => {
 
     it('provides default core state', () => {
         expect(store.get(allSessionsAtom)).toEqual([])
-        expect(store.get(filterModeAtom)).toBe(FilterMode.Running)
+        expect(store.get(filterModeAtom)).toBe(FilterMode.All)
         expect(store.get(searchQueryAtom)).toBe('')
         expect(store.get(isSearchVisibleAtom)).toBe(false)
     })
@@ -223,10 +223,11 @@ describe('sessions atoms', () => {
 
         store.set(allSessionsAtom, sessions)
 
-        // Default filter is Running, so sortedSessionsAtom shows only running sessions
+        // Default filter is unified, so specs and running sessions are both visible.
         expect(store.get(sortedSessionsAtom).map(s => s.info.session_id)).toEqual([
             'running-b',
             'running-a',
+            'spec-session',
             'reviewed-one',
         ])
 
@@ -808,7 +809,7 @@ describe('sessions atoms', () => {
 
         await store.set(initializeSessionsSettingsActionAtom)
 
-        expect(store.get(filterModeAtom)).toBe(FilterMode.Spec)
+        expect(store.get(filterModeAtom)).toBe(FilterMode.All)
         expect(store.get(autoCancelAfterMergeAtom)).toBe(false)
 
         store.set(filterModeAtom, FilterMode.Running)

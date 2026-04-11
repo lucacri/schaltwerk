@@ -272,12 +272,6 @@ describe('Ready session cancellation focus preservation', () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
-      expect(screen.getByTitle('Show spec agents')).toBeInTheDocument()
-    })
-
-    await userEvent.click(screen.getByTitle('Show spec agents'))
-
-    await waitFor(() => {
       const specButtons = screen.getAllByRole('button').filter(btn => (btn.textContent || '').includes('spec-'))
       expect(specButtons).toHaveLength(2)
     })

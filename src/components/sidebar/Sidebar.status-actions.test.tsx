@@ -133,12 +133,6 @@ describe('Sidebar status indicators and actions', () => {
 
     render(<TestProviders><Sidebar /></TestProviders>)
 
-    // Switch to Spec filter to see spec sessions
-    await waitFor(() => {
-      expect(screen.getByTitle('Show spec agents')).toBeInTheDocument()
-    })
-    fireEvent.click(screen.getByTitle('Show spec agents'))
-
     await waitFor(() => {
       expect(screen.getByText('Spec Alpha')).toBeInTheDocument()
     })
@@ -255,11 +249,6 @@ describe('Sidebar status indicators and actions', () => {
     })
 
     render(<TestProviders><Sidebar /></TestProviders>)
-
-    await waitFor(() => {
-      expect(screen.getByTitle('Show running agents')).toBeInTheDocument()
-    })
-    fireEvent.click(screen.getByTitle('Show running agents'))
 
     await waitFor(() => {
       expect(getSessionRow('s2')).toBeTruthy()
@@ -384,12 +373,6 @@ describe('Sidebar status indicators and actions', () => {
     vi.mocked(listen).mockResolvedValue(() => {})
 
     render(<TestProviders><Sidebar /></TestProviders>)
-
-    // Switch to Spec filter to see spec sessions
-    await waitFor(() => {
-      expect(screen.getByTitle('Show spec agents')).toBeInTheDocument()
-    })
-    fireEvent.click(screen.getByTitle('Show spec agents'))
 
     await waitFor(() => {
       expect(screen.getByText('Spec One')).toBeInTheDocument()
@@ -531,9 +514,6 @@ describe('Sidebar status indicators and actions', () => {
     await act(async () => {
       sessionsHandler?.({})
     })
-
-    // Switch to spec filter to see the converted session
-    fireEvent.click(screen.getByTitle('Show spec agents'))
 
     await waitFor(() => {
       const specButton = getSessionRow('s1-spec')

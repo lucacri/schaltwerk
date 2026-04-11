@@ -62,9 +62,9 @@ interface SnapshotRequest {
 const selectionAtom = atom<Selection>({ kind: 'orchestrator', projectPath: null })
 const switchingProjectStateAtom = atom(false)
 export const switchingProjectAtom = atom(get => get(switchingProjectStateAtom))
-let currentFilterMode: FilterMode = FilterMode.Running
+let currentFilterMode: FilterMode = FilterMode.All
 const projectFilterModes = new Map<string, FilterMode>()
-let defaultFilterModeForProjects: FilterMode = FilterMode.Running
+let defaultFilterModeForProjects: FilterMode = FilterMode.All
 let lastProcessedProjectPath: string | null = null
 
 export const selectionValueAtom = atom(get => {
@@ -213,12 +213,14 @@ function selectionMatchesCurrentFilter(selection: Selection): boolean {
 
   const state = selection.sessionState ?? null
   switch (currentFilterMode) {
+    case FilterMode.All:
+      return true
     case FilterMode.Spec:
       return state === 'spec'
     case FilterMode.Running:
       return state === 'running' || state === 'processing'
     default:
-      return state === 'running'
+      return true
   }
 }
 
@@ -1217,9 +1219,9 @@ export function resetSelectionAtomsForTest(): void {
   // ignoredSpecReverts.clear()
   cachedProjectPath = null
   cachedProjectId = 'default'
-  currentFilterMode = FilterMode.Running
+  currentFilterMode = FilterMode.All
   projectFilterModes.clear()
-  defaultFilterModeForProjects = FilterMode.Running
+  defaultFilterModeForProjects = FilterMode.All
   lastProcessedProjectPath = null
   intentionalSwitchInProgress = false
   if (eventCleanup) {

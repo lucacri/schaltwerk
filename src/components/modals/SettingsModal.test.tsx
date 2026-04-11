@@ -461,7 +461,7 @@ describe('SettingsModal initial tab handling', () => {
     })
   })
 
-}) 
+})
 
 describe('SettingsModal appearance settings', () => {
   beforeEach(() => {

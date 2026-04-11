@@ -201,13 +201,22 @@ function filterSessions(sessions: EnrichedSession[], filterMode: FilterMode): En
     )
 
     switch (filterMode) {
+        case FilterMode.All:
+            return sessions
         case FilterMode.Spec:
             return sessions.filter(session => isSpec(session.info))
         case FilterMode.Running:
             return sessions.filter(session => activeSessionIds.has(session.info.session_id))
         default:
-            return sessions.filter(session => activeSessionIds.has(session.info.session_id))
+            return sessions
     }
+}
+
+function normalizeStoredFilterMode(value?: string | null): FilterMode {
+    if (value === FilterMode.All) {
+        return FilterMode.All
+    }
+    return getDefaultFilterMode()
 }
 
 function defaultMergeDialogState(): MergeDialogState {
@@ -1309,7 +1318,9 @@ export const initializeSessionsSettingsActionAtom = atom(
 
         try {
             const settings = await invoke<{ filter_mode?: string } | null>(TauriCommands.GetProjectSessionsSettings)
-            const filter = settings && isValidFilterMode(settings.filter_mode) ? (settings.filter_mode as FilterMode) : getDefaultFilterMode()
+            const filter = normalizeStoredFilterMode(
+                settings && isValidFilterMode(settings.filter_mode) ? settings.filter_mode : null,
+            )
             set(filterModeStateAtom, filter)
             set(setSelectionFilterModeActionAtom, filter)
             lastPersistedFilterMode = filter

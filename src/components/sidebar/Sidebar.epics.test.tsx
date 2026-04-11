@@ -70,7 +70,7 @@ describe('Sidebar epic grouping', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders epic headers and ungrouped section', async () => {
+  it('renders epic headers inside both sections and shows an ungrouped running section', async () => {
     render(
       <TestProviders>
         <Sidebar />
@@ -81,7 +81,8 @@ describe('Sidebar epic grouping', () => {
       expect(screen.getByText('billing-handler')).toBeInTheDocument()
     })
 
-    expect(screen.getByTestId('epic-header-epic-1')).toHaveTextContent('billing-v2')
+    expect(screen.getAllByTestId('epic-header-epic-1')).toHaveLength(2)
+    expect(screen.getAllByTestId('epic-header-epic-1')[0]).toHaveTextContent('billing-v2')
     expect(screen.getByTestId('epic-ungrouped-header')).toHaveTextContent('Ungrouped')
   })
 })

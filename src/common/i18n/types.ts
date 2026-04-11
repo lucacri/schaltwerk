@@ -417,6 +417,14 @@ export interface Translations {
       result: string
       close: string
     }
+    sections: {
+      specs: string
+      running: string
+      collapseSpecs: string
+      expandSpecs: string
+      collapseRunning: string
+      expandRunning: string
+    }
     empty: string
     ungrouped: string
     states: {

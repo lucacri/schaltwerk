@@ -114,7 +114,26 @@ describe('Sidebar session ordering and persistence', () => {
     })
   })
 
-  it('persists filter mode changes without emitting legacy sort state', async () => {
+  it('persists section collapse locally without touching project filter settings', async () => {
+    const { unmount } = render(
+      <TestProviders>
+        <Sidebar />
+      </TestProviders>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-section-running')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /collapse running section/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('test_session_b')).toBeNull()
+      expect(lastPersistedSettings).toBeNull()
+    })
+
+    unmount()
+
     render(
       <TestProviders>
         <Sidebar />
@@ -122,15 +141,8 @@ describe('Sidebar session ordering and persistence', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByTitle('Show spec agents')).toBeInTheDocument()
-    })
-
-    const specsButton = screen.getByTitle('Show spec agents')
-    fireEvent.click(specsButton)
-
-    await waitFor(() => {
-      expect(savedFilterMode).toBe(FilterMode.Spec)
-      expect(lastPersistedSettings).toEqual({ filter_mode: FilterMode.Spec })
+      expect(screen.getByRole('button', { name: /expand running section/i })).toBeInTheDocument()
+      expect(screen.queryByText('test_session_b')).toBeNull()
     })
   })
 })

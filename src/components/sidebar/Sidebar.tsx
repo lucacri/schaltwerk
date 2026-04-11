@@ -19,10 +19,10 @@ import { useSessions } from '../../hooks/useSessions'
 import { captureSelectionSnapshot, SelectionMemoryEntry } from '../../utils/selectionMemory'
 import { computeSelectionCandidate } from '../../utils/selectionPostMerge'
 import { ConvertToSpecConfirmation } from '../modals/ConvertToSpecConfirmation'
-import { FilterMode, FILTER_MODES } from '../../types/sessionFilters'
-import { calculateFilterCounts, isSpec } from '../../utils/sessionFilters'
+import { FilterMode } from '../../types/sessionFilters'
+import { isSpec } from '../../utils/sessionFilters'
 import { theme } from '../../common/theme'
-import { groupSessionsByVersion, selectBestVersionAndCleanup, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
+import { getSessionVersionGroupAggregate, groupSessionsByVersion, selectBestVersionAndCleanup, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
 import { SessionVersionGroup } from './SessionVersionGroup'
 import { CollapsedSidebarRail } from './CollapsedSidebarRail'
 import { PromoteVersionConfirmation } from '../modals/PromoteVersionConfirmation'
@@ -87,6 +87,10 @@ type EpicGroupingResult = {
     epicGroups: EpicVersionGroup[]
     ungroupedGroups: SessionVersionGroupType[]
 }
+
+type SidebarSectionKey = 'specs' | 'running'
+
+type SidebarSectionCollapseState = Record<SidebarSectionKey, boolean>
 
 const flattenVersionGroups = (sessionGroups: SessionVersionGroupType[]): EnrichedSession[] => {
     const flattenedSessions: EnrichedSession[] = []
@@ -173,6 +177,49 @@ const groupVersionGroupsByEpic = (sessionGroups: SessionVersionGroupType[]): Epi
     return { epicGroups, ungroupedGroups }
 }
 
+const DEFAULT_SECTION_COLLAPSE_STATE: SidebarSectionCollapseState = {
+    specs: false,
+    running: false,
+}
+
+const createSelectionMemoryBuckets = (): Record<FilterMode, SelectionMemoryEntry> => ({
+    [FilterMode.All]: { lastSelection: null, lastSessions: [] },
+    [FilterMode.Spec]: { lastSelection: null, lastSessions: [] },
+    [FilterMode.Running]: { lastSelection: null, lastSessions: [] },
+})
+
+const normalizeSectionCollapseState = (value: unknown): SidebarSectionCollapseState => {
+    if (!value || typeof value !== 'object') {
+        return DEFAULT_SECTION_COLLAPSE_STATE
+    }
+
+    const record = value as Partial<Record<SidebarSectionKey, boolean>>
+    return {
+        specs: record.specs === true,
+        running: record.running === true,
+    }
+}
+
+const splitVersionGroupsBySection = (
+    sessionGroups: SessionVersionGroupType[],
+): Record<SidebarSectionKey, SessionVersionGroupType[]> => {
+    const sections: Record<SidebarSectionKey, SessionVersionGroupType[]> = {
+        specs: [],
+        running: [],
+    }
+
+    for (const group of sessionGroups) {
+        const aggregate = getSessionVersionGroupAggregate(group)
+        if (aggregate.state === 'spec') {
+            sections.specs.push(group)
+            continue
+        }
+        sections.running.push(group)
+    }
+
+    return sections
+}
+
 export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, onSelectNextProject, onSwitchToProject, onCycleNextProject, onCyclePrevProject, isCollapsed = false, onExpandRequest, onToggleSidebar }: SidebarProps) {
     const { t } = useTranslation()
     const { selection, setSelection, terminals, clearTerminalTracking } = useSelection()
@@ -190,7 +237,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         filterMode,
         searchQuery,
         isSearchVisible,
-        setFilterMode,
         setSearchQuery,
         setIsSearchVisible,
         optimisticallyConvertSessionToSpec,
@@ -241,7 +287,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             setOrchestratorBranch("main")
         }
     })
-    const [keyboardNavigatedFilter, setKeyboardNavigatedFilter] = useState<FilterMode | null>(null)
     const [switchOrchestratorModal, setSwitchOrchestratorModal] = useState<{ open: boolean; initialAgentType?: AgentType; targetSessionId?: string | null }>({ open: false })
     const [switchModelSessionId, setSwitchModelSessionId] = useState<string | null>(null)
     const orchestratorResetting = resettingSelection?.kind === 'orchestrator'
@@ -539,18 +584,13 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const sessionScrollTopRef = useRef(0)
     const isProjectSwitching = useRef(false)
     const previousProjectPathRef = useRef<string | null>(null)
-    const previousFilterModeRef = useRef<FilterMode>(filterMode)
-    const needsFilterAutoCorrect = useRef(true)
 
     const selectionMemoryRef = useRef<Map<string, Record<FilterMode, SelectionMemoryEntry>>>(new Map())
 
     const ensureProjectMemory = useCallback(() => {
       const key = projectPath || '__default__';
       if (!selectionMemoryRef.current.has(key)) {
-        selectionMemoryRef.current.set(key, {
-          [FilterMode.Spec]: { lastSelection: null, lastSessions: [] },
-          [FilterMode.Running]: { lastSelection: null, lastSessions: [] },
-        });
+        selectionMemoryRef.current.set(key, createSelectionMemoryBuckets());
       }
       return selectionMemoryRef.current.get(key)!;
     }, [projectPath]);
@@ -559,6 +599,11 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         () => (projectPath ? `schaltwerk:epic-collapse:${projectPath}` : null),
         [projectPath],
     )
+    const sectionCollapseStorageKey = useMemo(
+        () => (projectPath ? `schaltwerk:sidebar-sections:${projectPath}` : null),
+        [projectPath],
+    )
+    const [collapsedSections, setCollapsedSections] = useState<SidebarSectionCollapseState>(DEFAULT_SECTION_COLLAPSE_STATE)
 
     useEffect(() => {
         if (!epicCollapseStorageKey) {
@@ -590,60 +635,99 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }, [epicCollapseStorageKey, collapsedEpicIds])
 
-    const toggleEpicCollapsed = useCallback((epicId: string) => {
+    useEffect(() => {
+        if (!sectionCollapseStorageKey) {
+            setCollapsedSections(DEFAULT_SECTION_COLLAPSE_STATE)
+            return
+        }
+        try {
+            const raw = localStorage.getItem(sectionCollapseStorageKey)
+            if (!raw) {
+                setCollapsedSections(DEFAULT_SECTION_COLLAPSE_STATE)
+                return
+            }
+            setCollapsedSections(normalizeSectionCollapseState(JSON.parse(raw)))
+        } catch (err) {
+            logger.warn('[Sidebar] Failed to load section collapse state, resetting:', err)
+            setCollapsedSections(DEFAULT_SECTION_COLLAPSE_STATE)
+        }
+    }, [sectionCollapseStorageKey])
+
+    useEffect(() => {
+        if (!sectionCollapseStorageKey) {
+            return
+        }
+        try {
+            localStorage.setItem(sectionCollapseStorageKey, JSON.stringify(collapsedSections))
+        } catch (err) {
+            logger.warn('[Sidebar] Failed to persist section collapse state:', err)
+        }
+    }, [sectionCollapseStorageKey, collapsedSections])
+
+    const getCollapsedEpicKey = useCallback((section: SidebarSectionKey, epicId: string) => `${section}:${epicId}`, [])
+
+    const toggleEpicCollapsed = useCallback((section: SidebarSectionKey, epicId: string) => {
+        const key = getCollapsedEpicKey(section, epicId)
         setCollapsedEpicIds((prev) => {
             const next = { ...prev }
-            if (next[epicId]) {
-                delete next[epicId]
+            if (next[key]) {
+                delete next[key]
             } else {
-                next[epicId] = true
+                next[key] = true
             }
             return next
         })
+    }, [getCollapsedEpicKey])
+
+    const toggleSectionCollapsed = useCallback((section: SidebarSectionKey) => {
+        setCollapsedSections((prev) => ({
+            ...prev,
+            [section]: !prev[section],
+        }))
     }, [])
 
-    const hasAnyEpicAssigned = useMemo(() => allSessions.some(session => session.info.epic), [allSessions])
     const versionGroups = useMemo(() => groupSessionsByVersion(sessions), [sessions])
-    const epicGrouping = useMemo<EpicGroupingResult>(() => {
-        if (!hasAnyEpicAssigned) {
-            return { epicGroups: [], ungroupedGroups: versionGroups }
-        }
-        return groupVersionGroupsByEpic(versionGroups)
-    }, [hasAnyEpicAssigned, versionGroups])
+    const sectionGroups = useMemo(() => splitVersionGroupsBySection(versionGroups), [versionGroups])
+
+    const getVisibleGroupsForSection = useCallback((section: SidebarSectionKey, groups: SessionVersionGroupType[]) => {
+        const sectionGrouping = groupVersionGroupsByEpic(groups)
+        const expandedEpicGroups = sectionGrouping.epicGroups.flatMap((group) => (
+            collapsedEpicIds[getCollapsedEpicKey(section, group.epic.id)] ? [] : group.groups
+        ))
+        return [...expandedEpicGroups, ...sectionGrouping.ungroupedGroups]
+    }, [collapsedEpicIds, getCollapsedEpicKey])
+
+    const visibleSpecGroups = useMemo(
+        () => getVisibleGroupsForSection('specs', sectionGroups.specs),
+        [getVisibleGroupsForSection, sectionGroups.specs],
+    )
+    const visibleRunningGroups = useMemo(
+        () => getVisibleGroupsForSection('running', sectionGroups.running),
+        [getVisibleGroupsForSection, sectionGroups.running],
+    )
 
     const flattenedSessions = useMemo(() => {
-        if (!hasAnyEpicAssigned) {
-            return flattenVersionGroups(versionGroups)
+        const visibleGroups: SessionVersionGroupType[] = []
+        if (!collapsedSections.specs) {
+            visibleGroups.push(...visibleSpecGroups)
         }
+        if (!collapsedSections.running) {
+            visibleGroups.push(...visibleRunningGroups)
+        }
+        return flattenVersionGroups(visibleGroups)
+    }, [collapsedSections, visibleRunningGroups, visibleSpecGroups])
 
-        const expandedEpicGroups = epicGrouping.epicGroups.flatMap((group) => {
-            if (collapsedEpicIds[group.epic.id]) {
-                return []
-            }
-            return group.groups
-        })
-
-        return flattenVersionGroups([...expandedEpicGroups, ...epicGrouping.ungroupedGroups])
-    }, [hasAnyEpicAssigned, versionGroups, epicGrouping, collapsedEpicIds])
+    const selectionScopedSessions = useMemo(
+        () => [...flattenVersionGroups(visibleSpecGroups), ...flattenVersionGroups(visibleRunningGroups)],
+        [visibleSpecGroups, visibleRunningGroups],
+    )
 
     useEffect(() => {
         if (previousProjectPathRef.current !== null && previousProjectPathRef.current !== projectPath) {
             isProjectSwitching.current = true
-            previousFilterModeRef.current = filterMode
-            needsFilterAutoCorrect.current = true
         }
         previousProjectPathRef.current = projectPath
-    }, [projectPath, filterMode]);
-
-    useEffect(() => {
-        if (loading || !needsFilterAutoCorrect.current) return
-        needsFilterAutoCorrect.current = false
-        if (filterMode !== FilterMode.Spec) return
-        const hasSpecs = allSessions.some(s => isSpec(s.info))
-        if (!hasSpecs) {
-            setFilterMode(FilterMode.Running)
-        }
-    }, [loading, filterMode, allSessions, setFilterMode])
+    }, [projectPath]);
 
     useEffect(() => {
         let unsubscribe: (() => void) | null = null
@@ -783,7 +867,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }, [createSafeUnlistener, openMergeDialogWithPrefill, pushToast])
 
-    // Maintain per-filter selection memory and choose the next best session when visibility changes
+    // Maintain selection memory and choose the next best session when visibility changes.
     useEffect(() => {
         if (isProjectSwitching.current) {
             // Allow refocus even if the project switch completion event is delayed
@@ -795,7 +879,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         const memory = ensureProjectMemory();
         const entry = memory[filterMode];
 
-        const visibleSessions = sessions
+        const visibleSessions = selectionScopedSessions
         const visibleIds = new Set(visibleSessions.map(s => s.info.session_id))
         const currentSelectionId = selection.kind === 'session' ? (selection.payload ?? null) : null
 
@@ -820,8 +904,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
 
         const shouldPreserveForReadyRemoval = false
-
-        previousFilterModeRef.current = filterMode
 
         const currentSessionMovedToReady = false
 
@@ -894,7 +976,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         if (shouldAdvanceFromMerged) {
             lastMergedReadySessionRef.current = null
         }
-    }, [sessions, selection, filterMode, ensureProjectMemory, allSessions, setSelection])
+    }, [allSessions, ensureProjectMemory, filterMode, selectionScopedSessions, selection, setSelection])
 
     useEffect(() => { void fetchOrchestratorBranch() }, [])
 
@@ -1188,36 +1270,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }
 
-    const handleNavigateToPrevFilter = () => {
-        const currentIndex = FILTER_MODES.indexOf(filterMode)
-        const prevIndex = currentIndex === 0 ? FILTER_MODES.length - 1 : currentIndex - 1
-        const nextFilter = FILTER_MODES[prevIndex]
-
-        setKeyboardNavigatedFilter(nextFilter)
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                setKeyboardNavigatedFilter(null)
-            })
-        })
-
-        setFilterMode(nextFilter)
-    }
-
-    const handleNavigateToNextFilter = () => {
-        const currentIndex = FILTER_MODES.indexOf(filterMode)
-        const nextIndex = (currentIndex + 1) % FILTER_MODES.length
-        const nextFilter = FILTER_MODES[nextIndex]
-
-        setKeyboardNavigatedFilter(nextFilter)
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                setKeyboardNavigatedFilter(null)
-            })
-        })
-
-        setFilterMode(nextFilter)
-    }
-
     const findSessionById = useCallback((sessionId?: string | null) => {
         if (!sessionId) return null
         return sessions.find(s => s.info.session_id === sessionId)
@@ -1321,7 +1373,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         onRefineSpec: handleRefineSpecShortcut,
         onSpecSession: handleSpecSelectedSession,
         onPromoteSelectedVersion: () => { void handlePromoteSelectedVersion() },
-        sessionCount: sessions.length,
+        sessionCount: flattenedSessions.length,
         onSelectPrevSession: () => { void selectPrev() },
         onSelectNextSession: () => { void selectNext() },
         onFocusSidebar: () => {
@@ -1364,8 +1416,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         onSwitchToProject,
         onCycleNextProject,
         onCyclePrevProject,
-        onNavigateToPrevFilter: handleNavigateToPrevFilter,
-        onNavigateToNextFilter: handleNavigateToNextFilter,
         onResetSelection: handleResetSelectionShortcut,
         onOpenSwitchModel: handleOpenSwitchModelShortcut,
         onOpenMergeModal: () => { void handleMergeShortcut() },
@@ -1493,9 +1543,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             })
         }
     }, [setCurrentFocus, setFocusForSession, setSelection, createSafeUnlistener])
-
-    // Calculate counts based on all sessions (unaffected by search)
-    const { specsCount, runningCount } = calculateFilterCounts(allSessions)
 
     const sessionCardActions: SessionCardActions = {
         onSelect: (sessionId) => { void handleSelectSession(sessionId) },
@@ -1697,35 +1744,13 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 </div>
             </div>
 
-            {isCollapsed && (
-                <div className="py-1 px-0.5 flex items-center justify-center" aria-hidden="true">
-                    <span
-                        className="px-1 py-[2px] rounded border"
-                        style={{
-                            color: 'var(--color-text-secondary)',
-                            borderColor: 'var(--color-border-subtle)',
-                            backgroundColor: 'var(--color-bg-elevated)',
-                            fontSize: theme.fontSize.caption,
-                            lineHeight: theme.lineHeight.compact,
-                            minWidth: '24px',
-                            textAlign: 'center',
-                        }}
-                        title={`Filter: ${filterMode}`}
-                    >
-                        {filterMode === FilterMode.Spec && t.sidebar.filters.specShort}
-                        {filterMode === FilterMode.Running && t.sidebar.filters.runShort}
-                    </span>
-                </div>
-            )}
-
             {!isCollapsed && (
                 <div
                     className="h-8 px-3 border-t border-b text-xs flex items-center bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)]"
                     data-onboarding="session-filter-row"
                 >
-                    <div className="flex items-center gap-2 w-full">
-                        <div className="flex items-center gap-1 ml-auto flex-nowrap overflow-x-auto" style={{ scrollbarGutter: 'stable both-edges' }}>
-                            {/* Search Icon */}
+                    <div className="flex items-center gap-2 w-full justify-end">
+                        <div className="flex items-center gap-1 flex-nowrap overflow-x-auto" style={{ scrollbarGutter: 'stable both-edges' }}>
                             <button
                                 onClick={() => {
                                             setIsSearchVisible(true)
@@ -1757,32 +1782,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
                                 </svg>
-                            </button>
-                            <button
-                                className={clsx(
-                                    'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
-                                    filterMode === FilterMode.Spec
-                                        ? 'bg-[var(--color-accent-blue-bg)] text-[var(--color-text-primary)] border-[var(--color-accent-blue-border)] font-medium'
-                                        : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
-                                    keyboardNavigatedFilter === FilterMode.Spec && ''
-                                )}
-                                onClick={() => setFilterMode(FilterMode.Spec)}
-                                title={t.sidebar.filters.showSpecs}
-                            >
-                                {t.sidebar.filters.specs} <span className="text-[var(--color-text-muted)]">({specsCount})</span>
-                            </button>
-                            <button
-                                className={clsx(
-                                    'text-[10px] px-2 py-0.5 rounded flex items-center gap-1 border transition-colors',
-                                    filterMode === FilterMode.Running
-                                        ? 'bg-[var(--color-accent-blue-bg)] text-[var(--color-text-primary)] border-[var(--color-accent-blue-border)] font-medium'
-                                        : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)]',
-                                    keyboardNavigatedFilter === FilterMode.Running && ''
-                                )}
-                                onClick={() => setFilterMode(FilterMode.Running)}
-                                title={t.sidebar.filters.showRunning}
-                            >
-                                {t.sidebar.filters.running} <span className="text-[var(--color-text-muted)]">({runningCount})</span>
                             </button>
                         </div>
                     </div>
@@ -1935,66 +1934,138 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                 )
                             }
 
-                            if (!hasAnyEpicAssigned) {
-                                return versionGroups.map(renderVersionGroup)
-                            }
+                            const renderSection = (
+                                sectionKey: SidebarSectionKey,
+                                title: string,
+                                groups: SessionVersionGroupType[],
+                                collapsed: boolean,
+                            ) => {
+                                if (groups.length === 0) {
+                                    return null
+                                }
 
-	                            const elements: ReactNode[] = []
+                                const grouping = groupVersionGroupsByEpic(groups)
+                                const hasEpics = grouping.epicGroups.length > 0
+                                const toggleLabel = collapsed
+                                    ? (sectionKey === 'specs' ? t.sidebar.sections.expandSpecs : t.sidebar.sections.expandRunning)
+                                    : (sectionKey === 'specs' ? t.sidebar.sections.collapseSpecs : t.sidebar.sections.collapseRunning)
 
-	                            for (const epicGroup of epicGrouping.epicGroups) {
-	                                const epic = epicGroup.epic
-	                                const sessionCount = epicGroup.groups.reduce((acc, group) => acc + group.versions.length, 0)
-	                                const collapsed = Boolean(collapsedEpicIds[epic.id])
-	                                const countLabel = `${sessionCount} session${sessionCount === 1 ? '' : 's'}`
-	                                const epicScheme = getEpicAccentScheme(epic.color)
+                                const sectionElements: ReactNode[] = []
 
-	                                elements.push(
-	                                    <div key={`epic-group-${epic.id}`} className="mt-2 mb-2">
-	                                        <EpicGroupHeader
-	                                            epic={epic}
-	                                            collapsed={collapsed}
-	                                            countLabel={countLabel}
-	                                            menuOpen={epicMenuOpenId === epic.id}
-	                                            onMenuOpenChange={(open) => setEpicMenuOpenId(open ? epic.id : null)}
-	                                            onToggleCollapsed={() => toggleEpicCollapsed(epic.id)}
-	                                            onEdit={() => setEditingEpic(epic)}
-	                                            onDelete={() => setDeleteEpicTarget(epic)}
-	                                        />
-	                                        {!collapsed && (
-	                                            <div
-	                                                className="ml-1 pl-2 pb-1"
-	                                                style={{
-	                                                    borderLeft: `2px solid ${epicScheme?.DEFAULT ?? 'var(--color-border-subtle)'}`,
-	                                                    marginLeft: '6px',
-	                                                }}
-	                                            >
-	                                                {epicGroup.groups.map(group => renderVersionGroup(group))}
-	                                            </div>
-	                                        )}
-	                                    </div>
-	                                )
-                            }
+                                if (!collapsed) {
+                                    if (!hasEpics) {
+                                        sectionElements.push(...groups.map(renderVersionGroup))
+                                    } else {
+                                        for (const epicGroup of grouping.epicGroups) {
+                                            const epic = epicGroup.epic
+                                            const sessionCount = epicGroup.groups.reduce((acc, group) => acc + group.versions.length, 0)
+                                            const epicCollapsed = Boolean(collapsedEpicIds[getCollapsedEpicKey(sectionKey, epic.id)])
+                                            const countLabel = `${sessionCount} session${sessionCount === 1 ? '' : 's'}`
+                                            const epicScheme = getEpicAccentScheme(epic.color)
 
-                            if (epicGrouping.ungroupedGroups.length > 0) {
-                                elements.push(
+                                            sectionElements.push(
+                                                <div key={`epic-group-${sectionKey}-${epic.id}`} className="mt-2 mb-2">
+                                                    <EpicGroupHeader
+                                                        epic={epic}
+                                                        collapsed={epicCollapsed}
+                                                        countLabel={countLabel}
+                                                        menuOpen={epicMenuOpenId === epic.id}
+                                                        onMenuOpenChange={(open) => setEpicMenuOpenId(open ? epic.id : null)}
+                                                        onToggleCollapsed={() => toggleEpicCollapsed(sectionKey, epic.id)}
+                                                        onEdit={() => setEditingEpic(epic)}
+                                                        onDelete={() => setDeleteEpicTarget(epic)}
+                                                    />
+                                                    {!epicCollapsed && (
+                                                        <div
+                                                            className="ml-1 pl-2 pb-1"
+                                                            style={{
+                                                                borderLeft: `2px solid ${epicScheme?.DEFAULT ?? 'var(--color-border-subtle)'}`,
+                                                                marginLeft: '6px',
+                                                            }}
+                                                        >
+                                                            {epicGroup.groups.map(group => renderVersionGroup(group))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        }
+
+                                        if (grouping.ungroupedGroups.length > 0) {
+                                            sectionElements.push(
+                                                <div
+                                                    key={`ungrouped-header-${sectionKey}`}
+                                                    data-testid="epic-ungrouped-header"
+                                                    className="mt-4 mb-2 px-2 flex items-center gap-2"
+                                                    style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}
+                                                >
+                                                    <div style={{ flex: 1, height: 1, backgroundColor: 'var(--color-border-subtle)' }} />
+                                                    <span>{t.sidebar.ungrouped}</span>
+                                                    <div style={{ flex: 1, height: 1, backgroundColor: 'var(--color-border-subtle)' }} />
+                                                </div>
+                                            )
+
+                                            for (const group of grouping.ungroupedGroups) {
+                                                sectionElements.push(renderVersionGroup(group))
+                                            }
+                                        }
+                                    }
+                                }
+
+                                return (
                                     <div
-                                        key="ungrouped-header"
-                                        data-testid="epic-ungrouped-header"
-                                        className="mt-4 mb-2 px-2 flex items-center gap-2"
-                                        style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}
+                                        key={`sidebar-section-${sectionKey}`}
+                                        data-testid={`sidebar-section-${sectionKey}`}
+                                        className="mt-2 first:mt-0"
                                     >
-                                        <div style={{ flex: 1, height: 1, backgroundColor: 'var(--color-border-subtle)' }} />
-                                        <span>{t.sidebar.ungrouped}</span>
-                                        <div style={{ flex: 1, height: 1, backgroundColor: 'var(--color-border-subtle)' }} />
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleSectionCollapsed(sectionKey)}
+                                            aria-label={toggleLabel}
+                                            className="w-full px-2 py-1.5 flex items-center gap-2 text-left rounded-md hover:bg-bg-hover/30 transition-colors"
+                                        >
+                                            <span
+                                                className="uppercase tracking-wider"
+                                                style={{
+                                                    fontSize: theme.fontSize.caption,
+                                                    color: 'var(--color-text-secondary)',
+                                                    lineHeight: theme.lineHeight.compact,
+                                                }}
+                                            >
+                                                {title}
+                                            </span>
+                                            <span
+                                                className="shrink-0"
+                                                style={{
+                                                    fontSize: theme.fontSize.caption,
+                                                    color: 'var(--color-text-muted)',
+                                                    lineHeight: theme.lineHeight.compact,
+                                                }}
+                                            >
+                                                {groups.length}
+                                            </span>
+                                            <div className="flex-1 h-px bg-border-subtle" />
+                                            <svg
+                                                className={clsx('w-3 h-3 text-text-muted transition-transform', collapsed && '-rotate-90')}
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m19 9-7 7-7-7" />
+                                            </svg>
+                                        </button>
+                                        {!collapsed && (
+                                            <div className="mt-1">
+                                                {sectionElements}
+                                            </div>
+                                        )}
                                     </div>
                                 )
-
-                                for (const group of epicGrouping.ungroupedGroups) {
-                                    elements.push(renderVersionGroup(group))
-                                }
                             }
 
-                            return elements
+                            return [
+                                renderSection('specs', t.sidebar.sections.specs, sectionGroups.specs, collapsedSections.specs),
+                                renderSection('running', t.sidebar.sections.running, sectionGroups.running, collapsedSections.running),
+                            ]
                         })()}
                         </SessionCardActionsProvider>
                     )

@@ -415,6 +415,14 @@
       "result": "result",
       "close": "Close search"
     },
+    "sections": {
+      "specs": "Specs",
+      "running": "Running",
+      "collapseSpecs": "Collapse specs section",
+      "expandSpecs": "Expand specs section",
+      "collapseRunning": "Collapse running section",
+      "expandRunning": "Expand running section"
+    },
     "empty": "No active agents",
     "ungrouped": "Ungrouped",
     "states": {

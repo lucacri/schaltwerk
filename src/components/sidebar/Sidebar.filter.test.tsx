@@ -51,7 +51,7 @@ const sessionRows = () => screen.getAllByRole('button').filter(button => button.
 const getSessionRow = (id: string) => sessionRows().find(button => button.getAttribute('data-session-id') === id)
 
 
-describe('Sidebar filter functionality and persistence', () => {
+describe('Sidebar unified list behavior and persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
@@ -86,30 +86,26 @@ describe('Sidebar filter functionality and persistence', () => {
     vi.restoreAllMocks()
   })
 
-  it('filters sessions: Running -> Specs', async () => {
+  it('shows specs and running sections together', async () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
-      const runningButton = screen.getByTitle('Show running agents')
-      expect(runningButton.textContent).toContain('3')
+      expect(screen.getByTestId('sidebar-section-specs')).toBeInTheDocument()
+      expect(screen.getByTestId('sidebar-section-running')).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByTitle('Show spec agents'))
-
-    await waitFor(() => {
-      const specsButton = screen.getByTitle('Show spec agents')
-      expect(specsButton.textContent).toContain('2')
-    })
-
-    fireEvent.click(screen.getByTitle('Show running agents'))
-
-    await waitFor(() => {
-      const runningButton = screen.getByTitle('Show running agents')
-      expect(runningButton.textContent).toContain('3')
-    })
+    expect(screen.queryByTitle('Show spec agents')).toBeNull()
+    expect(screen.queryByTitle('Show running agents')).toBeNull()
+    expect(sessionRows().map(button => button.getAttribute('data-session-id'))).toEqual([
+      'alpha',
+      'charlie',
+      'bravo',
+      'delta',
+      'echo',
+    ])
   })
 
-  it('persists filterMode to backend and restores it', async () => {
+  it('normalizes legacy saved filters to the unified all mode', async () => {
     // Mock backend settings storage
     let savedFilterMode = 'running'
     let settingsLoadCalled = false
@@ -144,33 +140,26 @@ describe('Sidebar filter functionality and persistence', () => {
       return undefined
     })
 
-    // First render: starts at Running, switch to Specs
     const { unmount } = render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
-      const runningButton = screen.getByTitle('Show running agents')
-      expect(runningButton.textContent).toContain('4')
+      expect(sessionRows()).toHaveLength(4)
     })
 
-    fireEvent.click(screen.getByTitle('Show spec agents'))
-
-    await waitFor(() => {
-      expect(savedFilterMode).toBe('spec')
-    })
+    expect(savedFilterMode).toBe('running')
 
     unmount()
 
-    // Second render should restore 'spec'
     render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
-      const specsButton = screen.getByTitle('Show spec agents')
-      expect(specsButton.textContent).toContain('0')
+      expect(settingsLoadCalled).toBe(true)
+      expect(sessionRows()).toHaveLength(4)
     })
   })
 
-  describe('Ready session preservation with Running filter', () => {
-    it('preserves selection when currently selected session becomes ready while Running filter is active', async () => {
+  describe('Ready session preservation in unified list', () => {
+    it('preserves selection when currently selected session becomes ready', async () => {
       let sessionsList: EnrichedSession[] = [
         createSession('running-1', false, 'active'),
         createSession('running-2', false, 'active'),
@@ -204,14 +193,6 @@ describe('Sidebar filter functionality and persistence', () => {
       render(<TestProviders><Sidebar /></TestProviders>)
 
       await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('3')
-      })
-
-      const runningButton = screen.getByTitle('Show running agents')
-      fireEvent.click(runningButton)
-
-      await waitFor(() => {
         expect(sessionRows()).toHaveLength(3)
       })
 
@@ -230,14 +211,13 @@ describe('Sidebar filter functionality and persistence', () => {
       })
 
       await waitFor(() => {
-        const runningCount = screen.getByTitle('Show running agents')
-        expect(runningCount.textContent).toContain('3')
+        expect(sessionRows()).toHaveLength(3)
       })
 
       expect(getSessionRow('running-1')).toBeInTheDocument()
     })
 
-    it('keeps ready sessions visible when the first session becomes ready with Running filter active', async () => {
+    it('keeps ready sessions visible when the first session becomes ready', async () => {
       let sessionsList: EnrichedSession[] = [
         createSession('alpha', false, 'active'),
         createSession('beta', false, 'active'),
@@ -265,8 +245,7 @@ describe('Sidebar filter functionality and persistence', () => {
       render(<TestProviders><Sidebar /></TestProviders>)
 
       await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('3')
+        expect(sessionRows()).toHaveLength(3)
       })
 
       const alphaButton = screen.getAllByRole('button').find(b => b.textContent?.includes('alpha'))
@@ -284,8 +263,7 @@ describe('Sidebar filter functionality and persistence', () => {
       })
 
       await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('3')
+        expect(sessionRows()).toHaveLength(3)
       })
 
       expect(screen.getByText('alpha')).toBeInTheDocument()
@@ -318,8 +296,7 @@ describe('Sidebar filter functionality and persistence', () => {
       render(<TestProviders><Sidebar /></TestProviders>)
 
       await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('2')
+        expect(sessionRows()).toHaveLength(2)
       })
 
       const session1Button = screen.getAllByRole('button').find(b => b.textContent?.includes('session-1'))
@@ -335,8 +312,7 @@ describe('Sidebar filter functionality and persistence', () => {
       })
 
       await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('2')
+        expect(sessionRows()).toHaveLength(2)
       })
 
       const session2Button = screen.getAllByRole('button').find(b => b.textContent?.includes('session-2'))
@@ -375,8 +351,7 @@ describe('Sidebar filter functionality and persistence', () => {
       render(<TestProviders><Sidebar /></TestProviders>)
 
       await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('2')
+        expect(sessionRows()).toHaveLength(2)
       })
 
       const temp1Button = screen.getAllByRole('button').find(b => b.textContent?.includes('temp-1'))
@@ -391,8 +366,7 @@ describe('Sidebar filter functionality and persistence', () => {
       })
 
       await waitFor(() => {
-        const runningButton = screen.getByTitle('Show running agents')
-        expect(runningButton.textContent).toContain('1')
+        expect(sessionRows()).toHaveLength(1)
       })
     })
   })

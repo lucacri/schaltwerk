@@ -50,8 +50,6 @@ export const KEYBOARD_SHORTCUT_SECTIONS: ShortcutSection[] = [
       { action: KeyboardShortcutAction.SwitchToProject9, label: 'Switch to project 9' },
       { action: KeyboardShortcutAction.CycleNextProject, label: 'Cycle to next project' },
       { action: KeyboardShortcutAction.CyclePrevProject, label: 'Cycle to previous project' },
-      { action: KeyboardShortcutAction.NavigatePrevFilter, label: 'Previous filter' },
-      { action: KeyboardShortcutAction.NavigateNextFilter, label: 'Next filter' },
       { action: KeyboardShortcutAction.FocusClaude, label: 'Focus Claude session' },
       { action: KeyboardShortcutAction.FocusTerminal, label: 'Focus terminal' },
       { action: KeyboardShortcutAction.ToggleLeftSidebar, label: 'Toggle left sidebar' },

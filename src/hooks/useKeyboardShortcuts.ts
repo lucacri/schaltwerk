@@ -25,8 +25,6 @@ interface KeyboardShortcutsProps {
   onFocusTerminal?: () => void
   onSelectPrevProject?: () => void
   onSelectNextProject?: () => void
-  onNavigateToPrevFilter?: () => void
-  onNavigateToNextFilter?: () => void
   isDiffViewerOpen?: boolean
   isModalOpen?: boolean
   onResetSelection?: () => void
@@ -63,8 +61,6 @@ export function useKeyboardShortcuts(
     onFocusTerminal,
     onSelectPrevProject,
     onSelectNextProject,
-    onNavigateToPrevFilter,
-    onNavigateToNextFilter,
     isDiffViewerOpen,
     isModalOpen,
     onResetSelection,
@@ -171,18 +167,6 @@ export function useKeyboardShortcuts(
         return
       }
 
-      if (!isDiffViewerOpen && !isModalOpen && onNavigateToPrevFilter && isShortcutForAction(event, KeyboardShortcutAction.NavigatePrevFilter, shortcutConfig, { platform })) {
-        event.preventDefault()
-        onNavigateToPrevFilter()
-        return
-      }
-
-      if (!isDiffViewerOpen && !isModalOpen && onNavigateToNextFilter && isShortcutForAction(event, KeyboardShortcutAction.NavigateNextFilter, shortcutConfig, { platform })) {
-        event.preventDefault()
-        onNavigateToNextFilter()
-        return
-      }
-
       if (onCancelSelectedSession && isShortcutForAction(event, KeyboardShortcutAction.ForceCancelSession, shortcutConfig, { platform })) {
         event.preventDefault()
         onCancelSelectedSession(true)
@@ -285,8 +269,6 @@ export function useKeyboardShortcuts(
     onSelectNextSession,
     onSelectPrevProject,
     onSelectNextProject,
-    onNavigateToPrevFilter,
-    onNavigateToNextFilter,
     onCancelSelectedSession,
     onOpenDiffViewer,
     onRefineSpec,

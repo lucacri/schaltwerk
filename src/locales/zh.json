@@ -415,6 +415,14 @@
       "result": "个结果",
       "close": "关闭搜索"
     },
+    "sections": {
+      "specs": "规格",
+      "running": "运行中",
+      "collapseSpecs": "折叠规格分区",
+      "expandSpecs": "展开规格分区",
+      "collapseRunning": "折叠运行中分区",
+      "expandRunning": "展开运行中分区"
+    },
     "empty": "没有活动代理",
     "ungrouped": "未分组",
     "states": {
