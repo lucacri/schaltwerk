@@ -318,8 +318,9 @@ const sampleStructuredOutputs: Record<string, any> = {
     round_id: 'round-abc',
     winner_session: 'candidate-1',
     promoted_session: 'feature_v2',
-    candidate_sessions_cancelled: ['candidate-2'],
+    candidate_sessions_cancelled: ['candidate-1', 'candidate-2'],
     source_sessions_cancelled: ['feature_v1'],
+    judge_sessions_cancelled: ['judge-1'],
   },
 }
 

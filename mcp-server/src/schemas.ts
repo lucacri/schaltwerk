@@ -651,8 +651,9 @@ export const toolOutputSchemas = {
       promoted_session: { type: 'string' },
       candidate_sessions_cancelled: { type: 'array', items: { type: 'string' } },
       source_sessions_cancelled: { type: 'array', items: { type: 'string' } },
+      judge_sessions_cancelled: { type: 'array', items: { type: 'string' } },
     },
-    required: ['round_id', 'winner_session', 'promoted_session', 'candidate_sessions_cancelled', 'source_sessions_cancelled'],
+    required: ['round_id', 'winner_session', 'promoted_session', 'candidate_sessions_cancelled', 'source_sessions_cancelled', 'judge_sessions_cancelled'],
     additionalProperties: false,
   },
 

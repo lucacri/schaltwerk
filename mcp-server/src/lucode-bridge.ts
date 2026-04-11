@@ -166,6 +166,7 @@ export interface ConfirmConsolidationWinnerResult {
   promotedSessionName: string
   candidateSessionsCancelled: string[]
   sourceSessionsCancelled: string[]
+  judgeSessionsCancelled: string[]
 }
 
 export interface MergeSessionResult {
@@ -1687,6 +1688,7 @@ export class LucodeBridge {
       promoted_session_name: string
       candidate_sessions_cancelled: string[]
       source_sessions_cancelled: string[]
+      judge_sessions_cancelled: string[]
     }>(response, 'confirm consolidation winner')
     if (!payload) {
       throw new Error('Confirm consolidation winner payload missing')
@@ -1698,6 +1700,7 @@ export class LucodeBridge {
       promotedSessionName: payload.promoted_session_name,
       candidateSessionsCancelled: payload.candidate_sessions_cancelled,
       sourceSessionsCancelled: payload.source_sessions_cancelled,
+      judgeSessionsCancelled: payload.judge_sessions_cancelled,
     }
   }
 

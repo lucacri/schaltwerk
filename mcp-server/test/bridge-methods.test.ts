@@ -868,8 +868,9 @@ describe('LucodeBridge untested methods', () => {
         round_id: 'round-1',
         winner_session_name: 'feature-consolidation-a',
         promoted_session_name: 'feature_v1',
-        candidate_sessions_cancelled: ['feature-consolidation-b'],
+        candidate_sessions_cancelled: ['feature-consolidation-a', 'feature-consolidation-b'],
         source_sessions_cancelled: ['feature_v2'],
+        judge_sessions_cancelled: ['feature-consolidation-judge'],
       }))
 
       const bridge = new LucodeBridge()
@@ -879,8 +880,9 @@ describe('LucodeBridge untested methods', () => {
         roundId: 'round-1',
         winnerSessionName: 'feature-consolidation-a',
         promotedSessionName: 'feature_v1',
-        candidateSessionsCancelled: ['feature-consolidation-b'],
+        candidateSessionsCancelled: ['feature-consolidation-a', 'feature-consolidation-b'],
         sourceSessionsCancelled: ['feature_v2'],
+        judgeSessionsCancelled: ['feature-consolidation-judge'],
       })
       const [url, init] = fetchMock.mock.calls[0]
       expect(String(url)).toContain('/api/consolidation-rounds/round-1/confirm')

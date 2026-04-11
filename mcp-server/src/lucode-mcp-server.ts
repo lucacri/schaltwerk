@@ -1920,6 +1920,7 @@ ${presetStart.sessions
           promoted_session: result.promotedSessionName,
           candidate_sessions_cancelled: result.candidateSessionsCancelled,
           source_sessions_cancelled: result.sourceSessionsCancelled,
+          judge_sessions_cancelled: result.judgeSessionsCancelled,
         }
         response = buildStructuredResponse(structured, {
           summaryText: `Confirmed consolidation winner '${result.winnerSessionName}' for round '${result.roundId}'. Promoted session: '${result.promotedSessionName}'.`,

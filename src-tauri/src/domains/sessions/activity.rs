@@ -111,14 +111,6 @@ impl<E: EventEmitter> ActivityTracker<E> {
                 Some(mut stats) => {
                     stats.session_id = session.id.clone();
 
-                    let commits_ahead_count = worktree_repo.as_ref().and_then(|repo| {
-                        crate::domains::sessions::service::compute_commits_ahead_count_with_repo(
-                            repo,
-                            &session.branch,
-                            &session.parent_branch,
-                        )
-                    });
-
                     let merge_snapshot = shared_repo
                         .and_then(|repo| {
                             let session_oid =

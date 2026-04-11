@@ -814,6 +814,13 @@ struct ConfirmConsolidationWinnerRequest {
     override_reason: Option<String>,
 }
 
+struct ConfirmConsolidationWinnerParams<'a> {
+    round_id: &'a str,
+    winner_session_id: &'a str,
+    override_reason: Option<&'a str>,
+    confirmed_by: &'a str,
+}
+
 #[derive(Debug, Serialize)]
 pub(crate) struct ConfirmConsolidationWinnerResponse {
     round_id: String,
@@ -821,6 +828,7 @@ pub(crate) struct ConfirmConsolidationWinnerResponse {
     promoted_session_name: String,
     candidate_sessions_cancelled: Vec<String>,
     source_sessions_cancelled: Vec<String>,
+    judge_sessions_cancelled: Vec<String>,
 }
 
 fn strip_version_suffix(name: &str) -> &str {
@@ -2882,6 +2890,263 @@ mod tests {
             .find_branch(branch, git2::BranchType::Local)
             .expect("find branch");
         b.get().peel_to_commit().expect("peel commit").id()
+    }
+
+    struct ConsolidationRoundFixture {
+        _tmp: TempDir,
+        repo_path: PathBuf,
+        db: Database,
+        manager: SessionManager,
+        round_id: String,
+        version_group_id: String,
+        source_winner: Session,
+        source_loser: Session,
+        winning_candidate: Session,
+        losing_candidate: Session,
+        judge: Session,
+    }
+
+    fn create_round_session(
+        manager: &SessionManager,
+        name: &str,
+        version_group_id: &str,
+        source_ids: &[String],
+        round_id: &str,
+        role: &str,
+        confirmation_mode: &str,
+    ) -> Session {
+        manager
+            .create_session_with_agent(SessionCreationParams {
+                name,
+                prompt: None,
+                base_branch: None,
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(version_group_id),
+                version_number: None,
+                epic_id: None,
+                agent_type: None,
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(source_ids.to_vec()),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some(role),
+                consolidation_confirmation_mode: Some(confirmation_mode),
+            })
+            .expect("create round session")
+    }
+
+    fn make_consolidation_round_fixture(confirmation_mode: &str) -> ConsolidationRoundFixture {
+        let (tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let version_group_id = "group-confirm".to_string();
+        let round_id = format!("round-{confirmation_mode}");
+
+        let source_winner = manager
+            .create_session_with_auto_flag("feature_v1", None, None, false, Some(&version_group_id), Some(1))
+            .expect("create winning source");
+        let source_loser = manager
+            .create_session_with_auto_flag("feature_v2", None, None, false, Some(&version_group_id), Some(2))
+            .expect("create losing source");
+
+        let source_ids = vec![source_winner.id.clone(), source_loser.id.clone()];
+        upsert_consolidation_round(
+            &db,
+            &repo_path,
+            &round_id,
+            &version_group_id,
+            &source_ids,
+            confirmation_mode,
+        )
+        .expect("upsert round");
+
+        let winning_candidate = create_round_session(
+            &manager,
+            "feature-consolidation-a",
+            &version_group_id,
+            &source_ids,
+            &round_id,
+            "candidate",
+            confirmation_mode,
+        );
+        let losing_candidate = create_round_session(
+            &manager,
+            "feature-consolidation-b",
+            &version_group_id,
+            &source_ids,
+            &round_id,
+            "candidate",
+            confirmation_mode,
+        );
+        let judge = create_round_session(
+            &manager,
+            "feature-consolidation-judge",
+            &version_group_id,
+            &source_ids,
+            &round_id,
+            "judge",
+            confirmation_mode,
+        );
+
+        update_session_consolidation_report(
+            &db,
+            &repo_path,
+            &winning_candidate.name,
+            "Winner keeps v1 as the base.",
+            Some(source_winner.id.as_str()),
+            None,
+        )
+        .expect("set winning candidate base");
+        update_session_consolidation_report(
+            &db,
+            &repo_path,
+            &losing_candidate.name,
+            "Loser keeps v2 as the base.",
+            Some(source_loser.id.as_str()),
+            None,
+        )
+        .expect("set losing candidate base");
+        update_session_consolidation_report(
+            &db,
+            &repo_path,
+            &judge.name,
+            "Judge recommends feature-consolidation-a.",
+            None,
+            Some(winning_candidate.id.as_str()),
+        )
+        .expect("set judge report");
+        update_consolidation_round_recommendation(
+            &db,
+            &round_id,
+            Some(winning_candidate.id.as_str()),
+            Some(judge.id.as_str()),
+            "awaiting_confirmation",
+        )
+        .expect("persist recommendation");
+
+        commit_in_worktree(
+            &winning_candidate.worktree_path,
+            "merged.txt",
+            "winner result",
+            "winning consolidation result",
+        );
+
+        ConsolidationRoundFixture {
+            _tmp: tmp,
+            repo_path,
+            db,
+            manager,
+            round_id,
+            version_group_id,
+            source_winner,
+            source_loser,
+            winning_candidate,
+            losing_candidate,
+            judge,
+        }
+    }
+
+    fn active_version_group_sessions(manager: &SessionManager, version_group_id: &str) -> Vec<String> {
+        let mut names: Vec<String> = manager
+            .list_sessions()
+            .expect("list sessions")
+            .into_iter()
+            .filter(|session| session.version_group_id.as_deref() == Some(version_group_id))
+            .filter(|session| session.status == SessionStatus::Active)
+            .map(|session| session.name)
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[tokio::test]
+    async fn confirm_consolidation_winner_cleans_up_winning_candidate_and_judge() {
+        let fixture = make_consolidation_round_fixture("confirm");
+        let db = fixture.db.clone();
+        let repo_path = fixture.repo_path.clone();
+
+        let response = confirm_consolidation_winner_with_callbacks(
+            &fixture.db,
+            &fixture.manager,
+            ConfirmConsolidationWinnerParams {
+                round_id: &fixture.round_id,
+                winner_session_id: &fixture.winning_candidate.id,
+                override_reason: None,
+                confirmed_by: "user",
+            },
+            |_| Ok(()),
+            |session_name: &str| {
+                let session_name = session_name.to_string();
+                let db = db.clone();
+                let repo_path = repo_path.clone();
+                async move { SessionManager::new(db, repo_path).fast_cancel_session(&session_name).await }
+            },
+        )
+        .await
+        .expect("confirm winner");
+
+        assert_eq!(response.promoted_session_name, fixture.source_winner.name);
+        assert_eq!(response.source_sessions_cancelled, vec![fixture.source_loser.name.clone()]);
+        assert_eq!(
+            response.candidate_sessions_cancelled,
+            vec![
+                fixture.winning_candidate.name.clone(),
+                fixture.losing_candidate.name.clone(),
+            ]
+        );
+        assert_eq!(
+            response.judge_sessions_cancelled,
+            vec![fixture.judge.name.clone()]
+        );
+        assert_eq!(
+            active_version_group_sessions(&fixture.manager, &fixture.version_group_id),
+            vec![fixture.source_winner.name.clone()]
+        );
+    }
+
+    #[tokio::test]
+    async fn confirm_consolidation_winner_marks_round_promoted_before_cleanup_failures() {
+        let fixture = make_consolidation_round_fixture("confirm");
+        let db = fixture.db.clone();
+        let repo_path = fixture.repo_path.clone();
+        let judge_name = fixture.judge.name.clone();
+
+        let err = confirm_consolidation_winner_with_callbacks(
+            &fixture.db,
+            &fixture.manager,
+            ConfirmConsolidationWinnerParams {
+                round_id: &fixture.round_id,
+                winner_session_id: &fixture.winning_candidate.id,
+                override_reason: None,
+                confirmed_by: "user",
+            },
+            |_| Ok(()),
+            |session_name: &str| {
+                let session_name = session_name.to_string();
+                let db = db.clone();
+                let repo_path = repo_path.clone();
+                let judge_name = judge_name.clone();
+                async move {
+                    if session_name == judge_name {
+                        anyhow::bail!("forced judge cleanup failure");
+                    }
+                    SessionManager::new(db, repo_path).fast_cancel_session(&session_name).await
+                }
+            },
+        )
+        .await
+        .expect_err("judge cleanup should fail");
+
+        assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(err.1.contains(&fixture.judge.name));
+
+        let round = get_consolidation_round(&fixture.db, &fixture.repo_path, &fixture.round_id)
+            .expect("load confirmed round");
+        assert_eq!(round.status, "promoted");
+        assert_eq!(round.confirmed_by.as_deref(), Some("user"));
     }
 
     #[tokio::test]
@@ -5470,13 +5735,57 @@ pub(crate) async fn confirm_consolidation_winner_inner(
         )
     })?;
     let manager = core.session_manager();
-    let round = get_consolidation_round(&core.db, manager.repo_path(), round_id).map_err(|err| {
+    let cancel_db = core.db.clone();
+    let cancel_repo_path = manager.repo_path().to_path_buf();
+
+    confirm_consolidation_winner_with_callbacks(
+        &core.db,
+        &manager,
+        ConfirmConsolidationWinnerParams {
+            round_id,
+            winner_session_id,
+            override_reason,
+            confirmed_by,
+        },
+        |reason| {
+            request_sessions_refresh(app, reason);
+            Ok(())
+        },
+        move |session_name| {
+            let session_name = session_name.to_string();
+            let db = cancel_db.clone();
+            let repo_path = cancel_repo_path.clone();
+            async move { SessionManager::new(db, repo_path).fast_cancel_session(&session_name).await }
+        },
+    )
+    .await
+}
+
+async fn confirm_consolidation_winner_with_callbacks<RefreshFn, CancelFn, CancelFuture>(
+    db: &Database,
+    manager: &SessionManager,
+    params: ConfirmConsolidationWinnerParams<'_>,
+    mut refresh_fn: RefreshFn,
+    mut cancel_fn: CancelFn,
+) -> Result<ConfirmConsolidationWinnerResponse, (StatusCode, String)>
+where
+    RefreshFn: FnMut(SessionsRefreshReason) -> anyhow::Result<()>,
+    CancelFn: FnMut(&str) -> CancelFuture,
+    CancelFuture: Future<Output = anyhow::Result<()>>,
+{
+    let ConfirmConsolidationWinnerParams {
+        round_id,
+        winner_session_id,
+        override_reason,
+        confirmed_by,
+    } = params;
+    let round = get_consolidation_round(db, manager.repo_path(), round_id).map_err(|err| {
         (
             StatusCode::NOT_FOUND,
             format!("Consolidation round '{round_id}' not found: {err}"),
         )
     })?;
-    let round_sessions = list_round_sessions(&manager, round_id).map_err(|err| {
+    let round_sessions = list_round_sessions(manager, round_id).map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to list round sessions: {err}"),
@@ -5513,45 +5822,66 @@ pub(crate) async fn confirm_consolidation_winner_inner(
     }
 
     let reason = confirmation_reason(&round_sessions, &winner, override_reason);
-    let manager_ref = &manager;
     let outcome = execute_session_promotion(
-        &manager,
+        manager,
         &winner.name,
         &reason,
         Some(base_session_id),
-        || {
-            request_sessions_refresh(app, SessionsRefreshReason::MergeWorkflow);
-            Ok(())
-        },
-        move |sibling_name| {
-            let sibling_name = sibling_name.to_string();
-            async move { manager_ref.fast_cancel_session(&sibling_name).await }
-        },
+        || refresh_fn(SessionsRefreshReason::MergeWorkflow),
+        &mut cancel_fn,
     )
     .await?;
 
-    let mut candidate_sessions_cancelled = Vec::new();
-    for candidate in candidate_sessions {
-        if candidate.id == winner.id || candidate.status != SessionStatus::Active {
-            continue;
-        }
-        manager.fast_cancel_session(&candidate.name).await.map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to cancel losing consolidation candidate '{}': {err}", candidate.name),
-            )
-        })?;
-        candidate_sessions_cancelled.push(candidate.name);
-    }
-
-    update_consolidation_round_confirmation(&core.db, round_id, &winner.id, confirmed_by).map_err(|err| {
+    update_consolidation_round_confirmation(db, round_id, &winner.id, confirmed_by).map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to update consolidation round confirmation: {err}"),
         )
     })?;
 
-    request_sessions_refresh(app, SessionsRefreshReason::SessionLifecycle);
+    let mut candidate_sessions_cancelled = Vec::new();
+    let mut judge_sessions_cancelled = Vec::new();
+    let mut cleanup_failures = Vec::new();
+
+    for round_session in round_sessions {
+        if round_session.status != SessionStatus::Active {
+            continue;
+        }
+
+        let role = round_session
+            .consolidation_role
+            .as_deref()
+            .unwrap_or("candidate");
+        match cancel_fn(&round_session.name).await {
+            Ok(()) => match role {
+                "judge" => judge_sessions_cancelled.push(round_session.name),
+                _ => candidate_sessions_cancelled.push(round_session.name),
+            },
+            Err(err) => {
+                let label = match role {
+                    "judge" => "judge session",
+                    _ => "consolidation candidate",
+                };
+                cleanup_failures.push(format!("Failed to cancel {label} '{}': {err}", round_session.name));
+            }
+        }
+    }
+
+    candidate_sessions_cancelled.sort();
+    judge_sessions_cancelled.sort();
+
+    if let Err(err) = refresh_fn(SessionsRefreshReason::SessionLifecycle) {
+        cleanup_failures.push(format!(
+            "Failed to refresh sessions after consolidation confirmation: {err}"
+        ));
+    }
+
+    if !cleanup_failures.is_empty() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            cleanup_failures.join("; "),
+        ));
+    }
 
     Ok(ConfirmConsolidationWinnerResponse {
         round_id: round.id,
@@ -5559,6 +5889,7 @@ pub(crate) async fn confirm_consolidation_winner_inner(
         promoted_session_name: outcome.response.session_name,
         candidate_sessions_cancelled,
         source_sessions_cancelled: outcome.response.siblings_cancelled,
+        judge_sessions_cancelled,
     })
 }
 
