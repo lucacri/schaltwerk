@@ -127,6 +127,7 @@ export function SessionActions({
     worktree_exists: t.sessionActions.checkWorktreeExists,
     no_uncommitted_changes: t.sessionActions.checkNoUncommittedChanges,
     no_conflicts: t.sessionActions.checkNoConflicts,
+    has_committed_changes: t.sessionActions.checkHasCommittedChanges,
     rebased_onto_parent: t.sessionActions.checkRebasedOntoParent,
   }
 

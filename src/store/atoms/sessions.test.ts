@@ -24,6 +24,7 @@ vi.mock('../../common/eventSystem', () => ({
         SessionActivity: 'schaltwerk:session-activity',
         TerminalAttention: 'schaltwerk:terminal-attention',
         TerminalAgentStarted: 'schaltwerk:terminal-agent-started',
+        TerminalClosed: 'schaltwerk:terminal-closed',
     },
 }))
 
@@ -1026,6 +1027,122 @@ describe('sessions atoms', () => {
         expect(updated.info.merge_has_conflicts).toBe(true)
         expect(updated.info.merge_conflicting_paths).toEqual(['src/foo.ts'])
         expect(store.get(mergeStatusSelectorAtom)('merge-session')).toBe('conflict')
+    })
+
+    it('does not infer merged status from a pristine zero diff', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                return []
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        store.set(projectPathAtom, '/project')
+        await store.set(initializeSessionsEventsActionAtom)
+
+        store.set(allSessionsAtom, [
+            createSession({
+                session_id: 'pristine-session',
+                ready_to_merge: false,
+                commits_ahead_count: 0,
+                diff_stats: {
+                    files_changed: 0,
+                    additions: 0,
+                    deletions: 0,
+                    insertions: 0,
+                },
+            }),
+        ])
+
+        listeners['schaltwerk:session-git-stats']?.({
+            session_name: 'pristine-session',
+            project_path: '/project',
+            files_changed: 0,
+            lines_added: 0,
+            lines_removed: 0,
+            has_uncommitted: false,
+            commits_ahead_count: 0,
+            has_conflicts: false,
+            merge_is_up_to_date: true,
+        })
+
+        expect(store.get(mergeStatusSelectorAtom)('pristine-session')).toBeUndefined()
+    })
+
+    it('keeps merged status when the backend explicitly reports up-to-date with commits ahead', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+        store.set(projectPathAtom, '/project')
+
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                return [createSession({
+                    session_id: 'merged-session',
+                    ready_to_merge: true,
+                    diff_stats: {
+                        files_changed: 0,
+                        additions: 0,
+                        deletions: 0,
+                        insertions: 0,
+                    },
+                    merge_is_up_to_date: true,
+                })]
+            }
+
+            return undefined
+        })
+
+        await store.set(refreshSessionsActionAtom)
+
+        expect(store.get(mergeStatusSelectorAtom)('merged-session')).toBe('merged')
+    })
+
+    it('reloads spec sessions when clarification starts', async () => {
+        const { invoke } = await import('@tauri-apps/api/core')
+        const initialSpec = createSession({
+            session_id: 'spec-alpha',
+            stable_id: 'spec-alpha-stable',
+            status: 'spec',
+            session_state: SessionState.Spec,
+            worktree_path: '',
+            clarification_started: false,
+        })
+        const refreshedSpec = createSession({
+            ...initialSpec.info,
+            clarification_started: true,
+        })
+
+        let listCalls = 0
+        vi.mocked(invoke).mockImplementation(async (cmd) => {
+            if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+                listCalls += 1
+                return listCalls === 1 ? [initialSpec] : [refreshedSpec]
+            }
+            if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) {
+                return []
+            }
+            return undefined
+        })
+
+        store.set(projectPathAtom, '/project')
+        await store.set(initializeSessionsEventsActionAtom)
+        await store.set(refreshSessionsActionAtom)
+
+        expect(store.get(allSessionsAtom)[0]?.info.clarification_started).toBe(false)
+
+        listeners['schaltwerk:terminal-agent-started']?.({
+            session_name: 'spec-alpha',
+            terminal_id: 'spec-orchestrator-session-spec_alpha~12345678-top',
+        })
+
+        await Promise.resolve()
+        await Promise.resolve()
+
+        expect(store.get(allSessionsAtom)[0]?.info.clarification_started).toBe(true)
     })
 
     it('keeps merge dialog open on structured merge conflict', async () => {

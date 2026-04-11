@@ -1661,6 +1661,29 @@ fn test_list_enriched_sessions_marks_clean_committed_session_ready() {
 }
 
 #[test]
+fn test_list_enriched_sessions_keeps_pristine_session_not_ready() {
+    let env = TestEnvironment::new().unwrap();
+    let manager = env.get_session_manager().unwrap();
+
+    let session = manager
+        .create_session("pristine-not-ready-session", None, None)
+        .unwrap();
+
+    let enriched = manager.list_enriched_sessions().unwrap();
+    let refreshed = enriched
+        .iter()
+        .find(|candidate| candidate.info.session_id == session.name)
+        .expect("session present");
+
+    assert!(
+        !refreshed.info.ready_to_merge,
+        "fresh sessions without committed work should not be marked ready_to_merge"
+    );
+    assert_eq!(refreshed.info.commits_ahead_count, Some(0));
+    assert_eq!(refreshed.info.session_state, SessionState::Running);
+}
+
+#[test]
 fn test_list_enriched_sessions_clears_stale_ready_flag_for_dirty_session() {
     let env = TestEnvironment::new().unwrap();
     let manager = env.get_session_manager().unwrap();

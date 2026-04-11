@@ -125,6 +125,12 @@ impl<E: EventEmitter> ActivityTracker<E> {
                         })
                         .unwrap_or_default();
 
+                    let commits_ahead_count =
+                        crate::domains::sessions::service::compute_commits_ahead_count(
+                            &session.worktree_path,
+                            &session.branch,
+                            &session.parent_branch,
+                        );
                     let readiness = crate::domains::sessions::service::compute_ready_to_merge_for_event(
                         &session.session_state,
                         Some(stats.has_uncommitted),
@@ -134,6 +140,7 @@ impl<E: EventEmitter> ActivityTracker<E> {
                             &session.branch,
                             &session.parent_branch,
                         ),
+                        commits_ahead_count,
                     );
                     let payload = SessionGitStatsUpdated {
                         session_id: session.id.clone(),
@@ -144,7 +151,7 @@ impl<E: EventEmitter> ActivityTracker<E> {
                         lines_removed: stats.lines_removed,
                         has_uncommitted: stats.has_uncommitted,
                         dirty_files_count: Some(stats.dirty_files_count),
-                        commits_ahead_count: None,
+                        commits_ahead_count,
                         has_conflicts: stats.has_conflicts,
                         top_uncommitted_paths: None,
                         merge_has_conflicts: merge_snapshot.merge_has_conflicts,

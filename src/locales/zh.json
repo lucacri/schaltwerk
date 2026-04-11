@@ -1508,6 +1508,7 @@
     "checkWorktreeExists": "工作树存在",
     "checkNoUncommittedChanges": "没有未提交更改",
     "checkNoConflicts": "没有未解决的合并冲突",
+    "checkHasCommittedChanges": "有已提交的工作领先于父分支",
     "checkRebasedOntoParent": "已变基到父分支"
   },
   "gitlabMrModal": {

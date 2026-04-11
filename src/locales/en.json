@@ -1507,6 +1507,7 @@
     "checkWorktreeExists": "Worktree exists",
     "checkNoUncommittedChanges": "No uncommitted changes",
     "checkNoConflicts": "No unresolved merge conflicts",
+    "checkHasCommittedChanges": "Has committed work ahead of parent",
     "checkRebasedOntoParent": "Rebased onto parent branch"
   },
   "gitlabMrModal": {

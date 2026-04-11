@@ -866,25 +866,11 @@ function deriveMergeStatusFromSession(session: EnrichedSession): MergeStatus | u
         return 'conflict'
     }
 
-    if (info.merge_is_up_to_date === true) {
-        return 'merged'
-    }
-
     if (Array.isArray(info.merge_conflicting_paths) && info.merge_conflicting_paths.length > 0) {
         return 'conflict'
     }
 
-    const diff = info.diff_stats
-    if (!diff) {
-        return undefined
-    }
-
-    const filesChanged = diff.files_changed ?? 0
-    const additions = (diff.additions ?? diff.insertions) ?? 0
-    const deletions = diff.deletions ?? 0
-    const insertions = diff.insertions ?? diff.additions ?? 0
-
-    if (filesChanged === 0 && additions === 0 && deletions === 0 && insertions === 0) {
+    if (info.merge_is_up_to_date === true) {
         return 'merged'
     }
 
@@ -1458,19 +1444,46 @@ export const initializeSessionsEventsActionAtom = atom(
             })()
         })
 
+        const getSessionInActiveProject = (sessionId: string | undefined | null): EnrichedSession | undefined => {
+            if (!sessionId) return undefined
+            const currentSessions = get(allSessionsAtom)
+            return currentSessions.find(session => session.info.session_id === sessionId)
+        }
+
+        const hasSessionInActiveProject = (sessionId: string | undefined | null): boolean => {
+            return Boolean(getSessionInActiveProject(sessionId))
+        }
+
         await register(SchaltEvent.TerminalAgentStarted, (payload) => {
-            const event = payload as { terminal_id?: string | null }
+            const event = payload as { terminal_id?: string | null; session_name?: string | null }
             if (!event?.terminal_id) {
                 return
             }
             markTerminalStarted(event.terminal_id)
-        })
 
-        const hasSessionInActiveProject = (sessionId: string | undefined | null): boolean => {
-            if (!sessionId) return false
-            const currentSessions = get(allSessionsAtom)
-            return currentSessions.some(session => session.info.session_id === sessionId)
-        }
+            const session = getSessionInActiveProject(event.session_name)
+            if (!session || !isSpec(session.info)) {
+                return
+            }
+
+            set(allSessionsAtom, (prev) => prev.map(current => {
+                if (current.info.session_id !== session.info.session_id) {
+                    return current
+                }
+                return {
+                    ...current,
+                    info: {
+                        ...current.info,
+                        clarification_started: true,
+                    },
+                }
+            }))
+            syncSnapshotsFromAtom(get, set)
+
+            void set(reloadSessionsActionAtom).catch((error) => {
+                logger.warn('[SessionsAtoms] Failed to reload after TerminalAgentStarted for spec session:', error)
+            })
+        })
 
         await register(SchaltEvent.GitOperationStarted, (payload) => {
             const event = payload as GitOperationPayload
@@ -1783,19 +1796,10 @@ export const initializeSessionsEventsActionAtom = atom(
                 }
 
                 const upToDateFlag = event.merge_is_up_to_date
-                if (upToDateFlag === true) {
+                if (upToDateFlag === true && (event.commits_ahead_count ?? 0) > 0) {
                     next.set(event.session_name, 'merged')
                 } else if (upToDateFlag === false) {
                     if (next.get(event.session_name) === 'merged') {
-                        next.delete(event.session_name)
-                    }
-                } else if (conflictFlag === undefined) {
-                    const noDiff = (event.files_changed ?? 0) === 0
-                        && (event.has_uncommitted ?? false) === false
-                        && (event.has_conflicts ?? false) === false
-                    if (noDiff) {
-                        next.set(event.session_name, 'merged')
-                    } else if (next.get(event.session_name) === 'merged') {
                         next.delete(event.session_name)
                     }
                 }

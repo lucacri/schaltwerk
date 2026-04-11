@@ -92,7 +92,7 @@ fn compute_commits_ahead_count_with_repo(
     crate::domains::merge::service::count_commits_ahead(repo, session_oid, parent_oid).ok()
 }
 
-fn compute_commits_ahead_count(
+pub(crate) fn compute_commits_ahead_count(
     worktree_path: &Path,
     session_branch: &str,
     parent_branch: &str,
@@ -188,6 +188,7 @@ fn build_ready_to_merge_state(
     has_uncommitted_changes: Option<bool>,
     has_conflicts: Option<bool>,
     rebased_onto_parent: Option<bool>,
+    commits_ahead_count: Option<u32>,
 ) -> SessionReadyToMergeState {
     let checks = vec![
         SessionReadyToMergeCheck {
@@ -201,6 +202,10 @@ fn build_ready_to_merge_state(
         SessionReadyToMergeCheck {
             key: "no_conflicts".to_string(),
             passed: worktree_exists && has_conflicts == Some(false),
+        },
+        SessionReadyToMergeCheck {
+            key: "has_committed_changes".to_string(),
+            passed: worktree_exists && commits_ahead_count.unwrap_or(0) > 0,
         },
         SessionReadyToMergeCheck {
             key: "rebased_onto_parent".to_string(),
@@ -220,6 +225,7 @@ pub fn compute_ready_to_merge_for_event(
     has_uncommitted_changes: Option<bool>,
     has_conflicts: Option<bool>,
     rebased_onto_parent: Option<bool>,
+    commits_ahead_count: Option<u32>,
 ) -> (bool, Vec<SessionReadyToMergeCheck>) {
     let state = build_ready_to_merge_state(
         session_state,
@@ -227,6 +233,7 @@ pub fn compute_ready_to_merge_for_event(
         has_uncommitted_changes,
         has_conflicts,
         rebased_onto_parent,
+        commits_ahead_count,
     );
     (state.ready_to_merge, state.checks)
 }
@@ -297,6 +304,7 @@ pub fn apply_git_enrichment(
             has_uncommitted_changes,
             result.has_conflicts,
             result.rebased_onto_parent,
+            result.commits_ahead_count,
         );
         session.info.ready_to_merge = readiness.ready_to_merge;
         session.info.ready_to_merge_checks = Some(readiness.checks);
@@ -3165,6 +3173,7 @@ impl SessionManager {
                 None,
                 None,
                 None,
+                None,
             );
 
             let info = SessionInfo {
@@ -4014,6 +4023,11 @@ impl SessionManager {
 
         let worktree_exists = session.worktree_path.exists();
         let ready_to_merge = if worktree_exists {
+            let commits_ahead_count = compute_commits_ahead_count(
+                &session.worktree_path,
+                &session.branch,
+                &session.parent_branch,
+            );
             let (has_uncommitted_changes, has_conflicts) =
                 match git::calculate_git_stats_fast(&session.worktree_path, &session.parent_branch)
                 {
@@ -4038,6 +4052,7 @@ impl SessionManager {
                     &session.branch,
                     &session.parent_branch,
                 ),
+                commits_ahead_count,
             )
             .ready_to_merge
         } else {

@@ -434,6 +434,7 @@ impl FileWatcher {
                             &session_branch_name,
                             base_branch,
                         ),
+                        commits_ahead_count,
                     );
                     stats_payload = Some(SessionGitStatsUpdated {
                         session_id: session_name.to_string(),

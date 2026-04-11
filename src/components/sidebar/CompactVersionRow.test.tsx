@@ -201,6 +201,24 @@ describe('CompactVersionRow', () => {
     expect(screen.getByText(/ready/i)).toBeInTheDocument()
   })
 
+  it('renders running state when a ready session is still active', () => {
+    renderRow({
+      isRunning: true,
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          ready_to_merge: true,
+          session_state: 'running',
+          status: 'active',
+        },
+      },
+    })
+
+    expect(screen.getByTestId('compact-row-status-running')).toBeInTheDocument()
+    expect(screen.queryByTestId('compact-row-status-ready')).toBeNull()
+  })
+
   it('renders blocked state when session is blocked', () => {
     renderRow({
       session: {

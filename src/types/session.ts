@@ -80,6 +80,7 @@ export type SessionReadyToMergeCheckKey =
     | 'worktree_exists'
     | 'no_uncommitted_changes'
     | 'no_conflicts'
+    | 'has_committed_changes'
     | 'rebased_onto_parent'
 
 export interface SessionReadyToMergeCheck {

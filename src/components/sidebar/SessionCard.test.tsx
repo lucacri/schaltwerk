@@ -191,7 +191,7 @@ describe('SessionCard stats-first layout', () => {
 })
 
 describe('SessionCard running tag', () => {
-  it('shows status strip and ready label when session is ready to merge but still running', () => {
+  it('shows the running indicator instead of the ready label when a ready session is still active', () => {
     const session: EnrichedSession = {
       ...baseSession,
       info: {
@@ -216,7 +216,8 @@ describe('SessionCard running tag', () => {
     const card = screen.getByRole('button', { name: /selected session/i })
     const statusStrip = card.querySelector('.w-\\[3px\\]')
     expect(statusStrip).toBeInTheDocument()
-    expect(screen.getByText(/✓ Ready/)).toBeInTheDocument()
+    expect(statusStrip).toHaveClass('session-status-pulse')
+    expect(screen.queryByText(/✓ Ready/)).toBeNull()
   })
 })
 

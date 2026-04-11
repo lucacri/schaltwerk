@@ -15,7 +15,7 @@ import { getSessionCardSurfaceClasses } from './SessionCard'
 import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, sessionText } from './sessionCardStyles'
 import { useSessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { useSessionActivity } from '../../store/hooks/useSessionActivity'
-import { getSessionLifecycleState } from '../../utils/sessionState'
+import { getSidebarSessionStatus } from './sessionStatus'
 
 interface CompactVersionRowProps {
   session: {
@@ -86,14 +86,8 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   const filesChanged = s.diff_stats?.files_changed || 0
   const isBlocked = (activity?.is_blocked ?? s.is_blocked) || false
   const isReadyToMerge = s.ready_to_merge || false
-  const sessionState = getSessionLifecycleState(s)
-  const isSpecClarificationStarted = sessionState === 'spec' && s.clarification_started === true
-  const specNotStarted = sessionState === 'spec' && !isSpecClarificationStarted
-  const specWaitingForInput = isSpecClarificationStarted && s.attention_required === true
-  const isIdle = sessionState === 'spec'
-    ? specWaitingForInput
-    : s.attention_required === true
-  const isClarificationRunning = isSpecClarificationStarted && !isIdle
+  const statusState = getSidebarSessionStatus(s, isBlocked, isRunning)
+  const sessionState = statusState.sessionState
   const hasUncommittedChanges = !!s.has_uncommitted_changes
   const dirtyFilesCount =
     s.dirty_files_count
@@ -130,8 +124,8 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
     sessionState,
     isSelected,
     isReadyToMerge,
-    isRunning: Boolean(isRunning) || isClarificationRunning,
-    isIdle,
+    isRunning: statusState.isActivelyRunning,
+    isIdle: statusState.isIdle,
     hasFollowUpMessage,
     willBeDeleted,
     isPromotionPreview,
@@ -150,7 +144,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   }, [s.session_id])
 
   const statusIndicator = (() => {
-    if (isBlocked) {
+    if (statusState.primaryStatus === 'blocked') {
       return (
         <span
           data-testid="compact-row-status-blocked"
@@ -167,24 +161,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
       )
     }
 
-    if (isReadyToMerge) {
-      return (
-        <span
-          data-testid="compact-row-status-ready"
-          className="inline-flex items-center px-1.5 py-[1px] rounded border"
-          style={{
-            ...sessionText.badge,
-            backgroundColor: 'var(--color-accent-green-bg)',
-            color: 'var(--color-accent-green-light)',
-            borderColor: 'var(--color-accent-green-border)',
-          }}
-        >
-          {t.session.ready}
-        </span>
-      )
-    }
-
-    if (specWaitingForInput) {
+    if (statusState.primaryStatus === 'waiting') {
       return (
         <span
           data-testid="compact-row-status-idle"
@@ -201,7 +178,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
       )
     }
 
-    if (isIdle) {
+    if (statusState.primaryStatus === 'idle') {
       return (
         <span
           data-testid="compact-row-status-idle"
@@ -218,7 +195,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
       )
     }
 
-    if (specNotStarted) {
+    if (statusState.primaryStatus === 'not_started') {
       return (
         <span
           data-testid="compact-row-status-not-started"
@@ -235,7 +212,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
       )
     }
 
-    if ((sessionState === 'running' || isClarificationRunning) && !isReadyToMerge) {
+    if (statusState.primaryStatus === 'running') {
       return (
         <span
           data-testid="compact-row-status-running"
@@ -244,6 +221,23 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
           title="Active"
         >
           <ProgressIndicator size="sm" />
+        </span>
+      )
+    }
+
+    if (statusState.primaryStatus === 'ready') {
+      return (
+        <span
+          data-testid="compact-row-status-ready"
+          className="inline-flex items-center px-1.5 py-[1px] rounded border"
+          style={{
+            ...sessionText.badge,
+            backgroundColor: 'var(--color-accent-green-bg)',
+            color: 'var(--color-accent-green-light)',
+            borderColor: 'var(--color-accent-green-border)',
+          }}
+        >
+          {t.session.ready}
         </span>
       )
     }
@@ -335,20 +329,21 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
         style={surface.style}
         aria-label={`Select session ${s.display_name ?? s.session_id}`}
       >
-        {(sessionState !== 'spec' || isSpecClarificationStarted || specNotStarted) && (() => {
-          const isActivelyRunning = !isIdle && ((sessionState === 'running' && !isReadyToMerge) || isClarificationRunning)
-          const stripColor = isIdle
+        {statusState.shouldShowStatusStrip && (() => {
+          const stripColor = statusState.primaryStatus === 'blocked'
+            ? 'var(--color-accent-red)'
+            : statusState.isIdle
             ? 'var(--color-accent-yellow)'
-            : isActivelyRunning
+            : statusState.isActivelyRunning
               ? 'var(--color-accent-blue)'
-              : specNotStarted
+              : statusState.primaryStatus === 'not_started'
                 ? 'var(--color-border-subtle)'
               : isReadyToMerge
                 ? 'var(--color-accent-green)'
                 : 'var(--color-border-subtle)'
           return (
             <div
-              className={clsx('absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md', isActivelyRunning && 'session-status-pulse')}
+              className={clsx('absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md', statusState.isActivelyRunning && 'session-status-pulse')}
               style={{ backgroundColor: stripColor }}
             />
           )

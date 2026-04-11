@@ -18,7 +18,7 @@ import { useTranslation } from "../../common/i18n/useTranslation";
 import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, sessionText } from './sessionCardStyles'
 import { useSessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { useSessionActivity } from '../../store/hooks/useSessionActivity'
-import { getSessionLifecycleState } from '../../utils/sessionState'
+import { getSidebarSessionStatus } from './sessionStatus'
 
 interface SessionCardProps {
   session: {
@@ -217,14 +217,8 @@ export const SessionCard = memo<SessionCardProps>(
     const isReadyToMerge = s.ready_to_merge || false;
     const promotionReason = s.promotionReason?.trim() || s.promotion_reason?.trim();
     const consolidationReport = s.consolidation_report?.replace(/\s+/g, ' ').trim();
-    const sessionState = getSessionLifecycleState(s);
-    const isSpecClarificationStarted = sessionState === "spec" && s.clarification_started === true;
-    const specNotStarted = sessionState === "spec" && !isSpecClarificationStarted;
-    const specWaitingForInput = isSpecClarificationStarted && s.attention_required === true;
-    const isIdle = sessionState === "spec"
-      ? specWaitingForInput
-      : s.attention_required === true;
-    const isClarificationRunning = isSpecClarificationStarted && !isIdle;
+    const statusState = getSidebarSessionStatus(s, isBlocked, isRunning);
+    const sessionState = statusState.sessionState;
     const agentType =
       s.original_agent_type as SessionInfo["original_agent_type"];
     const agentKey = (agentType || "").toLowerCase();
@@ -257,8 +251,8 @@ export const SessionCard = memo<SessionCardProps>(
       sessionState,
       isSelected,
       isReadyToMerge,
-      isRunning: Boolean(isRunning) || isClarificationRunning,
-      isIdle,
+      isRunning: statusState.isActivelyRunning,
+      isIdle: statusState.isIdle,
       hasFollowUpMessage,
       willBeDeleted,
       isPromotionPreview,
@@ -339,20 +333,21 @@ export const SessionCard = memo<SessionCardProps>(
         style={surface.style}
         aria-label={getAccessibilityLabel(isSelected, index)}
       >
-        {(sessionState !== "spec" || isRunning || isSpecClarificationStarted || specNotStarted) && (() => {
-          const isActivelyRunning = !isIdle && ((sessionState === "running" || isRunning) && !isReadyToMerge || isClarificationRunning)
-          const stripColor = isIdle
+        {statusState.shouldShowStatusStrip && (() => {
+          const stripColor = statusState.primaryStatus === "blocked"
+            ? "var(--color-accent-red)"
+            : statusState.isIdle
             ? "var(--color-accent-yellow)"
-            : isActivelyRunning
+            : statusState.isActivelyRunning
               ? "var(--color-accent-blue)"
-              : specNotStarted
+              : statusState.primaryStatus === "not_started"
                 ? "var(--color-border-subtle)"
               : isReadyToMerge
                 ? "var(--color-accent-green)"
                 : "var(--color-border-subtle)"
           return (
             <div
-              className={clsx("absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md", isActivelyRunning && "session-status-pulse")}
+              className={clsx("absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md", statusState.isActivelyRunning && "session-status-pulse")}
               style={{ backgroundColor: stripColor }}
             />
           )
@@ -406,7 +401,7 @@ export const SessionCard = memo<SessionCardProps>(
                 {s.spec_stage === "clarified" ? "Clarified" : "Draft"}
               </span>
             )}
-            {specNotStarted && (
+            {statusState.primaryStatus === "not_started" && (
               <span
                 className="flex-shrink-0"
                 style={{
@@ -417,7 +412,7 @@ export const SessionCard = memo<SessionCardProps>(
                 {t.session.notStarted}
               </span>
             )}
-            {specWaitingForInput && (
+            {statusState.primaryStatus === "waiting" && (
               <span
                 className="flex-shrink-0"
                 style={{
@@ -428,7 +423,7 @@ export const SessionCard = memo<SessionCardProps>(
                 {t.session.waitingForInput}
               </span>
             )}
-            {isClarificationRunning && (
+            {statusState.primaryStatus === "running" && (
               <span
                 className="flex-shrink-0"
                 style={{
@@ -439,7 +434,7 @@ export const SessionCard = memo<SessionCardProps>(
                 {t.session.running}
               </span>
             )}
-            {isIdle && !specWaitingForInput && (
+            {statusState.primaryStatus === "idle" && (
               <span
                 className="flex-shrink-0"
                 style={{
@@ -450,7 +445,7 @@ export const SessionCard = memo<SessionCardProps>(
                 {t.session.idle}
               </span>
             )}
-            {isReadyToMerge && (
+            {statusState.primaryStatus === "ready" && (
               <span
                 className="flex-shrink-0"
                 style={{
@@ -461,7 +456,7 @@ export const SessionCard = memo<SessionCardProps>(
                 {t.session.ready}
               </span>
             )}
-            {isBlocked && (
+            {statusState.primaryStatus === "blocked" && (
               <span
                 className="flex-shrink-0"
                 style={{

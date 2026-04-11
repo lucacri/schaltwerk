@@ -1507,6 +1507,7 @@ export interface Translations {
     checkWorktreeExists: string
     checkNoUncommittedChanges: string
     checkNoConflicts: string
+    checkHasCommittedChanges: string
     checkRebasedOntoParent: string
   }
   gitlabMrModal: {
