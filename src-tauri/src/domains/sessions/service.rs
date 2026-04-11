@@ -55,10 +55,7 @@ fn agent_binary_available(agent: &str, binary_paths: &HashMap<String, String>) -
         .unwrap_or(false)
 }
 
-fn resolve_launch_agent(
-    preferred: &str,
-    binary_paths: &HashMap<String, String>,
-) -> Result<String> {
+fn resolve_launch_agent(preferred: &str, binary_paths: &HashMap<String, String>) -> Result<String> {
     let preferred_normalized = preferred.trim();
     let desired = if preferred_normalized.is_empty() {
         "claude".to_string()
@@ -80,7 +77,7 @@ fn resolve_launch_agent(
     ))
 }
 
-fn compute_commits_ahead_count_with_repo(
+pub(crate) fn compute_commits_ahead_count_with_repo(
     repo: &git2::Repository,
     session_branch: &str,
     parent_branch: &str,
@@ -99,6 +96,23 @@ pub(crate) fn compute_commits_ahead_count(
 ) -> Option<u32> {
     let repo = git2::Repository::open(worktree_path).ok()?;
     compute_commits_ahead_count_with_repo(&repo, session_branch, parent_branch)
+}
+
+pub(crate) fn compute_rebased_onto_parent_with_repo(
+    repo: &git2::Repository,
+    session_branch: &str,
+    parent_branch: &str,
+) -> Option<bool> {
+    let session_oid =
+        crate::domains::merge::service::resolve_branch_oid(repo, session_branch).ok()?;
+    let parent_oid =
+        crate::domains::merge::service::resolve_branch_oid(repo, parent_branch).ok()?;
+
+    if session_oid == parent_oid {
+        return Some(true);
+    }
+
+    repo.graph_descendant_of(session_oid, parent_oid).ok()
 }
 
 const FORCE_RESTART_CONTINUATION_PREAMBLE: &str = concat!(
@@ -170,16 +184,7 @@ pub fn compute_rebased_onto_parent(
     parent_branch: &str,
 ) -> Option<bool> {
     let repo = git2::Repository::open(worktree_path).ok()?;
-    let session_oid =
-        crate::domains::merge::service::resolve_branch_oid(&repo, session_branch).ok()?;
-    let parent_oid =
-        crate::domains::merge::service::resolve_branch_oid(&repo, parent_branch).ok()?;
-
-    if session_oid == parent_oid {
-        return Some(true);
-    }
-
-    repo.graph_descendant_of(session_oid, parent_oid).ok()
+    compute_rebased_onto_parent_with_repo(&repo, session_branch, parent_branch)
 }
 
 fn build_ready_to_merge_state(
@@ -239,33 +244,39 @@ pub fn compute_ready_to_merge_for_event(
 }
 
 pub fn compute_git_for_session(task: &GitEnrichmentTask) -> GitEnrichmentResult {
-    let computed_stats = git::calculate_git_stats_fast(&task.worktree_path, &task.parent_branch)
-        .ok()
-        .map(|mut s| {
-            s.session_id = task.session_id.clone();
-            s
+    let repo = git2::Repository::open(&task.worktree_path).ok();
+    let computed_stats = repo
+        .as_ref()
+        .and_then(|repo| {
+            git::calculate_git_stats_fast_with_repo(repo, &task.worktree_path, &task.parent_branch)
+                .ok()
+        })
+        .or_else(|| git::calculate_git_stats_fast(&task.worktree_path, &task.parent_branch).ok())
+        .map(|mut stats| {
+            stats.session_id = task.session_id.clone();
+            stats
         });
 
     let has_conflicts = computed_stats
         .as_ref()
         .map(|stats| stats.has_conflicts)
-        .or_else(|| {
-            match git::has_conflicts(&task.worktree_path) {
-                Ok(value) => Some(value),
-                Err(err) => {
-                    log::warn!(
-                        "Conflict detection failed for '{}': {err}",
-                        task.session_name
-                    );
-                    None
-                }
+        .or_else(|| match git::has_conflicts(&task.worktree_path) {
+            Ok(value) => Some(value),
+            Err(err) => {
+                log::warn!(
+                    "Conflict detection failed for '{}': {err}",
+                    task.session_name
+                );
+                None
             }
         });
 
-    let commits_ahead_count =
-        compute_commits_ahead_count(&task.worktree_path, &task.branch, &task.parent_branch);
-    let rebased_onto_parent =
-        compute_rebased_onto_parent(&task.worktree_path, &task.branch, &task.parent_branch);
+    let commits_ahead_count = repo.as_ref().and_then(|repo| {
+        compute_commits_ahead_count_with_repo(repo, &task.branch, &task.parent_branch)
+    });
+    let rebased_onto_parent = repo.as_ref().and_then(|repo| {
+        compute_rebased_onto_parent_with_repo(repo, &task.branch, &task.parent_branch)
+    });
 
     GitEnrichmentResult {
         index: task.index,
@@ -276,10 +287,7 @@ pub fn compute_git_for_session(task: &GitEnrichmentTask) -> GitEnrichmentResult 
     }
 }
 
-pub fn apply_git_enrichment(
-    sessions: &mut [EnrichedSession],
-    results: Vec<GitEnrichmentResult>,
-) {
+pub fn apply_git_enrichment(sessions: &mut [EnrichedSession], results: Vec<GitEnrichmentResult>) {
     for result in results {
         let session = &mut sessions[result.index];
         let has_uncommitted_changes = result.git_stats.as_ref().map(|stats| stats.has_uncommitted);
@@ -353,14 +361,14 @@ use crate::{
     domains::sessions::db_sessions::SessionMethods,
     domains::sessions::entity::ArchivedSpec,
     domains::sessions::entity::{
-        DiffStats, EnrichedSession, Epic, FilterMode, GitStats, Session, SessionInfo,
-        SessionState, SessionStatus, SessionStatusType, SessionType, SortMode, Spec, SpecStage,
+        DiffStats, EnrichedSession, Epic, FilterMode, GitStats, Session, SessionInfo, SessionState,
+        SessionStatus, SessionStatusType, SessionType, SortMode, Spec, SpecStage,
     },
     domains::sessions::repository::SessionDbManager,
     domains::sessions::utils::SessionUtils,
-    shared::format_branch_name,
     infrastructure::database::db_project_config::{DEFAULT_BRANCH_PREFIX, ProjectConfigMethods},
     infrastructure::database::{Database, db_archived_specs::ArchivedSpecMethods as _},
+    shared::format_branch_name,
 };
 use uuid::Uuid;
 
@@ -475,6 +483,42 @@ mod service_unified_tests {
         }
     }
 
+    #[test]
+    fn compute_git_for_session_preserves_diff_stats_when_parent_branch_is_missing() {
+        crate::domains::git::stats::clear_stats_cache();
+
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = temp_dir.path().join("repo");
+        std::fs::create_dir_all(&repo_path).unwrap();
+        init_git_repo(&repo_path);
+
+        run_git(&repo_path, &["checkout", "-b", "feature/session"]);
+        std::fs::write(repo_path.join("session.txt"), "one\ntwo\n").unwrap();
+
+        let task = GitEnrichmentTask {
+            index: 0,
+            worktree_path: repo_path.clone(),
+            parent_branch: "refs/heads/does-not-exist".to_string(),
+            branch: "feature/session".to_string(),
+            session_id: "session-1".to_string(),
+            session_name: "session-1".to_string(),
+        };
+
+        let result = compute_git_for_session(&task);
+        let stats = result
+            .git_stats
+            .as_ref()
+            .expect("expected git stats even when parent branch is missing");
+
+        assert!(stats.has_uncommitted);
+        assert_eq!(stats.files_changed, 1);
+        assert_eq!(stats.lines_added, 2);
+        assert_eq!(stats.lines_removed, 0);
+        assert_eq!(result.has_conflicts, Some(false));
+        assert_eq!(result.commits_ahead_count, None);
+        assert_eq!(result.rebased_onto_parent, None);
+    }
+
     const RESTART_CONTINUATION_MARKER: &str =
         "This is a continuation of prior work in this worktree, not a fresh start.";
     const RESTART_CONTINUATION_GIT_GUIDANCE: &str =
@@ -514,7 +558,9 @@ mod service_unified_tests {
     ) -> Session {
         let repo = temp_dir.path().join("repo");
         init_git_repo(&repo);
-        manager.create_spec_session(spec_name, spec_content).unwrap();
+        manager
+            .create_spec_session(spec_name, spec_content)
+            .unwrap();
         manager
             .start_spec_session_with_config(spec_name, None, None, None, Some(agent_type))
             .unwrap()
@@ -576,7 +622,11 @@ mod service_unified_tests {
                 .shell_command
                 .contains(RESTART_CONTINUATION_GIT_GUIDANCE)
         );
-        assert!(command.shell_command.contains(RESTART_CONTINUATION_SPEC_MARKER));
+        assert!(
+            command
+                .shell_command
+                .contains(RESTART_CONTINUATION_SPEC_MARKER)
+        );
         assert!(command.shell_command.contains(spec_content));
     }
 
@@ -604,7 +654,11 @@ mod service_unified_tests {
                 .shell_command
                 .contains(RESTART_CONTINUATION_GIT_GUIDANCE)
         );
-        assert!(command.shell_command.contains(RESTART_CONTINUATION_SPEC_MARKER));
+        assert!(
+            command
+                .shell_command
+                .contains(RESTART_CONTINUATION_SPEC_MARKER)
+        );
         assert!(command.shell_command.contains(spec_content));
     }
 
@@ -618,11 +672,7 @@ mod service_unified_tests {
             .expect("create session");
 
         manager
-            .link_session_to_pr(
-                &session.name,
-                42,
-                "https://github.com/owner/repo/pull/42",
-            )
+            .link_session_to_pr(&session.name, 42, "https://github.com/owner/repo/pull/42")
             .expect("link session to pr");
 
         let linked = manager.get_session(&session.name).expect("reload session");
@@ -790,14 +840,15 @@ mod service_unified_tests {
 
             // Get the unified command using the new registry approach
             let binary_paths = HashMap::new();
-            let result = manager.start_claude_in_session_with_restart_and_binary(AgentLaunchParams {
-                session_name: &session.name,
-                force_restart: false,
-                binary_paths: &binary_paths,
-                amp_mcp_servers: None,
-                agent_type_override: None,
-                skip_prompt: false,
-            });
+            let result =
+                manager.start_claude_in_session_with_restart_and_binary(AgentLaunchParams {
+                    session_name: &session.name,
+                    force_restart: false,
+                    binary_paths: &binary_paths,
+                    amp_mcp_servers: None,
+                    agent_type_override: None,
+                    skip_prompt: false,
+                });
 
             // Should succeed for all supported agents
             assert!(result.is_ok(), "Agent {} should be supported", agent_type);
@@ -1172,7 +1223,10 @@ mod service_unified_tests {
             .find(|session| session.info.session_id == "spec-agent-pref")
             .expect("spec should be present in enriched sessions");
 
-        assert_eq!(spec_session.info.original_agent_type.as_deref(), Some("gemini"));
+        assert_eq!(
+            spec_session.info.original_agent_type.as_deref(),
+            Some("gemini")
+        );
     }
 
     #[test]
@@ -1554,13 +1608,7 @@ mod service_unified_tests {
         let group_id = "version-group-123";
 
         let running = manager
-            .start_spec_session_with_config(
-                spec_name,
-                None,
-                Some(group_id),
-                Some(1),
-                Some("codex"),
-            )
+            .start_spec_session_with_config(spec_name, None, Some(group_id), Some(1), Some("codex"))
             .unwrap();
         assert_eq!(running.version_group_id.as_deref(), Some(group_id));
         assert_eq!(running.version_number, Some(1));
@@ -1794,8 +1842,8 @@ mod service_unified_tests {
 
     #[test]
     fn start_spec_session_applies_existing_display_name() {
-        use crate::shared::format_branch_name;
         use crate::infrastructure::database::db_project_config::DEFAULT_BRANCH_PREFIX;
+        use crate::shared::format_branch_name;
         use std::process::Command;
 
         let (manager, temp_dir) = create_test_session_manager();
@@ -2269,7 +2317,6 @@ mod service_unified_tests {
             "Spec session should not be returned when listing running sessions after normalization"
         );
     }
-
 }
 
 pub struct SessionManager {
@@ -2535,7 +2582,8 @@ impl SessionManager {
                 anyhow!("use_existing_branch requires custom_branch to be specified")
             })?;
 
-            if let Some(existing_wt) = git::get_worktree_for_branch(&self.repo_path, custom_branch)? {
+            if let Some(existing_wt) = git::get_worktree_for_branch(&self.repo_path, custom_branch)?
+            {
                 return Err(anyhow!(
                     "Branch '{custom_branch}' is already checked out in worktree: {}",
                     existing_wt.display()
@@ -2802,7 +2850,10 @@ impl SessionManager {
         self.db_manager
             .update_session_status(session_id, SessionStatus::Cancelled)?;
 
-        if let Err(e) = self.db_manager.set_session_resume_allowed(session_id, false) {
+        if let Err(e) = self
+            .db_manager
+            .set_session_resume_allowed(session_id, false)
+        {
             log::warn!("Failed to gate resume for {session_id}: {e}");
         }
 
@@ -2973,8 +3024,10 @@ impl SessionManager {
             epics_elapsed
         );
 
-        let epics_by_id: HashMap<String, Epic> =
-            epics.into_iter().map(|epic| (epic.id.clone(), epic)).collect();
+        let epics_by_id: HashMap<String, Epic> = epics
+            .into_iter()
+            .map(|epic| (epic.id.clone(), epic))
+            .collect();
 
         let spec_count = sessions
             .iter()
@@ -2989,7 +3042,8 @@ impl SessionManager {
         );
 
         let default_agent_type = self.db_manager.get_agent_type().ok();
-        let spec_clarification_agent_type = self.db_manager.get_spec_clarification_agent_type().ok();
+        let spec_clarification_agent_type =
+            self.db_manager.get_spec_clarification_agent_type().ok();
 
         let mut enriched = Vec::new();
         let mut git_tasks = Vec::new();
@@ -3228,9 +3282,7 @@ impl SessionManager {
                 consolidation_recommended_session_id: session
                     .consolidation_recommended_session_id
                     .clone(),
-                consolidation_confirmation_mode: session
-                    .consolidation_confirmation_mode
-                    .clone(),
+                consolidation_confirmation_mode: session.consolidation_confirmation_mode.clone(),
                 promotion_reason: session.promotion_reason.clone(),
                 attention_kind: None,
             };
@@ -3385,14 +3437,16 @@ impl SessionManager {
             skip_prompt,
         } = params;
         let session = self.db_manager.get_session_by_name(session_name)?;
-        let requested_agent_type = agent_type_override
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| {
-                session
-                    .original_agent_type
-                    .clone()
-                    .unwrap_or_else(|| self.db_manager.get_agent_type().unwrap_or("claude".to_string()))
-            });
+        let requested_agent_type =
+            agent_type_override
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    session.original_agent_type.clone().unwrap_or_else(|| {
+                        self.db_manager
+                            .get_agent_type()
+                            .unwrap_or("claude".to_string())
+                    })
+                });
         let agent_type = resolve_launch_agent(&requested_agent_type, binary_paths)?;
 
         let registry = crate::domains::agents::unified::AgentRegistry::new();
@@ -3896,12 +3950,7 @@ impl SessionManager {
             initial_prompt.is_some()
         );
 
-        self.build_orchestrator_command(
-            &agent_type,
-            binary_paths,
-            resume_session,
-            initial_prompt,
-        )
+        self.build_orchestrator_command(&agent_type, binary_paths, resume_session, initial_prompt)
     }
 
     fn build_orchestrator_command(
@@ -4031,35 +4080,68 @@ impl SessionManager {
 
         let worktree_exists = session.worktree_path.exists();
         let ready_to_merge = if worktree_exists {
-            let commits_ahead_count = compute_commits_ahead_count(
-                &session.worktree_path,
-                &session.branch,
-                &session.parent_branch,
-            );
-            let (has_uncommitted_changes, has_conflicts) =
-                match git::calculate_git_stats_fast(&session.worktree_path, &session.parent_branch)
-                {
-                    Ok(stats) => (Some(stats.has_uncommitted), Some(stats.has_conflicts)),
-                    Err(e) => {
-                        log::warn!(
-                            "mark_session_ready: stats computation failed for '{session_name}': {e}, falling back to direct git checks"
-                        );
-                        (
-                            Some(git::has_uncommitted_changes(&session.worktree_path)?),
-                            git::has_conflicts(&session.worktree_path).ok(),
-                        )
-                    }
-                };
+            let repo = git2::Repository::open(&session.worktree_path).ok();
+            let commits_ahead_count = repo
+                .as_ref()
+                .and_then(|repo| {
+                    compute_commits_ahead_count_with_repo(
+                        repo,
+                        &session.branch,
+                        &session.parent_branch,
+                    )
+                })
+                .or_else(|| {
+                    compute_commits_ahead_count(
+                        &session.worktree_path,
+                        &session.branch,
+                        &session.parent_branch,
+                    )
+                });
+            let (has_uncommitted_changes, has_conflicts) = match repo
+                .as_ref()
+                .and_then(|repo| {
+                    git::calculate_git_stats_fast_with_repo(
+                        repo,
+                        &session.worktree_path,
+                        &session.parent_branch,
+                    )
+                    .ok()
+                })
+                .or_else(|| {
+                    git::calculate_git_stats_fast(&session.worktree_path, &session.parent_branch)
+                        .ok()
+                }) {
+                Some(stats) => (Some(stats.has_uncommitted), Some(stats.has_conflicts)),
+                None => {
+                    log::warn!(
+                        "mark_session_ready: stats computation failed for '{session_name}', falling back to direct git checks"
+                    );
+                    (
+                        Some(git::has_uncommitted_changes(&session.worktree_path)?),
+                        git::has_conflicts(&session.worktree_path).ok(),
+                    )
+                }
+            };
             build_ready_to_merge_state(
                 &session.session_state,
                 worktree_exists,
                 has_uncommitted_changes,
                 has_conflicts,
-                compute_rebased_onto_parent(
-                    &session.worktree_path,
-                    &session.branch,
-                    &session.parent_branch,
-                ),
+                repo.as_ref()
+                    .and_then(|repo| {
+                        compute_rebased_onto_parent_with_repo(
+                            repo,
+                            &session.branch,
+                            &session.parent_branch,
+                        )
+                    })
+                    .or_else(|| {
+                        compute_rebased_onto_parent(
+                            &session.worktree_path,
+                            &session.branch,
+                            &session.parent_branch,
+                        )
+                    }),
                 commits_ahead_count,
             )
             .ready_to_merge
@@ -4656,7 +4738,8 @@ impl SessionManager {
 
     pub fn update_session_initial_prompt(&self, session_name: &str, prompt: &str) -> Result<()> {
         let session = self.db_manager.get_session_by_name(session_name)?;
-        self.db_manager.update_session_initial_prompt(&session.id, prompt)?;
+        self.db_manager
+            .update_session_initial_prompt(&session.id, prompt)?;
         crate::domains::sessions::cache::invalidate_spec_content(&self.repo_path, session_name);
         Ok(())
     }

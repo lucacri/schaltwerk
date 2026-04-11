@@ -1,13 +1,58 @@
 use crate::domains::attention::get_session_attention_state;
 use crate::domains::sessions::entity::EnrichedSession;
-use crate::domains::sessions::{
-    GitEnrichmentTask, apply_git_enrichment, compute_git_for_session,
-};
+use crate::domains::sessions::{GitEnrichmentTask, apply_git_enrichment, compute_git_for_session};
 use crate::infrastructure::database::SpecMethods;
 use crate::project_manager::ProjectManager;
 use crate::schaltwerk_core::SchaltwerkCore;
 use async_trait::async_trait;
+use futures::stream::{self, StreamExt};
 use std::sync::Arc;
+
+fn git_enrichment_parallelism(task_count: usize) -> usize {
+    if task_count <= 1 {
+        return task_count.max(1);
+    }
+
+    let available = std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(4)
+        .clamp(2, 4);
+    task_count.min(available)
+}
+
+fn sort_git_enrichment_results(
+    results: &mut [crate::domains::sessions::service::GitEnrichmentResult],
+) {
+    results.sort_unstable_by_key(|result| result.index);
+}
+
+async fn run_blocking_tasks_bounded<T, R, F>(tasks: Vec<T>, parallelism: usize, worker: F) -> Vec<R>
+where
+    T: Send + 'static,
+    R: Send + 'static,
+    F: Fn(T) -> R + Send + Sync + 'static,
+{
+    if tasks.is_empty() {
+        return Vec::new();
+    }
+
+    let worker = Arc::new(worker);
+    let mut results = Vec::with_capacity(tasks.len());
+    let mut stream = stream::iter(tasks.into_iter().map(|task| {
+        let worker = Arc::clone(&worker);
+        async move { tokio::task::spawn_blocking(move || worker(task)).await }
+    }))
+    .buffer_unordered(parallelism.max(1));
+
+    while let Some(result) = stream.next().await {
+        match result {
+            Ok(result) => results.push(result),
+            Err(err) => log::error!("Blocking task panicked: {err}"),
+        }
+    }
+
+    results
+}
 
 pub async fn compute_git_enrichment_parallel(
     tasks: Vec<GitEnrichmentTask>,
@@ -16,22 +61,10 @@ pub async fn compute_git_enrichment_parallel(
         return Vec::new();
     }
 
-    let handles: Vec<_> = tasks
-        .into_iter()
-        .map(|task| {
-            tokio::task::spawn_blocking(move || compute_git_for_session(&task))
-        })
-        .collect();
-
-    let mut results = Vec::with_capacity(handles.len());
-    for handle in handles {
-        match handle.await {
-            Ok(result) => results.push(result),
-            Err(err) => {
-                log::error!("Git enrichment task panicked: {err}");
-            }
-        }
-    }
+    let parallelism = git_enrichment_parallelism(tasks.len());
+    let mut results =
+        run_blocking_tasks_bounded(tasks, parallelism, |task| compute_git_for_session(&task)).await;
+    sort_git_enrichment_results(&mut results);
     results
 }
 
@@ -195,14 +228,17 @@ impl SessionsBackend for ProjectSessionsBackend {
                             }
                         });
 
-                        if session.info.session_state == crate::domains::sessions::entity::SessionState::Spec
+                        if session.info.session_state
+                            == crate::domains::sessions::entity::SessionState::Spec
                             && let Some(stable_id) = session.info.stable_id.as_deref()
                         {
                             let persisted_attention = match attention.kind {
                                 Some(crate::domains::attention::SessionAttentionKind::WaitingForInput) => {
                                     Some(true)
                                 }
-                                Some(crate::domains::attention::SessionAttentionKind::Idle) => Some(false),
+                                Some(crate::domains::attention::SessionAttentionKind::Idle) => {
+                                    Some(false)
+                                }
                                 None if !attention.needs_attention => Some(false),
                                 None => Some(attention.needs_attention),
                             };
@@ -210,7 +246,8 @@ impl SessionsBackend for ProjectSessionsBackend {
                             if let Some(persisted_attention) = persisted_attention
                                 && previous_attention != Some(persisted_attention)
                             {
-                                spec_attention_updates.push((stable_id.to_string(), persisted_attention));
+                                spec_attention_updates
+                                    .push((stable_id.to_string(), persisted_attention));
                             }
                         }
                     }
@@ -252,7 +289,9 @@ mod tests {
         SessionAttentionState, get_session_attention_state, set_session_attention_state,
     };
     use async_trait::async_trait;
-    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::mpsc;
+    use std::sync::{Arc, Condvar, Mutex as StdMutex};
     use tokio::sync::Mutex;
 
     struct SuccessBackend {
@@ -430,5 +469,110 @@ mod tests {
 
         assert_eq!(sessions[0].attention_required, Some(true));
         assert_eq!(sessions[0].attention_kind.as_deref(), Some("waiting_for_input"));
+    }
+
+    #[test]
+    fn git_enrichment_parallelism_caps_large_batches() {
+        assert_eq!(git_enrichment_parallelism(1), 1);
+        assert_eq!(git_enrichment_parallelism(2), 2);
+        assert!(git_enrichment_parallelism(20) <= 4);
+        assert!(git_enrichment_parallelism(20) >= 1);
+    }
+
+    #[test]
+    fn sort_git_enrichment_results_restores_input_order() {
+        use crate::domains::sessions::service::GitEnrichmentResult;
+
+        let mut results = vec![
+            GitEnrichmentResult {
+                index: 2,
+                git_stats: None,
+                has_conflicts: None,
+                commits_ahead_count: None,
+                rebased_onto_parent: None,
+            },
+            GitEnrichmentResult {
+                index: 0,
+                git_stats: None,
+                has_conflicts: None,
+                commits_ahead_count: None,
+                rebased_onto_parent: None,
+            },
+            GitEnrichmentResult {
+                index: 1,
+                git_stats: None,
+                has_conflicts: None,
+                commits_ahead_count: None,
+                rebased_onto_parent: None,
+            },
+        ];
+
+        sort_git_enrichment_results(&mut results);
+
+        assert_eq!(
+            results
+                .iter()
+                .map(|result| result.index)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2]
+        );
+    }
+
+    #[tokio::test]
+    async fn bounded_blocking_tasks_never_exceed_parallelism() {
+        let task_count = 8;
+        let parallelism = git_enrichment_parallelism(task_count);
+        let gate = Arc::new((StdMutex::new((0usize, false)), Condvar::new()));
+        let max_running = Arc::new(AtomicUsize::new(0));
+        let (started_tx, started_rx) = mpsc::channel();
+        let started_tx = Arc::new(StdMutex::new(Some(started_tx)));
+
+        let task_handle = tokio::spawn({
+            let gate = gate.clone();
+            let max_running = max_running.clone();
+            let started_tx = started_tx.clone();
+            async move {
+                run_blocking_tasks_bounded((0..task_count).collect(), parallelism, move |task| {
+                    let (lock, cv) = &*gate;
+                    let mut state = lock.lock().unwrap();
+                    state.0 += 1;
+                    max_running.fetch_max(state.0, Ordering::SeqCst);
+                    if state.0 == parallelism
+                        && let Some(tx) = started_tx.lock().unwrap().take()
+                    {
+                        let _ = tx.send(());
+                    }
+                    cv.notify_all();
+
+                    while !state.1 {
+                        state = cv.wait(state).unwrap();
+                    }
+
+                    state.0 -= 1;
+                    task
+                })
+                .await
+            }
+        });
+
+        tokio::task::spawn_blocking(move || started_rx.recv().unwrap())
+            .await
+            .unwrap();
+
+        {
+            let (lock, cv) = &*gate;
+            let mut state = lock.lock().unwrap();
+            state.1 = true;
+            cv.notify_all();
+        }
+
+        let mut results = task_handle.await.unwrap();
+        results.sort_unstable();
+        assert_eq!(results, (0..task_count).collect::<Vec<_>>());
+        assert!(
+            max_running.load(Ordering::SeqCst) <= parallelism,
+            "expected max concurrency <= {parallelism}, got {}",
+            max_running.load(Ordering::SeqCst)
+        );
     }
 }

@@ -162,7 +162,10 @@ fn short_oid(repo: &Repository, oid: Oid) -> String {
 }
 
 fn orchestrator_watcher_key(repo_path: &Path) -> String {
-    format!("{ORCHESTRATOR_WATCHER_KEY}::{}", repo_path.to_string_lossy())
+    format!(
+        "{ORCHESTRATOR_WATCHER_KEY}::{}",
+        repo_path.to_string_lossy()
+    )
 }
 
 fn session_watcher_key(repo_path: &Path, session_name: &str) -> String {
@@ -356,8 +359,7 @@ impl FileWatcher {
         let repo = git2::Repository::open(worktree_path)
             .map_err(|e| format!("Failed to open repository: {e}"))?;
 
-        let change_summary =
-            Self::compute_change_summary(&changed_files, &repo)?;
+        let change_summary = Self::compute_change_summary(&changed_files, &repo)?;
 
         let branch_info = Self::get_branch_info(&repo, base_branch)?;
         let session_branch_name = branch_info.current_branch.clone();
@@ -379,17 +381,11 @@ impl FileWatcher {
         let mut stats_payload = None;
         if is_session_visible(session_name) && should_compute_stats(worktree_path) {
             crate::domains::git::stats::invalidate_stats_cache_for(worktree_path, base_branch);
-            match git::calculate_git_stats_fast(worktree_path, base_branch) {
+            match git::calculate_git_stats_fast_with_repo(&repo, worktree_path, base_branch)
+                .or_else(|_| git::calculate_git_stats_fast(worktree_path, base_branch))
+            {
                 Ok(stats) => {
-                    let has_conflicts = match git::has_conflicts(worktree_path) {
-                        Ok(value) => value,
-                        Err(err) => {
-                            log::warn!(
-                                "Watcher conflict detection failed for {session_name}: {err}"
-                            );
-                            false
-                        }
-                    };
+                    let has_conflicts = stats.has_conflicts;
                     let (merge_snapshot, commits_ahead_count) = (|| {
                         let session_oid = repo.head().ok().and_then(|h| h.target())?;
                         let parent_obj = repo.revparse_single(base_branch).ok()?;
@@ -417,20 +413,19 @@ impl FileWatcher {
                         Some((merge_snapshot, commits_ahead_count))
                     })()
                     .unwrap_or((Default::default(), None));
-                    let sample =
-                        match crate::domains::git::operations::uncommitted_sample_paths(
-                            worktree_path,
-                            5,
-                        ) {
-                            Ok(v) if !v.is_empty() => Some(v),
-                            _ => None,
-                        };
+                    let sample = match crate::domains::git::operations::uncommitted_sample_paths(
+                        worktree_path,
+                        5,
+                    ) {
+                        Ok(v) if !v.is_empty() => Some(v),
+                        _ => None,
+                    };
                     let readiness = crate::domains::sessions::service::compute_ready_to_merge_for_event(
                         &crate::domains::sessions::entity::SessionState::Running,
                         Some(stats.has_uncommitted),
                         Some(has_conflicts),
-                        crate::domains::sessions::service::compute_rebased_onto_parent(
-                            worktree_path,
+                        crate::domains::sessions::service::compute_rebased_onto_parent_with_repo(
+                            &repo,
                             &session_branch_name,
                             base_branch,
                         ),
@@ -598,10 +593,7 @@ impl FileWatcher {
         })
     }
 
-    fn get_branch_info(
-        repo: &Repository,
-        base_branch: &str,
-    ) -> Result<BranchInfo, String> {
+    fn get_branch_info(repo: &Repository, base_branch: &str) -> Result<BranchInfo, String> {
         let mut current_branch = repo
             .head()
             .ok()
@@ -627,9 +619,7 @@ impl FileWatcher {
             _ => String::new(),
         };
 
-        let head_commit = head_oid
-            .map(|oid| short_oid(repo, oid))
-            .unwrap_or_default();
+        let head_commit = head_oid.map(|oid| short_oid(repo, oid)).unwrap_or_default();
 
         Ok(BranchInfo {
             current_branch,
@@ -1530,7 +1520,10 @@ mod tests {
         let alpha = Path::new("/projects/alpha");
         let beta = Path::new("/projects/beta");
 
-        assert_ne!(orchestrator_watcher_key(alpha), orchestrator_watcher_key(beta));
+        assert_ne!(
+            orchestrator_watcher_key(alpha),
+            orchestrator_watcher_key(beta)
+        );
     }
 
     #[test]

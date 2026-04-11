@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'bun:test'
 import Ajv from 'ajv'
-import { ToolSchema } from '@modelcontextprotocol/sdk/types.js'
 let addFormats: ((ajv: Ajv) => void)
+let outputSchemaValidator:
+  | { safeParse: (value: unknown) => { success: boolean; error?: unknown } }
+  | null = null
 try {
   // Prefer installed package; fall back to no-op when unavailable (CI cache miss)
   addFormats = (await import('ajv-formats')).default
 } catch {
   addFormats = () => {}
+}
+try {
+  const { ToolSchema } = await import('@modelcontextprotocol/sdk/types.js')
+  outputSchemaValidator = ToolSchema.shape.outputSchema
+} catch {
+  outputSchemaValidator = null
 }
 import { toolOutputSchemas } from '../src/schemas'
 
@@ -382,13 +390,17 @@ describe('MCP output schemas', () => {
     expect(validate(payload)).toBeTrue()
   })
 
-  describe('MCP SDK Tool.outputSchema acceptance', () => {
+  const sdkDescribe = outputSchemaValidator ? describe : describe.skip
+
+  sdkDescribe('MCP SDK Tool.outputSchema acceptance', () => {
     // Guard against regressions like https://… where a schema that Ajv accepts
     // (root-level `oneOf` without a top-level `type`) is still rejected by the
     // MCP SDK's Zod validator, causing Claude Code to discard the entire
     // `tools/list` response and surface zero lucode tools even though the
     // server reports "connected".
-    const outputSchemaValidator = ToolSchema.shape.outputSchema
+    if (!outputSchemaValidator) {
+      return
+    }
 
     for (const [toolName, schema] of Object.entries(toolOutputSchemas)) {
       it(`${toolName} is accepted by the MCP SDK Tool.outputSchema validator`, () => {

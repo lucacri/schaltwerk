@@ -214,6 +214,28 @@ struct StatsCacheKey {
     head: Option<Oid>,
     index_signature: Option<u64>,
     status_signature: u64,
+    dirty_content_signature: u64,
+    baseline_mode: StatsBaselineMode,
+    baseline_target: Option<Oid>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum StatsBaselineMode {
+    MergeBase,
+    ParentBranch,
+    HeadParent,
+    Head,
+}
+
+impl StatsBaselineMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::MergeBase => "merge_base",
+            Self::ParentBranch => "parent_branch",
+            Self::HeadParent => "head_parent",
+            Self::Head => "head",
+        }
+    }
 }
 
 type StatsCacheMap = HashMap<(std::path::PathBuf, String), (StatsCacheKey, GitStats)>;
@@ -243,6 +265,73 @@ fn is_internal_tooling_path(path: &str) -> bool {
     path == ".lucode" || path.starts_with(".lucode/")
 }
 
+fn dirty_content_signature(worktree_path: &Path, dirty_paths: &HashSet<String>) -> u64 {
+    let mut paths: Vec<&str> = dirty_paths.iter().map(String::as_str).collect();
+    paths.sort_unstable();
+
+    let mut signature: u64 = 1469598103934665603;
+    for path in paths {
+        for byte in path.as_bytes() {
+            signature ^= (*byte as u64).wrapping_mul(1099511628211);
+        }
+
+        let absolute_path = worktree_path.join(path);
+        match fs::metadata(&absolute_path) {
+            Ok(metadata) => {
+                signature ^= metadata.len().wrapping_mul(1099511628211);
+                if let Ok(modified) = metadata.modified()
+                    && let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH)
+                {
+                    signature ^= duration.as_secs().wrapping_mul(1099511628211);
+                    signature ^= (duration.subsec_nanos() as u64).wrapping_mul(1099511628211);
+                }
+            }
+            Err(_) => {
+                signature ^= u64::MAX.wrapping_mul(1099511628211);
+            }
+        }
+    }
+
+    signature
+}
+
+fn resolve_baseline_commit<'repo>(repo: &'repo Repository, parent_branch: &str) -> Option<git2::Commit<'repo>> {
+    let trimmed = parent_branch.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let mut candidates = vec![trimmed.to_string()];
+    if let Some(rest) = trimmed.strip_prefix("refs/heads/") {
+        candidates.push(rest.to_string());
+        candidates.push(format!("refs/remotes/origin/{rest}"));
+        candidates.push(format!("origin/{rest}"));
+    } else if let Some(rest) = trimmed.strip_prefix("refs/remotes/origin/") {
+        candidates.push(rest.to_string());
+        candidates.push(format!("origin/{rest}"));
+        candidates.push(format!("refs/heads/{rest}"));
+    } else if let Some(rest) = trimmed.strip_prefix("origin/") {
+        candidates.push(rest.to_string());
+        candidates.push(format!("refs/remotes/origin/{rest}"));
+        candidates.push(format!("refs/heads/{rest}"));
+    } else if !trimmed.starts_with("refs/") {
+        candidates.push(format!("refs/heads/{trimmed}"));
+        candidates.push(format!("refs/remotes/origin/{trimmed}"));
+        candidates.push(format!("origin/{trimmed}"));
+    }
+
+    for candidate in candidates {
+        let Ok(object) = repo.revparse_single(&candidate) else {
+            continue;
+        };
+        if let Ok(commit) = object.peel_to_commit() {
+            return Some(commit);
+        }
+    }
+
+    None
+}
+
 pub fn calculate_git_stats_fast(worktree_path: &Path, parent_branch: &str) -> Result<GitStats> {
     // IMPORTANT: Open the worktree repo directly. Using `discover` may return
     // the parent repository and yield incorrect status for worktrees.
@@ -262,22 +351,46 @@ pub fn calculate_git_stats_fast_with_repo(
 
     let head_oid = repo.head().ok().and_then(|h| h.target());
     let head_commit = head_oid.and_then(|oid| repo.find_commit(oid).ok());
-    let head_tree = head_commit.as_ref().and_then(|c| c.tree().ok());
-
-    let base_ref = repo.revparse_single(parent_branch).ok();
-    let base_commit = base_ref.and_then(|obj| obj.peel_to_commit().ok());
-    // Use merge-base between HEAD and parent_branch to represent the baseline
-    let base_tree = match (base_commit.as_ref(), head_commit.as_ref()) {
+    let base_commit = resolve_baseline_commit(repo, parent_branch);
+    let (base_tree, baseline_mode, baseline_target) = match (base_commit.as_ref(), head_commit.as_ref()) {
         (Some(base_c), Some(head_c)) => {
             if let Ok(merge_base_oid) = repo.merge_base(base_c.id(), head_c.id()) {
-                repo.find_commit(merge_base_oid)
-                    .ok()
-                    .and_then(|c| c.tree().ok())
+                (
+                    repo.find_commit(merge_base_oid)
+                        .ok()
+                        .and_then(|c| c.tree().ok()),
+                    StatsBaselineMode::MergeBase,
+                    Some(merge_base_oid),
+                )
             } else {
-                None
+                (
+                    base_c.tree().ok(),
+                    StatsBaselineMode::ParentBranch,
+                    Some(base_c.id()),
+                )
             }
         }
-        _ => None,
+        (Some(base_c), None) => (
+            base_c.tree().ok(),
+            StatsBaselineMode::ParentBranch,
+            Some(base_c.id()),
+        ),
+        (None, Some(head_c)) => {
+            if let Ok(parent_commit) = head_c.parent(0) {
+                (
+                    parent_commit.tree().ok(),
+                    StatsBaselineMode::HeadParent,
+                    Some(parent_commit.id()),
+                )
+            } else {
+                (
+                    head_commit.as_ref().and_then(|c| c.tree().ok()),
+                    StatsBaselineMode::Head,
+                    head_oid,
+                )
+            }
+        }
+        (None, None) => (None, StatsBaselineMode::Head, None),
     };
 
     let mut status_opts = StatusOptions::new();
@@ -321,9 +434,10 @@ pub fn calculate_git_stats_fast_with_repo(
         }
     }
     log::debug!(
-        "git_stats: begin path={} parent={} status_total={} has_uncommitted={} sample={:?}",
+        "git_stats: begin path={} parent={} baseline={} status_total={} has_uncommitted={} sample={:?}",
         worktree_path.display(),
         parent_branch,
+        baseline_mode.as_str(),
         statuses.len(),
         has_uncommitted_filtered,
         sample
@@ -352,11 +466,15 @@ pub fn calculate_git_stats_fast_with_repo(
         }
         sig
     });
+    let dirty_content_signature = dirty_content_signature(worktree_path, &dirty_paths);
 
     let key = StatsCacheKey {
         head: head_oid,
         index_signature,
         status_signature: status_sig,
+        dirty_content_signature,
+        baseline_mode,
+        baseline_target,
     };
     let cache_key = (worktree_path.to_path_buf(), parent_branch.to_string());
     if let Some(m) = STATS_CACHE.get()
@@ -371,82 +489,6 @@ pub fn calculate_git_stats_fast_with_repo(
             worktree_path.display(),
             cache_hit_time.as_millis()
         );
-        let mut last_diff_change_ts: Option<i64> = None;
-        if let (Some(base_commit), Some(head_commit)) = (base_commit.as_ref(), head_commit.as_ref())
-            && let Ok(merge_base_oid) = repo.merge_base(base_commit.id(), head_commit.id())
-            && repo.revparse(&format!("{merge_base_oid}..HEAD")).is_ok()
-            && let Ok(mut revwalk) = repo.revwalk()
-        {
-            revwalk.push_head().ok();
-            revwalk.hide(merge_base_oid).ok();
-            let latest_commit_ts = revwalk
-                .filter_map(|oid| oid.ok())
-                .filter_map(|oid| repo.find_commit(oid).ok())
-                .map(|c| c.time().seconds())
-                .max();
-            if let Some(ts) = latest_commit_ts {
-                last_diff_change_ts = Some(ts);
-            }
-        }
-
-        let mut files_for_mtime: HashSet<String> = HashSet::new();
-        if let Some(ht) = head_tree.as_ref()
-            && let Ok(idx) = repo.index()
-        {
-            let mut staged_opts = DiffOptions::new();
-            if let Ok(diff_for_mtime) =
-                repo.diff_tree_to_index(Some(ht), Some(&idx), Some(&mut staged_opts))
-            {
-                for d in diff_for_mtime.deltas() {
-                    if let Some(p) = d.new_file().path().or_else(|| d.old_file().path())
-                        && let Some(s) = p.to_str()
-                    {
-                        files_for_mtime.insert(s.to_string());
-                    }
-                }
-            }
-        }
-        if let Ok(idx) = repo.index() {
-            let mut workdir_opts = DiffOptions::new();
-            workdir_opts
-                .include_untracked(true)
-                .recurse_untracked_dirs(true);
-            if let Ok(diff_for_mtime) =
-                repo.diff_index_to_workdir(Some(&idx), Some(&mut workdir_opts))
-            {
-                for d in diff_for_mtime.deltas() {
-                    if let Some(p) = d.new_file().path().or_else(|| d.old_file().path())
-                        && let Some(s) = p.to_str()
-                    {
-                        files_for_mtime.insert(s.to_string());
-                    }
-                }
-            }
-        }
-        let mut latest_uncommitted_ts: Option<i64> = None;
-        let mut saw_schema_change_cache: bool = false;
-        for rel in files_for_mtime {
-            let abs = worktree_path.join(&rel);
-            if let Ok(metadata) = fs::metadata(&abs)
-                && let Ok(modified) = metadata.modified()
-                && let Ok(secs) = modified.duration_since(std::time::UNIX_EPOCH)
-            {
-                let ts = secs.as_secs() as i64;
-                latest_uncommitted_ts = Some(latest_uncommitted_ts.map_or(ts, |cur| cur.max(ts)));
-            } else {
-                saw_schema_change_cache = true;
-            }
-        }
-        if let Some(u_ts) = latest_uncommitted_ts {
-            last_diff_change_ts = Some(match last_diff_change_ts {
-                Some(c_ts) => c_ts.max(u_ts),
-                None => u_ts,
-            });
-        }
-        if last_diff_change_ts.is_none() && saw_schema_change_cache {
-            last_diff_change_ts = Some(Utc::now().timestamp());
-        }
-
         let total_cache_time = start_time.elapsed();
         if total_cache_time.as_millis() > 50 {
             log::debug!(
@@ -468,7 +510,7 @@ pub fn calculate_git_stats_fast_with_repo(
             has_uncommitted: has_uncommitted_filtered,
             dirty_files_count,
             calculated_at: Utc::now(),
-            last_diff_change_ts,
+            last_diff_change_ts: v.last_diff_change_ts,
             has_conflicts: has_conflicts_detected,
         });
     }
@@ -556,6 +598,11 @@ pub fn calculate_git_stats_fast_with_repo(
             }
         }
     }
+    if last_diff_change_ts.is_none() && files_changed > 0
+        && let Some(head_commit) = head_commit.as_ref()
+    {
+        last_diff_change_ts = Some(head_commit.time().seconds());
+    }
 
     // Latest mtime among changed-but-uncommitted files (staged, unstaged, untracked)
     let mut latest_uncommitted_ts: Option<i64> = None;
@@ -613,8 +660,9 @@ pub fn calculate_git_stats_fast_with_repo(
     }
 
     log::debug!(
-        "git_stats: end path={} files_changed={} +{} -{} has_uncommitted={} elapsed_ms={}",
+        "git_stats: end path={} baseline={} files_changed={} +{} -{} has_uncommitted={} elapsed_ms={}",
         worktree_path.display(),
+        baseline_mode.as_str(),
         stats.files_changed,
         stats.lines_added,
         stats.lines_removed,
@@ -1089,5 +1137,110 @@ mod tests {
             !has_remote_tracking_branch(p, "lucode/does-not-exist"),
             "Should not have remote tracking branch for non-existent branch"
         );
+    }
+
+    #[test]
+    fn fast_stats_fall_back_when_parent_branch_cannot_be_resolved() {
+        let repo = init_repo();
+        let p = repo.path();
+
+        StdCommand::new("git")
+            .args(["checkout", "-b", "feature"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+
+        fs::write(p.join("committed.txt"), "hello\nworld\n").unwrap();
+        StdCommand::new("git")
+            .args(["add", "committed.txt"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+        StdCommand::new("git")
+            .args(["commit", "-m", "feature work"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+
+        let stats = calculate_git_stats_fast(p, "refs/heads/does-not-exist").unwrap();
+
+        assert_eq!(stats.files_changed, 1);
+        assert_eq!(stats.lines_added, 2);
+        assert_eq!(stats.lines_removed, 0);
+        assert!(!stats.has_uncommitted);
+    }
+
+    #[test]
+    fn fast_stats_cache_preserves_fallback_diff_stats() {
+        let repo = init_repo();
+        let p = repo.path();
+
+        StdCommand::new("git")
+            .args(["checkout", "-b", "feature"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+
+        fs::write(p.join("committed.txt"), "hello\nworld\n").unwrap();
+        StdCommand::new("git")
+            .args(["add", "committed.txt"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+        StdCommand::new("git")
+            .args(["commit", "-m", "feature work"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+
+        clear_stats_cache();
+        reset_git_stats_call_count();
+        reset_git_stats_cache_hits();
+        let _scope = track_git_stats_on_current_thread();
+
+        let first = calculate_git_stats_fast(p, "refs/heads/does-not-exist").unwrap();
+        let second = calculate_git_stats_fast(p, "refs/heads/does-not-exist").unwrap();
+
+        assert_eq!(first.files_changed, 1);
+        assert_eq!(first.lines_added, 2);
+        assert_eq!(second.files_changed, 1);
+        assert_eq!(second.lines_added, 2);
+        assert_eq!(get_git_stats_call_count(), 2);
+        assert_eq!(get_git_stats_cache_hits(), 1);
+    }
+
+    #[test]
+    fn fast_stats_cache_invalidates_when_dirty_file_content_changes() {
+        let repo = init_repo();
+        let p = repo.path();
+
+        fs::write(p.join("tracked.txt"), "line1\n").unwrap();
+        StdCommand::new("git")
+            .args(["add", "tracked.txt"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+        StdCommand::new("git")
+            .args(["commit", "-m", "add tracked file"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+
+        clear_stats_cache();
+        reset_git_stats_call_count();
+        reset_git_stats_cache_hits();
+        let _scope = track_git_stats_on_current_thread();
+
+        fs::write(p.join("tracked.txt"), "line1\nline2\n").unwrap();
+        let first = calculate_git_stats_fast(p, "refs/heads/does-not-exist").unwrap();
+
+        fs::write(p.join("tracked.txt"), "line1\nline2\nline3\n").unwrap();
+        let second = calculate_git_stats_fast(p, "refs/heads/does-not-exist").unwrap();
+
+        assert_eq!(first.lines_added, 2);
+        assert_eq!(second.lines_added, 3);
+        assert!(second.lines_added > first.lines_added);
+        assert_eq!(get_git_stats_call_count(), 2);
+        assert_eq!(get_git_stats_cache_hits(), 0);
     }
 }

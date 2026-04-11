@@ -29,7 +29,8 @@ use crate::{
 };
 use lucode::domains::attention::get_session_attention_state;
 use lucode::domains::git::service::{ForgeType, detect_forge};
-use lucode::domains::sessions::{apply_git_enrichment, compute_git_for_session};
+use lucode::domains::sessions::apply_git_enrichment;
+use lucode::services::sessions::compute_git_enrichment_parallel;
 use lucode::domains::merge::MergeMode;
 use lucode::domains::sessions::entity::{Session, SessionStatus, Spec, SpecStage};
 use lucode::infrastructure::attention_bridge::clear_session_attention_state;
@@ -4483,22 +4484,7 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
         let mut sessions = base_sessions;
 
         if !git_tasks.is_empty() {
-            let handles: Vec<_> = git_tasks
-                .into_iter()
-                .map(|task| {
-                    tokio::task::spawn_blocking(move || compute_git_for_session(&task))
-                })
-                .collect();
-
-            let mut results = Vec::with_capacity(handles.len());
-            for handle in handles {
-                match handle.await {
-                    Ok(result) => results.push(result),
-                    Err(err) => {
-                        error!("Git enrichment task panicked: {err}");
-                    }
-                }
-            }
+            let results = compute_git_enrichment_parallel(git_tasks).await;
             apply_git_enrichment(&mut sessions, results);
         }
 

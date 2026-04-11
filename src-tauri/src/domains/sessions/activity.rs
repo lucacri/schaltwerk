@@ -91,17 +91,39 @@ impl<E: EventEmitter> ActivityTracker<E> {
         let mut emitted_activity = false;
 
         if session.worktree_path.exists() {
-            match git::calculate_git_stats_fast(&session.worktree_path, &session.parent_branch) {
-                Ok(mut stats) => {
+            let worktree_repo = Repository::open(&session.worktree_path).ok();
+            let stats = worktree_repo
+                .as_ref()
+                .and_then(|repo| {
+                    git::calculate_git_stats_fast_with_repo(
+                        repo,
+                        &session.worktree_path,
+                        &session.parent_branch,
+                    )
+                    .ok()
+                })
+                .or_else(|| {
+                    git::calculate_git_stats_fast(&session.worktree_path, &session.parent_branch)
+                        .ok()
+                });
+
+            match stats {
+                Some(mut stats) => {
                     stats.session_id = session.id.clone();
+
+                    let commits_ahead_count = worktree_repo.as_ref().and_then(|repo| {
+                        crate::domains::sessions::service::compute_commits_ahead_count_with_repo(
+                            repo,
+                            &session.branch,
+                            &session.parent_branch,
+                        )
+                    });
 
                     let merge_snapshot = shared_repo
                         .and_then(|repo| {
-                            let session_oid = MergeSnapshotGateway::resolve_branch_oid(
-                                repo,
-                                &session.branch,
-                            )
-                            .ok()?;
+                            let session_oid =
+                                MergeSnapshotGateway::resolve_branch_oid(repo, &session.branch)
+                                    .ok()?;
                             let parent_oid = MergeSnapshotGateway::resolve_branch_oid(
                                 repo,
                                 &session.parent_branch,
@@ -125,21 +147,39 @@ impl<E: EventEmitter> ActivityTracker<E> {
                         })
                         .unwrap_or_default();
 
-                    let commits_ahead_count =
-                        crate::domains::sessions::service::compute_commits_ahead_count(
-                            &session.worktree_path,
-                            &session.branch,
-                            &session.parent_branch,
-                        );
+                    let commits_ahead_count = worktree_repo
+                        .as_ref()
+                        .and_then(|repo| {
+                            crate::domains::sessions::service::compute_commits_ahead_count_with_repo(
+                                repo,
+                                &session.branch,
+                                &session.parent_branch,
+                            )
+                        })
+                        .or_else(|| {
+                            crate::domains::sessions::service::compute_commits_ahead_count(
+                                &session.worktree_path,
+                                &session.branch,
+                                &session.parent_branch,
+                            )
+                        });
                     let readiness = crate::domains::sessions::service::compute_ready_to_merge_for_event(
                         &session.session_state,
                         Some(stats.has_uncommitted),
                         Some(stats.has_conflicts),
-                        crate::domains::sessions::service::compute_rebased_onto_parent(
-                            &session.worktree_path,
-                            &session.branch,
-                            &session.parent_branch,
-                        ),
+                        worktree_repo.as_ref().and_then(|repo| {
+                            crate::domains::sessions::service::compute_rebased_onto_parent_with_repo(
+                                repo,
+                                &session.branch,
+                                &session.parent_branch,
+                            )
+                        }).or_else(|| {
+                            crate::domains::sessions::service::compute_rebased_onto_parent(
+                                &session.worktree_path,
+                                &session.branch,
+                                &session.parent_branch,
+                            )
+                        }),
                         commits_ahead_count,
                     );
                     let payload = SessionGitStatsUpdated {
@@ -183,12 +223,8 @@ impl<E: EventEmitter> ActivityTracker<E> {
                         }
                     }
                 }
-                Err(e) => {
-                    log::warn!(
-                        "Failed to compute fast git stats for {}: {}",
-                        session.name,
-                        e
-                    );
+                None => {
+                    log::warn!("Failed to compute fast git stats for {}", session.name);
                 }
             }
         }
@@ -269,7 +305,8 @@ pub struct SessionGitStatsUpdated {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ready_to_merge: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ready_to_merge_checks: Option<Vec<crate::domains::sessions::entity::SessionReadyToMergeCheck>>,
+    pub ready_to_merge_checks:
+        Option<Vec<crate::domains::sessions::entity::SessionReadyToMergeCheck>>,
 }
 
 pub fn start_activity_tracking_with_app(db: Arc<Database>, app: AppHandle) {
@@ -571,6 +608,124 @@ mod tests {
         let events = mock_emitter.get_activity_events();
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].session_name, session.name);
+
+        let git_events = mock_emitter.get_git_stats_events();
+        assert_eq!(git_events.len(), 1);
+        assert_eq!(git_events[0].commits_ahead_count, Some(0));
+    }
+
+    #[test]
+    fn test_refresh_emits_commits_ahead_count_for_ahead_session() {
+        let temp = TempDir::new().unwrap();
+        let repo_path = temp.path().to_path_buf();
+
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.email", "test@example.com"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "user.name", "Test User"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        std::fs::write(repo_path.join("README.md"), "Initial\n").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "."])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "init"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        let worktree_path = repo_path
+            .join(".lucode")
+            .join("worktrees")
+            .join("ahead-session");
+        let parent_branch = get_current_branch(&repo_path).unwrap();
+        create_worktree_from_base(
+            &repo_path,
+            "lucode/ahead-session",
+            &worktree_path,
+            &parent_branch,
+        )
+        .unwrap();
+
+        std::fs::write(worktree_path.join("feature.txt"), "feature\n").unwrap();
+        std::process::Command::new("git")
+            .args(["add", "feature.txt"])
+            .current_dir(&worktree_path)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "-m", "feature work"])
+            .current_dir(&worktree_path)
+            .output()
+            .unwrap();
+
+        let db_path = temp.path().join("test.db");
+        let db = Arc::new(Database::new(Some(db_path)).unwrap());
+        let mock_emitter = MockEmitter::new();
+        let tracker = ActivityTracker::new(db.clone(), mock_emitter.clone());
+
+        let session = Session {
+            id: "ahead-1".into(),
+            name: "ahead-session".into(),
+            display_name: None,
+            version_group_id: None,
+            version_number: None,
+            epic_id: None,
+            repository_path: repo_path.clone(),
+            repository_name: "repo".into(),
+            branch: "lucode/ahead-session".into(),
+            parent_branch: parent_branch.clone(),
+            original_parent_branch: Some(parent_branch.clone()),
+            worktree_path: worktree_path.clone(),
+            status: SessionStatus::Active,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_activity: None,
+            initial_prompt: None,
+            ready_to_merge: false,
+            original_agent_type: None,
+            pending_name_generation: false,
+            was_auto_generated: false,
+            spec_content: None,
+            session_state: SessionState::Running,
+            resume_allowed: true,
+            amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
+            pr_number: None,
+            pr_url: None,
+            is_consolidation: false,
+            consolidation_sources: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
+            promotion_reason: None,
+        };
+        db.create_session(&session).unwrap();
+
+        let emitted = tracker
+            .refresh_stats_and_activity_for_session(&session, None)
+            .unwrap();
+        assert!(emitted);
+
+        let git_events = mock_emitter.get_git_stats_events();
+        assert_eq!(git_events.len(), 1);
+        assert_eq!(git_events[0].commits_ahead_count, Some(1));
     }
 
     #[test]
