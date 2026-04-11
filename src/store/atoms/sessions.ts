@@ -5,7 +5,7 @@ import { AGENT_TYPES, type EnrichedSession, type AgentType, type Epic } from '..
 import { FilterMode, getDefaultFilterMode, isValidFilterMode } from '../../types/sessionFilters'
 import { TauriCommands } from '../../common/tauriCommands'
 import { searchSessions as searchSessionsUtil } from '../../utils/sessionFilters'
-import { SessionState, type SessionInfo } from '../../types/session'
+import { SessionState, type SessionReadyToMergeCheck, type SessionInfo } from '../../types/session'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
 import { projectPathAtom } from './project'
 import { setSelectionFilterModeActionAtom, clearTerminalTrackingActionAtom } from './selection'
@@ -1720,6 +1720,8 @@ export const initializeSessionsEventsActionAtom = atom(
                 merge_has_conflicts?: boolean
                 merge_is_up_to_date?: boolean
                 merge_conflicting_paths?: string[] | null
+                ready_to_merge?: boolean
+                ready_to_merge_checks?: SessionReadyToMergeCheck[]
             }
 
             const activeProject = get(projectPathAtom)
@@ -1760,6 +1762,10 @@ export const initializeSessionsEventsActionAtom = atom(
                         merge_conflicting_paths: event.merge_conflicting_paths && event.merge_conflicting_paths.length > 0
                             ? event.merge_conflicting_paths
                             : session.info.merge_conflicting_paths,
+                        ready_to_merge: typeof event.ready_to_merge === 'boolean'
+                            ? event.ready_to_merge
+                            : session.info.ready_to_merge,
+                        ready_to_merge_checks: event.ready_to_merge_checks ?? session.info.ready_to_merge_checks,
                     },
                 }
             }))

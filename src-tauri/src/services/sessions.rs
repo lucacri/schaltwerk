@@ -278,6 +278,7 @@ mod tests {
                 current_task: None,
                 diff_stats: None,
                 ready_to_merge: false,
+                ready_to_merge_checks: None,
                 spec_content: None,
                 spec_stage: None,
                 clarification_started: None,

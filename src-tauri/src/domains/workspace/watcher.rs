@@ -425,6 +425,16 @@ impl FileWatcher {
                             Ok(v) if !v.is_empty() => Some(v),
                             _ => None,
                         };
+                    let readiness = crate::domains::sessions::service::compute_ready_to_merge_for_event(
+                        &crate::domains::sessions::entity::SessionState::Running,
+                        Some(stats.has_uncommitted),
+                        Some(has_conflicts),
+                        crate::domains::sessions::service::compute_rebased_onto_parent(
+                            worktree_path,
+                            &session_branch_name,
+                            base_branch,
+                        ),
+                    );
                     stats_payload = Some(SessionGitStatsUpdated {
                         session_id: session_name.to_string(),
                         session_name: session_name.to_string(),
@@ -440,6 +450,8 @@ impl FileWatcher {
                         merge_has_conflicts: merge_snapshot.merge_has_conflicts,
                         merge_conflicting_paths: merge_snapshot.merge_conflicting_paths,
                         merge_is_up_to_date: merge_snapshot.merge_is_up_to_date,
+                        ready_to_merge: Some(readiness.0),
+                        ready_to_merge_checks: Some(readiness.1),
                     });
                 }
                 Err(e) => {

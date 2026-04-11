@@ -307,6 +307,12 @@ pub struct DiffStats {
     pub insertions: usize,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SessionReadyToMergeCheck {
+    pub key: String,
+    pub passed: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionInfo {
     pub session_id: String,
@@ -348,6 +354,8 @@ pub struct SessionInfo {
     pub diff_stats: Option<DiffStats>,
     #[serde(default)]
     pub ready_to_merge: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ready_to_merge_checks: Option<Vec<SessionReadyToMergeCheck>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

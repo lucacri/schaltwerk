@@ -76,6 +76,17 @@ export interface Epic {
     color?: string | null
 }
 
+export type SessionReadyToMergeCheckKey =
+    | 'worktree_exists'
+    | 'no_uncommitted_changes'
+    | 'no_conflicts'
+    | 'rebased_onto_parent'
+
+export interface SessionReadyToMergeCheck {
+    key: SessionReadyToMergeCheckKey
+    passed: boolean
+}
+
 export interface SessionInfo {
     session_id: string
     stable_id?: string
@@ -107,6 +118,7 @@ export interface SessionInfo {
     todo_percentage?: number
     is_blocked?: boolean
     ready_to_merge?: boolean
+    ready_to_merge_checks?: SessionReadyToMergeCheck[]
     spec_content?: string
     spec_stage?: SpecStage
     clarification_started?: boolean

@@ -1502,7 +1502,12 @@
     "createGitlabMr": "创建 GitLab 合并请求",
     "createGitlabMrShortcut": "创建 GitLab 合并请求",
     "noGitlabSources": "请先配置 GitLab 源",
-    "restartTerminals": "重启终端"
+    "restartTerminals": "重启终端",
+    "mergeChecks": "合并检查",
+    "checkWorktreeExists": "工作树存在",
+    "checkNoUncommittedChanges": "没有未提交更改",
+    "checkNoConflicts": "没有未解决的合并冲突",
+    "checkRebasedOntoParent": "已变基到父分支"
   },
   "gitlabMrModal": {
     "title": "创建 GitLab 合并请求",

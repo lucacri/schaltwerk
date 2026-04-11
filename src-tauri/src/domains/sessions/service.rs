@@ -1,4 +1,5 @@
 use crate::domains::agents::{AgentLaunchSpec, naming::sanitize_name};
+use crate::domains::sessions::entity::SessionReadyToMergeCheck;
 use crate::shared::terminal_id::{terminal_id_for_session_bottom, terminal_id_for_session_top};
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
@@ -155,6 +156,79 @@ pub struct GitEnrichmentResult {
     pub git_stats: Option<GitStats>,
     pub has_conflicts: Option<bool>,
     pub commits_ahead_count: Option<u32>,
+    pub rebased_onto_parent: Option<bool>,
+}
+
+struct SessionReadyToMergeState {
+    ready_to_merge: bool,
+    checks: Vec<SessionReadyToMergeCheck>,
+}
+
+pub fn compute_rebased_onto_parent(
+    worktree_path: &Path,
+    session_branch: &str,
+    parent_branch: &str,
+) -> Option<bool> {
+    let repo = git2::Repository::open(worktree_path).ok()?;
+    let session_oid =
+        crate::domains::merge::service::resolve_branch_oid(&repo, session_branch).ok()?;
+    let parent_oid =
+        crate::domains::merge::service::resolve_branch_oid(&repo, parent_branch).ok()?;
+
+    if session_oid == parent_oid {
+        return Some(true);
+    }
+
+    repo.graph_descendant_of(session_oid, parent_oid).ok()
+}
+
+fn build_ready_to_merge_state(
+    session_state: &SessionState,
+    worktree_exists: bool,
+    has_uncommitted_changes: Option<bool>,
+    has_conflicts: Option<bool>,
+    rebased_onto_parent: Option<bool>,
+) -> SessionReadyToMergeState {
+    let checks = vec![
+        SessionReadyToMergeCheck {
+            key: "worktree_exists".to_string(),
+            passed: worktree_exists,
+        },
+        SessionReadyToMergeCheck {
+            key: "no_uncommitted_changes".to_string(),
+            passed: worktree_exists && has_uncommitted_changes == Some(false),
+        },
+        SessionReadyToMergeCheck {
+            key: "no_conflicts".to_string(),
+            passed: worktree_exists && has_conflicts == Some(false),
+        },
+        SessionReadyToMergeCheck {
+            key: "rebased_onto_parent".to_string(),
+            passed: worktree_exists && rebased_onto_parent == Some(true),
+        },
+    ];
+
+    SessionReadyToMergeState {
+        ready_to_merge: matches!(session_state, SessionState::Running)
+            && checks.iter().all(|check| check.passed),
+        checks,
+    }
+}
+
+pub fn compute_ready_to_merge_for_event(
+    session_state: &SessionState,
+    has_uncommitted_changes: Option<bool>,
+    has_conflicts: Option<bool>,
+    rebased_onto_parent: Option<bool>,
+) -> (bool, Vec<SessionReadyToMergeCheck>) {
+    let state = build_ready_to_merge_state(
+        session_state,
+        true,
+        has_uncommitted_changes,
+        has_conflicts,
+        rebased_onto_parent,
+    );
+    (state.ready_to_merge, state.checks)
 }
 
 pub fn compute_git_for_session(task: &GitEnrichmentTask) -> GitEnrichmentResult {
@@ -165,25 +239,33 @@ pub fn compute_git_for_session(task: &GitEnrichmentTask) -> GitEnrichmentResult 
             s
         });
 
-    let has_conflicts = match git::has_conflicts(&task.worktree_path) {
-        Ok(value) => Some(value),
-        Err(err) => {
-            log::warn!(
-                "Conflict detection failed for '{}': {err}",
-                task.session_name
-            );
-            Some(false)
-        }
-    };
+    let has_conflicts = computed_stats
+        .as_ref()
+        .map(|stats| stats.has_conflicts)
+        .or_else(|| {
+            match git::has_conflicts(&task.worktree_path) {
+                Ok(value) => Some(value),
+                Err(err) => {
+                    log::warn!(
+                        "Conflict detection failed for '{}': {err}",
+                        task.session_name
+                    );
+                    None
+                }
+            }
+        });
 
     let commits_ahead_count =
         compute_commits_ahead_count(&task.worktree_path, &task.branch, &task.parent_branch);
+    let rebased_onto_parent =
+        compute_rebased_onto_parent(&task.worktree_path, &task.branch, &task.parent_branch);
 
     GitEnrichmentResult {
         index: task.index,
         git_stats: computed_stats,
         has_conflicts,
         commits_ahead_count,
+        rebased_onto_parent,
     }
 }
 
@@ -209,10 +291,15 @@ pub fn apply_git_enrichment(
         }
         session.info.has_conflicts = result.has_conflicts;
         session.info.commits_ahead_count = result.commits_ahead_count;
-        session.info.ready_to_merge = matches!(session.info.session_state, SessionState::Running)
-            && has_uncommitted_changes == Some(false)
-            && result.has_conflicts != Some(true)
-            && result.commits_ahead_count.unwrap_or(0) > 0;
+        let readiness = build_ready_to_merge_state(
+            &session.info.session_state,
+            true,
+            has_uncommitted_changes,
+            result.has_conflicts,
+            result.rebased_onto_parent,
+        );
+        session.info.ready_to_merge = readiness.ready_to_merge;
+        session.info.ready_to_merge_checks = Some(readiness.checks);
     }
 }
 
@@ -2937,6 +3024,7 @@ impl SessionManager {
                 current_task: None,
                 diff_stats: None,
                 ready_to_merge: false,
+                ready_to_merge_checks: None,
                 spec_content: Some(spec.content.clone()),
                 spec_stage: Some(spec.stage.clone()),
                 clarification_started: Some(spec.clarification_started),
@@ -3002,6 +3090,7 @@ impl SessionManager {
                     current_task: session.initial_prompt.clone(),
                     diff_stats: None,
                     ready_to_merge: session.ready_to_merge,
+                    ready_to_merge_checks: None,
                     spec_content: session.spec_content.clone(),
                     spec_stage: Some(SpecStage::Draft),
                     clarification_started: None,
@@ -3070,11 +3159,18 @@ impl SessionManager {
                 .or_else(|| default_agent_type.clone());
 
             let current_index = enriched.len();
+            let base_readiness = build_ready_to_merge_state(
+                &session_state,
+                worktree_exists,
+                None,
+                None,
+                None,
+            );
 
-                let info = SessionInfo {
-                    session_id: session.name.clone(),
-                    stable_id: Some(session.id.clone()),
-                    display_name: session.display_name.clone(),
+            let info = SessionInfo {
+                session_id: session.name.clone(),
+                stable_id: Some(session.id.clone()),
+                display_name: session.display_name.clone(),
                 version_group_id: session.version_group_id.clone(),
                 version_number: session.version_number,
                 epic: session
@@ -3098,11 +3194,12 @@ impl SessionManager {
                 original_agent_type: original_agent_type.or_else(|| default_agent_type.clone()),
                 current_task: session.initial_prompt.clone(),
                 diff_stats: None,
-                    ready_to_merge: session.ready_to_merge,
-                    spec_content: session.spec_content.clone(),
-                    spec_stage: None,
-                    clarification_started: None,
-                    session_state,
+                ready_to_merge: base_readiness.ready_to_merge,
+                ready_to_merge_checks: Some(base_readiness.checks),
+                spec_content: session.spec_content.clone(),
+                spec_stage: None,
+                clarification_started: None,
+                session_state,
                 issue_number: session.issue_number,
                 issue_url: session.issue_url.clone(),
                 pr_number: session.pr_number,
@@ -3915,19 +4012,34 @@ impl SessionManager {
     pub fn mark_session_ready(&self, session_name: &str) -> Result<bool> {
         let session = self.db_manager.get_session_by_name(session_name)?;
 
-        let ready_to_merge = if session.worktree_path.exists() {
-            match git::calculate_git_stats_fast(
-                &session.worktree_path,
-                &session.parent_branch,
-            ) {
-                Ok(stats) => !stats.has_uncommitted,
-                Err(e) => {
-                    log::warn!(
-                        "mark_session_ready: stats computation failed for '{session_name}': {e}, falling back to uncommitted check"
-                    );
-                    !git::has_uncommitted_changes(&session.worktree_path)?
-                }
-            }
+        let worktree_exists = session.worktree_path.exists();
+        let ready_to_merge = if worktree_exists {
+            let (has_uncommitted_changes, has_conflicts) =
+                match git::calculate_git_stats_fast(&session.worktree_path, &session.parent_branch)
+                {
+                    Ok(stats) => (Some(stats.has_uncommitted), Some(stats.has_conflicts)),
+                    Err(e) => {
+                        log::warn!(
+                            "mark_session_ready: stats computation failed for '{session_name}': {e}, falling back to direct git checks"
+                        );
+                        (
+                            Some(git::has_uncommitted_changes(&session.worktree_path)?),
+                            git::has_conflicts(&session.worktree_path).ok(),
+                        )
+                    }
+                };
+            build_ready_to_merge_state(
+                &session.session_state,
+                worktree_exists,
+                has_uncommitted_changes,
+                has_conflicts,
+                compute_rebased_onto_parent(
+                    &session.worktree_path,
+                    &session.branch,
+                    &session.parent_branch,
+                ),
+            )
+            .ready_to_merge
         } else {
             log::warn!(
                 "Worktree for session '{session_name}' is missing at {}; marking ready_to_merge=false",

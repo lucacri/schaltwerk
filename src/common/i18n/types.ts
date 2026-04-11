@@ -1502,6 +1502,11 @@ export interface Translations {
     createGitlabMrShortcut: string
     noGitlabSources: string
     restartTerminals: string
+    mergeChecks: string
+    checkWorktreeExists: string
+    checkNoUncommittedChanges: string
+    checkNoConflicts: string
+    checkRebasedOntoParent: string
   }
   gitlabMrModal: {
     title: string

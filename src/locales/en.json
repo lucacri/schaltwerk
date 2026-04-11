@@ -1501,7 +1501,12 @@
     "createGitlabMr": "Create GitLab merge request",
     "createGitlabMrShortcut": "Create GitLab merge request",
     "noGitlabSources": "Configure GitLab sources first",
-    "restartTerminals": "Restart terminals"
+    "restartTerminals": "Restart terminals",
+    "mergeChecks": "Merge checks",
+    "checkWorktreeExists": "Worktree exists",
+    "checkNoUncommittedChanges": "No uncommitted changes",
+    "checkNoConflicts": "No unresolved merge conflicts",
+    "checkRebasedOntoParent": "Rebased onto parent branch"
   },
   "gitlabMrModal": {
     "title": "Create GitLab Merge Request",

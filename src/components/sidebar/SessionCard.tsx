@@ -736,6 +736,7 @@ export const SessionCard = memo<SessionCardProps>(
           <SessionActions
             sessionState={sessionState as "spec" | "processing" | "running"}
             isReadyToMerge={isReadyToMerge}
+            readinessChecks={s.ready_to_merge_checks}
             sessionId={s.session_id}
             sessionSlug={s.session_id}
             worktreePath={s.worktree_path}
