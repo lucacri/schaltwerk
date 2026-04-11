@@ -189,13 +189,13 @@ function sortSessionsByCreationDate(sessions: EnrichedSession[]): EnrichedSessio
 }
 
 function filterSessions(sessions: EnrichedSession[], filterMode: FilterMode): EnrichedSession[] {
-    const runningSessionIds = new Set(
+    const activeSessionIds = new Set(
         groupSessionsByVersion(sessions)
             .filter(group => {
                 const aggregate = calculateLogicalSessionCounts(
                     group.versions.map(v => v.session),
                 )
-                return aggregate.runningCount > 0
+                return aggregate.runningCount > 0 || aggregate.idleCount > 0
             })
             .flatMap(group => group.versions.map(version => version.session.info.session_id)),
     )
@@ -204,9 +204,9 @@ function filterSessions(sessions: EnrichedSession[], filterMode: FilterMode): En
         case FilterMode.Spec:
             return sessions.filter(session => isSpec(session.info))
         case FilterMode.Running:
-            return sessions.filter(session => runningSessionIds.has(session.info.session_id))
+            return sessions.filter(session => activeSessionIds.has(session.info.session_id))
         default:
-            return sessions.filter(session => runningSessionIds.has(session.info.session_id))
+            return sessions.filter(session => activeSessionIds.has(session.info.session_id))
     }
 }
 

@@ -9,8 +9,8 @@ export { isSpec }
  * Calculate filter counts for sessions
  */
 export function calculateFilterCounts(sessions: EnrichedSession[]) {
-    const { specsCount, runningCount } = calculateLogicalSessionCounts(sessions)
-    return { specsCount, runningCount }
+    const { specsCount, runningCount, idleCount } = calculateLogicalSessionCounts(sessions)
+    return { specsCount, runningCount: runningCount + idleCount }
 }
 
 /**

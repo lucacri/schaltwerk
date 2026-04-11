@@ -117,7 +117,7 @@ describe('calculateFilterCounts', () => {
         expect(counts.specsCount).toBe(0)
         expect(counts.runningCount).toBe(1)
     })
-    it('counts idle group (all attention_required) as not running', () => {
+    it('counts idle group (all attention_required) in running filter', () => {
         const sessions = [
             createMockSession({
                 session_id: 'feature',
@@ -135,10 +135,10 @@ describe('calculateFilterCounts', () => {
             }),
         ]
         const counts = calculateFilterCounts(sessions)
-        expect(counts.runningCount).toBe(0)
+        expect(counts.runningCount).toBe(1)
     })
 
-    it('counts group with idle consolidation as not running', () => {
+    it('counts group with idle consolidation in running filter', () => {
         const sessions = [
             createMockSession({
                 session_id: 'feature',
@@ -156,7 +156,7 @@ describe('calculateFilterCounts', () => {
             }),
         ]
         const counts = calculateFilterCounts(sessions)
-        expect(counts.runningCount).toBe(0)
+        expect(counts.runningCount).toBe(1)
     })
 
     it('counts group with active consolidation as running', () => {
@@ -180,7 +180,7 @@ describe('calculateFilterCounts', () => {
         expect(counts.runningCount).toBe(1)
     })
 
-    it('standalone idle session not counted as running', () => {
+    it('standalone idle session counted in running filter', () => {
         const sessions = [
             createMockSession({
                 session_id: 'solo-idle',
@@ -189,7 +189,7 @@ describe('calculateFilterCounts', () => {
             }),
         ]
         const counts = calculateFilterCounts(sessions)
-        expect(counts.runningCount).toBe(0)
+        expect(counts.runningCount).toBe(1)
     })
 })
 
