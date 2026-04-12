@@ -4,6 +4,7 @@ import { Select } from '../components/ui'
 import { currentThemeIdAtom, setThemeActionAtom } from '../store/atoms/theme'
 import { STYLE_GUIDE_THEMES, applyStyleGuideTheme, persistStyleGuideTheme } from './mocks'
 import { PrimitivesSection } from './sections/PrimitivesSection'
+import { SessionPrimitivesSection } from './sections/SessionPrimitivesSection'
 import { CommonSection } from './sections/CommonSection'
 import { SettingsSection } from './sections/SettingsSection'
 import { DialogsSection } from './sections/DialogsSection'
@@ -78,6 +79,7 @@ export function StyleGuide() {
 
       <main className="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-8">
         <PrimitivesSection />
+        <SessionPrimitivesSection />
         <CommonSection />
         <SettingsSection />
         <DialogsSection />

@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { theme } from '../../common/theme'
+import { typography } from '../../common/typography'
 import { type Epic } from '../../types/session'
 import { getEpicAccentScheme } from '../../utils/epicColors'
 import { Dropdown } from '../inputs/Dropdown'
@@ -66,7 +66,12 @@ export function EpicGroupHeader({
                     <span className="truncate">{epic.name}</span>
                 </button>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                    <span style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}>
+                    <span
+                        style={{
+                            ...typography.caption,
+                            color: 'var(--color-text-muted)',
+                        }}
+                    >
                         {countLabel}
                     </span>
                     <Dropdown

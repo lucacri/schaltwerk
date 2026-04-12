@@ -173,6 +173,37 @@ describe('SessionCard stats-first layout', () => {
     expect(screen.queryByTestId('session-actions')).toBeNull()
   })
 
+  it('keeps the shared task, shortcut, stats, and metadata anatomy for running cards', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              current_task: 'Stabilize primitive contract',
+              diff_stats: { files_changed: 4, additions: 42, deletions: 18, insertions: 42 },
+              dirty_files_count: 3,
+              commits_ahead_count: 5,
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByText('Stabilize primitive contract')).toBeInTheDocument()
+    expect(screen.getByText(/⌘2|Ctrl\s*\+?\s*2/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /has uncommitted changes/i })).toHaveTextContent('3 dirty')
+    expect(screen.getByTestId('session-card-stat-ahead')).toHaveTextContent('5 ahead')
+    expect(screen.getByTestId('session-card-stat-diff')).toHaveTextContent('4 files')
+    expect(screen.getByTitle('Agent: claude')).toHaveTextContent('claude')
+    expect(screen.getByText('schaltwerk/s1')).toBeInTheDocument()
+  })
+
   it('expands selected session cards by default', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>

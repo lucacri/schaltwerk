@@ -107,6 +107,10 @@ export default [
   {
     files: [
       'src/components/sidebar/SessionCard.tsx',
+      'src/components/sidebar/CompactVersionRow.tsx',
+      'src/components/sidebar/EpicGroupHeader.tsx',
+      'src/components/sidebar/SessionVersionGroup.tsx',
+      'src/components/shared/FavoriteCard.tsx',
       'src/components/specs/**/*.{ts,tsx}',
       'src/components/terminal/UnifiedTab.tsx',
       'src/components/terminal/TerminalTabs.tsx',

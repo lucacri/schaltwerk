@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Provider, createStore } from 'jotai'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -55,10 +55,17 @@ describe('StyleGuide', () => {
     expect(screen.getByRole('heading', { name: 'Standalone Style Guide' })).toBeInTheDocument()
     expect(screen.getByText(/bun run style-guide/)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Primitives' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Session Primitives' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Common Components' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Settings Panels' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Dialogs And Modals' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Color And Border Reference' })).toBeInTheDocument()
+    expect(screen.getAllByText('FavoriteCard').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('SectionHeader').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('EpicGroupHeader').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('SessionCard').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('CompactVersionRow').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Open Overlay Menu Preview' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show ConfirmModal Preview' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show Link PR Preview' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show Reset Dialog Preview' })).toBeInTheDocument()
@@ -155,6 +162,57 @@ describe('StyleGuide', () => {
       expect(document.documentElement.dataset.theme).toBe('darcula')
       expect(localStorage.getItem('lucode-style-guide-theme')).toBe('darcula')
       expect(screen.getByRole('combobox', { name: 'Theme' })).toHaveTextContent('Darcula')
+    })
+  })
+
+  it('renders session primitives from live shared component anatomy', async () => {
+    const store = createStore()
+    const user = userEvent.setup()
+
+    render(
+      <Provider store={store}>
+        <StyleGuide />
+      </Provider>,
+    )
+
+    const sessionPrimitivesSection = screen
+      .getByRole('heading', { name: 'Session Primitives' })
+      .closest('section')
+
+    expect(sessionPrimitivesSection).not.toBeNull()
+
+    const section = within(sessionPrimitivesSection as HTMLElement)
+
+    expect(section.getByRole('button', { name: /Codex Fast/i })).toHaveAttribute('aria-pressed', 'true')
+    expect(section.getByText('⌘2')).toBeInTheDocument()
+    expect(section.getByText('modified')).toBeInTheDocument()
+    expect(section.getByText('Running Sessions')).toBeInTheDocument()
+    expect(section.getByTestId('epic-header-style-guide-contract')).toBeInTheDocument()
+
+    const sessionCard = (sessionPrimitivesSection as HTMLElement).querySelector('[data-session-id="sidebar_refine"]')
+    expect(sessionCard).not.toBeNull()
+    expect(within(sessionCard as HTMLElement).getByText('Stabilize session primitives before composed sidebar work.')).toBeInTheDocument()
+    expect(within(sessionCard as HTMLElement).getByText('1 dirty')).toBeInTheDocument()
+    expect(within(sessionCard as HTMLElement).getByTestId('session-card-stat-ahead')).toHaveTextContent('2 ahead')
+    expect(within(sessionCard as HTMLElement).getByTestId('session-card-stat-diff')).toHaveTextContent('4 files+28-6')
+
+    const compactVersionRow = section.getByTestId('compact-version-row')
+    expect(within(compactVersionRow).getByText('v2 · claude')).toBeInTheDocument()
+    expect(within(compactVersionRow).getByText('2 ahead')).toBeInTheDocument()
+    expect(within(compactVersionRow).getByTestId('compact-row-status-ready')).toBeInTheDocument()
+
+    await user.click(section.getByRole('button', { name: 'Open Overlay Menu Preview' }))
+
+    const menu = await screen.findByTestId('style-guide-overlay-menu')
+    expect(menu.parentElement).toBe(document.body)
+
+    const backdrop = menu.previousElementSibling
+    expect(backdrop).toBeInstanceOf(HTMLDivElement)
+
+    await user.click(backdrop as HTMLElement)
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('style-guide-overlay-menu')).not.toBeInTheDocument()
     })
   })
 })

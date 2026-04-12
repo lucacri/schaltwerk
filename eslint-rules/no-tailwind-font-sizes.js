@@ -1,18 +1,20 @@
 const ARBITRARY_FONT_SIZE_PATTERN = /text-\[/
+const SCALE_FONT_SIZE_PATTERN = /(?:^|\s)text-(?:xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl|7xl|8xl|9xl)(?=\s|$)/
 
 export default {
   meta: {
     type: 'suggestion',
     docs: {
-      description: 'disallow arbitrary fixed Tailwind font-size values like text-[12px]',
+      description: 'disallow Tailwind font-size classes on primitive components; use shared typography helpers instead',
     },
     schema: [],
     messages: {
-      unexpected: 'Use Tailwind scale classes (text-sm, text-base, …) instead of arbitrary "{{token}}"',
+      unexpectedArbitrary: 'Use the shared typography helpers instead of arbitrary "{{token}}"',
+      unexpectedScale: 'Use the shared typography helpers (e.g. sessionText/meta/badge or typography.*) instead of the Tailwind size class "{{token}}"',
     },
   },
   create(context) {
-    const reportMatch = (value, node) => {
+    const reportArbitraryMatch = (value, node) => {
       const match = value.match(ARBITRARY_FONT_SIZE_PATTERN)
       if (match) {
         const startIdx = match.index
@@ -22,10 +24,27 @@ export default {
           : value.slice(startIdx)
         context.report({
           node,
-          messageId: 'unexpected',
+          messageId: 'unexpectedArbitrary',
           data: { token },
         })
       }
+    }
+
+    const reportScaleMatch = (value, node) => {
+      const match = value.match(SCALE_FONT_SIZE_PATTERN)
+      if (match) {
+        const token = match[0].trim()
+        context.report({
+          node,
+          messageId: 'unexpectedScale',
+          data: { token },
+        })
+      }
+    }
+
+    const reportMatch = (value, node) => {
+      reportArbitraryMatch(value, node)
+      reportScaleMatch(value, node)
     }
 
     return {

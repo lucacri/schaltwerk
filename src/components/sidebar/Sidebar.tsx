@@ -58,6 +58,7 @@ import { EpicModal } from '../modals/EpicModal'
 import { ConfirmModal } from '../modals/ConfirmModal'
 import { useEpics } from '../../hooks/useEpics'
 import { EpicGroupHeader } from './EpicGroupHeader'
+import { SidebarSectionHeader } from './SidebarSectionHeader'
 import { getEpicAccentScheme } from '../../utils/epicColors'
 import { projectForgeAtom } from '../../store/atoms/forge'
 import { SessionCardActionsProvider, type SessionCardActions } from '../../contexts/SessionCardActionsContext'
@@ -2017,42 +2018,13 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                         data-testid={`sidebar-section-${sectionKey}`}
                                         className="mt-2 first:mt-0"
                                     >
-                                        <button
-                                            type="button"
-                                            onClick={() => toggleSectionCollapsed(sectionKey)}
-                                            aria-label={toggleLabel}
-                                            className="w-full px-2 py-1.5 flex items-center gap-2 text-left rounded-md hover:bg-bg-hover/30 transition-colors"
-                                        >
-                                            <span
-                                                className="uppercase tracking-wider"
-                                                style={{
-                                                    fontSize: theme.fontSize.caption,
-                                                    color: 'var(--color-text-secondary)',
-                                                    lineHeight: theme.lineHeight.compact,
-                                                }}
-                                            >
-                                                {title}
-                                            </span>
-                                            <span
-                                                className="shrink-0"
-                                                style={{
-                                                    fontSize: theme.fontSize.caption,
-                                                    color: 'var(--color-text-muted)',
-                                                    lineHeight: theme.lineHeight.compact,
-                                                }}
-                                            >
-                                                {groups.length}
-                                            </span>
-                                            <div className="flex-1 h-px bg-border-subtle" />
-                                            <svg
-                                                className={clsx('w-3 h-3 text-text-muted transition-transform', collapsed && '-rotate-90')}
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m19 9-7 7-7-7" />
-                                            </svg>
-                                        </button>
+                                        <SidebarSectionHeader
+                                            title={title}
+                                            count={groups.length}
+                                            collapsed={collapsed}
+                                            toggleLabel={toggleLabel}
+                                            onToggle={() => toggleSectionCollapsed(sectionKey)}
+                                        />
                                         {!collapsed && (
                                             <div className="mt-1">
                                                 {sectionElements}

@@ -38,4 +38,32 @@ describe('Dropdown', () => {
     expect(menu.parentElement).toBe(document.body)
     expect(window.getComputedStyle(menu).position).toBe('fixed')
   })
+
+  test('closes when the overlay backdrop is clicked', async () => {
+    const user = userEvent.setup()
+    render(<DropdownHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'Toggle' }))
+
+    const menu = await screen.findByTestId('dropdown-menu')
+    const overlay = screen.getByTestId('dropdown-menu-backdrop')
+
+    expect(menu).toBeInTheDocument()
+
+    await user.click(overlay)
+
+    expect(screen.queryByTestId('dropdown-menu')).toBeNull()
+  })
+
+  test('closes when escape is pressed', async () => {
+    const user = userEvent.setup()
+    render(<DropdownHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'Toggle' }))
+    await screen.findByTestId('dropdown-menu')
+
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByTestId('dropdown-menu')).toBeNull()
+  })
 })

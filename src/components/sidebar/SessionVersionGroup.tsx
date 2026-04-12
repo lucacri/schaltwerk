@@ -235,12 +235,14 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
               </svg>
               <span className="truncate" style={sessionText.title}>{group.baseName}</span>
               <span
-                className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
+                className="px-2 py-0.5 rounded-full flex-shrink-0"
                 style={hasSelectedVersion ? {
+                  ...sessionText.badge,
                   backgroundColor: 'var(--color-accent-blue-bg)',
                   color: 'var(--color-accent-blue-light)',
                   borderColor: 'var(--color-accent-blue-border)'
                 } : {
+                  ...sessionText.badge,
                   backgroundColor: 'rgba(var(--color-bg-hover-rgb), 0.5)',
                   color: 'var(--color-text-secondary)',
                   borderColor: 'rgba(var(--color-border-subtle-rgb), 0.5)'
@@ -248,8 +250,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
               >
                 {group.versions.length}x
               </span>
-            
-            {/* Base branch indicator */}
+
             {(() => {
               const firstSession = group.versions[0]?.session?.info
               if (!firstSession) return null
@@ -259,8 +260,8 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
 
               return (
                 <>
-                  <span className="text-[var(--color-text-muted)] text-xs">|</span>
-                  <span className="text-xs text-[var(--color-text-muted)]">← {baseBranch}</span>
+                  <span style={{ ...sessionText.meta, color: 'var(--color-text-muted)' }}>|</span>
+                  <span style={{ ...sessionText.meta, color: 'var(--color-text-muted)' }}>← {baseBranch}</span>
                 </>
               )
             })()}
@@ -376,8 +377,9 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
             {latestJudge?.session.info.consolidation_recommended_session_id && (
               <div className={clsx(sourceVersions.length > 0 && 'mt-3')}>
                 <div
-                  className="rounded-md px-3 py-2 text-xs"
+                  className="rounded-md px-3 py-2"
                   style={{
+                    ...sessionText.meta,
                     border: '1px solid var(--color-accent-purple-border)',
                     backgroundColor: 'rgb(var(--color-accent-purple-rgb) / 0.08)',
                     color: 'var(--color-text-secondary)',

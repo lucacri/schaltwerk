@@ -121,6 +121,7 @@ export function Dropdown({ open, onOpenChange, items, selectedKey, onSelect, ali
       {open && menuGeometry && createPortal(
         <>
           <div
+            data-testid={menuTestId ? `${menuTestId}-backdrop` : undefined}
             className="fixed inset-0"
             style={{ zIndex: theme.layers.dropdownOverlay }}
             onClick={() => onOpenChange(false)}
