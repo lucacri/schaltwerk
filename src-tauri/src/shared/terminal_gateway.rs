@@ -18,7 +18,7 @@ impl ProjectTerminalGateway {
     /// Create a new gateway with a fresh terminal manager instance.
     pub fn new() -> Self {
         Self {
-            manager: Arc::new(TerminalManager::new()),
+            manager: Arc::new(TerminalManager::new_local()),
         }
     }
 

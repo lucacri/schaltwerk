@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use super::super::*;
     use super::super::local::max_buffer_size_for_terminal;
+    use super::super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Duration;
     use tokio::time::{sleep, timeout};
@@ -15,6 +15,10 @@ mod tests {
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::Relaxed)
         )
+    }
+
+    fn local_manager() -> TerminalManager {
+        TerminalManager::new_local()
     }
 
     async fn safe_close(manager: &TerminalManager, id: &str) {
@@ -49,7 +53,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_paste_and_submit_terminal_executes() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let id = unique_id("paste-timing");
 
         manager
@@ -71,7 +75,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_paste_and_submit_bracketed_paste_mode() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let id = unique_id("bracketed-paste");
 
         manager
@@ -93,7 +97,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_paste_and_submit_partial_failure_recovery() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let closed_id = unique_id("closed-terminal");
 
         // Paste operations silently succeed for non-existent terminals since write operations do
@@ -123,7 +127,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_terminal_creation() {
-        let manager = Arc::new(TerminalManager::new());
+        let manager = Arc::new(local_manager());
         let num_terminals = 5;
         let mut handles = Vec::new();
 
@@ -162,7 +166,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_resource_tracking_across_async_ops() {
-        let manager = Arc::new(TerminalManager::new());
+        let manager = Arc::new(local_manager());
         let id = unique_id("resource-tracking");
 
         manager
@@ -209,7 +213,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_queue_initial_command_dispatches_on_ready_marker() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let id = unique_id("initial-cmd-ready");
 
         manager
@@ -249,7 +253,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_queue_initial_command_dispatches_after_delay_without_output() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let id = unique_id("initial-cmd-delay");
 
         manager
@@ -282,7 +286,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_environment_variable_handling() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let id = unique_id("env-vars");
 
         let custom_env = vec![
@@ -309,7 +313,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_shell_detection_and_configuration() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
 
         let test_shells = vec![
             (unique_id("bash-terminal"), "/bin/bash"),
@@ -337,7 +341,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cleanup_on_panic() {
-        let manager = Arc::new(TerminalManager::new());
+        let manager = Arc::new(local_manager());
         let panic_id = unique_id("panic-terminal");
 
         manager
@@ -372,7 +376,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_race_conditions_during_creation_destruction() {
-        let manager = Arc::new(TerminalManager::new());
+        let manager = Arc::new(local_manager());
         let race_id = unique_id("race-terminal");
 
         // Test with timeout and reduced complexity
@@ -411,7 +415,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_memory_leak_prevention() {
-        let manager = Arc::new(TerminalManager::new());
+        let manager = Arc::new(local_manager());
         let leak_test_base = unique_id("leak-test");
 
         // Simple test - just verify terminals can be created and cleaned up
@@ -429,7 +433,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_timing_sensitive_operations() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let timing_id = unique_id("timing-sensitive");
 
         manager
@@ -461,7 +465,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_zombie_prevention() {
-        let manager = Arc::new(TerminalManager::new());
+        let manager = Arc::new(local_manager());
         let zombie_base = unique_id("zombie-test");
         let mut ids = Vec::new();
 
@@ -494,7 +498,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_signal_handling() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let signal_id = unique_id("signal-test");
 
         manager
@@ -525,7 +529,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_terminal_with_custom_size() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let size_id = unique_id("size-test");
 
         manager
@@ -549,7 +553,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_terminal_with_custom_app() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let app_id = unique_id("app-test");
 
         // Test the terminal creation with custom app - just verify it doesn't crash
@@ -583,7 +587,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_path_environment_merging() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let path_id = unique_id("path-merge-test");
 
         let custom_env = vec![
@@ -610,7 +614,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_shell_specific_escaping() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let escape_id = unique_id("escape-test");
 
         manager
@@ -641,7 +645,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_app_handle_setting() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
 
         // We can't directly access app_handle, but we can verify behavior
         // by creating terminals and ensuring they work without app_handle set
@@ -657,7 +661,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_paste_multiline_with_special_chars() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let multiline_id = unique_id("multiline-special");
 
         manager
@@ -683,7 +687,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_paste_and_submit_appends_newline() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let terminal_id = unique_id("paste-newline");
 
         manager
@@ -707,7 +711,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_rapid_create_close_cycles() {
-        let manager = Arc::new(TerminalManager::new());
+        let manager = Arc::new(local_manager());
         let cycle_base = unique_id("rapid-cycle");
 
         for cycle in 0..3 {
@@ -728,7 +732,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_error_propagation() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
 
         // Write operations silently succeed for non-existent terminals in LocalPtyAdapter
         let result = manager
@@ -767,7 +771,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_inject_terminal_error_populates_buffer() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let id = unique_id("error-terminal");
         let message = "Error: Failed to start agent".to_string();
 
@@ -787,7 +791,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_env_vs_custom_env() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
 
         let empty_env_id = unique_id("empty-env");
         manager
@@ -813,7 +817,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cleanup_idempotency() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let cleanup_id = unique_id("cleanup-test");
 
         manager
@@ -831,7 +835,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_paste_empty_data() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let empty_id = unique_id("empty-paste");
 
         manager
@@ -849,7 +853,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_large_write_operations() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         let large_id = unique_id("large-write");
 
         manager

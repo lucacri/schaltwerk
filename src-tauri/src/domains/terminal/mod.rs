@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use tauri::AppHandle;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateParams {
@@ -44,6 +45,33 @@ pub trait TerminalBackend: Send + Sync {
         _command: String,
         _ready_marker: Option<String>,
         _dispatch_delay: Option<Duration>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+    async fn set_app_handle(&self, _handle: AppHandle) {}
+    async fn get_all_terminal_activity(&self) -> Vec<(String, u64)> {
+        Vec::new()
+    }
+    async fn get_activity_status(&self, _id: &str) -> Result<(bool, u64), String> {
+        Ok((true, 0))
+    }
+    async fn inject_terminal_error(
+        &self,
+        _id: &str,
+        _cwd: &str,
+        _message: &str,
+        _cols: u16,
+        _rows: u16,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+    async fn wait_for_output_change(&self, _id: &str, _min_seq: u64) -> Result<u64, String> {
+        Err("Terminal backend does not support waiting for output changes".to_string())
+    }
+    async fn configure_attention_profile(
+        &self,
+        _id: &str,
+        _agent_type: &str,
     ) -> Result<(), String> {
         Ok(())
     }

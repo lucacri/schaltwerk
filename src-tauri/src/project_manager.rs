@@ -51,7 +51,7 @@ impl Project {
         info!("Creating new project for path: {}", path.display());
 
         // Each project gets its own terminal manager
-        let terminal_manager = Arc::new(TerminalManager::new());
+        let terminal_manager = Arc::new(TerminalManager::new_local());
 
         // Get the global app data directory for project databases
         let db_path = Self::get_project_db_path(&path)?;
@@ -110,10 +110,7 @@ impl Project {
         );
 
         // Build the full path: ~/.local/share/lucode/projects/{projectname_hash}/sessions.db
-        let project_data_dir = data_dir
-            .join("lucode")
-            .join("projects")
-            .join(folder_name);
+        let project_data_dir = data_dir.join("lucode").join("projects").join(folder_name);
 
         Ok(project_data_dir.join("sessions.db"))
     }
@@ -121,7 +118,7 @@ impl Project {
     #[cfg(test)]
     pub fn new_in_memory(path: PathBuf) -> Result<Self> {
         // Each project gets its own terminal manager
-        let terminal_manager = Arc::new(TerminalManager::new());
+        let terminal_manager = Arc::new(TerminalManager::new_local());
 
         // For tests, create a temporary database file that will be cleaned up
         let temp_dir = std::env::temp_dir();

@@ -2,7 +2,9 @@ use super::coalescing::{
     CoalescingParams, CoalescingState, flush_terminal_output, handle_coalesced_output,
 };
 use super::command_builder::build_command_spec;
-use super::control_sequences::{SanitizedOutput, SequenceResponse, WindowSizeRequest, sanitize_control_sequences};
+use super::control_sequences::{
+    SanitizedOutput, SequenceResponse, WindowSizeRequest, sanitize_control_sequences,
+};
 use super::idle_detection::{IdleDetector, IdleTransition};
 use super::lifecycle::{self, LifecycleDeps};
 use super::submission::build_submission_payload;
@@ -50,20 +52,29 @@ fn attention_kind_to_status(kind: TerminalAttentionKind) -> (bool, Option<Termin
 fn last_claude_signal(
     notifications: &[super::control_sequences::TerminalNotification],
 ) -> Option<TerminalAttentionKind> {
-    notifications.iter().rev().find_map(|notification| match notification.payload.as_str() {
-        "lucode:waiting_for_input:enter" => Some(TerminalAttentionKind::WaitingForInput),
-        "lucode:waiting_for_input:clear" => Some(TerminalAttentionKind::Idle),
-        _ => None,
-    })
+    notifications
+        .iter()
+        .rev()
+        .find_map(|notification| match notification.payload.as_str() {
+            "lucode:waiting_for_input:enter" => Some(TerminalAttentionKind::WaitingForInput),
+            "lucode:waiting_for_input:clear" => Some(TerminalAttentionKind::Idle),
+            _ => None,
+        })
 }
 
 fn last_gemini_notification_signal(
     notifications: &[super::control_sequences::TerminalNotification],
 ) -> Option<TerminalAttentionKind> {
     notifications.iter().rev().find_map(|notification| {
-        if notification.payload.starts_with("Gemini CLI needs your attention") {
+        if notification
+            .payload
+            .starts_with("Gemini CLI needs your attention")
+        {
             Some(TerminalAttentionKind::WaitingForInput)
-        } else if notification.payload.starts_with("Gemini CLI session complete") {
+        } else if notification
+            .payload
+            .starts_with("Gemini CLI session complete")
+        {
             Some(TerminalAttentionKind::Idle)
         } else {
             None
@@ -89,10 +100,12 @@ fn attention_update_for_signals(
     window_titles: &[String],
 ) -> Option<(bool, Option<TerminalAttentionKind>)> {
     match profile {
-        Some(AttentionProfile::Claude) => last_claude_signal(notifications).map(|kind| match kind {
-            TerminalAttentionKind::Idle => (false, None),
-            _ => attention_kind_to_status(kind),
-        }),
+        Some(AttentionProfile::Claude) => {
+            last_claude_signal(notifications).map(|kind| match kind {
+                TerminalAttentionKind::Idle => (false, None),
+                _ => attention_kind_to_status(kind),
+            })
+        }
         Some(AttentionProfile::Gemini) => {
             let notification_signal = last_gemini_notification_signal(notifications);
             let title_signal = last_gemini_title_signal(window_titles);
@@ -749,10 +762,14 @@ impl LocalPtyAdapter {
 
                 if state.attention_profile.is_none() {
                     if !notifications.is_empty() {
-                        state.pending_notifications.extend(notifications.iter().cloned());
+                        state
+                            .pending_notifications
+                            .extend(notifications.iter().cloned());
                     }
                     if !window_titles.is_empty() {
-                        state.pending_window_titles.extend(window_titles.iter().cloned());
+                        state
+                            .pending_window_titles
+                            .extend(window_titles.iter().cloned());
                     }
                     trim_pending_attention_signals(state);
                 }
@@ -763,7 +780,11 @@ impl LocalPtyAdapter {
                     &window_titles,
                 );
                 if let Some((needs_attention, attention_kind)) = attention_update {
-                    state.attention_kind = if needs_attention { attention_kind } else { None };
+                    state.attention_kind = if needs_attention {
+                        attention_kind
+                    } else {
+                        None
+                    };
                     state.pending_notifications.clear();
                     state.pending_window_titles.clear();
                 }
@@ -780,8 +801,14 @@ impl LocalPtyAdapter {
                 .get(id)
                 .and_then(|state| state.session_id.clone())
         {
-            Self::emit_attention_update(reader_state, id, session_id, needs_attention, attention_kind)
-                .await;
+            Self::emit_attention_update(
+                reader_state,
+                id,
+                session_id,
+                needs_attention,
+                attention_kind,
+            )
+            .await;
         }
 
         if let Some(seq) = current_seq
@@ -885,11 +912,7 @@ impl LocalPtyAdapter {
                 .map_err(|e| format!("Failed to clone reader for terminal {id}: {e}"))?
         };
 
-        let reader_handle = Self::start_reader(
-            id.to_string(),
-            reader,
-            self.reader_state(),
-        );
+        let reader_handle = Self::start_reader(id.to_string(), reader, self.reader_state());
 
         self.reader_handles
             .lock()
@@ -979,6 +1002,10 @@ fn schedule_enter_replay(
 
 #[async_trait::async_trait]
 impl TerminalBackend for LocalPtyAdapter {
+    async fn set_app_handle(&self, handle: AppHandle) {
+        LocalPtyAdapter::set_app_handle(self, handle).await;
+    }
+
     async fn create(&self, params: CreateParams) -> Result<(), String> {
         // Use standard terminal defaults that will be immediately resized by frontend
         // These are just fallback values for compatibility
@@ -1173,6 +1200,41 @@ impl TerminalBackend for LocalPtyAdapter {
             );
         }
         Ok(())
+    }
+
+    async fn get_activity_status(&self, id: &str) -> Result<(bool, u64), String> {
+        LocalPtyAdapter::get_activity_status(self, id).await
+    }
+
+    async fn get_all_terminal_activity(&self) -> Vec<(String, u64)> {
+        LocalPtyAdapter::get_all_terminal_activity(self).await
+    }
+
+    async fn inject_terminal_error(
+        &self,
+        id: &str,
+        cwd: &str,
+        message: &str,
+        cols: u16,
+        rows: u16,
+    ) -> Result<(), String> {
+        LocalPtyAdapter::inject_terminal_error(
+            self,
+            id.to_string(),
+            cwd.to_string(),
+            message.to_string(),
+            cols,
+            rows,
+        )
+        .await
+    }
+
+    async fn wait_for_output_change(&self, id: &str, min_seq: u64) -> Result<u64, String> {
+        LocalPtyAdapter::wait_for_output_change(self, id, min_seq).await
+    }
+
+    async fn configure_attention_profile(&self, id: &str, agent_type: &str) -> Result<(), String> {
+        LocalPtyAdapter::configure_attention_profile(self, id, agent_type).await
     }
 
     async fn write(&self, id: &str, data: &[u8]) -> Result<(), String> {
@@ -1462,7 +1524,6 @@ impl TerminalBackend for LocalPtyAdapter {
         info!("All terminals force killed");
         Ok(())
     }
-
 }
 
 impl LocalPtyAdapter {
@@ -1506,7 +1567,11 @@ impl LocalPtyAdapter {
         );
     }
 
-    pub async fn configure_attention_profile(&self, id: &str, agent_type: &str) -> Result<(), String> {
+    pub async fn configure_attention_profile(
+        &self,
+        id: &str,
+        agent_type: &str,
+    ) -> Result<(), String> {
         let (attention_update, session_id) = {
             let mut terminals = self.terminals.write().await;
             let Some(state) = terminals.get_mut(id) else {
@@ -1526,7 +1591,11 @@ impl LocalPtyAdapter {
             );
             let mut session_id = None;
             if let Some((needs_attention, attention_kind)) = attention_update {
-                state.attention_kind = if needs_attention { attention_kind } else { None };
+                state.attention_kind = if needs_attention {
+                    attention_kind
+                } else {
+                    None
+                };
                 state.pending_notifications.clear();
                 state.pending_window_titles.clear();
                 session_id = state.session_id.clone();
@@ -1538,8 +1607,14 @@ impl LocalPtyAdapter {
             && let Some(session_id) = session_id
         {
             let reader_state = self.reader_state();
-            Self::emit_attention_update(&reader_state, id, session_id, needs_attention, attention_kind)
-                .await;
+            Self::emit_attention_update(
+                &reader_state,
+                id,
+                session_id,
+                needs_attention,
+                attention_kind,
+            )
+            .await;
         }
 
         Ok(())

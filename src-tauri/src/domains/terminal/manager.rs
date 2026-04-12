@@ -1,6 +1,6 @@
 use super::{
-    ApplicationSpec, CreateParams, LocalPtyAdapter, TerminalBackend, TerminalSnapshot,
-    get_effective_shell, submission::build_submission_payload,
+    ApplicationSpec, CreateParams, TerminalBackend, TerminalSnapshot, get_effective_shell,
+    submission::build_submission_payload,
 };
 use crate::infrastructure::events::{SchaltEvent, emit_event};
 use log::{debug, error, info, warn};
@@ -45,7 +45,7 @@ struct TerminalMetadata {
 }
 
 pub struct TerminalManager {
-    backend: Arc<LocalPtyAdapter>,
+    backend: Arc<dyn TerminalBackend>,
     active_ids: Arc<RwLock<HashSet<String>>>,
     metadata: Arc<RwLock<HashMap<String, TerminalMetadata>>>,
     session_index: Arc<RwLock<HashMap<SessionKey, HashSet<String>>>>,
@@ -54,7 +54,7 @@ pub struct TerminalManager {
 
 impl Default for TerminalManager {
     fn default() -> Self {
-        Self::new()
+        Self::new_local()
     }
 }
 
@@ -82,8 +82,7 @@ impl TerminalManager {
         Ok(trimmed.to_string())
     }
 
-    pub fn new() -> Self {
-        let backend = Arc::new(LocalPtyAdapter::new());
+    pub fn new(backend: Arc<dyn TerminalBackend>) -> Self {
         Self {
             backend,
             active_ids: Arc::new(RwLock::new(HashSet::new())),
@@ -91,6 +90,10 @@ impl TerminalManager {
             session_index: Arc::new(RwLock::new(HashMap::new())),
             app_handle: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub fn new_local() -> Self {
+        Self::new(Arc::new(super::LocalPtyAdapter::new()))
     }
 
     async fn register_terminal_session(&self, id: &str, session: SessionKey) {
@@ -445,7 +448,7 @@ impl TerminalManager {
         rows: u16,
     ) -> Result<(), String> {
         self.backend
-            .inject_terminal_error(id.clone(), cwd, message, cols, rows)
+            .inject_terminal_error(&id, &cwd, &message, cols, rows)
             .await?;
         self.active_ids.write().await.insert(id);
         Ok(())
@@ -599,7 +602,6 @@ impl TerminalManager {
         let known_ids: std::collections::HashSet<String> = self.active_ids.read().await.clone();
 
         // Check backend for any additional orphaned terminals
-        // Note: accessing concrete method since LocalPtyAdapter is the only implementation
         let backend_terminals = self.backend.get_all_terminal_activity().await;
 
         for (id, _elapsed) in backend_terminals {
@@ -615,8 +617,7 @@ impl TerminalManager {
     }
 
     async fn start_event_bridge(&self, id: String) {
-        // Only start if we're using LocalPtyAdapter which already emits events
-        // This is a placeholder for future remote adapters that might need explicit bridging
+        // Backends that need explicit event bridging can extend this path later.
         debug!("Event bridge started for terminal {id}");
     }
 
@@ -632,10 +633,135 @@ impl TerminalManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
+    use tokio::sync::Mutex;
+
+    fn local_manager() -> TerminalManager {
+        TerminalManager::new_local()
+    }
+
+    struct FakeBackend {
+        existing: Mutex<HashSet<String>>,
+        injected_errors: Mutex<Vec<(String, String, String, u16, u16)>>,
+        attention_profiles: Mutex<Vec<(String, String)>>,
+    }
+
+    impl FakeBackend {
+        fn new() -> Self {
+            Self {
+                existing: Mutex::new(HashSet::new()),
+                injected_errors: Mutex::new(Vec::new()),
+                attention_profiles: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl TerminalBackend for FakeBackend {
+        async fn create(&self, params: CreateParams) -> Result<(), String> {
+            self.existing.lock().await.insert(params.id);
+            Ok(())
+        }
+
+        async fn create_with_size(
+            &self,
+            params: CreateParams,
+            _cols: u16,
+            _rows: u16,
+        ) -> Result<(), String> {
+            self.create(params).await
+        }
+
+        async fn write(&self, _id: &str, _data: &[u8]) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn write_immediate(&self, _id: &str, _data: &[u8]) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn resize(&self, _id: &str, _cols: u16, _rows: u16) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn close(&self, id: &str) -> Result<(), String> {
+            self.existing.lock().await.remove(id);
+            Ok(())
+        }
+
+        async fn exists(&self, id: &str) -> Result<bool, String> {
+            Ok(self.existing.lock().await.contains(id))
+        }
+
+        async fn snapshot(
+            &self,
+            _id: &str,
+            _from_seq: Option<u64>,
+        ) -> Result<TerminalSnapshot, String> {
+            Ok(TerminalSnapshot {
+                seq: 0,
+                start_seq: 0,
+                data: Vec::new(),
+            })
+        }
+
+        async fn wait_for_output_change(&self, _id: &str, min_seq: u64) -> Result<u64, String> {
+            Ok(min_seq + 1)
+        }
+
+        async fn get_all_terminal_activity(&self) -> Vec<(String, u64)> {
+            self.existing
+                .lock()
+                .await
+                .iter()
+                .cloned()
+                .map(|id| (id, 0))
+                .collect()
+        }
+
+        async fn get_activity_status(&self, id: &str) -> Result<(bool, u64), String> {
+            if self.existing.lock().await.contains(id) {
+                Ok((false, 7))
+            } else {
+                Err(format!("Terminal {id} not found"))
+            }
+        }
+
+        async fn inject_terminal_error(
+            &self,
+            id: &str,
+            cwd: &str,
+            message: &str,
+            cols: u16,
+            rows: u16,
+        ) -> Result<(), String> {
+            self.existing.lock().await.insert(id.to_string());
+            self.injected_errors.lock().await.push((
+                id.to_string(),
+                cwd.to_string(),
+                message.to_string(),
+                cols,
+                rows,
+            ));
+            Ok(())
+        }
+
+        async fn configure_attention_profile(
+            &self,
+            id: &str,
+            agent_type: &str,
+        ) -> Result<(), String> {
+            self.attention_profiles
+                .lock()
+                .await
+                .push((id.to_string(), agent_type.to_string()));
+            Ok(())
+        }
+    }
 
     #[tokio::test]
     async fn test_close_all_kills_all_terminals() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
 
         manager
             .create_terminal("test-mgr-1".to_string(), "/tmp".to_string())
@@ -657,7 +783,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_terminal_buffer_returns_output() {
-        let manager = TerminalManager::new();
+        let manager = local_manager();
         manager
             .create_terminal("buf-term".to_string(), "/tmp".to_string())
             .await
@@ -707,6 +833,118 @@ mod tests {
         assert!(
             result.is_err(),
             "expected resolve_cwd to error for missing path"
+        );
+    }
+
+    #[tokio::test]
+    async fn terminal_manager_uses_backend_trait() {
+        let backend: Arc<dyn TerminalBackend> = Arc::new(FakeBackend::new());
+        let manager = TerminalManager::new(backend);
+
+        manager
+            .create_terminal("trait-backed".to_string(), "/tmp".to_string())
+            .await
+            .expect("create should succeed through trait backend");
+
+        assert!(
+            manager
+                .terminal_exists("trait-backed")
+                .await
+                .expect("exists should succeed"),
+            "manager should delegate terminal existence to the trait backend"
+        );
+
+        let seq = manager
+            .wait_for_output_change("trait-backed", 41)
+            .await
+            .expect("wait should delegate to the trait backend");
+        assert_eq!(seq, 42);
+    }
+
+    #[tokio::test]
+    async fn cleanup_orphaned_processes_uses_backend_activity() {
+        let backend = Arc::new(FakeBackend::new());
+        backend
+            .existing
+            .lock()
+            .await
+            .extend(["known-terminal".to_string(), "orphan-terminal".to_string()]);
+
+        let manager = TerminalManager::new(backend.clone());
+        manager
+            .active_ids
+            .write()
+            .await
+            .insert("known-terminal".to_string());
+
+        manager.cleanup_orphaned_processes().await;
+
+        let remaining = backend.existing.lock().await.clone();
+        assert!(
+            remaining.contains("known-terminal"),
+            "cleanup should preserve known terminals"
+        );
+        assert!(
+            !remaining.contains("orphan-terminal"),
+            "cleanup should close backend-reported orphaned terminals"
+        );
+    }
+
+    #[tokio::test]
+    async fn manager_delegates_activity_error_and_attention_calls() {
+        let backend = Arc::new(FakeBackend::new());
+        backend
+            .existing
+            .lock()
+            .await
+            .insert("trait-backed".to_string());
+        let manager = TerminalManager::new(backend.clone());
+
+        let activity = manager
+            .get_terminal_activity_status("trait-backed".to_string())
+            .await
+            .expect("activity status should delegate to the trait backend");
+        assert_eq!(activity, (false, 7));
+
+        manager
+            .inject_terminal_error(
+                "error-backed".to_string(),
+                "/tmp".to_string(),
+                "boom".to_string(),
+                120,
+                40,
+            )
+            .await
+            .expect("error injection should delegate to the trait backend");
+
+        manager
+            .configure_attention_profile("error-backed", "claude")
+            .await
+            .expect("attention profile should delegate to the trait backend");
+
+        let injected_errors = backend.injected_errors.lock().await.clone();
+        assert_eq!(
+            injected_errors,
+            vec![(
+                "error-backed".to_string(),
+                "/tmp".to_string(),
+                "boom".to_string(),
+                120,
+                40,
+            )]
+        );
+
+        let attention_profiles = backend.attention_profiles.lock().await.clone();
+        assert_eq!(
+            attention_profiles,
+            vec![("error-backed".to_string(), "claude".to_string())]
+        );
+        assert!(
+            manager
+                .terminal_exists("error-backed")
+                .await
+                .expect("exists should delegate after injected error"),
+            "injected error terminal should be tracked by the backend"
         );
     }
 }
