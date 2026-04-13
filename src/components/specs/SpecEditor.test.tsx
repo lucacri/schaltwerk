@@ -357,6 +357,128 @@ describe('SpecEditor keyboard shortcuts', () => {
     expect(clarifyCallIndex).toBeGreaterThan(saveCallIndex)
   })
 
+  it('renders separate Clarify and Run actions in the preview toolbar', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'toolbar-actions-spec',
+          stable_id: 'toolbar-actions-spec-stable-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="toolbar-actions-spec" allowClarificationControls />
+      </TestProviders>
+    )
+
+    const clarifyButton = await screen.findByRole('button', { name: 'Clarify' })
+    const runButton = screen.getByRole('button', { name: 'Run' })
+
+    expect(clarifyButton).toBeInTheDocument()
+    expect(clarifyButton.className).not.toContain('bg-accent-green')
+    expect(runButton.className).toContain('bg-accent-green')
+  })
+
+  it('opens the start-from-spec flow when Run is clicked', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'run-button-spec',
+          stable_id: 'run-button-spec-stable-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="run-button-spec" allowClarificationControls />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Run' }))
+
+    await waitFor(() => {
+      expect(emitUiEvent).toHaveBeenCalledWith(UiEvent.StartAgentFromSpec, {
+        name: 'run-button-spec',
+      })
+    })
+    expect(invoke).not.toHaveBeenCalledWith(
+      TauriCommands.SchaltwerkCoreSubmitSpecClarificationPrompt,
+      expect.anything()
+    )
+  })
+
+  it('flushes pending spec edits before emitting Run', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'run-save',
+          stable_id: 'run-save-stable-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="run-save" allowClarificationControls />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByTitle('Edit markdown'))
+    fireEvent.change(screen.getByTestId('markdown-editor-input'), {
+      target: { value: 'Updated draft before run' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreUpdateSpecContent, {
+        name: 'run-save',
+        content: 'Updated draft before run',
+      })
+      expect(emitUiEvent).toHaveBeenCalledWith(UiEvent.StartAgentFromSpec, {
+        name: 'run-save',
+      })
+    })
+
+    const saveCallOrder = vi.mocked(invoke).mock.invocationCallOrder[
+      vi.mocked(invoke).mock.calls.findIndex(([command]) => command === TauriCommands.SchaltwerkCoreUpdateSpecContent)
+    ]
+    const emitCallOrder = vi.mocked(emitUiEvent).mock.invocationCallOrder[
+      vi.mocked(emitUiEvent).mock.calls.findIndex(([event]) => event === UiEvent.StartAgentFromSpec)
+    ]
+
+    expect(emitCallOrder).toBeGreaterThan(saveCallOrder)
+  })
+
   it('keeps Clarify disabled until the spec clarification agent reports ready', async () => {
     sessionsMock = [
       {
@@ -402,6 +524,43 @@ describe('SpecEditor keyboard shortcuts', () => {
     })
   })
 
+  it('runs the start-from-spec shortcut without invoking clarification', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'run-shortcut-spec',
+          stable_id: 'run-shortcut-spec-stable-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+    getTerminalStartStateMock.mockReturnValue('starting')
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="run-shortcut-spec" allowClarificationControls />
+      </TestProviders>
+    )
+
+    await pressKey('Enter', { metaKey: true })
+
+    expect(emitUiEvent).toHaveBeenCalledWith(UiEvent.StartAgentFromSpec, {
+      name: 'run-shortcut-spec',
+    })
+    expect(invoke).not.toHaveBeenCalledWith(
+      TauriCommands.SchaltwerkCoreSubmitSpecClarificationPrompt,
+      expect.anything()
+    )
+  })
+
   it('does not run the Clarify shortcut until the spec clarification agent is ready', async () => {
     sessionsMock = [
       {
@@ -428,7 +587,7 @@ describe('SpecEditor keyboard shortcuts', () => {
       </TestProviders>
     )
 
-    await pressKey('Enter', { metaKey: true })
+    await pressKey('R', { metaKey: true, shiftKey: true })
     expect(invoke).not.toHaveBeenCalledWith(
       TauriCommands.SchaltwerkCoreSubmitSpecClarificationPrompt,
       expect.anything()
@@ -445,7 +604,7 @@ describe('SpecEditor keyboard shortcuts', () => {
       }))
     })
 
-    await pressKey('Enter', { metaKey: true })
+    await pressKey('R', { metaKey: true, shiftKey: true })
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith(

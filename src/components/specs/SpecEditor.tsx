@@ -328,8 +328,9 @@ export function SpecEditor({
   }, [allowClarificationControls, specTerminalId])
 
   const canClarify = allowClarificationControls && clarificationAgentReady && !clarifying && !resettingAgent
+  const canRunSpec = allowClarificationControls && !clarifying && !resettingAgent
 
-  const handleRun = useCallback(async () => {
+  const handleClarify = useCallback(async () => {
     if (!canClarify) return
 
     try {
@@ -348,6 +349,19 @@ export function SpecEditor({
       setClarifying(false)
     }
   }, [canClarify, clarificationAgentType, flushPendingSave, sessionName, specTerminalId])
+
+  const handleRunSpec = useCallback(async () => {
+    if (!canRunSpec) return
+
+    try {
+      setError(null)
+      await flushPendingSave()
+      emitUiEvent(UiEvent.StartAgentFromSpec, { name: sessionName })
+    } catch (e: unknown) {
+      logger.error('[SpecEditor] Failed to open start-from-spec flow:', e)
+      setError(String(e))
+    }
+  }, [canRunSpec, flushPendingSave, sessionName])
 
   const handleResetClarificationAgent = useCallback(async () => {
     if (!allowClarificationControls || clarifying || resettingAgent) return
@@ -565,17 +579,33 @@ export function SpecEditor({
         return
       }
 
-      if (isShortcutForAction(e, KeyboardShortcutAction.SubmitDiffComment, keyboardShortcutConfig, { platform }) ||
-          isShortcutForAction(e, KeyboardShortcutAction.RunSpecAgent, keyboardShortcutConfig, { platform })) {
+      if (isShortcutForAction(e, KeyboardShortcutAction.SubmitDiffComment, keyboardShortcutConfig, { platform })) {
         if (viewMode === 'review' && reviewComments.length > 0 && !showCommentForm) {
           e.preventDefault()
           e.stopPropagation()
           void handleFinishReview()
           return
         }
+      }
+
+      if (isShortcutForAction(e, KeyboardShortcutAction.RunSpecAgent, keyboardShortcutConfig, { platform })) {
+        if (viewMode === 'review' && reviewComments.length > 0 && !showCommentForm) {
+          e.preventDefault()
+          e.stopPropagation()
+          void handleFinishReview()
+          return
+        }
+        if (viewMode !== 'review' && canRunSpec) {
+          e.preventDefault()
+          void handleRunSpec()
+          return
+        }
+      }
+
+      if (isShortcutForAction(e, KeyboardShortcutAction.RefineSpec, keyboardShortcutConfig, { platform })) {
         if (viewMode !== 'review' && canClarify) {
           e.preventDefault()
-          void handleRun()
+          void handleClarify()
           return
         }
       }
@@ -596,7 +626,7 @@ export function SpecEditor({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [canClarify, handleRun, handleFinishReview, reviewComments.length, keyboardShortcutConfig, platform, disableFocusShortcut, viewMode, sessionName, setViewMode, showCommentForm, handleCancelComment, handleExitReviewMode])
+  }, [canClarify, canRunSpec, handleClarify, handleRunSpec, handleFinishReview, reviewComments.length, keyboardShortcutConfig, platform, disableFocusShortcut, viewMode, sessionName, setViewMode, showCommentForm, handleCancelComment, handleExitReviewMode])
 
   if (loading) {
     return (
@@ -721,20 +751,32 @@ export function SpecEditor({
             </button>
           )}
           {allowClarificationControls && (
-            <button
-              onClick={() => { void handleRun() }}
-              disabled={!canClarify}
-              className="px-3 py-1 rounded bg-accent-green hover:bg-[var(--color-accent-green-light)] text-text-primary flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={specText.toolbarButton}
-              title={t.specEditor.refine}
-            >
-              <VscPlay />
-              {clarifying ? (
-                <AnimatedText text="loading" size="xs" />
-              ) : (
-                t.specEditor.refine
-              )}
-            </button>
+            <>
+              <button
+                onClick={() => { void handleClarify() }}
+                disabled={!canClarify}
+                className="px-3 py-1 rounded bg-bg-hover hover:bg-bg-hover text-text-primary flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={specText.toolbarButton}
+                title={t.specEditor.refine}
+              >
+                <VscComment />
+                {clarifying ? (
+                  <AnimatedText text="loading" size="xs" />
+                ) : (
+                  t.specEditor.refine
+                )}
+              </button>
+              <button
+                onClick={() => { void handleRunSpec() }}
+                disabled={!canRunSpec}
+                className="px-3 py-1 rounded bg-accent-green hover:bg-[var(--color-accent-green-light)] text-text-primary flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={specText.toolbarButton}
+                title={t.specEditor.run}
+              >
+                <VscPlay />
+                {t.specEditor.run}
+              </button>
+            </>
           )}
           <button
             onClick={() => { void handleCopy() }}

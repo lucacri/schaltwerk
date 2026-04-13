@@ -2,6 +2,15 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Spec Preview: Dedicated Run Button
+
+The spec preview toolbar now cleanly separates clarification from execution:
+
+- **Clarify** is no longer styled as the green run/start action. It uses the neutral secondary-toolbar treatment and keeps the clarification prompt flow unchanged.
+- **Run** is a new green toolbar button that opens the same Start Agent modal used by the sidebar and the empty-spec state via `UiEvent.StartAgentFromSpec`.
+- Pending spec edits are flushed before Run opens the modal so the prefilled content stays in sync.
+- The `Mod+Enter` shortcut now triggers Run in the preview, while `Mod+Shift+R` remains the clarification shortcut.
+
 ## Quick Spec / Custom Mode in NewSessionModal
 
 The favorites row in the New Session modal now hosts two fixed cards:

@@ -917,6 +917,7 @@ export interface Translations {
     editSpecContent: string
     saving: string
     refine: string
+    run: string
     previewMarkdown: string
     editMarkdown: string
     preview: string
