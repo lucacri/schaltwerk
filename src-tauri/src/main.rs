@@ -1370,6 +1370,38 @@ fn main() {
         std::env::var("PATH").unwrap_or_default()
     );
 
+    // Preflight: Lucode requires tmux >= 3.6 for persistent terminals. Fail fast
+    // with a human-readable message if the binary is missing or outdated.
+    match lucode::domains::terminal::tmux_preflight::ensure_tmux_available() {
+        Ok(v) => log::info!("tmux preflight OK: {}.{}{}", v.major, v.minor, v.suffix),
+        Err(e) => {
+            log::error!("{e}");
+            eprintln!("Lucode requires tmux >= 3.6. {e}");
+            std::process::exit(1);
+        }
+    }
+
+    // Provision Lucode's tmux.conf; if the version stamp changed, upstream
+    // per-project servers will be rebuilt on next project open.
+    match lucode::domains::terminal::tmux_bootstrap::ensure_tmux_conf_on_disk() {
+        Ok(state) => {
+            if state.wrote {
+                log::info!(
+                    "Wrote tmux config to {} (previous stamp: {:?})",
+                    state.path.display(),
+                    state.previous_stamp
+                );
+            } else {
+                log::debug!("tmux config up to date at {}", state.path.display());
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to provision tmux.conf: {e}");
+            eprintln!("Lucode failed to write its tmux configuration: {e}");
+            std::process::exit(1);
+        }
+    }
+
     // macOS: disable smart quotes/dashes/text substitutions app-wide
     macos_prefs::disable_smart_substitutions();
     // macOS smart substitutions: handled in frontend for now

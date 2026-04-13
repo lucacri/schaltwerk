@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::time::Duration;
 use tauri::AppHandle;
 
@@ -7,6 +8,12 @@ pub struct CreateParams {
     pub id: String,
     pub cwd: String,
     pub app: Option<ApplicationSpec>,
+    /// When `true`, the terminal state skips Lucode's hydration ring buffer;
+    /// snapshots return an empty payload and the caller's backend (e.g. tmux)
+    /// is expected to own scrollback. Defaults to `false` so plain local PTYs
+    /// keep their existing hydration semantics.
+    #[serde(default)]
+    pub disable_hydration_buffer: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,6 +21,10 @@ pub struct ApplicationSpec {
     pub command: String,
     pub args: Vec<String>,
     pub env: Vec<(String, String)>,
+    /// Currently not consulted by any `TerminalBackend` implementation —
+    /// spawning is fire-and-forget and readiness is inferred from PTY output,
+    /// not a timer. The value is retained in the wire format for forward
+    /// compatibility; passing `0` or any other value has no effect today.
     pub ready_timeout_ms: u64,
 }
 
@@ -87,6 +98,12 @@ pub trait TerminalBackend: Send + Sync {
     async fn force_kill_all(&self) -> Result<(), String> {
         Ok(())
     }
+    /// Kill backend-owned sessions whose name isn't prefixed by any of
+    /// `live_bases`. Defaults to a no-op for backends that have no
+    /// persistent sessions.
+    async fn gc_orphans(&self, _live_bases: &HashSet<String>) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
 }
 
 pub mod ansi;
@@ -101,18 +118,26 @@ pub mod manager;
 pub mod nvm;
 pub mod shell_invocation;
 pub mod submission;
+pub mod tmux;
+pub mod tmux_bootstrap;
+pub mod tmux_cmd;
+pub mod tmux_conf;
+pub mod tmux_preflight;
 pub mod utf8_stream;
 pub mod visible;
 
 #[cfg(test)]
 pub mod manager_test;
 
-pub use local::LocalPtyAdapter;
+// LocalPtyAdapter is the internal PTY core used by TmuxAdapter (and by some
+// low-level tests). It is NOT a user-facing backend — only TmuxAdapter is.
+pub(crate) use local::LocalPtyAdapter;
 pub use manager::TerminalManager;
 pub use shell_invocation::{
     ShellInvocation, build_login_shell_invocation, build_login_shell_invocation_with_shell,
     sh_quote_string, shell_invocation_to_posix,
 };
+pub use tmux::TmuxAdapter;
 
 use std::sync::RwLock;
 use std::{env, path::Path, path::PathBuf};

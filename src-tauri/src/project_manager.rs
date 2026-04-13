@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow};
 use log::{debug, info, warn};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -51,8 +51,14 @@ impl Project {
     pub fn new(path: PathBuf) -> Result<Self> {
         info!("Creating new project for path: {}", path.display());
 
-        // Each project gets its own terminal manager
-        let terminal_manager = Arc::new(TerminalManager::new_local());
+        // Each project gets its own tmux-backed terminal manager so that agent
+        // terminals outlive the Lucode process and can be reattached after a
+        // crash/restart. `new_for_project` computes a stable per-project tmux
+        // socket and provisions Lucode's tmux.conf.
+        let terminal_manager = Arc::new(
+            TerminalManager::new_for_project(&path)
+                .map_err(|e| anyhow!("Failed to initialize tmux-backed terminal manager: {e}"))?,
+        );
 
         // Get the global app data directory for project databases
         let db_path = Self::get_project_db_path(&path)?;
@@ -114,6 +120,68 @@ impl Project {
         let project_data_dir = data_dir.join("lucode").join("projects").join(folder_name);
 
         Ok(project_data_dir.join("sessions.db"))
+    }
+
+    /// Compute the set of wire-ID bases for every Lucode session currently
+    /// in the project DB. Each base is the shared prefix of a session's
+    /// top/bottom/bottom-N terminal IDs, so a tmux session whose name
+    /// starts with a live base — regardless of pane suffix — is considered
+    /// "in use" during GC.
+    pub async fn live_wire_id_bases(&self) -> Result<HashSet<String>> {
+        use crate::shared::terminal_id::{
+            session_terminal_base, session_terminal_base_legacy,
+            session_terminal_base_legacy_hashed, session_terminal_base_v1,
+        };
+
+        let core = self.schaltwerk_core.read().await;
+        let manager = core.session_manager();
+        let sessions = manager
+            .list_sessions()
+            .map_err(|e| anyhow!("Failed to list sessions for GC base snapshot: {e}"))?;
+        let mut out: HashSet<String> = HashSet::with_capacity(sessions.len() * 4);
+        for s in sessions {
+            // Cover every historical hash format so mid-upgrade orphans aren't
+            // collected and killed out from under an attached agent.
+            out.insert(session_terminal_base(&s.name));
+            out.insert(session_terminal_base_v1(&s.name));
+            out.insert(session_terminal_base_legacy_hashed(&s.name));
+            out.insert(session_terminal_base_legacy(&s.name));
+        }
+        Ok(out)
+    }
+
+    /// Ask the terminal backend to prune any persistent sessions whose name
+    /// doesn't correspond to a live DB session. No-op when the backend
+    /// doesn't carry persistent state. Failures are logged but don't block
+    /// project open.
+    pub async fn gc_orphaned_tmux_sessions(&self) {
+        let live = match self.live_wire_id_bases().await {
+            Ok(s) => s,
+            Err(e) => {
+                warn!("Could not enumerate live sessions for tmux GC: {e}");
+                return;
+            }
+        };
+        match self
+            .terminal_manager
+            .gc_orphaned_backend_sessions(&live)
+            .await
+        {
+            Ok(killed) => {
+                if !killed.is_empty() {
+                    info!(
+                        "Pruned {} orphaned tmux session(s) for project {}: {:?}",
+                        killed.len(),
+                        self.path.display(),
+                        killed
+                    );
+                }
+            }
+            Err(e) => warn!(
+                "tmux session GC failed for project {}: {e}",
+                self.path.display()
+            ),
+        }
     }
 
     #[cfg(test)]
@@ -201,12 +269,12 @@ impl ProjectManager {
         // Check if project already exists.
         // IMPORTANT: Don't hold the projects lock while awaiting the current_project lock; this can deadlock
         // with readers that look up the current project while holding the current_project lock.
-        let project = {
+        let (project, is_fresh) = {
             let mut projects = self.projects.write().await;
 
             if let Some(existing) = projects.get(&path) {
                 info!("♻️ Using existing project instance for: {}", path.display());
-                existing.clone()
+                (existing.clone(), false)
             } else {
                 info!("🆕 Creating new project instance for: {}", path.display());
                 let new_project = match Project::new(path.clone()) {
@@ -217,7 +285,7 @@ impl ProjectManager {
                     }
                 };
                 projects.insert(path.clone(), new_project.clone());
-                new_project
+                (new_project, true)
             }
         };
 
@@ -231,6 +299,12 @@ impl ProjectManager {
                 "Failed to migrate legacy Lucode Claude hooks for {}: {e}",
                 path.display()
             );
+        }
+
+        // On a fresh project load, prune any tmux sessions left over from
+        // previously-deleted Lucode sessions on this project's socket.
+        if is_fresh {
+            project.gc_orphaned_tmux_sessions().await;
         }
 
         // Update current project (outside the projects lock).

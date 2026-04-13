@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use tauri::AppHandle;
@@ -16,10 +17,21 @@ pub struct ProjectTerminalGateway {
 
 impl ProjectTerminalGateway {
     /// Create a new gateway with a fresh terminal manager instance.
+    ///
+    /// Defaults to the local PTY backend; production callers should prefer
+    /// `new_for_project` so agent terminals outlive the Lucode process.
     pub fn new() -> Self {
         Self {
             manager: Arc::new(TerminalManager::new_local()),
         }
+    }
+
+    /// Create a new gateway backed by the per-project tmux server. Fails fast
+    /// if tmux is missing or the config cannot be written to disk.
+    pub fn new_for_project(project_path: &Path) -> Result<Self, String> {
+        Ok(Self {
+            manager: Arc::new(TerminalManager::new_for_project(project_path)?),
+        })
     }
 
     /// Create a gateway from an existing terminal manager instance.

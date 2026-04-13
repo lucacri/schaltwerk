@@ -139,6 +139,7 @@ pub(super) struct TerminalState {
     pub(super) buffer: Vec<u8>,
     pub(super) seq: u64,
     pub(super) start_seq: u64,
+    pub(super) max_buffer_size: usize,
     pub(super) last_output: SystemTime,
     pub(super) screen: VisibleScreen,
     pub(super) idle_detector: IdleDetector,
@@ -417,6 +418,7 @@ impl LocalPtyAdapter {
             buffer: error_bytes,
             seq,
             start_seq: 0,
+            max_buffer_size: max_buffer_size_for_terminal(&id),
             last_output: SystemTime::now(),
             screen: VisibleScreen::new(rows, cols, id.clone()),
             idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
@@ -704,22 +706,24 @@ impl LocalPtyAdapter {
             if let Some(state) = terminals.get_mut(id) {
                 let total_len = sanitized.len();
                 let mut processed = 0usize;
-                let max_size = max_buffer_size_for_terminal(id);
-
                 let apply_segment = |state: &mut TerminalState, segment: &[u8]| {
                     if segment.is_empty() {
                         return;
                     }
 
-                    state.buffer.extend_from_slice(segment);
                     state.screen.feed_bytes(segment);
                     state.seq = state.seq.saturating_add(segment.len() as u64);
                     state.last_output = SystemTime::now();
 
-                    if state.buffer.len() > max_size {
-                        let excess = state.buffer.len() - max_size;
-                        state.buffer.drain(0..excess);
-                        state.start_seq = state.start_seq.saturating_add(excess as u64);
+                    if state.max_buffer_size == 0 {
+                        state.start_seq = state.seq;
+                    } else {
+                        state.buffer.extend_from_slice(segment);
+                        if state.buffer.len() > state.max_buffer_size {
+                            let excess = state.buffer.len() - state.max_buffer_size;
+                            state.buffer.drain(0..excess);
+                            state.start_seq = state.start_seq.saturating_add(excess as u64);
+                        }
                     }
 
                     state.idle_detector.observe_activity(Instant::now());
@@ -1092,6 +1096,7 @@ impl TerminalBackend for LocalPtyAdapter {
                 buffer: error_bytes.clone(),
                 seq: error_len,
                 start_seq: 0,
+                max_buffer_size: max_buffer_size_for_terminal(&id),
                 last_output: SystemTime::now(),
                 screen: VisibleScreen::new(rows, cols, id.clone()),
                 idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
@@ -1169,6 +1174,11 @@ impl TerminalBackend for LocalPtyAdapter {
             buffer: Vec::new(),
             seq: 0,
             start_seq: 0,
+            max_buffer_size: if params.disable_hydration_buffer {
+                0
+            } else {
+                max_buffer_size_for_terminal(&id)
+            },
             last_output: SystemTime::now(),
             screen: VisibleScreen::new(rows, cols, id.clone()),
             idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
@@ -1449,6 +1459,13 @@ impl TerminalBackend for LocalPtyAdapter {
     async fn snapshot(&self, id: &str, from_seq: Option<u64>) -> Result<TerminalSnapshot, String> {
         let terminals = self.terminals.read().await;
         if let Some(state) = terminals.get(id) {
+            if state.max_buffer_size == 0 {
+                return Ok(TerminalSnapshot {
+                    seq: state.seq,
+                    start_seq: state.seq,
+                    data: Vec::new(),
+                });
+            }
             let start_seq = state.start_seq;
             let seq = state.seq;
             let from_requested = from_seq.unwrap_or(start_seq);
@@ -1751,6 +1768,7 @@ mod tests {
             id: id.clone(),
             cwd: test_temp_dir(),
             app: None,
+            disable_hydration_buffer: false,
         };
         adapter.create(params).await.unwrap();
 
@@ -1769,6 +1787,7 @@ mod tests {
             id: id.clone(),
             cwd: test_temp_dir(),
             app: None,
+            disable_hydration_buffer: false,
         };
 
         adapter.create_with_size(params, 120, 40).await.unwrap();
@@ -1787,6 +1806,7 @@ mod tests {
             id: id.clone(),
             cwd: test_temp_dir(),
             app: None,
+            disable_hydration_buffer: false,
         };
 
         adapter.create(params).await.unwrap();
@@ -1817,6 +1837,7 @@ mod tests {
                 env: vec![("CUSTOM_VAR".to_string(), "custom_value".to_string())],
                 ready_timeout_ms: 1000,
             }),
+            disable_hydration_buffer: false,
         };
 
         adapter.create(params).await.unwrap();
@@ -1834,6 +1855,7 @@ mod tests {
             id: id.clone(),
             cwd: test_temp_dir(),
             app: None,
+            disable_hydration_buffer: false,
         };
 
         adapter.create(params.clone()).await.unwrap();
@@ -1859,6 +1881,7 @@ mod tests {
                 id: id_clone1.clone(),
                 cwd: cwd_clone1,
                 app: None,
+                disable_hydration_buffer: false,
             };
             adapter_clone1.create(params).await.unwrap();
         });
@@ -1871,6 +1894,7 @@ mod tests {
                 id: id_clone2.clone(),
                 cwd: cwd_clone2,
                 app: None,
+                disable_hydration_buffer: false,
             };
             adapter_clone2.create(params).await.unwrap();
         });
@@ -1900,6 +1924,7 @@ mod tests {
                 env: vec![],
                 ready_timeout_ms: 1000,
             }),
+            disable_hydration_buffer: false,
         };
 
         let result = adapter.create(params).await;
@@ -1916,6 +1941,7 @@ mod tests {
             id: id.clone(),
             cwd: test_temp_dir(),
             app: None,
+            disable_hydration_buffer: false,
         };
 
         adapter.create(params).await.unwrap();
@@ -1943,6 +1969,7 @@ mod tests {
             id: id.clone(),
             cwd: test_temp_dir(),
             app: None,
+            disable_hydration_buffer: false,
         };
 
         adapter.create_with_size(params, 100, 30).await.unwrap();
@@ -1991,6 +2018,7 @@ mod tests {
             id: id.clone(),
             cwd: test_temp_dir(),
             app: None,
+            disable_hydration_buffer: false,
         };
 
         adapter.create(params).await.unwrap();
@@ -2021,6 +2049,7 @@ mod tests {
             id: id.clone(),
             cwd: test_temp_dir(),
             app: None,
+            disable_hydration_buffer: false,
         };
 
         adapter.create(params).await.unwrap();
@@ -2075,6 +2104,7 @@ mod tests {
             id: id.clone(),
             cwd: test_temp_dir(),
             app: None,
+            disable_hydration_buffer: false,
         };
 
         adapter.create(params).await.unwrap();
@@ -2088,6 +2118,7 @@ mod tests {
             buffer,
             seq,
             start_seq: 0,
+            max_buffer_size: DEFAULT_MAX_BUFFER_SIZE,
             last_output: SystemTime::now(),
             screen: VisibleScreen::new(24, 80, id.to_string()),
             idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.to_string()),
@@ -2143,6 +2174,88 @@ mod tests {
         let snapshot = adapter.snapshot(&id, None).await.unwrap();
         assert_eq!(snapshot.data.len(), 1024);
         assert_eq!(snapshot.data, small_data);
+    }
+
+    #[tokio::test]
+    async fn test_create_with_disable_hydration_flag_zeroes_max_buffer_size() {
+        let adapter = LocalPtyAdapter::new();
+        let id = unique_id("disable-hyd-flag");
+
+        let params = CreateParams {
+            id: id.clone(),
+            cwd: test_temp_dir(),
+            app: None,
+            disable_hydration_buffer: true,
+        };
+        adapter.create(params).await.unwrap();
+
+        {
+            let terminals = adapter.terminals.read().await;
+            let state = terminals.get(&id).expect("terminal state should exist");
+            assert_eq!(
+                state.max_buffer_size, 0,
+                "disable_hydration_buffer=true must zero the hydration window"
+            );
+        }
+
+        safe_close(&adapter, &id).await;
+    }
+
+    #[tokio::test]
+    async fn test_create_without_disable_hydration_flag_keeps_default_buffer() {
+        let adapter = LocalPtyAdapter::new();
+        let id = unique_id("default-hyd-flag");
+
+        let params = CreateParams {
+            id: id.clone(),
+            cwd: test_temp_dir(),
+            app: None,
+            disable_hydration_buffer: false,
+        };
+        adapter.create(params).await.unwrap();
+
+        {
+            let terminals = adapter.terminals.read().await;
+            let state = terminals.get(&id).expect("terminal state should exist");
+            assert!(
+                state.max_buffer_size > 0,
+                "default CreateParams must keep the hydration window enabled"
+            );
+        }
+
+        safe_close(&adapter, &id).await;
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_is_empty_when_hydration_buffer_disabled() {
+        let adapter = LocalPtyAdapter::new();
+        let id = unique_id("hydration-disabled");
+
+        {
+            let mut terminals = adapter.terminals.write().await;
+            terminals.insert(
+                id.clone(),
+                TerminalState {
+                    buffer: Vec::new(),
+                    seq: 42,
+                    start_seq: 42,
+                    max_buffer_size: 0,
+                    last_output: SystemTime::now(),
+                    screen: VisibleScreen::new(24, 80, id.clone()),
+                    idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
+                    session_id: None,
+                    attention_profile: None,
+                    attention_kind: None,
+                    pending_notifications: Vec::new(),
+                    pending_window_titles: Vec::new(),
+                },
+            );
+        }
+
+        let snapshot = adapter.snapshot(&id, None).await.unwrap();
+        assert_eq!(snapshot.seq, 42);
+        assert_eq!(snapshot.start_seq, 42);
+        assert!(snapshot.data.is_empty());
     }
 
     #[tokio::test]
@@ -2307,6 +2420,7 @@ mod tests {
                     buffer: Vec::new(),
                     seq: 0,
                     start_seq: 0,
+                    max_buffer_size: DEFAULT_MAX_BUFFER_SIZE,
                     last_output: SystemTime::now(),
                     screen: VisibleScreen::new(24, 80, id.clone()),
                     idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),
@@ -2349,6 +2463,7 @@ mod tests {
                     buffer: Vec::new(),
                     seq: 0,
                     start_seq: 0,
+                    max_buffer_size: DEFAULT_MAX_BUFFER_SIZE,
                     last_output: SystemTime::now(),
                     screen: VisibleScreen::new(24, 80, id.clone()),
                     idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.clone()),

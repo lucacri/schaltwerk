@@ -5,7 +5,6 @@ pub mod git;
 pub mod merge;
 pub mod network;
 pub mod power;
-pub mod projects;
 pub mod sessions;
 pub mod settings;
 pub mod terminal;

@@ -758,6 +758,7 @@ mod tests {
                 env: Vec::new(),
                 ready_timeout_ms: 0,
             }),
+            disable_hydration_buffer: false,
         };
 
         let spec = super::build_command_spec(&params, 80, 24)

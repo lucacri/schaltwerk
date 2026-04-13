@@ -881,7 +881,7 @@ mod tests {
     }
 
     #[test]
-    fn test_terminal_buffer_sizes_are_compact() {
+    fn test_local_terminal_buffer_sizes_preserve_hydration_window() {
         let top_id = "session-longhistory~deadbeef-top";
         let bottom_id = "session-longhistory~deadbeef-bottom";
 
@@ -890,12 +890,12 @@ mod tests {
 
         assert_eq!(
             top_size, bottom_size,
-            "Agent and user terminals should use the same compact buffer. top={top_size} bottom={bottom_size}"
+            "Agent and user terminals should use the same local buffer. top={top_size} bottom={bottom_size}"
         );
         assert_eq!(
             top_size,
             512 * 1024,
-            "Buffer should be 512KB, got {top_size} bytes"
+            "Local PTYs keep the legacy hydration window; tmux attach clients disable it per terminal state"
         );
     }
 

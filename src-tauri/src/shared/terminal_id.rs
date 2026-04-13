@@ -169,6 +169,16 @@ pub fn previous_hashed_terminal_id_for_session_bottom(name: &str) -> String {
     format!("{}-bottom", session_terminal_base_legacy_hashed(name))
 }
 
+/// True iff `tmux_session_name` follows one of the patterns Lucode uses for
+/// its own tmux sessions. Any tmux session whose name doesn't match one of
+/// these prefixes belongs to another tool sharing the socket and must be
+/// left alone.
+pub fn is_lucode_owned_tmux_session(tmux_session_name: &str) -> bool {
+    tmux_session_name.starts_with("session-")
+        || tmux_session_name.starts_with("orchestrator-")
+        || tmux_session_name.starts_with("spec-orchestrator-")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,7 +303,10 @@ mod tests {
 
     #[test]
     fn sanitize_session_name_unicode() {
-        assert_eq!(sanitize_session_name("\u{00E9}t\u{00E9}"), "\u{00E9}t\u{00E9}");
+        assert_eq!(
+            sanitize_session_name("\u{00E9}t\u{00E9}"),
+            "\u{00E9}t\u{00E9}"
+        );
     }
 
     #[test]
@@ -305,7 +318,10 @@ mod tests {
 
     #[test]
     fn session_terminal_hash_differs_for_different_inputs() {
-        assert_ne!(session_terminal_hash("alpha"), session_terminal_hash("beta"));
+        assert_ne!(
+            session_terminal_hash("alpha"),
+            session_terminal_hash("beta")
+        );
     }
 
     #[test]
@@ -433,5 +449,23 @@ mod tests {
         let bottom = legacy_terminal_id_for_session_bottom("my-session");
         assert_eq!(top, "session-my-session-top");
         assert_eq!(bottom, "session-my-session-bottom");
+    }
+
+    #[test]
+    fn is_lucode_owned_tmux_session_recognizes_wire_id_patterns() {
+        assert!(is_lucode_owned_tmux_session("session-alpha~abcd1234-top"));
+        assert!(is_lucode_owned_tmux_session(
+            "session-alpha~abcd1234-bottom-2"
+        ));
+        assert!(is_lucode_owned_tmux_session("orchestrator-proj-abcdef-top"));
+        assert!(is_lucode_owned_tmux_session("spec-orchestrator-foo-top"));
+    }
+
+    #[test]
+    fn is_lucode_owned_tmux_session_rejects_foreign_names() {
+        assert!(!is_lucode_owned_tmux_session("my-work"));
+        assert!(!is_lucode_owned_tmux_session("vim"));
+        assert!(!is_lucode_owned_tmux_session(""));
+        assert!(!is_lucode_owned_tmux_session("other-session"));
     }
 }

@@ -1,9 +1,11 @@
+pub mod app_paths;
 pub mod branch;
 pub mod cli;
 pub mod merge_snapshot_gateway;
 pub mod network;
 pub mod permissions;
 pub mod platform;
+pub mod project_hash;
 pub mod session_metadata_gateway;
 pub mod terminal_gateway;
 pub mod terminal_id;

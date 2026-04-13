@@ -13,6 +13,16 @@ use std::{
 use tauri::AppHandle;
 use tokio::sync::RwLock;
 
+/// Prefix for per-project tmux sockets created by this backend. The `v2`
+/// generation marker is intentional: it prevents any tmux server left behind
+/// by a pre-tmux Lucode build (or a hypothetical future incompatible
+/// implementation) from being reattached by this one.
+const TMUX_SOCKET_PREFIX: &str = "lucode-v2-";
+
+fn project_tmux_socket_name(project_hash16: &str) -> String {
+    format!("{TMUX_SOCKET_PREFIX}{project_hash16}")
+}
+
 /// Parameters for creating a terminal with an application and specific size
 pub struct CreateTerminalWithAppAndSizeParams {
     pub id: String,
@@ -94,6 +104,33 @@ impl TerminalManager {
 
     pub fn new_local() -> Self {
         Self::new(Arc::new(super::LocalPtyAdapter::new()))
+    }
+
+    /// Build a terminal manager backed by a per-project tmux server. Fails fast
+    /// if tmux is missing, outdated, or cannot provision its config on disk.
+    ///
+    /// This is the production factory; `new_local` is retained for tests that
+    /// need direct PTY spawning without a tmux round-trip.
+    pub fn new_for_project(project_path: &Path) -> Result<Self, String> {
+        use crate::domains::terminal::TmuxAdapter;
+        use crate::domains::terminal::tmux_bootstrap::ensure_tmux_conf_on_disk;
+        use crate::domains::terminal::tmux_cmd::make_system_cli;
+        use crate::shared::project_hash::project_hash16;
+
+        let hash = project_hash16(project_path).map_err(|e| e.to_string())?;
+        let conf = ensure_tmux_conf_on_disk()?;
+        let cli = make_system_cli(project_tmux_socket_name(&hash), conf.path.clone());
+        Ok(Self::new(Arc::new(TmuxAdapter::new(cli))))
+    }
+
+    /// Ask the backend to prune any persistent sessions whose name isn't
+    /// prefixed by one of `live_bases` (typically the wire-ID bases of the
+    /// currently active Lucode sessions). Returns the names killed.
+    pub async fn gc_orphaned_backend_sessions(
+        &self,
+        live_bases: &HashSet<String>,
+    ) -> Result<Vec<String>, String> {
+        self.backend.gc_orphans(live_bases).await
     }
 
     async fn register_terminal_session(&self, id: &str, session: SessionKey) {
@@ -226,6 +263,7 @@ impl TerminalManager {
                 id: id.clone(),
                 cwd: resolved_cwd.clone(),
                 app: None,
+                disable_hydration_buffer: false,
             }
         } else {
             // Create a shell with environment variables set (respect user-configured shell)
@@ -242,6 +280,7 @@ impl TerminalManager {
                     env,
                     ready_timeout_ms: 5000,
                 }),
+                disable_hydration_buffer: false,
             }
         };
 
@@ -314,6 +353,7 @@ impl TerminalManager {
                 id: id.clone(),
                 cwd: resolved_cwd.clone(),
                 app: None,
+                disable_hydration_buffer: false,
             }
         } else {
             // Create a shell with environment variables set (respect user-configured shell)
@@ -330,6 +370,7 @@ impl TerminalManager {
                     env,
                     ready_timeout_ms: 5000,
                 }),
+                disable_hydration_buffer: false,
             }
         };
 
@@ -373,6 +414,7 @@ impl TerminalManager {
             id: id.clone(),
             cwd: resolved_cwd.clone(),
             app: Some(app_spec),
+            disable_hydration_buffer: false,
         };
 
         self.backend.create(params).await?;
@@ -420,6 +462,7 @@ impl TerminalManager {
             id: id.clone(),
             cwd: resolved_cwd.clone(),
             app: Some(app_spec),
+            disable_hydration_buffer: false,
         };
 
         self.backend
@@ -638,6 +681,17 @@ mod tests {
 
     fn local_manager() -> TerminalManager {
         TerminalManager::new_local()
+    }
+
+    #[test]
+    fn project_tmux_socket_name_uses_v2_generation_prefix() {
+        let got = project_tmux_socket_name("abcdef0123456789");
+        assert_eq!(
+            got, "lucode-v2-abcdef0123456789",
+            "socket name must carry the v2 generation marker so pre-tmux-backend \
+             Lucode servers can't be silently reattached by this implementation"
+        );
+        assert!(got.starts_with(TMUX_SOCKET_PREFIX));
     }
 
     struct FakeBackend {
