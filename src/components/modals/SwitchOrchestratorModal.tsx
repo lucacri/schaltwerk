@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { ModelSelector } from '../inputs/ModelSelector'
 import { useClaudeSession } from '../../hooks/useClaudeSession'
 import { useEnabledAgents } from '../../hooks/useEnabledAgents'
@@ -44,8 +44,14 @@ export function SwitchOrchestratorModal({
   const derivedScope: 'orchestrator' | 'session' =
     scope ?? (targetSessionId ? 'session' : 'orchestrator')
   const isOrchestrator = derivedScope === 'orchestrator'
-  const allowedAgents = filterAgents(isOrchestrator ? ORCHESTRATOR_ALLOWED_AGENTS : SESSION_ALLOWED_AGENTS)
-  const selectableAgents = allowedAgents.length > 0 ? allowedAgents : [DEFAULT_AGENT]
+  const allowedAgents = useMemo(
+    () => filterAgents(isOrchestrator ? ORCHESTRATOR_ALLOWED_AGENTS : SESSION_ALLOWED_AGENTS),
+    [filterAgents, isOrchestrator]
+  )
+  const selectableAgents = useMemo(
+    () => (allowedAgents.length > 0 ? allowedAgents : [DEFAULT_AGENT]),
+    [allowedAgents]
+  )
   const title = isOrchestrator ? t.switchAgentModal.titleOrchestrator : t.switchAgentModal.titleSession
   const warningBody = isOrchestrator
     ? t.switchAgentModal.warningOrchestrator
@@ -114,11 +120,17 @@ export function SwitchOrchestratorModal({
         return
       }
 
+      const target = e.target instanceof Element ? e.target : null
+      const targetIsModelSelector = target?.closest('[data-model-selector]') !== null
+
       if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()
         onClose()
       } else if (e.key === 'Enter') {
+        if (targetIsModelSelector) {
+          return
+        }
         e.preventDefault()
         e.stopPropagation()
         switchRef.current()

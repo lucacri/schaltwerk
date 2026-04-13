@@ -343,6 +343,7 @@ export function SessionConfigurationPanel({
                             onAutonomyChange={handleAutonomyChange}
                             showShortcutHint={shouldShowShortcutHint}
                             allowedAgents={selectableAgents}
+                            variant="compact"
                         />
                     </div>
                 </div>

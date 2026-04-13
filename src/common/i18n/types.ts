@@ -1,3 +1,5 @@
+import type { AgentType } from '../../types/session'
+
 export type Language = 'en' | 'zh'
 
 export interface Translations {
@@ -1434,9 +1436,15 @@ export interface Translations {
   modelSelector: {
     checkingAvailability: string
     notInstalled: string
+    notInstalledLabel: string
     availableAt: string
     available: string
+    availableLabel: string
     permissionHandling: string
+    agents: Record<AgentType, {
+      label: string
+      description: string
+    }>
   }
   specMetadataPanel: {
     title: string

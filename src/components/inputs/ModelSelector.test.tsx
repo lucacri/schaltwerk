@@ -2,15 +2,19 @@ import { render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import userEvent from '@testing-library/user-event'
 import { ModelSelector } from './ModelSelector'
-import { AgentType } from '../../types/session'
+import { AgentType, AGENT_TYPES } from '../../types/session'
 
-// Mock the useAgentAvailability hook
+const availabilityMock = vi.hoisted(() => ({
+  availableAgents: new Set<string>(),
+  loading: false,
+}))
+
 vi.mock('../../hooks/useAgentAvailability', () => ({
   useAgentAvailability: () => ({
-    isAvailable: vi.fn().mockReturnValue(true),
-    getRecommendedPath: vi.fn().mockReturnValue('/usr/local/bin/agent'),
-    getInstallationMethod: vi.fn().mockReturnValue('Homebrew'),
-    loading: false,
+    isAvailable: vi.fn((agent: string) => availabilityMock.availableAgents.has(agent)),
+    getRecommendedPath: vi.fn((agent: string) => availabilityMock.availableAgents.has(agent) ? `/usr/local/bin/${agent}` : null),
+    getInstallationMethod: vi.fn((agent: string) => availabilityMock.availableAgents.has(agent) ? 'Homebrew' : null),
+    loading: availabilityMock.loading,
     availability: {},
     refreshAvailability: vi.fn(),
     refreshSingleAgent: vi.fn(),
@@ -30,11 +34,15 @@ function setup(options: {
   initial?: AgentType
   disabled?: boolean
   allowedAgents?: AgentType[]
+  agentSelectionDisabled?: boolean
+  variant?: 'grid' | 'compact'
 } = {}) {
   const {
     initial = 'claude',
     disabled = false,
     allowedAgents,
+    agentSelectionDisabled = false,
+    variant,
   } = options
   const onChange = vi.fn()
 
@@ -51,7 +59,9 @@ function setup(options: {
         value={value}
         onChange={handleChange}
         disabled={disabled}
+        agentSelectionDisabled={agentSelectionDisabled}
         allowedAgents={allowedAgents}
+        variant={variant}
       />
     )
   }
@@ -61,84 +71,95 @@ function setup(options: {
 }
 
 describe('ModelSelector', () => {
-  test('renders dropdown button with current model label and color indicator', () => {
-    setup()
-    const toggle = screen.getByRole('button', { name: /Claude/i })
-    expect(toggle).toBeInTheDocument()
-
-    // Check that the button contains the model label
-    expect(toggle.textContent).toContain('Claude')
+  beforeEach(() => {
+    availabilityMock.availableAgents = new Set(AGENT_TYPES)
+    availabilityMock.loading = false
   })
 
-  test('opens menu on click and renders options', async () => {
-    const user = userEvent.setup()
+  test('renders all supported agents as visible cards without opening a dropdown', () => {
     setup()
 
-    const toggle = screen.getByRole('button', { name: /Claude/i })
-    await user.click(toggle)
-
-    // Ensure all options are present
-    expect(screen.getAllByRole('button', { name: 'Claude' })).toHaveLength(2)
-    expect(screen.getByRole('button', { name: 'GitHub Copilot' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'OpenCode' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Gemini' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Codex' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Claude\b/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^GitHub Copilot\b/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^OpenCode\b/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Gemini\b/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Codex\b/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Terminal Only\b/i })).toBeInTheDocument()
   })
 
-  test('changes selection on option click and closes menu', async () => {
+  test('renders localized agent descriptions on cards', () => {
+    setup({ allowedAgents: ['claude', 'opencode'] })
+
+    expect(screen.getByRole('button', { name: /^Claude\b/i })).toHaveTextContent("Anthropic's powerful agent")
+    expect(screen.getByRole('button', { name: /^OpenCode\b/i })).toHaveTextContent('Open source coding assistant')
+  })
+
+  test('marks the selected agent as pressed', () => {
+    setup()
+
+    expect(screen.getByRole('button', { name: /^Claude\b/i })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^OpenCode\b/i })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  test('changes selection when an agent card is clicked', async () => {
     const user = userEvent.setup()
     const { onChange } = setup()
 
-    await user.click(screen.getByRole('button', { name: /Claude/i }))
-    await user.click(screen.getByRole('button', { name: 'OpenCode' }))
+    await user.click(screen.getByRole('button', { name: /^OpenCode\b/i }))
 
     expect(onChange).toHaveBeenCalledWith('opencode')
-
-    // menu should close (options disappear)
-    expect(screen.queryAllByRole('button', { name: 'OpenCode' })).toHaveLength(1)
   })
 
-  test('keyboard navigation: Enter opens menu, ArrowDown navigates, Enter selects', async () => {
+  test('shows unavailable status while keeping the agent selectable', async () => {
     const user = userEvent.setup()
+    availabilityMock.availableAgents = new Set(['claude'])
     const { onChange } = setup()
 
-    const toggle = screen.getByRole('button', { name: /Claude/i })
-    toggle.focus()
-    await user.keyboard('{Enter}')
+    const opencode = screen.getByRole('button', { name: /^OpenCode\b/i })
+    expect(opencode).not.toBeDisabled()
+    expect(opencode).toHaveTextContent('Not installed')
 
-    // Move to second option (GitHub Copilot) using arrow down
-    await user.keyboard('{ArrowDown}')
-    await user.keyboard('{Enter}')
+    await user.click(opencode)
 
-    expect(onChange).toHaveBeenCalledWith('copilot')
+    expect(onChange).toHaveBeenCalledWith('opencode')
   })
 
-  test('disabled state prevents opening and interaction', async () => {
+  test('includes card status in the accessible name', () => {
+    availabilityMock.availableAgents = new Set(['claude'])
+    setup()
+
+    expect(screen.getByRole('button', { name: /OpenCode.*Not installed/i })).toBeInTheDocument()
+  })
+
+  test('keeps the card focus ring visible despite clipped card content', () => {
+    setup()
+
+    expect(screen.getByRole('button', { name: /Claude.*Available/i })).toHaveClass('focus-visible:ring-2')
+  })
+
+  test('disabled state prevents card interaction', async () => {
     const user = userEvent.setup()
-    setup({ disabled: true })
+    const { onChange } = setup({ disabled: true })
 
-    const toggle = screen.getByRole('button', { name: /Claude/i })
-    expect(toggle).toBeDisabled()
+    const opencode = screen.getByRole('button', { name: /^OpenCode\b/i })
+    expect(opencode).toBeDisabled()
 
-    await user.click(toggle)
-    expect(screen.queryAllByRole('button', { name: 'OpenCode' })).toHaveLength(0)
+    await user.click(opencode)
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   test('default model selection reflects initial value', () => {
     setup({ initial: 'opencode' })
-    const toggle = screen.getByRole('button', { name: /OpenCode/i })
-    expect(toggle).toBeInTheDocument()
-    expect(toggle.textContent).toContain('OpenCode')
+    expect(screen.getByRole('button', { name: /^OpenCode\b/i })).toHaveAttribute('aria-pressed', 'true')
   })
 
   test('falls back to default model when given invalid value', () => {
     const onChange = vi.fn()
-    // Force an invalid value through casts to exercise fallback
     render(<ModelSelector value={'invalid' as unknown as AgentType} onChange={onChange} />)
-    expect(screen.getByRole('button', { name: /Claude/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Claude\b/i })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  test('mocks external model API calls (no network during interaction)', async () => {
+  test('mocks external model API calls with no network during interaction', async () => {
     const user = userEvent.setup()
     const fetchSpy = vi.spyOn(global as unknown as { fetch: typeof fetch }, 'fetch').mockResolvedValue({
       ok: true,
@@ -149,8 +170,7 @@ describe('ModelSelector', () => {
     } as Response)
 
     const { onChange } = setup()
-    await user.click(screen.getByRole('button', { name: /Claude/i }))
-    await user.click(screen.getByRole('button', { name: 'OpenCode' }))
+    await user.click(screen.getByRole('button', { name: /^OpenCode\b/i }))
 
     expect(onChange).toHaveBeenCalledWith('opencode')
     expect(fetchSpy).not.toHaveBeenCalled()
@@ -158,99 +178,55 @@ describe('ModelSelector', () => {
     fetchSpy.mockRestore()
   })
 
-  test('can select Gemini model', async () => {
-    const user = userEvent.setup()
-    const { onChange } = setup()
-
-    await user.click(screen.getByRole('button', { name: /Claude/i }))
-    await user.click(screen.getByRole('button', { name: 'Gemini' }))
-
-    expect(onChange).toHaveBeenCalledWith('gemini')
-  })
-
-  test('renders Gemini with orange color indicator', () => {
-    setup({ initial: 'gemini' })
-    const toggle = screen.getByRole('button', { name: /Gemini/i })
-    expect(toggle).toBeInTheDocument()
-    expect(toggle.textContent).toContain('Gemini')
-  })
-
-  test('keyboard navigation: ArrowDown moves focus to next option', async () => {
-    const user = userEvent.setup()
-    const { onChange } = setup()
-
-    const toggle = screen.getByRole('button', { name: /Claude/i })
-    await user.click(toggle)
-
-    await user.keyboard('{ArrowDown}')
-    await user.keyboard('{Enter}')
-
-    expect(onChange).toHaveBeenCalledWith('copilot')
-  })
-
-  test('filters available options when allowedAgents is provided', async () => {
-    const user = userEvent.setup()
+  test('filters available options when allowedAgents is provided', () => {
     setup({ allowedAgents: ['claude', 'opencode'] })
 
-    const toggle = screen.getByRole('button', { name: /Claude/i })
-    await user.click(toggle)
-
-    expect(screen.getAllByRole('button', { name: 'OpenCode' })).toHaveLength(1)
-    expect(screen.queryByRole('button', { name: 'Terminal Only' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Gemini' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^OpenCode\b/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Terminal Only\b/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Gemini\b/i })).not.toBeInTheDocument()
   })
 
-  test('keyboard navigation: ArrowUp moves focus to previous option', async () => {
+  test('agent selection disabled prevents card interaction', async () => {
     const user = userEvent.setup()
-    const { onChange } = setup({ initial: 'opencode' })
+    const { onChange } = setup({ agentSelectionDisabled: true })
 
-    const toggle = screen.getByRole('button', { name: /OpenCode/i })
-    await user.click(toggle)
+    const opencode = screen.getByRole('button', { name: /^OpenCode\b/i })
+    expect(opencode).toBeDisabled()
 
-    await user.keyboard('{ArrowUp}')
+    await user.click(opencode)
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  test('compact variant keeps keyboard dropdown selection functional', async () => {
+    const user = userEvent.setup()
+    const { onChange } = setup({ variant: 'compact' })
+
+    const toggle = screen.getByRole('button', { name: /^Claude\b/i })
+    toggle.focus()
+    await user.keyboard('{Enter}')
+
+    await user.keyboard('{ArrowDown}')
     await user.keyboard('{Enter}')
 
     expect(onChange).toHaveBeenCalledWith('copilot')
   })
 
-  test('keyboard navigation: wraps around when reaching boundaries', async () => {
+  test('compact variant can select unavailable agents', async () => {
     const user = userEvent.setup()
-    const { onChange } = setup()
+    availabilityMock.availableAgents = new Set(['claude'])
+    const { onChange } = setup({ variant: 'compact' })
 
-    const toggle = screen.getByRole('button', { name: /Claude/i })
+    const toggle = screen.getByRole('button', { name: /^Claude\b/i })
     await user.click(toggle)
+    await user.click(screen.getByRole('button', { name: /OpenCode/i }))
 
-    await user.keyboard('{ArrowUp}')
-    await user.keyboard('{Enter}')
-
-    expect(onChange).toHaveBeenCalledWith('terminal')
+    expect(onChange).toHaveBeenCalledWith('opencode')
   })
 
-  test('keyboard navigation: Escape closes dropdown', async () => {
-    const user = userEvent.setup()
-    setup()
+  test('compact variant shows selected unavailable status on the collapsed control', () => {
+    availabilityMock.availableAgents = new Set(['claude'])
+    setup({ initial: 'opencode', variant: 'compact' })
 
-    const toggle = screen.getByRole('button', { name: /Claude/i })
-    await user.click(toggle)
-
-    expect(screen.getByRole('button', { name: 'OpenCode' })).toBeInTheDocument()
-
-    await user.keyboard('{Escape}')
-
-    expect(screen.queryByRole('button', { name: 'OpenCode' })).not.toBeInTheDocument()
-  })
-
-  test('keyboard navigation: highlights focused option visually', async () => {
-    const user = userEvent.setup()
-    setup()
-
-    const toggle = screen.getByRole('button', { name: /Claude/i })
-    await user.click(toggle)
-
-    await user.keyboard('{ArrowDown}')
-
-    const opencodeOption = screen.getByRole('button', { name: 'OpenCode' })
-    // Check that the option exists and is rendered
-    expect(opencodeOption).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^OpenCode\b/i })).toHaveTextContent('Not installed')
   })
 })

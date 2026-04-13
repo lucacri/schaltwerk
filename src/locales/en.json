@@ -1434,9 +1434,53 @@
   "modelSelector": {
     "checkingAvailability": "Checking availability...",
     "notInstalled": "{agent} is not installed on this system. Please install it to use this agent.",
+    "notInstalledLabel": "Not installed",
     "availableAt": "{agent} is available at: {path} (installed via {method})",
     "available": "{agent} is available",
-    "permissionHandling": "Permission handling"
+    "availableLabel": "Available",
+    "permissionHandling": "Permission handling",
+    "agents": {
+      "claude": {
+        "label": "Claude",
+        "description": "Anthropic's powerful agent"
+      },
+      "copilot": {
+        "label": "GitHub Copilot",
+        "description": "GitHub's AI pair programmer"
+      },
+      "opencode": {
+        "label": "OpenCode",
+        "description": "Open source coding assistant"
+      },
+      "gemini": {
+        "label": "Gemini",
+        "description": "Google's multimodal model"
+      },
+      "codex": {
+        "label": "Codex",
+        "description": "OpenAI's specialized code model"
+      },
+      "droid": {
+        "label": "Droid",
+        "description": "Factory Droid automation agent"
+      },
+      "qwen": {
+        "label": "Qwen",
+        "description": "Alibaba's high-performance model"
+      },
+      "amp": {
+        "label": "Amp",
+        "description": "Accelerated development agent"
+      },
+      "kilocode": {
+        "label": "Kilo Code",
+        "description": "Kilo's specialized assistant"
+      },
+      "terminal": {
+        "label": "Terminal Only",
+        "description": "Standard system shell access"
+      }
+    }
   },
   "specMetadataPanel": {
     "title": "Spec Information",

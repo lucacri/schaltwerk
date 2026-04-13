@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { ModelSelector } from '../inputs/ModelSelector'
 import { useEnabledAgents } from '../../hooks/useEnabledAgents'
 import { AgentType, AGENT_TYPES } from '../../types/session'
@@ -30,8 +30,14 @@ export function CustomAgentModal({
     const [isSelecting, setIsSelecting] = useState(false)
     const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false)
     const selectRef = useRef<() => void>(() => {})
-    const allowedAgents = filterAgents(ALLOWED_AGENTS)
-    const selectableAgents = allowedAgents.length > 0 ? allowedAgents : [DEFAULT_AGENT]
+    const allowedAgents = useMemo(
+        () => filterAgents(ALLOWED_AGENTS),
+        [filterAgents]
+    )
+    const selectableAgents = useMemo(
+        () => (allowedAgents.length > 0 ? allowedAgents : [DEFAULT_AGENT]),
+        [allowedAgents]
+    )
 
     const handleSelect = async () => {
         if (isSelecting || enabledAgentsLoading) return
@@ -70,11 +76,17 @@ export function CustomAgentModal({
                 return
             }
 
+            const target = e.target instanceof Element ? e.target : null
+            const targetIsModelSelector = target?.closest('[data-model-selector]') !== null
+
             if (e.key === 'Escape') {
                 e.preventDefault()
                 e.stopPropagation()
                 onClose()
             } else if (e.key === 'Enter') {
+                if (targetIsModelSelector) {
+                    return
+                }
                 e.preventDefault()
                 e.stopPropagation()
                 selectRef.current()

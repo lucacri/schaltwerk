@@ -137,6 +137,21 @@ describe('SwitchOrchestratorModal', () => {
     await waitFor(() => expect(slowResolve).toHaveBeenCalledTimes(1))
   })
 
+  it('lets focused model cards handle Enter before the modal switch shortcut', async () => {
+    const user = userEvent.setup()
+    const { onSwitch } = openModal()
+
+    const gemini = await screen.findByRole('button', { name: /^Gemini\b/i })
+    gemini.focus()
+    await user.keyboard('{Enter}')
+
+    expect(onSwitch).not.toHaveBeenCalled()
+    expect(gemini).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: /switch agent/i }))
+    await waitFor(() => expect(onSwitch).toHaveBeenCalledWith({ agentType: 'gemini' }))
+  })
+
   it('re-enables controls after switch failure', async () => {
     const rejectOnce = vi.fn().mockImplementation(async () => {
       await Promise.resolve()
@@ -180,8 +195,8 @@ describe('SwitchOrchestratorModal', () => {
     await userEvent.click(screen.getByRole('button', { name: /opencode/i }))
 
     expect(filterAgentsMock).toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: 'Gemini' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Claude' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Gemini\b/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Claude\b/i })).toBeInTheDocument()
   })
 
   it('uses session-specific configuration when scope=session', async () => {

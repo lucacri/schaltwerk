@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { CustomAgentModal } from './CustomAgentModal'
 
 vi.mock('../../hooks/useEnabledAgents', () => ({
@@ -44,5 +45,28 @@ describe('CustomAgentModal', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /GitHub Copilot/i })).toBeInTheDocument()
     })
+  })
+
+  it('lets focused model cards handle Enter before the modal submit shortcut', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+
+    render(
+      <CustomAgentModal
+        open={true}
+        onClose={vi.fn()}
+        onSelect={onSelect}
+      />
+    )
+
+    const gemini = await screen.findByRole('button', { name: /^Gemini\b/i })
+    gemini.focus()
+    await user.keyboard('{Enter}')
+
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(gemini).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: /Add Tab/i }))
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith({ agentType: 'gemini' }))
   })
 })

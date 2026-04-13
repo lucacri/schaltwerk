@@ -1435,9 +1435,53 @@
   "modelSelector": {
     "checkingAvailability": "检查可用性...",
     "notInstalled": "{agent} 未安装在此系统上。请安装后使用此代理。",
+    "notInstalledLabel": "未安装",
     "availableAt": "{agent} 可用路径：{path}（通过 {method} 安装）",
     "available": "{agent} 可用",
-    "permissionHandling": "权限处理"
+    "availableLabel": "可用",
+    "permissionHandling": "权限处理",
+    "agents": {
+      "claude": {
+        "label": "Claude",
+        "description": "Anthropic 的强大代理"
+      },
+      "copilot": {
+        "label": "GitHub Copilot",
+        "description": "GitHub 的 AI 结对编程工具"
+      },
+      "opencode": {
+        "label": "OpenCode",
+        "description": "开源编码助手"
+      },
+      "gemini": {
+        "label": "Gemini",
+        "description": "Google 的多模态模型"
+      },
+      "codex": {
+        "label": "Codex",
+        "description": "OpenAI 的专用代码模型"
+      },
+      "droid": {
+        "label": "Droid",
+        "description": "Factory Droid 自动化代理"
+      },
+      "qwen": {
+        "label": "Qwen",
+        "description": "阿里巴巴的高性能模型"
+      },
+      "amp": {
+        "label": "Amp",
+        "description": "加速开发代理"
+      },
+      "kilocode": {
+        "label": "Kilo Code",
+        "description": "Kilo 的专业助手"
+      },
+      "terminal": {
+        "label": "仅终端",
+        "description": "标准系统 Shell 访问"
+      }
+    }
   },
   "specMetadataPanel": {
     "title": "规格信息",
