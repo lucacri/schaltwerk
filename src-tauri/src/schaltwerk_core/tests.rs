@@ -1859,6 +1859,11 @@ fn test_orchestrator_codex_prefers_explicit_resume_path() {
         shell
     );
     assert!(
+        shell.contains("--ask-for-approval never"),
+        "expected Codex approval policy in orchestrator start: {}",
+        shell
+    );
+    assert!(
         shell.contains(" resume "),
         "expected resume subcommand in orchestrator start: {}",
         shell
@@ -1913,6 +1918,11 @@ fn test_orchestrator_codex_fresh_start_omits_resume_subcommand() {
     assert!(
         shell.contains(" codex --sandbox "),
         "expected Codex sandbox flag in orchestrator start: {}",
+        shell
+    );
+    assert!(
+        shell.contains("--ask-for-approval never"),
+        "expected Codex approval policy in fresh orchestrator start: {}",
         shell
     );
     assert!(

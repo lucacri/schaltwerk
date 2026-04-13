@@ -957,6 +957,7 @@ pub fn build_codex_command_with_config(
 
     // Add sandbox mode first (this is an option)
     cmd.push_str(&format!(" --sandbox {sandbox_mode}"));
+    cmd.push_str(" --ask-for-approval never");
 
     // Handle session resumption
     log::debug!(
@@ -1048,7 +1049,7 @@ mod tests {
         );
         assert_eq!(
             cmd,
-            r#"cd /path/to/worktree && codex --sandbox workspace-write "implement feature X""#
+            r#"cd /path/to/worktree && codex --sandbox workspace-write --ask-for-approval never "implement feature X""#
         );
     }
 
@@ -1079,7 +1080,10 @@ mod tests {
             "read-only",
             Some(&config),
         );
-        assert_eq!(cmd, "cd /path/to/worktree && codex --sandbox read-only");
+        assert_eq!(
+            cmd,
+            "cd /path/to/worktree && codex --sandbox read-only --ask-for-approval never"
+        );
     }
 
     #[test]
@@ -1096,7 +1100,7 @@ mod tests {
         );
         assert_eq!(
             cmd,
-            "cd /path/to/worktree && codex --sandbox workspace-write resume"
+            "cd /path/to/worktree && codex --sandbox workspace-write --ask-for-approval never resume"
         );
     }
 
@@ -1114,7 +1118,7 @@ mod tests {
         );
         assert_eq!(
             cmd,
-            "cd /path/to/worktree && codex --sandbox workspace-write resume --last"
+            "cd /path/to/worktree && codex --sandbox workspace-write --ask-for-approval never resume --last"
         );
     }
 
@@ -1130,7 +1134,7 @@ mod tests {
             "workspace-write",
             Some(&config),
         );
-        assert!(cmd.contains("cd /repo/worktree-a && codex --sandbox workspace-write resume 2a593eaf-00b5-476a-bb16-f49c5dfb60c4"));
+        assert!(cmd.contains("cd /repo/worktree-a && codex --sandbox workspace-write --ask-for-approval never resume 2a593eaf-00b5-476a-bb16-f49c5dfb60c4"));
     }
 
     #[test]
@@ -1145,7 +1149,7 @@ mod tests {
             "danger-full-access",
             Some(&config),
         );
-        assert!(cmd.contains("cd /repo/worktree-a && codex --sandbox danger-full-access resume 2a593eaf-00b5-476a-bb16-f49c5dfb60c4"));
+        assert!(cmd.contains("cd /repo/worktree-a && codex --sandbox danger-full-access --ask-for-approval never resume 2a593eaf-00b5-476a-bb16-f49c5dfb60c4"));
     }
 
     #[test]
@@ -1169,7 +1173,7 @@ mod tests {
         );
 
         assert!(cmd.contains(
-            "cd /repo/worktree-a && codex --sandbox workspace-write resume legacy-session"
+            "cd /repo/worktree-a && codex --sandbox workspace-write --ask-for-approval never resume legacy-session"
         ));
     }
 
@@ -1197,7 +1201,9 @@ mod tests {
             Some(&config),
         );
 
-        assert!(cmd.contains("cd /repo/worktree-a && codex --sandbox workspace-write resume"));
+        assert!(cmd.contains(
+            "cd /repo/worktree-a && codex --sandbox workspace-write --ask-for-approval never resume"
+        ));
         assert!(cmd.ends_with(" resume"));
     }
 
@@ -1215,7 +1221,7 @@ mod tests {
         );
         assert_eq!(
             cmd,
-            r#"cd /path/to/worktree && codex --sandbox danger-full-access "fix bugs""#
+            r#"cd /path/to/worktree && codex --sandbox danger-full-access --ask-for-approval never "fix bugs""#
         );
     }
 
@@ -1233,7 +1239,7 @@ mod tests {
         );
         assert_eq!(
             cmd,
-            r#"cd /path/to/worktree && codex --sandbox workspace-write "implement \"feature\" with quotes""#
+            r#"cd /path/to/worktree && codex --sandbox workspace-write --ask-for-approval never "implement \"feature\" with quotes""#
         );
     }
 
@@ -1458,7 +1464,7 @@ mod tests {
         );
         assert_eq!(
             cmd,
-            "cd /path/to/worktree && codex --sandbox workspace-write resume",
+            "cd /path/to/worktree && codex --sandbox workspace-write --ask-for-approval never resume",
             "Should fall back to interactive resume when 'exec' is passed as session id"
         );
     }
@@ -1477,7 +1483,7 @@ mod tests {
         );
         assert_eq!(
             cmd,
-            "cd /path/to/worktree && codex --sandbox danger-full-access resume",
+            "cd /path/to/worktree && codex --sandbox danger-full-access --ask-for-approval never resume",
             "Should fall back to interactive resume when 'resume' is passed as session id"
         );
     }
@@ -1496,7 +1502,7 @@ mod tests {
         );
         assert_eq!(
             cmd,
-            "cd /path/to/worktree && codex --sandbox danger-full-access resume --last"
+            "cd /path/to/worktree && codex --sandbox danger-full-access --ask-for-approval never resume --last"
         );
     }
 
@@ -1514,7 +1520,7 @@ mod tests {
         );
         assert_eq!(
             cmd,
-            "cd /path/to/worktree && codex --sandbox danger-full-access resume"
+            "cd /path/to/worktree && codex --sandbox danger-full-access --ask-for-approval never resume"
         );
     }
 

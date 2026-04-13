@@ -100,10 +100,6 @@ pub async fn collect_agent_env_and_cli(
     (env_vars, cli_args, preferences)
 }
 
-fn harness_manages_codex_sandbox() -> bool {
-    std::env::var_os("LUCODE_SESSION").is_some()
-}
-
 fn strip_codex_sandbox_overrides(args: &mut Vec<String>) -> Option<Vec<String>> {
     let mut removed = Vec::new();
     let mut i = 0;
@@ -144,6 +140,57 @@ fn strip_codex_sandbox_overrides(args: &mut Vec<String>) -> Option<Vec<String>> 
     }
 }
 
+fn strip_codex_approval_overrides(args: &mut Vec<String>) -> Option<Vec<String>> {
+    let mut removed = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        if args[i] == "--full-auto" || args[i] == "--dangerously-bypass-approvals-and-sandbox" {
+            removed.push(args.remove(i));
+            continue;
+        }
+
+        if let Some(value) = args[i].strip_prefix("--ask-for-approval=") {
+            removed.push(format!("--ask-for-approval={value}"));
+            args.remove(i);
+            continue;
+        }
+
+        if let Some(value) = args[i].strip_prefix("-a=") {
+            removed.push(format!("-a={value}"));
+            args.remove(i);
+            continue;
+        }
+
+        if args[i] == "--ask-for-approval" || args[i] == "-a" {
+            let flag = args.remove(i);
+            let value = if i < args.len() {
+                let next = &args[i];
+                if next.starts_with('-') {
+                    None
+                } else {
+                    Some(args.remove(i))
+                }
+            } else {
+                None
+            };
+
+            match value {
+                Some(v) => removed.push(format!("{flag} {v}")),
+                None => removed.push(flag),
+            }
+            continue;
+        }
+
+        i += 1;
+    }
+
+    if removed.is_empty() {
+        None
+    } else {
+        Some(removed)
+    }
+}
+
 pub fn build_final_args(
     agent_kind: &AgentKind,
     mut parsed_agent_args: Vec<String>,
@@ -165,12 +212,17 @@ pub fn build_final_args(
             let extracted_prompt = extract_codex_prompt_if_present(&mut parsed_agent_args);
             fix_codex_single_dash_long_flags(&mut additional);
             reorder_codex_model_after_profile(&mut additional);
-            if harness_manages_codex_sandbox()
-                && let Some(removed) = strip_codex_sandbox_overrides(&mut additional)
-            {
+            let mut removed = Vec::new();
+            if let Some(stripped) = strip_codex_sandbox_overrides(&mut additional) {
+                removed.extend(stripped);
+            }
+            if let Some(stripped) = strip_codex_approval_overrides(&mut additional) {
+                removed.extend(stripped);
+            }
+            if !removed.is_empty() {
                 let removed_joined = removed.join(", ");
                 log::warn!(
-                    "Ignoring Codex CLI sandbox override because Lucode manages sandbox mode: {removed_joined}"
+                    "Ignoring Codex CLI execution override because Lucode manages sandbox mode and approval policy: {removed_joined}"
                 );
             }
             parsed_agent_args.extend(additional);
@@ -420,6 +472,151 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn codex_harness_strips_duplicate_approval_flag() {
+        let _guard = EnvVarGuard::set("LUCODE_SESSION", "session-approval");
+        let args = build_final_args(
+            &AgentKind::Codex,
+            vec![
+                "--sandbox".into(),
+                "workspace-write".into(),
+                "--ask-for-approval".into(),
+                "never".into(),
+            ],
+            "--ask-for-approval on-request --model gpt-4.1",
+            &AgentPreference::default(),
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never",
+                "--model",
+                "gpt-4.1"
+            ]
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn codex_harness_strips_duplicate_approval_flag_equals_form() {
+        let _guard = EnvVarGuard::set("LUCODE_SESSION", "session-approval-inline");
+        let args = build_final_args(
+            &AgentKind::Codex,
+            vec![
+                "--sandbox".into(),
+                "workspace-write".into(),
+                "--ask-for-approval".into(),
+                "never".into(),
+            ],
+            "--ask-for-approval=untrusted --profile work",
+            &AgentPreference::default(),
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never",
+                "--profile",
+                "work"
+            ]
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn codex_harness_strips_duplicate_approval_short_flag() {
+        let _guard = EnvVarGuard::set("LUCODE_SESSION", "session-approval-short");
+        let args = build_final_args(
+            &AgentKind::Codex,
+            vec![
+                "--sandbox".into(),
+                "workspace-write".into(),
+                "--ask-for-approval".into(),
+                "never".into(),
+            ],
+            "-a on-request --model gpt-5.4",
+            &AgentPreference::default(),
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never",
+                "--model",
+                "gpt-5.4"
+            ]
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn codex_harness_strips_full_auto_alias() {
+        let _guard = EnvVarGuard::set("LUCODE_SESSION", "session-full-auto");
+        let args = build_final_args(
+            &AgentKind::Codex,
+            vec![
+                "--sandbox".into(),
+                "workspace-write".into(),
+                "--ask-for-approval".into(),
+                "never".into(),
+            ],
+            "--full-auto --model gpt-5.4",
+            &AgentPreference::default(),
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never",
+                "--model",
+                "gpt-5.4"
+            ]
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn codex_harness_strips_dangerous_bypass_flag() {
+        let _guard = EnvVarGuard::set("LUCODE_SESSION", "session-danger-bypass");
+        let args = build_final_args(
+            &AgentKind::Codex,
+            vec![
+                "--sandbox".into(),
+                "danger-full-access".into(),
+                "--ask-for-approval".into(),
+                "never".into(),
+            ],
+            "--dangerously-bypass-approvals-and-sandbox --model gpt-5.4",
+            &AgentPreference::default(),
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "--sandbox",
+                "danger-full-access",
+                "--ask-for-approval",
+                "never",
+                "--model",
+                "gpt-5.4"
+            ]
+        );
+    }
+
+    #[test]
     fn codex_appends_preferences_when_missing() {
         let prefs = AgentPreference {
             model: Some("o4-mini".to_string()),
@@ -518,7 +715,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn codex_standalone_keeps_duplicate_sandbox_flag() {
+    fn codex_strips_duplicate_sandbox_flag_without_session_env() {
         use lucode::utils::env_adapter::EnvAdapter;
         EnvAdapter::remove_var("LUCODE_SESSION");
         let args = build_final_args(
@@ -530,11 +727,36 @@ mod tests {
 
         assert_eq!(
             args,
+            vec!["--sandbox", "workspace-write"]
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn codex_strips_duplicate_approval_without_session_env() {
+        use lucode::utils::env_adapter::EnvAdapter;
+        EnvAdapter::remove_var("LUCODE_SESSION");
+        let args = build_final_args(
+            &AgentKind::Codex,
+            vec![
+                "--sandbox".into(),
+                "workspace-write".into(),
+                "--ask-for-approval".into(),
+                "never".into(),
+            ],
+            "--ask-for-approval on-request --model gpt-5.4",
+            &AgentPreference::default(),
+        );
+
+        assert_eq!(
+            args,
             vec![
                 "--sandbox",
                 "workspace-write",
-                "--sandbox",
-                "danger-full-access"
+                "--ask-for-approval",
+                "never",
+                "--model",
+                "gpt-5.4"
             ]
         );
     }

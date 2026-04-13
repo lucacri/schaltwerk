@@ -1293,6 +1293,11 @@ mod service_unified_tests {
             shell_command
         );
         assert!(
+            shell_command.contains("--ask-for-approval never"),
+            "expected Codex approval policy in command: {}",
+            shell_command
+        );
+        assert!(
             shell_command.contains(spec_content),
             "expected spec content to be used as initial prompt: {}",
             shell_command
@@ -1334,6 +1339,11 @@ mod service_unified_tests {
         assert!(
             resumed,
             "expected resume-capable command on second start: {}",
+            cmd2.shell_command
+        );
+        assert!(
+            cmd2.shell_command.contains("--ask-for-approval never"),
+            "expected Codex approval policy in resumed command: {}",
             cmd2.shell_command
         );
 

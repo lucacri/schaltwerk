@@ -30,6 +30,7 @@ pub fn normalize_cli_text(s: &str) -> String {
 const MODEL_FLAGS: [&str; 2] = ["--model", "-m"];
 const PROFILE_FLAGS: [&str; 2] = ["--profile", "-p"];
 const CONFIG_FLAGS: [&str; 2] = ["--config", "-c"];
+const APPROVAL_FLAGS: [&str; 2] = ["--ask-for-approval", "-a"];
 const SANDBOX_FLAGS: [&str; 1] = ["--sandbox"]; // value required
 
 #[inline]
@@ -37,6 +38,7 @@ fn is_flag_with_value(s: &str) -> bool {
     MODEL_FLAGS.contains(&s)
         || PROFILE_FLAGS.contains(&s)
         || CONFIG_FLAGS.contains(&s)
+        || APPROVAL_FLAGS.contains(&s)
         || SANDBOX_FLAGS.contains(&s)
 }
 
@@ -86,7 +88,7 @@ pub fn fix_codex_single_dash_long_flags(args: &mut [String]) {
                 None => (stripped, None),
             };
             // Treat accidental single-dash long options as double-dash for known long flags
-            const NORMALIZE_LONGS: [&str; 3] = ["model", "profile", "search"];
+            const NORMALIZE_LONGS: [&str; 4] = ["model", "profile", "search", "ask-for-approval"];
             if NORMALIZE_LONGS.contains(&name) {
                 if let Some(v) = value_opt {
                     *a = format!("--{name}={v}");
@@ -264,6 +266,27 @@ mod tests {
     }
 
     #[test]
+    fn codex_does_not_consume_approval_value_as_prompt() {
+        let mut args = vec![
+            "--sandbox".to_string(),
+            "workspace-write".to_string(),
+            "--ask-for-approval".to_string(),
+            "never".to_string(),
+        ];
+        let extracted = extract_codex_prompt_if_present(&mut args);
+        assert!(extracted.is_none());
+        assert_eq!(
+            args,
+            vec![
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never"
+            ]
+        );
+    }
+
+    #[test]
     fn test_fix_codex_single_dash_long_flags() {
         let mut args = vec!["-model".to_string(), "gpt-4".to_string()];
         fix_codex_single_dash_long_flags(&mut args);
@@ -288,6 +311,10 @@ mod tests {
         let mut args = vec!["-search".to_string()];
         fix_codex_single_dash_long_flags(&mut args);
         assert_eq!(args, vec!["--search"]);
+
+        let mut args = vec!["-ask-for-approval".to_string(), "never".to_string()];
+        fix_codex_single_dash_long_flags(&mut args);
+        assert_eq!(args, vec!["--ask-for-approval", "never"]);
     }
 
     #[test]
