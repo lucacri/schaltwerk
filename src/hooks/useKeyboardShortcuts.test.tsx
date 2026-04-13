@@ -1195,4 +1195,191 @@ describe('useKeyboardShortcuts', () => {
       expect(callbacks.onFocusTerminal).toHaveBeenCalledTimes(1) // Called only from /
     })
   })
+
+  describe('isModalOpen gating', () => {
+    function renderAllCallbacks(overrides: Record<string, unknown> = {}) {
+      const callbacks = {
+        onSelectOrchestrator: vi.fn(),
+        onSelectSession: vi.fn(),
+        onCancelSelectedSession: vi.fn(),
+        onRefineSpec: vi.fn(),
+        onSpecSession: vi.fn(),
+        onPromoteSelectedVersion: vi.fn(),
+        onSelectPrevSession: vi.fn(),
+        onSelectNextSession: vi.fn(),
+        onFocusClaude: vi.fn(),
+        onOpenDiffViewer: vi.fn(),
+        onFocusTerminal: vi.fn(),
+        onSelectPrevProject: vi.fn(),
+        onSelectNextProject: vi.fn(),
+        onResetSelection: vi.fn(),
+        onOpenSwitchModel: vi.fn(),
+        onOpenMergeModal: vi.fn(),
+        onUpdateSessionFromParent: vi.fn(),
+        onCreatePullRequest: vi.fn(),
+        onOpenInApp: vi.fn(),
+        onOpenSettings: vi.fn(),
+        onSwitchToProject: vi.fn(),
+        onCycleNextProject: vi.fn(),
+        onCyclePrevProject: vi.fn(),
+      }
+      renderHook(() => useKeyboardShortcuts({
+        ...callbacks,
+        sessionCount: 5,
+        projectCount: 3,
+        isModalOpen: true,
+        ...overrides,
+      }))
+      return callbacks
+    }
+
+    it('does not fire SwitchToOrchestrator (Cmd+1) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('1', { metaKey: true })
+      expect(callbacks.onSelectOrchestrator).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire SwitchToSession (Cmd+2..9) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('2', { metaKey: true })
+      expect(callbacks.onSelectSession).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire ResetSessionOrOrchestrator (Cmd+Y) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('y', { metaKey: true })
+      expect(callbacks.onResetSelection).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire OpenSwitchModelModal (Cmd+P) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('p', { metaKey: true })
+      expect(callbacks.onOpenSwitchModel).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire OpenDiffViewer (Cmd+G) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('g', { metaKey: true })
+      expect(callbacks.onOpenDiffViewer).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire CancelSession (Cmd+D) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('d', { metaKey: true })
+      expect(callbacks.onCancelSelectedSession).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire ForceCancelSession (Cmd+Shift+D) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('d', { metaKey: true, shiftKey: true })
+      expect(callbacks.onCancelSelectedSession).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire UpdateSessionFromParent (Cmd+Shift+U) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('u', { metaKey: true, shiftKey: true })
+      expect(callbacks.onUpdateSessionFromParent).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire CreatePullRequest (Cmd+Shift+P) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('p', { metaKey: true, shiftKey: true })
+      expect(callbacks.onCreatePullRequest).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire OpenSettings (Cmd+,) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey(',', { metaKey: true })
+      expect(callbacks.onOpenSettings).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire FocusClaude (Cmd+T) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('t', { metaKey: true })
+      expect(callbacks.onFocusClaude).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire FocusTerminal (Cmd+/) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('/', { metaKey: true })
+      expect(callbacks.onFocusTerminal).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire RefineSpec when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('r', { metaKey: true, shiftKey: true })
+      expect(callbacks.onRefineSpec).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire ConvertSessionToSpec (Cmd+S) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('s', { metaKey: true })
+      expect(callbacks.onSpecSession).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire PromoteSessionVersion (Cmd+B) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('b', { metaKey: true })
+      expect(callbacks.onPromoteSelectedVersion).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire OpenMergeModal when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('m', { metaKey: true, shiftKey: true })
+      expect(callbacks.onOpenMergeModal).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire SelectPrevProject / SelectNextProject when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const prev = pressKey('ArrowLeft', { metaKey: true, shiftKey: true })
+      const next = pressKey('ArrowRight', { metaKey: true, shiftKey: true })
+      expect(callbacks.onSelectPrevProject).not.toHaveBeenCalled()
+      expect(callbacks.onSelectNextProject).not.toHaveBeenCalled()
+      expect(prev.defaultPrevented).toBe(false)
+      expect(next.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire SelectPrevSession / SelectNextSession (Cmd+ArrowUp/Down) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const prev = pressKey('ArrowUp', { metaKey: true })
+      const next = pressKey('ArrowDown', { metaKey: true })
+      expect(callbacks.onSelectPrevSession).not.toHaveBeenCalled()
+      expect(callbacks.onSelectNextSession).not.toHaveBeenCalled()
+      expect(prev.defaultPrevented).toBe(false)
+      expect(next.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire CyclePrevProject / CycleNextProject (Cmd+` / Cmd+Shift+`) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const next = pressKey('`', { metaKey: true })
+      const prev = pressKey('`', { metaKey: true, shiftKey: true })
+      expect(callbacks.onCycleNextProject).not.toHaveBeenCalled()
+      expect(callbacks.onCyclePrevProject).not.toHaveBeenCalled()
+      expect(next.defaultPrevented).toBe(false)
+      expect(prev.defaultPrevented).toBe(false)
+    })
+
+    it('does not fire OpenInApp (Cmd+Shift+O) when modal is open', () => {
+      const callbacks = renderAllCallbacks()
+      const event = pressKey('o', { metaKey: true, shiftKey: true })
+      expect(callbacks.onOpenInApp).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+  })
 })

@@ -105,6 +105,10 @@ export function useKeyboardShortcuts(
     ]
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (isModalOpen) {
+        return
+      }
+
       if (isShortcutForAction(event, KeyboardShortcutAction.SwitchToOrchestrator, shortcutConfig, { platform })) {
         event.preventDefault()
         onSelectOrchestrator()
@@ -120,7 +124,7 @@ export function useKeyboardShortcuts(
         }
       }
 
-      if (!isModalOpen && onSwitchToProject) {
+      if (onSwitchToProject) {
         for (let index = 0; index < projectActions.length; index++) {
           if (projectCount !== undefined && index >= projectCount) break
           if (isShortcutForAction(event, projectActions[index], shortcutConfig, { platform })) {
@@ -131,25 +135,25 @@ export function useKeyboardShortcuts(
         }
       }
 
-      if (!isModalOpen && onCyclePrevProject && isShortcutForAction(event, KeyboardShortcutAction.CyclePrevProject, shortcutConfig, { platform })) {
+      if (onCyclePrevProject && isShortcutForAction(event, KeyboardShortcutAction.CyclePrevProject, shortcutConfig, { platform })) {
         event.preventDefault()
         onCyclePrevProject()
         return
       }
 
-      if (!isModalOpen && onCycleNextProject && isShortcutForAction(event, KeyboardShortcutAction.CycleNextProject, shortcutConfig, { platform })) {
+      if (onCycleNextProject && isShortcutForAction(event, KeyboardShortcutAction.CycleNextProject, shortcutConfig, { platform })) {
         event.preventDefault()
         onCycleNextProject()
         return
       }
 
-      if (!isDiffViewerOpen && !isModalOpen && onSelectPrevSession && isShortcutForAction(event, KeyboardShortcutAction.SelectPrevSession, shortcutConfig, { platform })) {
+      if (!isDiffViewerOpen && onSelectPrevSession && isShortcutForAction(event, KeyboardShortcutAction.SelectPrevSession, shortcutConfig, { platform })) {
         event.preventDefault()
         onSelectPrevSession()
         return
       }
 
-      if (!isDiffViewerOpen && !isModalOpen && onSelectNextSession && isShortcutForAction(event, KeyboardShortcutAction.SelectNextSession, shortcutConfig, { platform })) {
+      if (!isDiffViewerOpen && onSelectNextSession && isShortcutForAction(event, KeyboardShortcutAction.SelectNextSession, shortcutConfig, { platform })) {
         event.preventDefault()
         onSelectNextSession()
         return
