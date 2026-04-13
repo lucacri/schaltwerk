@@ -204,6 +204,25 @@ describe('SessionCard stats-first layout', () => {
     expect(screen.getByText('schaltwerk/s1')).toBeInTheDocument()
   })
 
+  it('renders the shortcut chip inside the bottom metadata row to match the style guide', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={baseSession}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const metaRow = screen.getByTestId('session-card-meta-row')
+    const shortcut = screen.getByTestId('session-card-shortcut')
+    expect(metaRow).toContainElement(shortcut)
+    expect(shortcut).toHaveTextContent(/⌘2|Ctrl\s*\+?\s*2/)
+  })
+
   it('expands selected session cards by default', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>

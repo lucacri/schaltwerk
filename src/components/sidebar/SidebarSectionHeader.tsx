@@ -36,10 +36,14 @@ export function SidebarSectionHeader({
         {title}
       </span>
       <span
-        className="shrink-0"
+        data-testid="sidebar-section-count"
+        className="shrink-0 rounded border px-1.5 py-[1px]"
         style={{
           fontSize: theme.fontSize.caption,
+          fontWeight: 600,
           color: 'var(--color-text-muted)',
+          backgroundColor: 'var(--color-bg-elevated)',
+          borderColor: 'var(--color-border-subtle)',
           lineHeight: theme.lineHeight.compact,
         }}
       >

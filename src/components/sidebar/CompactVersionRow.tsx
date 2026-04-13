@@ -5,7 +5,10 @@ import { VscIssues, VscGitPullRequest } from 'react-icons/vsc'
 import { SessionActions } from '../session/SessionActions'
 import { ProgressIndicator } from '../common/ProgressIndicator'
 import { UncommittedIndicator } from '../common/UncommittedIndicator'
-import { getAgentColorScheme } from '../../common/theme'
+import { getAgentColorScheme, theme } from '../../common/theme'
+import { useMultipleShortcutDisplays } from '../../keyboardShortcuts/useShortcutDisplay'
+import { detectPlatformSafe } from '../../keyboardShortcuts/helpers'
+import { SESSION_SWITCH_SHORTCUT_ACTIONS, resolveSwitchSessionShortcut } from './sessionShortcut'
 import type { MergeStatus } from '../../store/atoms/sessions'
 import { lastAgentResponseMapAtom, agentResponseTickAtom } from '../../store/atoms/lastAgentResponse'
 import { useEpics } from '../../hooks/useEpics'
@@ -47,6 +50,7 @@ interface CompactVersionRowProps {
 
 export const CompactVersionRow = memo<CompactVersionRowProps>(({
   session,
+  index,
   isSelected,
   hasFollowUpMessage,
   showPromoteIcon = false,
@@ -67,6 +71,9 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   isHighlighted = false,
   isConsolidationSourceHighlighted = false,
 }) => {
+  const shortcuts = useMultipleShortcutDisplays([...SESSION_SWITCH_SHORTCUT_ACTIONS])
+  const platform = detectPlatformSafe()
+  const modKey = platform === 'mac' ? '⌘' : 'Ctrl'
   const {
     onSelect, onCancel,
     onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec,
@@ -350,9 +357,9 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
           )
         })()}
         <div className="flex flex-col gap-1">
-          <div className="flex min-w-0 items-center gap-2 overflow-hidden" style={sessionText.meta}>
-            {sessionState === 'spec' ? (
-              <>
+          <div className="flex items-stretch gap-2">
+            <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden" style={sessionText.meta}>
+              {sessionState === 'spec' ? (
                 <span
                   className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded border"
                   style={{
@@ -364,53 +371,73 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                 >
                   {t.session.spec}
                 </span>
-                {statusIndicator}
-              </>
-            ) : (
-              <>
-                {agentType && (
-                  <span
-                    className="inline-flex flex-shrink-0 items-center gap-1 px-1.5 py-[1px] rounded border"
-                    style={{
-                      ...sessionText.badge,
-                      minWidth: tagMinWidth,
-                      backgroundColor: colorScheme.bg,
-                      color: colorScheme.light,
-                      borderColor: colorScheme.border,
-                    }}
-                    title={`Agent: ${agentKey}`}
-                  >
+              ) : (
+                <>
+                  {agentType && (
                     <span
-                      className="w-1 h-1 rounded-full"
-                      style={{ backgroundColor: colorScheme.DEFAULT }}
-                    />
-                    {versionLabel}
+                      className="inline-flex flex-shrink-0 items-center gap-1 px-1.5 py-[1px] rounded border"
+                      style={{
+                        ...sessionText.badge,
+                        minWidth: tagMinWidth,
+                        backgroundColor: colorScheme.bg,
+                        color: colorScheme.light,
+                        borderColor: colorScheme.border,
+                      }}
+                      title={`Agent: ${agentKey}`}
+                    >
+                      <span
+                        className="w-1 h-1 rounded-full"
+                        style={{ backgroundColor: colorScheme.DEFAULT }}
+                      />
+                      {versionLabel}
+                    </span>
+                  )}
+                  {showDirtyIndicator ? (
+                    <div data-testid="compact-stat-dirty">
+                      <UncommittedIndicator
+                        className="flex-shrink-0"
+                        count={dirtyFilesCount}
+                        sessionName={s.display_name ?? s.session_id}
+                        samplePaths={s.top_uncommitted_paths}
+                      />
+                    </div>
+                  ) : null}
+                  <span
+                    className="inline-flex items-center gap-1"
+                    style={sessionText.meta}
+                    title={`${commitsAheadCount} ahead · ${filesChanged} files · +${additions} -${deletions}`}
+                  >
+                    <span>{commitsAheadCount} ahead</span>
+                    <span>{filesChanged} files</span>
+                    <span style={{ color: 'var(--color-accent-green-light)' }}>+{additions}</span>
+                    <span style={{ color: 'var(--color-accent-red-light)' }}>-{deletions}</span>
                   </span>
-                )}
-                {showDirtyIndicator ? (
-                  <div data-testid="compact-stat-dirty">
-                    <UncommittedIndicator
-                      className="flex-shrink-0"
-                      count={dirtyFilesCount}
-                      sessionName={s.display_name ?? s.session_id}
-                      samplePaths={s.top_uncommitted_paths}
-                    />
-                  </div>
-                ) : null}
+                </>
+              )}
+              {metadataBadges}
+            </div>
+            <div
+              data-testid="compact-row-right-stack"
+              className="flex flex-col items-end gap-1 flex-shrink-0"
+            >
+              {statusIndicator}
+              {index < 8 && (
                 <span
-                  className="inline-flex items-center gap-1"
-                  style={sessionText.meta}
-                  title={`${commitsAheadCount} ahead · ${filesChanged} files · +${additions} -${deletions}`}
+                  data-testid="compact-row-shortcut"
+                  className="mt-auto rounded border px-1.5 py-[1px]"
+                  title={`Switch to session (${resolveSwitchSessionShortcut(index, shortcuts, modKey)})`}
+                  style={{
+                    ...sessionText.badge,
+                    fontFamily: theme.fontFamily.mono,
+                    color: 'var(--color-text-muted)',
+                    backgroundColor: 'var(--color-bg-hover)',
+                    borderColor: 'var(--color-border-subtle)',
+                  }}
                 >
-                  <span>{commitsAheadCount} ahead</span>
-                  <span>{filesChanged} files</span>
-                  <span style={{ color: 'var(--color-accent-green-light)' }}>+{additions}</span>
-                  <span style={{ color: 'var(--color-accent-red-light)' }}>-{deletions}</span>
+                  {resolveSwitchSessionShortcut(index, shortcuts, modKey)}
                 </span>
-                {statusIndicator}
-              </>
-            )}
-            {metadataBadges}
+              )}
+            </div>
           </div>
 
           {consolidationSources.length > 0 && (

@@ -16,6 +16,7 @@ import { detectPlatformSafe } from "../../keyboardShortcuts/helpers";
 import { useEpics } from "../../hooks/useEpics";
 import { useTranslation } from "../../common/i18n/useTranslation";
 import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, sessionText } from './sessionCardStyles'
+import { resolveSwitchSessionShortcut } from './sessionShortcut'
 import { useSessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { useSessionActivity } from '../../store/hooks/useSessionActivity'
 import { getSidebarSessionStatus } from './sessionStatus'
@@ -526,31 +527,6 @@ export const SessionCard = memo<SessionCardProps>(
               </div>
             )}
           </div>
-          <div className="flex items-start gap-2 flex-shrink-0">
-            {index < 8 && (
-              <span
-                className="px-1.5 py-0.5 rounded"
-                style={{
-                  ...sessionText.meta,
-                  backgroundColor: "rgb(var(--color-bg-hover-rgb) / 0.6)",
-                }}
-              >
-                {(() => {
-                  const sessionActions = [
-                    KeyboardShortcutAction.SwitchToSession1,
-                    KeyboardShortcutAction.SwitchToSession2,
-                    KeyboardShortcutAction.SwitchToSession3,
-                    KeyboardShortcutAction.SwitchToSession4,
-                    KeyboardShortcutAction.SwitchToSession5,
-                    KeyboardShortcutAction.SwitchToSession6,
-                    KeyboardShortcutAction.SwitchToSession7,
-                  ];
-                  const sessionAction = sessionActions[index];
-                  return shortcuts[sessionAction] || `${modKey}${index + 2}`;
-                })()}
-              </span>
-            )}
-          </div>
         </div>
         {sessionState !== "spec" && (
           <div
@@ -611,9 +587,11 @@ export const SessionCard = memo<SessionCardProps>(
         )}
         {showExpandedDetails && (
           <div
-            className="mt-1 flex items-center gap-2"
+            data-testid="session-card-meta-row"
+            className="mt-1 flex items-center justify-between gap-2"
             style={sessionText.meta}
           >
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
             {sessionState === "spec" ? (
               <>
                 <span
@@ -726,6 +704,22 @@ export const SessionCard = memo<SessionCardProps>(
                   </span>
                 )}
               </>
+            )}
+            </div>
+            {index < 8 && (
+              <span
+                data-testid="session-card-shortcut"
+                className="flex-shrink-0 rounded border px-1.5 py-[1px]"
+                style={{
+                  ...sessionText.badge,
+                  fontFamily: theme.fontFamily.mono,
+                  color: 'var(--color-text-muted)',
+                  backgroundColor: 'var(--color-bg-hover)',
+                  borderColor: 'var(--color-border-subtle)',
+                }}
+              >
+                {resolveSwitchSessionShortcut(index, shortcuts, modKey)}
+              </span>
             )}
           </div>
         )}

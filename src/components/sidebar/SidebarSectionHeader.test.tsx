@@ -41,4 +41,21 @@ describe('SidebarSectionHeader', () => {
     expect(button).toHaveAttribute('aria-expanded', 'false')
     expect(screen.getByTestId('sidebar-section-chevron')).toBeInTheDocument()
   })
+
+  it('renders the count inside a bordered pill matching the style guide', () => {
+    render(
+      <SidebarSectionHeader
+        title="Running"
+        count={7}
+        collapsed={false}
+        toggleLabel="Collapse running section"
+        onToggle={() => {}}
+      />,
+    )
+
+    const countPill = screen.getByTestId('sidebar-section-count')
+    expect(countPill).toHaveTextContent('7')
+    expect(countPill.className).toMatch(/border/)
+    expect(countPill.className).toMatch(/rounded/)
+  })
 })

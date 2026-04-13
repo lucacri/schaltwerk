@@ -85,4 +85,51 @@ describe('Sidebar epic grouping', () => {
     expect(screen.getAllByTestId('epic-header-epic-1')[0]).toHaveTextContent('billing-v2')
     expect(screen.getByTestId('epic-ungrouped-header')).toHaveTextContent('Ungrouped')
   })
+
+  it('renders grouped running sessions with the parity version-group container', async () => {
+    const epic = { id: 'epic-1', name: 'billing-v2', color: 'blue' }
+
+    const sessions: EnrichedSession[] = [
+      createSession('billing-ui_v1', {
+        display_name: 'billing-ui_v1',
+        version_number: 1,
+        current_task: 'Refine billing session grouping',
+        epic,
+      } as unknown as Partial<SessionInfo>),
+      createSession('billing-ui_v2', {
+        display_name: 'billing-ui_v2',
+        version_number: 2,
+        current_task: 'Refine billing session grouping',
+        epic,
+        attention_required: true,
+        attention_kind: 'idle',
+      } as unknown as Partial<SessionInfo>),
+    ]
+
+    vi.mocked(invoke).mockImplementation(async (cmd) => {
+      if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) return sessions
+      if (cmd === TauriCommands.SchaltwerkCoreListSessionsByState) return []
+      if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
+      if (cmd === TauriCommands.GetProjectSessionsSettings) return { filter_mode: 'all' }
+      if (cmd === TauriCommands.SetProjectSessionsSettings) return undefined
+      if (cmd === TauriCommands.TerminalExists) return false
+      if (cmd === TauriCommands.CreateTerminal) return true
+      if (cmd === TauriCommands.GetCurrentDirectory) return '/test/dir'
+      return undefined
+    })
+
+    render(
+      <TestProviders>
+        <Sidebar />
+      </TestProviders>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('version-group-source-list')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('version-group-count')).toHaveTextContent('1 / 2')
+    expect(screen.getByTestId('version-group-header-status')).toBeInTheDocument()
+    expect(screen.queryByTestId('version-group-source-tree')).toBeNull()
+  })
 })

@@ -35,20 +35,28 @@ vi.mock('./CompactVersionRow', () => ({
 function createVersion({
   id,
   attentionRequired = false,
+  attentionKind,
   sessionState = 'running',
   currentTask = 'Shared task summary',
   specContent,
+  versionNumber = 1,
+  readyToMerge = false,
+  isBlocked = false,
 }: {
   id: string
   attentionRequired?: boolean
+  attentionKind?: 'idle' | 'waiting_for_input'
   sessionState?: 'spec' | 'running'
   currentTask?: string
   specContent?: string
+  versionNumber?: number
+  readyToMerge?: boolean
+  isBlocked?: boolean
 }): SessionVersionGroupType['versions'][number] {
   const info: EnrichedSession['info'] = {
     session_id: id,
     display_name: id,
-    version_number: 1,
+    version_number: versionNumber,
     branch: `${id}-branch`,
     worktree_path: `/tmp/${id}`,
     base_branch: 'main',
@@ -56,15 +64,17 @@ function createVersion({
     session_state: sessionState,
     is_current: false,
     session_type: 'worktree',
-    ready_to_merge: false,
+    attention_kind: attentionKind,
+    ready_to_merge: readyToMerge,
     attention_required: attentionRequired,
     original_agent_type: 'claude',
     current_task: currentTask,
-    spec_content: specContent
+    spec_content: specContent,
+    is_blocked: isBlocked,
   }
 
   return {
-    versionNumber: 1,
+    versionNumber,
     session: {
       info,
       status: undefined,
@@ -78,8 +88,8 @@ const baseGroup: SessionVersionGroupType = {
   baseName: 'feature-A',
   isVersionGroup: true,
   versions: [
-    createVersion({ id: 'feature-A_v1', attentionRequired: false }),
-    createVersion({ id: 'feature-A_v2', attentionRequired: true })
+    createVersion({ id: 'feature-A_v1', attentionRequired: false, versionNumber: 1 }),
+    createVersion({ id: 'feature-A_v2', attentionRequired: true, attentionKind: 'idle', versionNumber: 2 })
   ]
 }
 
@@ -105,8 +115,24 @@ const mockActions: SessionCardActions = {
 }
 
 describe('SessionVersionGroup status summary', () => {
-  it('does not show a primary status badge in the group header', () => {
-    const { queryByLabelText } = render(
+  it('shows selected version count and status in the group header', () => {
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup}
+          selection={{ kind: 'session', payload: 'feature-A_v2' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('version-group-count')).toHaveTextContent('2 / 2')
+    expect(screen.getByTestId('version-group-header-status')).toHaveTextContent('Idle')
+  })
+
+  it('falls back to the first source version when no grouped version is selected', () => {
+    render(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionVersionGroup
           group={baseGroup}
@@ -117,20 +143,20 @@ describe('SessionVersionGroup status summary', () => {
       </SessionCardActionsProvider>
     )
 
-    expect(queryByLabelText('Group status: Running')).toBeNull()
-    expect(queryByLabelText('Group status: Ready')).toBeNull()
+    expect(screen.getByTestId('version-group-count')).toHaveTextContent('1 / 2')
+    expect(screen.getByTestId('version-group-header-status')).toHaveTextContent('Running')
   })
 
-  it('does not show a primary status badge even when all versions are ready', () => {
+  it('shows ready state in the group header when the active version is ready', () => {
     const readyGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
-        createVersion({ id: 'feature-A_v1', sessionState: 'running' }),
-        createVersion({ id: 'feature-A_v2', sessionState: 'running' }),
+        createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1, readyToMerge: true }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
       ]
     }
 
-    const { queryByLabelText } = render(
+    render(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionVersionGroup
           group={readyGroup}
@@ -141,12 +167,11 @@ describe('SessionVersionGroup status summary', () => {
       </SessionCardActionsProvider>
     )
 
-    expect(queryByLabelText('Group status: Running')).toBeNull()
-    expect(queryByLabelText('Group status: Ready')).toBeNull()
+    expect(screen.getByTestId('version-group-header-status')).toHaveTextContent('Ready')
   })
 
-  it('keeps status area visible when collapsed', () => {
-    const { getByRole, getByTestId } = render(
+  it('keeps the header status area visible when collapsed', () => {
+    render(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionVersionGroup
           group={baseGroup}
@@ -157,13 +182,12 @@ describe('SessionVersionGroup status summary', () => {
       </SessionCardActionsProvider>
     )
 
-    const statusRow = getByTestId('version-group-status')
-    expect(statusRow.className).not.toContain('flex-wrap')
+    expect(screen.getByTestId('version-group-header-status')).toBeVisible()
 
-    const toggle = getByRole('button', { name: /feature-A/i })
+    const toggle = screen.getByRole('button', { name: /feature-A/i })
     fireEvent.click(toggle)
 
-    expect(getByTestId('version-group-status')).toBeVisible()
+    expect(screen.getByTestId('version-group-header-status')).toBeVisible()
   })
 
   it('shows consolidate button disabled when fewer than two running sessions exist', () => {
@@ -305,7 +329,7 @@ describe('SessionVersionGroup status summary', () => {
   })
 
   it('renders the first available group description above compact version rows', () => {
-    const { getByText, getAllByTestId, queryAllByTestId } = render(
+    render(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionVersionGroup
           group={baseGroup}
@@ -316,9 +340,9 @@ describe('SessionVersionGroup status summary', () => {
       </SessionCardActionsProvider>
     )
 
-    expect(getByText('Shared task summary')).toBeInTheDocument()
-    expect(getAllByTestId('compact-version-row')).toHaveLength(2)
-    expect(queryAllByTestId('session-card')).toHaveLength(0)
+    expect(screen.getByTestId('version-group-description')).toHaveTextContent('Shared task summary')
+    expect(screen.getAllByTestId('compact-version-row')).toHaveLength(2)
+    expect(screen.queryAllByTestId('session-card')).toHaveLength(0)
   })
 
   it('renders the first available description when version descriptions differ', () => {
@@ -368,7 +392,7 @@ describe('SessionVersionGroup status summary', () => {
     expect(getByText('Task one')).toBeInTheDocument()
   })
 
-  it('renders consolidation rows outside the source tree with a dedicated container', () => {
+  it('renders consolidation rows outside the source list with a dedicated lane container', () => {
     const consolidatedGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
@@ -400,16 +424,16 @@ describe('SessionVersionGroup status summary', () => {
       </SessionCardActionsProvider>
     )
 
-    const sourceTree = screen.getByTestId('version-group-source-tree')
-    const consolidationContainer = screen.getByTestId('version-group-consolidation')
+    const sourceList = screen.getByTestId('version-group-source-list')
+    const consolidationContainer = screen.getByTestId('version-group-consolidation-lane')
 
     expect(screen.getByTestId('version-group-consolidation-divider')).toBeInTheDocument()
-    expect(within(sourceTree).getAllByTestId('compact-version-row')).toHaveLength(2)
+    expect(within(sourceList).getAllByTestId('compact-version-row')).toHaveLength(2)
     expect(within(consolidationContainer).getByTestId('compact-version-row')).toHaveAttribute('data-session-id', 'feature-A-merge')
     expect(within(consolidationContainer).getByTestId('compact-version-row')).toHaveAttribute('data-hide-tree-connector', 'true')
   })
 
-  it('keeps source versions inside the tree connector layout', () => {
+  it('renders source versions without tree connectors in the parity source list', () => {
     const consolidatedGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
@@ -441,8 +465,69 @@ describe('SessionVersionGroup status summary', () => {
       </SessionCardActionsProvider>
     )
 
-    const sourceRows = within(screen.getByTestId('version-group-source-tree')).getAllByTestId('compact-version-row')
+    const sourceRows = within(screen.getByTestId('version-group-source-list')).getAllByTestId('compact-version-row')
     expect(sourceRows).toHaveLength(2)
-    sourceRows.forEach(row => expect(row).toHaveAttribute('data-hide-tree-connector', 'false'))
+    sourceRows.forEach(row => expect(row).toHaveAttribute('data-hide-tree-connector', 'true'))
+  })
+
+  it('renders grouped source rows without the legacy source-tree wrapper', () => {
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.queryByTestId('version-group-source-tree')).toBeNull()
+    screen.getAllByTestId('compact-version-row').forEach((row) => {
+      expect(row).toHaveAttribute('data-hide-tree-connector', 'true')
+    })
+  })
+
+  it('keeps judge actions available when only a judge recommendation remains', () => {
+    const judgeOnlyGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
+        {
+          ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_role: 'judge',
+              consolidation_round_id: 'round-123',
+              consolidation_recommended_session_id: 'feature-A_v2',
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={judgeOnlyGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onTriggerConsolidationJudge={vi.fn()}
+          onConfirmConsolidationWinner={vi.fn()}
+          onConsolidate={vi.fn()}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('version-group-consolidation-lane')).toBeInTheDocument()
+    expect(screen.getByTestId('version-group-judge-recommendation')).toHaveTextContent('claude v2')
+    expect(screen.getByTestId('trigger-consolidation-judge-button')).toBeInTheDocument()
+    expect(screen.getByTestId('confirm-consolidation-winner-button')).toBeInTheDocument()
   })
 })

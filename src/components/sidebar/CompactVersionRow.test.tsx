@@ -315,6 +315,21 @@ describe('CompactVersionRow', () => {
     expect(screen.queryByTestId('compact-row-tree-connector-dot')).toBeNull()
   })
 
+  it('places the status chip and shortcut chip in a right-side stack per the style guide', () => {
+    renderRow({ index: 2 })
+    const stack = screen.getByTestId('compact-row-right-stack')
+    const status = screen.getByTestId('compact-row-status-running')
+    const shortcut = screen.getByTestId('compact-row-shortcut')
+    expect(stack).toContainElement(status)
+    expect(stack).toContainElement(shortcut)
+    expect(shortcut).toHaveTextContent(/⌘4|Ctrl\s*\+?\s*4/)
+  })
+
+  it('omits the shortcut chip for rows beyond the indexed shortcut range', () => {
+    renderRow({ index: 12 })
+    expect(screen.queryByTestId('compact-row-shortcut')).toBeNull()
+  })
+
   it('renders consolidation source indicators when source metadata exists', () => {
     renderRow({
       session: {

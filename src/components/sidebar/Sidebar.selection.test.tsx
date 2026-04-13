@@ -268,7 +268,7 @@ describe('Ready session cancellation focus preservation', () => {
     await waitFor(() => {
       const groupHeader = screen.getByText('session-merge').closest('button')
       expect(groupHeader).toBeTruthy()
-      expect(groupHeader).toHaveTextContent('2x')
+      expect(screen.getByTestId('version-group-count')).toHaveTextContent('1 / 2')
       expect(screen.getByLabelText('Select session consolidation-candidate')).toBeInTheDocument()
     })
   })
