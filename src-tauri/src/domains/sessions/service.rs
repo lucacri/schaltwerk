@@ -3871,17 +3871,6 @@ impl SessionManager {
         self.start_claude_in_orchestrator_with_args(None)
     }
 
-    pub fn start_claude_in_orchestrator_fresh(&self) -> Result<AgentLaunchSpec> {
-        self.start_claude_in_orchestrator_fresh_with_binary(&HashMap::new())
-    }
-
-    pub fn start_claude_in_orchestrator_fresh_with_binary(
-        &self,
-        binary_paths: &HashMap<String, String>,
-    ) -> Result<AgentLaunchSpec> {
-        self.start_orchestrator_internal(binary_paths, false, None, None)
-    }
-
     pub fn start_claude_in_orchestrator_with_binary(
         &self,
         binary_paths: &HashMap<String, String>,

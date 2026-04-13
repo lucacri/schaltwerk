@@ -3416,12 +3416,28 @@ pub async fn schaltwerk_core_reset_orchestrator(terminal_id: String) -> Result<S
     schaltwerk_core_start_fresh_orchestrator(terminal_id).await
 }
 
+fn build_fresh_orchestrator_command_spec<DB: AppConfigMethods>(
+    db: &DB,
+    manager: &SessionManager,
+    binary_paths: &std::collections::HashMap<String, String>,
+) -> Result<(String, lucode::services::AgentLaunchSpec), String> {
+    let orchestrator_agent = db
+        .get_orchestrator_agent_type()
+        .unwrap_or_else(|_| "claude".to_string());
+    let command_spec = manager
+        .start_fresh_agent_in_orchestrator(binary_paths, None)
+        .map_err(|e| {
+            log::error!("Failed to build fresh orchestrator command: {e}");
+            format!("Failed to start fresh {orchestrator_agent} in orchestrator: {e}")
+        })?;
+
+    Ok((orchestrator_agent, command_spec))
+}
+
 #[tauri::command]
 pub async fn schaltwerk_core_start_fresh_orchestrator(
     terminal_id: String,
 ) -> Result<String, String> {
-    log::info!("Starting FRESH Claude for orchestrator in terminal: {terminal_id}");
-
     // First check if we have a valid project initialized
     let core = match get_core_read().await {
         Ok(c) => c,
@@ -3448,38 +3464,15 @@ pub async fn schaltwerk_core_start_fresh_orchestrator(
         .ok()
         .flatten();
 
-    // Resolve binary paths at command level (with caching)
-    let binary_paths = if let Some(settings_manager) = SETTINGS_MANAGER.get() {
-        let settings = settings_manager.lock().await;
-        let mut paths = std::collections::HashMap::new();
-
-        // Get resolved binary paths for all agents
-        for agent in [
-            "claude", "copilot", "codex", "opencode", "gemini", "droid", "qwen", "amp",
-        ] {
-            match settings.get_effective_binary_path(agent) {
-                Ok(path) => {
-                    log::trace!("Cached binary path for {agent}: {path}");
-                    paths.insert(agent.to_string(), path);
-                }
-                Err(e) => log::warn!("Failed to get cached binary path for {agent}: {e}"),
-            }
-        }
-        paths
-    } else {
-        std::collections::HashMap::new()
-    };
-
-    // Build command for FRESH session (no session resume)
-    let command_spec = manager
-        .start_claude_in_orchestrator_fresh_with_binary(&binary_paths)
-        .map_err(|e| {
-            log::error!("Failed to build fresh orchestrator command: {e}");
-            format!("Failed to start fresh Claude in orchestrator: {e}")
-        })?;
+    let binary_paths = load_cached_agent_binary_paths().await;
+    let (orchestrator_agent, command_spec) =
+        build_fresh_orchestrator_command_spec(&core.db, &manager, &binary_paths)?;
 
     log::info!(
-        "Fresh Claude command for orchestrator: {}",
+        "Starting fresh orchestrator in terminal {terminal_id} with configured agent: {orchestrator_agent}"
+    );
+    log::info!(
+        "Fresh orchestrator command for agent {orchestrator_agent}: {}",
         command_spec.shell_command.as_str()
     );
 
@@ -3546,6 +3539,25 @@ mod tests {
             std::fs::create_dir_all(parent).expect("parent directory should be created");
         }
         std::fs::write(file_path, contents).expect("file should be written");
+    }
+
+    fn create_test_session_manager() -> (SessionManager, TempDir, Database) {
+        let temp_dir = TempDir::new().expect("temp dir should be created");
+        let repo_path = temp_dir.path().join("repo");
+        std::fs::create_dir_all(&repo_path).expect("repo directory should be created");
+
+        run_git(&repo_path, &["init"]);
+        run_git(&repo_path, &["config", "user.email", "test@example.com"]);
+        run_git(&repo_path, &["config", "user.name", "Test User"]);
+        write_file(&repo_path, "README.md", "initial\n");
+        run_git(&repo_path, &["add", "README.md"]);
+        run_git(&repo_path, &["commit", "-m", "initial"]);
+
+        let db_path = temp_dir.path().join("test.db");
+        let db = Database::new(Some(db_path)).expect("database should be created");
+        let manager = SessionManager::new(db.clone(), repo_path);
+
+        (manager, temp_dir, db)
     }
 
     #[test]
@@ -3638,6 +3650,34 @@ mod tests {
         .await;
 
         assert_eq!(result.unwrap_err(), "launch failed".to_string());
+    }
+
+    #[test]
+    fn build_fresh_orchestrator_command_spec_uses_persisted_orchestrator_agent() {
+        let (manager, _temp_dir, db) = create_test_session_manager();
+        db.set_orchestrator_agent_type("codex")
+            .expect("orchestrator agent type should persist");
+
+        let (agent, command_spec) =
+            build_fresh_orchestrator_command_spec(&db, &manager, &std::collections::HashMap::new())
+                .expect("fresh orchestrator command should build");
+
+        assert_eq!(agent, "codex");
+        assert!(
+            command_spec.shell_command.contains("codex"),
+            "expected Codex orchestrator command: {}",
+            command_spec.shell_command
+        );
+        assert!(
+            command_spec.shell_command.contains(" codex --sandbox "),
+            "expected Codex sandbox flag in command: {}",
+            command_spec.shell_command
+        );
+        assert!(
+            !command_spec.shell_command.contains(" resume "),
+            "fresh orchestrator command must not resume: {}",
+            command_spec.shell_command
+        );
     }
 
     #[test]

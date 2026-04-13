@@ -1939,6 +1939,57 @@ fn test_orchestrator_codex_fresh_start_omits_resume_subcommand() {
 }
 
 #[test]
+#[serial_test::serial]
+fn test_fresh_orchestrator_without_override_uses_persisted_agent_type() {
+    use std::fs;
+    use std::io::Write;
+
+    let env = TestEnvironment::new().unwrap();
+    let manager = env.get_session_manager().unwrap();
+
+    manager.set_orchestrator_agent_type("codex").unwrap();
+
+    let home_dir = tempfile::TempDir::new().unwrap();
+    let codex_sessions = home_dir
+        .path()
+        .join(".codex")
+        .join("sessions")
+        .join("2025")
+        .join("09")
+        .join("13");
+    fs::create_dir_all(&codex_sessions).unwrap();
+
+    let jsonl_path = codex_sessions.join("orch.jsonl");
+    let mut f = std::fs::File::create(&jsonl_path).unwrap();
+    writeln!(f, "{{\"id\":\"orch-session\",\"timestamp\":\"2025-09-13T01:00:00.000Z\",\"cwd\":\"{}\",\"originator\":\"codex_cli_rs\"}}", env.repo_path.display()).unwrap();
+    writeln!(f, "{{\"record_type\":\"state\"}}").unwrap();
+
+    let prev_home = std::env::var("HOME").ok();
+    EnvAdapter::set_var("HOME", &home_dir.path().to_string_lossy());
+
+    let cmd = manager
+        .start_fresh_agent_in_orchestrator(&std::collections::HashMap::new(), None)
+        .unwrap();
+    let shell = &cmd.shell_command;
+    assert!(
+        shell.contains(" codex --sandbox "),
+        "fresh orchestrator with no override must launch persisted Codex agent, got: {}",
+        shell
+    );
+    assert!(
+        !shell.contains(" resume "),
+        "fresh orchestrator must not resume an existing Codex conversation: {}",
+        shell
+    );
+
+    if let Some(h) = prev_home {
+        EnvAdapter::set_var("HOME", &h);
+    } else {
+        EnvAdapter::remove_var("HOME");
+    }
+}
+
+#[test]
 fn test_create_session_with_empty_branch_prefix() {
     let env = TestEnvironment::new().unwrap();
     let db = env.get_database().unwrap();
