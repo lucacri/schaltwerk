@@ -48,13 +48,6 @@ export const FALLBACK_CODEX_MODELS: CodexModelMetadata[] = cloneCodexCatalog(
     LATEST_CODEX_CATALOG
 ).models
 
-export function getCodexModelMetadata(
-    modelId: string,
-    models: CodexModelMetadata[] = FALLBACK_CODEX_MODELS
-): CodexModelMetadata | undefined {
-    return models.find(model => model.id === modelId)
-}
-
 export function getAllCodexModels(): CodexModelMetadata[] {
     return LATEST_CODEX_CATALOG.models.map(cloneModel)
 }

@@ -11,6 +11,19 @@ The spec preview toolbar now cleanly separates clarification from execution:
 - Pending spec edits are flushed before Run opens the modal so the prefilled content stays in sync.
 - The `Mod+Enter` shortcut now triggers Run in the preview, while `Mod+Shift+R` remains the clarification shortcut.
 
+## New Session Modal Primary Surface Rebuild
+
+`NewSessionModal` was trimmed from ~2.5k lines to a focused primary creation flow that matches the `New Session Modal View` mockup in `design/style-guide.pen`.
+
+- Primary surface owns: name input (with auto-generation from prompt), one horizontally scrollable favorites row (`Spec only` → user presets → enabled raw agents filtered by `useEnabledAgents` + `useAgentAvailability`), markdown prompt, footer with version selector, Cancel, Create, and a `Custom settings…` toggle.
+- Version selector is enabled only when a raw-agent card is selected; spec and preset cards force the implicit version count.
+- `⌘1…⌘9` select the first nine favorite cards (badge labels match). `⌘Enter` submits.
+- Advanced controls (autonomy toggle, multi-agent allocation dropdown, link to agent defaults in Settings) moved behind a `Custom settings…` affordance. The primary modal no longer renders epic selectors, GitHub issue/PR cards, consolidation controls, base-branch picker, unified-search, or repository-empty banners.
+- `onCreate` payload contract is unchanged so `App.handleCreateSession` keeps working.
+- Prefill via `UiEvent.NewSessionPrefill` updates the name / prompt / favorite selection that the primary surface owns, and passes through metadata it doesn't render (`issueNumber`, `issueUrl`, `prNumber`, `prUrl`, `epicId`, `versionGroupId`, and consolidation fields) so existing callers — consolidation entry, contextual PR/issue actions — stay wired end-to-end.
+
+Supporting helpers introduced: `src/components/modals/newSession/favoriteOptions.ts`, `buildCreatePayload.ts`, and `NewSessionAdvancedPanel.tsx`, each covered by unit tests.
+
 ## Quick Spec / Custom Mode in NewSessionModal
 
 The favorites row in the New Session modal now hosts two fixed cards:

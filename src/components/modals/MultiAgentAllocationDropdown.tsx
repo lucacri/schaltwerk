@@ -10,16 +10,6 @@ import { Checkbox } from '../ui'
 
 export const MAX_VERSION_COUNT = 4
 export const MULTI_AGENT_TYPES = AGENT_TYPES.filter(agent => agent !== 'terminal') as AgentType[]
-export const VERSION_DROPDOWN_ITEMS = [
-    ...Array.from({ length: MAX_VERSION_COUNT }, (_value, index) => {
-        const count = index + 1
-        return {
-            key: String(count),
-            label: `${count} ${count === 1 ? 'version' : 'versions'}`,
-        }
-    }),
-    { key: 'multi', label: 'Use Multiple Agents' },
-]
 
 export type MultiAgentAllocations = Partial<Record<AgentType, number>>
 

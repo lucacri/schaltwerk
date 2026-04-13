@@ -1,15 +1,6 @@
-import { AgentType, createAgentRecord } from '../../types/session'
+import { AgentType } from '../../types/session'
 
 export type AgentEnvVar = { key: string; value: string }
-
-export type AgentEnvVarState = Record<AgentType, AgentEnvVar[]>
-
-export type AgentCliArgsState = Record<AgentType, string>
-
-export const createEmptyEnvVarState = (): AgentEnvVarState =>
-    createAgentRecord<AgentEnvVar[]>(_agent => [])
-
-export const createEmptyCliArgsState = (): AgentCliArgsState => createAgentRecord(_agent => '')
 
 export const displayNameForAgent = (agent: AgentType) => {
     switch (agent) {
