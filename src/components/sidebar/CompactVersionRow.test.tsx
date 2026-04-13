@@ -103,15 +103,35 @@ describe('CompactVersionRow', () => {
     expect(row).toBeInTheDocument()
     expect(row).toHaveAttribute('data-session-id', 'feature_v2')
     expect(row).toHaveAttribute('data-session-selected', 'false')
-    expect(screen.getByText('v2 · claude')).toBeInTheDocument()
-    expect(screen.getByText('+42')).toBeInTheDocument()
-    expect(screen.getByText('-3')).toBeInTheDocument()
+    expect(screen.getByTestId('compact-row-version-index')).toHaveTextContent('v2')
+    expect(screen.getByTestId('compact-row-agent-chip')).toHaveTextContent('claude')
+    expect(screen.getByTestId('compact-row-diff-chip')).toHaveTextContent('2f +42 -3')
     expect(screen.getByRole('button', { name: 'Open issue #8' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Open PR #11' })).toBeInTheDocument()
     expect(screen.getByTestId('compact-row-status-running')).toBeInTheDocument()
     expect(screen.getByTestId('compact-stat-dirty')).toHaveTextContent('2 dirty')
     expect(screen.getByText('4 ahead')).toBeInTheDocument()
     expect(screen.queryByTestId('session-actions')).toBeNull()
+  })
+
+  it('renders the style guide row structure with accent, index, body, and right stack', () => {
+    renderRow()
+
+    const row = screen.getByTestId('compact-version-row')
+    const accent = screen.getByTestId('compact-row-accent')
+    const versionIndex = screen.getByTestId('compact-row-version-index')
+    const body = screen.getByTestId('compact-row-body')
+    const rightStack = screen.getByTestId('compact-row-right-stack')
+
+    expect(row).toContainElement(accent)
+    expect(row).toContainElement(versionIndex)
+    expect(row).toContainElement(body)
+    expect(row).toContainElement(rightStack)
+    expect(accent.style.width).toBe('4px')
+    expect(versionIndex.style.width).toBe('52px')
+    expect(versionIndex).toHaveTextContent('v2')
+    expect(screen.getByTestId('compact-row-agent-chip')).toHaveTextContent('claude')
+    expect(screen.getByTestId('compact-row-diff-chip')).toHaveTextContent('2f +42 -3')
   })
 
   it('renders idle state when attention is required', () => {
@@ -260,15 +280,15 @@ describe('CompactVersionRow', () => {
     expect(actionsRow).toBeInTheDocument()
   })
 
-  it('applies tagMinWidth to the version badge', () => {
+  it('does not apply legacy tagMinWidth to the agent chip', () => {
     renderRow({ tagMinWidth: '14ch' })
-    const badge = screen.getByText('v2 · claude')
-    expect(badge.style.minWidth).toBe('14ch')
+    const badge = screen.getByTestId('compact-row-agent-chip')
+    expect(badge.style.minWidth).toBe('')
   })
 
-  it('does not set minWidth when tagMinWidth is undefined', () => {
+  it('does not set minWidth on the agent chip when tagMinWidth is undefined', () => {
     renderRow()
-    const badge = screen.getByText('v2 · claude')
+    const badge = screen.getByTestId('compact-row-agent-chip')
     expect(badge.style.minWidth).toBe('')
   })
 
@@ -283,10 +303,11 @@ describe('CompactVersionRow', () => {
       },
     })
 
-    expect(screen.getByText('v2 · kilocode')).toBeInTheDocument()
+    expect(screen.getByTestId('compact-row-version-index')).toHaveTextContent('v2')
+    expect(screen.getByTestId('compact-row-agent-chip')).toHaveTextContent('kilocode')
   })
 
-  it('renders consolidation sessions with a merge badge instead of a duplicate version label', () => {
+  it('renders consolidation sessions with a merge index instead of a duplicate version label', () => {
     renderRow({
       session: {
         ...baseSession,
@@ -297,8 +318,24 @@ describe('CompactVersionRow', () => {
       },
     })
 
-    expect(screen.getByText('merge · claude')).toBeInTheDocument()
+    expect(screen.getByTestId('compact-row-version-index')).toHaveTextContent(/merge/i)
+    expect(screen.getByTestId('compact-row-agent-chip')).toHaveTextContent('claude')
     expect(screen.queryByText('v2 · claude')).toBeNull()
+  })
+
+  it('uses selected styling from the style guide', () => {
+    renderRow({ isSelected: true })
+
+    const row = screen.getByTestId('compact-version-row')
+    expect(row.style.getPropertyValue('--session-card-border')).toBe('var(--color-accent-blue-border)')
+    expect(row.style.getPropertyValue('--session-card-bg')).toBe('var(--color-accent-blue-bg)')
+    expect(row.style.getPropertyValue('--session-card-hover-bg')).toBe('var(--color-accent-blue-bg)')
+  })
+
+  it('dims the entire row when it is not a consolidation candidate', () => {
+    renderRow({ isDimmedForConsolidation: true })
+
+    expect(screen.getByTestId('compact-version-row')).toHaveStyle({ opacity: '0.55' })
   })
 
   it('renders the tree connector by default', () => {

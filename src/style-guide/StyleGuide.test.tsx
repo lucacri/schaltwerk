@@ -197,7 +197,8 @@ describe('StyleGuide', () => {
     expect(within(sessionCard as HTMLElement).getByTestId('session-card-stat-diff')).toHaveTextContent('4 files+28-6')
 
     const compactVersionRow = section.getByTestId('compact-version-row')
-    expect(within(compactVersionRow).getByText('v2 · claude')).toBeInTheDocument()
+    expect(within(compactVersionRow).getByTestId('compact-row-version-index')).toHaveTextContent('v2')
+    expect(within(compactVersionRow).getByTestId('compact-row-agent-chip')).toHaveTextContent('claude')
     expect(within(compactVersionRow).getByText('2 ahead')).toBeInTheDocument()
     expect(within(compactVersionRow).getByTestId('compact-row-status-ready')).toBeInTheDocument()
 

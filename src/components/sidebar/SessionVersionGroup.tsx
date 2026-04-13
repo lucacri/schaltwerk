@@ -1,5 +1,6 @@
 import { memo, type ReactNode, useState } from 'react'
 import { clsx } from 'clsx'
+import { VscCheck, VscChevronRight, VscDebugStop, VscGitMerge, VscRefresh } from 'react-icons/vsc'
 import { SessionCard } from './SessionCard'
 import { CompactVersionRow } from './CompactVersionRow'
 import { SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
@@ -158,7 +159,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   const primaryVersion = selectedSourceVersion ?? sourceVersions[0] ?? group.versions[0]
   const siblingInfos = group.versions.map(v => v.session.info)
   const hoveredSession = group.versions.find(v => v.session.info.session_id === hoveredSessionId)?.session.info
-  const latestJudge = [...judgeSessions]
+  const sortedJudgeSessions = [...judgeSessions]
     .sort((a, b) => {
       const aTs = a.session.info.last_modified_ts
         ?? (Date.parse(a.session.info.last_modified ?? a.session.info.created_at ?? '') || 0)
@@ -166,9 +167,12 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
         ?? (Date.parse(b.session.info.last_modified ?? b.session.info.created_at ?? '') || 0)
       return bTs - aTs
     })
+  const activeJudge = sortedJudgeSessions[0]
+  const latestJudge = sortedJudgeSessions
     .find(v => v.session.info.consolidation_recommended_session_id)
-  const activeRoundId = consolidationCandidates[0]?.session.info.consolidation_round_id
-    ?? latestJudge?.session.info.consolidation_round_id
+  const focusJudge = latestJudge ?? activeJudge
+  const activeRoundId = focusJudge?.session.info.consolidation_round_id
+    ?? consolidationCandidates[0]?.session.info.consolidation_round_id
   const selectedCandidate = selectedVersionInGroup?.session.info.is_consolidation
     && selectedVersionInGroup.session.info.consolidation_role !== 'judge'
       ? selectedVersionInGroup.session.info
@@ -192,6 +196,9 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     latestJudge?.session.info.consolidation_recommended_session_id,
     group.versions,
   )
+  const recommendedWinnerSessionId = latestJudge?.session.info.consolidation_recommended_session_id ?? null
+  const judgeCandidateSessionIds = new Set(focusJudge?.session.info.consolidation_sources ?? [])
+  const isConsolidationFocusActive = Boolean(focusJudge)
   const maxTagLength = Math.max(
     ...group.versions.map(v => {
       const agent = (v.session.info.original_agent_type || '').toLowerCase()
@@ -299,6 +306,13 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
       : false
     const isHighlighted = (version.session.info.is_consolidation && version.session.info.consolidation_sources?.includes(hoveredSessionId || ''))
       || hoveredSessionId === version.session.info.session_id
+    const isConsolidationCandidate = version.session.info.consolidation_role !== 'judge'
+      && (
+        version.session.info.is_consolidation
+        || judgeCandidateSessionIds.has(version.session.info.session_id)
+        || version.session.info.session_id === recommendedWinnerSessionId
+      )
+    const isDimmedForConsolidation = isConsolidationFocusActive && !isConsolidationCandidate
 
     return (
       <CompactVersionRow
@@ -329,9 +343,16 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
         onHover={setHoveredSessionId}
         isHighlighted={isHighlighted}
         isConsolidationSourceHighlighted={Boolean(isConsolidationSourceHighlighted)}
+        isDimmedForConsolidation={isDimmedForConsolidation}
       />
     )
   }
+  const visibleVersionRows = [
+    ...consolidationCandidates,
+    ...sourceVersions,
+  ]
+  const sourceListRows = recommendationLabel ? sourceVersions : visibleVersionRows
+  const consolidationLaneRows = recommendationLabel ? consolidationCandidates : []
 
   return (
     <div className="mb-2 relative">
@@ -349,34 +370,35 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
+            data-testid="version-group-toggle"
             className="w-full text-left"
             title={`${group.baseName} (${sourceVersionCount} versions) - Click to expand/collapse`}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 min-w-0">
-                  <svg
-                    className={clsx('h-3 w-3 flex-shrink-0 text-text-muted transition-transform', isExpanded ? 'rotate-90' : 'rotate-0')}
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                    aria-hidden="true"
-                  >
-                    <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                  </svg>
-                  <span className="truncate" style={sessionText.title}>{group.baseName}</span>
-                  <span
-                    data-testid="version-group-count"
-                    className="inline-flex flex-shrink-0 items-center rounded-full border px-2 py-0.5"
-                    style={{
-                      ...sessionText.badge,
-                      backgroundColor: 'var(--color-bg-hover)',
-                      color: 'var(--color-text-secondary)',
-                      borderColor: 'var(--color-border-subtle)',
-                    }}
-                  >
-                    {primaryVersionIndex + 1} / {sourceVersionCount}
-                  </span>
-                </div>
+            <div className="flex items-center justify-between gap-3 py-[3px]">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <VscChevronRight
+                  data-testid="version-group-chevron"
+                  data-expanded={isExpanded ? 'true' : 'false'}
+                  className="h-3 w-3 flex-shrink-0 transition-transform duration-200"
+                  style={{
+                    color: 'var(--color-text-muted)',
+                    transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                  }}
+                  aria-hidden="true"
+                />
+                <span className="truncate" style={sessionText.title}>{group.baseName}</span>
+                <span
+                  data-testid="version-group-count"
+                  className="inline-flex flex-shrink-0 items-center rounded-full border px-1.5 py-px"
+                  style={{
+                    ...sessionText.badge,
+                    backgroundColor: 'var(--color-bg-hover)',
+                    color: 'var(--color-text-secondary)',
+                    borderColor: 'var(--color-border-subtle)',
+                  }}
+                >
+                  {primaryVersionIndex + 1} / {sourceVersionCount}
+                </span>
               </div>
 
               <span
@@ -415,11 +437,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                 {hasMultipleVersions && onConsolidate && renderHeaderAction(
                   'consolidate-versions-button',
                   canConsolidate ? 'Consolidate versions' : 'Needs at least 2 running sessions to consolidate',
-                  (
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                      <path d="M5 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm6.5 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 16a2 2 0 1 1 0-4 2 2 0 0 1 0 4zM3 5v3.5a.5.5 0 0 0 .5.5H8v3h0V9h4.5a.5.5 0 0 0 .5-.5V5h-1v3H8.5V5h-1v3H4V5H3z" />
-                    </svg>
-                  ),
+                  <VscGitMerge className="h-3.5 w-3.5" aria-hidden="true" />,
                   () => {
                     if (!canConsolidate) return
                     onConsolidate(group)
@@ -429,33 +447,21 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                 {activeRoundId && onTriggerConsolidationJudge && renderHeaderAction(
                   'trigger-consolidation-judge-button',
                   latestJudge ? 'Re-run consolidation judge' : 'Run consolidation judge',
-                  (
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                      <path d="M8 1.5a3.5 3.5 0 0 0-3.328 2.422l-.11.328H3.25a2.75 2.75 0 0 0 0 5.5h1.5v-1.5h-1.5a1.25 1.25 0 1 1 0-2.5h2.408l.17-.504A2 2 0 1 1 9.5 6h-1l2.25 2.25L13 6h-1a4 4 0 0 0-4-4.5ZM5 10h6v1.5H5zm0 3h6v1.5H5z" />
-                    </svg>
-                  ),
+                  <VscRefresh className="h-3.5 w-3.5" aria-hidden="true" />,
                   () => onTriggerConsolidationJudge(activeRoundId, consolidationCandidates.some(candidate => !candidate.session.info.consolidation_report)),
                   { tone: 'amber' },
                 )}
                 {activeRoundId && confirmWinnerSessionId && onConfirmConsolidationWinner && renderHeaderAction(
                   'confirm-consolidation-winner-button',
                   selectedCandidate ? 'Confirm selected consolidation winner' : 'Confirm judge recommendation',
-                  (
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                      <path d="M13.78 3.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 8.28a.75.75 0 1 1 1.06-1.06L6 9.94l6.72-6.72a.75.75 0 0 1 1.06 0Z" />
-                    </svg>
-                  ),
+                  <VscCheck className="h-3.5 w-3.5" aria-hidden="true" />,
                   () => onConfirmConsolidationWinner(activeRoundId, confirmWinnerSessionId),
                   { tone: 'green' },
                 )}
                 {hasRunning && onTerminateAll && renderHeaderAction(
                   'terminate-group-button',
                   'Terminate all running sessions',
-                  (
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                      <path d="M4 2.5A1.5 1.5 0 0 1 5.5 1h5A1.5 1.5 0 0 1 12 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 4 13.5v-11z" />
-                    </svg>
-                  ),
+                  <VscDebugStop className="h-3.5 w-3.5" aria-hidden="true" />,
                   () => onTerminateAll(group),
                   { tone: 'red' },
                 )}
@@ -466,60 +472,73 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
 
         {isExpanded && (
           <div className="border-t px-3 pb-3 pt-2" style={{ borderTopColor: 'rgb(var(--color-border-subtle-rgb) / 0.7)' }}>
-            {sourceVersions.length > 0 && (
+            {sourceListRows.length > 0 && (
               <div data-testid="version-group-source-list" className="space-y-1.5">
                 <div className="space-y-1.5">
-                  {sourceVersions.map((version, versionIndex) => renderVersionRow(version, versionIndex))}
+                  {sourceListRows.map((version, versionIndex) => renderVersionRow(version, versionIndex))}
                 </div>
               </div>
             )}
 
-            {(consolidationCandidates.length > 0 || recommendationLabel) && (
-              <div className={clsx(sourceVersions.length > 0 && 'mt-3')}>
-                {sourceVersions.length > 0 && (
-                  <div
-                    data-testid="version-group-consolidation-divider"
-                    className="mx-1 mb-3 border-t"
-                    style={{ borderTopColor: 'rgb(var(--color-accent-purple-rgb) / 0.3)' }}
-                  />
-                )}
+            {recommendationLabel && (
+              <div className={clsx(sourceListRows.length > 0 && 'mt-3')}>
                 <div
                   data-testid="version-group-consolidation-lane"
-                  className="rounded-md border px-3 py-2"
+                  className="rounded-md border px-2.5 py-2"
                   style={{
-                    borderColor: 'rgb(var(--color-accent-purple-rgb) / 0.3)',
-                    backgroundColor: 'rgb(var(--color-accent-purple-rgb) / 0.06)',
+                    borderColor: 'var(--color-accent-violet-border)',
+                    backgroundColor: 'var(--color-accent-violet-bg)',
                   }}
                 >
                   <div
                     className="mb-2"
                     style={{
                       ...sessionText.badge,
-                      color: 'var(--color-accent-violet-light)',
+                      color: 'var(--color-accent-violet)',
                     }}
                   >
                     CONSOLIDATION
                   </div>
-                  {recommendationLabel && (
-                    <div
-                      data-testid="version-group-judge-recommendation"
-                      className="mb-2 rounded-md border px-3 py-2"
-                      style={{
-                        ...sessionText.meta,
-                        borderColor: 'rgb(var(--color-accent-purple-rgb) / 0.35)',
-                        backgroundColor: 'rgb(var(--color-accent-purple-rgb) / 0.08)',
-                        color: 'var(--color-text-secondary)',
-                      }}
-                    >
+                  <div
+                    data-testid="version-group-judge-recommendation"
+                    className="flex items-center justify-between gap-3 rounded-md border px-2.5 py-2"
+                    style={{
+                      ...sessionText.meta,
+                      borderColor: 'var(--color-accent-violet-border)',
+                      backgroundColor: 'var(--color-accent-violet-bg)',
+                      color: 'var(--color-text-secondary)',
+                    }}
+                  >
+                    <span>
                       Judge recommends{' '}
                       <span style={{ color: 'var(--color-text-primary)' }}>
                         {recommendationLabel}
                       </span>
+                    </span>
+                    {activeRoundId && confirmWinnerSessionId && onConfirmConsolidationWinner && (
+                      <button
+                        type="button"
+                        data-testid="confirm-consolidation-winner-banner-button"
+                        className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border transition-colors"
+                        title="Confirm judge recommendation"
+                        style={{
+                          backgroundColor: 'var(--color-bg-hover)',
+                          color: 'var(--color-accent-green)',
+                          borderColor: 'var(--color-border-subtle)',
+                        }}
+                        onClick={() => onConfirmConsolidationWinner(activeRoundId, confirmWinnerSessionId)}
+                      >
+                        <VscCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                  {consolidationLaneRows.length > 0 && (
+                    <div data-testid="version-group-consolidation-candidates" className="mt-2 space-y-1.5">
+                      {consolidationLaneRows.map((version, versionIndex) => (
+                        renderVersionRow(version, sourceListRows.length + versionIndex)
+                      ))}
                     </div>
                   )}
-                  <div className="space-y-1.5">
-                    {consolidationCandidates.map((candidate, index) => renderVersionRow(candidate, sourceVersions.length + index, true))}
-                  </div>
                 </div>
               </div>
             )}

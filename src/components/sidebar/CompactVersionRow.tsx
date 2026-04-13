@@ -1,11 +1,11 @@
-import { memo, useCallback } from 'react'
+import { memo, useCallback, type CSSProperties } from 'react'
 import { clsx } from 'clsx'
 import { useAtomValue } from 'jotai'
 import { VscIssues, VscGitPullRequest } from 'react-icons/vsc'
 import { SessionActions } from '../session/SessionActions'
 import { ProgressIndicator } from '../common/ProgressIndicator'
 import { UncommittedIndicator } from '../common/UncommittedIndicator'
-import { getAgentColorScheme, theme } from '../../common/theme'
+import { theme, type AgentColor } from '../../common/theme'
 import { useMultipleShortcutDisplays } from '../../keyboardShortcuts/useShortcutDisplay'
 import { detectPlatformSafe } from '../../keyboardShortcuts/helpers'
 import { SESSION_SWITCH_SHORTCUT_ACTIONS, resolveSwitchSessionShortcut } from './sessionShortcut'
@@ -46,6 +46,59 @@ interface CompactVersionRowProps {
   onHover?: (sessionId: string | null) => void
   isHighlighted?: boolean
   isConsolidationSourceHighlighted?: boolean
+  isDimmedForConsolidation?: boolean
+}
+
+type AccentVars = {
+  DEFAULT: string
+  light: string
+  bg: string
+  border: string
+}
+
+type CompactRowStyle = CSSProperties & {
+  '--session-card-bg'?: string
+  '--session-card-hover-bg'?: string
+  '--session-card-border'?: string
+}
+
+const accentVarsByAgentColor: Record<AgentColor, AccentVars> = {
+  blue: {
+    DEFAULT: 'var(--color-accent-blue)',
+    light: 'var(--color-accent-blue-light)',
+    bg: 'var(--color-accent-blue-bg)',
+    border: 'var(--color-accent-blue-border)',
+  },
+  green: {
+    DEFAULT: 'var(--color-accent-green)',
+    light: 'var(--color-accent-green-light)',
+    bg: 'var(--color-accent-green-bg)',
+    border: 'var(--color-accent-green-border)',
+  },
+  orange: {
+    DEFAULT: 'var(--color-accent-amber)',
+    light: 'var(--color-accent-amber-light)',
+    bg: 'var(--color-accent-amber-bg)',
+    border: 'var(--color-accent-amber-border)',
+  },
+  violet: {
+    DEFAULT: 'var(--color-accent-violet)',
+    light: 'var(--color-accent-violet-light)',
+    bg: 'var(--color-accent-violet-bg)',
+    border: 'var(--color-accent-violet-border)',
+  },
+  red: {
+    DEFAULT: 'var(--color-accent-red)',
+    light: 'var(--color-accent-red-light)',
+    bg: 'var(--color-accent-red-bg)',
+    border: 'var(--color-accent-red-border)',
+  },
+  yellow: {
+    DEFAULT: 'var(--color-accent-yellow)',
+    light: 'var(--color-accent-yellow-light)',
+    bg: 'var(--color-accent-yellow-bg)',
+    border: 'var(--color-accent-yellow-border)',
+  },
 }
 
 export const CompactVersionRow = memo<CompactVersionRowProps>(({
@@ -54,7 +107,6 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   isSelected,
   hasFollowUpMessage,
   showPromoteIcon = false,
-  tagMinWidth,
   willBeDeleted = false,
   isPromotionPreview = false,
   onPromoteVersion,
@@ -70,6 +122,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   onHover,
   isHighlighted = false,
   isConsolidationSourceHighlighted = false,
+  isDimmedForConsolidation = false,
 }) => {
   const shortcuts = useMultipleShortcutDisplays([...SESSION_SWITCH_SHORTCUT_ACTIONS])
   const platform = detectPlatformSafe()
@@ -103,14 +156,15 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   const commitsAheadCount = s.commits_ahead_count ?? 0
   const agentType = s.original_agent_type as SessionInfo['original_agent_type']
   const agentKey = (agentType || '').toLowerCase()
-  const versionLabel = s.is_consolidation
-    ? `merge · ${agentKey}`
+  const versionIndexLabel = s.is_consolidation
+    ? 'merge'
     : s.version_number
-      ? `v${s.version_number} · ${agentKey}`
-      : agentKey
+      ? `v${s.version_number}`
+      : `v${index + 1}`
+  const agentLabel = sessionState === 'spec' ? t.session.spec : agentKey
 
   const agentColor = getAgentColorKey(agentKey)
-  const colorScheme = getAgentColorScheme(agentColor)
+  const colorScheme = accentVarsByAgentColor[agentColor]
   const consolidationSources = s.is_consolidation
     ? s.consolidation_sources?.map((sourceId, index) => {
         const source = siblings?.find(sibling => sibling.session_id === sourceId)
@@ -121,7 +175,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
           title: source
             ? `${sourceAgentKey}${source?.version_number ? ` (v${source.version_number})` : ''}`
             : `Session ${sourceId}`,
-          colorScheme: getAgentColorScheme(getAgentColorKey(sourceAgentKey)),
+          colorScheme: accentVarsByAgentColor[getAgentColorKey(sourceAgentKey)],
           zIndex: 10 - index,
         }
       }) ?? []
@@ -129,7 +183,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
 
   const surface = getSessionCardSurfaceClasses({
     sessionState,
-    isSelected,
+    isSelected: false,
     isReadyToMerge,
     isRunning: statusState.isActivelyRunning,
     isIdle: statusState.isIdle,
@@ -139,6 +193,13 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
     isPromotionPreview,
     isHighlighted,
   })
+  const rowStyle: CompactRowStyle = {
+    ...surface.style,
+    '--session-card-border': isSelected ? 'var(--color-accent-blue-border)' : surface.style['--session-card-border'],
+    '--session-card-bg': isSelected ? 'var(--color-accent-blue-bg)' : surface.style['--session-card-bg'],
+    '--session-card-hover-bg': isSelected ? 'var(--color-accent-blue-bg)' : surface.style['--session-card-hover-bg'],
+    opacity: isDimmedForConsolidation ? 0.55 : undefined,
+  }
 
   const handleEpicChange = useCallback(
     (nextEpicId: string | null) => {
@@ -330,114 +391,103 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
         onMouseEnter={() => onHover?.(s.session_id)}
         onMouseLeave={() => onHover?.(null)}
         className={clsx(
-          'group relative w-full text-left pl-3.5 pr-2.5 py-1.5 rounded-md border transition-all duration-300',
+          'group relative flex w-full min-h-[52px] overflow-hidden text-left rounded-md border transition-all duration-300',
           surface.className,
           isBusy ? 'cursor-progress opacity-60' : 'cursor-pointer',
         )}
-        style={surface.style}
+        style={rowStyle}
         aria-label={`Select session ${s.display_name ?? s.session_id}`}
       >
-        {statusState.shouldShowStatusStrip && (() => {
-          const stripColor = statusState.primaryStatus === 'blocked'
-            ? 'var(--color-accent-red)'
-            : statusState.isIdle
-            ? 'var(--color-accent-yellow)'
-            : statusState.isActivelyRunning
-              ? 'var(--color-accent-blue)'
-              : statusState.primaryStatus === 'not_started'
-                ? 'var(--color-border-subtle)'
-              : isReadyToMerge
-                ? 'var(--color-accent-green)'
-                : 'var(--color-border-subtle)'
-          return (
-            <div
-              className={clsx('absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md', statusState.isActivelyRunning && 'session-status-pulse')}
-              style={{ backgroundColor: stripColor }}
-            />
-          )
-        })()}
-        <div className="flex flex-col gap-1">
-          <div className="flex items-stretch gap-2">
-            <div className="flex-1 min-w-0 flex items-center gap-2 overflow-hidden" style={sessionText.meta}>
-              {sessionState === 'spec' ? (
-                <span
-                  className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded border"
+        <div
+          data-testid="compact-row-accent"
+          className={clsx('w-[4px] flex-shrink-0 self-stretch', statusState.isActivelyRunning && 'session-status-pulse')}
+          style={{ width: '4px', backgroundColor: colorScheme.DEFAULT }}
+        />
+        <div
+          data-testid="compact-row-version-index"
+          className="flex h-auto flex-shrink-0 items-center justify-center"
+          style={{
+            width: '52px',
+            ...sessionText.title,
+            color: colorScheme.light,
+          }}
+        >
+          {versionIndexLabel}
+        </div>
+        <div data-testid="compact-row-body" className="flex min-w-0 flex-1 flex-col gap-[5px] px-2.5 py-[7px]">
+          <span
+            data-testid="compact-row-agent-chip"
+            className="inline-flex h-4 w-fit items-center rounded border px-1.5 py-[2px]"
+            style={{
+              ...sessionText.badge,
+              backgroundColor: sessionState === 'spec' ? 'var(--color-accent-amber-bg)' : colorScheme.bg,
+              color: sessionState === 'spec' ? 'var(--color-accent-amber-light)' : colorScheme.light,
+              borderColor: sessionState === 'spec' ? 'var(--color-accent-amber-border)' : colorScheme.border,
+            }}
+            title={agentKey ? `Agent: ${agentKey}` : undefined}
+          >
+            {agentLabel}
+          </span>
+
+          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden" data-testid="compact-row-stats">
+            <div data-testid="compact-stat-dirty">
+              {showDirtyIndicator ? (
+                <UncommittedIndicator
+                  className="h-4 flex-shrink-0 px-1.5 py-[2px]"
+                  count={dirtyFilesCount}
+                  label={`${dirtyFilesCount} dirty`}
+                  sessionName={s.display_name ?? s.session_id}
+                  samplePaths={s.top_uncommitted_paths}
+                  tone="neutral"
                   style={{
                     ...sessionText.badge,
-                    backgroundColor: 'var(--color-accent-amber-bg)',
                     color: 'var(--color-accent-amber-light)',
+                    backgroundColor: 'var(--color-accent-amber-bg)',
                     borderColor: 'var(--color-accent-amber-border)',
                   }}
-                >
-                  {t.session.spec}
-                </span>
+                  dotColor="var(--color-accent-amber)"
+                />
               ) : (
-                <>
-                  {agentType && (
-                    <span
-                      className="inline-flex flex-shrink-0 items-center gap-1 px-1.5 py-[1px] rounded border"
-                      style={{
-                        ...sessionText.badge,
-                        minWidth: tagMinWidth,
-                        backgroundColor: colorScheme.bg,
-                        color: colorScheme.light,
-                        borderColor: colorScheme.border,
-                      }}
-                      title={`Agent: ${agentKey}`}
-                    >
-                      <span
-                        className="w-1 h-1 rounded-full"
-                        style={{ backgroundColor: colorScheme.DEFAULT }}
-                      />
-                      {versionLabel}
-                    </span>
-                  )}
-                  {showDirtyIndicator ? (
-                    <div data-testid="compact-stat-dirty">
-                      <UncommittedIndicator
-                        className="flex-shrink-0"
-                        count={dirtyFilesCount}
-                        sessionName={s.display_name ?? s.session_id}
-                        samplePaths={s.top_uncommitted_paths}
-                      />
-                    </div>
-                  ) : null}
-                  <span
-                    className="inline-flex items-center gap-1"
-                    style={sessionText.meta}
-                    title={`${commitsAheadCount} ahead · ${filesChanged} files · +${additions} -${deletions}`}
-                  >
-                    <span>{commitsAheadCount} ahead</span>
-                    <span>{filesChanged} files</span>
-                    <span style={{ color: 'var(--color-accent-green-light)' }}>+{additions}</span>
-                    <span style={{ color: 'var(--color-accent-red-light)' }}>-{deletions}</span>
-                  </span>
-                </>
-              )}
-              {metadataBadges}
-            </div>
-            <div
-              data-testid="compact-row-right-stack"
-              className="flex flex-col items-end gap-1 flex-shrink-0"
-            >
-              {statusIndicator}
-              {index < 8 && (
                 <span
-                  data-testid="compact-row-shortcut"
-                  className="mt-auto rounded border px-1.5 py-[1px]"
-                  title={`Switch to session (${resolveSwitchSessionShortcut(index, shortcuts, modKey)})`}
+                  className="inline-flex h-4 items-center rounded border px-1.5 py-[2px]"
                   style={{
                     ...sessionText.badge,
-                    fontFamily: theme.fontFamily.mono,
-                    color: 'var(--color-text-muted)',
                     backgroundColor: 'var(--color-bg-hover)',
+                    color: 'var(--color-text-tertiary)',
                     borderColor: 'var(--color-border-subtle)',
                   }}
                 >
-                  {resolveSwitchSessionShortcut(index, shortcuts, modKey)}
+                  clean
                 </span>
               )}
             </div>
+            <span
+              data-testid="compact-row-ahead-chip"
+              className="inline-flex h-4 flex-shrink-0 items-center rounded border px-1.5 py-[2px]"
+              style={{
+                ...sessionText.badge,
+                backgroundColor: 'var(--color-bg-hover)',
+                color: 'var(--color-text-tertiary)',
+                borderColor: 'var(--color-border-subtle)',
+              }}
+            >
+              {commitsAheadCount} ahead
+            </span>
+            <span
+              data-testid="compact-row-diff-chip"
+              className="inline-flex h-4 min-w-0 flex-shrink items-center rounded border px-1.5 py-[2px]"
+              title={`${filesChanged} files · +${additions} -${deletions}`}
+              style={{
+                ...sessionText.badge,
+                fontFamily: theme.fontFamily.mono,
+                backgroundColor: 'var(--color-bg-hover)',
+                color: 'var(--color-text-secondary)',
+                borderColor: 'var(--color-border-subtle)',
+              }}
+            >
+              {filesChanged}f +{additions} -{deletions}
+            </span>
+            {metadataBadges}
           </div>
 
           {consolidationSources.length > 0 && (
@@ -452,7 +502,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                   <div
                     key={source.sourceId}
                     data-testid="compact-row-consolidation-source-dot"
-                    className="flex items-center justify-center w-4 h-4 rounded-full border border-[var(--color-bg-primary)]"
+                    className="flex h-4 w-4 items-center justify-center rounded-full border border-[var(--color-bg-primary)]"
                     style={{
                       backgroundColor: source.colorScheme.DEFAULT,
                       zIndex: source.zIndex,
@@ -504,6 +554,29 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
               />
             </div>
           )}
+        </div>
+        <div
+          data-testid="compact-row-right-stack"
+          className="flex flex-shrink-0 flex-col items-end justify-between py-[7px] pr-2.5"
+          style={{ width: '62px' }}
+        >
+              {statusIndicator}
+              {index < 8 && (
+                <span
+                  data-testid="compact-row-shortcut"
+                  className="mt-auto rounded border px-1.5 py-[1px]"
+                  title={`Switch to session (${resolveSwitchSessionShortcut(index, shortcuts, modKey)})`}
+                  style={{
+                    ...sessionText.badge,
+                    fontFamily: theme.fontFamily.mono,
+                    color: 'var(--color-text-muted)',
+                    backgroundColor: 'var(--color-bg-hover)',
+                    borderColor: 'var(--color-border-subtle)',
+                  }}
+                >
+                  {resolveSwitchSessionShortcut(index, shortcuts, modKey)}
+                </span>
+              )}
         </div>
       </div>
     </div>
