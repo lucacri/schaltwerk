@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, cleanup, act, within } from '@testing-library/react'
 import { Provider as JotaiProvider, createStore } from 'jotai'
-import { ReactNode } from 'react'
+import { ReactNode, useState } from 'react'
 import { NewSessionModal } from './NewSessionModal'
 import { ModalProvider } from '../../contexts/ModalContext'
 import { TauriCommands } from '../../common/tauriCommands'
@@ -258,6 +258,17 @@ describe('NewSessionModal — primary surface', () => {
         expect(names[2]).toMatch(/Claude/)
     })
 
+    it('uses the designed modal body padding and wraps favorite cards tightly', () => {
+        openModal()
+
+        const body = screen.getByTestId('new-session-modal-body')
+        const favorites = screen.getByTestId('favorite-carousel')
+
+        expect(body).toHaveClass('p-5')
+        expect(favorites).toHaveClass('flex-wrap', 'gap-2')
+        expect(favorites).not.toHaveClass('overflow-x-auto', 'gap-3')
+    })
+
     it('disables the version selector when the spec card is selected', () => {
         openModal()
         // Spec is selected by default
@@ -346,6 +357,33 @@ describe('NewSessionModal — primary surface', () => {
         fireEvent.change(nameInput, { target: { value: 'custom_name' } })
         fireEvent.change(prompt, { target: { value: 'Something different entirely' } })
         expect(nameInput.value).toBe('custom_name')
+    })
+
+    it('does not reset a manually edited name when parent cachedPrompt updates while typing', async () => {
+        function ControlledModal() {
+            const [cachedPrompt, setCachedPrompt] = useState('')
+            return (
+                <NewSessionModal
+                    open={true}
+                    cachedPrompt={cachedPrompt}
+                    onPromptChange={setCachedPrompt}
+                    onClose={vi.fn()}
+                    onCreate={vi.fn()}
+                />
+            )
+        }
+
+        renderWithProviders(<ControlledModal />)
+
+        const nameInput = screen.getByLabelText('Agent Name') as HTMLInputElement
+        const prompt = screen.getByLabelText('Prompt') as HTMLTextAreaElement
+
+        fireEvent.change(nameInput, { target: { value: 'custom_name' } })
+        fireEvent.change(prompt, { target: { value: 'Keep this prompt in sync with the parent' } })
+
+        await waitFor(() => {
+            expect(nameInput.value).toBe('custom_name')
+        })
     })
 
     it('marks userEditedName=true on the payload when the user has edited the name', async () => {

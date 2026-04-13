@@ -204,6 +204,79 @@ describe('SessionCard stats-first layout', () => {
     expect(screen.getByText('schaltwerk/s1')).toBeInTheDocument()
   })
 
+  it('matches the style guide status strip and two-line task treatment', () => {
+    const longTask = 'Refine auth handoff and cleanup across the sidebar cards without truncating the second task line'
+
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              current_task: longTask,
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const card = screen.getByRole('button', { name: /selected session/i })
+    const statusStrip = card.querySelector('.w-\\[6px\\]')
+    const task = screen.getByText(longTask)
+
+    expect(statusStrip).toBeInTheDocument()
+    expect(task).not.toHaveClass('truncate')
+    expect(task.getAttribute('style')).toContain('font-size: var(--font-session-task)')
+    expect(task.getAttribute('style')).toContain('height: var(--font-session-task-height)')
+    expect(task).toHaveStyle({
+      overflow: 'hidden',
+    })
+  })
+
+  it('uses compact neutral dirty and diff badges with an accented ahead badge', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              has_uncommitted_changes: true,
+              dirty_files_count: 3,
+              commits_ahead_count: 5,
+              diff_stats: { files_changed: 4, additions: 42, deletions: 18, insertions: 42 },
+            },
+          }}
+          index={0}
+          isSelected={false}
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const dirty = screen.getByRole('button', { name: /has uncommitted changes/i })
+    const ahead = screen.getByTestId('session-card-stat-ahead')
+    const diff = screen.getByTestId('session-card-stat-diff')
+
+    expect(dirty).toHaveClass('px-1.5', 'py-[1px]')
+    expect(dirty).not.toHaveClass('bg-rose-900/30', 'text-rose-200', 'border-rose-700/60', 'hover:bg-rose-800/40')
+    expect(dirty.getAttribute('style')).toContain('background-color: var(--color-bg-elevated)')
+    expect(dirty.getAttribute('style')).toContain('border-color: var(--color-border-subtle)')
+    expect(dirty.getAttribute('style')).toContain('color: var(--color-text-tertiary)')
+    expect(ahead).toHaveClass('px-1.5', 'py-[1px]')
+    expect(ahead.getAttribute('style')).toContain('background-color: var(--color-accent-blue-bg)')
+    expect(ahead.getAttribute('style')).toContain('border-color: var(--color-accent-blue-border)')
+    expect(diff).toHaveClass('gap-1.5', 'px-1.5', 'py-[1px]')
+    expect(diff.getAttribute('style')).toContain('background-color: var(--color-bg-hover)')
+    expect(diff.getAttribute('style')).toContain('border-color: var(--color-border-subtle)')
+  })
+
   it('renders the shortcut chip inside the bottom metadata row to match the style guide', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>
@@ -264,7 +337,7 @@ describe('SessionCard running tag', () => {
     )
 
     const card = screen.getByRole('button', { name: /selected session/i })
-    const statusStrip = card.querySelector('.w-\\[3px\\]')
+    const statusStrip = card.querySelector('.w-\\[6px\\]')
     expect(statusStrip).toBeInTheDocument()
     expect(statusStrip).toHaveClass('session-status-pulse')
     expect(screen.queryByText(/✓ Ready/)).toBeNull()
@@ -348,7 +421,7 @@ describe('SessionCard spec stage badges', () => {
     )
 
     const card = screen.getByRole('button', { name: /selected session/i })
-    expect(card.querySelector('.w-\\[3px\\]')).toBeInTheDocument()
+    expect(card.querySelector('.w-\\[6px\\]')).toBeInTheDocument()
     expect(screen.getByText(/^running$/i)).toBeInTheDocument()
   })
 
@@ -377,7 +450,7 @@ describe('SessionCard spec stage badges', () => {
     )
 
     const card = screen.getByRole('button', { name: /selected session/i })
-    expect(card.querySelector('.w-\\[3px\\]')).toBeInTheDocument()
+    expect(card.querySelector('.w-\\[6px\\]')).toBeInTheDocument()
     expect(screen.getByText(/waiting for input/i)).toBeInTheDocument()
     expect(screen.queryByText(/^running$/i)).toBeNull()
   })

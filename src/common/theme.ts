@@ -407,6 +407,7 @@ export const theme = {
     button: 'var(--font-button)',
     input: 'var(--font-input)',
     label: 'var(--font-label)',
+    sessionTask: 'var(--font-session-task)',
     code: 'var(--font-code)',
     terminal: 'var(--font-terminal)',
   },

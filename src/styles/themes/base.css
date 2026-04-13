@@ -20,6 +20,8 @@
   --font-button: var(--ui-font-size);
   --font-input: var(--ui-font-size);
   --font-label: calc(var(--ui-font-size) * 0.929);
+  --font-session-task: calc(var(--ui-font-size) * 0.714);
+  --font-session-task-height: calc(var(--ui-font-size) * 1.571);
   --font-code: calc(var(--ui-font-size) * 0.929);
   --font-terminal: var(--terminal-font-size);
 

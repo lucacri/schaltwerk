@@ -94,8 +94,10 @@ export function NewSessionModal({
     const markdownEditorRef = useRef<MarkdownEditorRef>(null)
     const nameInputRef = useRef<HTMLInputElement>(null)
     const lastGeneratedNameRef = useRef<string>('')
+    const cachedPromptRef = useRef<string>(cachedPrompt)
     const promptRef = useRef<string>(cachedPrompt)
     const onPromptChangeRef = useRef(onPromptChange)
+    cachedPromptRef.current = cachedPrompt
     onPromptChangeRef.current = onPromptChange
 
     const favoriteOptions = useMemo<FavoriteOption[]>(
@@ -150,13 +152,13 @@ export function NewSessionModal({
 
     useEffect(() => {
         if (!open) return
-        // reset per-open state
         const initial = generateDockerStyleName()
+        const initialPrompt = cachedPromptRef.current
         setName(initial)
         lastGeneratedNameRef.current = initial
         setUserEditedName(false)
-        setPrompt(cachedPrompt)
-        promptRef.current = cachedPrompt
+        setPrompt(initialPrompt)
+        promptRef.current = initialPrompt
         setValidationError('')
         setCreating(false)
         setCustomSettingsOpen(false)
@@ -167,7 +169,7 @@ export function NewSessionModal({
         requestAnimationFrame(() => {
             markdownEditorRef.current?.focusEnd()
         })
-    }, [open, cachedPrompt])
+    }, [open])
 
     useEffect(() => {
         if (!open) return
@@ -397,7 +399,7 @@ export function NewSessionModal({
             minHeight={480}
             footer={footer}
         >
-            <div className="flex h-full min-h-0 flex-col gap-4">
+            <div data-testid="new-session-modal-body" className="flex h-full min-h-0 flex-col gap-4 p-5">
                 <FormGroup
                     label="Agent Name"
                     htmlFor="new-session-name"
@@ -416,10 +418,10 @@ export function NewSessionModal({
                 <section
                     aria-label="Favorites"
                     data-testid="favorite-carousel"
-                    className="flex shrink-0 gap-3 overflow-x-auto pb-1"
+                    className="flex shrink-0 flex-wrap gap-2 pb-1"
                 >
                     {favoriteOptions.map(option => (
-                        <div key={option.id} style={{ minWidth: 160 }}>
+                        <div key={option.id} style={{ width: 160 }}>
                             <FavoriteCard
                                 title={option.title}
                                 summary={option.summary}

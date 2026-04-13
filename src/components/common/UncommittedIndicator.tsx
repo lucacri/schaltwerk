@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import clsx from 'clsx'
 import { theme } from '../../common/theme'
 
@@ -6,6 +6,9 @@ interface UncommittedIndicatorProps {
     sessionName: string
     samplePaths?: string[]
     className?: string
+    style?: CSSProperties
+    dotColor?: string
+    tone?: 'danger' | 'neutral'
     label?: string
     count?: number
 }
@@ -14,6 +17,9 @@ export function UncommittedIndicator({
     sessionName,
     samplePaths,
     className,
+    style,
+    dotColor = 'var(--color-accent-red-light)',
+    tone = 'danger',
     label,
     count,
 }: UncommittedIndicatorProps) {
@@ -58,14 +64,17 @@ export function UncommittedIndicator({
                 onClick={(event) => event.stopPropagation()}
                 className={clsx(
                     'inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs transition-colors',
-                    'bg-rose-900/30 text-rose-200 border-rose-700/60 hover:bg-rose-800/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60',
+                    tone === 'danger'
+                        ? 'bg-rose-900/30 text-rose-200 border-rose-700/60 hover:bg-rose-800/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/60'
+                        : 'hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)]',
                     className
                 )}
+                style={style}
                 aria-label={`Worktree for ${sessionName} has uncommitted changes`}
                 title={tooltipText}
             >
                 <span className="relative flex items-center">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: dotColor }} />
                 </span>
                 <span style={{ lineHeight: theme.lineHeight.badge }}>{resolvedLabel}</span>
             </button>

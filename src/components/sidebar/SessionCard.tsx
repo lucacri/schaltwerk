@@ -355,7 +355,7 @@ export const SessionCard = memo<SessionCardProps>(
                 : "var(--color-border-subtle)"
           return (
             <div
-              className={clsx("absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md", statusState.isActivelyRunning && "session-status-pulse")}
+              className={clsx("absolute left-0 top-0 bottom-0 w-[6px] rounded-l-md", statusState.isActivelyRunning && "session-status-pulse")}
               style={{ backgroundColor: stripColor }}
             />
           )
@@ -519,8 +519,8 @@ export const SessionCard = memo<SessionCardProps>(
             </div>
             {taskDescription && (
               <div
-                className="truncate mt-0.5"
-                style={sessionText.meta}
+                className="mt-0.5"
+                style={sessionText.taskDescription}
                 title={taskDescription}
               >
                 {taskDescription}
@@ -535,7 +535,10 @@ export const SessionCard = memo<SessionCardProps>(
           >
             {showDirtyIndicator ? (
               <UncommittedIndicator
-                className="flex-shrink-0"
+                className="flex-shrink-0 py-[1px]"
+                style={sessionText.dirtyBadge}
+                dotColor="var(--color-text-tertiary)"
+                tone="neutral"
                 count={dirtyFilesCount}
                 sessionName={sessionName}
                 samplePaths={s.top_uncommitted_paths}
@@ -544,12 +547,7 @@ export const SessionCard = memo<SessionCardProps>(
               <span
                 data-testid="session-card-stat-dirty"
                 className="inline-flex items-center gap-1 rounded border px-1.5 py-[1px]"
-                style={{
-                  ...sessionText.badge,
-                  color: "var(--color-text-tertiary)",
-                  backgroundColor: "rgb(var(--color-bg-hover-rgb) / 0.35)",
-                  borderColor: "var(--color-border-subtle)",
-                }}
+                style={sessionText.dirtyBadge}
                 title={`Dirty files: ${dirtyFilesCount}`}
               >
                 {dirtyFilesCount} dirty
@@ -561,7 +559,7 @@ export const SessionCard = memo<SessionCardProps>(
               style={{
                 ...sessionText.badge,
                 color: commitsAheadCount > 0 ? "var(--color-accent-blue-light)" : "var(--color-text-tertiary)",
-                backgroundColor: commitsAheadCount > 0 ? "var(--color-accent-blue-bg)" : "rgb(var(--color-bg-hover-rgb) / 0.35)",
+                backgroundColor: commitsAheadCount > 0 ? "var(--color-accent-blue-bg)" : "var(--color-bg-elevated)",
                 borderColor: commitsAheadCount > 0 ? "var(--color-accent-blue-border)" : "var(--color-border-subtle)",
               }}
               title={`Commits ahead of ${s.base_branch}: ${commitsAheadCount}`}
@@ -570,13 +568,8 @@ export const SessionCard = memo<SessionCardProps>(
             </span>
             <span
               data-testid="session-card-stat-diff"
-              className="inline-flex items-center gap-1 rounded border px-1.5 py-[1px]"
-              style={{
-                ...sessionText.badge,
-                color: "var(--color-text-secondary)",
-                backgroundColor: "rgb(var(--color-bg-hover-rgb) / 0.35)",
-                borderColor: "var(--color-border-subtle)",
-              }}
+              className="inline-flex items-center gap-1.5 rounded border px-1.5 py-[1px]"
+              style={sessionText.diffBadge}
               title={`Diff summary: ${filesChanged} files, +${additions}, -${deletions}`}
             >
               <span>{filesChanged} files</span>

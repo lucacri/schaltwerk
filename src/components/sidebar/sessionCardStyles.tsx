@@ -20,6 +20,18 @@ export const sessionText = {
     ...typography.caption,
     color: 'var(--color-text-tertiary)',
   },
+  taskDescription: {
+    ...typography.caption,
+    fontSize: theme.fontSize.sessionTask,
+    lineHeight: 1.1,
+    color: 'var(--color-text-tertiary)',
+    height: 'var(--font-session-task-height)',
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    wordBreak: 'break-word',
+  },
   metaEmphasis: {
     ...typography.caption,
     color: 'var(--color-text-secondary)',
@@ -39,6 +51,22 @@ export const sessionText = {
   statsNumber: {
     ...typography.caption,
     fontWeight: 600,
+  },
+  dirtyBadge: {
+    ...typography.caption,
+    fontWeight: 600,
+    lineHeight: theme.lineHeight.compact,
+    color: 'var(--color-text-tertiary)',
+    backgroundColor: 'var(--color-bg-elevated)',
+    borderColor: 'var(--color-border-subtle)',
+  },
+  diffBadge: {
+    ...typography.caption,
+    fontWeight: 600,
+    lineHeight: theme.lineHeight.compact,
+    color: 'var(--color-text-secondary)',
+    backgroundColor: 'var(--color-bg-hover)',
+    borderColor: 'var(--color-border-subtle)',
   },
 } as const
 
