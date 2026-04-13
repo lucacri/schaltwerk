@@ -22,7 +22,7 @@ import { useAtomValue } from 'jotai'
 import { projectForgeAtom } from '../../store/atoms/forge'
 import { useToast } from '../../common/toast/ToastProvider'
 import { usePrComments } from '../../hooks/usePrComments'
-import type { Epic, SessionReadyToMergeCheck } from '../../types/session'
+import type { Epic } from '../../types/session'
 import { EpicSelect } from '../shared/EpicSelect'
 import { useTranslation } from '../../common/i18n'
 
@@ -33,7 +33,6 @@ const spinnerIcon = (
 interface SessionActionsProps {
   sessionState: 'spec' | 'processing' | 'running';
   isReadyToMerge?: boolean;
-  readinessChecks?: SessionReadyToMergeCheck[];
   sessionId: string;
   hasUncommittedChanges?: boolean;
   branch?: string;
@@ -70,7 +69,6 @@ interface SessionActionsProps {
 export function SessionActions({
   sessionState,
   isReadyToMerge: _isReadyToMerge = false,
-  readinessChecks,
   sessionId,
   hasUncommittedChanges = false,
   showPromoteIcon = false,
@@ -123,14 +121,6 @@ export function SessionActions({
   const gitlabMrTooltip = canCreateGitlabMr
     ? t.sessionActions.createGitlabMrShortcut
     : t.sessionActions.noGitlabSources
-  const readinessLabelByKey: Record<SessionReadyToMergeCheck['key'], string> = {
-    worktree_exists: t.sessionActions.checkWorktreeExists,
-    no_uncommitted_changes: t.sessionActions.checkNoUncommittedChanges,
-    no_conflicts: t.sessionActions.checkNoConflicts,
-    has_committed_changes: t.sessionActions.checkHasCommittedChanges,
-    rebased_onto_parent: t.sessionActions.checkRebasedOntoParent,
-  }
-
   const handleOpenPullRequest = useCallback(() => {
     if (!onCreatePullRequest) return
     onCreatePullRequest(sessionId)
@@ -340,37 +330,6 @@ export function SessionActions({
         </>
       )}
       </div>
-      {sessionState !== 'spec' && readinessChecks && readinessChecks.length > 0 && (
-        <div className="flex flex-col gap-1" aria-label={t.sessionActions.mergeChecks}>
-          <span
-            className="text-[11px] font-medium uppercase tracking-wide"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            {t.sessionActions.mergeChecks}
-          </span>
-          <div className="flex flex-col gap-1">
-            {readinessChecks.map((check) => (
-              <div
-                key={check.key}
-                className="inline-flex items-center gap-1.5 text-xs"
-                style={{ color: check.passed ? 'var(--color-text-secondary)' : 'var(--color-text-primary)' }}
-              >
-                <span
-                  className="inline-flex h-4 w-4 items-center justify-center rounded-full border"
-                  style={{
-                    borderColor: check.passed ? 'var(--color-accent-green-border)' : 'var(--color-accent-red-border)',
-                    backgroundColor: check.passed ? 'var(--color-accent-green-bg)' : 'var(--color-accent-red-bg)',
-                    color: check.passed ? 'var(--color-accent-green-light)' : 'var(--color-accent-red-light)',
-                  }}
-                >
-                  {check.passed ? <VscCheck /> : <VscClose />}
-                </span>
-                <span>{readinessLabelByKey[check.key]}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

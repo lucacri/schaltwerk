@@ -172,7 +172,7 @@ describe('SessionVersionGroup status summary', () => {
     expect(screen.getByTestId('version-group-header-status')).toHaveTextContent('Running')
   })
 
-  it('shows ready state in the group header when the active version is ready', () => {
+  it('does not show ready state in the group header when the active version is ready', () => {
     const readyGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
@@ -192,7 +192,8 @@ describe('SessionVersionGroup status summary', () => {
       </SessionCardActionsProvider>
     )
 
-    expect(screen.getByTestId('version-group-header-status')).toHaveTextContent('Ready')
+    expect(screen.getByTestId('version-group-header-status')).toHaveTextContent('Running')
+    expect(screen.getByTestId('version-group-header-status')).not.toHaveTextContent('Ready')
   })
 
   it('keeps the header status area visible when collapsed', () => {

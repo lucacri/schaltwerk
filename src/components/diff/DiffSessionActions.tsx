@@ -8,9 +8,11 @@ import { logger } from '../../utils/logger'
 import { UiEvent, emitUiEvent } from '../../common/uiEvents'
 import { usePrComments } from '../../hooks/usePrComments'
 import { useTranslation } from '../../common/i18n'
+import { MergeReadinessChecks } from '../session/MergeReadinessChecks'
 
 type DiffSessionActionsRenderProps = {
   headerActions: ReactNode
+  sidePanelContent: ReactNode
   dialogs: ReactNode
 }
 
@@ -38,6 +40,7 @@ export function DiffSessionActions({
 
   const prNumber = targetSession?.info.pr_number
   const prUrl = targetSession?.info.pr_url
+  const readinessChecks = targetSession?.info.ready_to_merge_checks
 
   const handleConfirmReset = useCallback(async () => {
     if (!sessionName) return
@@ -100,6 +103,11 @@ export function DiffSessionActions({
     )
   }, [t, isSessionSelection, isResetting, prNumber, prUrl, fetchingComments, handleFetchAndPasteComments])
 
+  const sidePanelContent = useMemo(() => {
+    if (!isSessionSelection || !readinessChecks?.length) return null
+    return <MergeReadinessChecks checks={readinessChecks} />
+  }, [isSessionSelection, readinessChecks])
+
   const dialogs = useMemo(() => (
     <ConfirmResetDialog
       open={confirmResetOpen && isSessionSelection}
@@ -109,5 +117,5 @@ export function DiffSessionActions({
     />
   ), [confirmResetOpen, isSessionSelection, handleConfirmReset, isResetting])
 
-  return <>{children({ headerActions, dialogs })}</>
+  return <>{children({ headerActions, sidePanelContent, dialogs })}</>
 }

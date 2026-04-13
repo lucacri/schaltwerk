@@ -200,7 +200,7 @@ describe('StyleGuide', () => {
     expect(within(compactVersionRow).getByTestId('compact-row-version-index')).toHaveTextContent('v2')
     expect(within(compactVersionRow).getByTestId('compact-row-agent-chip')).toHaveTextContent('claude')
     expect(within(compactVersionRow).getByText('2 ahead')).toBeInTheDocument()
-    expect(within(compactVersionRow).getByTestId('compact-row-status-ready')).toBeInTheDocument()
+    expect(within(compactVersionRow).queryByTestId('compact-row-status-ready')).toBeNull()
 
     await user.click(section.getByRole('button', { name: 'Open Overlay Menu Preview' }))
 

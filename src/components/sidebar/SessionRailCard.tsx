@@ -47,8 +47,7 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
     : info.attention_required === true && info.attention_kind === 'waiting_for_input'
   const isIdle = info.attention_required === true && !isWaitingForInput
   const isRunningState = (lifecycleState === 'running' || isRunning) && !isIdle && !isWaitingForInput
-  const isReadyState = Boolean(info.ready_to_merge)
-  const accessibleState = isWaitingForInput ? 'waiting for input' : (isIdle ? 'idle' : (isReadyState ? 'ready' : lifecycleState))
+  const accessibleState = isWaitingForInput ? 'waiting for input' : (isIdle ? 'idle' : lifecycleState)
   const shortcuts = useMultipleShortcutDisplays([
     KeyboardShortcutAction.SwitchToSession1,
     KeyboardShortcutAction.SwitchToSession2,
@@ -84,7 +83,7 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
   const surface = getSessionCardSurfaceClasses({
     sessionState,
     isSelected,
-    isReadyToMerge: isReadyState,
+    isReadyToMerge: false,
     isRunning,
     isIdle,
     isWaitingForInput,
@@ -168,16 +167,7 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
               title={t.sidebar.states.spec}
             />
           )}
-          {!isRunningState && !isIdle && isReadyState && (
-            <span
-              className="font-bold"
-              style={{ color: 'var(--color-accent-green-light)', fontSize: theme.fontSize.caption }}
-              title={t.sidebar.states.ready}
-            >
-              ✓
-            </span>
-          )}
-          {!isRunningState && !isIdle && !isReadyState && lifecycleState === SessionState.Running && (
+          {!isRunningState && !isIdle && lifecycleState === SessionState.Running && (
             <span
               className="block w-1 h-1 rounded-full opacity-40"
               style={{ backgroundColor: 'var(--color-text-tertiary)' }}

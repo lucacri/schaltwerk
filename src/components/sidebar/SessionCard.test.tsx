@@ -314,6 +314,31 @@ describe('SessionCard stats-first layout', () => {
 })
 
 describe('SessionCard running tag', () => {
+  it('does not show a ready label when a session is ready to merge', () => {
+    const session: EnrichedSession = {
+      ...baseSession,
+      info: {
+        ...baseSession.info,
+        ready_to_merge: true,
+        session_state: 'running',
+      },
+    }
+
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={session}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.queryByText('Ready')).toBeNull()
+  })
+
   it('shows the running indicator instead of the ready label when a ready session is still active', () => {
     const session: EnrichedSession = {
       ...baseSession,

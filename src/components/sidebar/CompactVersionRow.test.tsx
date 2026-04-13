@@ -205,7 +205,7 @@ describe('CompactVersionRow', () => {
     expect(screen.queryByTestId('compact-row-status-running')).toBeNull()
   })
 
-  it('renders ready state when session is ready to merge', () => {
+  it('does not render ready state when session is ready to merge', () => {
     renderRow({
       session: {
         ...baseSession,
@@ -218,8 +218,8 @@ describe('CompactVersionRow', () => {
       },
     })
 
-    expect(screen.getByTestId('compact-row-status-ready')).toBeInTheDocument()
-    expect(screen.getByText(/ready/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('compact-row-status-ready')).toBeNull()
+    expect(screen.queryByText(/ready/i)).toBeNull()
   })
 
   it('renders running state when a ready session is still active', () => {

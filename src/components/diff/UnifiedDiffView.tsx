@@ -3600,7 +3600,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
       onClose={onClose}
       onLoadChangedFiles={loadChangedFiles}
     >
-      {({ headerActions, dialogs }) =>
+      {({ headerActions, sidePanelContent, dialogs }) =>
         isSidebarMode ? (
           <div className="flex flex-col h-full w-full min-h-0 relative">
             <div className="flex-1 overflow-hidden min-h-0 w-full relative">
@@ -3656,6 +3656,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
                   onCancelReview={clearReview}
                   removeComment={removeComment}
                   getConfirmationMessage={getConfirmationMessage}
+                  footerContent={sidePanelContent}
                 />
               </div>
               <div

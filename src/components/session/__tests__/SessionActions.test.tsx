@@ -303,6 +303,30 @@ describe('SessionActions – Running state', () => {
     expect(screen.queryByRole('button', { name: /review/i })).not.toBeInTheDocument()
   })
 
+  it('does not render merge checks in sidebar actions', () => {
+    const legacyReadinessProps = {
+      readinessChecks: [
+        { key: 'worktree_exists', passed: true },
+        { key: 'no_uncommitted_changes', passed: false },
+      ],
+    }
+
+    render(
+      <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+        <GithubIntegrationContext.Provider value={mockGithub}>
+          <SessionActions
+            {...legacyReadinessProps}
+            sessionState="running"
+            isReadyToMerge={false}
+            sessionId="session-123"
+          />
+        </GithubIntegrationContext.Provider>
+      </GitlabIntegrationContext.Provider>
+    )
+
+    expect(screen.queryByText('Merge checks')).not.toBeInTheDocument()
+  })
+
   it('does not render restart terminals alongside the remaining session controls', () => {
     render(
       <GitlabIntegrationContext.Provider value={defaultGitlabValue}>

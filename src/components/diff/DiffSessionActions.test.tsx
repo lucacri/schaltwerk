@@ -38,6 +38,14 @@ vi.mock('../../common/i18n', () => ({
         discardAllChanges: 'Discard all changes',
         resetSession: 'Reset Session',
       },
+      sessionActions: {
+        mergeChecks: 'Merge checks',
+        checkWorktreeExists: 'Worktree exists',
+        checkNoUncommittedChanges: 'No uncommitted changes',
+        checkNoConflicts: 'No unresolved merge conflicts',
+        checkHasCommittedChanges: 'Has committed work ahead of parent',
+        checkRebasedOntoParent: 'Rebased onto parent branch',
+      },
     },
     currentLanguage: 'en',
   }),
@@ -89,9 +97,10 @@ function renderActions(props: Partial<Parameters<typeof DiffSessionActions>[0]> 
     targetSession: createSession(),
     onClose: vi.fn(),
     onLoadChangedFiles: vi.fn().mockResolvedValue(undefined),
-    children: ({ headerActions, dialogs }: { headerActions: React.ReactNode; dialogs: React.ReactNode }) => (
+    children: ({ headerActions, dialogs, sidePanelContent }: { headerActions: React.ReactNode; dialogs: React.ReactNode; sidePanelContent?: React.ReactNode }) => (
       <div>
         <div data-testid="header-actions">{headerActions}</div>
+        <div data-testid="side-panel-content">{sidePanelContent}</div>
         <div data-testid="dialogs">{dialogs}</div>
       </div>
     ),
@@ -120,6 +129,33 @@ describe('DiffSessionActions', () => {
     renderActions({ isSessionSelection: false })
     expect(screen.queryByText('Restart Terminals')).toBeNull()
     expect(screen.queryByText('Reset Session')).toBeNull()
+  })
+
+  it('renders merge checks in side panel content for session selection', () => {
+    const session = createSession({
+      ready_to_merge_checks: [
+        { key: 'worktree_exists', passed: true },
+        { key: 'no_uncommitted_changes', passed: false },
+      ],
+    })
+
+    renderActions({ targetSession: session })
+
+    expect(screen.getByTestId('side-panel-content')).toHaveTextContent('Merge checks')
+    expect(screen.getByText('Worktree exists')).toBeTruthy()
+    expect(screen.getByText('No uncommitted changes')).toBeTruthy()
+  })
+
+  it('does not render merge checks for non-session selections', () => {
+    const session = createSession({
+      ready_to_merge_checks: [
+        { key: 'worktree_exists', passed: true },
+      ],
+    })
+
+    renderActions({ isSessionSelection: false, targetSession: session })
+
+    expect(screen.getByTestId('side-panel-content')).not.toHaveTextContent('Merge checks')
   })
 
   it('opens confirm reset dialog when reset button clicked', () => {

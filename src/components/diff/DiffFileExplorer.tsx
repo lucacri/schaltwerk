@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { VscComment, VscCheck } from 'react-icons/vsc'
 import { getFileIcon } from '../../utils/fileIcons'
@@ -29,6 +29,7 @@ export interface DiffFileExplorerProps {
   onCancelReview: () => void
   removeComment: (commentId: string) => void
   getConfirmationMessage?: (count: number) => string
+  footerContent?: ReactNode
 }
 
 
@@ -43,7 +44,8 @@ export function DiffFileExplorer({
   onFinishReview,
   onCancelReview,
   removeComment,
-  getConfirmationMessage = (count: number) => `Cancel review and discard ${count} comment${count > 1 ? 's' : ''}?`
+  getConfirmationMessage = (count: number) => `Cancel review and discard ${count} comment${count > 1 ? 's' : ''}?`,
+  footerContent,
 }: DiffFileExplorerProps) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const { formatCommentsForDisplay } = useReviewComments()
@@ -127,6 +129,12 @@ export function DiffFileExplorer({
       <div className="flex-1 overflow-y-auto px-2">
         <FileTree files={files} renderFileNode={renderFileNode} />
       </div>
+
+      {footerContent && (
+        <div className="p-3 border-t border-border-subtle">
+          {footerContent}
+        </div>
+      )}
       
       {currentReview && currentReview.comments.length > 0 && (
         <div className="p-3 border-t border-border-subtle flex flex-col gap-3">

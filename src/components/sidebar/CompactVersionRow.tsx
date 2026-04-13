@@ -295,20 +295,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
     }
 
     if (statusState.primaryStatus === 'ready') {
-      return (
-        <span
-          data-testid="compact-row-status-ready"
-          className="inline-flex items-center px-1.5 py-[1px] rounded border"
-          style={{
-            ...sessionText.badge,
-            backgroundColor: 'var(--color-accent-green-bg)',
-            color: 'var(--color-accent-green-light)',
-            borderColor: 'var(--color-accent-green-border)',
-          }}
-        >
-          {t.session.ready}
-        </span>
-      )
+      return null
     }
 
     return null
@@ -519,7 +506,6 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
               <SessionActions
                 sessionState={sessionState as 'spec' | 'processing' | 'running'}
                 isReadyToMerge={isReadyToMerge}
-                readinessChecks={s.ready_to_merge_checks}
                 sessionId={s.session_id}
                 sessionSlug={s.session_id}
                 worktreePath={s.worktree_path}

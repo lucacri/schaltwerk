@@ -259,7 +259,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
       case 'idle':
         return { label: t.session.idle, tone: 'yellow' as HeaderStatusTone }
       case 'ready':
-        return { label: t.session.ready, tone: 'green' as HeaderStatusTone }
+        return { label: t.session.running, tone: 'blue' as HeaderStatusTone }
       case 'running':
         return { label: t.session.running, tone: 'blue' as HeaderStatusTone }
       default:

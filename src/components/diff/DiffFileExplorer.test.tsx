@@ -117,6 +117,17 @@ describe('DiffFileExplorer', () => {
     expect(screen.queryByText('Finish Review')).not.toBeInTheDocument()
   })
 
+  it('renders footer content in the side panel', () => {
+    render(
+      <DiffFileExplorer
+        {...mockProps}
+        footerContent={<div>Merge checks footer</div>}
+      />
+    )
+
+    expect(screen.getByText('Merge checks footer')).toBeInTheDocument()
+  })
+
   it('shows review section when review has comments', () => {
     const currentReview = {
       sessionName: 'test',

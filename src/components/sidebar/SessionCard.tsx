@@ -350,8 +350,6 @@ export const SessionCard = memo<SessionCardProps>(
               ? "var(--color-accent-blue)"
               : statusState.primaryStatus === "not_started"
                 ? "var(--color-border-subtle)"
-              : isReadyToMerge
-                ? "var(--color-accent-green)"
                 : "var(--color-border-subtle)"
           return (
             <div
@@ -451,17 +449,6 @@ export const SessionCard = memo<SessionCardProps>(
                 }}
               >
                 {t.session.idle}
-              </span>
-            )}
-            {statusState.primaryStatus === "ready" && (
-              <span
-                className="flex-shrink-0"
-                style={{
-                  ...sessionText.badge,
-                  color: "var(--color-accent-green-light)",
-                }}
-              >
-                {t.session.ready}
               </span>
             )}
             {statusState.primaryStatus === "blocked" && (
@@ -725,7 +712,6 @@ export const SessionCard = memo<SessionCardProps>(
           <SessionActions
             sessionState={sessionState as "spec" | "processing" | "running"}
             isReadyToMerge={isReadyToMerge}
-            readinessChecks={s.ready_to_merge_checks}
             sessionId={s.session_id}
             sessionSlug={s.session_id}
             worktreePath={s.worktree_path}
