@@ -8,6 +8,7 @@ import { useTranslation } from '../../common/i18n/useTranslation'
 interface ConvertToDraftConfirmationProps {
   open: boolean
   sessionName: string
+  projectPath?: string | null
   sessionDisplayName?: string
   hasUncommittedChanges: boolean
   onClose: () => void
@@ -17,6 +18,7 @@ interface ConvertToDraftConfirmationProps {
 export function ConvertToSpecConfirmation({
   open,
   sessionName,
+  projectPath,
   sessionDisplayName,
   hasUncommittedChanges,
   onClose,
@@ -32,6 +34,7 @@ export function ConvertToSpecConfirmation({
     try {
       const result = await invoke<string | void>(TauriCommands.SchaltwerkCoreConvertSessionToDraft, {
         name: sessionName,
+        ...(projectPath ? { projectPath } : {}),
       })
       const newSpecName = typeof result === 'string' ? result : undefined
 
@@ -43,7 +46,7 @@ export function ConvertToSpecConfirmation({
     } finally {
       setLoading(false)
     }
-  }, [loading, sessionName, onSuccess, onClose])
+  }, [loading, onClose, onSuccess, projectPath, sessionName])
 
   if (!open) return null
 

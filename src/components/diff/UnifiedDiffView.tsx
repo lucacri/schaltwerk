@@ -458,11 +458,15 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
   const loadDiffForFile = useCallback(
     (session: string | null, file: ChangedFile, viewMode: "unified" | "split") => {
       if (diffSourceRef.current === "uncommitted" && session) {
-        return loadUncommittedFileDiff(session, file);
+        return currentProjectPath
+          ? loadUncommittedFileDiff(session, file, currentProjectPath)
+          : loadUncommittedFileDiff(session, file);
       }
-      return loadFileDiff(session, file, viewMode);
+      return currentProjectPath
+        ? loadFileDiff(session, file, viewMode, currentProjectPath)
+        : loadFileDiff(session, file, viewMode);
     },
-    [],
+    [currentProjectPath],
   );
 
   const handleOpenFile = useCallback(
@@ -482,7 +486,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         } else if (sessionName) {
           const sessionData = await invoke<{ worktree_path?: string }>(
             TauriCommands.SchaltwerkCoreGetSession,
-            { name: sessionName },
+            { name: sessionName, ...(currentProjectPath ? { projectPath: currentProjectPath } : {}) },
           );
           const worktreePath = sessionData?.worktree_path;
           if (worktreePath) {
@@ -859,19 +863,22 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
     if (diffSource === "uncommitted" && sessionName) {
       return await invoke<ChangedFile[]>(TauriCommands.GetUncommittedFiles, {
         sessionName,
+        ...(currentProjectPath ? { projectPath: currentProjectPath } : {}),
       });
     }
 
     return await invoke<ChangedFile[]>(TauriCommands.GetChangedFilesFromMain, {
       sessionName,
+      ...(currentProjectPath ? { projectPath: currentProjectPath } : {}),
     });
-  }, [diffSource, sessionName]);
+  }, [currentProjectPath, diffSource, sessionName]);
 
   const fetchOrchestratorChangedFiles = useCallback(async () => {
     return await invoke<ChangedFile[]>(
       TauriCommands.GetOrchestratorWorkingChanges,
+      currentProjectPath ? { projectPath: currentProjectPath } : undefined,
     );
-  }, []);
+  }, [currentProjectPath]);
 
   const loadChangedFiles = useCallback(async () => {
     captureScrollAnchor();
@@ -1033,14 +1040,15 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
 
       const currentBranch = await invoke<string>(
         TauriCommands.GetCurrentBranchName,
-        { sessionName },
+        { sessionName, ...(currentProjectPath ? { projectPath: currentProjectPath } : {}) },
       );
       const baseBranch = await invoke<string>(TauriCommands.GetBaseBranchName, {
         sessionName,
+        ...(currentProjectPath ? { projectPath: currentProjectPath } : {}),
       });
       const [baseCommit, headCommit] = await invoke<[string, string]>(
         TauriCommands.GetCommitComparisonInfo,
-        { sessionName },
+        { sessionName, ...(currentProjectPath ? { projectPath: currentProjectPath } : {}) },
       );
 
       setBranchInfo({ currentBranch, baseBranch, baseCommit, headCommit });
@@ -2834,6 +2842,7 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         {
           sessionName,
           filePath: targetFilePath,
+          ...(currentProjectPath ? { projectPath: currentProjectPath } : {}),
         },
       );
 

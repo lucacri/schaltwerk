@@ -109,6 +109,7 @@ export interface BranchInfo {
 
 export interface GitOperationPayload {
   session_name: string
+  project_path?: string
   session_branch: string
   parent_branch: string
   mode: string

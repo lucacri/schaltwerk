@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react'
 import { TauriCommands } from '../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
 import { logger } from '../utils/logger'
+import { useAtomValue } from 'jotai'
+import { projectPathAtom } from '../store/atoms/project'
 
 export interface SessionPrefillData {
   name: string
@@ -43,6 +45,7 @@ export function extractSessionContent(sessionData: SessionData | null): string {
 export function useSessionPrefill() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const projectPath = useAtomValue(projectPathAtom)
 
   const fetchSessionForPrefill = useCallback(async (sessionName: string): Promise<SessionPrefillData | null> => {
     logger.info('[useSessionPrefill] Fetching session for prefill:', sessionName)
@@ -51,8 +54,9 @@ export function useSessionPrefill() {
 
     try {
       let sessionData: SessionData | null = null
+      const projectScope = projectPath ? { projectPath } : {}
 
-      const spec = await invoke<SpecData>(TauriCommands.SchaltwerkCoreGetSpec, { name: sessionName }).catch((err) => {
+      const spec = await invoke<SpecData>(TauriCommands.SchaltwerkCoreGetSpec, { name: sessionName, ...projectScope }).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err)
         const notFound = msg.toLowerCase().includes('not found')
         if (!notFound) {
@@ -72,7 +76,7 @@ export function useSessionPrefill() {
         epicId = spec.epic_id ?? null
         logger.info('[useSessionPrefill] Raw spec data:', spec)
       } else {
-        sessionData = await invoke<SessionData>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionName })
+        sessionData = await invoke<SessionData>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionName, ...projectScope })
         logger.info('[useSessionPrefill] Raw session data:', sessionData)
       }
 
@@ -101,7 +105,7 @@ export function useSessionPrefill() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [projectPath])
 
   return {
     fetchSessionForPrefill,

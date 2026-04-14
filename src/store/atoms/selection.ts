@@ -309,6 +309,7 @@ export const getSessionSnapshotActionAtom = atom(
 
     const projectPath = overrideProjectPath ?? get(projectPathAtom)
     const cacheKey = sessionSnapshotCacheKey(sessionId, projectPath)
+    const projectScope = projectPath ? { projectPath } : {}
 
     if (!refresh) {
       const cached = sessionSnapshotsCache.get(cacheKey)
@@ -327,7 +328,7 @@ export const getSessionSnapshotActionAtom = atom(
       let sessionError: unknown = null
 
       try {
-        const raw = await invoke<RawSession>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionId })
+        const raw = await invoke<RawSession>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionId, ...projectScope })
         if (raw) {
           const snapshot = snapshotFromRawSession(raw)
           sessionSnapshotsCache.set(cacheKey, snapshot)
@@ -342,7 +343,7 @@ export const getSessionSnapshotActionAtom = atom(
       }
 
       try {
-        const rawSpec = await invoke<RawSpec>(TauriCommands.SchaltwerkCoreGetSpec, { name: sessionId })
+        const rawSpec = await invoke<RawSpec>(TauriCommands.SchaltwerkCoreGetSpec, { name: sessionId, ...projectScope })
         if (rawSpec) {
           const snapshot = snapshotFromRawSpec(rawSpec)
           sessionSnapshotsCache.set(cacheKey, snapshot)
@@ -1062,10 +1063,12 @@ export const initializeSelectionEventsActionAtom = atom(
 
         if (matched) {
           try {
-            const raw = await invoke<RawSession>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionId })
+            const activeProjectPath = get(projectPathAtom)
+            const projectScope = activeProjectPath ? { projectPath: activeProjectPath } : {}
+            const raw = await invoke<RawSession>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionId, ...projectScope })
             if (raw) {
               snapshot = snapshotFromRawSession(raw)
-              const cacheKey = sessionSnapshotCacheKey(sessionId, get(projectPathAtom))
+              const cacheKey = sessionSnapshotCacheKey(sessionId, activeProjectPath)
               sessionSnapshotsCache.set(cacheKey, snapshot)
             }
           } catch (error) {

@@ -17,8 +17,10 @@ const MAX_FILE_SIZE_FOR_VIEW: usize = 5 * 1024 * 1024;
 pub async fn read_project_file(
     session_name: Option<String>,
     file_path: String,
+    project_path: Option<String>,
 ) -> Result<FileContentResponse, SchaltError> {
-    let repo_path = resolve_repo_path_structured(session_name.as_deref()).await?;
+    let repo_path =
+        resolve_repo_path_structured(session_name.as_deref(), project_path.as_deref()).await?;
     let full_path = std::path::Path::new(&repo_path).join(&file_path);
 
     if !full_path.exists() {
@@ -28,9 +30,8 @@ pub async fn read_project_file(
         ));
     }
 
-    let metadata = std::fs::metadata(&full_path).map_err(|e| {
-        SchaltError::io("get_file_metadata", full_path.to_string_lossy(), e)
-    })?;
+    let metadata = std::fs::metadata(&full_path)
+        .map_err(|e| SchaltError::io("get_file_metadata", full_path.to_string_lossy(), e))?;
 
     if metadata.is_dir() {
         return Err(SchaltError::invalid_input(

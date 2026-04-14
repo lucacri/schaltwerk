@@ -53,6 +53,7 @@ export interface MergeDialogState {
     isOpen: boolean
     status: MergeDialogStatus
     sessionName: string | null
+    projectPath?: string | null
     preview: MergePreviewResponse | null
     error?: string | null
     prefillMode?: 'squash' | 'reapply'
@@ -224,9 +225,18 @@ function defaultMergeDialogState(): MergeDialogState {
         isOpen: false,
         status: 'idle',
         sessionName: null,
+        projectPath: null,
         preview: null,
         error: null,
     }
+}
+
+function sessionScopeKey(projectPath: string | null | undefined, sessionId: string) {
+    return `${projectPath ?? '__default__'}::${sessionId}`
+}
+
+function activeSessionScopeKey(get: Getter, sessionId: string) {
+    return sessionScopeKey(get(projectPathAtom), sessionId)
 }
 
 function normalizeMergePreviewForDialog(preview: MergePreviewResponse): MergePreviewResponse {
@@ -368,19 +378,20 @@ async function releaseRemovedSessions(get: Getter, set: Setter, previous: Enrich
 }
 
 
-function syncMergeStatuses(set: Setter, sessions: EnrichedSession[]) {
+function syncMergeStatuses(set: Setter, sessions: EnrichedSession[], projectPath: string | null) {
     set(mergeStatusesStateAtom, (prev) => {
         const next = new Map(prev)
         const seen = new Set<string>()
         for (const session of sessions) {
             const sessionId = session.info.session_id
+            const key = sessionScopeKey(projectPath, sessionId)
             const status = deriveMergeStatusFromSession(session)
             if (status) {
-                next.set(sessionId, status)
+                next.set(key, status)
             } else {
-                next.delete(sessionId)
+                next.delete(key)
             }
-            seen.add(sessionId)
+            seen.add(key)
         }
 
         for (const key of Array.from(next.keys())) {
@@ -595,9 +606,10 @@ function autoStartRunningSessions(
 function attachMergeSnapshot(
     session: EnrichedSession,
     previousSessions: Map<string, EnrichedSession>,
+    projectPath: string | null,
 ): EnrichedSession {
     const previous = previousSessions.get(session.info.session_id)
-    const cached = mergePreviewCache.get(session.info.session_id) ?? null
+    const cached = mergePreviewCache.get(sessionScopeKey(projectPath, session.info.session_id)) ?? null
 
     const mergeHasConflicts = session.info.merge_has_conflicts
         ?? previous?.info.merge_has_conflicts
@@ -649,7 +661,7 @@ async function applySessionsSnapshot(
     const projectPath = snapshotProjectPath ?? activeProjectPath
     const previousMap = new Map(previousSessionsSnapshot.map(session => [session.info.session_id, session]))
     const withSnapshots = sessions.map(session => {
-        const merged = attachMergeSnapshot(session, previousMap)
+        const merged = attachMergeSnapshot(session, previousMap, projectPath ?? null)
         if (
             (merged.attention_required != null && merged.info.attention_required == null)
             || (merged.attention_kind != null && merged.info.attention_kind == null)
@@ -749,7 +761,7 @@ async function applySessionsSnapshot(
     previousSessionsSnapshot = resolved
     set(activeSessionsHydratedFromCacheStateAtom, options.reason === 'cache-hydrate')
 
-    syncMergeStatuses(set, resolved)
+    syncMergeStatuses(set, resolved, projectPath ?? null)
     autoStartRunningSessions(get, set, resolved, {
         reason: options.reason,
         previousStates: options.previousStates ?? previousSessionStates,
@@ -775,7 +787,7 @@ async function applySessionsSnapshot(
 function cacheProjectSnapshot(projectPath: string, sessions: EnrichedSession[]) {
     const previous = projectSessionsSnapshotCache.get(projectPath) ?? []
     const previousMap = new Map(previous.map(session => [session.info.session_id, session]))
-    const withSnapshots = sessions.map(session => attachMergeSnapshot(session, previousMap))
+    const withSnapshots = sessions.map(session => attachMergeSnapshot(session, previousMap, projectPath))
     const deduped = dedupeSessions(withSnapshots)
     projectSessionsSnapshotCache.set(projectPath, deduped)
     projectSessionStatesCache.set(projectPath, buildStateMap(deduped))
@@ -994,7 +1006,7 @@ export const hydrateProjectSessionsForSwitchActionAtom = atom(
             previousSessionsSnapshot = []
             previousSessionStates = new Map()
             activeSessionsProjectPath = null
-            syncMergeStatuses(set, [])
+            syncMergeStatuses(set, [], null)
             return
         }
 
@@ -1007,7 +1019,7 @@ export const hydrateProjectSessionsForSwitchActionAtom = atom(
         previousSessionsSnapshot = [...strippedSnapshot]
         previousSessionStates = new Map(stateMap)
         activeSessionsProjectPath = projectPath
-        syncMergeStatuses(set, strippedSnapshot)
+        syncMergeStatuses(set, strippedSnapshot, projectPath)
     },
 )
 
@@ -1085,12 +1097,12 @@ export const mergeDialogAtom = atom((get) => get(mergeDialogStateAtom))
 
 export const mergeStatusSelectorAtom = atom((get) => {
     const statuses = get(mergeStatusesStateAtom)
-    return (sessionId: string): MergeStatus | undefined => statuses.get(sessionId)
+    return (sessionId: string): MergeStatus | undefined => statuses.get(activeSessionScopeKey(get, sessionId))
 })
 
 export const mergeInFlightSelectorAtom = atom((get) => {
     const statuses = get(mergeInFlightStateAtom)
-    return (sessionId: string): boolean => statuses.get(sessionId) ?? false
+    return (sessionId: string): boolean => statuses.get(activeSessionScopeKey(get, sessionId)) ?? false
 })
 
 export const sessionMutationSelectorAtom = atom((get) => {
@@ -1527,24 +1539,27 @@ export const initializeSessionsEventsActionAtom = atom(
                 return
             }
 
-            mergeErrorCache.delete(sessionName)
+            const projectPath = event.project_path ?? get(projectPathAtom)
+            const key = sessionScopeKey(projectPath, sessionName)
+
+            mergeErrorCache.delete(key)
             set(mergeInFlightStateAtom, (prev) => {
                 const next = new Map(prev)
-                next.set(sessionName, true)
+                next.set(key, true)
                 return next
             })
 
             set(mergeStatusesStateAtom, (prev) => {
-                if (!prev.has(sessionName)) {
+                if (!prev.has(key)) {
                     return prev
                 }
                 const next = new Map(prev)
-                next.delete(sessionName)
+                next.delete(key)
                 return next
             })
 
             set(mergeDialogStateAtom, (prev) => {
-                if (!prev.isOpen || prev.sessionName !== sessionName) {
+                if (!prev.isOpen || prev.sessionName !== sessionName || prev.projectPath !== projectPath) {
                     return prev
                 }
                 return {
@@ -1566,10 +1581,13 @@ export const initializeSessionsEventsActionAtom = atom(
                 return
             }
 
-            mergeErrorCache.delete(sessionName)
+            const projectPath = event.project_path ?? get(projectPathAtom)
+            const key = sessionScopeKey(projectPath, sessionName)
+
+            mergeErrorCache.delete(key)
             set(mergeInFlightStateAtom, (prev) => {
                 const next = new Map(prev)
-                next.set(sessionName, false)
+                next.set(key, false)
                 return next
             })
 
@@ -1578,9 +1596,9 @@ export const initializeSessionsEventsActionAtom = atom(
             set(mergeStatusesStateAtom, (prev) => {
                 const next = new Map(prev)
                 if (status === 'success') {
-                    next.set(sessionName, 'merged')
+                    next.set(key, 'merged')
                 } else if (status === 'conflict') {
-                    next.set(sessionName, 'conflict')
+                    next.set(key, 'conflict')
                 }
                 return next
             })
@@ -1601,7 +1619,10 @@ export const initializeSessionsEventsActionAtom = atom(
             if (autoCancel && event.operation === 'merge' && (event.status === 'success' || event.status === undefined)) {
                 void (async () => {
                     try {
-                        await invoke(TauriCommands.SchaltwerkCoreCancelSession, { name: sessionName })
+                        await invoke(TauriCommands.SchaltwerkCoreCancelSession, {
+                            name: sessionName,
+                            ...(projectPath ? { projectPath } : {}),
+                        })
                     } catch (error) {
                         logger.error(`Failed to auto-cancel session after merge: ${sessionName}`, error)
                         if (pushToastHandler) {
@@ -1616,7 +1637,7 @@ export const initializeSessionsEventsActionAtom = atom(
             }
 
             set(mergeDialogStateAtom, (prev) => {
-                if (!prev.isOpen || prev.sessionName !== sessionName) {
+                if (!prev.isOpen || prev.sessionName !== sessionName || prev.projectPath !== projectPath) {
                     return prev
                 }
                 return defaultMergeDialogState()
@@ -1634,22 +1655,25 @@ export const initializeSessionsEventsActionAtom = atom(
                 return
             }
 
+            const projectPath = event.project_path ?? get(projectPathAtom)
+            const key = sessionScopeKey(projectPath, sessionName)
+
             set(mergeInFlightStateAtom, (prev) => {
                 const next = new Map(prev)
-                next.set(sessionName, false)
+                next.set(key, false)
                 return next
             })
 
             if (event.status === 'conflict') {
                 set(mergeStatusesStateAtom, (prev) => {
                     const next = new Map(prev)
-                    next.set(sessionName, 'conflict')
+                    next.set(key, 'conflict')
                     return next
                 })
             }
 
             const message = event.error ?? 'Merge failed'
-            const previousError = mergeErrorCache.get(sessionName)
+            const previousError = mergeErrorCache.get(key)
             if (pushToastHandler && previousError !== message) {
                 pushToastHandler({
                     tone: 'error',
@@ -1657,10 +1681,10 @@ export const initializeSessionsEventsActionAtom = atom(
                     description: message,
                 })
             }
-            mergeErrorCache.set(sessionName, message)
+            mergeErrorCache.set(key, message)
 
             set(mergeDialogStateAtom, (prev) => {
-                if (!prev.isOpen || prev.sessionName !== sessionName) {
+                if (!prev.isOpen || prev.sessionName !== sessionName || prev.projectPath !== projectPath) {
                     return prev
                 }
                 return {
@@ -1825,21 +1849,22 @@ export const initializeSessionsEventsActionAtom = atom(
 
             set(mergeStatusesStateAtom, (prev) => {
                 const next = new Map(prev)
+                const key = sessionScopeKey(activeProject, event.session_name)
                 const conflictFlag = event.merge_has_conflicts
                 if (conflictFlag === true || (conflictFlag === undefined && event.has_conflicts)) {
-                    next.set(event.session_name, 'conflict')
+                    next.set(key, 'conflict')
                 } else if (conflictFlag === false || (!event.has_conflicts && conflictFlag === undefined)) {
-                    if (next.get(event.session_name) === 'conflict') {
-                        next.delete(event.session_name)
+                    if (next.get(key) === 'conflict') {
+                        next.delete(key)
                     }
                 }
 
                 const upToDateFlag = event.merge_is_up_to_date
                 if (upToDateFlag === true && (event.commits_ahead_count ?? 0) > 0) {
-                    next.set(event.session_name, 'merged')
+                    next.set(key, 'merged')
                 } else if (upToDateFlag === false) {
-                    if (next.get(event.session_name) === 'merged') {
-                        next.delete(event.session_name)
+                    if (next.get(key) === 'merged') {
+                        next.delete(key)
                     }
                 }
 
@@ -1982,11 +2007,12 @@ export const initializeSessionsEventsActionAtom = atom(
                     set(pendingStartupsAtom, pending)
                 }
                 set(mergeStatusesStateAtom, (prev) => {
-                    if (!prev.has(event.session_name)) {
+                    const key = activeSessionScopeKey(get, event.session_name)
+                    if (!prev.has(key)) {
                         return prev
                     }
                     const next = new Map(prev)
-                    next.delete(event.session_name)
+                    next.delete(key)
                     return next
                 })
                 set(sessionMutationsStateAtom, (prev) => {
@@ -2070,7 +2096,7 @@ export function __resetSessionsTestingState() {
 
 export const openMergeDialogActionAtom = atom(
     null,
-    async (_get, set, input: string | { sessionId: string; prefillMode?: 'squash' | 'reapply' }) => {
+    async (get, set, input: string | { sessionId: string; prefillMode?: 'squash' | 'reapply' }) => {
         const sessionId = typeof input === 'string' ? input : input.sessionId
         const prefillMode = typeof input === 'string' ? undefined : input.prefillMode
 
@@ -2078,31 +2104,36 @@ export const openMergeDialogActionAtom = atom(
             isOpen: true,
             status: 'loading',
             sessionName: sessionId,
+            projectPath: get(projectPathAtom),
             preview: null,
             error: null,
             prefillMode,
         })
 
         try {
+            const projectPath = get(projectPathAtom)
+            const projectScope = projectPath ? { projectPath } : {}
             const preview = normalizeMergePreviewForDialog(
-                await invoke<MergePreviewResponse>(TauriCommands.SchaltwerkCoreGetMergePreviewWithWorktree, { name: sessionId })
+                await invoke<MergePreviewResponse>(TauriCommands.SchaltwerkCoreGetMergePreviewWithWorktree, { name: sessionId, ...projectScope })
             )
             set(mergeDialogStateAtom, {
                 isOpen: true,
                 status: 'ready',
                 sessionName: sessionId,
+                projectPath,
                 preview,
                 error: null,
                 prefillMode,
             })
 
-            mergePreviewCache.set(sessionId, preview)
+            mergePreviewCache.set(sessionScopeKey(projectPath, sessionId), preview)
         } catch (error) {
             logger.error(`Failed to prepare merge for session ${sessionId}`, error)
             set(mergeDialogStateAtom, {
                 isOpen: true,
                 status: 'idle',
                 sessionName: sessionId,
+                projectPath: get(projectPathAtom),
                 preview: null,
                 error: error instanceof Error ? error.message : 'Unknown error',
                 prefillMode,
@@ -2121,14 +2152,19 @@ export const closeMergeDialogActionAtom = atom(
 export const confirmMergeActionAtom = atom(
     null,
     async (get, set, input: { sessionId: string; mode: MergeModeOption; commitMessage?: string }) => {
+        const dialog = get(mergeDialogStateAtom)
+        const projectPath = dialog.sessionName === input.sessionId
+            ? dialog.projectPath ?? get(projectPathAtom)
+            : get(projectPathAtom)
+        const key = sessionScopeKey(projectPath, input.sessionId)
         const current = get(mergeInFlightStateAtom)
-        if (current.get(input.sessionId)) {
+        if (current.get(key)) {
             return
         }
 
         set(mergeInFlightStateAtom, (prev) => {
             const next = new Map(prev)
-            next.set(input.sessionId, true)
+            next.set(key, true)
             return next
         })
 
@@ -2137,6 +2173,7 @@ export const confirmMergeActionAtom = atom(
                 name: input.sessionId,
                 mode: input.mode,
                 commitMessage: input.commitMessage ?? null,
+                ...(projectPath ? { projectPath } : {}),
             })
 
             set(mergeDialogStateAtom, defaultMergeDialogState())
@@ -2145,13 +2182,13 @@ export const confirmMergeActionAtom = atom(
                 const conflictingPaths = [...error.data.files]
                 set(mergeStatusesStateAtom, (prev) => {
                     const next = new Map(prev)
-                    next.set(input.sessionId, 'conflict')
+                    next.set(key, 'conflict')
                     return next
                 })
                 set(mergeDialogStateAtom, (prev) => {
                     const nextPreview = applyMergeConflictToPreview(prev.preview, conflictingPaths)
                     if (nextPreview) {
-                        mergePreviewCache.set(input.sessionId, nextPreview)
+                        mergePreviewCache.set(key, nextPreview)
                     }
                     return {
                         ...prev,
@@ -2173,7 +2210,7 @@ export const confirmMergeActionAtom = atom(
         } finally {
             set(mergeInFlightStateAtom, (prev) => {
                 const next = new Map(prev)
-                next.set(input.sessionId, false)
+                next.set(key, false)
                 return next
             })
         }
@@ -2199,16 +2236,20 @@ export const shortcutMergeActionAtom = atom(
             return { status: 'blocked', reason: 'not-ready' }
         }
 
-        if (get(mergeInFlightStateAtom).get(sessionId)) {
+        const projectPath = get(projectPathAtom)
+        const key = sessionScopeKey(projectPath, sessionId)
+
+        if (get(mergeInFlightStateAtom).get(key)) {
             return { status: 'blocked', reason: 'in-flight' }
         }
 
         let preview: MergePreviewResponse
         try {
+            const projectScope = projectPath ? { projectPath } : {}
             preview = normalizeMergePreviewForDialog(
-                await invoke<MergePreviewResponse>(TauriCommands.SchaltwerkCoreGetMergePreviewWithWorktree, { name: sessionId })
+                await invoke<MergePreviewResponse>(TauriCommands.SchaltwerkCoreGetMergePreviewWithWorktree, { name: sessionId, ...projectScope })
             )
-            mergePreviewCache.set(sessionId, preview)
+            mergePreviewCache.set(key, preview)
         } catch (error) {
             return { status: 'error', message: getErrorMessage(error) }
         }
@@ -2218,6 +2259,7 @@ export const shortcutMergeActionAtom = atom(
                 isOpen: true,
                 status: 'ready',
                 sessionName: sessionId,
+                projectPath,
                 preview,
                 error: null,
             })
@@ -2226,7 +2268,7 @@ export const shortcutMergeActionAtom = atom(
         if (preview.isUpToDate) {
             set(mergeStatusesStateAtom, (prev) => {
                 const next = new Map(prev)
-                next.set(sessionId, 'merged')
+                next.set(key, 'merged')
                 return next
             })
             return { status: 'blocked', reason: 'already-merged' }
@@ -2270,7 +2312,7 @@ export const updateSessionStatusActionAtom = atom(
 
         try {
             if (input.status === 'spec') {
-                const createdSpecName = await invoke<string>(TauriCommands.SchaltwerkCoreConvertSessionToDraft, { name: input.sessionId })
+                const createdSpecName = await invoke<string>(TauriCommands.SchaltwerkCoreConvertSessionToDraft, { name: input.sessionId, projectPath })
                 const specSessionName = createdSpecName ?? input.sessionId
                 const optimisticSpec: EnrichedSession = {
                     ...session,
@@ -2349,7 +2391,7 @@ export const updateSessionSpecContentActionAtom = atom(
 
 export const optimisticallyConvertSessionToSpecActionAtom = atom(
     null,
-    (_get, set, sessionId: string) => {
+    (get, set, sessionId: string) => {
         set(allSessionsAtom, (prev) => {
             let mutated = false
             const next = prev.map(session => {
@@ -2377,11 +2419,12 @@ export const optimisticallyConvertSessionToSpecActionAtom = atom(
         })
 
         set(mergeStatusesStateAtom, (prev) => {
-            if (!prev.has(sessionId)) {
+            const key = activeSessionScopeKey(get, sessionId)
+            if (!prev.has(key)) {
                 return prev
             }
             const next = new Map(prev)
-            next.delete(sessionId)
+            next.delete(key)
             return next
         })
     },

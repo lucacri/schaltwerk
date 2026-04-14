@@ -809,7 +809,10 @@ describe('sessions atoms', () => {
         })
 
         await store.set(updateSessionStatusActionAtom, { sessionId: 'running', status: 'spec' })
-        expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreConvertSessionToDraft, { name: 'running' })
+        expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreConvertSessionToDraft, {
+            name: 'running',
+            projectPath: '/project',
+        })
 
         await store.set(updateSessionStatusActionAtom, { sessionId: 'review', status: 'dirty' })
         expect(invoke).not.toHaveBeenCalledWith('schaltwerk_core_mark_ready', { name: 'review' })
@@ -1049,7 +1052,10 @@ describe('sessions atoms', () => {
         })
 
         expect(store.get(mergeStatusSelectorAtom)('merge')).toBe('merged')
-        expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreCancelSession, { name: 'merge' })
+        expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreCancelSession, {
+            name: 'merge',
+            projectPath: '/project',
+        })
         expect(toastSpy).toHaveBeenCalled()
     })
 

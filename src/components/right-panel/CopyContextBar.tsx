@@ -146,28 +146,31 @@ export function CopyContextBar({ sessionName }: CopyContextBarProps) {
 
   const fetchSpecText = useCallback(async () => {
     if (specCacheRef.current !== null) return specCacheRef.current
-    const [draftContent, initialPrompt] = await invoke<[string | null, string | null]>(TauriCommands.SchaltwerkCoreGetSessionAgentContent, { name: sessionName })
+    const projectScope = projectPath ? { projectPath } : {}
+    const [draftContent, initialPrompt] = await invoke<[string | null, string | null]>(TauriCommands.SchaltwerkCoreGetSessionAgentContent, { name: sessionName, ...projectScope })
     const specText = (draftContent ?? initialPrompt ?? '').trimEnd()
     specCacheRef.current = specText
     return specText
-  }, [sessionName])
+  }, [projectPath, sessionName])
 
   const fetchDiff = useCallback(async (filePath: string) => {
     const cached = diffCacheRef.current.get(filePath)
     if (cached) return cached
-    const diff = await invoke<DiffResponse>(TauriCommands.ComputeUnifiedDiffBackend, { sessionName, filePath })
+    const projectScope = projectPath ? { projectPath } : {}
+    const diff = await invoke<DiffResponse>(TauriCommands.ComputeUnifiedDiffBackend, { sessionName, filePath, ...projectScope })
     diffCacheRef.current.set(filePath, diff)
     return diff
-  }, [sessionName])
+  }, [projectPath, sessionName])
 
   const fetchFileContents = useCallback(async (filePath: string) => {
     const cached = fileCacheRef.current.get(filePath)
     if (cached) return cached
-    const [base, head] = await invoke<[string, string]>(TauriCommands.GetFileDiffFromMain, { sessionName, filePath })
+    const projectScope = projectPath ? { projectPath } : {}
+    const [base, head] = await invoke<[string, string]>(TauriCommands.GetFileDiffFromMain, { sessionName, filePath, ...projectScope })
     const value = { base, head }
     fileCacheRef.current.set(filePath, value)
     return value
-  }, [sessionName])
+  }, [projectPath, sessionName])
 
   const assembleBundle = useCallback(async () => {
     const sections: string[] = []
@@ -221,9 +224,10 @@ export function CopyContextBar({ sessionName }: CopyContextBarProps) {
 
   const loadInitialData = useCallback(async () => {
     try {
+      const projectScope = projectPath ? { projectPath } : {}
       const [specPair, files] = await Promise.all([
-        invoke<[string | null, string | null]>(TauriCommands.SchaltwerkCoreGetSessionAgentContent, { name: sessionName }),
-        invoke<ChangedFile[]>(TauriCommands.GetChangedFilesFromMain, { sessionName }),
+        invoke<[string | null, string | null]>(TauriCommands.SchaltwerkCoreGetSessionAgentContent, { name: sessionName, ...projectScope }),
+        invoke<ChangedFile[]>(TauriCommands.GetChangedFilesFromMain, { sessionName, ...projectScope }),
       ])
 
       const specText = (specPair?.[0] ?? specPair?.[1] ?? '').trimEnd()
@@ -297,7 +301,8 @@ export function CopyContextBar({ sessionName }: CopyContextBarProps) {
           const match = targetSessions.find((session) => session.info?.session_id === sessionName)
           if (!match) return
           try {
-            const specPair = await invoke<[string | null, string | null]>(TauriCommands.SchaltwerkCoreGetSessionAgentContent, { name: sessionName })
+            const projectScope = projectPath ? { projectPath } : {}
+            const specPair = await invoke<[string | null, string | null]>(TauriCommands.SchaltwerkCoreGetSessionAgentContent, { name: sessionName, ...projectScope })
             const specText = (specPair?.[0] ?? specPair?.[1] ?? '').trimEnd()
             specCacheRef.current = specText
             setAvailability(prev => ({ ...prev, spec: specText.length > 0 }))

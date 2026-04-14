@@ -251,6 +251,7 @@ export async function selectBestVersionAndCleanup(
   versionGroup: SessionVersionGroup,
   selectedSessionId: string,
   invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+  projectPath?: string | null,
 ): Promise<void> {
   if (!versionGroup.isVersionGroup) {
     throw new Error('Cannot select best version from a non-version group')
@@ -270,7 +271,8 @@ export async function selectBestVersionAndCleanup(
 
     for (const version of versionsToCancel) {
       await invoke(TauriCommands.SchaltwerkCoreCancelSession, {
-        name: version.session.info.session_id
+        name: version.session.info.session_id,
+        ...(projectPath ? { projectPath } : {}),
       })
     }
   } catch (error) {

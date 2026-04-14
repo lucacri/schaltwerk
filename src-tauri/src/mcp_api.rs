@@ -29,12 +29,11 @@ use crate::{
 };
 use lucode::domains::attention::get_session_attention_state;
 use lucode::domains::git::service::{ForgeType, detect_forge};
-use lucode::domains::sessions::apply_git_enrichment;
-use lucode::services::sessions::compute_git_enrichment_parallel;
 use lucode::domains::merge::MergeMode;
+use lucode::domains::sessions::apply_git_enrichment;
 use lucode::domains::sessions::entity::{Session, SessionStatus, Spec, SpecStage};
-use lucode::infrastructure::attention_bridge::clear_session_attention_state;
 use lucode::domains::settings::{AgentPreset, setup_script::SetupScriptService};
+use lucode::infrastructure::attention_bridge::clear_session_attention_state;
 use lucode::infrastructure::database::Database;
 use lucode::infrastructure::database::SpecMethods;
 use lucode::infrastructure::database::db_project_config::ProjectConfigMethods;
@@ -42,6 +41,7 @@ use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
 use lucode::schaltwerk_core::{SessionManager, SessionState};
 use lucode::services::SessionMethods;
+use lucode::services::sessions::compute_git_enrichment_parallel;
 use lucode::shared::terminal_id::terminal_id_for_orchestrator_top;
 
 mod diff_api;
@@ -71,6 +71,14 @@ pub async fn handle_mcp_request(
         );
     } else {
         debug!("MCP API request missing X-Project-Path header — falling back to active project");
+    }
+
+    if let Some(path) = project_manager.current_project_path().await {
+        return REQUEST_PROJECT_OVERRIDE
+            .scope(RefCell::new(Some(path)), async move {
+                handle_mcp_request_inner(req, app).await
+            })
+            .await;
     }
 
     handle_mcp_request_inner(req, app).await
@@ -512,7 +520,9 @@ async fn rollback_created_preset_sessions(
         let session = match manager.get_session(name) {
             Ok(session) => session,
             Err(err) => {
-                failures.push(format!("{name}: failed to load session for rollback: {err}"));
+                failures.push(format!(
+                    "{name}: failed to load session for rollback: {err}"
+                ));
                 continue;
             }
         };
@@ -523,7 +533,9 @@ async fn rollback_created_preset_sessions(
         }
 
         if let Err(err) = db.delete_session(&session.id) {
-            failures.push(format!("{name}: failed to delete rolled back session: {err}"));
+            failures.push(format!(
+                "{name}: failed to delete rolled back session: {err}"
+            ));
         }
     }
 
@@ -624,7 +636,9 @@ async fn create_sessions_from_preset_launch(
                 } else {
                     format!(" Rollback failures: {}", rollback_failures.join(", "))
                 };
-                return Err(format!("Failed to create preset session '{session_name}': {err}.{rollback_suffix}"));
+                return Err(format!(
+                    "Failed to create preset session '{session_name}': {err}.{rollback_suffix}"
+                ));
             }
         };
 
@@ -859,10 +873,15 @@ fn sort_sessions_for_promotion(sessions: &mut [Session]) {
     });
 }
 
-fn find_promotion_siblings(manager: &SessionManager, session: &Session) -> anyhow::Result<Vec<Session>> {
+fn find_promotion_siblings(
+    manager: &SessionManager,
+    session: &Session,
+) -> anyhow::Result<Vec<Session>> {
     let all_sessions = manager.list_sessions()?;
 
-    if session.is_consolidation && let Some(source_ids) = session.consolidation_sources.as_ref() {
+    if session.is_consolidation
+        && let Some(source_ids) = session.consolidation_sources.as_ref()
+    {
         // `consolidation_sources` may contain either session UUIDs (used by tests
         // and any caller with backend access) or session names (used by the
         // frontend, which only exposes names as "session_id"). Match against both.
@@ -1047,12 +1066,15 @@ where
         "execute_consolidation_winner_promotion must be called with a consolidation session"
     );
 
-    let source_ids = consolidation.consolidation_sources.as_ref().ok_or_else(|| {
-        (
-            StatusCode::BAD_REQUEST,
-            "Consolidation session has no recorded source versions".to_string(),
-        )
-    })?;
+    let source_ids = consolidation
+        .consolidation_sources
+        .as_ref()
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                "Consolidation session has no recorded source versions".to_string(),
+            )
+        })?;
 
     // `winner_session_id` may be either the database UUID or the session name.
     // The frontend passes session names (because the "session_id" field exposed to
@@ -1075,9 +1097,7 @@ where
     if !winner_in_sources {
         return Err((
             StatusCode::BAD_REQUEST,
-            format!(
-                "winner_session_id '{winner_id}' is not among the consolidation sources"
-            ),
+            format!("winner_session_id '{winner_id}' is not among the consolidation sources"),
         ));
     }
 
@@ -1201,8 +1221,14 @@ pub(crate) fn upsert_consolidation_round(
     source_session_ids: &[String],
     confirmation_mode: &str,
 ) -> anyhow::Result<()> {
-    let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
-    repo.upsert_consolidation_round(round_id, version_group_id, source_session_ids, confirmation_mode)
+    let repo =
+        lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
+    repo.upsert_consolidation_round(
+        round_id,
+        version_group_id,
+        source_session_ids,
+        confirmation_mode,
+    )
 }
 
 fn get_consolidation_round(
@@ -1210,7 +1236,8 @@ fn get_consolidation_round(
     repo_path: &Path,
     round_id: &str,
 ) -> anyhow::Result<ConsolidationRoundRecord> {
-    let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
+    let repo =
+        lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
     let round = repo.get_consolidation_round(round_id)?;
     Ok(ConsolidationRoundRecord {
         id: round.id,
@@ -1234,7 +1261,12 @@ fn update_consolidation_round_recommendation(
     status: &str,
 ) -> anyhow::Result<()> {
     let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), PathBuf::new());
-    repo.update_consolidation_round_recommendation(round_id, recommended_session_id, recommended_by_session_id, status)
+    repo.update_consolidation_round_recommendation(
+        round_id,
+        recommended_session_id,
+        recommended_by_session_id,
+        status,
+    )
 }
 
 fn update_consolidation_round_confirmation(
@@ -1255,8 +1287,14 @@ fn update_session_consolidation_report(
     base_session_id: Option<&str>,
     recommended_session_id: Option<&str>,
 ) -> anyhow::Result<()> {
-    let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
-    repo.update_session_consolidation_report(session_name, report, base_session_id, recommended_session_id)
+    let repo =
+        lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
+    repo.update_session_consolidation_report(
+        session_name,
+        report,
+        base_session_id,
+        recommended_session_id,
+    )
 }
 
 fn list_round_sessions(manager: &SessionManager, round_id: &str) -> anyhow::Result<Vec<Session>> {
@@ -1689,11 +1727,7 @@ mod tests {
 
     fn create_branch(repo_path: &Path, branch_name: &str) {
         let repo = Repository::open(repo_path).expect("open repo");
-        let commit = repo
-            .head()
-            .expect("head")
-            .peel_to_commit()
-            .expect("commit");
+        let commit = repo.head().expect("head").peel_to_commit().expect("commit");
         repo.branch(branch_name, &commit, false)
             .expect("create branch");
     }
@@ -1748,8 +1782,11 @@ mod tests {
 
     #[test]
     fn resolve_preset_rejects_zero_slots() {
-        let err = resolve_preset("preset-empty", &[make_preset("preset-empty", "Empty", vec![])])
-            .expect_err("empty preset should fail");
+        let err = resolve_preset(
+            "preset-empty",
+            &[make_preset("preset-empty", "Empty", vec![])],
+        )
+        .expect_err("empty preset should fail");
 
         assert!(err.contains("zero slots"));
     }
@@ -1768,19 +1805,10 @@ mod tests {
     #[test]
     fn resolve_preset_id_match_takes_precedence_over_name_match() {
         let presets = vec![
-            make_preset(
-                "Smarts",
-                "First",
-                vec![make_preset_slot("claude", None)],
-            ),
-            make_preset(
-                "preset-2",
-                "Smarts",
-                vec![make_preset_slot("codex", None)],
-            ),
+            make_preset("Smarts", "First", vec![make_preset_slot("claude", None)]),
+            make_preset("preset-2", "Smarts", vec![make_preset_slot("codex", None)]),
         ];
-        let resolved =
-            resolve_preset("Smarts", &presets).expect("id match should beat name match");
+        let resolved = resolve_preset("Smarts", &presets).expect("id match should beat name match");
         assert_eq!(resolved.id, "Smarts");
         assert_eq!(resolved.slots[0].agent_type, "claude");
     }
@@ -1931,9 +1959,7 @@ mod tests {
         assert_eq!(response.archived_spec, Some(true));
         assert_eq!(response.sessions.len(), 1);
         let created_name = response.sessions[0].name.clone();
-        let created = manager
-            .get_session(&created_name)
-            .expect("created session");
+        let created = manager.get_session(&created_name).expect("created session");
         assert_eq!(created.epic_id.as_deref(), Some(epic.id.as_str()));
         assert!(manager.get_spec("preset-spec").is_err());
         assert_eq!(
@@ -1991,7 +2017,12 @@ mod tests {
         assert!(err.contains("existing-feature"));
         assert!(manager.get_spec("rollback-spec").is_ok());
         assert!(manager.get_session("rollback-spec_v1").is_err());
-        assert!(manager.list_archived_specs().expect("archived specs").is_empty());
+        assert!(
+            manager
+                .list_archived_specs()
+                .expect("archived specs")
+                .is_empty()
+        );
     }
 
     #[test]
@@ -2629,9 +2660,17 @@ mod tests {
         )
         .expect("update report");
 
-        let updated = db.get_session_by_name(&repo_path, "candidate-1").expect("load updated");
-        assert_eq!(updated.consolidation_report.as_deref(), Some("## Decision\nKeep v1 base."));
-        assert_eq!(updated.consolidation_base_session_id.as_deref(), Some("feature_v1"));
+        let updated = db
+            .get_session_by_name(&repo_path, "candidate-1")
+            .expect("load updated");
+        assert_eq!(
+            updated.consolidation_report.as_deref(),
+            Some("## Decision\nKeep v1 base.")
+        );
+        assert_eq!(
+            updated.consolidation_base_session_id.as_deref(),
+            Some("feature_v1")
+        );
     }
 
     #[tokio::test]
@@ -2640,13 +2679,34 @@ mod tests {
         let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
         let manager = SessionManager::new(db.clone(), repo_path.clone());
         manager
-            .create_session_with_auto_flag("feature_v1", None, None, false, Some("group-1"), Some(1))
+            .create_session_with_auto_flag(
+                "feature_v1",
+                None,
+                None,
+                false,
+                Some("group-1"),
+                Some(1),
+            )
             .expect("create v1");
         manager
-            .create_session_with_auto_flag("feature_v2", None, None, false, Some("group-1"), Some(2))
+            .create_session_with_auto_flag(
+                "feature_v2",
+                None,
+                None,
+                false,
+                Some("group-1"),
+                Some(2),
+            )
             .expect("create v2");
         manager
-            .create_session_with_auto_flag("feature_v3", None, None, false, Some("group-1"), Some(3))
+            .create_session_with_auto_flag(
+                "feature_v3",
+                None,
+                None,
+                false,
+                Some("group-1"),
+                Some(3),
+            )
             .expect("create v3");
 
         let cancelled = Arc::new(Mutex::new(Vec::new()));
@@ -2693,13 +2753,34 @@ mod tests {
         let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
         let manager = SessionManager::new(db.clone(), repo_path.clone());
         let v1 = manager
-            .create_session_with_auto_flag("feature_v1", None, None, false, Some("group-9"), Some(1))
+            .create_session_with_auto_flag(
+                "feature_v1",
+                None,
+                None,
+                false,
+                Some("group-9"),
+                Some(1),
+            )
             .expect("create v1");
         let v2 = manager
-            .create_session_with_auto_flag("feature_v2", None, None, false, Some("group-9"), Some(2))
+            .create_session_with_auto_flag(
+                "feature_v2",
+                None,
+                None,
+                false,
+                Some("group-9"),
+                Some(2),
+            )
             .expect("create v2");
         manager
-            .create_session_with_auto_flag("feature_v3", None, None, false, Some("group-9"), Some(3))
+            .create_session_with_auto_flag(
+                "feature_v3",
+                None,
+                None,
+                false,
+                Some("group-9"),
+                Some(3),
+            )
             .expect("create v3");
 
         db.update_session_status(&v2.id, SessionStatus::Cancelled)
@@ -2825,10 +2906,24 @@ mod tests {
         let manager = SessionManager::new(db.clone(), repo_path.clone());
 
         let v1 = manager
-            .create_session_with_auto_flag("feature_v1", None, None, false, Some("group-1"), Some(1))
+            .create_session_with_auto_flag(
+                "feature_v1",
+                None,
+                None,
+                false,
+                Some("group-1"),
+                Some(1),
+            )
             .expect("create v1");
         let _v2 = manager
-            .create_session_with_auto_flag("feature_v2", None, None, false, Some("group-1"), Some(2))
+            .create_session_with_auto_flag(
+                "feature_v2",
+                None,
+                None,
+                false,
+                Some("group-1"),
+                Some(2),
+            )
             .expect("create v2");
 
         let judge = manager
@@ -2946,10 +3041,24 @@ mod tests {
         let round_id = format!("round-{confirmation_mode}");
 
         let source_winner = manager
-            .create_session_with_auto_flag("feature_v1", None, None, false, Some(&version_group_id), Some(1))
+            .create_session_with_auto_flag(
+                "feature_v1",
+                None,
+                None,
+                false,
+                Some(&version_group_id),
+                Some(1),
+            )
             .expect("create winning source");
         let source_loser = manager
-            .create_session_with_auto_flag("feature_v2", None, None, false, Some(&version_group_id), Some(2))
+            .create_session_with_auto_flag(
+                "feature_v2",
+                None,
+                None,
+                false,
+                Some(&version_group_id),
+                Some(2),
+            )
             .expect("create losing source");
 
         let source_ids = vec![source_winner.id.clone(), source_loser.id.clone()];
@@ -3049,7 +3158,10 @@ mod tests {
         }
     }
 
-    fn active_version_group_sessions(manager: &SessionManager, version_group_id: &str) -> Vec<String> {
+    fn active_version_group_sessions(
+        manager: &SessionManager,
+        version_group_id: &str,
+    ) -> Vec<String> {
         let mut names: Vec<String> = manager
             .list_sessions()
             .expect("list sessions")
@@ -3082,14 +3194,21 @@ mod tests {
                 let session_name = session_name.to_string();
                 let db = db.clone();
                 let repo_path = repo_path.clone();
-                async move { SessionManager::new(db, repo_path).fast_cancel_session(&session_name).await }
+                async move {
+                    SessionManager::new(db, repo_path)
+                        .fast_cancel_session(&session_name)
+                        .await
+                }
             },
         )
         .await
         .expect("confirm winner");
 
         assert_eq!(response.promoted_session_name, fixture.source_winner.name);
-        assert_eq!(response.source_sessions_cancelled, vec![fixture.source_loser.name.clone()]);
+        assert_eq!(
+            response.source_sessions_cancelled,
+            vec![fixture.source_loser.name.clone()]
+        );
         assert_eq!(
             response.candidate_sessions_cancelled,
             vec![
@@ -3133,7 +3252,9 @@ mod tests {
                     if session_name == judge_name {
                         anyhow::bail!("forced judge cleanup failure");
                     }
-                    SessionManager::new(db, repo_path).fast_cancel_session(&session_name).await
+                    SessionManager::new(db, repo_path)
+                        .fast_cancel_session(&session_name)
+                        .await
                 }
             },
         )
@@ -3214,8 +3335,7 @@ mod tests {
 
         assert_eq!(outcome.status, StatusCode::OK);
         assert_eq!(
-            outcome.response.session_name,
-            v1.name,
+            outcome.response.session_name, v1.name,
             "surviving session should be the winner, not the consolidation session"
         );
 
@@ -3610,13 +3730,34 @@ mod tests {
         let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
         let manager = SessionManager::new(db.clone(), repo_path.clone());
         manager
-            .create_session_with_auto_flag("feature_v1", None, None, false, Some("group-2"), Some(1))
+            .create_session_with_auto_flag(
+                "feature_v1",
+                None,
+                None,
+                false,
+                Some("group-2"),
+                Some(1),
+            )
             .expect("create v1");
         manager
-            .create_session_with_auto_flag("feature_v2", None, None, false, Some("group-2"), Some(2))
+            .create_session_with_auto_flag(
+                "feature_v2",
+                None,
+                None,
+                false,
+                Some("group-2"),
+                Some(2),
+            )
             .expect("create v2");
         manager
-            .create_session_with_auto_flag("feature_v3", None, None, false, Some("group-2"), Some(3))
+            .create_session_with_auto_flag(
+                "feature_v3",
+                None,
+                None,
+                false,
+                Some("group-2"),
+                Some(3),
+            )
             .expect("create v3");
 
         let outcome = execute_session_promotion(
@@ -3637,14 +3778,20 @@ mod tests {
         .expect("promotion should return structured outcome");
 
         assert_eq!(outcome.status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(outcome.response.siblings_cancelled, vec!["feature_v1".to_string()]);
+        assert_eq!(
+            outcome.response.siblings_cancelled,
+            vec!["feature_v1".to_string()]
+        );
         assert_eq!(outcome.response.failures.len(), 1);
         assert!(outcome.response.failures[0].contains("feature_v2"));
 
         let promoted = db
             .get_session_by_name(Path::new(&repo_path), "feature_v3")
             .expect("load promoted session");
-        assert_eq!(promoted.promotion_reason.as_deref(), Some("Most stable branch"));
+        assert_eq!(
+            promoted.promotion_reason.as_deref(),
+            Some("Most stable branch")
+        );
     }
 
     #[test]
@@ -3741,7 +3888,10 @@ mod tests {
     #[test]
     fn parse_pr_number_from_url_returns_none_for_invalid() {
         assert_eq!(parse_pr_number_from_url("not-a-url"), None);
-        assert_eq!(parse_pr_number_from_url("https://github.com/owner/repo/issues/5"), None);
+        assert_eq!(
+            parse_pr_number_from_url("https://github.com/owner/repo/issues/5"),
+            None
+        );
     }
 
     #[test]
@@ -4327,10 +4477,7 @@ async fn start_spec_session(
     let version_number = payload["version_number"].as_i64().map(|n| n as i32);
     let preset = payload["preset"].as_str().map(|s| s.to_string());
 
-    if let Err(message) = validate_preset_request_conflicts(
-        preset.as_deref(),
-        agent_type,
-    ) {
+    if let Err(message) = validate_preset_request_conflicts(preset.as_deref(), agent_type) {
         return Ok(json_error_response(StatusCode::BAD_REQUEST, message));
     }
 
@@ -4544,10 +4691,9 @@ async fn create_session(
         .or_else(|| payload["pr_url"].as_str())
         .map(|s| s.to_string());
 
-    if let Err(message) = validate_preset_request_conflicts(
-        preset.as_deref(),
-        agent_type.as_deref(),
-    ) {
+    if let Err(message) =
+        validate_preset_request_conflicts(preset.as_deref(), agent_type.as_deref())
+    {
         return Ok(json_error_response(StatusCode::BAD_REQUEST, message));
     }
 
@@ -4686,10 +4832,7 @@ async fn create_session(
                 pr_url.as_deref(),
             ) {
                 error!("{err}");
-                return Ok(error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    err,
-                ));
+                return Ok(error_response(StatusCode::INTERNAL_SERVER_ERROR, err));
             }
             info!("Created session via API: {name}");
             request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
@@ -4794,7 +4937,8 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
                             if let Some(persisted_attention) = persisted_attention
                                 && previous_attention != Some(persisted_attention)
                             {
-                                spec_attention_updates.push((stable_id.to_string(), persisted_attention));
+                                spec_attention_updates
+                                    .push((stable_id.to_string(), persisted_attention));
                             }
                         }
                     }
@@ -5001,12 +5145,12 @@ async fn merge_session(
 
     let mode = payload.mode.unwrap_or(MergeMode::Squash);
     let outcome =
-        match merge_session_with_events(&app, name, mode, payload.commit_message.clone()).await {
+        match merge_session_with_events(&app, name, mode, payload.commit_message.clone(), None)
+            .await
+        {
             Ok(outcome) => outcome,
             Err(MergeCommandError {
-                message,
-                conflict,
-                ..
+                message, conflict, ..
             }) => {
                 let status = if conflict {
                     StatusCode::CONFLICT
@@ -5021,7 +5165,7 @@ async fn merge_session(
     let mut cancel_queued = false;
 
     if payload.cancel_after_merge {
-        match schaltwerk_core_cancel_session(app.clone(), name.to_string()).await {
+        match schaltwerk_core_cancel_session(app.clone(), name.to_string(), None).await {
             Ok(()) => {
                 cancel_queued = true;
             }
@@ -5098,12 +5242,20 @@ async fn create_pull_request(
     };
 
     let project_manager = get_project_manager().await;
-    let project = match project_manager.current_project().await {
-        Ok(p) => p,
+    let request_project_path = REQUEST_PROJECT_OVERRIDE
+        .try_with(|cell| cell.borrow().clone())
+        .ok()
+        .flatten();
+    let project_result = match request_project_path.as_ref() {
+        Some(path) => project_manager.get_project_for_path(path).await,
+        None => project_manager.current_project().await,
+    };
+    let project = match project_result {
+        Ok(project) => project,
         Err(e) => {
             return Ok(error_response(
                 StatusCode::BAD_REQUEST,
-                format!("No active project: {e}"),
+                format!("No project for request: {e}"),
             ));
         }
     };
@@ -5637,7 +5789,10 @@ fn confirmation_reason(
     winner: &Session,
     override_reason: Option<&str>,
 ) -> String {
-    if let Some(reason) = override_reason.map(str::trim).filter(|reason| !reason.is_empty()) {
+    if let Some(reason) = override_reason
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty())
+    {
         return reason.to_string();
     }
 
@@ -5645,7 +5800,13 @@ fn confirmation_reason(
         .into_iter()
         .rev()
         .find_map(|session| session.consolidation_report)
-        .and_then(|report| report.lines().find(|line| !line.trim().is_empty()).map(str::trim).map(str::to_string))
+        .and_then(|report| {
+            report
+                .lines()
+                .find(|line| !line.trim().is_empty())
+                .map(str::trim)
+                .map(str::to_string)
+        })
     {
         return judge_report;
     }
@@ -5755,7 +5916,11 @@ pub(crate) async fn confirm_consolidation_winner_inner(
             let session_name = session_name.to_string();
             let db = cancel_db.clone();
             let repo_path = cancel_repo_path.clone();
-            async move { SessionManager::new(db, repo_path).fast_cancel_session(&session_name).await }
+            async move {
+                SessionManager::new(db, repo_path)
+                    .fast_cancel_session(&session_name)
+                    .await
+            }
         },
     )
     .await
@@ -5800,7 +5965,9 @@ where
         .ok_or_else(|| {
             (
                 StatusCode::BAD_REQUEST,
-                format!("Winner session '{winner_session_id}' is not a candidate in round '{round_id}'"),
+                format!(
+                    "Winner session '{winner_session_id}' is not a candidate in round '{round_id}'"
+                ),
             )
         })?;
 
@@ -5810,7 +5977,10 @@ where
         .ok_or_else(|| {
             (
                 StatusCode::BAD_REQUEST,
-                format!("Candidate '{}' has not recorded consolidation_base_session_id", winner.name),
+                format!(
+                    "Candidate '{}' has not recorded consolidation_base_session_id",
+                    winner.name
+                ),
             )
         })?;
 
@@ -5832,12 +6002,14 @@ where
     )
     .await?;
 
-    update_consolidation_round_confirmation(db, round_id, &winner.id, confirmed_by).map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to update consolidation round confirmation: {err}"),
-        )
-    })?;
+    update_consolidation_round_confirmation(db, round_id, &winner.id, confirmed_by).map_err(
+        |err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to update consolidation round confirmation: {err}"),
+            )
+        },
+    )?;
 
     let mut candidate_sessions_cancelled = Vec::new();
     let mut judge_sessions_cancelled = Vec::new();
@@ -5862,7 +6034,10 @@ where
                     "judge" => "judge session",
                     _ => "consolidation candidate",
                 };
-                cleanup_failures.push(format!("Failed to cancel {label} '{}': {err}", round_session.name));
+                cleanup_failures.push(format!(
+                    "Failed to cancel {label} '{}': {err}",
+                    round_session.name
+                ));
             }
         }
     }
@@ -5905,12 +6080,13 @@ pub(crate) async fn trigger_consolidation_judge_inner(
         )
     })?;
     let manager = core.session_manager();
-    let round = get_consolidation_round(&core.db, manager.repo_path(), round_id).map_err(|err| {
-        (
-            StatusCode::NOT_FOUND,
-            format!("Consolidation round '{round_id}' not found: {err}"),
-        )
-    })?;
+    let round =
+        get_consolidation_round(&core.db, manager.repo_path(), round_id).map_err(|err| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("Consolidation round '{round_id}' not found: {err}"),
+            )
+        })?;
     let candidate_sessions = list_round_sessions(&manager, round_id)
         .map(|sessions| candidate_sessions_for_round(&sessions))
         .map_err(|err| {
@@ -5923,7 +6099,9 @@ pub(crate) async fn trigger_consolidation_judge_inner(
     if round.status == "promoted" {
         return Err((
             StatusCode::BAD_REQUEST,
-            format!("Consolidation round '{round_id}' is already confirmed and cannot be judged again"),
+            format!(
+                "Consolidation round '{round_id}' is already confirmed and cannot be judged again"
+            ),
         ));
     }
 
@@ -6068,7 +6246,10 @@ async fn update_consolidation_report(
             match confirm_consolidation_winner_inner(
                 &app,
                 round_id,
-                payload.recommended_session_id.as_deref().unwrap_or_default(),
+                payload
+                    .recommended_session_id
+                    .as_deref()
+                    .unwrap_or_default(),
                 None,
                 "judge",
             )
@@ -6087,9 +6268,15 @@ async fn update_consolidation_report(
         }
         let candidate_sessions = candidate_sessions_for_round(&round_sessions);
         let judge_sessions = judge_sessions_for_round(&round_sessions);
-        if round.status == "running" && judge_sessions.is_empty() && all_candidates_reported(&candidate_sessions) {
+        if round.status == "running"
+            && judge_sessions.is_empty()
+            && all_candidates_reported(&candidate_sessions)
+        {
             if let Err(message) = create_and_start_judge_session(&app, &manager, &round).await {
-                return Ok(json_error_response(StatusCode::INTERNAL_SERVER_ERROR, message));
+                return Ok(json_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    message,
+                ));
             }
             auto_judge_triggered = true;
         }
@@ -6238,12 +6425,10 @@ async fn unlink_session_pr(
     match manager.unlink_session_from_pr(name) {
         Ok(()) => {
             request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
-            let json = serde_json::to_string(&LinkPrResponse::unlinked(name)).unwrap_or_else(
-                |e| {
-                    error!("Failed to serialize PR unlink response for '{name}': {e}");
-                    "{}".to_string()
-                },
-            );
+            let json = serde_json::to_string(&LinkPrResponse::unlinked(name)).unwrap_or_else(|e| {
+                error!("Failed to serialize PR unlink response for '{name}': {e}");
+                "{}".to_string()
+            });
             Ok(json_response(StatusCode::OK, json))
         }
         Err(e) => Ok(error_response(
@@ -6794,12 +6979,26 @@ async fn start_orchestrator_with_prompt(
     skip_prompt: bool,
 ) -> Result<String, String> {
     let Some(prompt) = prompt.filter(|p| !p.trim().is_empty()) else {
-        return schaltwerk_core_start_claude_orchestrator(app, terminal_id, None, None, agent_type, None)
-            .await;
+        return schaltwerk_core_start_claude_orchestrator(
+            app,
+            terminal_id,
+            None,
+            None,
+            agent_type,
+            None,
+        )
+        .await;
     };
     if skip_prompt {
-        return schaltwerk_core_start_claude_orchestrator(app, terminal_id, None, None, agent_type, None)
-            .await;
+        return schaltwerk_core_start_claude_orchestrator(
+            app,
+            terminal_id,
+            None,
+            None,
+            agent_type,
+            None,
+        )
+        .await;
     }
 
     let core = get_core_read().await?;

@@ -12,6 +12,8 @@ import { emitUiEvent, UiEvent } from '../../common/uiEvents'
 import { getSessionDisplayName } from '../../utils/sessionDisplayName'
 import { isSessionMissingError } from '../../types/errors'
 import { useTranslation } from '../../common/i18n'
+import { useAtomValue } from 'jotai'
+import { projectPathAtom } from '../../store/atoms/project'
 
 const METADATA_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   month: 'short',
@@ -36,12 +38,14 @@ export function SpecMetadataPanel({ sessionName }: Props) {
   const [metadata, setMetadata] = useState<SpecMetadata>({})
   const [loading, setLoading] = useState(true)
   const { sessions } = useSessions()
+  const projectPath = useAtomValue(projectPathAtom)
 
   useEffect(() => {
     const loadMetadata = async () => {
       setLoading(true)
       try {
-        const session = await invoke<Record<string, unknown>>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionName })
+        const projectScope = projectPath ? { projectPath } : {}
+        const session = await invoke<Record<string, unknown>>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionName, ...projectScope })
         setMetadata({
           created_at: session.created_at as string | undefined,
           updated_at: (session.updated_at as string | undefined) || (session.last_modified as string | undefined),
@@ -60,7 +64,7 @@ export function SpecMetadataPanel({ sessionName }: Props) {
     }
 
     void loadMetadata()
-  }, [sessionName])
+  }, [projectPath, sessionName])
 
   const handleRunSpec = useCallback((id: string) => {
     window.dispatchEvent(new CustomEvent('schaltwerk:start-agent-from-spec', { detail: { name: id } }))

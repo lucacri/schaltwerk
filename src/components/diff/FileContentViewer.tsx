@@ -11,6 +11,8 @@ import { useAsyncState } from '../../hooks/useAsyncState'
 import { getLanguageFromPath, isMarkdownFile } from '../../utils/fileTypes'
 import { useTranslation } from '../../common/i18n'
 import { LoadingSkeleton } from '../shared/LoadingSkeleton'
+import { useAtomValue } from 'jotai'
+import { projectPathAtom } from '../../store/atoms/project'
 
 interface FileContentViewerProps {
   filePath: string | null
@@ -96,6 +98,7 @@ export function FileContentViewer({
   const [viewMode, setViewMode] = useState<'preview' | 'raw'>('preview')
   const { requestBlockHighlight, readBlockLine } = useHighlightWorker()
   const { openInEditor } = useOpenInEditor({ sessionNameOverride })
+  const projectPath = useAtomValue(projectPathAtom)
 
   const sessionName =
     sessionNameOverride ?? (selection.kind === 'session' ? selection.payload : null)
@@ -106,15 +109,17 @@ export function FileContentViewer({
   const { data: response, loading: isLoading, error: loadError } = useAsyncState(
     (signal) => {
       if (!filePath) return Promise.resolve(null)
+      const projectScope = projectPath ? { projectPath } : {}
       return invoke<FileContentResponse>(TauriCommands.ReadProjectFile, {
         sessionName,
         filePath,
+        ...projectScope,
       }).then((r) => {
         if (signal.aborted) return null
         return r
       })
     },
-    [filePath, sessionName],
+    [filePath, projectPath, sessionName],
   )
 
   const content = useMemo(() => {

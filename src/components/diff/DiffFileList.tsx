@@ -372,9 +372,11 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
 
         // For orchestrator mode (no session), get working changes
         if (commanderDuringLoad && !currentSession) {
+          const projectPath = projectPathRef.current
+          const projectScope = projectPath ? { projectPath } : {}
           const [changedFiles, currentBranch] = await Promise.all([
-            invoke<ChangedFile[]>(TauriCommands.GetOrchestratorWorkingChanges),
-            invoke<string>(TauriCommands.GetCurrentBranchName, { sessionName: null })
+            invoke<ChangedFile[]>(TauriCommands.GetOrchestratorWorkingChanges, projectScope),
+            invoke<string>(TauriCommands.GetCurrentBranchName, { sessionName: null, ...projectScope })
           ])
 
           // Check if results actually changed to avoid unnecessary re-renders
@@ -414,17 +416,20 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
           }
           return
         }
-        
+
         const effectiveCompareMode = modeOverride ?? currentPropsRef.current.compareMode
+        const projectPath = projectPathRef.current
+        const projectScope = projectPath ? { projectPath } : {}
         const [changedFiles, currentBranch, baseBranch, [baseCommit, headCommit], sessionData] = await Promise.all([
           invoke<ChangedFile[]>(TauriCommands.GetChangedFilesFromMain, {
             sessionName: currentSession,
             compareMode: effectiveCompareMode,
+            ...projectScope,
           }),
-          invoke<string>(TauriCommands.GetCurrentBranchName, { sessionName: currentSession }),
-          invoke<string>(TauriCommands.GetBaseBranchName, { sessionName: currentSession }),
-          invoke<[string, string]>(TauriCommands.GetCommitComparisonInfo, { sessionName: currentSession }),
-          invoke<{ original_parent_branch?: string | null }>(TauriCommands.SchaltwerkCoreGetSession, { name: currentSession })
+          invoke<string>(TauriCommands.GetCurrentBranchName, { sessionName: currentSession, ...projectScope }),
+          invoke<string>(TauriCommands.GetBaseBranchName, { sessionName: currentSession, ...projectScope }),
+          invoke<[string, string]>(TauriCommands.GetCommitComparisonInfo, { sessionName: currentSession, ...projectScope }),
+          invoke<{ original_parent_branch?: string | null }>(TauriCommands.SchaltwerkCoreGetSession, { name: currentSession, ...projectScope })
         ])
         
         // Check if results actually changed to avoid unnecessary re-renders
@@ -528,7 +533,9 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
       return
     }
     try {
-      const result = await invoke<ChangedFile[]>(TauriCommands.GetUncommittedFiles, { sessionName: targetSession })
+      const projectPath = projectPathRef.current
+      const projectScope = projectPath ? { projectPath } : {}
+      const result = await invoke<ChangedFile[]>(TauriCommands.GetUncommittedFiles, { sessionName: targetSession, ...projectScope })
       const { sessionNameOverride: latestOverride, selection: latestSelection } = currentPropsRef.current
       const latestSession = latestOverride ?? (latestSelection.kind === 'session' ? latestSelection.payload : null)
       if (latestSession === targetSession) {
@@ -537,8 +544,8 @@ export function DiffFileList({ onFileSelect, sessionNameOverride, isCommander, g
         setHasLoadedDirtyResult(true)
       }
     } catch (error: unknown) {
-      const message = String(error ?? '').toLowerCase()
-      if (!message.includes('not found') && !message.includes('no such file')) {
+      const message = getErrorMessage(error).toLowerCase()
+      if (!isSessionMissingError(error) && !message.includes('not found') && !message.includes('no such file')) {
         logger.error('Failed to load dirty files:', error)
       }
       const { sessionNameOverride: latestOverride, selection: latestSelection } = currentPropsRef.current

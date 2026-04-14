@@ -185,7 +185,8 @@ describe('UnifiedDiffView first-open scroll', () => {
       expect(loadFileDiffMock).toHaveBeenCalledWith(
         'demo',
         expect.objectContaining({ path: 'src/b.ts' }),
-        'unified'
+        'unified',
+        '/test/project'
       )
     })
   })

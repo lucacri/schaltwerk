@@ -69,9 +69,10 @@ class DiffPreloadManager {
     const cacheKey = this.getCacheKey(sessionName, projectPath)
     const startTime = performance.now()
     try {
+      const projectScope = projectPath ? { projectPath } : {}
       const changedFiles = isOrchestrator
-        ? await invoke<ChangedFile[]>(TauriCommands.GetOrchestratorWorkingChanges)
-        : await invoke<ChangedFile[]>(TauriCommands.GetChangedFilesFromMain, { sessionName })
+        ? await invoke<ChangedFile[]>(TauriCommands.GetOrchestratorWorkingChanges, projectScope)
+        : await invoke<ChangedFile[]>(TauriCommands.GetChangedFilesFromMain, { sessionName, ...projectScope })
 
       if (signal.aborted) return
 
@@ -93,7 +94,7 @@ class DiffPreloadManager {
           const myIndex = index++
           const file = files[myIndex]
           try {
-            const diff = await loadFileDiff(sessionName, file, diffLayout)
+            const diff = await loadFileDiff(sessionName, file, diffLayout, projectPath)
             if (signal.aborted) return
             diffMap.set(file.path, diff)
           } catch (e) {

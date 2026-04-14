@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { TauriCommands } from '../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
 import { logger } from '../utils/logger'
+import { useAtomValue } from 'jotai'
+import { projectPathAtom } from '../store/atoms/project'
 
 interface SpecCacheEntry {
   content: string
@@ -10,6 +12,15 @@ interface SpecCacheEntry {
 
 const specCache = new Map<string, SpecCacheEntry>()
 
+function buildSpecCacheKey(projectPath: string | null | undefined, sessionName: string) {
+  return `${projectPath ?? '__default__'}::${sessionName}`
+}
+
+function deleteSpecCacheEntries(sessionName: string, projectPath?: string | null) {
+  specCache.delete(sessionName)
+  specCache.delete(buildSpecCacheKey(projectPath, sessionName))
+}
+
 export function useSpecContentCache(
   sessionName: string,
   sessionState?: 'spec' | 'processing' | 'running',
@@ -17,12 +28,14 @@ export function useSpecContentCache(
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const projectPath = useAtomValue(projectPathAtom)
+  const cacheKey = buildSpecCacheKey(projectPath, sessionName)
 
   useEffect(() => {
     let mounted = true
     const isStatic = sessionState === 'running'
 
-    const cached = specCache.get(sessionName)
+    const cached = specCache.get(cacheKey)
     if (cached) {
       setContent(cached.content)
       if (cached.isStatic) {
@@ -39,12 +52,14 @@ export function useSpecContentCache(
 
     setError(null)
 
-    invoke<[string | null, string | null]>(TauriCommands.SchaltwerkCoreGetSessionAgentContent, { name: sessionName })
+    const projectScope = projectPath ? { projectPath } : {}
+
+    invoke<[string | null, string | null]>(TauriCommands.SchaltwerkCoreGetSessionAgentContent, { name: sessionName, ...projectScope })
       .then(([draftContent, initialPrompt]) => {
         if (!mounted) return
         const text: string = draftContent ?? initialPrompt ?? ''
 
-        specCache.set(sessionName, {
+        specCache.set(cacheKey, {
           content: text,
           isStatic,
         })
@@ -64,19 +79,19 @@ export function useSpecContentCache(
       })
 
     return () => { mounted = false }
-  }, [sessionName, sessionState])
+  }, [cacheKey, projectPath, sessionName, sessionState])
 
   const updateContent = useCallback((value: string) => {
     setContent(value)
-    specCache.set(sessionName, {
+    specCache.set(cacheKey, {
       content: value,
       isStatic: false,
     })
-  }, [sessionName])
+  }, [cacheKey])
 
   const invalidateCache = useCallback(() => {
-    specCache.delete(sessionName)
-  }, [sessionName])
+    deleteSpecCacheEntries(sessionName, projectPath)
+  }, [projectPath, sessionName])
 
   return {
     content,
@@ -87,8 +102,8 @@ export function useSpecContentCache(
   }
 }
 
-export function invalidateSpecCache(sessionName: string) {
-  specCache.delete(sessionName)
+export function invalidateSpecCache(sessionName: string, projectPath?: string | null) {
+  deleteSpecCacheEntries(sessionName, projectPath)
 }
 
 export function clearAllSpecCache() {

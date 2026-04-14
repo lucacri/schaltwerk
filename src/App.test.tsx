@@ -1004,8 +1004,14 @@ describe('App.tsx', () => {
 
     const invokeMock = await getInvokeMock()
     await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreCancelSession, { name: 'feature-a' })
-      expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreCancelSession, { name: 'feature-a_v2' })
+      expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreCancelSession, {
+        name: 'feature-a',
+        projectPath: '/Users/me/sample-project',
+      })
+      expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreCancelSession, {
+        name: 'feature-a_v2',
+        projectPath: '/Users/me/sample-project',
+      })
     })
 
     const firstCancelIndex = invokeMock.mock.calls.findIndex(

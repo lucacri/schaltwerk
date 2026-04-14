@@ -85,12 +85,15 @@ export async function loadCommitFileDiff(request: CommitDiffRequest): Promise<Fi
 export async function loadFileDiff(
   sessionName: string | null,
   file: ChangedFile,
-  viewMode: ViewMode
+  viewMode: ViewMode,
+  projectPath?: string | null,
 ): Promise<FileDiffData> {
+  const projectScope = projectPath ? { projectPath } : {}
   if (viewMode === 'unified') {
     const diffResponse = await invoke<DiffResponse>(TauriCommands.ComputeUnifiedDiffBackend, {
       sessionName,
       filePath: file.path,
+      ...projectScope,
     })
     const changedLinesCount = diffResponse.stats.additions + diffResponse.stats.deletions
     return {
@@ -106,6 +109,7 @@ export async function loadFileDiff(
     const splitResponse = await invoke<SplitDiffResponse>(TauriCommands.ComputeSplitDiffBackend, {
       sessionName,
       filePath: file.path,
+      ...projectScope,
     })
     const changedLinesCount = splitResponse.stats.additions + splitResponse.stats.deletions
     return {
@@ -126,10 +130,13 @@ export async function loadFileDiff(
 export async function loadUncommittedFileDiff(
   sessionName: string,
   file: ChangedFile,
+  projectPath?: string | null,
 ): Promise<FileDiffDataUnified> {
+  const projectScope = projectPath ? { projectPath } : {}
   const diffResponse = await invoke<DiffResponse>(TauriCommands.GetUncommittedFileDiff, {
     sessionName,
     filePath: file.path,
+    ...projectScope,
   })
   const changedLinesCount = diffResponse.stats.additions + diffResponse.stats.deletions
   return {
@@ -147,7 +154,8 @@ export async function loadAllFileDiffs(
   sessionName: string | null,
   files: ChangedFile[],
   viewMode: ViewMode,
-  concurrency = 4
+  concurrency = 4,
+  projectPath?: string | null,
 ): Promise<Map<string, FileDiffData>> {
   const results = new Map<string, FileDiffData>()
   let index = 0
@@ -158,7 +166,7 @@ export async function loadAllFileDiffs(
     if (myIndex >= files.length) return
     const file = files[myIndex]
     try {
-      const diff = await loadFileDiff(sessionName, file, viewMode)
+      const diff = await loadFileDiff(sessionName, file, viewMode, projectPath)
       results.set(file.path, diff)
     } catch (e) {
       logger.debug(`Failed to load diff for ${file.path} in session ${sessionName}`, e)

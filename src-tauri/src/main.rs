@@ -382,6 +382,28 @@ pub async fn get_schaltwerk_core()
     })
 }
 
+pub async fn get_schaltwerk_core_for_project_path(
+    project_path: Option<&str>,
+) -> Result<Arc<RwLock<lucode::schaltwerk_core::SchaltwerkCore>>, String> {
+    let Some(path) = project_path.map(str::trim).filter(|path| !path.is_empty()) else {
+        return get_schaltwerk_core().await;
+    };
+
+    let manager = get_project_manager().await;
+    let project_path = PathBuf::from(path);
+    manager
+        .get_schaltwerk_core_for_path(&project_path)
+        .await
+        .map_err(|e| {
+            let message = format!(
+                "Failed to get Lucode core for project path {}: {e}",
+                project_path.display()
+            );
+            log::error!("{message}");
+            message
+        })
+}
+
 pub async fn get_core_read()
 -> Result<OwnedRwLockReadGuard<lucode::schaltwerk_core::SchaltwerkCore>, String> {
     let call_id = uuid::Uuid::new_v4();
@@ -432,6 +454,61 @@ pub async fn get_core_read()
     }
 }
 
+pub async fn get_core_read_for_project_path(
+    project_path: Option<&str>,
+) -> Result<OwnedRwLockReadGuard<lucode::schaltwerk_core::SchaltwerkCore>, String> {
+    let call_id = uuid::Uuid::new_v4();
+    let start = std::time::Instant::now();
+    log::debug!("get_core_read_for_project_path start call_id={call_id}");
+
+    let core = get_schaltwerk_core_for_project_path(project_path).await?;
+    let guard_wait = std::time::Instant::now();
+    match timeout(
+        std::time::Duration::from_secs(5),
+        Arc::clone(&core).read_owned(),
+    )
+    .await
+    {
+        Ok(guard) => {
+            let waited = guard_wait.elapsed().as_millis();
+
+            if waited > 200 {
+                log::warn!(
+                    "get_core_read_for_project_path acquired call_id={call_id} wait={waited}ms"
+                );
+            } else {
+                log::debug!(
+                    "get_core_read_for_project_path acquired call_id={call_id} wait={waited}ms"
+                );
+            }
+            log::debug!(
+                "get_core_read_for_project_path done call_id={call_id} total={}ms",
+                start.elapsed().as_millis()
+            );
+            Ok(guard)
+        }
+        Err(_) => {
+            if let Ok(guard) = LAST_CORE_WRITE.lock() {
+                if let Some((writer_id, since)) = *guard {
+                    log::error!(
+                        "get_core_read_for_project_path timed out (5s) call_id={call_id}; last write call_id={writer_id} alive_for={}ms",
+                        since.elapsed().as_millis()
+                    );
+                } else {
+                    log::error!(
+                        "get_core_read_for_project_path timed out (5s) call_id={call_id}; no recorded writer"
+                    );
+                }
+            } else {
+                log::error!(
+                    "get_core_read_for_project_path timed out (5s) call_id={call_id}; failed to inspect last writer"
+                );
+            }
+            Err("Timed out waiting for core read lock".to_string())
+        }
+    }
+}
+
 pub async fn get_core_write()
 -> Result<OwnedRwLockWriteGuard<lucode::schaltwerk_core::SchaltwerkCore>, String> {
     let call_id = uuid::Uuid::new_v4();
@@ -465,6 +542,49 @@ pub async fn get_core_write()
         }
         Err(_) => {
             log::error!("get_core_write timed out (5s) call_id={call_id}");
+            Err("Timed out waiting for core write lock".to_string())
+        }
+    }
+}
+
+pub async fn get_core_write_for_project_path(
+    project_path: Option<&str>,
+) -> Result<OwnedRwLockWriteGuard<lucode::schaltwerk_core::SchaltwerkCore>, String> {
+    let call_id = uuid::Uuid::new_v4();
+    let start = std::time::Instant::now();
+    log::debug!("get_core_write_for_project_path start call_id={call_id}");
+
+    let core = get_schaltwerk_core_for_project_path(project_path).await?;
+    let guard_wait = std::time::Instant::now();
+    match timeout(
+        std::time::Duration::from_secs(5),
+        Arc::clone(&core).write_owned(),
+    )
+    .await
+    {
+        Ok(guard) => {
+            let waited = guard_wait.elapsed().as_millis();
+            if let Ok(mut last) = LAST_CORE_WRITE.lock() {
+                *last = Some((call_id, std::time::Instant::now()));
+            }
+
+            if waited > 200 {
+                log::warn!(
+                    "get_core_write_for_project_path acquired call_id={call_id} wait={waited}ms"
+                );
+            } else {
+                log::debug!(
+                    "get_core_write_for_project_path acquired call_id={call_id} wait={waited}ms"
+                );
+            }
+            log::debug!(
+                "get_core_write_for_project_path done call_id={call_id} total={}ms",
+                start.elapsed().as_millis()
+            );
+            Ok(guard)
+        }
+        Err(_) => {
+            log::error!("get_core_write_for_project_path timed out (5s) call_id={call_id}");
             Err("Timed out waiting for core write lock".to_string())
         }
     }
@@ -587,7 +707,9 @@ async fn stop_file_watcher(session_name: String) -> Result<(), SchaltError> {
         return watcher_manager
             .stop_watching_orchestrator(repo_path.as_path())
             .await
-            .map_err(|e| SchaltError::io("stop_watching_orchestrator", repo_path.to_string_lossy(), e));
+            .map_err(|e| {
+                SchaltError::io("stop_watching_orchestrator", repo_path.to_string_lossy(), e)
+            });
     }
     watcher_manager
         .stop_watching_session(repo_path.as_path(), &session_name)
@@ -613,7 +735,9 @@ async fn is_file_watcher_active(session_name: String) -> Result<bool, SchaltErro
         core.repo_path.clone()
     };
     if session_name == "orchestrator" {
-        return Ok(watcher_manager.is_watching_orchestrator(repo_path.as_path()).await);
+        return Ok(watcher_manager
+            .is_watching_orchestrator(repo_path.as_path())
+            .await);
     }
 
     Ok(watcher_manager
@@ -803,7 +927,9 @@ async fn start_webhook_server(app: tauri::AppHandle) -> bool {
                             is_consolidation: payload
                                 .get("is_consolidation")
                                 .and_then(|v| v.as_bool())
-                                .or_else(|| payload.get("isConsolidation").and_then(|v| v.as_bool())),
+                                .or_else(|| {
+                                    payload.get("isConsolidation").and_then(|v| v.as_bool())
+                                }),
                             consolidation_sources: payload
                                 .get("consolidation_sources")
                                 .or_else(|| payload.get("consolidationSources"))
@@ -1269,17 +1395,15 @@ fn main() {
         .plugin(tauri_plugin_os::init());
 
     #[cfg(target_os = "macos")]
-    let builder = builder
-        .menu(build_app_menu)
-        .on_menu_event(|app, event| {
-            if event.id() != MACOS_SELECT_ALL_MENU_ID {
-                return;
-            }
+    let builder = builder.menu(build_app_menu).on_menu_event(|app, event| {
+        if event.id() != MACOS_SELECT_ALL_MENU_ID {
+            return;
+        }
 
-            if let Err(error) = emit_event(app, SchaltEvent::SelectAllRequested, &()) {
-                log::warn!("[menu] Failed to emit select-all-requested event: {error}");
-            }
-        });
+        if let Err(error) = emit_event(app, SchaltEvent::SelectAllRequested, &()) {
+            log::warn!("[menu] Failed to emit select-all-requested event: {error}");
+        }
+    });
 
     let run_result = builder.invoke_handler(tauri::generate_handler![
             // Development info

@@ -17,7 +17,7 @@ import { useEpics } from '../../hooks/useEpics'
 import { theme } from '../../common/theme'
 import { Textarea } from '../ui'
 import { typography } from '../../common/typography'
-import { useAtom, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useTranslation } from '../../common/i18n'
 import {
   markSpecEditorSessionSavedAtom,
@@ -36,6 +36,7 @@ import { UiEvent, emitUiEvent, listenUiEvent } from '../../common/uiEvents'
 import { useReviewComments } from '../../hooks/useReviewComments'
 import type { SpecReviewComment } from '../../types/specReview'
 import { getTerminalAgentType, getTerminalStartState } from '../../common/terminalStartState'
+import { projectPathAtom } from '../../store/atoms/project'
 
 const specText = {
   title: {
@@ -128,6 +129,7 @@ export function SpecEditor({
   const lineSelection = useSpecLineSelection()
   const { getOrchestratorAgentType, getSpecClarificationAgentType } = useClaudeSession()
   const { getConfirmationMessage } = useReviewComments()
+  const projectPath = useAtomValue(projectPathAtom)
 
   useEffect(() => {
     setError(null)
@@ -147,9 +149,10 @@ export function SpecEditor({
 
     void (async () => {
       try {
+        const projectScope = projectPath ? { projectPath } : {}
         const [draftContent, initialPrompt] = await invoke<[string | null, string | null]>(
           TauriCommands.SchaltwerkCoreGetSessionAgentContent,
-          { name: sessionName }
+          { name: sessionName, ...projectScope }
         )
 
         if (cancelled) return
@@ -170,7 +173,7 @@ export function SpecEditor({
     return () => {
       cancelled = true
     }
-  }, [sessionName, hasCachedData, setCurrentContent, setSavedContent])
+  }, [hasCachedData, projectPath, sessionName, setCurrentContent, setSavedContent])
 
   useEffect(() => {
     if (hasCachedData) {

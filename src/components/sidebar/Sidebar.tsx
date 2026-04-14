@@ -281,7 +281,8 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     }, [projectPath])
     const fetchOrchestratorBranch = useEffectEvent(async () => {
         try {
-            const branch = await invoke<string>(TauriCommands.GetCurrentBranchName, { sessionName: null })
+            const projectPath = projectPathRef.current
+            const branch = await invoke<string>(TauriCommands.GetCurrentBranchName, { sessionName: null, ...(projectPath ? { projectPath } : {}) })
             setOrchestratorBranch(branch || "main")
         } catch (error) {
             logger.warn('Failed to get current branch, defaulting to main:', error)
@@ -468,11 +469,13 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const [convertToSpecModal, setConvertToDraftModal] = useState<{ 
         open: boolean; 
         sessionName: string; 
+        projectPath?: string | null;
         sessionDisplayName?: string;
         hasUncommitted: boolean 
     }>({
         open: false,
         sessionName: '',
+        projectPath: null,
         hasUncommitted: false
     })
     
@@ -1157,6 +1160,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 setConvertToDraftModal({
                     open: true,
                     sessionName: selectedSession.info.session_id,
+                    projectPath: projectPathRef.current,
                     sessionDisplayName: getSessionDisplayName(selectedSession.info),
                     hasUncommitted: selectedSession.info.has_uncommitted_changes || false
                 })
@@ -1192,7 +1196,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
 
     const executeVersionPromotion = async (targetGroup: SessionVersionGroupType, selectedSessionId: string) => {
         try {
-            await selectBestVersionAndCleanup(targetGroup, selectedSessionId, invoke)
+            await selectBestVersionAndCleanup(targetGroup, selectedSessionId, invoke, projectPathRef.current)
         } catch (error) {
             logger.error('Failed to select best version:', error)
             alert(`Failed to select best version: ${error}`)
@@ -1567,6 +1571,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 setConvertToDraftModal({
                     open: true,
                     sessionName: sessionId,
+                    projectPath: projectPathRef.current,
                     sessionDisplayName: getSessionDisplayName(session.info),
                     hasUncommitted: session.info.has_uncommitted_changes || false
                 })
@@ -2095,9 +2100,10 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             <ConvertToSpecConfirmation
                 open={convertToSpecModal.open}
                 sessionName={convertToSpecModal.sessionName}
+                projectPath={convertToSpecModal.projectPath}
                 sessionDisplayName={convertToSpecModal.sessionDisplayName}
                 hasUncommittedChanges={convertToSpecModal.hasUncommitted}
-                onClose={() => setConvertToDraftModal({ open: false, sessionName: '', hasUncommitted: false })}
+                onClose={() => setConvertToDraftModal({ open: false, sessionName: '', projectPath: null, hasUncommitted: false })}
                 onSuccess={(newSpecName) => {
                     if (convertToSpecModal.sessionName) {
                         optimisticallyConvertSessionToSpec(convertToSpecModal.sessionName)

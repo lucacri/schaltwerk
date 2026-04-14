@@ -799,6 +799,32 @@ describe('DiffFileList', () => {
   })
 
   describe('Session Switching Issues', () => {
+    it('passes the owning project path to session-scoped diff loads', async () => {
+      const mockInvoke = await getInvokeMock()
+      const projectPath = '/projects/alpha'
+
+      render(
+        <Wrapper sessionName="session1" projectPath={projectPath}>
+          <DiffFileList onFileSelect={() => {}} sessionNameOverride="session1" />
+        </Wrapper>
+      )
+
+      await waitFor(() => {
+        expect(mockInvoke).toHaveBeenCalledWith(
+          TauriCommands.GetChangedFilesFromMain,
+          expect.objectContaining({ sessionName: 'session1', projectPath })
+        )
+        expect(mockInvoke).toHaveBeenCalledWith(
+          TauriCommands.SchaltwerkCoreGetSession,
+          expect.objectContaining({ name: 'session1', projectPath })
+        )
+        expect(mockInvoke).toHaveBeenCalledWith(
+          TauriCommands.GetUncommittedFiles,
+          expect.objectContaining({ sessionName: 'session1', projectPath })
+        )
+      })
+    })
+
     it('should show correct files when switching between sessions quickly', async () => {
       const mockInvoke = await getInvokeMock()
 
@@ -957,6 +983,42 @@ describe('DiffFileList', () => {
       await waitFor(() => {
         expect(onFilesChange).toHaveBeenCalledWith(false)
       })
+    })
+
+    it('silences structured SessionNotFound errors from dirty-file loads', async () => {
+      const mockInvoke = await getInvokeMock()
+      const errorSpy = vi.spyOn(loggerModule.logger, 'error').mockImplementation(() => {})
+
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === TauriCommands.GetChangedFilesFromMain) return []
+        if (cmd === TauriCommands.GetCurrentBranchName) return 'main'
+        if (cmd === TauriCommands.GetBaseBranchName) return 'main'
+        if (cmd === TauriCommands.GetCommitComparisonInfo) return ['abc123', 'def456']
+        if (cmd === TauriCommands.SchaltwerkCoreGetSession) return { original_parent_branch: 'main' }
+        if (cmd === TauriCommands.GetUncommittedFiles) {
+          throw {
+            type: 'SessionNotFound',
+            data: { session_id: 'demo' },
+          }
+        }
+        return undefined
+      })
+
+      render(
+        <Wrapper sessionName="demo">
+          <DiffFileList onFileSelect={() => {}} sessionNameOverride="demo" />
+        </Wrapper>
+      )
+
+      await waitFor(() => {
+        expect(mockInvoke).toHaveBeenCalledWith(
+          TauriCommands.GetUncommittedFiles,
+          expect.objectContaining({ sessionName: 'demo' })
+        )
+      })
+
+      expect(errorSpy).not.toHaveBeenCalled()
+      errorSpy.mockRestore()
     })
 
     it('clears stale dirty files immediately when sessions switch', async () => {

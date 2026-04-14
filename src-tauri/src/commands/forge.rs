@@ -3,19 +3,18 @@ use once_cell::sync::Lazy;
 use std::sync::Arc;
 
 use crate::get_project_manager;
+use base64::Engine;
 use log::{error, info, warn};
+use lucode::domains::git::service::GitlabCli;
 use lucode::domains::git::service::{
-    create_provider, detect_forge, rename_branch, ForgeCommitMode,
-    ForgeCreateSessionPrParams, ForgeError, ForgeIssueSummary, ForgeIssueDetails,
+    ForgeCommitMode, ForgeCreateSessionPrParams, ForgeError, ForgeIssueDetails, ForgeIssueSummary,
     ForgePrDetails, ForgePrResult, ForgePrSummary, ForgeReviewComment, ForgeSourceConfig,
-    ForgeType,
+    ForgeType, create_provider, detect_forge, rename_branch,
 };
-use lucode::services::{log_diagnostics, ConnectionVerdict};
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::services::MergeMode;
+use lucode::services::{ConnectionVerdict, log_diagnostics};
 use lucode::shared::session_metadata_gateway::SessionMetadataGateway;
-use base64::Engine;
-use lucode::domains::git::service::GitlabCli;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
@@ -35,7 +34,9 @@ fn format_forge_error(err: ForgeError) -> String {
     err.to_string()
 }
 
-async fn resolve_project(project_path: &str) -> Result<Arc<lucode::project_manager::Project>, String> {
+async fn resolve_project(
+    project_path: &str,
+) -> Result<Arc<lucode::project_manager::Project>, String> {
     let path = std::path::PathBuf::from(project_path);
     let manager = get_project_manager().await;
     manager
@@ -112,7 +113,10 @@ pub async fn forge_search_issues(
     let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
-    provider.ensure_installed().await.map_err(format_forge_error)?;
+    provider
+        .ensure_installed()
+        .await
+        .map_err(format_forge_error)?;
 
     let hostname_hint = source.hostname.as_deref();
 
@@ -141,7 +145,10 @@ pub async fn forge_get_issue_details(
     let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
-    provider.ensure_installed().await.map_err(format_forge_error)?;
+    provider
+        .ensure_installed()
+        .await
+        .map_err(format_forge_error)?;
 
     let hostname_hint = source.hostname.as_deref();
 
@@ -171,7 +178,10 @@ pub async fn forge_search_prs(
     let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
-    provider.ensure_installed().await.map_err(format_forge_error)?;
+    provider
+        .ensure_installed()
+        .await
+        .map_err(format_forge_error)?;
 
     let hostname_hint = source.hostname.as_deref();
 
@@ -200,14 +210,14 @@ pub async fn forge_get_pr_details(
     let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
-    provider.ensure_installed().await.map_err(format_forge_error)?;
+    provider
+        .ensure_installed()
+        .await
+        .map_err(format_forge_error)?;
 
     let hostname_hint = source.hostname.as_deref();
 
-    match provider
-        .get_pr_details(&project.path, &id, &source)
-        .await
-    {
+    match provider.get_pr_details(&project.path, &id, &source).await {
         Ok(details) => {
             clear_connection_issue(hostname_hint);
             Ok(details)
@@ -243,7 +253,10 @@ pub async fn forge_create_session_pr(
     use crate::commands::schaltwerk_core::schaltwerk_core_cancel_session;
 
     let provider = create_provider(args.source.forge_type).map_err(format_forge_error)?;
-    provider.ensure_installed().await.map_err(format_forge_error)?;
+    provider
+        .ensure_installed()
+        .await
+        .map_err(format_forge_error)?;
 
     let project = match &args.project_path {
         Some(pp) => resolve_project(pp).await?,
@@ -304,11 +317,7 @@ pub async fn forge_create_session_pr(
 
     info!(
         "Creating {:?} PR/MR for session '{}' (branch='{}', base='{}', head='{}')",
-        args.source.forge_type,
-        args.session_name,
-        session_branch,
-        base_branch,
-        pr_branch_name
+        args.source.forge_type, args.session_name, session_branch, base_branch, pr_branch_name
     );
 
     let params = ForgeCreateSessionPrParams {
@@ -378,8 +387,12 @@ pub async fn forge_create_session_pr(
     }
 
     if args.cancel_after_pr
-        && let Err(err) =
-            schaltwerk_core_cancel_session(app.clone(), args.session_name.clone()).await
+        && let Err(err) = schaltwerk_core_cancel_session(
+            app.clone(),
+            args.session_name.clone(),
+            Some(project_path.to_string_lossy().to_string()),
+        )
+        .await
     {
         error!(
             "PR/MR created but auto-cancel failed for session '{}': {err}",
@@ -400,7 +413,10 @@ pub async fn forge_get_review_comments(
     let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
-    provider.ensure_installed().await.map_err(format_forge_error)?;
+    provider
+        .ensure_installed()
+        .await
+        .map_err(format_forge_error)?;
 
     let hostname_hint = source.hostname.as_deref();
 
@@ -429,7 +445,10 @@ pub async fn forge_approve_pr(
     let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
-    provider.ensure_installed().await.map_err(format_forge_error)?;
+    provider
+        .ensure_installed()
+        .await
+        .map_err(format_forge_error)?;
 
     let hostname_hint = source.hostname.as_deref();
 
@@ -457,7 +476,10 @@ pub async fn forge_merge_pr(
     let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
-    provider.ensure_installed().await.map_err(format_forge_error)?;
+    provider
+        .ensure_installed()
+        .await
+        .map_err(format_forge_error)?;
 
     let hostname_hint = source.hostname.as_deref();
 
@@ -487,7 +509,10 @@ pub async fn forge_comment_on_pr(
     let project = resolve_project(&project_path).await?;
 
     let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
-    provider.ensure_installed().await.map_err(format_forge_error)?;
+    provider
+        .ensure_installed()
+        .await
+        .map_err(format_forge_error)?;
 
     let hostname_hint = source.hostname.as_deref();
 

@@ -3,6 +3,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../common/tauriCommands'
 import { useSelection } from './useSelection'
 import { logger } from '../utils/logger'
+import { useAtomValue } from 'jotai'
+import { projectPathAtom } from '../store/atoms/project'
 
 interface UseOpenInEditorOptions {
   sessionNameOverride?: string | null
@@ -31,6 +33,7 @@ export function extractExtension(filePath: string): string | null {
 export function useOpenInEditor(options: UseOpenInEditorOptions = {}) {
   const { sessionNameOverride, isCommander } = options
   const { selection } = useSelection()
+  const projectPath = useAtomValue(projectPathAtom)
 
   const sessionName = sessionNameOverride ?? (selection.kind === 'session' ? selection.payload : null)
 
@@ -51,7 +54,8 @@ export function useOpenInEditor(options: UseOpenInEditorOptions = {}) {
       if (isCommander && !sessionName) {
         basePath = await invoke<string>(TauriCommands.GetActiveProjectPath)
       } else if (sessionName) {
-        const sessionData = await invoke<{ worktree_path: string }>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionName })
+        const projectScope = projectPath ? { projectPath } : {}
+        const sessionData = await invoke<{ worktree_path: string }>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionName, ...projectScope })
         basePath = sessionData.worktree_path
       } else {
         basePath = await invoke<string>(TauriCommands.GetActiveProjectPath)
@@ -70,7 +74,7 @@ export function useOpenInEditor(options: UseOpenInEditorOptions = {}) {
       const errorMessage = typeof e === 'string' ? e : ((e as Error)?.message || String(e) || 'Unknown error')
       alert(errorMessage)
     }
-  }, [sessionName, isCommander, resolveEditorAppId])
+  }, [isCommander, projectPath, resolveEditorAppId, sessionName])
 
   return { openInEditor, resolveEditorAppId }
 }

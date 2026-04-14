@@ -6,6 +6,8 @@ import { TauriCommands } from '../common/tauriCommands'
 import { getSessionDisplayName } from '../utils/sessionDisplayName'
 import { logger } from '../utils/logger'
 import { isSpec } from '../utils/sessionFilters'
+import { useAtomValue } from 'jotai'
+import { projectPathAtom } from '../store/atoms/project'
 
 interface UpdateSessionFromParentResult {
   status:
@@ -27,6 +29,7 @@ export function useUpdateSessionFromParent() {
   const { pushToast } = useToast()
   const { sessions } = useSessions()
   const [isUpdating, setIsUpdating] = useState(false)
+  const projectPath = useAtomValue(projectPathAtom)
 
   const updateSessionFromParent = useCallback(async (sessionName: string) => {
     const session = sessions.find(s => s.info.session_id === sessionName)
@@ -52,7 +55,7 @@ export function useUpdateSessionFromParent() {
     try {
       const result = await invoke<UpdateSessionFromParentResult>(
         TauriCommands.SchaltwerkCoreUpdateSessionFromParent,
-        { name: sessionName },
+        { name: sessionName, ...(projectPath ? { projectPath } : {}) },
       )
 
       const displayName = getSessionDisplayName(session.info)
@@ -128,7 +131,7 @@ export function useUpdateSessionFromParent() {
     } finally {
       setIsUpdating(false)
     }
-  }, [sessions, pushToast])
+  }, [projectPath, sessions, pushToast])
 
   const updateAllSessionsFromParent = useCallback(async () => {
     const runningSessions = sessions.filter(session => !isSpec(session.info))
@@ -148,7 +151,7 @@ export function useUpdateSessionFromParent() {
         runningSessions.map(async session => {
           const result = await invoke<UpdateSessionFromParentResult>(
             TauriCommands.SchaltwerkCoreUpdateSessionFromParent,
-            { name: session.info.session_id },
+            { name: session.info.session_id, ...(projectPath ? { projectPath } : {}) },
           )
 
           if (result.status === 'success') return 'updated' satisfies SessionUpdateOutcome
@@ -222,7 +225,7 @@ export function useUpdateSessionFromParent() {
     } finally {
       setIsUpdating(false)
     }
-  }, [sessions, pushToast])
+  }, [projectPath, sessions, pushToast])
 
   return {
     updateSessionFromParent,

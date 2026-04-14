@@ -1,15 +1,15 @@
 use crate::get_project_manager;
 use log::{error, info, warn};
 use lucode::domains::git::service::{
-    format_cli_error, rename_branch, CreateMrParams, CreateSessionMrOptions, GitlabCli,
-    GitlabCliError, GitlabIssueDetails, GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary,
-    GitlabNote, GitlabPipelineDetails, GitlabPipelineJob, MrCommitMode,
+    CreateMrParams, CreateSessionMrOptions, GitlabCli, GitlabCliError, GitlabIssueDetails,
+    GitlabIssueSummary, GitlabMrDetails, GitlabMrSummary, GitlabNote, GitlabPipelineDetails,
+    GitlabPipelineJob, MrCommitMode, format_cli_error, rename_branch,
 };
-use lucode::services::MergeMode;
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::schaltwerk_core::db_project_config::{
     GitlabSource, ProjectConfigMethods, ProjectGitlabConfig,
 };
+use lucode::services::MergeMode;
 use lucode::shared::session_metadata_gateway::SessionMetadataGateway;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
@@ -401,10 +401,7 @@ pub async fn gitlab_get_sources(
 }
 
 #[tauri::command]
-pub async fn gitlab_set_sources(
-    _app: AppHandle,
-    sources: Vec<GitlabSource>,
-) -> Result<(), String> {
+pub async fn gitlab_set_sources(_app: AppHandle, sources: Vec<GitlabSource>) -> Result<(), String> {
     for source in &sources {
         if source.project_path.trim().is_empty() {
             return Err(format!(
@@ -758,8 +755,12 @@ pub async fn gitlab_create_session_mr(
     }
 
     if args.cancel_after_mr
-        && let Err(err) =
-            schaltwerk_core_cancel_session(app.clone(), args.session_name.clone()).await
+        && let Err(err) = schaltwerk_core_cancel_session(
+            app.clone(),
+            args.session_name.clone(),
+            Some(project.path.to_string_lossy().to_string()),
+        )
+        .await
     {
         error!(
             "MR created but auto-cancel failed for session '{}': {err}",
@@ -823,10 +824,7 @@ fn map_note_payload(note: GitlabNote) -> GitlabNotePayload {
     }
 }
 
-fn map_mr_summary_payload(
-    mr: GitlabMrSummary,
-    source_label: &str,
-) -> GitlabMrSummaryPayload {
+fn map_mr_summary_payload(mr: GitlabMrSummary, source_label: &str) -> GitlabMrSummaryPayload {
     GitlabMrSummaryPayload {
         iid: mr.iid,
         title: mr.title,
@@ -841,10 +839,7 @@ fn map_mr_summary_payload(
     }
 }
 
-fn map_mr_details_payload(
-    details: GitlabMrDetails,
-    source_label: &str,
-) -> GitlabMrDetailsPayload {
+fn map_mr_details_payload(details: GitlabMrDetails, source_label: &str) -> GitlabMrDetailsPayload {
     GitlabMrDetailsPayload {
         iid: details.iid,
         title: details.title,
@@ -863,11 +858,7 @@ fn map_mr_details_payload(
             .filter(|n| !n.system)
             .map(map_note_payload)
             .collect(),
-        reviewers: details
-            .reviewers
-            .into_iter()
-            .map(|u| u.username)
-            .collect(),
+        reviewers: details.reviewers.into_iter().map(|u| u.username).collect(),
         source_label: source_label.to_string(),
     }
 }

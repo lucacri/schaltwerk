@@ -1236,6 +1236,7 @@ function AppContent() {
     try {
       await invoke(TauriCommands.SchaltwerkCoreCancelSession, {
         name: sessionName,
+        ...(projectPath ? { projectPath } : {}),
       })
     } catch (error) {
       logger.error(`[App] Failed to cancel session ${sessionName}:`, error)
@@ -1243,7 +1244,7 @@ function AppContent() {
     } finally {
       endSessionMutation(sessionName, 'remove')
     }
-  }, [beginSessionMutation, endSessionMutation])
+  }, [beginSessionMutation, endSessionMutation, projectPath])
 
   const handleCancelSession = useCallback(async () => {
     if (!currentSession) return
@@ -1702,7 +1703,8 @@ function AppContent() {
 
     if (!stableId) {
       try {
-        const spec = await invoke<RawSpec>(TauriCommands.SchaltwerkCoreGetSpec, { name: specName })
+        const projectScope = projectPath ? { projectPath } : {}
+        const spec = await invoke<RawSpec>(TauriCommands.SchaltwerkCoreGetSpec, { name: specName, ...projectScope })
         stableId = spec?.id ?? null
       } catch (error) {
         logger.warn('[App] Failed to load spec before orchestrator cleanup:', { specName, error })

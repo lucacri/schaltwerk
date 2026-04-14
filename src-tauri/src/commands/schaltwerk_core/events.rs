@@ -23,6 +23,7 @@ pub struct SelectionPayload {
 #[derive(serde::Serialize, Clone)]
 pub struct GitOperationPayload {
     pub session_name: String,
+    pub project_path: String,
     pub session_branch: String,
     pub parent_branch: String,
     pub mode: String,
@@ -87,12 +88,14 @@ pub fn request_sessions_refreshed(app: &AppHandle, reason: SessionsRefreshReason
 pub fn emit_git_operation_started(
     app: &AppHandle,
     session_name: &str,
+    project_path: &str,
     session_branch: &str,
     parent_branch: &str,
     mode: &str,
 ) {
     let payload = GitOperationPayload {
         session_name: session_name.to_string(),
+        project_path: project_path.to_string(),
         session_branch: session_branch.to_string(),
         parent_branch: parent_branch.to_string(),
         mode: mode.to_string(),
@@ -106,6 +109,7 @@ pub fn emit_git_operation_started(
 pub fn emit_git_operation_completed(
     app: &AppHandle,
     session_name: &str,
+    project_path: &str,
     session_branch: &str,
     parent_branch: &str,
     mode: &str,
@@ -113,6 +117,7 @@ pub fn emit_git_operation_completed(
 ) {
     let payload = GitOperationPayload {
         session_name: session_name.to_string(),
+        project_path: project_path.to_string(),
         session_branch: session_branch.to_string(),
         parent_branch: parent_branch.to_string(),
         mode: mode.to_string(),
@@ -123,26 +128,29 @@ pub fn emit_git_operation_completed(
     let _ = emit_event(app, SchaltEvent::GitOperationCompleted, &payload);
 }
 
-pub fn emit_git_operation_failed(
-    app: &AppHandle,
-    session_name: &str,
-    session_branch: &str,
-    parent_branch: &str,
-    mode: &str,
-    status: &'static str,
-    error: &str,
-) {
+pub struct GitOperationFailure<'a> {
+    pub session_name: &'a str,
+    pub project_path: &'a str,
+    pub session_branch: &'a str,
+    pub parent_branch: &'a str,
+    pub mode: &'a str,
+    pub status: &'static str,
+    pub error: &'a str,
+}
+
+pub fn emit_git_operation_failed(app: &AppHandle, failure: GitOperationFailure<'_>) {
     let payload = GitOperationFailedPayload {
         base: GitOperationPayload {
-            session_name: session_name.to_string(),
-            session_branch: session_branch.to_string(),
-            parent_branch: parent_branch.to_string(),
-            mode: mode.to_string(),
+            session_name: failure.session_name.to_string(),
+            project_path: failure.project_path.to_string(),
+            session_branch: failure.session_branch.to_string(),
+            parent_branch: failure.parent_branch.to_string(),
+            mode: failure.mode.to_string(),
             operation: "merge",
             commit: None,
-            status,
+            status: failure.status,
         },
-        error: error.to_string(),
+        error: failure.error.to_string(),
     };
     let _ = emit_event(app, SchaltEvent::GitOperationFailed, &payload);
 }

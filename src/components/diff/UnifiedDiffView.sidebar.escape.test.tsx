@@ -236,7 +236,8 @@ describe('UnifiedDiffView sidebar escape handling', () => {
       expect(loadFileDiffMock).toHaveBeenCalledWith(
         'beta',
         expect.objectContaining({ path: 'src/beta.txt' }),
-        'unified'
+        'unified',
+        '/test/project'
       )
     })
   })

@@ -1,24 +1,24 @@
-use crate::{
-    PROJECT_MANAGER, SETTINGS_MANAGER, commands::session_lookup_cache::global_session_lookup_cache,
-    errors::SchaltError, get_core_read, get_core_write, get_file_watcher_manager,
-    get_settings_manager,
-    get_terminal_manager,
-};
 use crate::mcp_api::{
     ConfirmConsolidationWinnerResponse, TriggerConsolidationJudgeResponse,
     confirm_consolidation_winner_inner, trigger_consolidation_judge_inner,
     upsert_consolidation_round,
 };
+use crate::{
+    PROJECT_MANAGER, SETTINGS_MANAGER, commands::session_lookup_cache::global_session_lookup_cache,
+    errors::SchaltError, get_core_read, get_core_read_for_project_path, get_core_write,
+    get_core_write_for_project_path, get_file_watcher_manager, get_settings_manager,
+    get_terminal_manager,
+};
 use lucode::infrastructure::attention_bridge::clear_session_attention_state;
 use lucode::infrastructure::database::db_specs::SpecMethods as _;
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
-use lucode::schaltwerk_core::{AgentLaunchParams, SessionManager};
 use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
 use lucode::schaltwerk_core::db_project_config::{DEFAULT_BRANCH_PREFIX, ProjectConfigMethods};
-use lucode::services::format_branch_name;
+use lucode::schaltwerk_core::{AgentLaunchParams, SessionManager};
 use lucode::services::MergeStateSnapshot;
 use lucode::services::ServiceHandles;
 use lucode::services::SessionMethods;
+use lucode::services::format_branch_name;
 use lucode::services::get_project_files_with_status;
 use lucode::services::repository;
 use lucode::services::{AgentManifest, parse_agent_command};
@@ -30,8 +30,8 @@ use lucode::services::{
     build_login_shell_invocation_with_shell, get_effective_shell, sh_quote_string,
     shell_invocation_to_posix,
 };
-use std::collections::BTreeSet;
 use lucode::utils::env_adapter::EnvAdapter;
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::time::{Duration, Instant};
 use tauri::State;
@@ -86,12 +86,7 @@ fn extract_conflicting_paths(message: &str) -> Vec<String> {
     let first_line = tail.lines().next().unwrap_or(tail);
     first_line
         .split(',')
-        .map(|part| {
-            part.trim()
-                .trim_end_matches('.')
-                .trim()
-                .to_string()
-        })
+        .map(|part| part.trim().trim_end_matches('.').trim().to_string())
         .filter(|path| !path.is_empty())
         .collect()
 }
@@ -237,9 +232,7 @@ fn build_session_added_payload(
         consolidation_role: session.consolidation_role.clone(),
         consolidation_report: session.consolidation_report.clone(),
         consolidation_base_session_id: session.consolidation_base_session_id.clone(),
-        consolidation_recommended_session_id: session
-            .consolidation_recommended_session_id
-            .clone(),
+        consolidation_recommended_session_id: session.consolidation_recommended_session_id.clone(),
         consolidation_confirmation_mode: session.consolidation_confirmation_mode.clone(),
     }
 }
@@ -278,8 +271,7 @@ async fn load_cached_agent_binary_paths() -> std::collections::HashMap<String, S
         let mut paths = std::collections::HashMap::new();
 
         for agent in [
-            "claude", "copilot", "codex", "opencode", "gemini", "droid", "qwen", "amp",
-            "kilocode",
+            "claude", "copilot", "codex", "opencode", "gemini", "droid", "qwen", "amp", "kilocode",
         ] {
             match settings.get_effective_binary_path(agent) {
                 Ok(path) => {
@@ -316,9 +308,9 @@ fn resolve_spec_clarification_agent_type(
 #[cfg(test)]
 mod spec_clarification_prompt_tests {
     use super::{build_spec_clarification_prompt, resolve_spec_clarification_agent_type};
+    use chrono::Utc;
     use lucode::infrastructure::database::Database;
     use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
-    use chrono::Utc;
     use std::path::PathBuf;
 
     #[test]
@@ -385,7 +377,11 @@ async fn resolve_generation_agent_and_args(
     let (env_vars, mut cli_args, binary_path, preferences) =
         get_agent_env_and_cli_args_async(&agent).await;
 
-    if let Some(gen_cli_args) = generation_settings.cli_args.as_deref().filter(|a| !a.is_empty()) {
+    if let Some(gen_cli_args) = generation_settings
+        .cli_args
+        .as_deref()
+        .filter(|a| !a.is_empty())
+    {
         if cli_args.is_empty() {
             cli_args = gen_cli_args.to_string();
         } else {
@@ -501,9 +497,7 @@ fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: Str
             custom_name_prompt,
         };
 
-        match lucode::domains::agents::naming::generate_display_name_and_rename_branch(ctx)
-            .await
-        {
+        match lucode::domains::agents::naming::generate_display_name_and_rename_branch(ctx).await {
             Ok(Some(display_name)) => {
                 log::info!(
                     "Successfully generated display name '{display_name}' for session '{session_name_clone}'"
@@ -651,9 +645,10 @@ pub async fn schaltwerk_core_generate_session_name(
 #[tauri::command]
 pub async fn schaltwerk_core_generate_commit_message(
     session_name: String,
+    project_path: Option<String>,
 ) -> Result<Option<String>, String> {
     let (db_clone, repo_path, session) = {
-        let core = get_core_read()
+        let core = get_core_read_for_project_path(project_path.as_deref())
             .await
             .map_err(|e| format!("Cannot load core: {e}"))?;
         let manager = core.session_manager();
@@ -730,10 +725,7 @@ pub async fn schaltwerk_core_generate_commit_message(
                                 "renamed" => "R",
                                 _ => "M",
                             };
-                            format!(
-                                "{} {} (+{} -{})",
-                                change, f.path, f.additions, f.deletions
-                            )
+                            format!("{} {} (+{} -{})", change, f.path, f.additions, f.deletions)
                         })
                         .collect::<Vec<_>>()
                         .join("\n")
@@ -780,8 +772,10 @@ pub async fn schaltwerk_core_generate_commit_message(
         .map_err(|e| format!("Commit message generation failed: {e}"))
 }
 
-async fn session_manager_read() -> Result<SessionManager, String> {
-    Ok(get_core_read().await?.session_manager())
+async fn session_manager_read(project_path: Option<&str>) -> Result<SessionManager, String> {
+    Ok(get_core_read_for_project_path(project_path)
+        .await?
+        .session_manager())
 }
 
 // CLI helpers live in schaltwerk_core_cli.rs and are consumed by agent_ctx
@@ -834,9 +828,12 @@ pub async fn schaltwerk_core_list_enriched_sessions(
 }
 
 #[tauri::command]
-pub async fn schaltwerk_core_get_merge_preview(name: String) -> Result<MergePreview, String> {
+pub async fn schaltwerk_core_get_merge_preview(
+    name: String,
+    project_path: Option<String>,
+) -> Result<MergePreview, String> {
     let (db, repo_path) = {
-        let core = get_core_read().await?;
+        let core = get_core_read_for_project_path(project_path.as_deref()).await?;
         (core.db.clone(), core.repo_path.clone())
     };
 
@@ -847,9 +844,10 @@ pub async fn schaltwerk_core_get_merge_preview(name: String) -> Result<MergePrev
 #[tauri::command]
 pub async fn schaltwerk_core_get_merge_preview_with_worktree(
     name: String,
+    project_path: Option<String>,
 ) -> Result<MergePreview, String> {
     let (db, repo_path) = {
-        let core = get_core_read().await?;
+        let core = get_core_read_for_project_path(project_path.as_deref()).await?;
         (core.db.clone(), core.repo_path.clone())
     };
 
@@ -871,8 +869,9 @@ pub async fn merge_session_with_events(
     name: &str,
     mode: MergeMode,
     commit_message: Option<String>,
+    project_path: Option<&str>,
 ) -> Result<MergeOutcome, MergeCommandError> {
-    let (db, repo_path) = match get_core_write().await {
+    let (db, repo_path) = match get_core_write_for_project_path(project_path).await {
         Ok(core) => (core.db.clone(), core.repo_path.clone()),
         Err(e) => {
             return Err(MergeCommandError {
@@ -891,10 +890,12 @@ pub async fn merge_session_with_events(
         conflict: false,
         conflicting_paths: Vec::new(),
     })?;
+    let session_project_path = session.repository_path.to_string_lossy().to_string();
 
     events::emit_git_operation_started(
         app,
         name,
+        &session_project_path,
         &session.branch,
         &session.parent_branch,
         mode.as_str(),
@@ -908,6 +909,7 @@ pub async fn merge_session_with_events(
             events::emit_git_operation_completed(
                 app,
                 name,
+                &session_project_path,
                 &outcome.session_branch,
                 &outcome.parent_branch,
                 outcome.mode.as_str(),
@@ -961,7 +963,9 @@ pub async fn merge_session_with_events(
                         lines_removed: stats.lines_removed,
                         has_uncommitted: stats.has_uncommitted,
                         dirty_files_count: Some(stats.dirty_files_count),
-                        commits_ahead_count: preview.as_ref().map(|value| value.commits_ahead_count),
+                        commits_ahead_count: preview
+                            .as_ref()
+                            .map(|value| value.commits_ahead_count),
                         has_conflicts: stats.has_conflicts,
                         top_uncommitted_paths: None,
                         merge_has_conflicts: merge_snapshot.merge_has_conflicts,
@@ -983,12 +987,15 @@ pub async fn merge_session_with_events(
 
             events::emit_git_operation_failed(
                 app,
-                name,
-                &session.branch,
-                &session.parent_branch,
-                mode.as_str(),
-                if conflict { "conflict" } else { "error" },
-                &message,
+                events::GitOperationFailure {
+                    session_name: name,
+                    project_path: &session_project_path,
+                    session_branch: &session.branch,
+                    parent_branch: &session.parent_branch,
+                    mode: mode.as_str(),
+                    status: if conflict { "conflict" } else { "error" },
+                    error: &message,
+                },
             );
             Err(MergeCommandError {
                 message,
@@ -1005,8 +1012,9 @@ pub async fn schaltwerk_core_merge_session_to_main(
     name: String,
     mode: MergeMode,
     commit_message: Option<String>,
+    project_path: Option<String>,
 ) -> Result<(), SchaltError> {
-    merge_session_with_events(&app, &name, mode, commit_message)
+    merge_session_with_events(&app, &name, mode, commit_message, project_path.as_deref())
         .await
         .map(|_| ())
         .map_err(|err| {
@@ -1027,8 +1035,9 @@ pub async fn schaltwerk_core_merge_session_to_main(
 #[tauri::command]
 pub async fn schaltwerk_core_update_session_from_parent(
     name: String,
+    project_path: Option<String>,
 ) -> Result<lucode::services::UpdateSessionFromParentResult, String> {
-    let core = get_core_read().await?;
+    let core = get_core_read_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -1088,7 +1097,7 @@ pub async fn schaltwerk_core_archive_spec_session(
 #[tauri::command]
 pub async fn schaltwerk_core_list_archived_specs()
 -> Result<Vec<lucode::domains::sessions::entity::ArchivedSpec>, String> {
-    let manager = session_manager_read().await?;
+    let manager = session_manager_read(None).await?;
     manager
         .list_archived_specs()
         .map_err(|e| format!("Failed to list archived specs: {e}"))
@@ -1146,7 +1155,7 @@ pub async fn schaltwerk_core_delete_archived_spec(
 
 #[tauri::command]
 pub async fn schaltwerk_core_get_archive_max_entries() -> Result<i32, String> {
-    let manager = session_manager_read().await?;
+    let manager = session_manager_read(None).await?;
     manager
         .get_archive_max_entries()
         .map_err(|e| format!("Failed to get archive limit: {e}"))
@@ -1205,7 +1214,7 @@ pub async fn schaltwerk_core_list_enriched_sessions_sorted(
         .parse::<FilterMode>()
         .map_err(|e| format!("Invalid filter mode '{filter_mode_str}': {e}"))?;
 
-    let manager = session_manager_read().await?;
+    let manager = session_manager_read(None).await?;
 
     let result = manager.list_enriched_sessions_sorted(sort_mode, filter_mode);
 
@@ -1301,11 +1310,9 @@ pub async fn schaltwerk_core_create_session(
     let was_auto_generated = !was_user_edited;
 
     let autonomy_template = {
-        let settings_manager = get_settings_manager(&app).await.map_err(|message| {
-            SchaltError::DatabaseError {
-                message,
-            }
-        })?;
+        let settings_manager = get_settings_manager(&app)
+            .await
+            .map_err(|message| SchaltError::DatabaseError { message })?;
         let manager = settings_manager.lock().await;
         manager
             .get_generation_settings()
@@ -1385,7 +1392,12 @@ pub async fn schaltwerk_core_create_session(
             session.consolidation_confirmation_mode.as_deref(),
         )
         && let Err(err) = upsert_consolidation_round(
-            &get_core_read().await.map_err(|e| SchaltError::DatabaseError { message: e.to_string() })?.db,
+            &get_core_read()
+                .await
+                .map_err(|e| SchaltError::DatabaseError {
+                    message: e.to_string(),
+                })?
+                .db,
             session.repository_path.as_path(),
             round_id,
             group_id,
@@ -1395,7 +1407,7 @@ pub async fn schaltwerk_core_create_session(
     {
         return Err(SchaltError::DatabaseError {
             message: format!("Failed to persist consolidation round: {err}"),
-        })
+        });
     }
 
     let _ = emit_event(
@@ -1635,16 +1647,16 @@ pub async fn schaltwerk_core_rename_version_group(
 
 #[tauri::command]
 pub async fn schaltwerk_core_list_sessions() -> Result<Vec<Session>, String> {
-    session_manager_read()
+    session_manager_read(None)
         .await?
         .list_sessions()
         .map_err(|e| format!("Failed to list sessions: {e}"))
 }
 
 #[tauri::command]
-pub async fn schaltwerk_core_list_epics(
-) -> Result<Vec<lucode::domains::sessions::entity::Epic>, String> {
-    session_manager_read()
+pub async fn schaltwerk_core_list_epics()
+-> Result<Vec<lucode::domains::sessions::entity::Epic>, String> {
+    session_manager_read(None)
         .await?
         .list_epics()
         .map_err(|e| format!("Failed to list epics: {e}"))
@@ -1686,10 +1698,7 @@ pub async fn schaltwerk_core_update_epic(
 }
 
 #[tauri::command]
-pub async fn schaltwerk_core_delete_epic(
-    app: tauri::AppHandle,
-    id: String,
-) -> Result<(), String> {
+pub async fn schaltwerk_core_delete_epic(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let core = get_core_write().await?;
     let manager = core.session_manager();
     manager
@@ -1717,8 +1726,11 @@ pub async fn schaltwerk_core_set_item_epic(
 }
 
 #[tauri::command]
-pub async fn schaltwerk_core_get_session(name: String) -> Result<Session, SchaltError> {
-    let manager = session_manager_read()
+pub async fn schaltwerk_core_get_session(
+    name: String,
+    project_path: Option<String>,
+) -> Result<Session, SchaltError> {
+    let manager = session_manager_read(project_path.as_deref())
         .await
         .map_err(|e| SchaltError::DatabaseError {
             message: e.to_string(),
@@ -1733,8 +1745,9 @@ pub async fn schaltwerk_core_get_session(name: String) -> Result<Session, Schalt
 #[tauri::command]
 pub async fn schaltwerk_core_get_spec(
     name: String,
+    project_path: Option<String>,
 ) -> Result<lucode::domains::sessions::entity::Spec, SchaltError> {
-    let manager = session_manager_read()
+    let manager = session_manager_read(project_path.as_deref())
         .await
         .map_err(|e| SchaltError::DatabaseError {
             message: e.to_string(),
@@ -1750,8 +1763,9 @@ pub async fn schaltwerk_core_get_spec(
 #[tauri::command]
 pub async fn schaltwerk_core_get_session_agent_content(
     name: String,
+    project_path: Option<String>,
 ) -> Result<(Option<String>, Option<String>), SchaltError> {
-    session_manager_read()
+    session_manager_read(project_path.as_deref())
         .await
         .map_err(|e| SchaltError::DatabaseError {
             message: e.to_string(),
@@ -1764,11 +1778,12 @@ pub async fn schaltwerk_core_get_session_agent_content(
 pub async fn schaltwerk_core_cancel_session(
     app: tauri::AppHandle,
     name: String,
+    project_path: Option<String>,
 ) -> Result<(), SchaltError> {
     log::info!("Starting cancel session: {name}");
 
     let (is_spec, repo_path_str, archive_count_after_opt) = {
-        let core = get_core_write()
+        let core = get_core_write_for_project_path(project_path.as_deref())
             .await
             .map_err(|e| SchaltError::DatabaseError {
                 message: e.to_string(),
@@ -1840,8 +1855,10 @@ pub async fn schaltwerk_core_cancel_session(
                 use lucode::schaltwerk_core::{
                     CancellationConfig, StandaloneCancellationCoordinator,
                 };
-                let coordinator =
-                    StandaloneCancellationCoordinator::new(info.repo_path.clone(), info.session.clone());
+                let coordinator = StandaloneCancellationCoordinator::new(
+                    info.repo_path.clone(),
+                    info.session.clone(),
+                );
                 let config = CancellationConfig::default();
                 let result = coordinator.cancel_filesystem_only(config).await;
 
@@ -1920,10 +1937,11 @@ pub async fn schaltwerk_core_cancel_session(
 pub async fn schaltwerk_core_convert_session_to_draft(
     app: tauri::AppHandle,
     name: String,
+    project_path: Option<String>,
 ) -> Result<String, String> {
     log::info!("Converting session to spec: {name}");
 
-    let core = get_core_write().await?;
+    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
     let repo_path_str = core.repo_path.to_string_lossy().to_string();
 
@@ -1965,8 +1983,11 @@ pub async fn schaltwerk_core_convert_session_to_draft(
 }
 
 #[tauri::command]
-pub async fn schaltwerk_core_update_git_stats(session_id: String) -> Result<(), String> {
-    let core = get_core_write().await?;
+pub async fn schaltwerk_core_update_git_stats(
+    session_id: String,
+    project_path: Option<String>,
+) -> Result<(), String> {
+    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -2209,14 +2230,12 @@ async fn schaltwerk_core_start_agent_in_terminal(
     if auto_send_initial_command
         && let Some(initial) = initial_command.clone().filter(|v| !v.trim().is_empty())
     {
-        let dispatch_delay = if agent_type == "copilot"
-            || agent_type == "kilocode"
-            || agent_type == "opencode"
-        {
-            Some(Duration::from_millis(1500))
-        } else {
-            None
-        };
+        let dispatch_delay =
+            if agent_type == "copilot" || agent_type == "kilocode" || agent_type == "opencode" {
+                Some(Duration::from_millis(1500))
+            } else {
+                None
+            };
         let preview = initial
             .chars()
             .filter(|c| *c != '\r' && *c != '\n')
@@ -2502,7 +2521,9 @@ pub async fn schaltwerk_core_start_claude_orchestrator(
     fresh_session: Option<bool>,
 ) -> Result<String, String> {
     let agent_label = agent_type.as_deref().unwrap_or("claude");
-    log::info!("[AGENT_LAUNCH_TRACE] Starting {agent_label} for orchestrator in terminal: {terminal_id}");
+    log::info!(
+        "[AGENT_LAUNCH_TRACE] Starting {agent_label} for orchestrator in terminal: {terminal_id}"
+    );
 
     log::info!("[AGENT_LAUNCH_TRACE] Acquiring core read lock for {terminal_id}");
     let core = match get_core_read().await {
@@ -2622,15 +2643,7 @@ pub async fn schaltwerk_core_start_spec_orchestrator(
     rows: Option<u16>,
     agent_type: Option<String>,
 ) -> Result<String, String> {
-    start_spec_orchestrator_impl(
-        Some(app),
-        terminal_id,
-        spec_name,
-        cols,
-        rows,
-        agent_type,
-    )
-    .await
+    start_spec_orchestrator_impl(Some(app), terminal_id, spec_name, cols, rows, agent_type).await
 }
 
 pub async fn start_spec_orchestrator_impl(
@@ -2768,7 +2781,9 @@ pub async fn submit_spec_clarification_prompt_impl(
 
     if !spec.clarification_started {
         db.update_spec_clarification_started(&spec.id, true)
-            .map_err(|e| format!("Failed to update clarification_started for '{spec_name}': {e}"))?;
+            .map_err(|e| {
+                format!("Failed to update clarification_started for '{spec_name}': {e}")
+            })?;
         request_spec_sessions_refresh(app.as_ref());
     }
 
@@ -2844,8 +2859,9 @@ pub async fn schaltwerk_core_set_session_agent_type(
     app: tauri::AppHandle,
     session_name: String,
     agent_type: String,
+    project_path: Option<String>,
 ) -> Result<(), String> {
-    let core = get_core_write().await?;
+    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
 
     // Update global agent type
     core.db
@@ -3021,8 +3037,11 @@ pub async fn schaltwerk_core_set_font_sizes(
 }
 
 #[tauri::command]
-pub async fn schaltwerk_core_has_uncommitted_changes(name: String) -> Result<bool, String> {
-    let manager = session_manager_read().await?;
+pub async fn schaltwerk_core_has_uncommitted_changes(
+    name: String,
+    project_path: Option<String>,
+) -> Result<bool, String> {
+    let manager = session_manager_read(project_path.as_deref()).await?;
 
     let session = manager
         .get_session(&name)
@@ -3219,7 +3238,9 @@ pub async fn schaltwerk_core_rename_session_display_name(
     session_id: String,
     new_display_name: String,
 ) -> Result<(), String> {
-    log::info!("Renaming session display name: session_id={session_id}, new_name={new_display_name}");
+    log::info!(
+        "Renaming session display name: session_id={session_id}, new_name={new_display_name}"
+    );
 
     let sanitized = lucode::domains::agents::naming::sanitize_name(&new_display_name);
     if sanitized.is_empty() {
@@ -3257,7 +3278,9 @@ pub async fn schaltwerk_core_rename_session_display_name(
     });
 
     if duplicate_session.is_some() || duplicate_spec.is_some() {
-        return Err(format!("A session with the name '{sanitized}' already exists"));
+        return Err(format!(
+            "A session with the name '{sanitized}' already exists"
+        ));
     }
 
     if let Ok(session) = manager.get_session(&session_id) {
@@ -3295,10 +3318,11 @@ pub async fn schaltwerk_core_link_session_to_issue(
     name: String,
     issue_number: i64,
     issue_url: String,
+    project_path: Option<String>,
 ) -> Result<(), String> {
     log::info!("Linking session '{name}' to issue #{issue_number}");
 
-    let core = get_core_write().await?;
+    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -3320,10 +3344,11 @@ pub async fn schaltwerk_core_link_session_to_pr(
     name: String,
     pr_number: i64,
     pr_url: String,
+    project_path: Option<String>,
 ) -> Result<(), String> {
     log::info!("Linking session '{name}' to PR #{pr_number}");
 
-    let core = get_core_write().await?;
+    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -3343,10 +3368,11 @@ pub async fn schaltwerk_core_link_session_to_pr(
 pub async fn schaltwerk_core_unlink_session_from_issue(
     app: tauri::AppHandle,
     name: String,
+    project_path: Option<String>,
 ) -> Result<(), String> {
     log::info!("Unlinking issue from session '{name}'");
 
-    let core = get_core_write().await?;
+    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -3366,10 +3392,11 @@ pub async fn schaltwerk_core_unlink_session_from_issue(
 pub async fn schaltwerk_core_unlink_session_from_pr(
     app: tauri::AppHandle,
     name: String,
+    project_path: Option<String>,
 ) -> Result<(), String> {
     log::info!("Unlinking PR from session '{name}'");
 
-    let core = get_core_write().await?;
+    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -3530,7 +3557,12 @@ mod tests {
             .current_dir(current_dir)
             .status()
             .expect("git command should start");
-        assert!(status.success(), "git {:?} failed in {}", args, current_dir.display());
+        assert!(
+            status.success(),
+            "git {:?} failed in {}",
+            args,
+            current_dir.display()
+        );
     }
 
     fn write_file(path: &Path, relative_path: &str, contents: &str) {
@@ -3687,7 +3719,10 @@ mod tests {
             Path::new("/tmp/does-not-need-to-exist"),
         );
 
-        assert_eq!(paths, vec!["src/lib.rs".to_string(), "src/main.rs".to_string()]);
+        assert_eq!(
+            paths,
+            vec!["src/lib.rs".to_string(), "src/main.rs".to_string()]
+        );
     }
 
     #[test]
@@ -3721,7 +3756,8 @@ mod tests {
             .expect("merge command should run");
         assert!(!output.status.success(), "merge should conflict");
 
-        let paths = resolve_conflicting_paths("Merge failed without explicit path marker", repo_path);
+        let paths =
+            resolve_conflicting_paths("Merge failed without explicit path marker", repo_path);
         assert_eq!(paths, vec!["conflict.txt".to_string()]);
     }
 
@@ -3740,7 +3776,9 @@ mod tests {
                 branch: "schaltwerk/feature-consolidation".to_string(),
                 parent_branch: "main".to_string(),
                 original_parent_branch: None,
-                worktree_path: std::path::PathBuf::from("/tmp/repo/.lucode/worktrees/feature-consolidation"),
+                worktree_path: std::path::PathBuf::from(
+                    "/tmp/repo/.lucode/worktrees/feature-consolidation",
+                ),
                 status: lucode::domains::sessions::entity::SessionStatus::Active,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
@@ -3759,7 +3797,10 @@ mod tests {
                 pr_number: None,
                 pr_url: None,
                 is_consolidation: true,
-                consolidation_sources: Some(vec!["feature_v1".to_string(), "feature_v2".to_string()]),
+                consolidation_sources: Some(vec![
+                    "feature_v1".to_string(),
+                    "feature_v2".to_string(),
+                ]),
                 consolidation_round_id: Some("round-1".to_string()),
                 consolidation_role: Some("candidate".to_string()),
                 consolidation_report: None,
@@ -3772,7 +3813,10 @@ mod tests {
         );
 
         let serialized = serde_json::to_value(payload).expect("payload should serialize");
-        assert_eq!(serialized.get("version_group_id"), Some(&Value::String("group-1".to_string())));
+        assert_eq!(
+            serialized.get("version_group_id"),
+            Some(&Value::String("group-1".to_string()))
+        );
         assert_eq!(serialized.get("version_number"), Some(&Value::from(2)));
     }
 }

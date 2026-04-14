@@ -1,18 +1,20 @@
 use crate::commands::session_lookup_cache::{current_repo_cache_key, global_session_lookup_cache};
 use crate::errors::SchaltError;
-use crate::get_core_read;
+use crate::get_core_read_for_project_path;
 use crate::get_project_manager;
 use git2::{
     Delta, DiffFindOptions, DiffOptions, ErrorCode, ObjectType, Oid, Repository, Sort, Tree,
 };
-use lucode::binary_detection::{get_unsupported_reason, is_binary_file_by_extension, is_likely_binary_content};
+use lucode::binary_detection::{
+    get_unsupported_reason, is_binary_file_by_extension, is_likely_binary_content,
+};
 use lucode::domains::git;
 use lucode::domains::git::stats::build_changed_files_from_diff;
 use lucode::domains::sessions::entity::ChangedFile;
 use lucode::domains::workspace::diff_engine::{
-    DiffResponse, FileInfo, SplitDiffResponse, add_collapsible_sections, calculate_diff_stats,
-    add_collapsible_sections_split, calculate_split_diff_stats, compute_split_diff,
-    compute_unified_diff, get_file_language,
+    DiffResponse, FileInfo, SplitDiffResponse, add_collapsible_sections,
+    add_collapsible_sections_split, calculate_diff_stats, calculate_split_diff_stats,
+    compute_split_diff, compute_unified_diff, get_file_language,
 };
 use lucode::domains::workspace::file_utils;
 use serde::Serialize;
@@ -22,14 +24,16 @@ use std::path::Path;
 pub async fn get_changed_files_from_main(
     session_name: Option<String>,
     compare_mode: Option<git::DiffCompareMode>,
+    project_path: Option<String>,
 ) -> Result<Vec<ChangedFile>, SchaltError> {
     let session_ref = session_name.as_deref();
-    let repo_path = resolve_repo_path_structured(session_ref).await?;
-    let base_branch = resolve_base_branch_structured(session_ref).await?;
+    let project_ref = project_path.as_deref();
+    let repo_path = resolve_repo_path_structured(session_ref, project_ref).await?;
+    let base_branch = resolve_base_branch_structured(session_ref, project_ref).await?;
     let mode = compare_mode.unwrap_or_default();
 
     let session_branch = if mode == git::DiffCompareMode::UnpushedOnly {
-        resolve_session_branch(session_ref).await.ok()
+        resolve_session_branch(session_ref, project_ref).await.ok()
     } else {
         None
     };
@@ -49,16 +53,23 @@ pub async fn get_changed_files_from_main(
 }
 
 #[tauri::command]
-pub async fn has_remote_tracking_branch(session_name: String) -> Result<bool, SchaltError> {
-    let repo_path = resolve_repo_path_structured(Some(&session_name)).await?;
-    let session_branch = resolve_session_branch(Some(&session_name)).await?;
+pub async fn has_remote_tracking_branch(
+    session_name: String,
+    project_path: Option<String>,
+) -> Result<bool, SchaltError> {
+    let project_ref = project_path.as_deref();
+    let repo_path = resolve_repo_path_structured(Some(&session_name), project_ref).await?;
+    let session_branch = resolve_session_branch(Some(&session_name), project_ref).await?;
     Ok(git::has_remote_tracking_branch(
         std::path::Path::new(&repo_path),
         &session_branch,
     ))
 }
 
-async fn resolve_session_branch(session_name: Option<&str>) -> Result<String, SchaltError> {
+async fn resolve_session_branch(
+    session_name: Option<&str>,
+    project_path: Option<&str>,
+) -> Result<String, SchaltError> {
     let Some(name) = session_name else {
         return Err(SchaltError::InvalidInput {
             field: "session_name".to_string(),
@@ -67,17 +78,20 @@ async fn resolve_session_branch(session_name: Option<&str>) -> Result<String, Sc
     };
 
     let manager = {
-        let core = get_core_read().await.map_err(|e| SchaltError::DatabaseError {
-            message: e.to_string(),
-        })?;
+        let core = get_core_read_for_project_path(project_path)
+            .await
+            .map_err(|e| SchaltError::DatabaseError {
+                message: e.to_string(),
+            })?;
         core.session_manager()
     };
 
-    let session = manager.get_session_by_id(name).or_else(|_| manager.get_session(name)).map_err(
-        |e| SchaltError::SessionNotFound {
+    let session = manager
+        .get_session_by_id(name)
+        .or_else(|_| manager.get_session(name))
+        .map_err(|e| SchaltError::SessionNotFound {
             session_id: format!("{name}: {e}"),
-        },
-    )?;
+        })?;
 
     Ok(session.branch.clone())
 }
@@ -104,8 +118,10 @@ fn collect_working_directory_changes(repo: &Repository) -> anyhow::Result<Vec<Ch
 }
 
 #[tauri::command]
-pub async fn get_orchestrator_working_changes() -> Result<Vec<ChangedFile>, String> {
-    let repo_path = get_repo_path(None).await?;
+pub async fn get_orchestrator_working_changes(
+    project_path: Option<String>,
+) -> Result<Vec<ChangedFile>, String> {
+    let repo_path = get_repo_path(None, project_path.as_deref()).await?;
 
     let repo = tokio::task::spawn_blocking({
         let path = repo_path.clone();
@@ -122,8 +138,12 @@ pub async fn get_orchestrator_working_changes() -> Result<Vec<ChangedFile>, Stri
 }
 
 #[tauri::command]
-pub async fn get_uncommitted_files(session_name: String) -> Result<Vec<ChangedFile>, SchaltError> {
-    let repo_path = resolve_repo_path_structured(Some(&session_name)).await?;
+pub async fn get_uncommitted_files(
+    session_name: String,
+    project_path: Option<String>,
+) -> Result<Vec<ChangedFile>, SchaltError> {
+    let repo_path =
+        resolve_repo_path_structured(Some(&session_name), project_path.as_deref()).await?;
 
     let repo = tokio::task::spawn_blocking({
         let path = repo_path.clone();
@@ -136,13 +156,19 @@ pub async fn get_uncommitted_files(session_name: String) -> Result<Vec<ChangedFi
     tokio::task::spawn_blocking(move || collect_working_directory_changes(&repo))
         .await
         .map_err(|e| SchaltError::git("spawn_blocking", git2::Error::from_str(&e.to_string())))?
-        .map_err(|e| SchaltError::git("collect_working_directory_changes", git2::Error::from_str(&e.to_string())))
+        .map_err(|e| {
+            SchaltError::git(
+                "collect_working_directory_changes",
+                git2::Error::from_str(&e.to_string()),
+            )
+        })
 }
 
 #[tauri::command]
 pub async fn get_uncommitted_file_diff(
     session_name: String,
     file_path: String,
+    project_path: Option<String>,
 ) -> Result<DiffResponse, SchaltError> {
     use std::time::Instant;
     let start_total = Instant::now();
@@ -162,7 +188,8 @@ pub async fn get_uncommitted_file_diff(
         });
     }
 
-    let repo_path = resolve_repo_path_structured(Some(&session_name)).await?;
+    let repo_path =
+        resolve_repo_path_structured(Some(&session_name), project_path.as_deref()).await?;
 
     let repo = tokio::task::spawn_blocking({
         let path = repo_path.clone();
@@ -177,7 +204,9 @@ pub async fn get_uncommitted_file_diff(
     if worktree_path.exists() {
         let diff_info = file_utils::check_file_diffability(&worktree_path);
         if !diff_info.is_diffable {
-            let reason = diff_info.reason.unwrap_or_else(|| "Unknown reason".to_string());
+            let reason = diff_info
+                .reason
+                .unwrap_or_else(|| "Unknown reason".to_string());
             return Err(SchaltError::invalid_input("file_path", reason));
         }
     }
@@ -421,10 +450,7 @@ mod tests {
         file_map.insert("normal_file.txt".to_string(), "M".to_string());
         file_map.insert(".lucode".to_string(), "A".to_string());
         file_map.insert(".lucode/session.db".to_string(), "A".to_string());
-        file_map.insert(
-            ".lucode/worktrees/test.txt".to_string(),
-            "A".to_string(),
-        );
+        file_map.insert(".lucode/worktrees/test.txt".to_string(), "A".to_string());
 
         let mut changed_files: Vec<ChangedFile> = file_map
             .into_iter()
@@ -551,9 +577,9 @@ mod tests {
                     pr_number: None,
                     is_consolidation: false,
                     consolidation_source_ids: None,
-            consolidation_round_id: None,
-            consolidation_role: None,
-            consolidation_confirmation_mode: None,
+                    consolidation_round_id: None,
+                    consolidation_role: None,
+                    consolidation_confirmation_mode: None,
                 };
                 let session = session_manager.create_session_with_agent(params).unwrap();
                 (
@@ -566,7 +592,7 @@ mod tests {
             fs::write(worktree_path.join("README.md"), session_edit).unwrap();
 
             let (old_content, new_content) =
-                get_file_diff_from_main(Some(session_name.clone()), "README.md".to_string())
+                get_file_diff_from_main(Some(session_name.clone()), "README.md".to_string(), None)
                     .await
                     .unwrap();
 
@@ -758,9 +784,11 @@ mod tests {
 pub async fn get_file_diff_from_main(
     session_name: Option<String>,
     file_path: String,
+    project_path: Option<String>,
 ) -> Result<(String, String), SchaltError> {
     let session_ref = session_name.as_deref();
-    let repo_path = resolve_repo_path_structured(session_ref).await?;
+    let project_ref = project_path.as_deref();
+    let repo_path = resolve_repo_path_structured(session_ref, project_ref).await?;
 
     // Check if the worktree file is diffable
     let worktree_path = Path::new(&repo_path).join(&file_path);
@@ -788,7 +816,7 @@ pub async fn get_file_diff_from_main(
 
     // For sessions, compare merge-base(HEAD, parent_branch) to working directory using git2
     let repo = Repository::open(&repo_path).map_err(|e| SchaltError::git("open_repository", e))?;
-    let parent_branch = resolve_base_branch_structured(session_ref).await?;
+    let parent_branch = resolve_base_branch_structured(session_ref, project_ref).await?;
     let base_text = read_blob_from_merge_base(&repo, &parent_branch, &file_path)
         .map_err(|e| SchaltError::git("read_blob_from_merge_base", e))?;
     let worktree_text = read_workdir_text(&worktree_path)
@@ -797,13 +825,20 @@ pub async fn get_file_diff_from_main(
 }
 
 #[tauri::command]
-pub async fn get_base_branch_name(session_name: Option<String>) -> Result<String, SchaltError> {
-    resolve_base_branch_structured(session_name.as_deref()).await
+pub async fn get_base_branch_name(
+    session_name: Option<String>,
+    project_path: Option<String>,
+) -> Result<String, SchaltError> {
+    resolve_base_branch_structured(session_name.as_deref(), project_path.as_deref()).await
 }
 
 #[tauri::command]
-pub async fn get_current_branch_name(session_name: Option<String>) -> Result<String, SchaltError> {
-    let repo_path = resolve_repo_path_structured(session_name.as_deref()).await?;
+pub async fn get_current_branch_name(
+    session_name: Option<String>,
+    project_path: Option<String>,
+) -> Result<String, SchaltError> {
+    let repo_path =
+        resolve_repo_path_structured(session_name.as_deref(), project_path.as_deref()).await?;
     let repo = Repository::open(&repo_path).map_err(|e| SchaltError::git("open_repository", e))?;
     match repo.head() {
         Ok(head) => Ok(head.shorthand().unwrap_or("").to_string()),
@@ -818,9 +853,11 @@ pub async fn get_current_branch_name(session_name: Option<String>) -> Result<Str
 #[tauri::command]
 pub async fn get_commit_comparison_info(
     session_name: Option<String>,
+    project_path: Option<String>,
 ) -> Result<(String, String), SchaltError> {
     const EMPTY_COMMIT_SHORT_ID: &str = "0000000";
-    let repo_path = resolve_repo_path_structured(session_name.as_deref()).await?;
+    let project_ref = project_path.as_deref();
+    let repo_path = resolve_repo_path_structured(session_name.as_deref(), project_ref).await?;
     let repo = Repository::open(&repo_path).map_err(|e| SchaltError::git("open_repository", e))?;
 
     // Check for unborn HEAD first, before trying to get base branch
@@ -848,7 +885,7 @@ pub async fn get_commit_comparison_info(
     };
 
     // Only get base branch if HEAD is not unborn
-    let base_branch = resolve_base_branch_structured(session_name.as_deref()).await?;
+    let base_branch = resolve_base_branch_structured(session_name.as_deref(), project_ref).await?;
     let base_branch_commit = repo
         .revparse_single(&base_branch)
         .map_err(|e| SchaltError::git("resolve_base_branch", e))?
@@ -981,10 +1018,11 @@ pub struct CommitInfo {
 #[tauri::command]
 pub async fn get_git_history(
     session_name: Option<String>,
+    project_path: Option<String>,
     skip: Option<u32>,
     limit: Option<u32>,
 ) -> Result<Vec<CommitInfo>, String> {
-    let repo_path = get_repo_path(session_name).await?;
+    let repo_path = get_repo_path(session_name, project_path.as_deref()).await?;
     let repo =
         Repository::open(&repo_path).map_err(|e| format!("Failed to open repository: {e}"))?;
 
@@ -1048,9 +1086,10 @@ pub struct CommitChangedFile {
 #[tauri::command]
 pub async fn get_commit_files(
     session_name: Option<String>,
+    project_path: Option<String>,
     commit: String,
 ) -> Result<Vec<CommitChangedFile>, String> {
-    let repo_path = get_repo_path(session_name).await?;
+    let repo_path = get_repo_path(session_name, project_path.as_deref()).await?;
     let repo =
         Repository::open(&repo_path).map_err(|e| format!("Failed to open repository: {e}"))?;
     let oid = Oid::from_str(&commit).map_err(|e| format!("Invalid commit id: {e}"))?;
@@ -1106,10 +1145,11 @@ pub async fn get_commit_files(
 #[tauri::command]
 pub async fn get_commit_file_contents(
     session_name: Option<String>,
+    project_path: Option<String>,
     commit: String,
     file_path: String,
 ) -> Result<(String, String), String> {
-    let repo_path = get_repo_path(session_name).await?;
+    let repo_path = get_repo_path(session_name, project_path.as_deref()).await?;
     let repo =
         Repository::open(&repo_path).map_err(|e| format!("Failed to open repository: {e}"))?;
     let oid = Oid::from_str(&commit).map_err(|e| format!("Invalid commit id: {e}"))?;
@@ -1133,13 +1173,16 @@ pub async fn get_commit_file_contents(
     Ok((old_text, new_text))
 }
 
-async fn get_repo_path(session_name: Option<String>) -> Result<String, String> {
+async fn get_repo_path(
+    session_name: Option<String>,
+    project_path: Option<&str>,
+) -> Result<String, String> {
     if let Some(name) = session_name {
-        let (worktree_path, _) = resolve_session_info(&name).await?;
+        let (worktree_path, _) = resolve_session_info(&name, project_path).await?;
         Ok(worktree_path)
+    } else if let Some(path) = project_path.map(str::trim).filter(|path| !path.is_empty()) {
+        Ok(path.to_string())
     } else {
-        // For diff commands without session, use current project path if available,
-        // otherwise fall back to current directory for backward compatibility
         let manager = crate::get_project_manager().await;
         if let Ok(project) = manager.current_project().await {
             Ok(project.path.to_string_lossy().to_string())
@@ -1160,8 +1203,14 @@ async fn get_repo_path(session_name: Option<String>) -> Result<String, String> {
     }
 }
 
-async fn resolve_session_info(session_name: &str) -> Result<(String, String), String> {
-    let repo_key = current_repo_cache_key().await?;
+async fn resolve_session_info(
+    session_name: &str,
+    project_path: Option<&str>,
+) -> Result<(String, String), String> {
+    let repo_key = match project_path.map(str::trim).filter(|path| !path.is_empty()) {
+        Some(path) => path.to_string(),
+        None => current_repo_cache_key().await?,
+    };
     let cache = global_session_lookup_cache();
     if let Some((worktree_path, base_branch)) = cache.get(&repo_key, session_name).await {
         log::debug!(
@@ -1173,7 +1222,7 @@ async fn resolve_session_info(session_name: &str) -> Result<(String, String), St
 
     let (worktree_path, base_branch) = {
         let manager = {
-            let core = get_core_read().await?;
+            let core = get_core_read_for_project_path(project_path).await?;
             core.session_manager()
         };
         let session = match manager.get_session_by_id(session_name) {
@@ -1225,16 +1274,22 @@ fn map_session_lookup_error(session_name: &str, message: String) -> SchaltError 
 
 async fn resolve_session_info_structured(
     session_name: &str,
+    project_path: Option<&str>,
 ) -> Result<(String, String), SchaltError> {
-    resolve_session_info(session_name)
+    resolve_session_info(session_name, project_path)
         .await
         .map_err(|message| map_session_lookup_error(session_name, message))
 }
 
-pub async fn resolve_repo_path_structured(session_name: Option<&str>) -> Result<String, SchaltError> {
+pub async fn resolve_repo_path_structured(
+    session_name: Option<&str>,
+    project_path: Option<&str>,
+) -> Result<String, SchaltError> {
     if let Some(name) = session_name {
-        let (worktree, _) = resolve_session_info_structured(name).await?;
+        let (worktree, _) = resolve_session_info_structured(name, project_path).await?;
         Ok(worktree)
+    } else if let Some(path) = project_path.map(str::trim).filter(|path| !path.is_empty()) {
+        Ok(path.to_string())
     } else {
         let manager = get_project_manager().await;
         if let Ok(project) = manager.current_project().await {
@@ -1256,10 +1311,16 @@ pub async fn resolve_repo_path_structured(session_name: Option<&str>) -> Result<
     }
 }
 
-async fn resolve_base_branch_structured(session_name: Option<&str>) -> Result<String, SchaltError> {
+async fn resolve_base_branch_structured(
+    session_name: Option<&str>,
+    project_path: Option<&str>,
+) -> Result<String, SchaltError> {
     if let Some(name) = session_name {
-        let (_, base_branch) = resolve_session_info_structured(name).await?;
+        let (_, base_branch) = resolve_session_info_structured(name, project_path).await?;
         Ok(base_branch)
+    } else if let Some(path) = project_path.map(str::trim).filter(|path| !path.is_empty()) {
+        lucode::domains::git::get_default_branch(Path::new(path))
+            .map_err(|e| SchaltError::git("get_default_branch", e))
     } else {
         let manager = get_project_manager().await;
         if let Ok(project) = manager.current_project().await {
@@ -1287,7 +1348,7 @@ pub async fn compute_commit_unified_diff(
     let resolved_repo_path = if let Some(path) = repo_path {
         path
     } else {
-        get_repo_path(None).await?
+        get_repo_path(None, None).await?
     };
 
     let repo = Repository::open(&resolved_repo_path)
@@ -1415,6 +1476,7 @@ pub async fn compute_commit_unified_diff(
 pub async fn compute_unified_diff_backend(
     session_name: Option<String>,
     file_path: String,
+    project_path: Option<String>,
 ) -> Result<DiffResponse, SchaltError> {
     use std::time::Instant;
     let start_total = Instant::now();
@@ -1437,23 +1499,24 @@ pub async fn compute_unified_diff_backend(
 
     // Profile file content loading
     let start_load = Instant::now();
-    let (old_content, new_content) = match get_file_diff_from_main(session_name, file_path.clone()).await {
-        Ok(contents) => contents,
-        Err(SchaltError::InvalidInput { field, message }) if field == "file_path" => {
-            return Ok(DiffResponse {
-                lines: vec![],
-                stats: calculate_diff_stats(&[]),
-                file_info: FileInfo {
-                    language: get_file_language(&file_path),
-                    size_bytes: 0,
-                },
-                is_large_file: false,
-                is_binary: None,
-                unsupported_reason: Some(message),
-            });
-        }
-        Err(e) => return Err(e),
-    };
+    let (old_content, new_content) =
+        match get_file_diff_from_main(session_name, file_path.clone(), project_path).await {
+            Ok(contents) => contents,
+            Err(SchaltError::InvalidInput { field, message }) if field == "file_path" => {
+                return Ok(DiffResponse {
+                    lines: vec![],
+                    stats: calculate_diff_stats(&[]),
+                    file_info: FileInfo {
+                        language: get_file_language(&file_path),
+                        size_bytes: 0,
+                    },
+                    is_large_file: false,
+                    is_binary: None,
+                    unsupported_reason: Some(message),
+                });
+            }
+            Err(e) => return Err(e),
+        };
     let load_duration = start_load.elapsed();
 
     // Check for binary content after loading
@@ -1524,6 +1587,7 @@ pub async fn compute_unified_diff_backend(
 pub async fn compute_split_diff_backend(
     session_name: Option<String>,
     file_path: String,
+    project_path: Option<String>,
 ) -> Result<SplitDiffResponse, SchaltError> {
     use std::time::Instant;
     let start_total = Instant::now();
@@ -1546,23 +1610,24 @@ pub async fn compute_split_diff_backend(
 
     // Profile file content loading
     let start_load = Instant::now();
-    let (old_content, new_content) = match get_file_diff_from_main(session_name, file_path.clone()).await {
-        Ok(contents) => contents,
-        Err(SchaltError::InvalidInput { field, message }) if field == "file_path" => {
-            return Ok(SplitDiffResponse {
-                split_result: compute_split_diff("", ""),
-                stats: calculate_split_diff_stats(&compute_split_diff("", "")),
-                file_info: FileInfo {
-                    language: get_file_language(&file_path),
-                    size_bytes: 0,
-                },
-                is_large_file: false,
-                is_binary: None,
-                unsupported_reason: Some(message),
-            });
-        }
-        Err(e) => return Err(e),
-    };
+    let (old_content, new_content) =
+        match get_file_diff_from_main(session_name, file_path.clone(), project_path).await {
+            Ok(contents) => contents,
+            Err(SchaltError::InvalidInput { field, message }) if field == "file_path" => {
+                return Ok(SplitDiffResponse {
+                    split_result: compute_split_diff("", ""),
+                    stats: calculate_split_diff_stats(&compute_split_diff("", "")),
+                    file_info: FileInfo {
+                        language: get_file_language(&file_path),
+                        size_bytes: 0,
+                    },
+                    is_large_file: false,
+                    is_binary: None,
+                    unsupported_reason: Some(message),
+                });
+            }
+            Err(e) => return Err(e),
+        };
     let load_duration = start_load.elapsed();
 
     // Check for binary content after loading
@@ -1637,7 +1702,7 @@ pub async fn set_session_diff_base_branch(
     new_base_branch: String,
 ) -> Result<(), String> {
     use lucode::domains::sessions::db_sessions::SessionMethods;
-    use lucode::infrastructure::events::{emit_event, SchaltEvent};
+    use lucode::infrastructure::events::{SchaltEvent, emit_event};
 
     let project_manager = get_project_manager().await;
     let project = project_manager
@@ -1654,13 +1719,18 @@ pub async fn set_session_diff_base_branch(
         session.id.clone()
     };
 
-    let available_branches = git::list_branches(&project.path)
-        .map_err(|e| format!("Failed to list branches: {e}"))?;
+    let available_branches =
+        git::list_branches(&project.path).map_err(|e| format!("Failed to list branches: {e}"))?;
 
     if !available_branches.contains(&new_base_branch) {
         return Err(format!(
             "Branch '{new_base_branch}' not found. Available branches: {}",
-            available_branches.iter().take(5).cloned().collect::<Vec<_>>().join(", ")
+            available_branches
+                .iter()
+                .take(5)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
     }
 
@@ -1676,9 +1746,7 @@ pub async fn set_session_diff_base_branch(
         .evict_repo_session(&repo_key, &session_name)
         .await;
 
-    log::info!(
-        "Updated diff base branch for session '{session_name}' to '{new_base_branch}'"
-    );
+    log::info!("Updated diff base branch for session '{session_name}' to '{new_base_branch}'");
 
     #[derive(serde::Serialize, Clone)]
     struct DiffBaseBranchChangedPayload {

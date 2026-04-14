@@ -546,8 +546,12 @@ pub async fn github_create_session_pr_impl(
     }
 
     if args.cancel_after_pr
-        && let Err(err) =
-            schaltwerk_core_cancel_session(app.clone(), args.session_name.clone()).await
+        && let Err(err) = schaltwerk_core_cancel_session(
+            app.clone(),
+            args.session_name.clone(),
+            Some(project.path.to_string_lossy().to_string()),
+        )
+        .await
     {
         error!(
             "PR created but auto-cancel failed for session '{}': {err}",
