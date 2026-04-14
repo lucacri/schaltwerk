@@ -3598,6 +3598,42 @@
           "fontFamily": "Inter",
           "fontSize": 13,
           "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "RBUmF",
+          "x": 0,
+          "y": 0,
+          "name": "sbSpacer",
+          "enabled": false,
+          "width": "fill_container(0)",
+          "height": 1,
+          "fill": "#00000000"
+        },
+        {
+          "type": "text",
+          "id": "QMoql",
+          "x": 0,
+          "y": 0,
+          "name": "sbResultCount",
+          "enabled": false,
+          "fill": "$text-muted",
+          "fontFamily": "Inter",
+          "fontSize": 11,
+          "fontWeight": "500"
+        },
+        {
+          "type": "text",
+          "id": "v3bKI",
+          "x": 0,
+          "y": 0,
+          "name": "sbClose",
+          "enabled": false,
+          "fill": "$text-muted",
+          "content": "×",
+          "fontFamily": "Inter",
+          "fontSize": 12,
+          "fontWeight": "600"
         }
       ]
     },
@@ -7778,72 +7814,42 @@
                       ]
                     },
                     {
-                      "type": "frame",
-                      "id": "fx",
-                      "name": "Search Input Row",
+                      "id": "3ZuLd",
+                      "type": "ref",
+                      "ref": "dW8n0",
                       "width": "fill_container",
-                      "fill": "#0f1115",
                       "cornerRadius": 6,
-                      "stroke": {
-                        "thickness": 1,
-                        "fill": "#383b3f"
-                      },
-                      "gap": 8,
+                      "fill": "#0f1115",
                       "padding": [
                         9,
                         10
                       ],
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "ts",
-                          "name": "searchInputIcon",
-                          "fill": "#757980",
-                          "content": "⌕",
-                          "fontFamily": "Inter",
-                          "fontSize": 11,
-                          "fontWeight": "600"
-                        },
-                        {
-                          "type": "text",
-                          "id": "tt",
-                          "name": "searchInputValue",
-                          "fill": "#c4c6cc",
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#383b3f"
+                      },
+                      "height": "fit_content",
+                      "name": "searchInst",
+                      "descendants": {
+                        "a5wY6": {
                           "content": "sidebar",
-                          "fontFamily": "Inter",
+                          "fill": "#c4c6cc",
                           "fontSize": 11,
                           "fontWeight": "500"
                         },
-                        {
-                          "type": "frame",
-                          "id": "fu",
-                          "name": "searchInputSpacer",
-                          "width": "fill_container",
-                          "height": 1,
-                          "fill": "transparent"
+                        "RBUmF": {
+                          "enabled": true
                         },
-                        {
-                          "type": "text",
-                          "id": "tv",
-                          "name": "searchResultCount",
-                          "fill": "#8f939b",
+                        "QMoql": {
+                          "enabled": true,
                           "content": "8 results",
-                          "fontFamily": "Inter",
-                          "fontSize": 11,
-                          "fontWeight": "500"
+                          "fill": "#8f939b"
                         },
-                        {
-                          "type": "text",
-                          "id": "tw",
-                          "name": "searchInputClose",
-                          "fill": "#8f939b",
-                          "content": "×",
-                          "fontFamily": "Inter",
-                          "fontSize": 12,
-                          "fontWeight": "600"
+                        "v3bKI": {
+                          "enabled": true,
+                          "fill": "#8f939b"
                         }
-                      ]
+                      }
                     }
                   ]
                 },
@@ -7895,223 +7901,93 @@
                       }
                     },
                     {
-                      "type": "frame",
-                      "id": "zaRi6",
-                      "name": "SpecDraftCard",
+                      "id": "Kg565",
+                      "type": "ref",
+                      "ref": "p09Tn",
                       "width": "fill_container",
-                      "fill": "$bg-tertiary",
+                      "height": 108,
                       "cornerRadius": 10,
                       "stroke": {
                         "thickness": 1,
                         "fill": "$border-subtle"
                       },
-                      "children": [
-                        {
-                          "type": "rectangle",
-                          "id": "JVvuh",
-                          "name": "specStrip",
-                          "fill": "$accent-amber",
+                      "name": "specInst",
+                      "descendants": {
+                        "vcnT8": {
                           "width": 3,
-                          "height": "fill_container"
+                          "fill": "$accent-amber"
                         },
-                        {
-                          "type": "frame",
-                          "id": "rC0Vo",
-                          "name": "specNew",
-                          "width": "fill_container",
-                          "fill": "#00000000",
-                          "stroke": {
-                            "thickness": {
-                              "top": 1,
-                              "right": 1,
-                              "bottom": 1
-                            },
-                            "fill": "$border-subtle"
-                          },
-                          "layout": "vertical",
-                          "gap": 10,
+                        "KIZcw": {
                           "padding": 12,
+                          "gap": 10
+                        },
+                        "scHlf1": {
+                          "type": "frame",
+                          "id": "L1F2f",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
                           "children": [
                             {
-                              "type": "frame",
-                              "id": "QAoWH",
-                              "name": "scTopRow",
-                              "width": "fill_container",
-                              "justifyContent": "space_between",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "9O1sY",
-                                  "name": "scHeaderLeft",
-                                  "width": "fill_container",
-                                  "gap": 8,
-                                  "justifyContent": "space_between",
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "KQRnH",
-                                      "name": "scName",
-                                      "fill": "$text-primary",
-                                      "textGrowth": "fixed-width-height",
-                                      "width": "fill_container",
-                                      "height": 20,
-                                      "content": "sidebar-clarity",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 14,
-                                      "fontWeight": "500"
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "lxzrj",
-                                      "name": "scStageText",
-                                      "fill": "$text-muted",
-                                      "content": "Not started",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 10,
-                                      "fontWeight": "normal"
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "PiJK5",
-                                      "name": "scStatusBadge",
-                                      "width": 56,
-                                      "height": 16,
-                                      "fill": "$accent-amber-bg",
-                                      "cornerRadius": 4,
-                                      "stroke": {
-                                        "thickness": 1,
-                                        "fill": "#be8f3880"
-                                      },
-                                      "padding": [
-                                        1,
-                                        8
-                                      ],
-                                      "justifyContent": "center",
-                                      "alignItems": "center",
-                                      "children": [
-                                        {
-                                          "type": "text",
-                                          "id": "JADnU",
-                                          "name": "scStatusText",
-                                          "fill": "$accent-amber-light",
-                                          "content": "Draft",
-                                          "fontFamily": "Inter",
-                                          "fontSize": 10,
-                                          "fontWeight": "500"
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ]
+                              "type": "text",
+                              "id": "hbXMR",
+                              "name": "scName",
+                              "fill": "$text-primary",
+                              "content": "sidebar-clarity",
+                              "fontFamily": "Inter",
+                              "fontSize": 14,
+                              "fontWeight": "500"
                             },
                             {
                               "type": "text",
-                              "id": "6xiiu",
-                              "name": "scTask",
-                              "fill": "$text-secondary",
-                              "textGrowth": "fixed-width",
-                              "width": "fill_container",
-                              "content": "Clarify the sidebar parity gaps before implementation.",
-                              "lineHeight": 1.35,
+                              "id": "DlUAm",
+                              "name": "scStageText",
+                              "fill": "$text-muted",
+                              "content": "Not started",
                               "fontFamily": "Inter",
-                              "fontSize": 11,
+                              "fontSize": 10,
                               "fontWeight": "normal"
-                            },
-                            {
-                              "type": "frame",
-                              "id": "AxiFC",
-                              "name": "scBottomRow",
-                              "width": "fill_container",
-                              "gap": 10,
-                              "justifyContent": "space_between",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "vYcy7",
-                                  "name": "scMetaRow",
-                                  "width": "fill_container",
-                                  "gap": 8,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "frame",
-                                      "id": "qAQbH",
-                                      "name": "scAgent",
-                                      "fill": "$bg-elevated",
-                                      "cornerRadius": 4,
-                                      "stroke": {
-                                        "thickness": 1,
-                                        "fill": "$border-subtle"
-                                      },
-                                      "padding": [
-                                        1,
-                                        6
-                                      ],
-                                      "alignItems": "center",
-                                      "children": [
-                                        {
-                                          "type": "text",
-                                          "id": "shcXk",
-                                          "name": "scAgentText",
-                                          "fill": "$text-tertiary",
-                                          "content": "spec",
-                                          "fontFamily": "Inter",
-                                          "fontSize": 10,
-                                          "fontWeight": "500"
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "83J3Z",
-                                      "name": "scBranch",
-                                      "fill": "$text-tertiary",
-                                      "content": "spec/sidebar-clarity",
-                                      "fontFamily": "JetBrains Mono",
-                                      "fontSize": 11,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "lFuoZ",
-                                  "name": "scShortcutBadge",
-                                  "height": 15,
-                                  "fill": "$bg-hover",
-                                  "cornerRadius": 4,
-                                  "stroke": {
-                                    "thickness": 1,
-                                    "fill": "$border-subtle"
-                                  },
-                                  "layout": "vertical",
-                                  "padding": [
-                                    1,
-                                    6
-                                  ],
-                                  "justifyContent": "center",
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "C3494",
-                                      "name": "scShortcutText",
-                                      "fill": "$text-muted",
-                                      "content": "⌘2",
-                                      "fontFamily": "JetBrains Mono",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    }
-                                  ]
-                                }
-                              ]
                             }
                           ]
+                        },
+                        "b3Sch": {
+                          "fill": "$accent-amber-bg",
+                          "stroke": {
+                            "thickness": 1,
+                            "fill": "#be8f3880"
+                          }
+                        },
+                        "b3Sct": {
+                          "content": "Draft",
+                          "fill": "$accent-amber"
+                        },
+                        "b3Tsk": {
+                          "content": "Clarify the sidebar parity gaps before implementation.",
+                          "fontSize": 11,
+                          "height": 30,
+                          "lineHeight": 1.35
+                        },
+                        "2GWw5": {
+                          "enabled": false
+                        },
+                        "3DbRz": {
+                          "fill": "$bg-elevated",
+                          "stroke": {
+                            "thickness": 1,
+                            "fill": "$border-subtle"
+                          }
+                        },
+                        "UCCgw": {
+                          "content": "spec",
+                          "fill": "$text-tertiary"
+                        },
+                        "O6dxT": {
+                          "content": "spec/sidebar-clarity"
+                        },
+                        "9GF5h": {
+                          "content": "⌘2"
                         }
-                      ]
+                      }
                     }
                   ]
                 },
@@ -8942,320 +8818,78 @@
                       "cornerRadius": 6,
                       "children": [
                         {
-                          "type": "rectangle",
-                          "id": "qjcR8",
-                          "name": "stateStrip",
-                          "fill": "$accent-green",
-                          "width": 6,
-                          "height": "fill_container"
-                        },
-                        {
-                          "type": "frame",
-                          "id": "DX5T2",
-                          "name": "SessionCard ready",
-                          "width": 362,
-                          "fill": "$bg-tertiary",
-                          "cornerRadius": [
-                            0,
-                            6,
-                            6,
-                            0
-                          ],
+                          "id": "YJcVz",
+                          "type": "ref",
+                          "ref": "p09Tn",
+                          "width": "fill_container",
+                          "height": 106,
                           "stroke": {
                             "thickness": 1,
                             "fill": "$accent-green"
                           },
-                          "layout": "vertical",
-                          "gap": 8,
-                          "padding": [
-                            10,
-                            12
-                          ],
-                          "children": [
-                            {
-                              "type": "frame",
-                              "id": "injjT",
-                              "name": "scTopRow",
-                              "width": "fill_container",
-                              "justifyContent": "space_between",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "ZFgA6",
-                                  "name": "scHeaderLeft",
-                                  "width": "fill_container",
-                                  "gap": 8,
-                                  "justifyContent": "space_between",
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "v9Mci",
-                                      "name": "scName",
-                                      "fill": "$text-primary",
-                                      "content": "fix-terminal-leak",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 16,
-                                      "fontWeight": "500"
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "NCXhA",
-                                      "name": "scStageText",
-                                      "fill": "$text-tertiary",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "8o1RD",
-                                      "name": "scStatusBadge",
-                                      "width": 56,
-                                      "height": 16,
-                                      "fill": "$accent-green-bg",
-                                      "cornerRadius": 4,
-                                      "stroke": {
-                                        "thickness": 1,
-                                        "fill": "#6aab7380"
-                                      },
-                                      "padding": [
-                                        1,
-                                        8
-                                      ],
-                                      "justifyContent": "center",
-                                      "alignItems": "center",
-                                      "children": [
-                                        {
-                                          "type": "text",
-                                          "id": "Cz3RK",
-                                          "name": "scStatusText",
-                                          "fill": "$accent-green",
-                                          "content": "Ready",
-                                          "fontFamily": "Inter",
-                                          "fontSize": 10,
-                                          "fontWeight": "500"
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ]
+                          "name": "readyInst",
+                          "descendants": {
+                            "vcnT8": {
+                              "fill": "$accent-green"
                             },
-                            {
-                              "type": "text",
-                              "id": "cOHyq",
-                              "name": "scTask",
-                              "fill": "$text-secondary",
-                              "textGrowth": "fixed-width",
-                              "width": "fill_container",
-                              "content": "Leak cleanup is done and ready to merge.",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
+                            "URdwL": {
+                              "content": "fix-terminal-leak"
                             },
-                            {
-                              "type": "frame",
-                              "id": "NMHxe",
-                              "name": "scStatsRow",
-                              "width": "fill_container",
-                              "gap": 6,
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "LgyDt",
-                                  "name": "scDirtyChip",
-                                  "fill": "$bg-elevated",
-                                  "cornerRadius": 4,
-                                  "stroke": {
-                                    "thickness": 1,
-                                    "fill": "$border-subtle"
-                                  },
-                                  "padding": [
-                                    1,
-                                    6
-                                  ],
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "7yyWs",
-                                      "name": "scDirtyText",
-                                      "fill": "$text-tertiary",
-                                      "content": "0 dirty",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "WokxB",
-                                  "name": "scAheadChip",
-                                  "fill": "$bg-elevated",
-                                  "cornerRadius": 4,
-                                  "stroke": {
-                                    "thickness": 1,
-                                    "fill": "$border-subtle"
-                                  },
-                                  "padding": [
-                                    1,
-                                    6
-                                  ],
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "cDHPW",
-                                      "name": "scAheadText",
-                                      "fill": "$text-tertiary",
-                                      "content": "0 ahead",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "AGwUZ",
-                                  "name": "scDiffChip",
-                                  "fill": "$bg-hover",
-                                  "cornerRadius": 4,
-                                  "stroke": {
-                                    "thickness": 1,
-                                    "fill": "$border-subtle"
-                                  },
-                                  "gap": 6,
-                                  "padding": [
-                                    1,
-                                    6
-                                  ],
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "8MlaG",
-                                      "name": "scFiles",
-                                      "fill": "$text-muted",
-                                      "content": "2 files",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "s0RKj",
-                                      "name": "scAdded",
-                                      "fill": "$accent-green",
-                                      "content": "+23",
-                                      "fontFamily": "JetBrains Mono",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "0Htk8",
-                                      "name": "scRemoved",
-                                      "fill": "$accent-red",
-                                      "content": "-8",
-                                      "fontFamily": "JetBrains Mono",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    }
-                                  ]
-                                }
-                              ]
+                            "b3Sch": {
+                              "fill": "$accent-green-bg",
+                              "stroke": {
+                                "thickness": 1,
+                                "fill": "#6aab7380"
+                              }
                             },
-                            {
-                              "type": "frame",
-                              "id": "J8Qn0",
-                              "name": "scBottomRow",
-                              "width": "fill_container",
-                              "justifyContent": "space_between",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "Dkf4t",
-                                  "name": "scMetaRow",
-                                  "width": "fill_container",
-                                  "gap": 8,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "frame",
-                                      "id": "IvFeY",
-                                      "name": "scAgent",
-                                      "fill": "#c45d521f",
-                                      "cornerRadius": 4,
-                                      "stroke": {
-                                        "thickness": 1,
-                                        "fill": "#c45d5280"
-                                      },
-                                      "padding": [
-                                        1,
-                                        6
-                                      ],
-                                      "alignItems": "center",
-                                      "children": [
-                                        {
-                                          "type": "text",
-                                          "id": "hh4Gz",
-                                          "name": "scAgentText",
-                                          "fill": "#c45d52",
-                                          "content": "codex",
-                                          "fontFamily": "Inter",
-                                          "fontSize": 10,
-                                          "fontWeight": "500"
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "ogPhh",
-                                      "name": "scBranch",
-                                      "fill": "$text-tertiary",
-                                      "content": "lucode/fix-terminal-leak",
-                                      "fontFamily": "JetBrains Mono",
-                                      "fontSize": 11,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "eMunH",
-                                  "name": "scShortcutBadge",
-                                  "width": 24,
-                                  "height": 15,
-                                  "fill": "$bg-hover",
-                                  "cornerRadius": 4,
-                                  "layout": "vertical",
-                                  "padding": [
-                                    1,
-                                    6
-                                  ],
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "eIvB4",
-                                      "name": "scShortcutText",
-                                      "fill": "$text-muted",
-                                      "content": "⌘4",
-                                      "fontFamily": "JetBrains Mono",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    }
-                                  ]
-                                }
-                              ]
+                            "b3Sct": {
+                              "content": "Ready",
+                              "fill": "$accent-green"
+                            },
+                            "b3Tsk": {
+                              "content": "Leak cleanup is done and ready to merge."
+                            },
+                            "b3Dtx": {
+                              "content": "0 dirty"
+                            },
+                            "b3Acp": {
+                              "fill": "$bg-elevated",
+                              "stroke": {
+                                "thickness": 1,
+                                "fill": "$border-subtle"
+                              }
+                            },
+                            "b3Atx": {
+                              "content": "0 ahead",
+                              "fill": "$text-tertiary"
+                            },
+                            "LwoXN": {
+                              "content": "2 files"
+                            },
+                            "wNfOQ": {
+                              "content": "+23"
+                            },
+                            "vTQtC": {
+                              "content": "-8"
+                            },
+                            "3DbRz": {
+                              "fill": "#c45d521f",
+                              "stroke": {
+                                "thickness": 1,
+                                "fill": "#c45d5280"
+                              }
+                            },
+                            "UCCgw": {
+                              "content": "codex",
+                              "fill": "#c45d52"
+                            },
+                            "O6dxT": {
+                              "content": "lucode/fix-terminal-leak"
+                            },
+                            "9GF5h": {
+                              "content": "⌘4"
                             }
-                          ]
+                          }
                         }
                       ]
                     },
@@ -9263,325 +8897,18 @@
                       "type": "frame",
                       "id": "ohS7S",
                       "name": "SessionCard running border treatment",
+                      "reusable": true,
                       "clip": true,
                       "width": "fill_container",
                       "cornerRadius": 6,
                       "children": [
                         {
-                          "type": "rectangle",
-                          "id": "8Txo9",
-                          "name": "stateStrip",
-                          "fill": "$accent-blue",
-                          "width": 6,
-                          "height": "fill_container"
-                        },
-                        {
-                          "type": "frame",
-                          "id": "yPIc9",
-                          "name": "SessionCard running",
+                          "id": "e7gdH",
+                          "type": "ref",
+                          "ref": "p09Tn",
                           "width": "fill_container",
-                          "fill": "$bg-tertiary",
-                          "cornerRadius": [
-                            0,
-                            6,
-                            6,
-                            0
-                          ],
-                          "stroke": {
-                            "thickness": 1,
-                            "fill": "$border-subtle"
-                          },
-                          "layout": "vertical",
-                          "gap": 8,
-                          "padding": [
-                            10,
-                            12
-                          ],
-                          "children": [
-                            {
-                              "type": "frame",
-                              "id": "gqfOU",
-                              "name": "scTopRow",
-                              "width": "fill_container",
-                              "justifyContent": "space_between",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "M58FK",
-                                  "name": "scHeaderLeft",
-                                  "width": "fill_container",
-                                  "gap": 8,
-                                  "justifyContent": "space_between",
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "3TUxQ",
-                                      "name": "scName",
-                                      "fill": "$text-primary",
-                                      "content": "auth-refactor",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 16,
-                                      "fontWeight": "500"
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "ePsJj",
-                                      "name": "scStageText",
-                                      "fill": "$text-tertiary",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "bP6le",
-                                      "name": "scStatusBadge",
-                                      "width": 56,
-                                      "height": 16,
-                                      "fill": "$accent-blue-bg",
-                                      "cornerRadius": 4,
-                                      "stroke": {
-                                        "thickness": 1,
-                                        "fill": "#548af780"
-                                      },
-                                      "padding": [
-                                        1,
-                                        8
-                                      ],
-                                      "justifyContent": "center",
-                                      "alignItems": "center",
-                                      "children": [
-                                        {
-                                          "type": "text",
-                                          "id": "n3TS0",
-                                          "name": "scStatusText",
-                                          "fill": "$accent-blue",
-                                          "content": "Running",
-                                          "fontFamily": "Inter",
-                                          "fontSize": 10,
-                                          "fontWeight": "500"
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "type": "text",
-                              "id": "6H8AV",
-                              "name": "scTask",
-                              "fill": "$text-secondary",
-                              "textGrowth": "fixed-width",
-                              "width": "fill_container",
-                              "content": "Refine auth handoff and cleanup.",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "frame",
-                              "id": "Y9e4C",
-                              "name": "scStatsRow",
-                              "width": "fill_container",
-                              "gap": 6,
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "CldKA",
-                                  "name": "scDirtyChip",
-                                  "fill": "$bg-elevated",
-                                  "cornerRadius": 4,
-                                  "stroke": {
-                                    "thickness": 1,
-                                    "fill": "$border-subtle"
-                                  },
-                                  "padding": [
-                                    1,
-                                    6
-                                  ],
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "Lbye1",
-                                      "name": "scDirtyText",
-                                      "fill": "$text-tertiary",
-                                      "content": "3 dirty",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "tRBsA",
-                                  "name": "scAheadChip",
-                                  "fill": "$accent-blue-bg",
-                                  "cornerRadius": 4,
-                                  "stroke": {
-                                    "thickness": 1,
-                                    "fill": "#548af780"
-                                  },
-                                  "padding": [
-                                    1,
-                                    6
-                                  ],
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "miFPz",
-                                      "name": "scAheadText",
-                                      "fill": "$accent-blue",
-                                      "content": "2 ahead",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "roPGl",
-                                  "name": "scDiffChip",
-                                  "fill": "$bg-hover",
-                                  "cornerRadius": 4,
-                                  "stroke": {
-                                    "thickness": 1,
-                                    "fill": "$border-subtle"
-                                  },
-                                  "gap": 6,
-                                  "padding": [
-                                    1,
-                                    6
-                                  ],
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "eTVrJ",
-                                      "name": "scFiles",
-                                      "fill": "$text-muted",
-                                      "content": "5 files",
-                                      "fontFamily": "Inter",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "ic22w",
-                                      "name": "scAdded",
-                                      "fill": "$accent-green",
-                                      "content": "+142",
-                                      "fontFamily": "JetBrains Mono",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "2uGwm",
-                                      "name": "scRemoved",
-                                      "fill": "$accent-red",
-                                      "content": "-38",
-                                      "fontFamily": "JetBrains Mono",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    }
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "type": "frame",
-                              "id": "OexYn",
-                              "name": "scBottomRow",
-                              "width": "fill_container",
-                              "justifyContent": "space_between",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "wyu8N",
-                                  "name": "scMetaRow",
-                                  "width": "fill_container",
-                                  "gap": 8,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "frame",
-                                      "id": "2LOAH",
-                                      "name": "scAgent",
-                                      "fill": "$accent-blue-bg",
-                                      "cornerRadius": 4,
-                                      "stroke": {
-                                        "thickness": 1,
-                                        "fill": "#548af780"
-                                      },
-                                      "padding": [
-                                        1,
-                                        6
-                                      ],
-                                      "alignItems": "center",
-                                      "children": [
-                                        {
-                                          "type": "text",
-                                          "id": "yosMb",
-                                          "name": "scAgentText",
-                                          "fill": "$accent-blue",
-                                          "content": "claude",
-                                          "fontFamily": "Inter",
-                                          "fontSize": 10,
-                                          "fontWeight": "500"
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "4qZob",
-                                      "name": "scBranch",
-                                      "fill": "$text-tertiary",
-                                      "content": "lucode/auth-refactor",
-                                      "fontFamily": "JetBrains Mono",
-                                      "fontSize": 11,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "FOYwX",
-                                  "name": "scShortcutBadge",
-                                  "width": 24,
-                                  "height": 15,
-                                  "fill": "$bg-hover",
-                                  "cornerRadius": 4,
-                                  "layout": "vertical",
-                                  "padding": [
-                                    1,
-                                    6
-                                  ],
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "BTfPs",
-                                      "name": "scShortcutText",
-                                      "fill": "$text-muted",
-                                      "content": "⌘2",
-                                      "fontFamily": "JetBrains Mono",
-                                      "fontSize": 10,
-                                      "fontWeight": "500"
-                                    }
-                                  ]
-                                }
-                              ]
-                            }
-                          ]
+                          "height": 106,
+                          "name": "runningInst"
                         }
                       ]
                     }
