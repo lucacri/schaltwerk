@@ -175,6 +175,72 @@ describe('buildFavoriteOptions', () => {
         expect(gemini?.accentColor).toBe(favoriteAccentColor('gemini'))
     })
 
+    it('orders raw agents per rawAgentOrder, appending unspecified ones in AGENT_TYPES order', () => {
+        const result = buildFavoriteOptions({
+            presets: [],
+            enabledAgents: onlyEnabled(['claude', 'codex', 'gemini', 'copilot']),
+            isAvailable: alwaysAvailable,
+            presetOrder: [],
+            rawAgentOrder: ['codex', 'gemini'],
+        })
+        const agentIds = result.filter(o => o.kind === 'agent').map(o => o.id)
+        expect(agentIds).toEqual([
+            '__agent__codex',
+            '__agent__gemini',
+            '__agent__claude',
+            '__agent__copilot',
+        ])
+    })
+
+    it('falls back to AGENT_TYPES order when rawAgentOrder is empty', () => {
+        const result = buildFavoriteOptions({
+            presets: [],
+            enabledAgents: onlyEnabled(['gemini', 'claude']),
+            isAvailable: alwaysAvailable,
+            presetOrder: [],
+            rawAgentOrder: [],
+        })
+        const agentIds = result.filter(o => o.kind === 'agent').map(o => o.id)
+        expect(agentIds).toEqual(['__agent__claude', '__agent__gemini'])
+    })
+
+    it('filters disabled agents out of the saved rawAgentOrder', () => {
+        const result = buildFavoriteOptions({
+            presets: [],
+            enabledAgents: onlyEnabled(['claude', 'codex']),
+            isAvailable: alwaysAvailable,
+            presetOrder: [],
+            rawAgentOrder: ['gemini', 'codex', 'claude'],
+        })
+        const agentIds = result.filter(o => o.kind === 'agent').map(o => o.id)
+        expect(agentIds).toEqual(['__agent__codex', '__agent__claude'])
+    })
+
+    it('ignores unknown or duplicate entries in rawAgentOrder', () => {
+        const result = buildFavoriteOptions({
+            presets: [],
+            enabledAgents: onlyEnabled(['claude', 'codex']),
+            isAvailable: alwaysAvailable,
+            presetOrder: [],
+            rawAgentOrder: ['not-an-agent', 'codex', 'codex', 'claude'],
+        })
+        const agentIds = result.filter(o => o.kind === 'agent').map(o => o.id)
+        expect(agentIds).toEqual(['__agent__codex', '__agent__claude'])
+    })
+
+    it('shifts ⌘1..⌘9 shortcuts to reflect user raw-agent ordering', () => {
+        const result = buildFavoriteOptions({
+            presets: [],
+            enabledAgents: onlyEnabled(['claude', 'codex', 'gemini']),
+            isAvailable: alwaysAvailable,
+            presetOrder: [],
+            rawAgentOrder: ['gemini', 'codex', 'claude'],
+        })
+        const firstAgent = result.find(o => o.kind === 'agent')
+        expect(firstAgent?.id).toBe('__agent__gemini')
+        expect(firstAgent?.shortcut).toBe('⌘2')
+    })
+
     it('uses the primary slot agent colour for presets', () => {
         const presets: AgentPreset[] = [
             { id: 'p1', name: 'Mixed', slots: [{ agentType: 'gemini' }, { agentType: 'claude' }], isBuiltIn: false },

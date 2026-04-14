@@ -349,6 +349,11 @@ export interface Translations {
       autonomyTemplate: string
       autonomyTemplateDesc: string
       autonomyTemplateHint: string
+      rawAgentOrder: string
+      rawAgentOrderDesc: string
+      rawAgentOrderEmpty: string
+      moveUp: string
+      moveDown: string
     }
     mcp: {
       title: string

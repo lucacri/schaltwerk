@@ -344,7 +344,12 @@
       "enabledAgentsDesc": "选择哪些代理会出现在启动下拉菜单和多代理选择器中。",
       "autonomyTemplate": "自主执行提示模板",
       "autonomyTemplateDesc": "当会话启动时启用“完全自主”后，这段文本会追加到初始提示词末尾。",
-      "autonomyTemplateHint": "v1 在所有代理之间共享。重置会恢复默认的自主执行指令块。"
+      "autonomyTemplateHint": "v1 在所有代理之间共享。重置会恢复默认的自主执行指令块。",
+      "rawAgentOrder": "原始代理顺序",
+      "rawAgentOrderDesc": "调整已启用的原始代理在“启动新代理”弹窗中的排列顺序。顺序决定 ⌘1–⌘9 快捷键。",
+      "rawAgentOrderEmpty": "请先在上方启用至少一个代理。",
+      "moveUp": "上移",
+      "moveDown": "下移"
     },
     "mcp": {
       "title": "MCP 服务器配置",

@@ -468,6 +468,8 @@ pub struct Settings {
     #[serde(default)]
     pub favorite_order: Vec<String>,
     #[serde(default)]
+    pub raw_agent_order: Vec<String>,
+    #[serde(default)]
     pub contextual_actions: Vec<ContextualAction>,
 }
 
@@ -498,6 +500,7 @@ impl Default for Settings {
             agent_variants: Vec::new(),
             agent_presets: Vec::new(),
             favorite_order: Vec::new(),
+            raw_agent_order: Vec::new(),
             contextual_actions: Vec::new(),
         }
     }

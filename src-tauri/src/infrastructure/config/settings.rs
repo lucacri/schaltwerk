@@ -417,6 +417,16 @@ impl SettingsManager {
             .map_err(|e| e.to_string())
     }
 
+    pub fn get_raw_agent_order(&self) -> Vec<String> {
+        self.service.get_raw_agent_order()
+    }
+
+    pub fn set_raw_agent_order(&mut self, raw_agent_order: Vec<String>) -> Result<(), String> {
+        self.service
+            .set_raw_agent_order(raw_agent_order)
+            .map_err(|e| e.to_string())
+    }
+
     pub fn get_restore_open_projects(&self) -> bool {
         self.service.get_restore_open_projects()
     }

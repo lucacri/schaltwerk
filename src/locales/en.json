@@ -344,7 +344,12 @@
       "enabledAgentsDesc": "Choose which agents appear in launch dropdowns and multi-agent pickers.",
       "autonomyTemplate": "Autonomy prompt template",
       "autonomyTemplateDesc": "This text is appended to the initial prompt when Full autonomous is enabled for a session launch.",
-      "autonomyTemplateHint": "Shared across agents in v1. Reset restores the default autonomy instruction block."
+      "autonomyTemplateHint": "Shared across agents in v1. Reset restores the default autonomy instruction block.",
+      "rawAgentOrder": "Raw Agent Order",
+      "rawAgentOrderDesc": "Reorder how enabled raw agents appear in the Start New Agent modal. Position determines the ⌘1–⌘9 shortcuts.",
+      "rawAgentOrderEmpty": "Enable at least one agent above to reorder.",
+      "moveUp": "Move up",
+      "moveDown": "Move down"
     },
     "mcp": {
       "title": "MCP Server Configuration",

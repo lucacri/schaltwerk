@@ -11,6 +11,16 @@ Features and enhancements added on top of the original schaltwerk codebase.
 - Accessible names for spec editors and the setup script are translated through the i18n layer (`en` / `zh`).
 - Editing semantics, paste guard, file-reference autocomplete, and keybindings are unchanged — the fix is purely additive ARIA.
 
+## Reorderable Raw Agents in Start New Agent Modal
+
+Raw agents (Claude, Copilot, OpenCode, Gemini, Codex, Droid, Qwen, Amp, KiloCode, Terminal) in the `NewSessionModal` can now be reordered from **Settings → Agent Configuration → Raw Agent Order**. The reorder list shows only *enabled* agents; disabled agents never appear in the modal anyway.
+
+- Persisted globally as `raw_agent_order: Vec<String>` in the main settings file, alongside `favorite_order`.
+- Surfaced via new Tauri commands `get_raw_agent_order` / `set_raw_agent_order`, a Jotai atom (`rawAgentOrder`), and the `useRawAgentOrder` hook.
+- `buildFavoriteOptions` orders the raw-agent slice by the saved order, then falls back to the `AGENT_TYPES` default for any agent not yet in the saved order. Unknown or duplicate entries are filtered at compose time.
+- Spec stays pinned first and presets keep their existing independent ordering.
+- `⌘1`–`⌘9` continue to follow composed-list position, so reordering raw agents directly shifts which agent owns which shortcut.
+
 ## Spec Preview: Dedicated Run Button
 
 The spec preview toolbar now cleanly separates clarification from execution:

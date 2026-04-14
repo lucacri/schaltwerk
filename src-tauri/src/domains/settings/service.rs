@@ -620,6 +620,18 @@ impl SettingsService {
         self.save()
     }
 
+    pub fn get_raw_agent_order(&self) -> Vec<String> {
+        self.settings.raw_agent_order.clone()
+    }
+
+    pub fn set_raw_agent_order(
+        &mut self,
+        raw_agent_order: Vec<String>,
+    ) -> Result<(), SettingsServiceError> {
+        self.settings.raw_agent_order = raw_agent_order;
+        self.save()
+    }
+
     pub fn get_restore_open_projects(&self) -> bool {
         self.settings.restore_open_projects
     }
@@ -1279,6 +1291,27 @@ mod tests {
         let loaded = service.get_favorite_order();
         assert_eq!(loaded, favorite_order);
         assert_eq!(repo_handle.snapshot().favorite_order, favorite_order);
+    }
+
+    #[test]
+    fn raw_agent_order_roundtrip() {
+        let repo = InMemoryRepository::default();
+        let repo_handle = repo.clone();
+        let mut service = SettingsService::new(Box::new(repo));
+
+        let raw_agent_order = vec![
+            "codex".to_string(),
+            "claude".to_string(),
+            "gemini".to_string(),
+        ];
+
+        service
+            .set_raw_agent_order(raw_agent_order.clone())
+            .expect("should save raw agent order");
+
+        let loaded = service.get_raw_agent_order();
+        assert_eq!(loaded, raw_agent_order);
+        assert_eq!(repo_handle.snapshot().raw_agent_order, raw_agent_order);
     }
 
     #[test]

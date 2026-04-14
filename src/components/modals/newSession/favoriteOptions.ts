@@ -100,6 +100,7 @@ export interface BuildFavoriteOptionsInput {
     enabledAgents: EnabledAgents
     isAvailable: (agent: AgentType) => boolean
     presetOrder: string[]
+    rawAgentOrder?: string[]
 }
 
 function summarisePreset(preset: AgentPreset): string {
@@ -118,6 +119,24 @@ function orderPresets(presets: AgentPreset[], presetOrder: string[]): AgentPrese
     return [...ordered, ...remaining]
 }
 
+function orderRawAgents(rawAgentOrder: readonly string[]): AgentType[] {
+    const known = new Set<AgentType>(AGENT_TYPES)
+    const seen = new Set<AgentType>()
+    const ordered: AgentType[] = []
+    for (const entry of rawAgentOrder) {
+        if (!known.has(entry as AgentType)) continue
+        const agent = entry as AgentType
+        if (seen.has(agent)) continue
+        seen.add(agent)
+        ordered.push(agent)
+    }
+    for (const agent of AGENT_TYPES) {
+        if (seen.has(agent)) continue
+        ordered.push(agent)
+    }
+    return ordered
+}
+
 function shortcutFor(index: number): string | undefined {
     if (index >= MAX_SHORTCUT_INDEX) return undefined
     return `⌘${index + 1}`
@@ -128,6 +147,7 @@ export function buildFavoriteOptions({
     enabledAgents,
     isAvailable,
     presetOrder,
+    rawAgentOrder = [],
 }: BuildFavoriteOptionsInput): FavoriteOption[] {
     const specOption: SpecFavoriteOption = {
         kind: 'spec',
@@ -157,7 +177,7 @@ export function buildFavoriteOptions({
     }
 
     const agentOptions: AgentFavoriteOption[] = []
-    for (const agent of AGENT_TYPES) {
+    for (const agent of orderRawAgents(rawAgentOrder)) {
         if (!enabledAgents[agent]) continue
         if (!isAvailable(agent)) continue
         agentOptions.push({

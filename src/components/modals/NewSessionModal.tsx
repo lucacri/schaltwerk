@@ -13,6 +13,7 @@ import { useAgentAvailability } from '../../hooks/useAgentAvailability'
 import { useAgentPresets } from '../../hooks/useAgentPresets'
 import { useEnabledAgents } from '../../hooks/useEnabledAgents'
 import { useFavorites } from '../../hooks/useFavorites'
+import { useRawAgentOrder } from '../../hooks/useRawAgentOrder'
 import { useProjectFileIndex } from '../../hooks/useProjectFileIndex'
 import { FavoriteCard } from '../shared/FavoriteCard'
 import { ResizableModal } from '../shared/ResizableModal'
@@ -77,6 +78,7 @@ export function NewSessionModal({
     const { presets } = useAgentPresets()
     const { enabledAgents } = useEnabledAgents()
     const { favoriteOrder } = useFavorites()
+    const { rawAgentOrder } = useRawAgentOrder()
     const projectFileIndex = useProjectFileIndex()
 
     const [name, setName] = useState<string>(() => generateDockerStyleName())
@@ -112,8 +114,9 @@ export function NewSessionModal({
                 enabledAgents,
                 isAvailable,
                 presetOrder: favoriteOrder,
+                rawAgentOrder,
             }),
-        [presets, enabledAgents, isAvailable, favoriteOrder],
+        [presets, enabledAgents, isAvailable, favoriteOrder, rawAgentOrder],
     )
 
     const selectedFavorite = useMemo<FavoriteOption>(() => {

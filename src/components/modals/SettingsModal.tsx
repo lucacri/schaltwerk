@@ -43,6 +43,7 @@ import { useModal } from '../../contexts/ModalContext'
 import { ResizableModal } from '../shared/ResizableModal'
 import { AgentVariantsSettings } from '../settings/AgentVariantsSettings'
 import { AgentPresetsSettings } from '../settings/AgentPresetsSettings'
+import { AgentOrderSettings } from '../settings/AgentOrderSettings'
 import { ContextualActionsSettings } from '../settings/ContextualActionsSettings'
 import { EditorOverridesSettings } from '../settings/EditorOverridesSettings'
 import { Button, Checkbox, FormGroup, Label, SectionHeader, Select, TextInput, Textarea, Toggle } from '../ui'
@@ -2974,6 +2975,7 @@ fi`}
                         <div className="flex-1 overflow-y-auto p-6">
                             <div className="space-y-8">
                                 {renderEnabledAgentsSettings()}
+                                <AgentOrderSettings enabledAgents={enabledAgents} onNotification={showNotification} />
                                 {renderAutonomyTemplateSettings()}
                                 <AgentVariantsSettings onNotification={showNotification} enabledAgents={enabledAgents} />
                                 <AgentPresetsSettings onNotification={showNotification} enabledAgents={enabledAgents} />
