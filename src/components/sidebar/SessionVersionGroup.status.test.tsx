@@ -520,6 +520,20 @@ describe('SessionVersionGroup status summary', () => {
         createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
         createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
         {
+          ...createVersion({ id: 'feature-A-merge_v1', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-merge_v1', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_round_id: 'round-123',
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+              consolidation_base_session_id: 'feature-A_v2',
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+        {
           ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }),
           session: {
             info: {
@@ -527,7 +541,7 @@ describe('SessionVersionGroup status summary', () => {
               is_consolidation: true,
               consolidation_role: 'judge',
               consolidation_round_id: 'round-123',
-              consolidation_recommended_session_id: 'feature-A_v2',
+              consolidation_recommended_session_id: 'feature-A-merge_v1',
             },
             status: undefined,
             terminals: [],
@@ -564,6 +578,20 @@ describe('SessionVersionGroup status summary', () => {
         createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
         createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
         {
+          ...createVersion({ id: 'feature-A-merge_v1', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-merge_v1', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_round_id: 'round-123',
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+              consolidation_base_session_id: 'feature-A_v2',
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+        {
           ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }),
           session: {
             info: {
@@ -572,7 +600,7 @@ describe('SessionVersionGroup status summary', () => {
               consolidation_role: 'judge',
               consolidation_round_id: 'round-123',
               consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
-              consolidation_recommended_session_id: 'feature-A_v2',
+              consolidation_recommended_session_id: 'feature-A-merge_v1',
             },
             status: undefined,
             terminals: [],
@@ -598,7 +626,117 @@ describe('SessionVersionGroup status summary', () => {
     expect(within(lane).getByTestId('version-group-judge-recommendation')).toHaveTextContent('Judge recommends claude v2')
 
     fireEvent.click(within(lane).getByTestId('confirm-consolidation-winner-banner-button'))
-    expect(onConfirmConsolidationWinner).toHaveBeenCalledWith('round-123', 'feature-A_v2')
+    expect(onConfirmConsolidationWinner).toHaveBeenCalledWith('round-123', 'feature-A-merge_v1')
+  })
+
+  it('labels the judge recommendation using the winning candidate base session, not the candidate version', () => {
+    const judgeGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
+        createVersion({ id: 'feature-A_v3', sessionState: 'running', versionNumber: 3 }),
+        {
+          ...createVersion({ id: 'feature-A-merge_v1', sessionState: 'running', versionNumber: 1 }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-merge_v1', sessionState: 'running', versionNumber: 1 }).session.info,
+              is_consolidation: true,
+              consolidation_round_id: 'round-123',
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2', 'feature-A_v3'],
+              consolidation_base_session_id: 'feature-A_v2',
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+        {
+          ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_role: 'judge',
+              consolidation_round_id: 'round-123',
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2', 'feature-A_v3'],
+              consolidation_recommended_session_id: 'feature-A-merge_v1',
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={judgeGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onConfirmConsolidationWinner={vi.fn()}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const banner = screen.getByTestId('version-group-judge-recommendation')
+    expect(banner).toHaveTextContent('Judge recommends claude v2')
+    expect(banner).not.toHaveTextContent('claude v1')
+  })
+
+  it('degrades the judge recommendation label to agent-only when the winning candidate has no base session id', () => {
+    const judgeGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
+        {
+          ...createVersion({ id: 'feature-A-merge_v1', sessionState: 'running', versionNumber: 1 }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-merge_v1', sessionState: 'running', versionNumber: 1 }).session.info,
+              is_consolidation: true,
+              consolidation_round_id: 'round-123',
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+        {
+          ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_role: 'judge',
+              consolidation_round_id: 'round-123',
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+              consolidation_recommended_session_id: 'feature-A-merge_v1',
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={judgeGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onConfirmConsolidationWinner={vi.fn()}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const banner = screen.getByTestId('version-group-judge-recommendation')
+    expect(banner).toHaveTextContent('Judge recommends claude')
+    expect(banner).not.toHaveTextContent(/v\d/)
   })
 
   it('places consolidation candidate rows inside the recommendation lane when a judge recommendation exists', () => {

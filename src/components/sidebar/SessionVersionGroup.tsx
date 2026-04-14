@@ -61,6 +61,20 @@ function getJudgeRecommendationLabel(
   const recommended = versions.find(version => version.session.info.session_id === recommendedSessionId)?.session.info
   if (!recommended) return recommendedSessionId
 
+  const baseSessionId = recommended.consolidation_base_session_id
+  const baseSession = baseSessionId
+    ? versions.find(version => version.session.info.session_id === baseSessionId)?.session.info
+    : null
+
+  if (baseSession) {
+    const agent = (baseSession.original_agent_type || 'session').toLowerCase()
+    return baseSession.version_number ? `${agent} v${baseSession.version_number}` : agent
+  }
+
+  if (recommended.is_consolidation) {
+    return (recommended.original_agent_type || 'session').toLowerCase()
+  }
+
   const agent = (recommended.original_agent_type || 'session').toLowerCase()
   return recommended.version_number ? `${agent} v${recommended.version_number}` : agent
 }
