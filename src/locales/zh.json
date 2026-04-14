@@ -219,7 +219,8 @@
       "runScriptTip": "提示：使用包管理器脚本（例如「bun run dev」或「npm run dev」）或任何 shell 命令。命令在专用的只读终端中运行，进程退出时结束。",
       "projectEnvVars": "项目环境变量",
       "projectEnvVarsDesc": "配置将为此项目中所有代理设置的环境变量。这些变量适用于所有终端和代理进程。",
-      "commonEnvVars": "常用项目环境变量："
+      "commonEnvVars": "常用项目环境变量：",
+      "setupScriptAriaLabel": "设置脚本"
     },
     "projectActions": {
       "title": "操作按钮",
@@ -913,6 +914,7 @@
   "specEditor": {
     "focusSpecContent": "聚焦规格内容",
     "editSpecContent": "编辑规格内容",
+    "specAriaLabel": "规格内容",
     "saving": "保存中...",
     "refine": "优化",
     "run": "运行",
@@ -1167,6 +1169,7 @@
   "specContentView": {
     "saving": "保存中…",
     "editingSpec": "编辑规格",
+    "specAriaLabel": "规格内容",
     "previewMode": "预览模式",
     "focusSpecContent": "聚焦规格内容",
     "previewMarkdown": "预览 Markdown",

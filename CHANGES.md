@@ -2,6 +2,15 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## MarkdownEditor: Dictation / Voice Control accessibility
+
+`MarkdownEditor` now exposes the underlying CodeMirror contenteditable as a standard multiline textbox so macOS dictation, Voice Control, and screen readers can target it as a text input:
+
+- The shared editor sets `role="textbox"`, `aria-multiline="true"`, `aria-label` (or `aria-labelledby`), and `aria-readonly` (when read-only) on `.cm-content` via `EditorView.contentAttributes`.
+- New `ariaLabel` and `ariaLabelledBy` props are threaded through every caller (`NewSessionModal` prompt, `SpecEditor`, `SpecContentView`, `SettingsModal` setup script); the label falls back to the placeholder text when none is supplied.
+- Accessible names for spec editors and the setup script are translated through the i18n layer (`en` / `zh`).
+- Editing semantics, paste guard, file-reference autocomplete, and keybindings are unchanged — the fix is purely additive ARIA.
+
 ## Spec Preview: Dedicated Run Button
 
 The spec preview toolbar now cleanly separates clarification from execution:

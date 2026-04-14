@@ -1366,6 +1366,7 @@ if [ -f "$REPO_PATH/.env" ]; then
     echo "✓ Copied .env file to worktree"
 fi`}
                                 className="h-full"
+                                ariaLabel={t.settings.projectRun.setupScriptAriaLabel}
                             />
                         </div>
 

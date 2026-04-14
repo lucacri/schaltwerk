@@ -219,7 +219,8 @@
       "runScriptTip": "Tip: Use a package manager script (for example, \"bun run dev\" or \"npm run dev\") or any shell command. The command runs in a dedicated read-only terminal and ends when the process exits.",
       "projectEnvVars": "Project Environment Variables",
       "projectEnvVarsDesc": "Configure environment variables that will be set for all agents in this project. These variables are applied to all terminals and agent processes.",
-      "commonEnvVars": "Common project environment variables:"
+      "commonEnvVars": "Common project environment variables:",
+      "setupScriptAriaLabel": "Setup script"
     },
     "projectActions": {
       "title": "Action Buttons",
@@ -913,6 +914,7 @@
   "specEditor": {
     "focusSpecContent": "Focus spec content",
     "editSpecContent": "Edit spec content",
+    "specAriaLabel": "Spec content",
     "saving": "Saving...",
     "refine": "Clarify",
     "run": "Run",
@@ -1167,6 +1169,7 @@
   "specContentView": {
     "saving": "Saving…",
     "editingSpec": "Editing spec",
+    "specAriaLabel": "Spec content",
     "previewMode": "Preview mode",
     "focusSpecContent": "Focus spec content",
     "previewMarkdown": "Preview markdown",

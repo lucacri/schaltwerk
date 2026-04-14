@@ -817,6 +817,7 @@ export function SpecEditor({
             placeholder={t.specEditor.enterAgentDescription}
             className="h-full"
             fileReferenceProvider={projectFileIndex}
+            ariaLabel={t.specEditor.specAriaLabel}
           />
         </div>
         <div style={{ display: viewMode === 'preview' ? 'block' : 'none' }} className="h-full">

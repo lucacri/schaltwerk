@@ -121,6 +121,7 @@ export function SpecContentView({ sessionName, editable = true, debounceMs = 100
             onChange={updateContent}
             placeholder={t.specContentView.enterAgentDescription}
             className="flex-1"
+            ariaLabel={t.specContentView.specAriaLabel}
           />
         ) : (
           <div className="flex-1 overflow-hidden">

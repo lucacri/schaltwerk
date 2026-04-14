@@ -224,6 +224,7 @@ export interface Translations {
       projectEnvVars: string
       projectEnvVarsDesc: string
       commonEnvVars: string
+      setupScriptAriaLabel: string
     }
     projectActions: {
       title: string
@@ -917,6 +918,7 @@ export interface Translations {
   specEditor: {
     focusSpecContent: string
     editSpecContent: string
+    specAriaLabel: string
     saving: string
     refine: string
     run: string
@@ -1171,6 +1173,7 @@ export interface Translations {
   specContentView: {
     saving: string
     editingSpec: string
+    specAriaLabel: string
     previewMode: string
     focusSpecContent: string
     previewMarkdown: string

@@ -522,6 +522,7 @@ export function NewSessionModal({
                             onChange={handlePromptChange}
                             placeholder="# Describe what you want the agent to do…"
                             fileReferenceProvider={projectFileIndex}
+                            ariaLabel="Prompt and context"
                         />
                     </div>
                     <span style={{ ...typography.caption, color: 'var(--color-text-muted)' }}>

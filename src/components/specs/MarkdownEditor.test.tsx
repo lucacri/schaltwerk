@@ -1,7 +1,8 @@
 import { render } from '@testing-library/react'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { ComponentProps } from 'react'
-import type { Extension } from '@codemirror/state'
+import { EditorState, type Extension } from '@codemirror/state'
+import { EditorView } from '@codemirror/view'
 import { MarkdownEditor, MARKDOWN_PASTE_CHARACTER_LIMIT, handleMarkdownPaste } from './MarkdownEditor'
 import type { ProjectFileIndexApi } from '../../hooks/useProjectFileIndex'
 
@@ -38,6 +39,17 @@ function captureExtensions(extraProps: Partial<ComponentProps<typeof MarkdownEdi
   }
   const [props] = lastCall as [Record<string, unknown>]
   return (props.extensions as Extension[]) ?? []
+}
+
+function resolveContentAttributes(extensions: Extension[]): Record<string, string> {
+  const state = EditorState.create({ extensions })
+  const entries = state.facet(EditorView.contentAttributes)
+  const merged: Record<string, string> = {}
+  for (const entry of entries) {
+    if (typeof entry === 'function') continue
+    Object.assign(merged, entry)
+  }
+  return merged
 }
 
 describe('MarkdownEditor', () => {
@@ -94,6 +106,43 @@ describe('MarkdownEditor', () => {
     expect(pushToastMock).toHaveBeenCalledWith(expect.objectContaining({
       tone: 'warning',
     }))
+  })
+
+  describe('accessibility', () => {
+    it('sets role=textbox and aria-multiline=true by default', () => {
+      const attrs = resolveContentAttributes(captureExtensions())
+      expect(attrs.role).toBe('textbox')
+      expect(attrs['aria-multiline']).toBe('true')
+    })
+
+    it('falls back to placeholder as aria-label when no ariaLabel is provided', () => {
+      const attrs = resolveContentAttributes(captureExtensions({ placeholder: 'Describe the task…' }))
+      expect(attrs['aria-label']).toBe('Describe the task…')
+    })
+
+    it('uses ariaLabel prop when provided', () => {
+      const attrs = resolveContentAttributes(captureExtensions({ ariaLabel: 'Prompt and context' }))
+      expect(attrs['aria-label']).toBe('Prompt and context')
+    })
+
+    it('prefers ariaLabelledBy over ariaLabel and omits aria-label', () => {
+      const attrs = resolveContentAttributes(captureExtensions({
+        ariaLabel: 'ignored',
+        ariaLabelledBy: 'prompt-label-id',
+      }))
+      expect(attrs['aria-labelledby']).toBe('prompt-label-id')
+      expect(attrs['aria-label']).toBeUndefined()
+    })
+
+    it('sets aria-readonly=true when readOnly is enabled', () => {
+      const attrs = resolveContentAttributes(captureExtensions({ readOnly: true }))
+      expect(attrs['aria-readonly']).toBe('true')
+    })
+
+    it('omits aria-readonly when editable', () => {
+      const attrs = resolveContentAttributes(captureExtensions())
+      expect(attrs['aria-readonly']).toBeUndefined()
+    })
   })
 
   it('allows paste operations within the configured limit', () => {

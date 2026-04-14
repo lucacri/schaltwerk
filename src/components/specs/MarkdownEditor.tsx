@@ -28,6 +28,8 @@ interface MarkdownEditorProps {
   readOnly?: boolean
   className?: string
   fileReferenceProvider?: ProjectFileIndexApi
+  ariaLabel?: string
+  ariaLabelledBy?: string
 }
 
 export interface MarkdownEditorRef {
@@ -287,6 +289,8 @@ export const MarkdownEditor = memo(forwardRef<MarkdownEditorRef, MarkdownEditorP
   readOnly = false,
   className = '',
   fileReferenceProvider,
+  ariaLabel,
+  ariaLabelledBy,
 }, ref) {
   const { t } = useTranslation()
   const editorConfig = useMemo(() => EditorState.tabSize.of(2), [])
@@ -314,6 +318,24 @@ export const MarkdownEditor = memo(forwardRef<MarkdownEditorRef, MarkdownEditorP
     },
   }), [toast, pasteTranslations])
 
+  const a11yAttributesExtension = useMemo<Extension>(() => {
+    const attrs: Record<string, string> = {
+      role: 'textbox',
+      'aria-multiline': 'true',
+    }
+    if (ariaLabelledBy) {
+      attrs['aria-labelledby'] = ariaLabelledBy
+    } else if (ariaLabel) {
+      attrs['aria-label'] = ariaLabel
+    } else if (placeholder) {
+      attrs['aria-label'] = placeholder
+    }
+    if (readOnly) {
+      attrs['aria-readonly'] = 'true'
+    }
+    return EditorView.contentAttributes.of(attrs)
+  }, [ariaLabel, ariaLabelledBy, placeholder, readOnly])
+
   const extensions = useMemo(() => [
     markdown(),
     customTheme,
@@ -321,8 +343,9 @@ export const MarkdownEditor = memo(forwardRef<MarkdownEditorRef, MarkdownEditorP
     EditorView.lineWrapping,
     editorConfig,
     pasteGuardExtension,
+    a11yAttributesExtension,
     ...fileReferenceExtensions,
-  ], [editorConfig, fileReferenceExtensions, pasteGuardExtension])
+  ], [editorConfig, fileReferenceExtensions, pasteGuardExtension, a11yAttributesExtension])
 
   // Only update internal value if the prop value actually changed
   useEffect(() => {
