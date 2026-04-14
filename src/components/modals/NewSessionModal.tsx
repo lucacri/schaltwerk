@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { typography } from '../../common/typography'
 import { theme } from '../../common/theme'
+import { TauriCommands } from '../../common/tauriCommands'
+import { useTranslation } from '../../common/i18n'
 import { UiEvent, listenUiEvent, emitUiEvent, type NewSessionPrefillDetail } from '../../common/uiEvents'
 import { generateDockerStyleName } from '../../utils/dockerNames'
 import { promptToSessionName } from '../../utils/promptToSessionName'
@@ -69,6 +72,7 @@ export function NewSessionModal({
 }: Props) {
     const modalId = MODAL_STORAGE_KEY
     const { registerModal, unregisterModal } = useModal()
+    const { t } = useTranslation()
     const { isAvailable } = useAgentAvailability({ autoLoad: open })
     const { presets } = useAgentPresets()
     const { enabledAgents } = useEnabledAgents()
@@ -84,6 +88,7 @@ export function NewSessionModal({
     const [advanced, setAdvanced] = useState<AdvancedSessionState>(createEmptyAdvancedState)
     const [versionMenuOpen, setVersionMenuOpen] = useState(false)
     const [creating, setCreating] = useState(false)
+    const [generatingName, setGeneratingName] = useState(false)
     const [validationError, setValidationError] = useState<string>('')
     const [persistedDefaults, setPersistedDefaults] = useState<PersistedSessionDefaults>({
         baseBranch: '',
@@ -161,6 +166,7 @@ export function NewSessionModal({
         promptRef.current = initialPrompt
         setValidationError('')
         setCreating(false)
+        setGeneratingName(false)
         setCustomSettingsOpen(false)
         setAdvanced(createEmptyAdvancedState())
         setVersionCount(1)
@@ -239,6 +245,34 @@ export function NewSessionModal({
             setUserEditedName(true)
         }
     }, [])
+
+    const resolvedAgentType: AgentType = selectedFavorite.kind === 'agent'
+        ? selectedFavorite.agentType
+        : persistedDefaults.agentType
+    const canGenerateName = prompt.trim().length > 0
+
+    const handleGenerateName = useCallback(async () => {
+        if (generatingName) return
+        const content = promptRef.current.trim()
+        if (!content) return
+        setGeneratingName(true)
+        try {
+            const generated = await invoke<string | null>(
+                TauriCommands.SchaltwerkCoreGenerateSessionName,
+                { content, agentType: resolvedAgentType },
+            )
+            if (generated && generated.trim().length > 0) {
+                const value = generated.trim()
+                setName(value)
+                lastGeneratedNameRef.current = value
+                setUserEditedName(true)
+            }
+        } catch (error) {
+            logger.warn('[NewSessionModal] Failed to generate name:', error)
+        } finally {
+            setGeneratingName(false)
+        }
+    }, [generatingName, resolvedAgentType])
 
     const handleSelectFavorite = useCallback((option: FavoriteOption) => {
         if (option.disabled) return
@@ -412,6 +446,28 @@ export function NewSessionModal({
                         ref={nameInputRef}
                         value={name}
                         onChange={(event) => handleNameChange(event.target.value)}
+                        rightElement={
+                            <button
+                                type="button"
+                                data-testid="generate-name-button"
+                                onClick={() => { void handleGenerateName() }}
+                                disabled={generatingName || !canGenerateName}
+                                className={`inline-flex h-7 w-7 items-center justify-center rounded ${generatingName || !canGenerateName ? 'cursor-not-allowed opacity-40' : 'hover:bg-[rgba(var(--color-bg-hover-rgb),0.45)]'}`}
+                                title={generatingName ? t.newSessionModal.tooltips.generatingName : t.newSessionModal.tooltips.generateName}
+                            >
+                                {generatingName ? (
+                                    <span
+                                        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
+                                        style={{ borderColor: 'var(--color-text-secondary)', borderTopColor: 'transparent' }}
+                                        aria-hidden="true"
+                                    />
+                                ) : (
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text-secondary)' }}>
+                                        <path d="M15 4V2" /><path d="M15 16v-2" /><path d="M8 9h2" /><path d="M20 9h2" /><path d="M17.8 11.8 19 13" /><path d="M15 9h.01" /><path d="M17.8 6.2 19 5" /><path d="M11 6.2 9.7 5" /><path d="M11 11.8 9.7 13" /><path d="M8 15h2c4.7 0 4.7 4 0 4H4c-.5 0-1-.2-1-.5S2 17 4 17c5 0 3 4 0 4" />
+                                    </svg>
+                                )}
+                            </button>
+                        }
                     />
                 </FormGroup>
 

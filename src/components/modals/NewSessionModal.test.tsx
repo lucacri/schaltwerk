@@ -115,21 +115,23 @@ vi.mock('../../hooks/useAgentAvailability', () => ({
     useAgentAvailability: (...args: unknown[]) => mockAvailability(...args),
 }))
 
+const invokeMock = vi.fn().mockImplementation((cmd: string) => {
+    switch (cmd) {
+        case TauriCommands.GetProjectDefaultBaseBranch:
+            return Promise.resolve(null)
+        case TauriCommands.GetProjectDefaultBranch:
+            return Promise.resolve('main')
+        case TauriCommands.SchaltwerkCoreGetAgentType:
+            return Promise.resolve('claude')
+        case TauriCommands.GetFavoriteOrder:
+            return Promise.resolve([])
+        default:
+            return Promise.resolve(null)
+    }
+})
+
 vi.mock('@tauri-apps/api/core', () => ({
-    invoke: vi.fn().mockImplementation((cmd: string) => {
-        switch (cmd) {
-            case TauriCommands.GetProjectDefaultBaseBranch:
-                return Promise.resolve(null)
-            case TauriCommands.GetProjectDefaultBranch:
-                return Promise.resolve('main')
-            case TauriCommands.SchaltwerkCoreGetAgentType:
-                return Promise.resolve('claude')
-            case TauriCommands.GetFavoriteOrder:
-                return Promise.resolve([])
-            default:
-                return Promise.resolve(null)
-        }
-    }),
+    invoke: (cmd: string, args?: unknown) => invokeMock(cmd, args),
 }))
 
 function renderWithProviders(ui: ReactNode) {
@@ -534,6 +536,125 @@ describe('NewSessionModal — primary surface', () => {
         // Stale Claude should be gone; first remaining option (Spec) becomes selected
         expect(screen.queryByText(/^Claude$/)).toBeNull()
         expect(getFavoriteButton(/Spec only/).getAttribute('aria-pressed')).toBe('true')
+    })
+
+    describe('generate-name button', () => {
+        beforeEach(() => {
+            invokeMock.mockClear()
+            invokeMock.mockImplementation((cmd: string) => {
+                switch (cmd) {
+                    case TauriCommands.GetProjectDefaultBaseBranch:
+                        return Promise.resolve(null)
+                    case TauriCommands.GetProjectDefaultBranch:
+                        return Promise.resolve('main')
+                    case TauriCommands.SchaltwerkCoreGetAgentType:
+                        return Promise.resolve('claude')
+                    case TauriCommands.GetFavoriteOrder:
+                        return Promise.resolve([])
+                    default:
+                        return Promise.resolve(null)
+                }
+            })
+        })
+
+        it('renders the generate-name button next to the Agent Name input', () => {
+            openModal()
+            expect(screen.getByTestId('generate-name-button')).toBeTruthy()
+        })
+
+        it('disables the button when the prompt is empty', () => {
+            openModal()
+            const btn = screen.getByTestId('generate-name-button') as HTMLButtonElement
+            expect(btn.disabled).toBe(true)
+        })
+
+        it('enables the button once the prompt has content', () => {
+            openModal()
+            const prompt = screen.getByLabelText('Prompt') as HTMLTextAreaElement
+            fireEvent.change(prompt, { target: { value: 'Wire auth middleware' } })
+            const btn = screen.getByTestId('generate-name-button') as HTMLButtonElement
+            expect(btn.disabled).toBe(false)
+        })
+
+        it('invokes the generate command and replaces the name with the result', async () => {
+            invokeMock.mockImplementation((cmd: string) => {
+                if (cmd === TauriCommands.SchaltwerkCoreGenerateSessionName) {
+                    return Promise.resolve('ai-chosen-name')
+                }
+                if (cmd === TauriCommands.SchaltwerkCoreGetAgentType) return Promise.resolve('claude')
+                if (cmd === TauriCommands.GetFavoriteOrder) return Promise.resolve([])
+                if (cmd === TauriCommands.GetProjectDefaultBaseBranch) return Promise.resolve(null)
+                if (cmd === TauriCommands.GetProjectDefaultBranch) return Promise.resolve('main')
+                return Promise.resolve(null)
+            })
+            openModal()
+            fireEvent.click(getFavoriteButton(/Claude/))
+            const prompt = screen.getByLabelText('Prompt') as HTMLTextAreaElement
+            fireEvent.change(prompt, { target: { value: 'Fix the migration script' } })
+            const btn = screen.getByTestId('generate-name-button') as HTMLButtonElement
+            await act(async () => {
+                fireEvent.click(btn)
+            })
+            await waitFor(() => {
+                const nameInput = screen.getByLabelText('Agent Name') as HTMLInputElement
+                expect(nameInput.value).toBe('ai-chosen-name')
+            })
+            expect(invokeMock).toHaveBeenCalledWith(
+                TauriCommands.SchaltwerkCoreGenerateSessionName,
+                { content: 'Fix the migration script', agentType: 'claude' },
+            )
+        })
+
+        it('treats a generated name as user-edited so prompt edits do not overwrite it', async () => {
+            invokeMock.mockImplementation((cmd: string) => {
+                if (cmd === TauriCommands.SchaltwerkCoreGenerateSessionName) {
+                    return Promise.resolve('ai-chosen-name')
+                }
+                if (cmd === TauriCommands.SchaltwerkCoreGetAgentType) return Promise.resolve('claude')
+                if (cmd === TauriCommands.GetFavoriteOrder) return Promise.resolve([])
+                if (cmd === TauriCommands.GetProjectDefaultBaseBranch) return Promise.resolve(null)
+                if (cmd === TauriCommands.GetProjectDefaultBranch) return Promise.resolve('main')
+                return Promise.resolve(null)
+            })
+            openModal()
+            const prompt = screen.getByLabelText('Prompt') as HTMLTextAreaElement
+            fireEvent.change(prompt, { target: { value: 'Initial prompt content' } })
+            await act(async () => {
+                fireEvent.click(screen.getByTestId('generate-name-button'))
+            })
+            const nameInput = screen.getByLabelText('Agent Name') as HTMLInputElement
+            await waitFor(() => {
+                expect(nameInput.value).toBe('ai-chosen-name')
+            })
+            fireEvent.change(prompt, { target: { value: 'Completely different direction' } })
+            expect(nameInput.value).toBe('ai-chosen-name')
+        })
+
+        it('leaves the name unchanged when generation fails', async () => {
+            invokeMock.mockImplementation((cmd: string) => {
+                if (cmd === TauriCommands.SchaltwerkCoreGenerateSessionName) {
+                    return Promise.reject(new Error('boom'))
+                }
+                if (cmd === TauriCommands.SchaltwerkCoreGetAgentType) return Promise.resolve('claude')
+                if (cmd === TauriCommands.GetFavoriteOrder) return Promise.resolve([])
+                if (cmd === TauriCommands.GetProjectDefaultBaseBranch) return Promise.resolve(null)
+                if (cmd === TauriCommands.GetProjectDefaultBranch) return Promise.resolve('main')
+                return Promise.resolve(null)
+            })
+            openModal()
+            const prompt = screen.getByLabelText('Prompt') as HTMLTextAreaElement
+            fireEvent.change(prompt, { target: { value: 'Do a thing' } })
+            const beforeName = (screen.getByLabelText('Agent Name') as HTMLInputElement).value
+            await act(async () => {
+                fireEvent.click(screen.getByTestId('generate-name-button'))
+            })
+            await waitFor(() => {
+                const btn = screen.getByTestId('generate-name-button') as HTMLButtonElement
+                expect(btn.disabled).toBe(false)
+            })
+            const afterName = (screen.getByLabelText('Agent Name') as HTMLInputElement).value
+            expect(afterName).toBe(beforeName)
+        })
     })
 
     it('submits multi-agent allocations from the advanced panel as agentTypes on the payload', async () => {
