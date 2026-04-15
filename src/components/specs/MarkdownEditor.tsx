@@ -322,6 +322,12 @@ export const MarkdownEditor = memo(forwardRef<MarkdownEditorRef, MarkdownEditorP
     const attrs: Record<string, string> = {
       role: 'textbox',
       'aria-multiline': 'true',
+      tabindex: '0',
+      inputmode: 'text',
+      spellcheck: 'false',
+      autocorrect: 'off',
+      autocapitalize: 'off',
+      'data-lucode-text-input-surface': 'markdown-editor',
     }
     if (ariaLabelledBy) {
       attrs['aria-labelledby'] = ariaLabelledBy
@@ -336,6 +342,20 @@ export const MarkdownEditor = memo(forwardRef<MarkdownEditorRef, MarkdownEditorP
     return EditorView.contentAttributes.of(attrs)
   }, [ariaLabel, ariaLabelledBy, placeholder, readOnly])
 
+  const editorA11yAttributesExtension = useMemo<Extension>(() => {
+    const attrs: Record<string, string> = {
+      'data-lucode-text-input-root': 'markdown-editor',
+    }
+    if (ariaLabelledBy) {
+      attrs['aria-labelledby'] = ariaLabelledBy
+    } else if (ariaLabel) {
+      attrs['aria-label'] = ariaLabel
+    } else if (placeholder) {
+      attrs['aria-label'] = placeholder
+    }
+    return EditorView.editorAttributes.of(attrs)
+  }, [ariaLabel, ariaLabelledBy, placeholder])
+
   const extensions = useMemo(() => [
     markdown(),
     customTheme,
@@ -344,8 +364,9 @@ export const MarkdownEditor = memo(forwardRef<MarkdownEditorRef, MarkdownEditorP
     editorConfig,
     pasteGuardExtension,
     a11yAttributesExtension,
+    editorA11yAttributesExtension,
     ...fileReferenceExtensions,
-  ], [editorConfig, fileReferenceExtensions, pasteGuardExtension, a11yAttributesExtension])
+  ], [editorConfig, fileReferenceExtensions, pasteGuardExtension, a11yAttributesExtension, editorA11yAttributesExtension])
 
   // Only update internal value if the prop value actually changed
   useEffect(() => {

@@ -19,6 +19,7 @@ mod diff_commands;
 pub mod errors;
 mod events;
 mod file_commands;
+mod macos_accessibility;
 mod macos_prefs;
 mod mcp_api;
 mod permissions;
@@ -1372,6 +1373,9 @@ fn main() {
     // macOS: disable smart quotes/dashes/text substitutions app-wide
     macos_prefs::disable_smart_substitutions();
     // macOS smart substitutions: handled in frontend for now
+
+    // Third-party AX voice tools (Mac Whisper) need the WKWebView AX tree eagerly populated.
+    macos_accessibility::enable_manual_accessibility();
 
     let cwd = match std::env::current_dir() {
         Ok(cwd) => cwd,

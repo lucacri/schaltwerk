@@ -52,6 +52,17 @@ function resolveContentAttributes(extensions: Extension[]): Record<string, strin
   return merged
 }
 
+function resolveEditorAttributes(extensions: Extension[]): Record<string, string> {
+  const state = EditorState.create({ extensions })
+  const entries = state.facet(EditorView.editorAttributes)
+  const merged: Record<string, string> = {}
+  for (const entry of entries) {
+    if (typeof entry === 'function') continue
+    Object.assign(merged, entry)
+  }
+  return merged
+}
+
 describe('MarkdownEditor', () => {
   beforeEach(() => {
     codeMirrorMock.mockClear()
@@ -113,6 +124,22 @@ describe('MarkdownEditor', () => {
       const attrs = resolveContentAttributes(captureExtensions())
       expect(attrs.role).toBe('textbox')
       expect(attrs['aria-multiline']).toBe('true')
+    })
+
+    it('marks the focused content node as a standard text input surface for macOS voice tools', () => {
+      const attrs = resolveContentAttributes(captureExtensions())
+      expect(attrs.tabindex).toBe('0')
+      expect(attrs.inputmode).toBe('text')
+      expect(attrs.spellcheck).toBe('false')
+      expect(attrs.autocorrect).toBe('off')
+      expect(attrs.autocapitalize).toBe('off')
+      expect(attrs['data-lucode-text-input-surface']).toBe('markdown-editor')
+    })
+
+    it('labels the editor root consistently with the focused content node', () => {
+      const attrs = resolveEditorAttributes(captureExtensions({ ariaLabel: 'Prompt and context' }))
+      expect(attrs['aria-label']).toBe('Prompt and context')
+      expect(attrs['data-lucode-text-input-root']).toBe('markdown-editor')
     })
 
     it('falls back to placeholder as aria-label when no ariaLabel is provided', () => {

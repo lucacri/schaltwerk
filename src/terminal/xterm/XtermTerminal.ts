@@ -65,6 +65,7 @@ function buildTerminalOptions(config: XtermTerminalConfig, theme: TerminalTheme)
     fontWeightBold: 'bold',
     customGlyphs: true,
     drawBoldTextInBrightColors: false,
+    screenReaderMode: true,
     rescaleOverlappingGlyphs: false,
     allowTransparency: false,
     allowProposedApi: false,
@@ -207,6 +208,7 @@ export class XtermTerminal {
       profileSwitchPhase('xterm.open', () => {
         this.raw.open(this.container)
       }, { terminalId: this.terminalId })
+      this.configureInputTextareaAccessibility()
       this.opened = true
       logger.debug(`[XtermTerminal ${this.terminalId}] Opened terminal (first attach)`)
     }
@@ -240,6 +242,21 @@ export class XtermTerminal {
     } else {
       this.forceScrollbarRefresh()
     }
+  }
+
+  private configureInputTextareaAccessibility(): void {
+    const textarea = this.raw.textarea
+    if (!textarea) {
+      return
+    }
+    textarea.setAttribute('role', 'textbox')
+    textarea.setAttribute('aria-label', 'Terminal input')
+    textarea.setAttribute('aria-multiline', 'false')
+    textarea.setAttribute('autocomplete', 'off')
+    textarea.setAttribute('autocorrect', 'off')
+    textarea.setAttribute('autocapitalize', 'off')
+    textarea.setAttribute('spellcheck', 'false')
+    textarea.dataset.lucodeTextInputSurface = 'terminal'
   }
 
   isAtBottom(): boolean {

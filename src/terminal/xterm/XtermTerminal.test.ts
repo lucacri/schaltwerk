@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { TauriCommands } from '../../common/tauriCommands'
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -14,6 +16,7 @@ vi.mock('@xterm/xterm', () => {
     open = vi.fn()
     write = vi.fn()
     dispose = vi.fn()
+    textarea = document.createElement('textarea')
     registerLinkProvider = vi.fn(() => ({ dispose: vi.fn() }))
     scrollToBottom = vi.fn()
     scrollToLine = vi.fn()
@@ -104,7 +107,7 @@ describe('XtermTerminal wrapper', () => {
     await wrapper.ensureCoreAddonsLoaded()
 
     const { Terminal: MockTerminal } = await import('@xterm/xterm') as unknown as {
-      Terminal: { __instances: Array<{ options: Record<string, unknown>; loadAddon: ReturnType<typeof vi.fn>; open: ReturnType<typeof vi.fn>; parser: { registerOscHandler: ReturnType<typeof vi.fn> } }> }
+      Terminal: { __instances: Array<{ options: Record<string, unknown>; loadAddon: ReturnType<typeof vi.fn>; open: ReturnType<typeof vi.fn>; textarea: HTMLTextAreaElement; parser: { registerOscHandler: ReturnType<typeof vi.fn> } }> }
     }
     expect(MockTerminal.__instances).toHaveLength(1)
     const instance = MockTerminal.__instances[0]
@@ -114,6 +117,7 @@ describe('XtermTerminal wrapper', () => {
     expect(instance.options.disableStdin).toBe(false)
     expect(instance.options.minimumContrastRatio).toBe(1.3)
     expect(instance.options.smoothScrollDuration).toBeGreaterThan(0)
+    expect(instance.options.screenReaderMode).toBe(true)
     expect(instance.options.theme).toMatchObject(terminalTheme)
     expect(instance.loadAddon).toHaveBeenCalledTimes(3)
     expect(registerMock).toHaveBeenCalledWith('fit', expect.any(Function))
@@ -136,6 +140,10 @@ describe('XtermTerminal wrapper', () => {
     expect(child.style.height).toBe('100%')
     expect(child.style.display).toBe('block')
     expect(instance.open).toHaveBeenCalledTimes(1)
+    expect(instance.textarea.getAttribute('role')).toBe('textbox')
+    expect(instance.textarea.getAttribute('aria-label')).toBe('Terminal input')
+    expect(instance.textarea.getAttribute('aria-multiline')).toBe('false')
+    expect(instance.textarea.dataset.lucodeTextInputSurface).toBe('terminal')
 
     wrapper.detach()
     expect((child as HTMLElement).style.display).toBe('none')
@@ -169,6 +177,23 @@ describe('XtermTerminal wrapper', () => {
     wrapper.updateOptions({ fontSize: 17, fontFamily: 'Fira Code' })
     expect(instance.options.fontSize).toBe(17)
     expect(instance.options.fontFamily).toBe('Fira Code')
+  })
+
+  it('keeps the helper textarea visually hidden but in the document accessibility geometry', () => {
+    const css = readFileSync(join(process.cwd(), 'src/components/terminal/xtermOverrides.css'), 'utf8')
+
+    expect(css).toContain('.schaltwerk-terminal-wrapper .xterm .xterm-helper-textarea')
+    expect(css).toContain('opacity: 0.01 !important')
+    expect(css).toContain('left: 0')
+    expect(css).toContain('top: 0')
+    expect(css).toContain('width: 1px')
+    expect(css).toContain('height: 1px')
+    expect(css).toContain('z-index: 0 !important')
+    expect(css).not.toContain('left: -9999em')
+    expect(css).not.toContain('left: 0 !important')
+    expect(css).not.toContain('top: 0 !important')
+    expect(css).not.toContain('width: 1px !important')
+    expect(css).not.toContain('height: 1px !important')
   })
 
   it('applies config updates through applyConfig and updateOptions', async () => {
