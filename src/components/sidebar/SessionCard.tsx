@@ -75,7 +75,7 @@ type SessionCardSurfaceStyle = CSSProperties & {
 export function getSessionCardSurfaceClasses({
   sessionState,
   isSelected,
-  isReadyToMerge: _isReadyToMerge,
+  isReadyToMerge,
   isRunning,
   isIdle,
   isWaitingForInput,
@@ -123,7 +123,7 @@ export function getSessionCardSurfaceClasses({
     className = clsx(className, "session-ring session-ring-blue")
   }
 
-  if (!willBeDeleted && !isSelected) {
+  if (!willBeDeleted && !isSelected && !isPromotionPreview) {
     if (isWaitingForInput) {
       style['--session-card-bg'] = 'var(--color-accent-amber-bg)'
       style['--session-card-hover-bg'] = 'var(--color-accent-amber-bg)'
@@ -132,6 +132,10 @@ export function getSessionCardSurfaceClasses({
       style['--session-card-bg'] = 'var(--color-accent-yellow-bg)'
       style['--session-card-hover-bg'] = 'var(--color-accent-yellow-bg)'
       style['--session-card-border'] = 'var(--color-accent-yellow-border)'
+    } else if (isReadyToMerge && sessionState !== "spec") {
+      style['--session-card-border'] = 'var(--color-accent-green-border)'
+      style['--session-card-bg'] = 'rgb(var(--color-accent-green-rgb) / 0.08)'
+      style['--session-card-hover-bg'] = 'rgb(var(--color-accent-green-rgb) / 0.12)'
     }
     if (hasFollowUpMessage) {
       style['--session-card-bg'] = 'var(--color-accent-blue-bg)'
@@ -344,12 +348,14 @@ export const SessionCard = memo<SessionCardProps>(
         {statusState.shouldShowStatusStrip && (() => {
           const stripColor = statusState.primaryStatus === "blocked"
             ? "var(--color-accent-red)"
+            : statusState.isWaitingForInput
+            ? "var(--color-accent-amber)"
             : statusState.isIdle
             ? "var(--color-accent-yellow)"
-            : statusState.isActivelyRunning
-              ? "var(--color-accent-blue)"
-              : statusState.primaryStatus === "not_started"
-                ? "var(--color-border-subtle)"
+            : statusState.primaryStatus === "ready"
+              ? "var(--color-accent-green)"
+              : statusState.isActivelyRunning
+                ? "var(--color-accent-blue)"
                 : "var(--color-border-subtle)"
           return (
             <div
@@ -377,8 +383,7 @@ export const SessionCard = memo<SessionCardProps>(
           </div>
         )}
         <div
-          className="flex items-start justify-between gap-2"
-          style={{ marginBottom: "8px" }}
+          className="flex items-center justify-between gap-2"
         >
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -407,76 +412,6 @@ export const SessionCard = memo<SessionCardProps>(
                 {s.spec_stage === "clarified" ? "Clarified" : "Draft"}
               </span>
             )}
-            {statusState.primaryStatus === "not_started" && (
-              <span
-                className="flex-shrink-0"
-                style={{
-                  ...sessionText.badge,
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                {t.session.notStarted}
-              </span>
-            )}
-            {statusState.primaryStatus === "waiting" && (
-              <span
-                className="flex-shrink-0"
-                style={{
-                  ...sessionText.badge,
-                  color: "var(--color-accent-amber-light)",
-                }}
-              >
-                {t.session.waitingForInput}
-              </span>
-            )}
-            {statusState.primaryStatus === "running" && (
-              <span
-                className="flex-shrink-0"
-                style={{
-                  ...sessionText.badge,
-                  color: "var(--color-accent-blue-light)",
-                }}
-              >
-                {t.session.running}
-              </span>
-            )}
-            {statusState.primaryStatus === "idle" && (
-              <span
-                className="flex-shrink-0"
-                style={{
-                  ...sessionText.badge,
-                  color: "var(--color-accent-yellow-light)",
-                }}
-              >
-                {t.session.idle}
-              </span>
-            )}
-            {statusState.primaryStatus === "blocked" && (
-              <span
-                className="flex-shrink-0"
-                style={{
-                  ...sessionText.badge,
-                  color: "var(--color-accent-red-light)",
-                }}
-              >
-                {t.session.blocked}
-              </span>
-            )}
-            {promotionReason && (
-              <span
-                className="flex-shrink-0 inline-flex items-center gap-1 rounded border px-1.5 py-[1px]"
-                title={promotionReason}
-                style={{
-                  ...sessionText.badge,
-                  backgroundColor: "var(--color-accent-green-bg)",
-                  color: "var(--color-accent-green-light)",
-                  borderColor: "var(--color-accent-green-border)",
-                }}
-              >
-                {t.session.promoted}
-              </span>
-            )}
-
             {hasFollowUpMessage && !isReadyToMerge && (
               <span
                 className="flex-shrink-0 inline-flex items-center gap-1"
@@ -504,20 +439,120 @@ export const SessionCard = memo<SessionCardProps>(
               </span>
             )}
             </div>
-            {taskDescription && (
-              <div
-                className="mt-0.5"
-                style={sessionText.taskDescription}
-                title={taskDescription}
+          </div>
+          <div className="flex-shrink-0 flex items-center gap-1.5">
+            {statusState.primaryStatus === "not_started" && (
+              <span
+                data-testid="session-card-status-pill"
+                className="inline-flex items-center rounded border px-2 py-[1px]"
+                style={{
+                  ...sessionText.badge,
+                  backgroundColor: "var(--color-bg-elevated)",
+                  color: "var(--color-text-muted)",
+                  borderColor: "var(--color-border-subtle)",
+                }}
               >
-                {taskDescription}
-              </div>
+                {t.session.notStarted}
+              </span>
+            )}
+            {statusState.primaryStatus === "waiting" && (
+              <span
+                data-testid="session-card-status-pill"
+                className="inline-flex items-center rounded border px-2 py-[1px]"
+                style={{
+                  ...sessionText.badge,
+                  backgroundColor: "var(--color-accent-amber-bg)",
+                  color: "var(--color-accent-amber-light)",
+                  borderColor: "var(--color-accent-amber-border)",
+                }}
+              >
+                {t.session.waitingForInput}
+              </span>
+            )}
+            {statusState.primaryStatus === "running" && (
+              <span
+                data-testid="session-card-status-pill"
+                className="inline-flex items-center rounded border px-2 py-[1px]"
+                style={{
+                  ...sessionText.badge,
+                  backgroundColor: "var(--color-accent-blue-bg)",
+                  color: "var(--color-accent-blue-light)",
+                  borderColor: "var(--color-accent-blue-border)",
+                }}
+              >
+                {t.session.running}
+              </span>
+            )}
+            {statusState.primaryStatus === "idle" && (
+              <span
+                data-testid="session-card-status-pill"
+                className="inline-flex items-center rounded border px-2 py-[1px]"
+                style={{
+                  ...sessionText.badge,
+                  backgroundColor: "var(--color-accent-yellow-bg)",
+                  color: "var(--color-accent-yellow-light)",
+                  borderColor: "var(--color-accent-yellow-border)",
+                }}
+              >
+                {t.session.idle}
+              </span>
+            )}
+            {statusState.primaryStatus === "ready" && (
+              <span
+                data-testid="session-card-status-pill"
+                className="inline-flex items-center rounded border px-2 py-[1px]"
+                style={{
+                  ...sessionText.badge,
+                  backgroundColor: "var(--color-accent-green-bg)",
+                  color: "var(--color-accent-green-light)",
+                  borderColor: "var(--color-accent-green-border)",
+                }}
+              >
+                {t.session.ready}
+              </span>
+            )}
+            {statusState.primaryStatus === "blocked" && (
+              <span
+                data-testid="session-card-status-pill"
+                className="inline-flex items-center rounded border px-2 py-[1px]"
+                style={{
+                  ...sessionText.badge,
+                  backgroundColor: "var(--color-accent-red-bg)",
+                  color: "var(--color-accent-red-light)",
+                  borderColor: "var(--color-accent-red-border)",
+                }}
+              >
+                {t.session.blocked}
+              </span>
+            )}
+            {promotionReason && (
+              <span
+                className="inline-flex items-center gap-1 rounded border px-1.5 py-[1px]"
+                title={promotionReason}
+                style={{
+                  ...sessionText.badge,
+                  backgroundColor: "var(--color-accent-green-bg)",
+                  color: "var(--color-accent-green-light)",
+                  borderColor: "var(--color-accent-green-border)",
+                }}
+              >
+                {t.session.promoted}
+              </span>
             )}
           </div>
         </div>
+        {taskDescription && (
+          <div
+            className="mt-2"
+            style={sessionText.taskDescription}
+            title={taskDescription}
+          >
+            {taskDescription}
+          </div>
+        )}
         {sessionState !== "spec" && (
           <div
-            className="mt-1 flex items-center gap-2 flex-wrap"
+            className="mt-2 flex items-center gap-1.5 flex-wrap"
             style={sessionText.meta}
           >
             {showDirtyIndicator ? (
@@ -568,7 +603,7 @@ export const SessionCard = memo<SessionCardProps>(
         {showExpandedDetails && (
           <div
             data-testid="session-card-meta-row"
-            className="mt-1 flex items-center justify-between gap-2"
+            className="mt-2 flex items-center justify-between gap-2"
             style={sessionText.meta}
           >
             <div className="flex items-center gap-2 flex-wrap min-w-0">
