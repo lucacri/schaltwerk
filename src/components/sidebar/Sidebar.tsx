@@ -1912,12 +1912,8 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                                 emitUiEvent(UiEvent.ConsolidateVersionGroup, detail)
                                             }
                                         }}
-                                        onTriggerConsolidationJudge={(roundId, early) => {
-                                            void handleTriggerConsolidationJudge(roundId, early)
-                                        }}
-                                        onConfirmConsolidationWinner={(roundId, winnerSessionId) => {
-                                            void handleConfirmConsolidationWinner(roundId, winnerSessionId)
-                                        }}
+                                        onTriggerConsolidationJudge={(roundId, early) => handleTriggerConsolidationJudge(roundId, early)}
+                                        onConfirmConsolidationWinner={(roundId, winnerSessionId) => handleConfirmConsolidationWinner(roundId, winnerSessionId)}
                                         onTerminateAll={(group) => {
                                             const runningSessions = group.versions
                                                 .filter(v => v.session.info.session_state === 'running')

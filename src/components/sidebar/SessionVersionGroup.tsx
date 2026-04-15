@@ -1,4 +1,4 @@
-import { memo, type ReactNode, useState } from 'react'
+import { memo, type ReactNode, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 import { VscCheck, VscChevronRight, VscDebugStop, VscGitMerge, VscRefresh } from 'react-icons/vsc'
 import { SessionCard } from './SessionCard'
@@ -79,6 +79,13 @@ function getJudgeRecommendationLabel(
   return recommended.version_number ? `${agent} v${recommended.version_number}` : agent
 }
 
+type ConsolidationActionId =
+  | 'consolidate'
+  | 'trigger-judge'
+  | 'confirm-winner-header'
+  | 'confirm-winner-banner'
+  | 'terminate-all'
+
 interface SessionVersionGroupProps {
   group: SessionVersionGroupType
   selection: {
@@ -96,10 +103,10 @@ interface SessionVersionGroupProps {
   isMergeDisabled?: (sessionId: string) => boolean
   getMergeStatus?: (sessionId: string) => MergeStatus
   isSessionBusy?: (sessionId: string) => boolean
-  onConsolidate?: (group: SessionVersionGroupType) => void
-  onTriggerConsolidationJudge?: (roundId: string, early?: boolean) => void
-  onConfirmConsolidationWinner?: (roundId: string, winnerSessionId: string) => void
-  onTerminateAll?: (group: SessionVersionGroupType) => void
+  onConsolidate?: (group: SessionVersionGroupType) => void | Promise<void>
+  onTriggerConsolidationJudge?: (roundId: string, early?: boolean) => void | Promise<void>
+  onConfirmConsolidationWinner?: (roundId: string, winnerSessionId: string) => void | Promise<void>
+  onTerminateAll?: (group: SessionVersionGroupType) => void | Promise<void>
 }
 
 export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
@@ -125,6 +132,28 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   const [isExpanded, setIsExpanded] = useState(true)
   const [isPreviewingDeletion, setIsPreviewingDeletion] = useState(false)
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null)
+  const [busyActionId, setBusyActionId] = useState<ConsolidationActionId | null>(null)
+  const busyActionIdRef = useRef<ConsolidationActionId | null>(null)
+
+  const runConsolidationAction = (actionId: ConsolidationActionId, invoke: () => void | Promise<void>) => {
+    if (busyActionIdRef.current) return
+    busyActionIdRef.current = actionId
+    setBusyActionId(actionId)
+    const clear = () => {
+      busyActionIdRef.current = null
+      setBusyActionId(null)
+    }
+    let result: void | Promise<void>
+    try {
+      result = invoke()
+    } catch (error) {
+      clear()
+      throw error
+    }
+    void Promise.resolve(result)
+      .catch(() => undefined)
+      .finally(clear)
+  }
 
   const isVersionSelected = (sessionId: string, sessionInfo: SessionVersionGroupType['versions'][number]['session']['info']) => (
     (selection.kind === 'session' && selection.payload === sessionId)
@@ -286,24 +315,39 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     title: string,
     icon: ReactNode,
     onClick: () => void,
-    options?: { disabled?: boolean; tone?: HeaderStatusTone },
+    options?: { disabled?: boolean; tone?: HeaderStatusTone; busy?: boolean; dimmedWhenBlocked?: boolean },
   ) => {
     const tone = options?.tone ?? 'neutral'
+    const isBusy = options?.busy === true
+    const isBlockedByOtherAction = options?.dimmedWhenBlocked === true
+    const isDisabled = options?.disabled === true || isBusy || isBlockedByOtherAction
     return (
       <button
         type="button"
         onClick={onClick}
-        disabled={options?.disabled}
+        disabled={isDisabled}
+        aria-busy={isBusy}
         title={title}
         data-testid={testId}
-        className="inline-flex h-6 w-6 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        className="relative inline-flex h-6 w-6 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         style={{
           backgroundColor: 'var(--color-bg-hover)',
           color: headerStatusToneStyles[tone].color,
           borderColor: 'var(--color-border-subtle)',
         }}
       >
-        {icon}
+        <span className={clsx('inline-flex items-center justify-center', isBusy && 'invisible')}>{icon}</span>
+        {isBusy && (
+          <span
+            data-testid="consolidation-action-spinner"
+            aria-hidden="true"
+            className="absolute h-3.5 w-3.5 rounded-full border-2 border-solid animate-spin"
+            style={{
+              borderColor: headerStatusToneStyles[tone].color,
+              borderTopColor: 'transparent',
+            }}
+          />
+        )}
       </button>
     )
   }
@@ -454,30 +498,50 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                   <VscGitMerge className="h-3.5 w-3.5" aria-hidden="true" />,
                   () => {
                     if (!canConsolidate) return
-                    onConsolidate(group)
+                    runConsolidationAction('consolidate', () => onConsolidate(group))
                   },
-                  { disabled: !canConsolidate, tone: 'amber' },
+                  {
+                    disabled: !canConsolidate,
+                    tone: 'amber',
+                    busy: busyActionId === 'consolidate',
+                    dimmedWhenBlocked: busyActionId !== null && busyActionId !== 'consolidate',
+                  },
                 )}
                 {activeRoundId && onTriggerConsolidationJudge && renderHeaderAction(
                   'trigger-consolidation-judge-button',
                   latestJudge ? 'Re-run consolidation judge' : 'Run consolidation judge',
                   <VscRefresh className="h-3.5 w-3.5" aria-hidden="true" />,
-                  () => onTriggerConsolidationJudge(activeRoundId, consolidationCandidates.some(candidate => !candidate.session.info.consolidation_report)),
-                  { tone: 'amber' },
+                  () => runConsolidationAction('trigger-judge', () => onTriggerConsolidationJudge(
+                    activeRoundId,
+                    consolidationCandidates.some(candidate => !candidate.session.info.consolidation_report),
+                  )),
+                  {
+                    tone: 'amber',
+                    busy: busyActionId === 'trigger-judge',
+                    dimmedWhenBlocked: busyActionId !== null && busyActionId !== 'trigger-judge',
+                  },
                 )}
                 {activeRoundId && confirmWinnerSessionId && onConfirmConsolidationWinner && renderHeaderAction(
                   'confirm-consolidation-winner-button',
                   selectedCandidate ? 'Confirm selected consolidation winner' : 'Confirm judge recommendation',
                   <VscCheck className="h-3.5 w-3.5" aria-hidden="true" />,
-                  () => onConfirmConsolidationWinner(activeRoundId, confirmWinnerSessionId),
-                  { tone: 'green' },
+                  () => runConsolidationAction('confirm-winner-header', () => onConfirmConsolidationWinner(activeRoundId, confirmWinnerSessionId)),
+                  {
+                    tone: 'green',
+                    busy: busyActionId === 'confirm-winner-header',
+                    dimmedWhenBlocked: busyActionId !== null && busyActionId !== 'confirm-winner-header',
+                  },
                 )}
                 {hasRunning && onTerminateAll && renderHeaderAction(
                   'terminate-group-button',
                   'Terminate all running sessions',
                   <VscDebugStop className="h-3.5 w-3.5" aria-hidden="true" />,
-                  () => onTerminateAll(group),
-                  { tone: 'red' },
+                  () => runConsolidationAction('terminate-all', () => onTerminateAll(group)),
+                  {
+                    tone: 'red',
+                    busy: busyActionId === 'terminate-all',
+                    dimmedWhenBlocked: busyActionId !== null && busyActionId !== 'terminate-all',
+                  },
                 )}
               </div>
             </div>
@@ -529,22 +593,41 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                         {recommendationLabel}
                       </span>
                     </span>
-                    {activeRoundId && confirmWinnerSessionId && onConfirmConsolidationWinner && (
-                      <button
-                        type="button"
-                        data-testid="confirm-consolidation-winner-banner-button"
-                        className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border transition-colors"
-                        title="Confirm judge recommendation"
-                        style={{
-                          backgroundColor: 'var(--color-bg-hover)',
-                          color: 'var(--color-accent-green)',
-                          borderColor: 'var(--color-border-subtle)',
-                        }}
-                        onClick={() => onConfirmConsolidationWinner(activeRoundId, confirmWinnerSessionId)}
-                      >
-                        <VscCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                      </button>
-                    )}
+                    {activeRoundId && confirmWinnerSessionId && onConfirmConsolidationWinner && (() => {
+                      const isBannerBusy = busyActionId === 'confirm-winner-banner'
+                      const isBannerDisabled = busyActionId !== null
+                      return (
+                        <button
+                          type="button"
+                          data-testid="confirm-consolidation-winner-banner-button"
+                          disabled={isBannerDisabled}
+                          aria-busy={isBannerBusy}
+                          className="relative inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                          title="Confirm judge recommendation"
+                          style={{
+                            backgroundColor: 'var(--color-bg-hover)',
+                            color: 'var(--color-accent-green)',
+                            borderColor: 'var(--color-border-subtle)',
+                          }}
+                          onClick={() => runConsolidationAction('confirm-winner-banner', () => onConfirmConsolidationWinner(activeRoundId, confirmWinnerSessionId))}
+                        >
+                          <span className={clsx('inline-flex items-center justify-center', isBannerBusy && 'invisible')}>
+                            <VscCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                          </span>
+                          {isBannerBusy && (
+                            <span
+                              data-testid="consolidation-action-spinner"
+                              aria-hidden="true"
+                              className="absolute h-3.5 w-3.5 rounded-full border-2 border-solid animate-spin"
+                              style={{
+                                borderColor: 'var(--color-accent-green)',
+                                borderTopColor: 'transparent',
+                              }}
+                            />
+                          )}
+                        </button>
+                      )
+                    })()}
                   </div>
                   {consolidationLaneRows.length > 0 && (
                     <div data-testid="version-group-consolidation-candidates" className="mt-2 space-y-1.5">

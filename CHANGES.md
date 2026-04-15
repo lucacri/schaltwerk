@@ -2,6 +2,14 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Sidebar: Consolidation action feedback
+
+Every consolidation action button in `SessionVersionGroup` now gives immediate busy feedback and blocks concurrent clicks:
+
+- Clicking "Consolidate versions", the consolidation judge trigger, either confirm-winner button (header or judge banner), or the group terminate-all button shows an inline spinner over the button icon for the full duration of the triggered work.
+- While any action in a consolidation group is in flight, every other action button in that group is disabled, so the same action can't be double-triggered and collisions between actions are prevented. Success and failure are still surfaced via the existing toast system.
+- `onTriggerConsolidationJudge` / `onConfirmConsolidationWinner` in `Sidebar` now return their backend promise so the group can await the real request; the modal-opening callbacks resolve immediately because the subsequent UX lives in their respective modals.
+
 ## MarkdownEditor: Dictation / Voice Control accessibility
 
 `MarkdownEditor` now exposes the underlying CodeMirror contenteditable as a standard multiline textbox so macOS dictation, Voice Control, and screen readers can target it as a text input:

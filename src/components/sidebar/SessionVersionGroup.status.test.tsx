@@ -1,4 +1,4 @@
-import { render, fireEvent, screen, within } from '@testing-library/react'
+import { act, render, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { SessionVersionGroup } from './SessionVersionGroup'
 import type { SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
@@ -899,5 +899,280 @@ describe('SessionVersionGroup status summary', () => {
     expect(rowBySessionId.get('feature-A_v1')).toHaveAttribute('data-dimmed-for-consolidation', 'true')
     expect(rowBySessionId.get('feature-A_v2')).toHaveAttribute('data-dimmed-for-consolidation', 'false')
     expect(rowBySessionId.get('feature-A_v3')).toHaveAttribute('data-dimmed-for-consolidation', 'true')
+  })
+})
+
+describe('SessionVersionGroup action busy state', () => {
+  const buildJudgeGroup = (): SessionVersionGroupType => ({
+    ...baseGroup,
+    versions: [
+      createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
+      createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
+      {
+        ...createVersion({ id: 'feature-A-merge_v1', sessionState: 'running' }),
+        session: {
+          info: {
+            ...createVersion({ id: 'feature-A-merge_v1', sessionState: 'running' }).session.info,
+            is_consolidation: true,
+            consolidation_round_id: 'round-123',
+            consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+            consolidation_base_session_id: 'feature-A_v2',
+          },
+          status: undefined,
+          terminals: [],
+        },
+      },
+      {
+        ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }),
+        session: {
+          info: {
+            ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }).session.info,
+            is_consolidation: true,
+            consolidation_role: 'judge',
+            consolidation_round_id: 'round-123',
+            consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+            consolidation_recommended_session_id: 'feature-A-merge_v1',
+          },
+          status: undefined,
+          terminals: [],
+        },
+      },
+    ],
+  })
+
+  function createDeferred<T>() {
+    let resolve!: (value: T) => void
+    let reject!: (reason?: unknown) => void
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  it('shows a spinner on the trigger-judge button while its async callback is in flight and disables sibling action buttons', async () => {
+    const deferred = createDeferred<void>()
+    const onTriggerConsolidationJudge = vi.fn(() => deferred.promise)
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={buildJudgeGroup()}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onTriggerConsolidationJudge={onTriggerConsolidationJudge}
+          onConfirmConsolidationWinner={vi.fn(() => Promise.resolve())}
+          onConsolidate={vi.fn(() => Promise.resolve())}
+          onTerminateAll={vi.fn(() => Promise.resolve())}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const triggerButton = screen.getByTestId('trigger-consolidation-judge-button')
+    fireEvent.click(triggerButton)
+
+    expect(onTriggerConsolidationJudge).toHaveBeenCalledTimes(1)
+    expect(within(triggerButton).getByTestId('consolidation-action-spinner')).toBeInTheDocument()
+    expect(triggerButton).toBeDisabled()
+    expect(screen.getByTestId('confirm-consolidation-winner-button')).toBeDisabled()
+    expect(screen.getByTestId('confirm-consolidation-winner-banner-button')).toBeDisabled()
+
+    fireEvent.click(triggerButton)
+    expect(onTriggerConsolidationJudge).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      deferred.resolve()
+      await deferred.promise
+    })
+
+    await waitFor(() => {
+      expect(within(triggerButton).queryByTestId('consolidation-action-spinner')).toBeNull()
+    })
+    expect(triggerButton).not.toBeDisabled()
+    expect(screen.getByTestId('confirm-consolidation-winner-button')).not.toBeDisabled()
+  })
+
+  it('shows a spinner on the header confirm button and disables the banner confirm button while confirming', async () => {
+    const deferred = createDeferred<void>()
+    const onConfirmConsolidationWinner = vi.fn(() => deferred.promise)
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={buildJudgeGroup()}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onTriggerConsolidationJudge={vi.fn(() => Promise.resolve())}
+          onConfirmConsolidationWinner={onConfirmConsolidationWinner}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const headerConfirm = screen.getByTestId('confirm-consolidation-winner-button')
+    fireEvent.click(headerConfirm)
+
+    expect(onConfirmConsolidationWinner).toHaveBeenCalledWith('round-123', 'feature-A-merge_v1')
+    expect(within(headerConfirm).getByTestId('consolidation-action-spinner')).toBeInTheDocument()
+
+    const bannerConfirm = screen.getByTestId('confirm-consolidation-winner-banner-button')
+    expect(bannerConfirm).toBeDisabled()
+    expect(within(bannerConfirm).queryByTestId('consolidation-action-spinner')).toBeNull()
+    expect(screen.getByTestId('trigger-consolidation-judge-button')).toBeDisabled()
+
+    fireEvent.click(bannerConfirm)
+    expect(onConfirmConsolidationWinner).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      deferred.resolve()
+      await deferred.promise
+    })
+
+    await waitFor(() => {
+      expect(within(headerConfirm).queryByTestId('consolidation-action-spinner')).toBeNull()
+    })
+    expect(bannerConfirm).not.toBeDisabled()
+  })
+
+  it('shows a spinner on the banner confirm button while its click is in flight', async () => {
+    const deferred = createDeferred<void>()
+    const onConfirmConsolidationWinner = vi.fn(() => deferred.promise)
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={buildJudgeGroup()}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onConfirmConsolidationWinner={onConfirmConsolidationWinner}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const bannerConfirm = screen.getByTestId('confirm-consolidation-winner-banner-button')
+    fireEvent.click(bannerConfirm)
+
+    expect(onConfirmConsolidationWinner).toHaveBeenCalledTimes(1)
+    expect(within(bannerConfirm).getByTestId('consolidation-action-spinner')).toBeInTheDocument()
+
+    const headerConfirm = screen.getByTestId('confirm-consolidation-winner-button')
+    expect(headerConfirm).toBeDisabled()
+    expect(within(headerConfirm).queryByTestId('consolidation-action-spinner')).toBeNull()
+
+    await act(async () => {
+      deferred.resolve()
+      await deferred.promise
+    })
+
+    await waitFor(() => {
+      expect(within(bannerConfirm).queryByTestId('consolidation-action-spinner')).toBeNull()
+    })
+  })
+
+  it('shows a spinner on the terminate-all button while its callback is in flight', async () => {
+    const deferred = createDeferred<void>()
+    const onTerminateAll = vi.fn(() => deferred.promise)
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onTerminateAll={onTerminateAll}
+          onConsolidate={vi.fn(() => Promise.resolve())}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const terminateButton = screen.getByTestId('terminate-group-button')
+    fireEvent.click(terminateButton)
+
+    expect(onTerminateAll).toHaveBeenCalledTimes(1)
+    expect(within(terminateButton).getByTestId('consolidation-action-spinner')).toBeInTheDocument()
+    expect(screen.getByTestId('consolidate-versions-button')).toBeDisabled()
+
+    fireEvent.click(terminateButton)
+    expect(onTerminateAll).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      deferred.resolve()
+      await deferred.promise
+    })
+
+    await waitFor(() => {
+      expect(within(terminateButton).queryByTestId('consolidation-action-spinner')).toBeNull()
+    })
+  })
+
+  it('shows a spinner on the consolidate button while its callback is in flight', async () => {
+    const deferred = createDeferred<void>()
+    const onConsolidate = vi.fn(() => deferred.promise)
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onConsolidate={onConsolidate}
+          onTerminateAll={vi.fn(() => Promise.resolve())}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const consolidateButton = screen.getByTestId('consolidate-versions-button')
+    fireEvent.click(consolidateButton)
+
+    expect(onConsolidate).toHaveBeenCalledTimes(1)
+    expect(within(consolidateButton).getByTestId('consolidation-action-spinner')).toBeInTheDocument()
+    expect(screen.getByTestId('terminate-group-button')).toBeDisabled()
+
+    await act(async () => {
+      deferred.resolve()
+      await deferred.promise
+    })
+
+    await waitFor(() => {
+      expect(within(consolidateButton).queryByTestId('consolidation-action-spinner')).toBeNull()
+    })
+  })
+
+  it('clears busy state after a callback rejects so the user can retry', async () => {
+    const deferred = createDeferred<void>()
+    const onTriggerConsolidationJudge = vi.fn(() => deferred.promise)
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={buildJudgeGroup()}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onTriggerConsolidationJudge={onTriggerConsolidationJudge}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const triggerButton = screen.getByTestId('trigger-consolidation-judge-button')
+    fireEvent.click(triggerButton)
+    expect(within(triggerButton).getByTestId('consolidation-action-spinner')).toBeInTheDocument()
+
+    await act(async () => {
+      deferred.reject(new Error('boom'))
+      await deferred.promise.catch(() => undefined)
+    })
+
+    await waitFor(() => {
+      expect(within(triggerButton).queryByTestId('consolidation-action-spinner')).toBeNull()
+    })
+    expect(triggerButton).not.toBeDisabled()
+
+    fireEvent.click(triggerButton)
+    expect(onTriggerConsolidationJudge).toHaveBeenCalledTimes(2)
   })
 })
