@@ -2018,7 +2018,10 @@ mod service_unified_tests {
         )
         .unwrap();
         assert_eq!(parsed["key"], serde_json::Value::String("value".to_string()));
-        assert!(parsed["hooks"]["Notification"].is_array());
+        assert!(
+            parsed.get("hooks").is_none(),
+            "Lucode no longer injects hooks into settings.local.json"
+        );
     }
 
     #[test]

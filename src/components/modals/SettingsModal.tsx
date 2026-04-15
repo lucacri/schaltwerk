@@ -10,6 +10,7 @@ import { useSessions } from '../../hooks/useSessions'
 import { useActionButtons } from '../../hooks/useActionButtons'
 import type { HeaderActionConfig } from '../../types/actionButton'
 import { SpecContentModal } from '../SpecContentModal'
+import { AgentPluginsPanel } from '../settings/AgentPluginsPanel'
 import { MCPConfigPanel } from '../settings/MCPConfigPanel'
 import { SettingsArchivesSection } from '../settings/SettingsArchivesSection'
 import { ThemeSettings } from '../settings/ThemeSettings'
@@ -1775,6 +1776,13 @@ fi`}
 
             <div className="flex-1 overflow-y-auto p-6">
                 <div className="space-y-6">
+                     {/* Lucode-managed Claude plugins for this project */}
+                     {projectPath && activeAgentTab === 'claude' && (
+                         <div>
+                             <AgentPluginsPanel agent="claude" />
+                         </div>
+                     )}
+
                      {/* MCP Configuration for Claude/Codex/OpenCode/Amp/Droid */}
                      {projectPath && (activeAgentTab === 'claude' || activeAgentTab === 'codex' || activeAgentTab === 'opencode' || activeAgentTab === 'amp' || activeAgentTab === 'droid') && (
                          <div>

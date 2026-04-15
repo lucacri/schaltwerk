@@ -48,6 +48,25 @@ pub struct RunScript {
     pub preview_localhost_on_click: bool,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentPluginConfig {
+    #[serde(default = "default_true")]
+    pub claude_lucode_terminal_hooks: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for AgentPluginConfig {
+    fn default() -> Self {
+        Self {
+            claude_lucode_terminal_hooks: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectGithubConfig {
@@ -127,6 +146,12 @@ pub trait ProjectConfigMethods {
         &self,
         repo_path: &Path,
         base_directory: Option<&str>,
+    ) -> Result<()>;
+    fn get_project_agent_plugins(&self, repo_path: &Path) -> Result<AgentPluginConfig>;
+    fn set_project_agent_plugins(
+        &self,
+        repo_path: &Path,
+        config: &AgentPluginConfig,
     ) -> Result<()>;
 }
 
@@ -847,6 +872,74 @@ impl ProjectConfigMethods for Database {
 
         Ok(())
     }
+
+    fn get_project_agent_plugins(&self, repo_path: &Path) -> Result<AgentPluginConfig> {
+        let conn = self.get_conn()?;
+        let canonical_path =
+            std::fs::canonicalize(repo_path).unwrap_or_else(|_| repo_path.to_path_buf());
+
+        let query_res: rusqlite::Result<Option<String>> = conn.query_row(
+            "SELECT agent_plugins_json FROM project_config WHERE repository_path = ?1",
+            params![canonical_path.to_string_lossy()],
+            |row| row.get(0),
+        );
+
+        match query_res {
+            Ok(Some(json_str)) if !json_str.trim().is_empty() => {
+                match serde_json::from_str::<AgentPluginConfig>(&json_str) {
+                    Ok(cfg) => Ok(cfg),
+                    Err(err) => {
+                        log::warn!(
+                            "Invalid agent_plugins_json for {}: {err}. Falling back to defaults.",
+                            canonical_path.display()
+                        );
+                        Ok(AgentPluginConfig::default())
+                    }
+                }
+            }
+            Ok(_) | Err(rusqlite::Error::QueryReturnedNoRows) => Ok(AgentPluginConfig::default()),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn set_project_agent_plugins(
+        &self,
+        repo_path: &Path,
+        config: &AgentPluginConfig,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        let now = Utc::now().timestamp();
+        let canonical_path =
+            std::fs::canonicalize(repo_path).unwrap_or_else(|_| repo_path.to_path_buf());
+
+        let json_str = serde_json::to_string(config)?;
+
+        conn.execute(
+            "INSERT INTO project_config (
+                    repository_path,
+                    auto_cancel_after_merge,
+                    agent_plugins_json,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?1,
+                    COALESCE(
+                        (SELECT auto_cancel_after_merge FROM project_config WHERE repository_path = ?1),
+                        1
+                    ),
+                    ?2,
+                    ?3,
+                    ?4
+                )
+                ON CONFLICT(repository_path) DO UPDATE SET
+                    agent_plugins_json = excluded.agent_plugins_json,
+                    updated_at = excluded.updated_at",
+            params![canonical_path.to_string_lossy(), json_str, now, now],
+        )?;
+
+        Ok(())
+    }
 }
 
 impl Database {
@@ -1163,6 +1256,82 @@ mod tests {
             .expect("load gitlab config");
 
         assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn agent_plugins_defaults_to_enabled_when_unset() {
+        let db = Database::new_in_memory().expect("db");
+        let (_tmp, repo_path) = create_temp_repo_path();
+
+        let loaded = db
+            .get_project_agent_plugins(&repo_path)
+            .expect("load agent plugins");
+
+        assert_eq!(loaded, AgentPluginConfig::default());
+        assert!(loaded.claude_lucode_terminal_hooks);
+    }
+
+    #[test]
+    fn agent_plugins_round_trip_disabled() {
+        let db = Database::new_in_memory().expect("db");
+        let (_tmp, repo_path) = create_temp_repo_path();
+
+        let config = AgentPluginConfig {
+            claude_lucode_terminal_hooks: false,
+        };
+        db.set_project_agent_plugins(&repo_path, &config)
+            .expect("store agent plugins");
+
+        let loaded = db
+            .get_project_agent_plugins(&repo_path)
+            .expect("load agent plugins");
+
+        assert_eq!(loaded, config);
+    }
+
+    #[test]
+    fn agent_plugins_preserves_other_settings() {
+        let db = Database::new_in_memory().expect("db");
+        let (_tmp, repo_path) = create_temp_repo_path();
+
+        db.set_project_branch_prefix(&repo_path, "custom-prefix")
+            .expect("store branch prefix");
+
+        db.set_project_agent_plugins(
+            &repo_path,
+            &AgentPluginConfig {
+                claude_lucode_terminal_hooks: false,
+            },
+        )
+        .expect("store agent plugins");
+
+        let prefix = db
+            .get_project_branch_prefix(&repo_path)
+            .expect("load branch prefix");
+        assert_eq!(prefix, "custom-prefix");
+    }
+
+    #[test]
+    fn agent_plugins_falls_back_to_defaults_on_invalid_json() {
+        let db = Database::new_in_memory().expect("db");
+        let (_tmp, repo_path) = create_temp_repo_path();
+
+        db.set_project_branch_prefix(&repo_path, "")
+            .expect("ensure row exists");
+
+        let conn = db.get_conn().expect("conn");
+        let canonical = std::fs::canonicalize(&repo_path).unwrap_or_else(|_| repo_path.clone());
+        conn.execute(
+            "UPDATE project_config SET agent_plugins_json = 'not-json' WHERE repository_path = ?1",
+            params![canonical.to_string_lossy()],
+        )
+        .expect("write invalid json");
+
+        let loaded = db
+            .get_project_agent_plugins(&repo_path)
+            .expect("load agent plugins");
+
+        assert_eq!(loaded, AgentPluginConfig::default());
     }
 
     #[test]

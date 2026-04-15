@@ -32,6 +32,7 @@ use lucode::domains::power::global_service::{
     GlobalInhibitorService, set_global_keep_awake_service,
 };
 use lucode::domains::terminal::submission::submission_options_for_agent;
+use lucode::domains::agent_plugins::install_bundled_lucode_plugins;
 use lucode::domains::{attention::AttentionStateRegistry, git::repository};
 use lucode::infrastructure::config::SettingsManager;
 use lucode::project_manager::ProjectManager;
@@ -1648,6 +1649,8 @@ fn main() {
             set_keyboard_shortcuts,
             get_project_settings,
             set_project_settings,
+            get_project_agent_plugin_config,
+            set_project_agent_plugin_config,
             get_project_sessions_settings,
             set_project_sessions_settings,
             get_project_environment_variables,
@@ -1740,6 +1743,11 @@ fn main() {
 
             let services = ServiceHandles::new(Arc::clone(&project_manager), app.handle().clone());
             app.manage(services);
+
+            let resource_dir = app.path().resource_dir().ok();
+            if let Err(e) = install_bundled_lucode_plugins(resource_dir) {
+                log::warn!("Failed to install bundled Lucode plugins: {e}");
+            }
 
             // Initialize global keep-awake service
             match GlobalInhibitorService::initialize(app.handle().clone()) {

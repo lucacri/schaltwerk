@@ -1,0 +1,14 @@
+{
+  "name": "lucode-plugins",
+  "owner": {
+    "name": "Lucode",
+    "url": "https://github.com/lucacri/schaltwerk"
+  },
+  "plugins": [
+    {
+      "name": "lucode-terminal-hooks",
+      "source": "./lucode-terminal-hooks",
+      "description": "Terminal integration hooks for Lucode (waiting-for-input and idle signaling)."
+    }
+  ]
+}

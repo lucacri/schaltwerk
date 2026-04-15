@@ -1,0 +1,107 @@
+{
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\033]9;lucode:waiting_for_input:enter\\a' > /dev/tty"
+          }
+        ]
+      }
+    ],
+    "Elicitation": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\033]9;lucode:waiting_for_input:enter\\a' > /dev/tty"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt|idle_prompt|elicitation_dialog",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\033]9;lucode:waiting_for_input:enter\\a' > /dev/tty"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty"
+          }
+        ]
+      }
+    ],
+    "ElicitationResult": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty"
+          }
+        ]
+      }
+    ]
+  }
+}

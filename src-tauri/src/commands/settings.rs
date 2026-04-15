@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use crate::{PROJECT_MANAGER, get_core_read, get_core_write, get_settings_manager};
 use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
 use lucode::schaltwerk_core::db_project_config::{
-    HeaderActionConfig, ProjectConfigMethods, ProjectMergePreferences, ProjectSessionsSettings,
-    RunScript, default_action_buttons,
+    AgentPluginConfig, HeaderActionConfig, ProjectConfigMethods, ProjectMergePreferences,
+    ProjectSessionsSettings, RunScript, default_action_buttons,
 };
+use lucode::services::apply_agent_plugins_to_worktree;
 use lucode::services::{
     AgentPreference, AgentPreset, AgentVariant, ContextualAction, DiffViewPreferences,
     EnabledAgents, McpServerConfig, SessionPreferences, TerminalSettings,
@@ -317,6 +318,65 @@ pub async fn get_project_settings() -> Result<ProjectSettings, String> {
         branch_prefix,
         worktree_base_directory,
     })
+}
+
+#[tauri::command]
+pub async fn get_project_agent_plugin_config() -> Result<AgentPluginConfig, String> {
+    let project = PROJECT_MANAGER
+        .get()
+        .ok_or_else(|| "Project manager not initialized".to_string())?
+        .current_project()
+        .await
+        .map_err(|e| format!("Failed to get current project: {e}"))?;
+
+    let core = project.schaltwerk_core.read().await;
+    core.database()
+        .get_project_agent_plugins(&project.path)
+        .map_err(|e| format!("Failed to get project agent plugin config: {e}"))
+}
+
+#[tauri::command]
+pub async fn set_project_agent_plugin_config(config: AgentPluginConfig) -> Result<(), String> {
+    let project = PROJECT_MANAGER
+        .get()
+        .ok_or_else(|| "Project manager not initialized".to_string())?
+        .current_project()
+        .await
+        .map_err(|e| format!("Failed to get current project: {e}"))?;
+
+    let core = project.schaltwerk_core.write().await;
+    core.database()
+        .set_project_agent_plugins(&project.path, &config)
+        .map_err(|e| format!("Failed to set project agent plugin config: {e}"))?;
+
+    if let Err(e) = apply_agent_plugins_to_worktree(&project.path, &config) {
+        log::warn!(
+            "Failed to propagate agent plugin config to project root {}: {e}",
+            project.path.display()
+        );
+    }
+
+    let worktrees: Vec<std::path::PathBuf> = core
+        .session_manager()
+        .list_sessions()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| s.worktree_path)
+        .collect();
+    drop(core);
+    for wt in worktrees {
+        if !wt.exists() {
+            continue;
+        }
+        if let Err(e) = apply_agent_plugins_to_worktree(&wt, &config) {
+            log::warn!(
+                "Failed to propagate agent plugin config to worktree {}: {e}",
+                wt.display()
+            );
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]

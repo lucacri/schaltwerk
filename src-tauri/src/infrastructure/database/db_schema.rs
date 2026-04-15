@@ -519,6 +519,10 @@ fn apply_project_config_migrations(conn: &rusqlite::Connection) -> anyhow::Resul
         "ALTER TABLE project_config ADD COLUMN worktree_base_directory TEXT",
         [],
     );
+    let _ = conn.execute(
+        "ALTER TABLE project_config ADD COLUMN agent_plugins_json TEXT",
+        [],
+    );
     Ok(())
 }
 

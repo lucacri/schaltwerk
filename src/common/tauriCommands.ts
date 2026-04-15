@@ -104,6 +104,8 @@ export const TauriCommands = {
   GetProjectSessionsSettings: 'get_project_sessions_settings',
   GetGlobalKeepAwakeState: 'get_global_keep_awake_state',
   GetProjectSettings: 'get_project_settings',
+  GetProjectAgentPluginConfig: 'get_project_agent_plugin_config',
+  SetProjectAgentPluginConfig: 'set_project_agent_plugin_config',
   GetProjectMergePreferences: 'get_project_merge_preferences',
   GetRecentProjects: 'get_recent_projects',
   GetRestoreOpenProjects: 'get_restore_open_projects',

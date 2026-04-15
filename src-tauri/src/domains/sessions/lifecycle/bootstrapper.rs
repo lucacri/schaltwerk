@@ -1,110 +1,174 @@
 use crate::domains::git::service as git;
 use crate::domains::sessions::utils::SessionUtils;
+use crate::infrastructure::database::ProjectConfigMethods;
+use crate::infrastructure::database::db_project_config::AgentPluginConfig;
 use anyhow::{Context, Result, anyhow};
 use log::{info, warn};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
-const CLAUDE_WAITING_ENTER_PAYLOAD: &str = "lucode:waiting_for_input:enter";
-const CLAUDE_WAITING_CLEAR_PAYLOAD: &str = "lucode:waiting_for_input:clear";
+pub const LUCODE_TERMINAL_HOOKS_PLUGIN_ID: &str = "lucode-terminal-hooks@lucode-plugins";
+const LEGACY_HOOK_PAYLOAD_MARKER: &str = "lucode:waiting_for_input:";
 
-fn claude_hook_command(payload: &str) -> Value {
-    json!({
-        "type": "command",
-        "command": format!("printf '\\033]9;{payload}\\a' > /dev/tty"),
-    })
-}
-
-fn lucode_claude_hook_groups() -> Vec<(&'static str, Value)> {
-    vec![
-        (
-            "PermissionRequest",
-            json!({
-                "hooks": [claude_hook_command(CLAUDE_WAITING_ENTER_PAYLOAD)],
-            }),
-        ),
-        (
-            "Elicitation",
-            json!({
-                "hooks": [claude_hook_command(CLAUDE_WAITING_ENTER_PAYLOAD)],
-            }),
-        ),
-        (
-            "Notification",
-            json!({
-                "matcher": "permission_prompt|idle_prompt|elicitation_dialog",
-                "hooks": [claude_hook_command(CLAUDE_WAITING_ENTER_PAYLOAD)],
-            }),
-        ),
-        (
-            "UserPromptSubmit",
-            json!({
-                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
-            }),
-        ),
-        (
-            "ElicitationResult",
-            json!({
-                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
-            }),
-        ),
-        (
-            "PostToolUse",
-            json!({
-                "matcher": "*",
-                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
-            }),
-        ),
-        (
-            "PostToolUseFailure",
-            json!({
-                "matcher": "*",
-                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
-            }),
-        ),
-        (
-            "Stop",
-            json!({
-                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
-            }),
-        ),
-        (
-            "StopFailure",
-            json!({
-                "hooks": [claude_hook_command(CLAUDE_WAITING_CLEAR_PAYLOAD)],
-            }),
-        ),
-    ]
-}
-
-fn merge_claude_settings_local(existing: Option<&str>) -> Result<String> {
-    let mut root = match existing {
+fn apply_plugin_enable(settings_json: Option<&str>, enabled: bool) -> Result<String> {
+    let mut root = match settings_json {
         Some(contents) if !contents.trim().is_empty() => serde_json::from_str::<Value>(contents)
-            .context("Failed to parse existing Claude settings.local.json")?,
+            .context("Failed to parse existing Claude settings.json")?,
         _ => json!({}),
     };
 
     let root_object = root
         .as_object_mut()
-        .ok_or_else(|| anyhow!("Claude settings.local.json must contain a JSON object"))?;
-    let hooks_value = root_object.entry("hooks").or_insert_with(|| json!({}));
-    let hooks_object = hooks_value
-        .as_object_mut()
-        .ok_or_else(|| anyhow!("Claude hooks config must contain a JSON object"))?;
+        .ok_or_else(|| anyhow!("Claude settings.json must contain a JSON object"))?;
 
-    for (event_name, hook_group) in lucode_claude_hook_groups() {
-        let groups_value = hooks_object
-            .entry(event_name.to_string())
-            .or_insert_with(|| json!([]));
-        let groups = groups_value
-            .as_array_mut()
-            .ok_or_else(|| anyhow!("Claude hook event '{event_name}' must be an array"))?;
-        if !groups.iter().any(|existing_group| existing_group == &hook_group) {
-            groups.push(hook_group);
+    let plugins_value = root_object
+        .entry("enabledPlugins".to_string())
+        .or_insert_with(|| json!({}));
+    let plugins_object = plugins_value
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("enabledPlugins must be a JSON object"))?;
+
+    plugins_object.insert(
+        LUCODE_TERMINAL_HOOKS_PLUGIN_ID.to_string(),
+        Value::Bool(enabled),
+    );
+
+    let mut out = serde_json::to_string_pretty(&root)
+        .context("Failed to serialize Claude settings.json")?;
+    out.push('\n');
+    Ok(out)
+}
+
+fn strip_legacy_lucode_hooks(settings_local_json: &str) -> Result<Option<String>> {
+    if settings_local_json.trim().is_empty() {
+        return Ok(None);
+    }
+
+    let mut root: Value = serde_json::from_str(settings_local_json)
+        .context("Failed to parse Claude settings.local.json for migration")?;
+
+    let Some(root_object) = root.as_object_mut() else {
+        return Ok(Some(settings_local_json.to_string()));
+    };
+
+    let mut modified = false;
+    if let Some(hooks_value) = root_object.get_mut("hooks")
+        && let Some(hooks_object) = hooks_value.as_object_mut()
+    {
+        let event_names: Vec<String> = hooks_object.keys().cloned().collect();
+        for event_name in event_names {
+            if let Some(groups_value) = hooks_object.get_mut(&event_name)
+                && let Some(groups) = groups_value.as_array_mut()
+            {
+                let original_len = groups.len();
+                groups.retain(|group| !group_is_lucode_legacy(group));
+                if groups.len() != original_len {
+                    modified = true;
+                }
+                if groups.is_empty() {
+                    hooks_object.remove(&event_name);
+                }
+            }
+        }
+
+        if hooks_object.is_empty() {
+            root_object.remove("hooks");
         }
     }
 
-    serde_json::to_string_pretty(&root).context("Failed to serialize Claude settings.local.json")
+    if !modified {
+        return Ok(Some(settings_local_json.to_string()));
+    }
+
+    if root_object.is_empty() {
+        return Ok(None);
+    }
+
+    let mut serialized = serde_json::to_string_pretty(&root)
+        .context("Failed to re-serialize Claude settings.local.json after migration")?;
+    serialized.push('\n');
+    Ok(Some(serialized))
+}
+
+fn group_is_lucode_legacy(group: &Value) -> bool {
+    group
+        .get("hooks")
+        .and_then(Value::as_array)
+        .map(|hooks| {
+            hooks.iter().any(|entry| {
+                entry
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .is_some_and(|cmd| cmd.contains(LEGACY_HOOK_PAYLOAD_MARKER))
+            })
+        })
+        .unwrap_or(false)
+}
+
+pub fn apply_agent_plugins_to_worktree(
+    worktree_path: &Path,
+    config: &AgentPluginConfig,
+) -> Result<()> {
+    write_plugin_settings(worktree_path, config)
+}
+
+fn write_plugin_settings(worktree_path: &Path, config: &AgentPluginConfig) -> Result<()> {
+    let claude_dir = worktree_path.join(".claude");
+    std::fs::create_dir_all(&claude_dir)
+        .with_context(|| format!("Failed to create {}", claude_dir.display()))?;
+
+    let settings_path = claude_dir.join("settings.json");
+    let existing = if settings_path.exists() {
+        Some(
+            std::fs::read_to_string(&settings_path)
+                .with_context(|| format!("Failed to read {}", settings_path.display()))?,
+        )
+    } else {
+        None
+    };
+
+    let merged = apply_plugin_enable(existing.as_deref(), config.claude_lucode_terminal_hooks)?;
+    if existing.as_deref() == Some(merged.as_str()) {
+        return Ok(());
+    }
+    std::fs::write(&settings_path, merged)
+        .with_context(|| format!("Failed to write {}", settings_path.display()))?;
+    Ok(())
+}
+
+/// Remove legacy Lucode hook entries from `.claude/settings.local.json`.
+///
+/// Returns `true` if entries were found and removed (possibly deleting the file).
+pub fn migrate_legacy_hooks_in_dir(dir: &Path) -> Result<bool> {
+    let settings_local = dir.join(".claude").join("settings.local.json");
+    if !settings_local.exists() {
+        return Ok(false);
+    }
+    let contents = std::fs::read_to_string(&settings_local)
+        .with_context(|| format!("Failed to read {}", settings_local.display()))?;
+
+    match strip_legacy_lucode_hooks(&contents)? {
+        None => {
+            std::fs::remove_file(&settings_local).with_context(|| {
+                format!("Failed to delete migrated {}", settings_local.display())
+            })?;
+            info!(
+                "Migrated legacy Lucode hooks (deleted empty {})",
+                settings_local.display()
+            );
+            Ok(true)
+        }
+        Some(new_contents) if new_contents != contents => {
+            std::fs::write(&settings_local, new_contents)
+                .with_context(|| format!("Failed to write {}", settings_local.display()))?;
+            info!(
+                "Migrated legacy Lucode hooks out of {}",
+                settings_local.display()
+            );
+            Ok(true)
+        }
+        Some(_) => Ok(false),
+    }
 }
 
 pub struct WorktreeBootstrapper<'a> {
@@ -411,72 +475,21 @@ impl<'a> WorktreeBootstrapper<'a> {
             }
         }
 
-        if let Err(err) = self.ensure_lucode_claude_hooks(worktree_path) {
-            warn!("Failed to configure Lucode Claude hooks: {err}");
-        }
-    }
-
-    fn ensure_lucode_claude_hooks(&self, worktree_path: &Path) -> Result<()> {
-        let claude_dir = worktree_path.join(".claude");
-        std::fs::create_dir_all(&claude_dir)
-            .with_context(|| format!("Failed to create {}", claude_dir.display()))?;
-
-        let settings_path = claude_dir.join("settings.local.json");
-        let existing = if settings_path.exists() {
-            Some(
-                std::fs::read_to_string(&settings_path)
-                    .with_context(|| format!("Failed to read {}", settings_path.display()))?,
-            )
-        } else {
-            None
-        };
-
-        let merged = merge_claude_settings_local(existing.as_deref())?;
-        std::fs::write(&settings_path, merged)
-            .with_context(|| format!("Failed to write {}", settings_path.display()))?;
-
-        self.ensure_worktree_git_exclude(worktree_path, ".claude/settings.local.json")?;
-        Ok(())
-    }
-
-    fn ensure_worktree_git_exclude(&self, worktree_path: &Path, entry: &str) -> Result<()> {
-        let repo = git2::Repository::open(worktree_path)
-            .with_context(|| format!("Failed to open worktree repo {}", worktree_path.display()))?;
-        let mut exclude_paths = vec![repo.path().join("info").join("exclude")];
-        let common_exclude = repo.commondir().join("info").join("exclude");
-        if !exclude_paths.iter().any(|path| path == &common_exclude) {
-            exclude_paths.push(common_exclude);
-        }
-
-        for exclude_path in exclude_paths {
-            if let Some(parent) = exclude_path.parent() {
-                std::fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create {}", parent.display()))?;
+        match migrate_legacy_hooks_in_dir(worktree_path) {
+            Ok(true) => {
+                let plugin_config = self
+                    .utils
+                    .db_manager
+                    .db
+                    .get_project_agent_plugins(self.repo_path)
+                    .unwrap_or_default();
+                if let Err(err) = apply_agent_plugins_to_worktree(worktree_path, &plugin_config) {
+                    warn!("Failed to preserve Lucode plugin state during migration: {err}");
+                }
             }
-
-            let existing = if exclude_path.exists() {
-                std::fs::read_to_string(&exclude_path)
-                    .with_context(|| format!("Failed to read {}", exclude_path.display()))?
-            } else {
-                String::new()
-            };
-
-            if existing.lines().any(|line| line.trim() == entry) {
-                continue;
-            }
-
-            let mut next = existing;
-            if !next.is_empty() && !next.ends_with('\n') {
-                next.push('\n');
-            }
-            next.push_str(entry);
-            next.push('\n');
-
-            std::fs::write(&exclude_path, next)
-                .with_context(|| format!("Failed to write {}", exclude_path.display()))?;
+            Ok(false) => {}
+            Err(err) => warn!("Failed to migrate legacy Lucode hooks: {err}"),
         }
-
-        Ok(())
     }
 }
 
@@ -623,7 +636,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_copy_claude_locals_when_exists() {
+    fn test_copy_claude_locals_copies_files_without_injecting_hooks() {
         let (_temp, repo_path) = setup_test_repo();
         std::fs::write(
             repo_path.join("CLAUDE.local.md"),
@@ -665,35 +678,272 @@ mod tests {
         let root_content = std::fs::read_to_string(copied_root_file).unwrap();
         assert_eq!(root_content, "# Claude Local Instructions");
 
-        let copied_settings = worktree_path.join(".claude").join("settings.local.json");
-        assert!(copied_settings.exists());
-        let settings_content = std::fs::read_to_string(&copied_settings).unwrap();
-        let parsed: Value = serde_json::from_str(&settings_content).unwrap();
-        assert_eq!(parsed["key"], Value::String("value".to_string()));
-        assert!(parsed["hooks"]["Notification"]
-            .as_array()
-            .expect("notification hooks should be an array")
-            .iter()
-            .any(|group| group["matcher"] == Value::String("permission_prompt|idle_prompt|elicitation_dialog".to_string())));
-        assert!(parsed["hooks"]["PermissionRequest"].is_array());
-        assert!(parsed["hooks"]["Elicitation"].is_array());
+        let copied_local = worktree_path.join(".claude").join("settings.local.json");
+        assert!(copied_local.exists());
+        let local_content = std::fs::read_to_string(&copied_local).unwrap();
+        let local_parsed: Value = serde_json::from_str(&local_content).unwrap();
+        assert_eq!(local_parsed["key"], Value::String("value".to_string()));
+        assert!(
+            !local_parsed.as_object().unwrap().contains_key("hooks"),
+            "settings.local.json must not receive Lucode hook injection anymore"
+        );
 
-        let repo = git2::Repository::open(&worktree_path).unwrap();
-        let exclude = std::fs::read_to_string(repo.path().join("info").join("exclude")).unwrap();
-        assert!(exclude.contains(".claude/settings.local.json"));
+        let settings_json = worktree_path.join(".claude").join("settings.json");
+        assert!(
+            !settings_json.exists(),
+            "bootstrap must not fabricate .claude/settings.json when nothing to migrate"
+        );
     }
 
     #[test]
-    fn merge_claude_settings_local_preserves_existing_keys() {
-        let merged = merge_claude_settings_local(Some("{\"key\":\"value\"}"))
-            .expect("merge should succeed");
-        let parsed: Value = serde_json::from_str(&merged).expect("merged JSON should parse");
+    #[serial]
+    fn test_copy_claude_locals_migrates_legacy_hooks_and_writes_plugin_enable() {
+        let (_temp, repo_path) = setup_test_repo();
 
-        assert_eq!(parsed["key"], Value::String("value".to_string()));
-        assert!(parsed["hooks"]["UserPromptSubmit"].is_array());
-        assert!(parsed["hooks"]["Stop"].is_array());
-        assert!(parsed["hooks"]["PermissionRequest"].is_array());
-        assert!(parsed["hooks"]["Elicitation"].is_array());
+        let claude_dir = repo_path.join(".claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        std::fs::write(
+            claude_dir.join("settings.local.json"),
+            r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty"}]}]}}"#,
+        )
+        .unwrap();
+
+        let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
+        let db_manager = SessionDbManager::new(db.clone(), repo_path.clone());
+        let cache_manager = SessionCacheManager::new(repo_path.clone());
+        let utils = SessionUtils::new(repo_path.clone(), cache_manager, db_manager);
+        let bootstrapper = WorktreeBootstrapper::new(&repo_path, &utils);
+
+        let worktree_path = repo_path.join(".lucode/worktrees/legacy-migrate");
+        let config = BootstrapConfig {
+            session_name: "legacy-migrate",
+            branch_name: "lucode/legacy-migrate",
+            worktree_path: &worktree_path,
+            parent_branch: "master",
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            should_copy_claude_locals: true,
+            pr_number: None,
+        };
+
+        bootstrapper.bootstrap_worktree(config).unwrap();
+
+        let copied_local = worktree_path.join(".claude").join("settings.local.json");
+        assert!(
+            !copied_local.exists(),
+            "legacy settings.local.json should be deleted after migration"
+        );
+
+        let settings_json = worktree_path.join(".claude").join("settings.json");
+        assert!(
+            settings_json.exists(),
+            "migrated worktree should get .claude/settings.json with plugin enable"
+        );
+        let parsed: Value =
+            serde_json::from_str(&std::fs::read_to_string(&settings_json).unwrap()).unwrap();
+        assert_eq!(
+            parsed["enabledPlugins"][LUCODE_TERMINAL_HOOKS_PLUGIN_ID],
+            Value::Bool(true)
+        );
+    }
+
+    #[test]
+    fn apply_plugin_enable_writes_flag_into_empty_settings() {
+        let out = apply_plugin_enable(None, true).unwrap();
+        let parsed: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(
+            parsed["enabledPlugins"][LUCODE_TERMINAL_HOOKS_PLUGIN_ID],
+            Value::Bool(true)
+        );
+    }
+
+    #[test]
+    fn apply_plugin_enable_preserves_other_root_and_plugin_keys() {
+        let existing = r#"{
+            "permissions": { "allow": ["Bash(ls:*)"] },
+            "enabledPlugins": { "other@marketplace": true }
+        }"#;
+        let out = apply_plugin_enable(Some(existing), false).unwrap();
+        let parsed: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(
+            parsed["permissions"]["allow"][0],
+            Value::String("Bash(ls:*)".to_string())
+        );
+        assert_eq!(
+            parsed["enabledPlugins"]["other@marketplace"],
+            Value::Bool(true)
+        );
+        assert_eq!(
+            parsed["enabledPlugins"][LUCODE_TERMINAL_HOOKS_PLUGIN_ID],
+            Value::Bool(false)
+        );
+    }
+
+    #[test]
+    fn strip_legacy_lucode_hooks_removes_only_matching_groups() {
+        let input = r#"{
+            "permissions": { "allow": ["Bash(grep:*)"] },
+            "hooks": {
+                "Stop": [
+                    { "hooks": [ { "type": "command", "command": "printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty" } ] },
+                    { "hooks": [ { "type": "command", "command": "echo bye" } ] }
+                ],
+                "Notification": [
+                    { "hooks": [ { "type": "command", "command": "printf '\\033]9;lucode:waiting_for_input:enter\\a' > /dev/tty" } ] }
+                ],
+                "UnrelatedEvent": [
+                    { "hooks": [ { "type": "command", "command": "echo hi" } ] }
+                ]
+            }
+        }"#;
+
+        let cleaned = strip_legacy_lucode_hooks(input).unwrap().unwrap();
+        let parsed: Value = serde_json::from_str(&cleaned).unwrap();
+
+        assert_eq!(
+            parsed["permissions"]["allow"][0],
+            Value::String("Bash(grep:*)".to_string())
+        );
+        assert!(
+            parsed["hooks"].get("Notification").is_none(),
+            "Notification became empty and should be removed"
+        );
+        let stop = parsed["hooks"]["Stop"].as_array().unwrap();
+        assert_eq!(stop.len(), 1);
+        assert_eq!(
+            stop[0]["hooks"][0]["command"],
+            Value::String("echo bye".to_string())
+        );
+        assert!(parsed["hooks"]["UnrelatedEvent"].is_array());
+    }
+
+    #[test]
+    fn strip_legacy_lucode_hooks_returns_none_when_file_becomes_empty() {
+        let input = r#"{
+            "hooks": {
+                "Stop": [
+                    { "hooks": [ { "type": "command", "command": "printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty" } ] }
+                ]
+            }
+        }"#;
+        let result = strip_legacy_lucode_hooks(input).unwrap();
+        assert!(
+            result.is_none(),
+            "empty migrated file should be deleted, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn strip_legacy_lucode_hooks_noop_when_no_lucode_entries() {
+        let input = r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo hi"}]}]}}"#;
+        let result = strip_legacy_lucode_hooks(input).unwrap().unwrap();
+        assert_eq!(result, input.to_string());
+    }
+
+    #[test]
+    fn migrate_legacy_hooks_deletes_file_when_only_lucode_entries_remain() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join(".claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        let settings = claude_dir.join("settings.local.json");
+        std::fs::write(
+            &settings,
+            r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty"}]}]}}"#,
+        )
+        .unwrap();
+
+        migrate_legacy_hooks_in_dir(tmp.path()).unwrap();
+
+        assert!(!settings.exists(), "settings.local.json should have been deleted");
+    }
+
+    #[test]
+    fn migrate_legacy_hooks_rewrites_file_when_other_keys_remain() {
+        let tmp = TempDir::new().unwrap();
+        let claude_dir = tmp.path().join(".claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        let settings = claude_dir.join("settings.local.json");
+        std::fs::write(
+            &settings,
+            r#"{"permissions":{"allow":["Bash(grep:*)"]},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"printf '\\033]9;lucode:waiting_for_input:clear\\a' > /dev/tty"}]}]}}"#,
+        )
+        .unwrap();
+
+        migrate_legacy_hooks_in_dir(tmp.path()).unwrap();
+
+        assert!(settings.exists());
+        let content = std::fs::read_to_string(&settings).unwrap();
+        let parsed: Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(
+            parsed["permissions"]["allow"][0],
+            Value::String("Bash(grep:*)".to_string())
+        );
+        assert!(parsed.get("hooks").is_none());
+    }
+
+    #[test]
+    fn apply_agent_plugins_to_worktree_writes_settings_json() {
+        let tmp = TempDir::new().unwrap();
+        let worktree = tmp.path().join("wt");
+
+        let config = AgentPluginConfig {
+            claude_lucode_terminal_hooks: true,
+        };
+        apply_agent_plugins_to_worktree(&worktree, &config).unwrap();
+
+        let settings =
+            std::fs::read_to_string(worktree.join(".claude/settings.json")).unwrap();
+        let parsed: Value = serde_json::from_str(&settings).unwrap();
+        assert_eq!(
+            parsed["enabledPlugins"][LUCODE_TERMINAL_HOOKS_PLUGIN_ID],
+            Value::Bool(true)
+        );
+    }
+
+    #[test]
+    fn apply_agent_plugins_to_worktree_is_idempotent_when_value_matches() {
+        let tmp = TempDir::new().unwrap();
+        let worktree = tmp.path().join("wt");
+        let config = AgentPluginConfig {
+            claude_lucode_terminal_hooks: true,
+        };
+
+        apply_agent_plugins_to_worktree(&worktree, &config).unwrap();
+        let settings_path = worktree.join(".claude/settings.json");
+        let first_mtime = std::fs::metadata(&settings_path).unwrap().modified().unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        apply_agent_plugins_to_worktree(&worktree, &config).unwrap();
+        let second_mtime = std::fs::metadata(&settings_path).unwrap().modified().unwrap();
+
+        assert_eq!(first_mtime, second_mtime);
+    }
+
+    #[test]
+    fn hooks_json_commands_match_terminal_osc_payloads() {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let hooks_path = Path::new(manifest_dir)
+            .parent()
+            .unwrap()
+            .join("plugins/lucode-plugins/lucode-terminal-hooks/hooks/hooks.json");
+        let raw = std::fs::read_to_string(&hooks_path)
+            .unwrap_or_else(|_| panic!("hooks.json missing at {}", hooks_path.display()));
+        let parsed: Value = serde_json::from_str(&raw).unwrap();
+        let events = parsed["hooks"].as_object().unwrap();
+        assert!(!events.is_empty(), "hooks.json must declare at least one event");
+        for (_event, groups) in events {
+            for group in groups.as_array().unwrap() {
+                for entry in group["hooks"].as_array().unwrap() {
+                    let cmd = entry["command"].as_str().unwrap();
+                    assert!(
+                        cmd.contains("lucode:waiting_for_input:enter")
+                            || cmd.contains("lucode:waiting_for_input:clear"),
+                        "hooks.json command missing known OSC payload: {cmd}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

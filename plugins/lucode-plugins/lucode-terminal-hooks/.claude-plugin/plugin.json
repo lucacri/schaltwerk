@@ -1,0 +1,9 @@
+{
+  "name": "lucode-terminal-hooks",
+  "version": "1.0.0",
+  "description": "Terminal integration hooks for Lucode: signals waiting-for-input and idle states via OSC escape sequences so the Lucode UI can badge sessions that need attention.",
+  "author": {
+    "name": "Lucode",
+    "url": "https://github.com/lucacri/schaltwerk"
+  }
+}

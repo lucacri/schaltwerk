@@ -29,6 +29,9 @@
   },
   "bundle": {
     "active": true,
+    "resources": [
+      "../plugins/lucode-plugins/**/*"
+    ],
     "targets": [
       "app",
       "dmg",

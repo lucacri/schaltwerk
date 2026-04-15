@@ -28,9 +28,9 @@ pub fn resolve_worktree_base(repo_path: &Path, worktree_base_directory: Option<&
 }
 
 pub struct SessionUtils {
-    repo_path: PathBuf,
+    pub(crate) repo_path: PathBuf,
     cache_manager: SessionCacheManager,
-    db_manager: SessionDbManager,
+    pub(crate) db_manager: SessionDbManager,
 }
 
 impl SessionUtils {

@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use crate::domains::sessions::lifecycle::bootstrapper::migrate_legacy_hooks_in_dir;
 use crate::domains::terminal::TerminalManager;
 use crate::schaltwerk_core::SchaltwerkCore;
 
@@ -223,6 +224,13 @@ impl ProjectManager {
         // Ensure .lucode is excluded from git (outside the projects lock).
         if let Err(e) = Self::ensure_schaltwerk_excluded(&path) {
             log::warn!("Failed to ensure .lucode exclusion: {e}");
+        }
+
+        if let Err(e) = migrate_legacy_hooks_in_dir(&path) {
+            log::warn!(
+                "Failed to migrate legacy Lucode Claude hooks for {}: {e}",
+                path.display()
+            );
         }
 
         // Update current project (outside the projects lock).

@@ -1,3 +1,4 @@
+pub mod agent_plugins;
 pub mod agents;
 pub mod attention;
 pub mod git;

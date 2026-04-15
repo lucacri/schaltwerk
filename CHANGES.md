@@ -2,6 +2,17 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Per-project agent plugin toggles (Claude terminal hooks)
+
+Lucode no longer injects its Claude terminal-signal hooks into each worktree's `.claude/settings.local.json`. The hook definitions now live in a bundled Claude Code plugin under `plugins/lucode-plugins/lucode-terminal-hooks/`, which Lucode installs once to `~/.claude/plugins/lucode-plugins/` on startup. Per-project enablement is written to `.claude/settings.json` as `"enabledPlugins": { "lucode-terminal-hooks@lucode-plugins": true }`.
+
+- New DB column `project_config.agent_plugins_json` and struct `AgentPluginConfig { claudeLucodeTerminalHooks: bool }`, default `true`, with Tauri commands `get_project_agent_plugin_config` / `set_project_agent_plugin_config`.
+- New UI panel in `SettingsModal` (under Agents → Claude) lists "Lucode terminal hooks" with a per-project enable checkbox; toggling writes to the project root and every existing worktree's `.claude/settings.json`.
+- Bootstrap runs a migration: if `.claude/settings.local.json` contains legacy `lucode:waiting_for_input:*` hook entries, those are removed (file deleted when empty) and the plugin enable flag is written to `.claude/settings.json`. Fresh worktrees without legacy entries are untouched, keeping `git status` clean.
+- The same migration runs against the main project root on project open, so the user's own checkout also gets cleaned once without needing to spawn a new worktree.
+- Plugin `hooks.json` also clears the waiting-for-input signal on `SessionStart`, so resuming a Claude session never leaves a stale waiting badge.
+- `ensure_lucode_claude_hooks`, `merge_claude_settings_local`, and the per-worktree `.claude/settings.local.json` git-exclude code were removed.
+
 ## Sidebar: Consolidation action feedback
 
 Every consolidation action button in `SessionVersionGroup` now gives immediate busy feedback and blocks concurrent clicks:
