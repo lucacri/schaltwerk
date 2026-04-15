@@ -290,7 +290,68 @@ async fn load_cached_agent_binary_paths() -> std::collections::HashMap<String, S
 fn build_spec_clarification_prompt(spec: &lucode::domains::sessions::entity::Spec) -> String {
     let title = spec.display_name.as_deref().unwrap_or(&spec.name);
     format!(
-        "You are the clarification agent for the Lucode spec \"{title}\".\n\nYour job is to turn the draft into a clarified problem definition that is ready for implementation handoff.\n\nRules:\n- Stay at the clarification/problem-definition level.\n- Ask clarifying questions when needed.\n- Inspect the codebase for context when useful.\n- Rewrite the spec content only through Lucode MCP tools such as `lucode_spec_read`, `lucode_draft_update`, `lucode_spec_set_stage`, and `lucode_spec_set_attention`.\n- Structure the rewritten spec with `## Problem` and `## Goal`. Add sections like `## Constraints`, `## Out of Scope`, or `## Decisions` only when they help clarify the request.\n- When you are blocked on missing user input, call `lucode_spec_set_attention` with `attention_required: true` and leave concrete questions in the spec.\n- After the user responds and you are unblocked, call `lucode_spec_set_attention` with `attention_required: false`.\n- When the spec is clear, call `lucode_spec_set_stage` with stage `clarified`.\n- If the spec needs more clarification later, call `lucode_spec_set_stage` with stage `draft`.\n- Do not produce implementation steps, file lists, function signatures, code stubs, or solution plans.\n\nCurrent spec draft:\n\n{content}",
+        "You are the clarification agent for the Lucode spec \"{title}\".\n\n\
+Job: turn the draft into a clarified problem definition ready for implementation handoff. Investigate deeply before asking anything. Record what you find. Only surface questions that require genuine human judgment.\n\n\
+INVESTIGATION:\n\
+On turn 1, before any question, do all of the following and record each as a `verified:` Context entry (match with snippet OR explicit null result):\n\
+1. Read the draft end-to-end; restate intent in your own words.\n\
+2. Read `CLAUDE.md` at the repo root; read any nested `CLAUDE.md` inside directories the draft names.\n\
+3. Scan `plans/` for terms from the draft; list prior specs via the `lucode_spec_list` MCP tool and read relevant titles.\n\
+4. Grep the repo for the draft's key nouns, proper nouns, symbols, or paths — at least one search.\n\
+5. Trace one relevant data or control flow the draft touches, chosen by the strongest term match from step 4.\n\
+Minimum-evidence floor (applies to every non-early-exit pass, regardless of question count): at least one `verified:` entry citing `CLAUDE.md` (root or nested), at least one `verified:` entry for `plans/` or prior specs (match or explicit null result), and at least one `verified:` entry recording a symbol/path search result (match or null).\n\
+On Claude: invoke `superpowers:brainstorming` on turn 1 to expand intent; invoke `superpowers:systematic-debugging` when the draft describes a bug; use the `Agent` tool (via `superpowers:dispatching-parallel-agents` when candidate questions are independent) to run the question-research gate — one research subagent per candidate question, dispatched in parallel when independent.\n\n\
+CONTEXT_FORMAT:\n\
+All findings live under a `## Context` subsection in the rewritten spec. Every entry begins with one of these tags:\n\
+- `verified: <path>:<line-or-range> — \"<quoted snippet or concise paraphrase from that location>\"`\n\
+- `verified: searched <terms-or-question> in <scope> — <no match | summary of finding>`\n\
+- `verified: researched <question> via <subagent|targeted search> — <summary>`\n\
+- `assumed: <claim> because <reason>`\n\
+A bare path without snippet, range, or null-result is not sufficient. Discoveries NEVER go silently into `## Problem`, `## Goal`, or `## Decisions`.\n\n\
+QUESTION_RULES:\n\
+- Ceiling: up to 3 explicit questions per pass. This is a ceiling, not a target.\n\
+- Atomic: one interrogative, one decision, one subject. No `and`, `or`, `also`, `plus`, or comma-joined asks.\n\
+- Compound-across-turns ban: splitting a compound question into sequential single questions across turns counts as one compound violation.\n\
+- Every question MUST be predicated on a named `verified:` Context entry AND accompanied by a `verified: researched <question> via <subagent|targeted search> — no repo answer; requires human <intent|scope|tradeoff|priority> judgment` entry that records the failed research attempt.\n\
+- Good-question shape: target user intent, scope boundaries, UX tradeoffs, priorities, or constraints unknowable from the code.\n\n\
+QUESTION_RESEARCH_GATE:\n\
+Before surfacing ANY candidate question to the user, run a dedicated research pass on that specific question. Outcomes:\n\
+- Answered → drop the question; add the finding as a `verified:` Context entry and resolve dependent `assumed:` entries.\n\
+- Partially answered (scope narrowed but judgment still required) → rewrite the question to reflect the narrower remaining ambiguity, and record what research established as a `verified:` Context entry.\n\
+- Not answered (genuine user-judgment call) → the question survives, paired with a `verified: researched ... — no repo answer; requires human <intent|scope|tradeoff|priority> judgment` Context entry summarizing what was searched.\n\
+Claude path: dispatch one `Agent`-tool research subagent per candidate question (parallel via `superpowers:dispatching-parallel-agents` when independent).\n\
+Non-Claude path (Codex, Gemini, Droid, OpenCode, or any agent without reliable subagent dispatch): run an additional targeted deep-search per candidate question — at minimum one fresh grep using question-specific terms, one read of any file the search surfaces, and a written summary recorded as a `verified: researched ...` entry. Skipping this step is not acceptable on any agent.\n\
+Fabricating a null-result entry without actually running the research counts as a regression.\n\n\
+EARLY_EXIT:\n\
+Permitted only when ALL four gates hold after one read of the draft:\n\
+1. Draft is non-empty (at least one token after trimming whitespace).\n\
+2. Draft is ≤300 characters.\n\
+3. Draft references no external symbols, file paths, or domain terms that require resolution.\n\
+4. Draft contains no integration verbs (wire, hook, replace, migrate, refactor, extend, integrate).\n\
+List which gates passed. Failing any gate forbids early exit. On early exit: `## Context` contains one `verified:` entry naming the gates passed; the minimum-evidence floor and the question-research gate are waived (no questions are being posed); `## Problem` and `## Goal` faithfully restate the draft.\n\n\
+LATER_TURNS:\n\
+Do NOT redo the full five-step sweep. Diff the user's latest turn against existing Context; extract every new proper noun, file path, symbol, acronym, or domain term; produce a `verified:` entry (via bounded, targeted search or read for that specific term) or an `assumed:` entry for each before using that term in reasoning. Any NEW candidate question introduced by the follow-up is subject to the full QUESTION_RESEARCH_GATE before being surfaced. A later turn with zero new terms extracted and no new candidate questions requires an explicit \"no new terms introduced\" statement.\n\n\
+PROHIBITIONS:\n\
+Never ask a question whose answer is:\n\
+- Findable via a symbol, path, or term search in the repo.\n\
+- In `CLAUDE.md` (root or nested).\n\
+- In memory.\n\
+- In a prior spec.\n\
+- In `plans/`.\n\
+- About whether a helper exists that you have not already searched for.\n\
+- Vague about scope (e.g. \"what should this cover?\").\n\
+Never surface a question that lacks a paired `verified: researched ...` Context entry.\n\
+Never invent requirements: `## Problem` and `## Goal` stay anchored to the draft and the user's turns; new facts go into `## Context`; a discovery that implies a new requirement is recorded as an `assumed:` entry and must be converted to a question (subject to the research gate), resolved to a `verified:` entry, or deleted before finalizing.\n\n\
+Spec-writing rules:\n\
+- Stay at the clarification/problem-definition level.\n\
+- Rewrite the spec content only through Lucode MCP tools such as `lucode_spec_read`, `lucode_draft_update`, `lucode_spec_set_stage`, and `lucode_spec_set_attention`.\n\
+- Structure the rewritten spec with `## Problem` and `## Goal`. Add `## Context`, `## Constraints`, `## Out of Scope`, or `## Decisions` only when they help clarify the request.\n\
+- When blocked on missing user input, call `lucode_spec_set_attention` with `attention_required: true` and leave the concrete questions in the spec.\n\
+- After the user responds and you are unblocked, call `lucode_spec_set_attention` with `attention_required: false`.\n\
+- When the spec is clear, call `lucode_spec_set_stage` with stage `clarified`. If it needs more clarification later, call `lucode_spec_set_stage` with stage `draft`.\n\
+- Do not produce implementation steps, file lists, function signatures, code stubs, or solution plans.\n\n\
+Current spec draft:\n\n\
+{content}",
         content = spec.content
     )
 }
@@ -311,12 +372,12 @@ mod spec_clarification_prompt_tests {
     use chrono::Utc;
     use lucode::infrastructure::database::Database;
     use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
+    use regex::Regex;
     use std::path::PathBuf;
 
-    #[test]
-    fn prompt_mentions_attention_tool_and_problem_goal_sections() {
+    fn make_spec(content: &str) -> lucode::domains::sessions::entity::Spec {
         let now = Utc::now();
-        let prompt = build_spec_clarification_prompt(&lucode::domains::sessions::entity::Spec {
+        lucode::domains::sessions::entity::Spec {
             id: "spec-1".to_string(),
             name: "alpha".to_string(),
             display_name: Some("Alpha".to_string()),
@@ -327,17 +388,277 @@ mod spec_clarification_prompt_tests {
             pr_url: None,
             repository_path: PathBuf::from("/tmp/repo"),
             repository_name: "repo".to_string(),
-            content: "rough draft".to_string(),
+            content: content.to_string(),
             created_at: now,
             updated_at: now,
             stage: lucode::domains::sessions::entity::SpecStage::Draft,
             attention_required: false,
             clarification_started: false,
-        });
+        }
+    }
 
+    fn default_prompt() -> String {
+        build_spec_clarification_prompt(&make_spec("rough draft"))
+    }
+
+    fn assert_regex(prompt: &str, pattern: &str, label: &str) {
+        let re = Regex::new(pattern).unwrap_or_else(|e| panic!("bad regex {pattern}: {e}"));
+        assert!(
+            re.is_match(prompt),
+            "expected prompt to match {label} (/{pattern}/)"
+        );
+    }
+
+    #[test]
+    fn prompt_mentions_attention_tool_and_problem_goal_sections() {
+        let prompt = default_prompt();
         assert!(prompt.contains("lucode_spec_set_attention"));
         assert!(prompt.contains("## Problem"));
         assert!(prompt.contains("## Goal"));
+    }
+
+    #[test]
+    fn prompt_has_all_required_section_anchors_with_content() {
+        let prompt = default_prompt();
+        for anchor in [
+            "INVESTIGATION",
+            "CONTEXT_FORMAT",
+            "QUESTION_RULES",
+            "QUESTION_RESEARCH_GATE",
+            "EARLY_EXIT",
+            "LATER_TURNS",
+            "PROHIBITIONS",
+        ] {
+            assert_regex(
+                &prompt,
+                &format!(r"(?m)^{anchor}:\n\S"),
+                &format!("non-empty {anchor}: section"),
+            );
+        }
+    }
+
+    #[test]
+    fn investigation_section_names_required_sources() {
+        let prompt = default_prompt();
+        assert!(prompt.contains("CLAUDE.md"), "INVESTIGATION must name CLAUDE.md");
+        assert!(prompt.contains("plans/"), "INVESTIGATION must name plans/");
+        assert!(
+            prompt.contains("lucode_spec_list"),
+            "INVESTIGATION must call the lucode_spec_list MCP tool"
+        );
+        assert_regex(
+            &prompt,
+            r"(?i)\bgrep\b",
+            "INVESTIGATION must require a grep step",
+        );
+        assert_regex(
+            &prompt,
+            r"(?i)(data|control) flow",
+            "INVESTIGATION must require a flow-trace step",
+        );
+        assert_regex(
+            &prompt,
+            r"(?i)nested\s+`?CLAUDE\.md`?",
+            "INVESTIGATION must call for nested CLAUDE.md reads",
+        );
+    }
+
+    #[test]
+    fn investigation_mentions_minimum_evidence_floor() {
+        let prompt = default_prompt();
+        assert!(
+            prompt.contains("Minimum-evidence floor"),
+            "prompt must state the minimum-evidence floor"
+        );
+        assert_regex(
+            &prompt,
+            r"(?is)Minimum-evidence floor.*CLAUDE\.md.*plans/.*symbol",
+            "floor must cover CLAUDE.md + plans/prior specs + symbol/path",
+        );
+    }
+
+    #[test]
+    fn investigation_names_claude_skill_and_subagent_mechanisms() {
+        let prompt = default_prompt();
+        assert!(prompt.contains("superpowers:brainstorming"));
+        assert!(prompt.contains("superpowers:systematic-debugging"));
+        assert!(prompt.contains("superpowers:dispatching-parallel-agents"));
+        assert!(
+            prompt.contains("`Agent` tool"),
+            "prompt must name the Agent tool for subagent dispatch"
+        );
+    }
+
+    #[test]
+    fn context_format_defines_verified_and_assumed_grammars() {
+        let prompt = default_prompt();
+        assert!(prompt.contains("## Context"));
+        assert!(
+            prompt.contains("verified: <path>:<line-or-range>"),
+            "CONTEXT_FORMAT must define path:line verified grammar"
+        );
+        assert!(
+            prompt.contains("verified: searched"),
+            "CONTEXT_FORMAT must define searched/null-result grammar"
+        );
+        assert!(
+            prompt.contains("verified: researched"),
+            "CONTEXT_FORMAT must define researched grammar"
+        );
+        assert!(
+            prompt.contains("assumed: <claim> because <reason>"),
+            "CONTEXT_FORMAT must define assumed grammar"
+        );
+    }
+
+    #[test]
+    fn question_rules_cover_ceiling_atomic_and_compound_bans() {
+        let prompt = default_prompt();
+        assert_regex(
+            &prompt,
+            r"(?i)up to 3 (explicit )?questions",
+            "3-question ceiling",
+        );
+        assert_regex(&prompt, r"(?i)\bAtomic\b", "atomic rule");
+        assert!(
+            prompt.contains("Compound-across-turns"),
+            "compound-across-turns ban"
+        );
+        assert_regex(
+            &prompt,
+            r"(?i)and.*or.*also.*plus",
+            "compound connectives ban",
+        );
+        assert_regex(
+            &prompt,
+            r"(?i)predicated on",
+            "question must be predicated on verified Context",
+        );
+        assert_regex(
+            &prompt,
+            r"(?i)user intent.*scope.*tradeoff|intent.*scope.*priorit",
+            "good-question shape",
+        );
+    }
+
+    #[test]
+    fn question_research_gate_covers_three_outcomes_and_both_agent_paths() {
+        let prompt = default_prompt();
+        assert_regex(&prompt, r"(?m)- Answered", "answered outcome");
+        assert_regex(&prompt, r"(?m)- Partially answered", "partially answered outcome");
+        assert_regex(&prompt, r"(?m)- Not answered", "not answered outcome");
+        assert!(prompt.contains("Claude path:"), "Claude path guidance");
+        assert!(
+            prompt.contains("Non-Claude path"),
+            "Non-Claude fallback guidance",
+        );
+        assert_regex(
+            &prompt,
+            r"(?i)targeted deep-search",
+            "non-Claude fallback must require a targeted deep-search",
+        );
+        assert_regex(
+            &prompt,
+            r"(?i)fabricat(ing|ed)",
+            "gate must warn against fabricated null results",
+        );
+    }
+
+    #[test]
+    fn every_surviving_question_paired_with_verified_researched_entry() {
+        let prompt = default_prompt();
+        assert_regex(
+            &prompt,
+            r"(?is)QUESTION_RULES:.*verified: researched",
+            "QUESTION_RULES must require a paired verified: researched entry per question",
+        );
+        assert_regex(
+            &prompt,
+            r"(?is)PROHIBITIONS:.*lacks a paired `verified: researched",
+            "PROHIBITIONS must ban questions lacking paired verified: researched entry",
+        );
+    }
+
+    #[test]
+    fn early_exit_lists_four_objective_gates() {
+        let prompt = default_prompt();
+        assert_regex(&prompt, r"(?m)^1\. Draft is non-empty", "gate 1");
+        assert_regex(&prompt, r"(?m)^2\. Draft is .*300 characters", "gate 2");
+        assert_regex(&prompt, r"(?m)^3\. Draft references no", "gate 3");
+        assert_regex(
+            &prompt,
+            r"(?m)^4\. Draft contains no integration verbs",
+            "gate 4",
+        );
+        assert_regex(
+            &prompt,
+            r"wire, hook, replace, migrate, refactor, extend, integrate",
+            "integration verbs enumerated",
+        );
+        assert_regex(
+            &prompt,
+            r"(?i)(list|state) which gates passed",
+            "must state which gates passed",
+        );
+    }
+
+    #[test]
+    fn later_turns_bans_full_sweep_and_requires_diff_extract_and_gate() {
+        let prompt = default_prompt();
+        assert_regex(
+            &prompt,
+            r"(?is)LATER_TURNS:.*Do NOT redo the full five-step sweep",
+            "later turns must forbid redoing the full sweep",
+        );
+        assert_regex(
+            &prompt,
+            r"(?is)LATER_TURNS:.*Diff the user's latest turn",
+            "later turns must require diff-and-extract",
+        );
+        assert_regex(
+            &prompt,
+            r"(?is)LATER_TURNS:.*QUESTION_RESEARCH_GATE",
+            "later turns must require the research gate for new questions",
+        );
+        assert_regex(
+            &prompt,
+            r#"no new terms introduced"#,
+            "later turns must require explicit no-new-terms statement",
+        );
+    }
+
+    #[test]
+    fn prohibitions_enumerate_forbidden_question_categories() {
+        let prompt = default_prompt();
+        for phrase in [
+            "symbol",
+            "CLAUDE.md",
+            "memory",
+            "prior spec",
+            "plans/",
+            "helper",
+            "Vague about scope",
+        ] {
+            assert!(
+                prompt.contains(phrase),
+                "PROHIBITIONS must enumerate forbidden category containing {phrase}"
+            );
+        }
+    }
+
+    #[test]
+    fn prompt_forbids_inventing_requirements() {
+        let prompt = default_prompt();
+        assert_regex(
+            &prompt,
+            r"(?i)Never invent requirements",
+            "explicit no-invented-requirements rule",
+        );
+        assert_regex(
+            &prompt,
+            r"(?is)## Problem.*## Goal.*anchored to the draft",
+            "Problem/Goal must stay anchored to the draft and user turns",
+        );
     }
 
     #[test]
