@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { TauriCommands } from '../../common/tauriCommands'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
@@ -48,9 +49,23 @@ vi.mock('@xterm/addon-search', () => ({
   },
 }))
 
+type WebLinkCallback = (
+  event: Pick<MouseEvent, 'preventDefault' | 'stopPropagation' | 'stopImmediatePropagation'>,
+  uri: string,
+) => Promise<void> | void
+
+const webLinksAddonInstances: Array<{ callback: WebLinkCallback }> = []
+
 vi.mock('@xterm/addon-web-links', () => ({
   WebLinksAddon: class {
+    static instances = webLinksAddonInstances
+    callback: WebLinkCallback
     dispose = vi.fn()
+
+    constructor(callback: WebLinkCallback) {
+      this.callback = callback
+      webLinksAddonInstances.push({ callback })
+    }
   },
 }))
 
@@ -63,7 +78,9 @@ vi.mock('./xtermAddonImporter', () => ({
 }))
 
 beforeEach(() => {
+  vi.clearAllMocks()
   registerMock.mockClear()
+  webLinksAddonInstances.length = 0
 })
 
 describe('XtermTerminal wrapper', () => {
@@ -323,5 +340,129 @@ describe('XtermTerminal wrapper', () => {
 
     await new Promise(resolve => requestAnimationFrame(resolve))
     expect(instance.scrollToLine).toHaveBeenCalledWith(42)
+  })
+
+  it('opens detected URL clicks via OpenExternalUrl and suppresses default navigation', async () => {
+    const { XtermTerminal } = await import('./XtermTerminal')
+    const { WebLinksAddon } = await import('@xterm/addon-web-links') as unknown as {
+      WebLinksAddon: { instances: Array<{ callback: WebLinkCallback }> }
+    }
+    const { invoke } = await import('@tauri-apps/api/core') as unknown as {
+      invoke: ReturnType<typeof vi.fn>
+    }
+
+    new XtermTerminal({
+      terminalId: 'web-links-open',
+      config: {
+        scrollback: 12000,
+        fontSize: 14,
+        fontFamily: 'Menlo',
+        readOnly: false,
+        minimumContrastRatio: 1.3,
+        smoothScrolling: true,
+      },
+    })
+
+    const linkHandler = WebLinksAddon.instances.at(-1)
+    expect(linkHandler).toBeDefined()
+
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+
+    await linkHandler!.callback(
+      { preventDefault, stopPropagation, stopImmediatePropagation },
+      'https://example.com/path',
+    )
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(stopPropagation).toHaveBeenCalledTimes(1)
+    expect(stopImmediatePropagation).toHaveBeenCalledTimes(1)
+    expect(invoke).toHaveBeenCalledWith(TauriCommands.OpenExternalUrl, { url: 'https://example.com/path' })
+  })
+
+  it('skips OpenExternalUrl when the custom link handler consumes the detected URL click', async () => {
+    const { XtermTerminal } = await import('./XtermTerminal')
+    const { WebLinksAddon } = await import('@xterm/addon-web-links') as unknown as {
+      WebLinksAddon: { instances: Array<{ callback: WebLinkCallback }> }
+    }
+    const { invoke } = await import('@tauri-apps/api/core') as unknown as {
+      invoke: ReturnType<typeof vi.fn>
+    }
+
+    const onLinkClick = vi.fn(async () => true)
+
+    new XtermTerminal({
+      terminalId: 'web-links-consumed',
+      onLinkClick,
+      config: {
+        scrollback: 12000,
+        fontSize: 14,
+        fontFamily: 'Menlo',
+        readOnly: false,
+        minimumContrastRatio: 1.3,
+        smoothScrolling: true,
+      },
+    })
+
+    const linkHandler = WebLinksAddon.instances.at(-1)
+    expect(linkHandler).toBeDefined()
+
+    await linkHandler!.callback(
+      { preventDefault: vi.fn(), stopPropagation: vi.fn(), stopImmediatePropagation: vi.fn() },
+      'https://example.com/handled',
+    )
+
+    expect(onLinkClick).toHaveBeenCalledWith('https://example.com/handled')
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('routes OSC 8 hyperlink activations through OpenExternalUrl without prompting', async () => {
+    const { XtermTerminal } = await import('./XtermTerminal')
+    const { Terminal: MockTerminal } = await import('@xterm/xterm') as unknown as {
+      Terminal: { __instances: Array<{ options: Record<string, unknown> }> }
+    }
+    const { invoke } = await import('@tauri-apps/api/core') as unknown as {
+      invoke: ReturnType<typeof vi.fn>
+    }
+
+    const confirmSpy = vi.fn(() => false)
+    const openSpy = vi.fn(() => null)
+    const originalConfirm = window.confirm
+    const originalOpen = window.open
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirmSpy })
+    Object.defineProperty(window, 'open', { configurable: true, value: openSpy })
+
+    new XtermTerminal({
+      terminalId: 'osc8-activate',
+      config: {
+        scrollback: 4000,
+        fontSize: 12,
+        fontFamily: 'Menlo',
+        readOnly: false,
+        minimumContrastRatio: 1.0,
+        smoothScrolling: false,
+      },
+    })
+
+    const instance = MockTerminal.__instances.at(-1)!
+    const osc8Handler = instance.options.linkHandler as {
+      activate: (event: MouseEvent, uri: string) => void
+      allowNonHttpProtocols: boolean
+    }
+
+    expect(osc8Handler).toBeDefined()
+    expect(osc8Handler.allowNonHttpProtocols).toBe(true)
+
+    osc8Handler.activate({} as MouseEvent, 'https://example.com/osc8')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(invoke).toHaveBeenCalledWith(TauriCommands.OpenExternalUrl, { url: 'https://example.com/osc8' })
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(openSpy).not.toHaveBeenCalled()
+
+    Object.defineProperty(window, 'confirm', { configurable: true, value: originalConfirm })
+    Object.defineProperty(window, 'open', { configurable: true, value: originalOpen })
   })
 })

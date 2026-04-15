@@ -100,6 +100,12 @@ export class XtermTerminal {
     this.linkHandler = options.onLinkClick ?? null
     const resolvedTheme = options.theme ?? buildTerminalTheme('dark')
     const resolvedOptions = buildTerminalOptions(this.config, resolvedTheme)
+    resolvedOptions.linkHandler = {
+      activate: (_event, uri) => {
+        void this.openExternalLink(uri)
+      },
+      allowNonHttpProtocols: true,
+    }
 
     this.raw = new XTerm(resolvedOptions)
     this.fitAddon = new FitAddon()
@@ -108,25 +114,13 @@ export class XtermTerminal {
     this.searchAddon = new SearchAddon()
     this.raw.loadAddon(this.searchAddon)
 
-    this.webLinksAddon = new WebLinksAddon((_event: MouseEvent, uri: string) => {
-      const openLink = async () => {
-        try {
-          if (this.linkHandler) {
-            const handled = await this.linkHandler(uri)
-            if (handled) return
-          }
-        } catch (error) {
-          logger.debug(`[XtermTerminal ${this.terminalId}] Link handler failed`, error)
-        }
-
-        try {
-          await invoke<void>(TauriCommands.OpenExternalUrl, { url: uri })
-        } catch (error) {
-          logger.error(`[XtermTerminal ${this.terminalId}] Failed to open link: ${uri}`, error)
-        }
+    this.webLinksAddon = new WebLinksAddon((event: MouseEvent, uri: string) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (typeof event.stopImmediatePropagation === 'function') {
+        event.stopImmediatePropagation()
       }
-
-      void openLink()
+      void this.openExternalLink(uri)
     })
     this.raw.loadAddon(this.webLinksAddon)
 
@@ -159,6 +153,23 @@ export class XtermTerminal {
 
     this.registerOscHandlers()
     this.registerCsiHandlers()
+  }
+
+  private async openExternalLink(uri: string): Promise<void> {
+    try {
+      if (this.linkHandler) {
+        const handled = await this.linkHandler(uri)
+        if (handled) return
+      }
+    } catch (error) {
+      logger.debug(`[XtermTerminal ${this.terminalId}] Link handler failed`, error)
+    }
+
+    try {
+      await invoke<void>(TauriCommands.OpenExternalUrl, { url: uri })
+    } catch (error) {
+      logger.error(`[XtermTerminal ${this.terminalId}] Failed to open link: ${uri}`, error)
+    }
   }
 
   isTuiMode(): boolean {
