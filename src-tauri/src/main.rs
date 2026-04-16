@@ -1406,9 +1406,6 @@ fn main() {
     macos_prefs::disable_smart_substitutions();
     // macOS smart substitutions: handled in frontend for now
 
-    // Third-party AX voice tools (Mac Whisper) need the WKWebView AX tree eagerly populated.
-    macos_accessibility::enable_manual_accessibility();
-
     let cwd = match std::env::current_dir() {
         Ok(cwd) => cwd,
         Err(e) => {
@@ -1748,6 +1745,11 @@ fn main() {
             reset_contextual_actions_to_defaults
         ])
         .setup(move |app| {
+            // Third-party AX voice tools (Mac Whisper) need the WKWebView AX tree
+            // eagerly populated. Must run after tao has installed `TaoApp`, so we
+            // wire it into the Tauri setup hook rather than early startup.
+            macos_accessibility::enable_manual_accessibility();
+
             if ATTENTION_REGISTRY.get().is_none() {
                 let registry = Arc::new(Mutex::new(AttentionStateRegistry::default()));
                 let _ = ATTENTION_REGISTRY.set(registry);

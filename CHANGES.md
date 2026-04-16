@@ -2,6 +2,16 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## macOS: activate WKWebView accessibility tree for external dictation tools
+
+Lucode now injects three `NSAccessibility` override methods onto NSApp's runtime class from the Tauri `.setup()` hook, teaching the app to advertise and accept the `AXManualAccessibility` and `AXEnhancedUserInterface` attributes. Without these overrides, the stock `tao` NSApplication returns `kAXErrorNotImplemented` (-25208) when any AX client tries to set those attributes, so WKWebView never populates its accessibility tree — and third-party dictation tools like Mac Whisper silently fail across every Lucode input surface (native `<input>`, CodeMirror, xterm, URL bar).
+
+- New module `src-tauri/src/macos_accessibility.rs` using `objc2` + `objc2-app-kit` + `objc2-foundation`. A compile-time subclass `LucodeAccessibleApplication : NSApplication` (via `define_class!`) is used only as a well-typed source for IMPs/type-encodings; at runtime the three IMPs are added onto NSApp's live class (`TaoApp`) via `class_addMethod` — tao's own `sendEvent:` override for Cmd+keyUp delivery stays in the dispatch chain.
+- Install runs from Tauri's `.setup()` callback (after `[TaoApp sharedApplication]` has bound NSApp), not from early `main()`. The self-directed `AXUIElementSetAttributeValue(selfPid, "AXManualAccessibility", true)` call that follows returns `0` (was `-25208`), eagerly activating the AX tree without needing the external AX client to set it first.
+- Approach mirrors Electron's `AtomApplication` override pattern (`electron/electron#38102`) adapted for stock `tao` / wry.
+- Complements the April 14 per-surface ARIA hardening on `MarkdownEditor` and the xterm helper `<textarea>`; those remain useful once the AX tree is actually live.
+- Covered by a live-NSApp integration test that asserts the three selectors on the live `NSApp` instance advertise the attribute, report it settable, and round-trip via `accessibilitySetValue:forAttribute:` / `accessibilityAttributeValue:` (inspired by the sibling branch's contract test).
+
 ## Contextual action: one-click issue → spec with auto-clarify
 
 Forge issues can now be turned into a spec whose clarification agent is already investigating, in a single gesture. A new `spec-clarify` `ContextualActionMode` is available alongside `spec` and `session`: selecting an action with this mode from the issue detail view's Actions dropdown creates the spec (preserving `issueNumber` / `issueUrl`), spawns the spec clarification PTY in the background, and submits the clarification prompt automatically once the agent is ready. The user stays on the issue view; the new spec surfaces in the sidebar with the existing `clarification_started` indicator lit.
