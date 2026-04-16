@@ -26,11 +26,12 @@ interface UseTerminalTabsProps {
   maxTabs?: number
   sessionName?: string | null
   bootstrapTopTerminalId?: string
+  initialTerminalEnabled?: boolean
 }
 
 const DEFAULT_MAX_TABS = 6
 
-const globalTerminalCreated = new Set<string>()
+const globalTerminalCreated = new Map<string, string>()
 
 export function useTerminalTabs({
   baseTerminalId,
@@ -38,6 +39,7 @@ export function useTerminalTabs({
   maxTabs = DEFAULT_MAX_TABS,
   sessionName = null,
   bootstrapTopTerminalId,
+  initialTerminalEnabled = true,
 }: UseTerminalTabsProps) {
   // Use Jotai atoms for tab state
   const atomState = useAtomValue(terminalTabsAtomFamily(baseTerminalId))
@@ -88,17 +90,23 @@ export function useTerminalTabs({
   }, [baseTerminalId, tabs, resetTabsAction, shouldHandleReset])
 
   const createTerminal = useCallback(async (terminalId: string) => {
-    if (globalTerminalCreated.has(terminalId)) {
-      return
-    }
-
     const sanitizedCwd = workingDirectory.trim()
     if (!sanitizedCwd) {
       logger.debug(`[useTerminalTabs] Deferring creation of ${terminalId} until working directory is ready`)
       return
     }
 
+    const trackedCwd = globalTerminalCreated.get(terminalId)
+    if (trackedCwd === sanitizedCwd) {
+      return
+    }
+
     try {
+      if (trackedCwd && trackedCwd !== sanitizedCwd) {
+        await closeTerminalBackend(terminalId)
+        globalTerminalCreated.delete(terminalId)
+      }
+
       const directoryExists = await invoke<boolean>(TauriCommands.PathExists, { path: sanitizedCwd })
       if (!directoryExists) {
         logger.debug(`[useTerminalTabs] Skipping creation of ${terminalId} because ${sanitizedCwd} is not present yet`)
@@ -121,7 +129,7 @@ export function useTerminalTabs({
           rows: sizeHint?.rows,
         })
       }
-      globalTerminalCreated.add(terminalId)
+      globalTerminalCreated.set(terminalId, sanitizedCwd)
     } catch (error) {
       logger.error(`Failed to create terminal ${terminalId}:`, error)
       throw error
@@ -183,6 +191,7 @@ export function useTerminalTabs({
 
   // Create initial terminal when component mounts
   useEffect(() => {
+    if (!initialTerminalEnabled) return
     const initialTab = tabs[0]
     if (!initialTab) return
     const ensureInitial = async () => {
@@ -193,7 +202,7 @@ export function useTerminalTabs({
       }
     }
     void ensureInitial()
-  }, [createTerminal, tabs])
+  }, [createTerminal, initialTerminalEnabled, tabs])
 
   return {
     tabs,

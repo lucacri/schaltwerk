@@ -21,6 +21,7 @@ interface TerminalTabsProps {
   bootstrapTopTerminalId?: string
   previewKey?: string
   autoPreviewConfig?: AutoPreviewConfig
+  initialTerminalEnabled?: boolean
 }
 
 export interface TerminalTabsHandle {
@@ -51,6 +52,7 @@ const TerminalTabsComponent = forwardRef<TerminalTabsHandle, TerminalTabsProps>(
   bootstrapTopTerminalId,
   previewKey,
   autoPreviewConfig,
+  initialTerminalEnabled = true,
 }, ref) => {
   const { t } = useTranslation()
   const { tabs, activeTab, canAddTab, addTab, closeTab, setActiveTab } = useTerminalTabs({
@@ -58,7 +60,8 @@ const TerminalTabsComponent = forwardRef<TerminalTabsHandle, TerminalTabsProps>(
     workingDirectory,
     maxTabs,
     sessionName: sessionName ?? null,
-    bootstrapTopTerminalId
+    bootstrapTopTerminalId,
+    initialTerminalEnabled,
   })
 
   const terminalRefs = useRef<Map<number, TerminalHandle>>(new Map())

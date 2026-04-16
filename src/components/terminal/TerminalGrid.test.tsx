@@ -173,6 +173,7 @@ vi.mock('./Terminal', () => {
 vi.mock('./TerminalTabs', () => {
   let lastFocusedTerminalId: string | null = null
   const tabFunctionStore = new Map<string, { addTab: ReturnType<typeof vi.fn>; closeTab: ReturnType<typeof vi.fn>; setActiveTab: ReturnType<typeof vi.fn> }>()
+  const initialTerminalEnabledStore = new Map<string, boolean | undefined>()
 
   const getOrCreateTabFns = (terminalId: string) => {
     let entry = tabFunctionStore.get(terminalId)
@@ -187,8 +188,9 @@ vi.mock('./TerminalTabs', () => {
     return entry
   }
 
-  const TerminalTabsMock = forwardRef<MockTerminalTabsRef, { baseTerminalId: string; isCommander?: boolean; onTerminalClick?: (event: ReactMouseEvent) => void }>(function TerminalTabsMock(props, ref) {
-    const { baseTerminalId, isCommander, onTerminalClick } = props
+  const TerminalTabsMock = forwardRef<MockTerminalTabsRef, { baseTerminalId: string; isCommander?: boolean; onTerminalClick?: (event: ReactMouseEvent) => void; initialTerminalEnabled?: boolean }>(function TerminalTabsMock(props, ref) {
+    const { baseTerminalId, isCommander, onTerminalClick, initialTerminalEnabled } = props
+    initialTerminalEnabledStore.set(baseTerminalId, initialTerminalEnabled)
     // For orchestrator, add -0 suffix; for sessions, no suffix
     const terminalId = isCommander ? `${baseTerminalId}-0` : baseTerminalId
     const addTabAction = useSetAtom(addTabActionAtom)
@@ -257,7 +259,8 @@ vi.mock('./TerminalTabs', () => {
   return {
     TerminalTabs: TerminalTabsMock,
     __getLastFocusedTerminalId: () => lastFocusedTerminalId,
-    __getTabFunctions: (id: string) => tabFunctionStore.get(id)
+    __getTabFunctions: (id: string) => tabFunctionStore.get(id),
+    __getInitialTerminalEnabled: (baseTerminalId: string) => initialTerminalEnabledStore.get(baseTerminalId)
   }
 })
 
@@ -987,6 +990,43 @@ describe('TerminalGrid', () => {
   })
 
   describe('Terminal Minimization', () => {
+    it('lazy bottom terminal creation is disabled for collapsed sessions until expand while orchestrator stays enabled', async () => {
+      localStorage.setItem('schaltwerk:layout:bottomTerminalCollapsed', 'true')
+
+      await renderGrid()
+      vi.useRealTimers()
+      await waitForGridReady()
+
+      const tabModule = TerminalTabsModule as unknown as {
+        __getInitialTerminalEnabled?: (baseTerminalId: string) => boolean | undefined
+      }
+
+      expect(tabModule.__getInitialTerminalEnabled?.(bridge!.terminals.bottomBase)).toBe(true)
+
+      await act(async () => {
+        await bridge!.setSelection({
+          kind: 'session',
+          payload: 'lazy-session',
+          worktreePath: '/lazy/path',
+          sessionState: 'running',
+        })
+      })
+
+      await waitFor(() => {
+        expectAgentTabBarOrHeader('lazy-session')
+      })
+
+      const collapsedSessionBottom = bridge!.terminals.bottomBase
+      expect(tabModule.__getInitialTerminalEnabled?.(collapsedSessionBottom)).toBe(false)
+
+      fireEvent.click(screen.getByLabelText('Expand terminal panel'))
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Collapse terminal panel')).toBeInTheDocument()
+        expect(tabModule.__getInitialTerminalEnabled?.(collapsedSessionBottom)).toBe(true)
+      })
+    })
+
     it('initializes split sizes from persisted entries with sensible fallbacks (migrates from sessionStorage)', async () => {
       // Legacy sessionStorage values should be migrated to localStorage
       sessionStorage.setItem('schaltwerk:layout:bottomTerminalSizes', 'not-json')
@@ -1714,6 +1754,30 @@ describe('TerminalGrid', () => {
 
     await waitFor(() => {
       expect(getLastFocused()).toBe(bottomId)
+    })
+  })
+
+  it('focus terminal request restores expanded split sizes from collapsed state', async () => {
+    localStorage.setItem('schaltwerk:layout:bottomTerminalCollapsed', 'true')
+    localStorage.setItem('schaltwerk:layout:bottomTerminalSizes', JSON.stringify([90, 10]))
+
+    await renderGrid()
+    vi.useRealTimers()
+
+    await waitForGridReady()
+
+    if (!bridge) throw new Error('bridge missing')
+    const bottomId = bridge.terminals.bottomBase.includes('orchestrator')
+      ? `${bridge.terminals.bottomBase}-0`
+      : bridge.terminals.bottomBase
+
+    act(() => {
+      emitUiEvent(UiEvent.FocusTerminal, { terminalId: bottomId, focusType: 'terminal' })
+    })
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Collapse terminal panel')).toBeInTheDocument()
+      expect(screen.getByTestId('split').getAttribute('data-sizes')).toBe(JSON.stringify([72, 28]))
     })
   })
 

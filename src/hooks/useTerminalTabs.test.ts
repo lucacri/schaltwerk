@@ -8,6 +8,7 @@ import { ReactNode, createElement } from 'react'
 import { UiEvent, emitUiEvent } from '../common/uiEvents'
 import { logger } from '../utils/logger'
 import { Provider, createStore } from 'jotai'
+import * as terminalRegistry from '../terminal/registry/terminalRegistry'
 
 // Mock the invoke function
 vi.mock('@tauri-apps/api/core', () => ({
@@ -24,6 +25,10 @@ vi.mock('../utils/logger', () => ({
 
 vi.mock('../common/terminalSizeCache', () => ({
   bestBootstrapSize: vi.fn(() => ({ cols: 120, rows: 32 }))
+}))
+
+vi.mock('../terminal/registry/terminalRegistry', () => ({
+  releaseTerminalInstance: vi.fn()
 }))
 
 describe('useTerminalTabs', () => {
@@ -422,6 +427,89 @@ describe('useTerminalTabs', () => {
         cwd: '/ready/path',
         cols: 120,
         rows: 32
+      })
+    })
+
+    it('defers initial terminal creation until initialTerminalEnabled is true', async () => {
+      const { rerender } = renderHook(
+        (props: { baseTerminalId: string; workingDirectory: string; initialTerminalEnabled: boolean }) => useTerminalTabs(props),
+        {
+          wrapper: createWrapper(),
+          initialProps: {
+            baseTerminalId: 'test-initial-enabled',
+            workingDirectory: '/test/dir',
+            initialTerminalEnabled: false,
+          }
+        }
+      )
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(mockInvoke).not.toHaveBeenCalledWith(TauriCommands.CreateTerminalWithSize, expect.objectContaining({
+        id: 'test-initial-enabled',
+      }))
+
+      rerender({
+        baseTerminalId: 'test-initial-enabled',
+        workingDirectory: '/test/dir',
+        initialTerminalEnabled: true,
+      })
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.CreateTerminalWithSize, {
+        id: 'test-initial-enabled',
+        cwd: '/test/dir',
+        cols: 120,
+        rows: 32,
+      })
+    })
+
+    it('recreates an existing initial terminal when its working directory changes', async () => {
+      const { rerender } = renderHook(
+        (props: { baseTerminalId: string; workingDirectory: string }) => useTerminalTabs(props),
+        {
+          wrapper: createWrapper(),
+          initialProps: {
+            baseTerminalId: 'test-cwd-change',
+            workingDirectory: '/old/dir',
+          }
+        }
+      )
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.CreateTerminalWithSize, {
+        id: 'test-cwd-change',
+        cwd: '/old/dir',
+        cols: 120,
+        rows: 32,
+      })
+
+      mockInvoke.mockClear()
+
+      rerender({
+        baseTerminalId: 'test-cwd-change',
+        workingDirectory: '/new/dir',
+      })
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.CloseTerminal, { id: 'test-cwd-change' })
+      expect(vi.mocked(terminalRegistry.releaseTerminalInstance)).not.toHaveBeenCalledWith('test-cwd-change')
+      expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.CreateTerminalWithSize, {
+        id: 'test-cwd-change',
+        cwd: '/new/dir',
+        cols: 120,
+        rows: 32,
       })
     })
   })

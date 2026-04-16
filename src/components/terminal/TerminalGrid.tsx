@@ -518,7 +518,7 @@ const TerminalGridComponent = () => {
 
             // Expand if collapsed
             if (isBottomCollapsed) {
-                void setIsBottomCollapsed(false)
+                toggleTerminalCollapsed()
             }
 
             // If a specific terminalId was provided, prefer focusing that one
@@ -564,7 +564,7 @@ const TerminalGridComponent = () => {
             cleanupFocus()
             cleanupReady()
         }
-    }, [isBottomCollapsed, runModeActive, terminalTabsState.activeTab, isAnyModalOpen, selection.kind, selection.payload, setIsBottomCollapsed, resetAgentTabs])
+    }, [isBottomCollapsed, runModeActive, terminalTabsState.activeTab, isAnyModalOpen, selection.kind, selection.payload, toggleTerminalCollapsed, resetAgentTabs])
 
     // Fetch agent type based on selection
     useEffect(() => {
@@ -1321,6 +1321,7 @@ const TerminalGridComponent = () => {
     // Render terminals as soon as we have project-scoped ids even if not ready yet
     const hasProjectScopedIds = terminals.top && !terminals.top.includes('orchestrator-default')
     const shouldRenderTerminals = isReady || hasProjectScopedIds
+    const shouldCreateInitialBottomTerminal = selection.kind === 'orchestrator' || !isBottomCollapsed
 
     const applyPendingInsert = useCallback(async () => {
         const pendingText = pendingInsertTextRef.current
@@ -1904,6 +1905,7 @@ const TerminalGridComponent = () => {
                                     autoPreviewConfig={autoPreviewConfig}
                                     headless={true}
                                     bootstrapTopTerminalId={terminals.top}
+                                    initialTerminalEnabled={shouldCreateInitialBottomTerminal}
                                 />
                             </TerminalErrorBoundary>
                         </div>

@@ -378,6 +378,10 @@ function selectionCacheKey(selection: Selection, projectPath?: string | null): s
   return `session:${scopedProject}:${selection.payload ?? 'unknown'}`
 }
 
+function shouldEagerCreateBottomTerminal(selection: Selection): boolean {
+  return selection.kind === 'orchestrator'
+}
+
 function sessionStateCacheKey(sessionId: string, projectPath: string | null): string {
   return `${projectPath ?? 'none'}::${sessionId}`
 }
@@ -621,10 +625,13 @@ export const setSelectionActionAtom = atom(
       }
 
       const terminals = computeTerminals(enrichedSelection, projectPath)
+      const eagerCreateBottomTerminal = shouldEagerCreateBottomTerminal(enrichedSelection)
       const cacheKey = selectionCacheKey(enrichedSelection, projectPath)
       const pendingRecreate = selectionsNeedingRecreate.has(cacheKey)
       const trackedTopCwd = terminalWorkingDirectory.get(terminals.top)
-      const trackedBottomCwd = terminals.bottomBase ? terminalWorkingDirectory.get(terminals.bottomBase) : undefined
+      const trackedBottomCwd = eagerCreateBottomTerminal && terminals.bottomBase
+        ? terminalWorkingDirectory.get(terminals.bottomBase)
+        : undefined
       const workingDirectoryChanged = Boolean(
         terminals.workingDirectory &&
         ((trackedTopCwd && trackedTopCwd !== terminals.workingDirectory) ||
@@ -637,7 +644,7 @@ export const setSelectionActionAtom = atom(
         terminalsCache.set(cacheKey, tracked)
       }
       let missingTop = terminals.top ? !tracked.has(terminals.top) : false
-      let missingBottom = terminals.bottomBase ? !tracked.has(terminals.bottomBase) : false
+      let missingBottom = eagerCreateBottomTerminal && terminals.bottomBase ? !tracked.has(terminals.bottomBase) : false
 
       const unchanged = !forceRecreate && selectionEquals(current, enrichedSelection)
 
@@ -673,7 +680,7 @@ export const setSelectionActionAtom = atom(
               ensureTerminal(terminals.top, terminals.workingDirectory, tracked, effectiveForceRecreate, cacheKey),
             )
           }
-          if (terminals.bottomBase) {
+          if (eagerCreateBottomTerminal && terminals.bottomBase) {
             createTasks.push(
               ensureTerminal(terminals.bottomBase, terminals.workingDirectory, tracked, effectiveForceRecreate, cacheKey),
             )

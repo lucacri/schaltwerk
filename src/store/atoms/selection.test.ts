@@ -299,7 +299,7 @@ describe('selection atoms', () => {
     expect(terminals.workingDirectory).toBe('/Users/me/projects/my project')
   })
 
-  it('sets session selection with snapshot enrichment and terminal creation', async () => {
+  it('sets session selection with snapshot enrichment and top terminal creation only', async () => {
     await withNodeEnv('development', async () => {
       const backend = await import('../../terminal/transport/backend')
       await store.set(setProjectPathActionAtom, '/projects/alpha')
@@ -312,7 +312,11 @@ describe('selection atoms', () => {
       const terminals = store.get(terminalsAtom)
       expect(terminals.top).toMatch(/^session-session-1~[0-9a-f]{8}-top$/)
       expect(terminals.workingDirectory).toBe('/tmp/worktrees/session-1')
-      expect(vi.mocked(backend.createTerminalBackend)).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(backend.createTerminalBackend)).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(backend.createTerminalBackend)).toHaveBeenCalledWith({
+        id: terminals.top,
+        cwd: '/tmp/worktrees/session-1',
+      })
     })
   })
 
@@ -358,7 +362,7 @@ describe('selection atoms', () => {
     })
   })
 
-  it('allocates terminals for ready running sessions with a worktree', async () => {
+  it('allocates only the top terminal for ready running sessions with a worktree', async () => {
     await withNodeEnv('development', async () => {
       const backend = await import('../../terminal/transport/backend')
 
@@ -378,9 +382,9 @@ describe('selection atoms', () => {
       const terminals = store.get(terminalsAtom)
       expect(terminals.workingDirectory).toBe('/tmp/worktrees/reviewed-1')
       expect(terminals.top).toMatch(/^session-reviewed-1~[0-9a-f]{8}-top$/)
-      expect(vi.mocked(backend.createTerminalBackend)).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(backend.createTerminalBackend)).toHaveBeenCalledTimes(1)
       const cwdCalls = vi.mocked(backend.createTerminalBackend).mock.calls.map(([arg]) => arg.cwd)
-      expect(cwdCalls).toEqual(['/tmp/worktrees/reviewed-1', '/tmp/worktrees/reviewed-1'])
+      expect(cwdCalls).toEqual(['/tmp/worktrees/reviewed-1'])
     })
   })
 
@@ -441,8 +445,7 @@ describe('selection atoms', () => {
         selection: { kind: 'session', payload: 'session-1', worktreePath: '/tmp/worktrees/session-1', sessionState: 'running', projectPath: '/projects/alpha' },
       })
 
-      // First creation creates top + bottom
-      expect(vi.mocked(backend.createTerminalBackend).mock.calls.length).toBeGreaterThanOrEqual(2)
+      expect(vi.mocked(backend.createTerminalBackend).mock.calls.length).toBeGreaterThanOrEqual(1)
 
       vi.mocked(backend.createTerminalBackend).mockClear()
       vi.mocked(registry.hasTerminalInstance).mockReturnValue(true)
@@ -792,7 +795,7 @@ describe('selection atoms', () => {
 
       vi.mocked(backend.createTerminalBackend).mockClear()
       await store.set(setSelectionActionAtom, { selection: { kind: 'session', payload: 'session-1' }, forceRecreate: true })
-      expect(vi.mocked(backend.createTerminalBackend)).toHaveBeenCalledTimes(2)
+      expect(vi.mocked(backend.createTerminalBackend)).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -904,7 +907,7 @@ describe('selection atoms', () => {
         selection: { kind: 'session', payload: 'session-1', sessionState: 'running', worktreePath: '/tmp/worktrees/session-1' },
       })
 
-      expect(vi.mocked(backend.createTerminalBackend).mock.calls.length).toBeGreaterThanOrEqual(2)
+      expect(vi.mocked(backend.createTerminalBackend).mock.calls.length).toBeGreaterThanOrEqual(1)
 
       vi.mocked(backend.createTerminalBackend).mockClear()
 
@@ -916,11 +919,11 @@ describe('selection atoms', () => {
         selection: { kind: 'session', payload: 'session-1', sessionState: 'running', worktreePath: '/tmp/worktrees/session-1', projectPath: '/projects/beta' },
       })
 
-      // Session terminals should be recreated because caches are now scoped by project path
+      // The session top terminal should be recreated because caches are now scoped by project path.
       const sessionCalls = vi.mocked(backend.createTerminalBackend).mock.calls.filter(
         ([args]) => (args?.id ?? '').includes('session-')
       )
-      expect(sessionCalls.length).toBeGreaterThanOrEqual(2)
+      expect(sessionCalls.length).toBeGreaterThanOrEqual(1)
     })
   })
 
@@ -961,7 +964,7 @@ describe('selection atoms', () => {
         ([args]) => (args?.id ?? '').includes('shared-session')
       )
       const recreatedCwds = recreatedSessionCalls.map(call => call[0]?.cwd)
-      expect(recreatedCwds).toEqual(['/tmp/worktrees/beta/shared-session', '/tmp/worktrees/beta/shared-session'])
+      expect(recreatedCwds).toEqual(['/tmp/worktrees/beta/shared-session'])
       expect(vi.mocked(backend.closeTerminalBackend)).toHaveBeenCalled()
 
       vi.mocked(registry.hasTerminalInstance).mockReset()
