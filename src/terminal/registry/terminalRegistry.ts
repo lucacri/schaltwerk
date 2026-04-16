@@ -636,11 +636,6 @@ class TerminalInstanceRegistry {
       const has2J = chunk.includes('\x1b[2J');
       const hasH = containsCupSequence(chunk);
 
-      if (has3J || has2J || hasH) {
-        const buffer = record.xterm.raw.buffer?.active;
-        logger.debug(`[Registry ${record.id}] Control sequences: 3J=${has3J}, 2J=${has2J}, H=${hasH}, isTUI=${record.xterm.isTuiMode()}, baseY=${buffer?.baseY}, viewportY=${buffer?.viewportY}`);
-      }
-
       if (has3J) {
         if (record.xterm.isTuiMode()) {
           processedChunk = chunk.split(CLEAR_SCROLLBACK_SEQ).join('');

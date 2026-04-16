@@ -131,17 +131,16 @@ pub fn init_logging() {
         builder.is_test(true);
     }
 
-    // Set log level from env or default to DEBUG for our crates, INFO for others
+    // Set log level from env, or default to INFO for our crates and third-party
+    // crates we care about, WARN for everything else. DEBUG is opt-in via
+    // `RUST_LOG=lucode=debug` so hot-path frontend `logger.debug` messages
+    // (forwarded verbatim through `commands::utility`) don't flood the file.
     if let Ok(rust_log) = env::var("RUST_LOG") {
         builder.parse_filters(&rust_log);
     } else if config.file_logging_enabled {
-        builder.filter_module("lucode", LevelFilter::Debug);
-
-        // Third-party crates we care about
+        builder.filter_module("lucode", LevelFilter::Info);
         builder.filter_module("portable_pty", LevelFilter::Info);
         builder.filter_module("tauri", LevelFilter::Info);
-
-        // Everything else defaults to Warn
         builder.filter_level(LevelFilter::Warn);
     } else {
         builder.filter_level(LevelFilter::Warn);
