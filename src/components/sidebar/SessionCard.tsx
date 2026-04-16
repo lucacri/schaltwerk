@@ -708,6 +708,21 @@ export const SessionCard = memo<SessionCardProps>(
                     {consolidationReport}
                   </span>
                 )}
+                {s.consolidation_report_source === 'auto_stub' && (
+                  <span
+                    data-testid="consolidation-auto-stub-badge"
+                    className="flex-shrink-0 rounded border px-1.5 py-[1px]"
+                    title="This candidate exited without filing a report; Lucode auto-filed a stub so the round could progress."
+                    style={{
+                      ...sessionText.badge,
+                      color: 'var(--color-accent-amber)',
+                      backgroundColor: 'var(--color-accent-amber-bg)',
+                      borderColor: 'var(--color-accent-amber-border)',
+                    }}
+                  >
+                    Auto-filed
+                  </span>
+                )}
                 <span className="truncate max-w-[120px]" title={s.branch}>
                   {s.branch}
                 </span>

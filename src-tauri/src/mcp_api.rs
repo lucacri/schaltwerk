@@ -1286,6 +1286,7 @@ fn update_session_consolidation_report(
     report: &str,
     base_session_id: Option<&str>,
     recommended_session_id: Option<&str>,
+    source: &str,
 ) -> anyhow::Result<()> {
     let repo =
         lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
@@ -1294,6 +1295,7 @@ fn update_session_consolidation_report(
         report,
         base_session_id,
         recommended_session_id,
+        source,
     )
 }
 
@@ -1323,10 +1325,18 @@ fn build_judge_prompt(candidate_sessions: &[Session], source_session_ids: &[Stri
             .consolidation_base_session_id
             .as_deref()
             .unwrap_or("<missing base>");
+        let report_source = candidate
+            .consolidation_report_source
+            .as_deref()
+            .unwrap_or("agent");
         prompt.push_str(&format!(
-            "- {}\n  base_session_id: {}\n  report:\n{}\n\n",
-            candidate.name, base, report
+            "- {}\n  base_session_id: {}\n  report_source: {}\n",
+            candidate.name, base, report_source
         ));
+        if report_source == "auto_stub" {
+            prompt.push_str("  note: This candidate has only an auto-filed stub report.\n");
+        }
+        prompt.push_str(&format!("  report:\n{report}\n\n"));
     }
     prompt.push_str(
         "Choose the strongest consolidation candidate. File your reasoning through lucode_consolidation_report with recommended_session_id set to the winning candidate session ID. Do not call lucode_promote directly.",
@@ -2643,6 +2653,7 @@ mod tests {
             consolidation_round_id: Some("round-1".to_string()),
             consolidation_role: Some("candidate".to_string()),
             consolidation_report: None,
+            consolidation_report_source: None,
             consolidation_base_session_id: None,
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: Some("confirm".to_string()),
@@ -2659,6 +2670,7 @@ mod tests {
             "## Decision\nKeep v1 base.",
             Some("feature_v1"),
             None,
+            "agent",
         )
         .expect("update report");
 
@@ -3109,6 +3121,7 @@ mod tests {
             "Winner keeps v1 as the base.",
             Some(source_winner.id.as_str()),
             None,
+            "agent",
         )
         .expect("set winning candidate base");
         update_session_consolidation_report(
@@ -3118,6 +3131,7 @@ mod tests {
             "Loser keeps v2 as the base.",
             Some(source_loser.id.as_str()),
             None,
+            "agent",
         )
         .expect("set losing candidate base");
         update_session_consolidation_report(
@@ -3127,6 +3141,7 @@ mod tests {
             "Judge recommends feature-consolidation-a.",
             None,
             Some(winning_candidate.id.as_str()),
+            "agent",
         )
         .expect("set judge report");
         update_consolidation_round_recommendation(
@@ -3227,6 +3242,7 @@ mod tests {
             "Use v1 as the base.",
             Some(source.id.as_str()),
             None,
+            "agent",
         )
         .expect("set candidate report");
 
@@ -3248,6 +3264,189 @@ mod tests {
             .get_session_by_name(&repo_path, &candidate.name)
             .expect("load candidate");
         assert!(updated_candidate.ready_to_merge);
+    }
+
+    #[test]
+    fn stub_report_unblocks_all_candidates_reported() {
+        use lucode::domains::sessions::consolidation_stub::{
+            StubWriteOutcome, ensure_stub_report_for_candidate,
+        };
+
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let version_group_id = "group-stub-round";
+        let round_id = "round-stub-unblock";
+
+        let source = manager
+            .create_session_with_auto_flag(
+                "feature_v1",
+                None,
+                None,
+                false,
+                Some(version_group_id),
+                Some(1),
+            )
+            .expect("create source");
+        let source_ids = vec![source.id.clone()];
+        upsert_consolidation_round(
+            &db,
+            &repo_path,
+            round_id,
+            version_group_id,
+            &source_ids,
+            "confirm",
+        )
+        .expect("upsert round");
+
+        let filer = create_round_session(
+            &manager,
+            "feature-consolidation-filer",
+            version_group_id,
+            &source_ids,
+            round_id,
+            "candidate",
+            "confirm",
+        );
+        let exiter = create_round_session(
+            &manager,
+            "feature-consolidation-exiter",
+            version_group_id,
+            &source_ids,
+            round_id,
+            "candidate",
+            "confirm",
+        );
+
+        let initial_sessions = list_round_sessions(&manager, round_id).expect("list initial");
+        let initial_candidates = candidate_sessions_for_round(&initial_sessions);
+        assert!(
+            !all_candidates_reported(&initial_candidates),
+            "nothing filed yet"
+        );
+
+        update_session_consolidation_report(
+            &db,
+            &repo_path,
+            &filer.name,
+            "## Filer report",
+            Some(source.id.as_str()),
+            None,
+            "agent",
+        )
+        .expect("file agent report");
+
+        let after_agent = list_round_sessions(&manager, round_id).expect("list after agent");
+        let after_agent_candidates = candidate_sessions_for_round(&after_agent);
+        assert!(
+            !all_candidates_reported(&after_agent_candidates),
+            "only one candidate reported so far"
+        );
+
+        let db_manager =
+            lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
+        let outcome = ensure_stub_report_for_candidate(&db_manager, &exiter, "cancelled")
+            .expect("file stub");
+        assert_eq!(outcome, StubWriteOutcome::Written);
+
+        let after_stub = list_round_sessions(&manager, round_id).expect("list after stub");
+        let after_stub_candidates = candidate_sessions_for_round(&after_stub);
+        assert!(
+            all_candidates_reported(&after_stub_candidates),
+            "stub should satisfy the all-reported predicate"
+        );
+
+        let reloaded_filer = db
+            .get_session_by_name(&repo_path, &filer.name)
+            .expect("load filer");
+        assert_eq!(
+            reloaded_filer.consolidation_report_source.as_deref(),
+            Some("agent")
+        );
+
+        let reloaded_exiter = db
+            .get_session_by_name(&repo_path, &exiter.name)
+            .expect("load exiter");
+        assert_eq!(
+            reloaded_exiter.consolidation_report_source.as_deref(),
+            Some("auto_stub")
+        );
+        let exiter_body = reloaded_exiter
+            .consolidation_report
+            .as_deref()
+            .unwrap_or_default();
+        assert!(
+            exiter_body.contains("Auto-filed stub report"),
+            "body should carry the auto-stub heading"
+        );
+    }
+
+    #[test]
+    fn agent_report_supersedes_auto_stub_source() {
+        use lucode::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate;
+
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let version_group_id = "group-supersede";
+        let round_id = "round-supersede";
+
+        let source = manager
+            .create_session_with_auto_flag(
+                "feature_v1",
+                None,
+                None,
+                false,
+                Some(version_group_id),
+                Some(1),
+            )
+            .expect("create source");
+        let source_ids = vec![source.id.clone()];
+        upsert_consolidation_round(
+            &db,
+            &repo_path,
+            round_id,
+            version_group_id,
+            &source_ids,
+            "confirm",
+        )
+        .expect("upsert round");
+        let candidate = create_round_session(
+            &manager,
+            "feature-consolidation-late",
+            version_group_id,
+            &source_ids,
+            round_id,
+            "candidate",
+            "confirm",
+        );
+
+        let db_manager =
+            lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
+        ensure_stub_report_for_candidate(&db_manager, &candidate, "cancelled").expect("stub");
+
+        update_session_consolidation_report(
+            &db,
+            &repo_path,
+            &candidate.name,
+            "## Agent analysis arrived late",
+            Some(source.id.as_str()),
+            None,
+            "agent",
+        )
+        .expect("agent overrides stub");
+
+        let reloaded = db
+            .get_session_by_name(&repo_path, &candidate.name)
+            .expect("load candidate");
+        assert_eq!(
+            reloaded.consolidation_report.as_deref(),
+            Some("## Agent analysis arrived late")
+        );
+        assert_eq!(
+            reloaded.consolidation_report_source.as_deref(),
+            Some("agent")
+        );
     }
 
     #[tokio::test]
@@ -5741,8 +5940,15 @@ async fn delete_session(
     name: &str,
     app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
-    let manager = match get_core_write().await {
-        Ok(core) => core.session_manager(),
+    let (manager, db, round_id) = match get_core_write().await {
+        Ok(core) => {
+            let round_id = core
+                .session_manager()
+                .get_session(name)
+                .ok()
+                .and_then(|session| session.consolidation_round_id);
+            (core.session_manager(), core.db.clone(), round_id)
+        }
         Err(e) => {
             error!("Failed to get para core: {e}");
             return Ok(error_response(
@@ -5755,6 +5961,11 @@ async fn delete_session(
     match manager.fast_cancel_session(name).await {
         Ok(()) => {
             info!("Deleted session via API: {name}");
+
+            if let Some(round_id) = round_id {
+                let _ =
+                    maybe_auto_start_consolidation_judge(&app, &db, &manager, &round_id).await;
+            }
 
             #[derive(serde::Serialize, Clone)]
             struct SessionRemovedPayload {
@@ -5928,6 +6139,51 @@ fn confirmation_reason(
     }
 
     format!("Confirmed consolidation winner {}", winner.name)
+}
+
+/// If the given round still has no judge and all candidates have a consolidation
+/// report on file, start the judge session. Returns `true` if a judge was started.
+///
+/// Callers should invoke this after any event that can make the "all candidates
+/// reported" predicate flip to true — e.g. a candidate session exiting after
+/// `ensure_stub_report_for_candidate` filed a stub on its behalf.
+pub(crate) async fn maybe_auto_start_consolidation_judge(
+    app: &tauri::AppHandle,
+    db: &Database,
+    manager: &SessionManager,
+    round_id: &str,
+) -> bool {
+    let round = match get_consolidation_round(db, manager.repo_path(), round_id) {
+        Ok(round) => round,
+        Err(e) => {
+            log::warn!("Auto-judge check: cannot load round '{round_id}': {e}");
+            return false;
+        }
+    };
+    if round.status == "promoted" {
+        return false;
+    }
+
+    let round_sessions = match list_round_sessions(manager, round_id) {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("Auto-judge check: cannot list round sessions for '{round_id}': {e}");
+            return false;
+        }
+    };
+    let candidates = candidate_sessions_for_round(&round_sessions);
+    let judges = judge_sessions_for_round(&round_sessions);
+    if !judges.is_empty() || !all_candidates_reported(&candidates) {
+        return false;
+    }
+
+    match create_and_start_judge_session(app, manager, &round).await {
+        Ok(_) => true,
+        Err(e) => {
+            log::warn!("Auto-judge check: failed to start judge for round '{round_id}': {e}");
+            false
+        }
+    }
 }
 
 async fn create_and_start_judge_session(
@@ -6298,6 +6554,7 @@ async fn update_consolidation_report(
         trimmed_report,
         payload.base_session_id.as_deref(),
         payload.recommended_session_id.as_deref(),
+        "agent",
     ) {
         return Ok(json_error_response(
             StatusCode::INTERNAL_SERVER_ERROR,

@@ -188,6 +188,7 @@ mod tests {
             consolidation_round_id: None,
             consolidation_role: None,
             consolidation_report: None,
+            consolidation_report_source: None,
             consolidation_base_session_id: None,
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,

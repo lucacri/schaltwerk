@@ -114,6 +114,7 @@ pub struct Session {
     pub consolidation_round_id: Option<String>,
     pub consolidation_role: Option<String>,
     pub consolidation_report: Option<String>,
+    pub consolidation_report_source: Option<String>,
     pub consolidation_base_session_id: Option<String>,
     pub consolidation_recommended_session_id: Option<String>,
     pub consolidation_confirmation_mode: Option<String>,
@@ -383,6 +384,8 @@ pub struct SessionInfo {
     pub consolidation_role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consolidation_report: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consolidation_report_source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consolidation_base_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

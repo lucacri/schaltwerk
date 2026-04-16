@@ -476,6 +476,7 @@ mod service_unified_tests {
             consolidation_round_id: None,
             consolidation_role: None,
             consolidation_report: None,
+            consolidation_report_source: None,
             consolidation_base_session_id: None,
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,
@@ -2748,6 +2749,7 @@ impl SessionManager {
             consolidation_round_id: params.consolidation_round_id.map(str::to_string),
             consolidation_role: params.consolidation_role.map(str::to_string),
             consolidation_report: None,
+            consolidation_report_source: None,
             consolidation_base_session_id: None,
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: params
@@ -2812,6 +2814,14 @@ impl SessionManager {
             return Ok(());
         }
 
+        if let Err(e) = crate::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
+            &self.db_manager,
+            &session,
+            "cancelled",
+        ) {
+            log::warn!("Cancel {name}: stub report write failed: {e}");
+        }
+
         let coordinator = CancellationCoordinator::new(&self.repo_path, &self.db_manager);
         let config = CancellationConfig {
             force: false,
@@ -2830,6 +2840,14 @@ impl SessionManager {
         };
 
         let session = self.db_manager.get_session_by_name(name)?;
+
+        if let Err(e) = crate::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
+            &self.db_manager,
+            &session,
+            "cancelled",
+        ) {
+            log::warn!("Fast cancel {name}: stub report write failed: {e}");
+        }
 
         let coordinator = CancellationCoordinator::new(&self.repo_path, &self.db_manager);
         let config = CancellationConfig {
@@ -3119,6 +3137,7 @@ impl SessionManager {
                 consolidation_round_id: None,
                 consolidation_role: None,
                 consolidation_report: None,
+                consolidation_report_source: None,
                 consolidation_base_session_id: None,
                 consolidation_recommended_session_id: None,
                 consolidation_confirmation_mode: None,
@@ -3187,6 +3206,7 @@ impl SessionManager {
                     consolidation_round_id: session.consolidation_round_id.clone(),
                     consolidation_role: session.consolidation_role.clone(),
                     consolidation_report: session.consolidation_report.clone(),
+                    consolidation_report_source: None,
                     consolidation_base_session_id: session.consolidation_base_session_id.clone(),
                     consolidation_recommended_session_id: session
                         .consolidation_recommended_session_id
@@ -3295,6 +3315,7 @@ impl SessionManager {
                 consolidation_round_id: session.consolidation_round_id.clone(),
                 consolidation_role: session.consolidation_role.clone(),
                 consolidation_report: session.consolidation_report.clone(),
+                consolidation_report_source: None,
                 consolidation_base_session_id: session.consolidation_base_session_id.clone(),
                 consolidation_recommended_session_id: session
                     .consolidation_recommended_session_id
@@ -4287,6 +4308,7 @@ impl SessionManager {
             consolidation_round_id: None,
             consolidation_role: None,
             consolidation_report: None,
+            consolidation_report_source: None,
             consolidation_base_session_id: None,
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,

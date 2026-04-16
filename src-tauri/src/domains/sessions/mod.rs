@@ -1,6 +1,7 @@
 pub mod activity;
 pub mod autonomy;
 pub mod cache;
+pub mod consolidation_stub;
 pub mod db_sessions;
 pub mod entity;
 pub mod lifecycle;

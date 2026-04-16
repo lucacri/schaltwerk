@@ -122,6 +122,7 @@ struct SessionSummaryRow {
     consolidation_round_id: Option<String>,
     consolidation_role: Option<String>,
     consolidation_report: Option<String>,
+    consolidation_report_source: Option<String>,
     consolidation_base_session_id: Option<String>,
     consolidation_recommended_session_id: Option<String>,
     consolidation_confirmation_mode: Option<String>,
@@ -188,6 +189,7 @@ impl Database {
                     consolidation_round_id: summary.consolidation_round_id,
                     consolidation_role: summary.consolidation_role,
                     consolidation_report: summary.consolidation_report,
+                    consolidation_report_source: summary.consolidation_report_source,
                     consolidation_base_session_id: summary.consolidation_base_session_id,
                     consolidation_recommended_session_id: summary
                         .consolidation_recommended_session_id,
@@ -246,8 +248,8 @@ impl SessionMethods for Database {
                 branch, parent_branch, original_parent_branch, worktree_path,
                 status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                 original_agent_type, pending_name_generation, was_auto_generated,
-                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40)",
+                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41)",
             params![
                 session.id,
                 session.name,
@@ -286,6 +288,7 @@ impl SessionMethods for Database {
                 session.consolidation_round_id,
                 session.consolidation_role,
                 session.consolidation_report,
+                session.consolidation_report_source,
                 session.consolidation_base_session_id,
                 session.consolidation_recommended_session_id,
                 session.consolidation_confirmation_mode,
@@ -306,7 +309,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
              FROM sessions
              WHERE repository_path = ?1 AND name = ?2"
         )?;
@@ -358,12 +361,13 @@ impl SessionMethods for Database {
                 consolidation_round_id: row.get(31).ok(),
                 consolidation_role: row.get(32).ok(),
                 consolidation_report: row.get(33).ok(),
-                consolidation_base_session_id: row.get(34).ok(),
-                consolidation_recommended_session_id: row.get(35).ok(),
-                consolidation_confirmation_mode: row.get(36).ok(),
-                promotion_reason: row.get(37).ok(),
-                ci_autofix_enabled: row.get(38).unwrap_or(false),
-                merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(39)?),
+                consolidation_report_source: row.get(34).ok(),
+                consolidation_base_session_id: row.get(35).ok(),
+                consolidation_recommended_session_id: row.get(36).ok(),
+                consolidation_confirmation_mode: row.get(37).ok(),
+                promotion_reason: row.get(38).ok(),
+                ci_autofix_enabled: row.get(39).unwrap_or(false),
+                merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(40)?),
             })
         })?;
 
@@ -378,7 +382,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
              FROM sessions
              WHERE id = ?1"
         )?;
@@ -430,12 +434,13 @@ impl SessionMethods for Database {
                 consolidation_round_id: row.get(31).ok(),
                 consolidation_role: row.get(32).ok(),
                 consolidation_report: row.get(33).ok(),
-                consolidation_base_session_id: row.get(34).ok(),
-                consolidation_recommended_session_id: row.get(35).ok(),
-                consolidation_confirmation_mode: row.get(36).ok(),
-                promotion_reason: row.get(37).ok(),
-                ci_autofix_enabled: row.get(38).unwrap_or(false),
-                merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(39)?),
+                consolidation_report_source: row.get(34).ok(),
+                consolidation_base_session_id: row.get(35).ok(),
+                consolidation_recommended_session_id: row.get(36).ok(),
+                consolidation_confirmation_mode: row.get(37).ok(),
+                promotion_reason: row.get(38).ok(),
+                ci_autofix_enabled: row.get(39).unwrap_or(false),
+                merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(40)?),
             })
         })?;
 
@@ -477,7 +482,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
                  FROM sessions
                  WHERE repository_path = ?1
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -524,12 +529,13 @@ impl SessionMethods for Database {
                     consolidation_round_id: row.get(29).ok(),
                     consolidation_role: row.get(30).ok(),
                     consolidation_report: row.get(31).ok(),
-                    consolidation_base_session_id: row.get(32).ok(),
-                    consolidation_recommended_session_id: row.get(33).ok(),
-                    consolidation_confirmation_mode: row.get(34).ok(),
-                    promotion_reason: row.get(35).ok(),
-                    ci_autofix_enabled: row.get(36).unwrap_or(false),
-                    merged_at: row.get(37).ok(),
+                    consolidation_report_source: row.get(32).ok(),
+                    consolidation_base_session_id: row.get(33).ok(),
+                    consolidation_recommended_session_id: row.get(34).ok(),
+                    consolidation_confirmation_mode: row.get(35).ok(),
+                    promotion_reason: row.get(36).ok(),
+                    ci_autofix_enabled: row.get(37).unwrap_or(false),
+                    merged_at: row.get(38).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -559,7 +565,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
                  FROM sessions
                  WHERE status = 'active'
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -606,12 +612,13 @@ impl SessionMethods for Database {
                     consolidation_round_id: row.get(29).ok(),
                     consolidation_role: row.get(30).ok(),
                     consolidation_report: row.get(31).ok(),
-                    consolidation_base_session_id: row.get(32).ok(),
-                    consolidation_recommended_session_id: row.get(33).ok(),
-                    consolidation_confirmation_mode: row.get(34).ok(),
-                    promotion_reason: row.get(35).ok(),
-                    ci_autofix_enabled: row.get(36).unwrap_or(false),
-                    merged_at: row.get(37).ok(),
+                    consolidation_report_source: row.get(32).ok(),
+                    consolidation_base_session_id: row.get(33).ok(),
+                    consolidation_recommended_session_id: row.get(34).ok(),
+                    consolidation_confirmation_mode: row.get(35).ok(),
+                    promotion_reason: row.get(36).ok(),
+                    ci_autofix_enabled: row.get(37).unwrap_or(false),
+                    merged_at: row.get(38).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -738,7 +745,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at
                  FROM sessions
                  WHERE repository_path = ?1 AND session_state = ?2
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -789,12 +796,13 @@ impl SessionMethods for Database {
                         consolidation_round_id: row.get(29).ok(),
                         consolidation_role: row.get(30).ok(),
                         consolidation_report: row.get(31).ok(),
-                        consolidation_base_session_id: row.get(32).ok(),
-                        consolidation_recommended_session_id: row.get(33).ok(),
-                        consolidation_confirmation_mode: row.get(34).ok(),
-                        promotion_reason: row.get(35).ok(),
-                        ci_autofix_enabled: row.get(36).unwrap_or(false),
-                        merged_at: row.get(37).ok(),
+                        consolidation_report_source: row.get(32).ok(),
+                        consolidation_base_session_id: row.get(33).ok(),
+                        consolidation_recommended_session_id: row.get(34).ok(),
+                        consolidation_confirmation_mode: row.get(35).ok(),
+                        promotion_reason: row.get(36).ok(),
+                        ci_autofix_enabled: row.get(37).unwrap_or(false),
+                        merged_at: row.get(38).ok(),
                     })
                 },
             )?;
@@ -1101,6 +1109,7 @@ mod tests {
             consolidation_round_id: None,
             consolidation_role: None,
             consolidation_report: None,
+            consolidation_report_source: None,
             consolidation_base_session_id: None,
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,
@@ -1167,6 +1176,7 @@ mod tests {
             consolidation_round_id: None,
             consolidation_role: None,
             consolidation_report: None,
+            consolidation_report_source: None,
             consolidation_base_session_id: None,
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,
@@ -1229,6 +1239,7 @@ mod tests {
             consolidation_round_id: None,
             consolidation_role: None,
             consolidation_report: None,
+            consolidation_report_source: None,
             consolidation_base_session_id: None,
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,
@@ -1371,6 +1382,7 @@ mod tests {
             consolidation_round_id: None,
             consolidation_role: None,
             consolidation_report: None,
+            consolidation_report_source: None,
             consolidation_base_session_id: None,
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,
@@ -1442,6 +1454,7 @@ mod tests {
             consolidation_round_id: None,
             consolidation_role: None,
             consolidation_report: None,
+            consolidation_report_source: None,
             consolidation_base_session_id: None,
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,
@@ -1529,6 +1542,7 @@ mod tests {
             consolidation_round_id: None,
             consolidation_role: None,
             consolidation_report: None,
+            consolidation_report_source: None,
             consolidation_base_session_id: None,
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,
@@ -1604,6 +1618,7 @@ mod tests {
             consolidation_round_id: Some("round-1".to_string()),
             consolidation_role: Some("candidate".to_string()),
             consolidation_report: Some("## Decision\nKeep v1 base and port v2 tests.".to_string()),
+            consolidation_report_source: None,
             consolidation_base_session_id: Some("feature_v1".to_string()),
             consolidation_recommended_session_id: Some("feature-merge-1".to_string()),
             consolidation_confirmation_mode: Some("confirm".to_string()),

@@ -1889,6 +1889,7 @@ export const initializeSessionsEventsActionAtom = atom(
                 consolidation_round_id?: string | null
                 consolidation_role?: 'candidate' | 'judge' | null
                 consolidation_report?: string | null
+                consolidation_report_source?: 'agent' | 'auto_stub' | null
                 consolidation_base_session_id?: string | null
                 consolidation_recommended_session_id?: string | null
                 consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null
@@ -1935,6 +1936,7 @@ export const initializeSessionsEventsActionAtom = atom(
                     consolidation_round_id: event.consolidation_round_id ?? undefined,
                     consolidation_role: event.consolidation_role ?? undefined,
                     consolidation_report: event.consolidation_report ?? undefined,
+                    consolidation_report_source: event.consolidation_report_source ?? undefined,
                     consolidation_base_session_id: event.consolidation_base_session_id ?? undefined,
                     consolidation_recommended_session_id: event.consolidation_recommended_session_id ?? undefined,
                     consolidation_confirmation_mode: event.consolidation_confirmation_mode ?? undefined,

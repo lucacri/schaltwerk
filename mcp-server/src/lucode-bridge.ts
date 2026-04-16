@@ -34,6 +34,7 @@ export interface Session {
   consolidation_round_id?: string | null
   consolidation_role?: 'candidate' | 'judge' | null
   consolidation_report?: string | null
+  consolidation_report_source?: 'agent' | 'auto_stub' | null
   consolidation_base_session_id?: string | null
   consolidation_recommended_session_id?: string | null
   consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null
@@ -597,6 +598,7 @@ export class LucodeBridge {
             consolidation_round_id?: string | null;
             consolidation_role?: 'candidate' | 'judge' | null;
             consolidation_report?: string | null;
+            consolidation_report_source?: 'agent' | 'auto_stub' | null;
             consolidation_base_session_id?: string | null;
             consolidation_recommended_session_id?: string | null;
             consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null;
@@ -631,6 +633,7 @@ export class LucodeBridge {
         consolidation_round_id: es.info.consolidation_round_id ?? undefined,
         consolidation_role: es.info.consolidation_role ?? undefined,
         consolidation_report: es.info.consolidation_report ?? undefined,
+        consolidation_report_source: es.info.consolidation_report_source ?? undefined,
         consolidation_base_session_id: es.info.consolidation_base_session_id ?? undefined,
         consolidation_recommended_session_id: es.info.consolidation_recommended_session_id ?? undefined,
         consolidation_confirmation_mode: es.info.consolidation_confirmation_mode ?? undefined,

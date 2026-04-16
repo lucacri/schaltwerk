@@ -31,6 +31,7 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             consolidation_round_id TEXT DEFAULT NULL,
             consolidation_role TEXT DEFAULT NULL,
             consolidation_report TEXT DEFAULT NULL,
+            consolidation_report_source TEXT DEFAULT NULL,
             consolidation_base_session_id TEXT DEFAULT NULL,
             consolidation_recommended_session_id TEXT DEFAULT NULL,
             consolidation_confirmation_mode TEXT DEFAULT NULL,
@@ -381,6 +382,10 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
     );
     let _ = conn.execute(
         "ALTER TABLE sessions ADD COLUMN consolidation_report TEXT DEFAULT NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN consolidation_report_source TEXT DEFAULT NULL",
         [],
     );
     let _ = conn.execute(

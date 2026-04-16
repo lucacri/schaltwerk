@@ -1,7 +1,7 @@
 use crate::mcp_api::{
     ConfirmConsolidationWinnerResponse, TriggerConsolidationJudgeResponse,
-    confirm_consolidation_winner_inner, trigger_consolidation_judge_inner,
-    upsert_consolidation_round,
+    confirm_consolidation_winner_inner, maybe_auto_start_consolidation_judge,
+    trigger_consolidation_judge_inner, upsert_consolidation_round,
 };
 use crate::{
     PROJECT_MANAGER, SETTINGS_MANAGER, commands::session_lookup_cache::global_session_lookup_cache,
@@ -236,6 +236,8 @@ struct SessionAddedPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     consolidation_report: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    consolidation_report_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     consolidation_base_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     consolidation_recommended_session_id: Option<String>,
@@ -263,6 +265,7 @@ fn build_session_added_payload(
         consolidation_round_id: session.consolidation_round_id.clone(),
         consolidation_role: session.consolidation_role.clone(),
         consolidation_report: session.consolidation_report.clone(),
+        consolidation_report_source: session.consolidation_report_source.clone(),
         consolidation_base_session_id: session.consolidation_base_session_id.clone(),
         consolidation_recommended_session_id: session.consolidation_recommended_session_id.clone(),
         consolidation_confirmation_mode: session.consolidation_confirmation_mode.clone(),
@@ -2334,6 +2337,30 @@ pub async fn schaltwerk_core_cancel_session(
             Err(e) => Err(anyhow::anyhow!(e)),
         };
 
+        let consolidation_round_id = session_info
+            .as_ref()
+            .ok()
+            .and_then(|info| info.session.consolidation_round_id.clone());
+
+        if let Ok(ref info) = session_info {
+            // File an auto_stub report if the session is a candidate exiting without
+            // one. Runs against the still-intact worktree so the stub can include a
+            // branch diff snapshot.
+            if let Ok(core) = get_core_write().await {
+                let db_manager = lucode::domains::sessions::SessionDbManager::new(
+                    core.db.clone(),
+                    core.repo_path.clone(),
+                );
+                if let Err(e) = lucode::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
+                    &db_manager,
+                    &info.session,
+                    "cancelled",
+                ) {
+                    log::warn!("Cancel {name_for_bg}: stub report write failed: {e}");
+                }
+            }
+        }
+
         let cancel_result = match session_info {
             Ok(info) => {
                 // Perform slow filesystem operations WITHOUT holding the core write lock
@@ -2361,6 +2388,20 @@ pub async fn schaltwerk_core_cancel_session(
             }
             Err(e) => Err(e),
         };
+
+        if cancel_result.is_ok()
+            && let Some(round_id) = consolidation_round_id
+            && let Ok(core) = get_core_write().await
+        {
+            let manager = core.session_manager();
+            let _ = maybe_auto_start_consolidation_judge(
+                &app_for_refresh,
+                &core.db,
+                &manager,
+                &round_id,
+            )
+            .await;
+        }
 
         match cancel_result {
             Ok(()) => {
@@ -4441,6 +4482,7 @@ mod tests {
                 consolidation_round_id: Some("round-1".to_string()),
                 consolidation_role: Some("candidate".to_string()),
                 consolidation_report: None,
+                consolidation_report_source: None,
                 consolidation_base_session_id: Some("feature_v1".to_string()),
                 consolidation_recommended_session_id: None,
                 consolidation_confirmation_mode: Some("confirm".to_string()),

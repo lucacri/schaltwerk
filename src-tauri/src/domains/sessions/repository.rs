@@ -662,18 +662,21 @@ impl SessionDbManager {
         report: &str,
         base_session_id: Option<&str>,
         recommended_session_id: Option<&str>,
+        source: &str,
     ) -> Result<()> {
         let conn = self.db.get_conn()?;
         conn.execute(
             "UPDATE sessions
              SET consolidation_report = ?1,
-                 consolidation_base_session_id = COALESCE(?2, consolidation_base_session_id),
-                 consolidation_recommended_session_id = COALESCE(?3, consolidation_recommended_session_id),
-                 updated_at = ?4,
-                 last_activity = ?4
-             WHERE repository_path = ?5 AND name = ?6",
+                 consolidation_report_source = ?2,
+                 consolidation_base_session_id = COALESCE(?3, consolidation_base_session_id),
+                 consolidation_recommended_session_id = COALESCE(?4, consolidation_recommended_session_id),
+                 updated_at = ?5,
+                 last_activity = ?5
+             WHERE repository_path = ?6 AND name = ?7",
             params![
                 report,
+                source,
                 base_session_id,
                 recommended_session_id,
                 Utc::now().timestamp(),

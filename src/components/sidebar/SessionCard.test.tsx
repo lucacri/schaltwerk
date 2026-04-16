@@ -717,4 +717,52 @@ describe('SessionCard promoted badge', () => {
 
     expect(screen.getByText('## Decision Keep v1 base and port v2 tests.')).toBeInTheDocument()
   })
+
+  it('shows Auto-filed badge for stub-sourced consolidation reports', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              is_consolidation: true,
+              consolidation_report: '## Auto-filed stub report (session exited without filing)',
+              consolidation_report_source: 'auto_stub',
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('consolidation-auto-stub-badge')).toBeInTheDocument()
+  })
+
+  it('hides Auto-filed badge when the report was filed by an agent', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              is_consolidation: true,
+              consolidation_report: '## Real analysis',
+              consolidation_report_source: 'agent',
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.queryByTestId('consolidation-auto-stub-badge')).toBeNull()
+  })
 })

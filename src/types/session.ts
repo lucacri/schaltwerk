@@ -138,6 +138,7 @@ export interface SessionInfo {
     consolidation_round_id?: string | null
     consolidation_role?: 'candidate' | 'judge' | null
     consolidation_report?: string | null
+    consolidation_report_source?: 'agent' | 'auto_stub' | null
     consolidation_base_session_id?: string | null
     consolidation_recommended_session_id?: string | null
     consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null
@@ -210,6 +211,7 @@ export interface RawSession {
     consolidation_round_id?: string | null
     consolidation_role?: 'candidate' | 'judge' | null
     consolidation_report?: string | null
+    consolidation_report_source?: 'agent' | 'auto_stub' | null
     consolidation_base_session_id?: string | null
     consolidation_recommended_session_id?: string | null
     consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null

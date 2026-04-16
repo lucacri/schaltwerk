@@ -2,6 +2,18 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Consolidation: auto-file stub report when a candidate exits without reporting
+
+A consolidation round used to stall forever if a candidate session was cancelled (or converted to a spec) before its agent called `lucode_consolidation_report`: `all_candidates_reported` would never return true, so neither the auto-judge nor the candidate-verdict banner could unblock the round. Lucode now auto-fills a stub report on the exiting candidate's behalf so the round can progress.
+
+- New module `src-tauri/src/domains/sessions/consolidation_stub.rs` hosts `ensure_stub_report_for_candidate`. It writes a Markdown report body — containing `git diff --stat` and `git log --oneline` against the candidate's parent branch — via `update_session_consolidation_report` with a new `source = "auto_stub"` column value and the candidate's own id as the `consolidation_base_session_id` (so the existing `all_candidates_reported` invariant is satisfied). The helper no-ops when the session is not a candidate, already has a report, or the round is promoted.
+- `SessionManager::cancel_session` / `fast_cancel_session` plus the `schaltwerk_core_cancel_session` Tauri command invoke the helper before the worktree is torn down, so every cancel path (UI button, MCP `lucode_cancel`, post-promotion sibling cleanup, convert-to-spec) produces the same outcome. The post-promotion path short-circuits because the round is already `"promoted"`.
+- After a cancel completes the command (and the MCP `delete_session` handler) re-checks the round and calls a new `mcp_api::maybe_auto_start_consolidation_judge` helper that mirrors the existing post-report auto-judge logic — so an exiting candidate being the last one to "report" immediately kicks off the judge if no judge is running yet.
+- Schema migration adds `sessions.consolidation_report_source` (`NULL` / `"agent"` / `"auto_stub"`) and `update_session_consolidation_report` takes a `source: &str` argument. Agent writes via `lucode_consolidation_report` always pass `"agent"`, so an agent report arriving after a stub overwrites both body and source naturally (no supersede branch).
+- `build_judge_prompt` labels each candidate's `report_source` and annotates auto-filed stubs, so the judge can weight candidates that exited without analyzing.
+- `SessionCard` renders a subtle "Auto-filed" badge in the consolidation lane when `consolidation_report_source === 'auto_stub'`, with a tooltip explaining why. The event payload, Jotai atoms, TS types, and MCP bridge all pass the new field through.
+- Covered by unit tests in `consolidation_stub.rs` (write, idempotency, role / round-status short-circuits, agent-supersede) plus two integration tests in `mcp_api.rs` (`stub_report_unblocks_all_candidates_reported`, `agent_report_supersedes_auto_stub_source`) and two UI tests in `SessionCard.test.tsx` asserting the badge is shown only when the report is a stub.
+
 ## Tmux agent terminal reattach stability
 
 Agent terminals backed by tmux now reattach without replaying hidden output that arrived while the pane was detached. Same-size resize requests are also forwarded to tmux so selecting a long-running session triggers the expected viewport redraw instead of staying blank until a manual resize.
