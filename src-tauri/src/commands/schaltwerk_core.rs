@@ -1093,6 +1093,138 @@ pub async fn schaltwerk_core_generate_commit_message(
         .map_err(|e| format!("Commit message generation failed: {e}"))
 }
 
+#[tauri::command]
+pub async fn forge_generate_writeback(
+    session_name: String,
+    project_path: Option<String>,
+) -> Result<Option<String>, String> {
+    let (db_clone, repo_path, session) = {
+        let core = get_core_read_for_project_path(project_path.as_deref())
+            .await
+            .map_err(|e| format!("Cannot load core: {e}"))?;
+        let manager = core.session_manager();
+        let session = manager
+            .get_session(&session_name)
+            .map_err(|e| format!("Session not found: {e}"))?;
+        (core.db.clone(), core.repo_path.clone(), session)
+    };
+
+    let worktree_path = session.worktree_path.clone();
+    let parent_branch = session.parent_branch.clone();
+    let fallback_agent_type = session.original_agent_type.clone().unwrap_or_else(|| {
+        db_clone
+            .get_agent_type()
+            .unwrap_or_else(|_| "claude".to_string())
+    });
+
+    let commit_subjects = tokio::task::spawn_blocking({
+        let wt = worktree_path.clone();
+        let parent = parent_branch.clone();
+        move || -> Vec<String> {
+            let repo = match git2::Repository::open(&wt) {
+                Ok(r) => r,
+                Err(_) => return vec![],
+            };
+            let head_oid = match repo.head().and_then(|r| r.peel_to_commit().map(|c| c.id())) {
+                Ok(oid) => oid,
+                Err(_) => return vec![],
+            };
+            let parent_oid = match repo
+                .revparse_single(&parent)
+                .and_then(|o| o.peel_to_commit().map(|c| c.id()))
+            {
+                Ok(oid) => oid,
+                Err(_) => return vec![],
+            };
+            let merge_base = match repo.merge_base(head_oid, parent_oid) {
+                Ok(oid) => oid,
+                Err(_) => return vec![],
+            };
+            let mut revwalk = match repo.revwalk() {
+                Ok(rw) => rw,
+                Err(_) => return vec![],
+            };
+            let _ = revwalk.push(head_oid);
+            let _ = revwalk.hide(merge_base);
+            revwalk
+                .filter_map(|oid| oid.ok())
+                .filter_map(|oid| repo.find_commit(oid).ok())
+                .take(50)
+                .filter_map(|c| c.summary().map(|s| s.to_string()))
+                .collect()
+        }
+    })
+    .await
+    .map_err(|e| format!("Failed to read commit log: {e}"))?;
+
+    let changed_files_summary = tokio::task::spawn_blocking({
+        let wt = worktree_path.clone();
+        let parent = parent_branch.clone();
+        move || -> String {
+            let repo = match git2::Repository::open(&wt) {
+                Ok(r) => r,
+                Err(_) => return String::new(),
+            };
+            let head = match repo.head().and_then(|r| r.peel_to_tree()) {
+                Ok(t) => t,
+                Err(_) => return String::new(),
+            };
+            let parent_tree = match repo
+                .revparse_single(&parent)
+                .and_then(|o| o.peel_to_tree())
+            {
+                Ok(t) => t,
+                Err(_) => return String::new(),
+            };
+            let diff = match repo.diff_tree_to_tree(Some(&parent_tree), Some(&head), None) {
+                Ok(d) => d,
+                Err(_) => return String::new(),
+            };
+            let stats = match diff.stats() {
+                Ok(s) => s,
+                Err(_) => return String::new(),
+            };
+            format!(
+                "{} files changed, {} insertions(+), {} deletions(-)",
+                stats.files_changed(),
+                stats.insertions(),
+                stats.deletions()
+            )
+        }
+    })
+    .await
+    .map_err(|e| format!("Failed to read diff stats: {e}"))?;
+
+    let (agent_type_str, mut env_vars, cli_args, binary_path, _, _, _) =
+        resolve_generation_agent_and_args(&fallback_agent_type).await;
+
+    if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
+        env_vars.extend(project_env_vars);
+    }
+
+    let cli_args_opt = if cli_args.is_empty() {
+        None
+    } else {
+        Some(cli_args)
+    };
+
+    let writeback_prompt = "Summarize the changes in this session in a short markdown comment suitable for posting to the linked issue or pull request. Focus on what changed and why. Plain prose, no signatures, no code blocks unless essential. Keep it under 200 words.";
+
+    let args = lucode::domains::agents::commit_message::CommitMessageArgs {
+        agent_type: &agent_type_str,
+        commit_subjects: &commit_subjects,
+        changed_files_summary: &changed_files_summary,
+        cli_args: cli_args_opt.as_deref(),
+        env_vars: &env_vars,
+        binary_path: binary_path.as_deref(),
+        custom_commit_prompt: Some(writeback_prompt),
+    };
+
+    lucode::domains::agents::commit_message::generate_commit_message(args)
+        .await
+        .map_err(|e| format!("Writeback generation failed: {e}"))
+}
+
 async fn session_manager_read(project_path: Option<&str>) -> Result<SessionManager, String> {
     Ok(get_core_read_for_project_path(project_path)
         .await?
@@ -4129,6 +4261,8 @@ mod tests {
                 consolidation_recommended_session_id: None,
                 consolidation_confirmation_mode: Some("confirm".to_string()),
                 promotion_reason: None,
+                ci_autofix_enabled: false,
+                merged_at: None,
             },
             None,
         );
@@ -4237,6 +4371,142 @@ pub async fn schaltwerk_core_discard_file_in_orchestrator(
         None,
     )
     .map_err(|e| SchaltError::git("discard_file_in_orchestrator", e))
+}
+
+#[tauri::command]
+pub async fn session_set_autofix(
+    session_name: String,
+    enabled: bool,
+    project_path: Option<String>,
+) -> Result<(), String> {
+    let core = get_core_read_for_project_path(project_path.as_deref())
+        .await
+        .map_err(|e| format!("Cannot load core: {e}"))?;
+    let conn = core
+        .db
+        .get_conn()
+        .map_err(|e| format!("Failed to get connection: {e}"))?;
+    conn.execute(
+        "UPDATE sessions SET ci_autofix_enabled = ?1 WHERE name = ?2 AND repository_path = ?3",
+        rusqlite::params![enabled, session_name, core.repo_path.to_string_lossy().as_ref()],
+    )
+    .map_err(|e| format!("Failed to update autofix: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn session_get_autofix(
+    session_name: String,
+    project_path: Option<String>,
+) -> Result<bool, String> {
+    let core = get_core_read_for_project_path(project_path.as_deref())
+        .await
+        .map_err(|e| format!("Cannot load core: {e}"))?;
+    let manager = core.session_manager();
+    let session = manager
+        .get_session(&session_name)
+        .map_err(|e| format!("Session not found: {e}"))?;
+    Ok(session.ci_autofix_enabled)
+}
+
+#[tauri::command]
+pub async fn session_try_autofix(
+    app: tauri::AppHandle,
+    session_name: String,
+    ci_failed: bool,
+    commit_sha: String,
+    failing_jobs: Vec<String>,
+    project_path: Option<String>,
+) -> Result<bool, String> {
+    if !ci_failed {
+        return Ok(false);
+    }
+
+    let core = get_core_read_for_project_path(project_path.as_deref())
+        .await
+        .map_err(|e| format!("Cannot load core: {e}"))?;
+    let manager = core.session_manager();
+    let session = manager
+        .get_session(&session_name)
+        .map_err(|e| format!("Session not found: {e}"))?;
+
+    if !session.ci_autofix_enabled {
+        return Ok(false);
+    }
+
+    if session.session_state != lucode::domains::sessions::SessionState::Running {
+        return Ok(false);
+    }
+
+    let conn = core
+        .db
+        .get_conn()
+        .map_err(|e| format!("Failed to get connection: {e}"))?;
+
+    let already_handled: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM autofix_attempts WHERE session_name = ?1 AND commit_sha = ?2 AND repository_path = ?3",
+            rusqlite::params![session_name, commit_sha, core.repo_path.to_string_lossy().as_ref()],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if already_handled {
+        log::debug!(
+            "[autofix] Already handled failure for session={session_name} sha={commit_sha}"
+        );
+        return Ok(false);
+    }
+
+    conn.execute(
+        "INSERT OR IGNORE INTO autofix_attempts (session_name, commit_sha, repository_path, attempted_at) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![
+            session_name,
+            commit_sha,
+            core.repo_path.to_string_lossy().as_ref(),
+            chrono::Utc::now().timestamp()
+        ],
+    )
+    .map_err(|e| format!("Failed to record autofix attempt: {e}"))?;
+
+    let job_names = if failing_jobs.is_empty() {
+        "unknown".to_string()
+    } else {
+        failing_jobs.join(", ")
+    };
+    let failure_suffix = format!(
+        "\n\n---\nCI failed on commit {commit_sha}. Failing jobs: {job_names}. Please inspect and fix."
+    );
+
+    let prompt_override = session
+        .initial_prompt
+        .as_deref()
+        .unwrap_or("")
+        .to_string()
+        + &failure_suffix;
+
+    let params = StartAgentParams {
+        session_name: session_name.clone(),
+        force_restart: true,
+        cols: None,
+        rows: None,
+        terminal_id: None,
+        agent_type: session.original_agent_type.clone(),
+        prompt: Some(prompt_override),
+        skip_prompt: Some(false),
+    };
+
+    log::info!(
+        "[autofix] Restarting agent for session={session_name} due to CI failure on {commit_sha}"
+    );
+
+    match schaltwerk_core_start_session_agent_with_restart(app, params).await {
+        Ok(_) => Ok(true),
+        Err(e) => {
+            log::error!("[autofix] Failed to restart agent for {session_name}: {e}");
+            Err(format!("Autofix restart failed: {e}"))
+        }
+    }
 }
 
 #[cfg(test)]

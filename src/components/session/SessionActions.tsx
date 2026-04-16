@@ -64,6 +64,9 @@ interface SessionActionsProps {
   epic?: Epic | null;
   onEpicChange?: (epicId: string | null) => void;
   epicDisabled?: boolean;
+  issueNumber?: number;
+  issueUrl?: string;
+  onPostToForge?: (sessionId: string) => void;
 }
 
 export function SessionActions({
@@ -95,6 +98,9 @@ export function SessionActions({
   epic,
   onEpicChange,
   epicDisabled = false,
+  issueNumber,
+  issueUrl: _issueUrl,
+  onPostToForge,
 }: SessionActionsProps) {
   const { t } = useTranslation()
   const github = useGithubIntegrationContext()
@@ -270,6 +276,14 @@ export function SessionActions({
             )
           )}
           {forgeButton}
+          {onPostToForge && (prNumber || issueNumber) && (
+            <IconButton
+              icon={<VscComment />}
+              onClick={() => onPostToForge(sessionId)}
+              ariaLabel="Post to forge"
+              tooltip="Post comment to linked issue/PR"
+            />
+          )}
           {showPromoteIcon && onPromoteVersion && (
             <div
               onMouseEnter={onPromoteVersionHover}

@@ -20,6 +20,7 @@ import { resolveSwitchSessionShortcut } from './sessionShortcut'
 import { useSessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { useSessionActivity } from '../../store/hooks/useSessionActivity'
 import { getSidebarSessionStatus } from './sessionStatus'
+import { SessionAutoFixToggle } from '../session/SessionAutoFixToggle'
 
 interface SessionCardProps {
   session: {
@@ -175,7 +176,7 @@ export const SessionCard = memo<SessionCardProps>(
       onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec,
       onReset, onSwitchModel,
       onCreatePullRequest, onCreateGitlabMr,
-      onMerge, onQuickMerge, onRename, onLinkPr,
+      onMerge, onQuickMerge, onRename, onLinkPr, onPostToForge,
     } = useSessionCardActions()
 
     const { t } = useTranslation();
@@ -777,7 +778,16 @@ export const SessionCard = memo<SessionCardProps>(
             epic={s.epic}
             onEpicChange={handleEpicChange}
             epicDisabled={isBusy}
+            issueNumber={s.issue_number}
+            issueUrl={s.issue_url}
+            onPostToForge={onPostToForge}
           />
+          {s.pr_number && (
+            <SessionAutoFixToggle
+              sessionName={s.session_id}
+              hasPr={Boolean(s.pr_number)}
+            />
+          )}
         </div>
         )}
       </div>

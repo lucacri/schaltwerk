@@ -15,6 +15,7 @@ export interface SessionCardActions {
   onQuickMerge: (sessionId: string) => void
   onRename: (sessionId: string, newName: string) => Promise<void>
   onLinkPr: (sessionId: string, prNumber: number, prUrl: string) => void
+  onPostToForge: (sessionId: string) => void
 }
 
 const SessionCardActionsContext = createContext<SessionCardActions | null>(null)
@@ -49,6 +50,7 @@ export function SessionCardActionsProvider({ actions, children }: ProviderProps)
     onQuickMerge: (...args) => ref.current.onQuickMerge(...args),
     onRename: (...args) => ref.current.onRename(...args),
     onLinkPr: (...args) => ref.current.onLinkPr(...args),
+    onPostToForge: (...args) => ref.current.onPostToForge(...args),
   }), [])
 
   return (

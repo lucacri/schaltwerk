@@ -480,6 +480,8 @@ mod service_unified_tests {
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,
             promotion_reason: None,
+            ci_autofix_enabled: false,
+            merged_at: None,
         }
     }
 
@@ -2752,6 +2754,8 @@ impl SessionManager {
                 .consolidation_confirmation_mode
                 .map(str::to_string),
             promotion_reason: None,
+            ci_autofix_enabled: false,
+            merged_at: None,
         };
 
         let finalizer = SessionFinalizer::new(&self.db_manager, &self.cache_manager);
@@ -4287,6 +4291,8 @@ impl SessionManager {
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,
             promotion_reason: None,
+            ci_autofix_enabled: false,
+            merged_at: None,
         }
     }
 

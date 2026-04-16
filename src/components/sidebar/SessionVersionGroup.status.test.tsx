@@ -115,6 +115,7 @@ const mockActions: SessionCardActions = {
   onQuickMerge: vi.fn(),
   onRename: vi.fn().mockResolvedValue(undefined),
   onLinkPr: vi.fn(),
+  onPostToForge: vi.fn(),
 }
 
 describe('SessionVersionGroup status summary', () => {

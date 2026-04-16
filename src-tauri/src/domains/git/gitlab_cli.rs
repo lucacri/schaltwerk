@@ -1009,6 +1009,50 @@ impl<R: CommandRunner> GitlabCli<R> {
         Ok(())
     }
 
+    pub fn comment_on_gitlab_issue(
+        &self,
+        project_path: &Path,
+        issue_id: &str,
+        gitlab_project: &str,
+        message: &str,
+        hostname: Option<&str>,
+    ) -> Result<(), GitlabCliError> {
+        debug!(
+            "[GitlabCli] Commenting on issue: project={}, id={}",
+            project_path.display(),
+            issue_id
+        );
+
+        let args_vec = vec![
+            "issue".to_string(),
+            "note".to_string(),
+            issue_id.to_string(),
+            "-m".to_string(),
+            message.to_string(),
+            "-R".to_string(),
+            gitlab_project.to_string(),
+        ];
+
+        let mut env_vec: Vec<(&str, &str)> =
+            vec![("GLAB_NO_PROMPT", "1"), ("NO_COLOR", "1")];
+        if let Some(host) = hostname {
+            env_vec.push(("GITLAB_HOST", host));
+        }
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|s| s.as_str()).collect();
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, Some(project_path), &env_vec)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        info!("[GitlabCli] Comment added to issue {issue_id}");
+        Ok(())
+    }
+
     pub fn create_session_mr(
         &self,
         opts: CreateSessionMrOptions<'_>,
@@ -1849,6 +1893,23 @@ impl<R: CommandRunner> ForgeProvider for GitlabCli<R> {
         self.comment_on_mr(
             repo_path,
             iid,
+            &source.project_identifier,
+            message,
+            source.hostname.as_deref(),
+        )
+        .map_err(ForgeError::from)
+    }
+
+    async fn comment_on_issue(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        message: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<(), ForgeError> {
+        self.comment_on_gitlab_issue(
+            repo_path,
+            id,
             &source.project_identifier,
             message,
             source.hostname.as_deref(),

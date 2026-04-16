@@ -82,6 +82,10 @@ pub use schaltwerk_core::{
     schaltwerk_core_update_git_stats, schaltwerk_core_update_session_state,
     schaltwerk_core_update_spec_content,
     schaltwerk_core_update_epic,
+    forge_generate_writeback,
+    session_set_autofix,
+    session_get_autofix,
+    session_try_autofix,
 };
 pub use preview::*;
 pub use settings::*;

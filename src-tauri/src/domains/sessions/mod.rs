@@ -7,12 +7,14 @@ pub mod lifecycle;
 pub mod process_cleanup;
 pub mod repository;
 pub mod service;
+pub mod stage;
 pub mod utils;
 
 #[cfg(test)]
 pub mod sorting;
 
 pub use entity::{EnrichedSession, SessionState};
+pub use stage::{Stage, StageInputs, derive_stage};
 pub use repository::SessionDbManager;
 pub use service::{
     AgentLaunchParams, GitEnrichmentTask, SessionCancellationInfo, SessionManager,

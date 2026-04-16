@@ -5,7 +5,7 @@ import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
 import { getPasteSubmissionOptions } from '../../common/terminalPaste'
 import clsx from 'clsx'
 import { invoke } from '@tauri-apps/api/core'
-import { useAtomValue, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useTranslation } from '../../common/i18n/useTranslation'
 import { inlineSidebarDefaultPreferenceAtom } from '../../store/atoms/diffPreferences'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
@@ -63,6 +63,11 @@ import { getEpicAccentScheme } from '../../utils/epicColors'
 import { projectForgeAtom } from '../../store/atoms/forge'
 import { SessionCardActionsProvider, type SessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { getSessionLifecycleState } from '../../utils/sessionState'
+import { sidebarViewModeAtom } from '../../store/atoms/sidebarViewMode'
+import { KanbanView } from './KanbanView'
+import { KanbanSessionRow } from './KanbanSessionRow'
+import { ForgeWritebackModal } from '../forge/ForgeWritebackModal'
+import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
 
 // Removed legacy terminal-stuck idle handling; we rely on last-edited timestamps only
 
@@ -230,6 +235,9 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const { isAnyModalOpen } = useModal()
     const github = useGithubIntegrationContext()
     const forge = useAtomValue(projectForgeAtom)
+    const [sidebarViewMode, setSidebarViewMode] = useAtom(sidebarViewModeAtom)
+    const forgeIntegration = useForgeIntegrationContext()
+    const [forgeWritebackSessionId, setForgeWritebackSessionId] = useState<string | null>(null)
     const { pushToast } = useToast()
     const { 
         sessions,
@@ -1619,6 +1627,9 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         onQuickMerge: (sessionId) => { void handleMergeShortcut(sessionId) },
         onRename: handleRenameSession,
         onLinkPr: (sessionId, prNumber, prUrl) => { void handleLinkPr(sessionId, prNumber, prUrl) },
+        onPostToForge: (sessionId) => {
+            setForgeWritebackSessionId(sessionId)
+        },
     }
 
     return (
@@ -1634,6 +1645,22 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             <div className={clsx('flex items-center shrink-0 h-9', isCollapsed ? 'justify-center px-0' : 'justify-between px-2 pt-2')}>
                 {!isCollapsed && (
                     <span className="text-xs font-medium text-text-tertiary uppercase tracking-wider ml-1">{t.sidebar.header}</span>
+                )}
+                {!isCollapsed && (
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            void setSidebarViewMode(sidebarViewMode === 'board' ? 'list' : 'board')
+                        }}
+                        data-testid="sidebar-view-mode-toggle"
+                        className="h-6 px-2 flex items-center justify-center rounded text-text-tertiary hover:text-text-primary hover:bg-bg-elevated transition-colors text-[11px] uppercase tracking-wider"
+                        title={sidebarViewMode === 'board' ? 'Switch to list view' : 'Switch to board view'}
+                        aria-label={sidebarViewMode === 'board' ? 'Switch to list view' : 'Switch to board view'}
+                        aria-pressed={sidebarViewMode === 'board'}
+                    >
+                        {sidebarViewMode === 'board' ? 'Board' : 'List'}
+                    </button>
                 )}
                 {onToggleSidebar && (
                     <div className="flex items-center gap-2">
@@ -1882,6 +1909,17 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                             isSessionRunning={isSessionRunning}
                             onSelect={(sessionOrIndex) => { void handleSelectSession(sessionOrIndex) }}
                             onExpandRequest={onExpandRequest}
+                        />
+                    ) : sidebarViewMode === 'board' ? (
+                        <KanbanView
+                            sessions={sessions}
+                            renderSession={(session) => (
+                                <KanbanSessionRow
+                                    session={session}
+                                    isSelected={selection.kind === 'session' && selection.payload === session.info.session_id}
+                                    onSelect={(s) => { void handleSelectSession(s.info.session_id) }}
+                                />
+                            )}
                         />
                     ) : (
                         <SessionCardActionsProvider actions={sessionCardActions}>
@@ -2187,6 +2225,22 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 initialAgentType={switchOrchestratorModal.initialAgentType}
                 targetSessionId={switchOrchestratorModal.targetSessionId}
             />
+            {forgeWritebackSessionId && (() => {
+                const writebackSession = sessions.find(s => s.info.session_id === forgeWritebackSessionId)
+                if (!writebackSession) return null
+                return (
+                    <ForgeWritebackModal
+                        sessionId={writebackSession.info.session_id}
+                        sessionName={writebackSession.info.session_id}
+                        prNumber={writebackSession.info.pr_number}
+                        prUrl={writebackSession.info.pr_url}
+                        issueNumber={writebackSession.info.issue_number}
+                        issueUrl={writebackSession.info.issue_url}
+                        forgeSource={forgeIntegration.sources[0] ?? null}
+                        onClose={() => setForgeWritebackSessionId(null)}
+                    />
+                )
+            })()}
         </div>
     )
 });

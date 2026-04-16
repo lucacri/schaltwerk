@@ -770,6 +770,8 @@ mod tests {
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: None,
             promotion_reason: None,
+            ci_autofix_enabled: false,
+            merged_at: None,
         }
     }
 

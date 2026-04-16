@@ -101,6 +101,7 @@ const noopSessionCardActions: SessionCardActions = {
   onQuickMerge: () => {},
   onRename: async () => {},
   onLinkPr: () => {},
+  onPostToForge: () => {},
 }
 
 function OverlayMenuPreview() {

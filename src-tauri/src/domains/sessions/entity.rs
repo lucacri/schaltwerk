@@ -118,6 +118,8 @@ pub struct Session {
     pub consolidation_recommended_session_id: Option<String>,
     pub consolidation_confirmation_mode: Option<String>,
     pub promotion_reason: Option<String>,
+    pub ci_autofix_enabled: bool,
+    pub merged_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

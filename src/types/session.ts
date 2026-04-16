@@ -143,6 +143,8 @@ export interface SessionInfo {
     consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null
     promotion_reason?: string | null
     promotionReason?: string | null
+    ci_autofix_enabled?: boolean
+    stage?: string | null
 }
 
 export interface DiffStats {
@@ -213,6 +215,8 @@ export interface RawSession {
     consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null
     promotion_reason?: string | null
     promotionReason?: string | null
+    ci_autofix_enabled?: boolean
+    stage?: string | null
 }
 
 export interface RawSpec {

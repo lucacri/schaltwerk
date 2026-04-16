@@ -2647,6 +2647,8 @@ mod tests {
             consolidation_recommended_session_id: None,
             consolidation_confirmation_mode: Some("confirm".to_string()),
             promotion_reason: None,
+            ci_autofix_enabled: false,
+            merged_at: None,
         };
         db.create_session(&session).expect("create session");
 

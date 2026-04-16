@@ -412,6 +412,14 @@ pub trait ForgeProvider: Send + Sync {
         message: &str,
         source: &ForgeSourceConfig,
     ) -> Result<(), ForgeError>;
+
+    async fn comment_on_issue(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        message: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<(), ForgeError>;
 }
 
 pub fn create_provider(forge_type: ForgeType) -> Result<Box<dyn ForgeProvider>, ForgeError> {

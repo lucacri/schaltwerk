@@ -132,7 +132,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
     onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec,
     onReset, onSwitchModel,
     onCreatePullRequest, onCreateGitlabMr,
-    onMerge, onQuickMerge, onLinkPr,
+    onMerge, onQuickMerge, onLinkPr, onPostToForge,
   } = useSessionCardActions()
   const { t } = useTranslation()
   const { setItemEpic } = useEpics()
@@ -537,6 +537,9 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                 epic={s.epic}
                 onEpicChange={handleEpicChange}
                 epicDisabled={isBusy}
+                issueNumber={s.issue_number}
+                issueUrl={s.issue_url}
+                onPostToForge={onPostToForge}
               />
             </div>
           )}

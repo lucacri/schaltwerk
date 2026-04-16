@@ -532,6 +532,39 @@ pub async fn forge_comment_on_pr(
 }
 
 #[tauri::command]
+pub async fn forge_comment_on_issue(
+    app: AppHandle,
+    project_path: String,
+    source: ForgeSourceConfig,
+    id: String,
+    message: String,
+) -> Result<(), String> {
+    let project = resolve_project(&project_path).await?;
+
+    let provider = create_provider(source.forge_type).map_err(format_forge_error)?;
+    provider
+        .ensure_installed()
+        .await
+        .map_err(format_forge_error)?;
+
+    let hostname_hint = source.hostname.as_deref();
+
+    match provider
+        .comment_on_issue(&project.path, &id, &message, &source)
+        .await
+    {
+        Ok(_) => {
+            clear_connection_issue(hostname_hint);
+            Ok(())
+        }
+        Err(err) => {
+            error!("Forge issue comment failed: {err}");
+            Err(handle_connection_failure(&app, err, hostname_hint, None))
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn forge_proxy_image(
     image_url: String,
     forge_type: String,

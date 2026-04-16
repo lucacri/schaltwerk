@@ -400,6 +400,27 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
         "ALTER TABLE sessions ADD COLUMN promotion_reason TEXT DEFAULT NULL",
         [],
     );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN ci_autofix_enabled BOOLEAN DEFAULT FALSE",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN merged_at INTEGER",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN stage TEXT",
+        [],
+    );
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS autofix_attempts (
+            session_name TEXT NOT NULL,
+            commit_sha TEXT NOT NULL,
+            repository_path TEXT NOT NULL,
+            attempted_at INTEGER NOT NULL,
+            PRIMARY KEY (session_name, commit_sha, repository_path)
+        )"
+    )?;
     Ok(())
 }
 

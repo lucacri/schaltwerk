@@ -741,6 +741,41 @@ impl<R: CommandRunner> GitHubCli<R> {
         })
     }
 
+    pub async fn comment_on_github_issue(
+        &self,
+        project_path: &Path,
+        id: &str,
+        message: &str,
+        repository: &str,
+    ) -> Result<(), GitHubCliError> {
+        ensure_git_remote_exists(project_path)?;
+
+        let env = [("GH_PROMPT_DISABLED", "1"), ("NO_COLOR", "1")];
+        let mut args_vec = vec![
+            "issue".to_string(),
+            "comment".to_string(),
+            id.to_string(),
+            "--body".to_string(),
+            message.to_string(),
+        ];
+        if !repository.is_empty() {
+            args_vec.push("--repo".to_string());
+            args_vec.push(repository.to_string());
+        }
+
+        let arg_refs: Vec<&str> = args_vec.iter().map(|entry| entry.as_str()).collect();
+        let output = self
+            .runner
+            .run(&self.program, &arg_refs, Some(project_path), &env)
+            .map_err(map_runner_error)?;
+
+        if !output.success() {
+            return Err(command_failure(&self.program, &args_vec, output));
+        }
+
+        Ok(())
+    }
+
     pub fn search_prs(
         &self,
         project_path: &Path,
@@ -2879,6 +2914,18 @@ impl<R: CommandRunner> ForgeProvider for GitHubCli<R> {
         Err(ForgeError::InvalidInput(
             "GitHub PR commenting via CLI is not supported yet.".into(),
         ))
+    }
+
+    async fn comment_on_issue(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        message: &str,
+        source: &ForgeSourceConfig,
+    ) -> Result<(), ForgeError> {
+        self.comment_on_github_issue(repo_path, id, message, &source.project_identifier)
+            .await
+            .map_err(ForgeError::from)
     }
 }
 

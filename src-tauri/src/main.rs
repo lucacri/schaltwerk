@@ -1436,6 +1436,8 @@ fn main() {
             forge_approve_pr,
             forge_merge_pr,
             forge_comment_on_pr,
+            forge_comment_on_issue,
+            forge_generate_writeback,
             forge_proxy_image,
             // GitLab commands (TODO: remove after frontend migration to forge_* commands)
             gitlab_get_status,
@@ -1575,6 +1577,9 @@ fn main() {
             schaltwerk_core_set_archive_max_entries,
             schaltwerk_core_list_project_files,
             schaltwerk_core_list_codex_models,
+            session_set_autofix,
+            session_get_autofix,
+            session_try_autofix,
             // Open apps commands
             get_default_open_app,
             set_default_open_app,
