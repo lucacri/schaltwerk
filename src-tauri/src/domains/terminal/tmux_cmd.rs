@@ -25,6 +25,23 @@ impl TmuxCliOutput {
     }
 }
 
+/// Classify a tmux stderr as meaning "no server/session to talk to" — the
+/// tmux socket file is absent, the server died, or the named session is
+/// missing. These are all states Lucode treats as "nothing to reattach to;
+/// go ahead and create".
+///
+/// Deliberately narrow: `Permission denied`, `Address already in use`, and
+/// every other kind of failure must bubble up as a real error. Keying on the
+/// OS `errno` strings (`no such file or directory`, `connection refused`) is
+/// stable across tmux versions because those come from `strerror(3)`.
+fn is_no_server_or_session(stderr_lower: &str) -> bool {
+    stderr_lower.contains("can't find session")
+        || stderr_lower.contains("no server running")
+        || stderr_lower.contains("session not found")
+        || stderr_lower.contains("no such file or directory")
+        || stderr_lower.contains("connection refused")
+}
+
 #[async_trait]
 pub trait TmuxCli: Send + Sync {
     /// Absolute path to the tmux binary used by this backend.
@@ -36,18 +53,15 @@ pub trait TmuxCli: Send + Sync {
     /// Run tmux with the given subcommand + args. Lucode global args are prepended.
     async fn run(&self, args: &[&str]) -> Result<TmuxCliOutput, String>;
 
-    /// `tmux has-session -t <name>` → Ok(true) on exit 0, Ok(false) on expected
-    /// "no such session" / "no server running", Err on unexpected failures.
+    /// `tmux has-session -t <name>` → Ok(true) on exit 0, Ok(false) when tmux
+    /// reports that there's nothing to talk to (missing socket, dead server,
+    /// or session not found), Err on any other failure.
     async fn has_session(&self, name: &str) -> Result<bool, String> {
         let out = self.run(&["has-session", "-t", name]).await?;
         if out.ok() {
             return Ok(true);
         }
-        let stderr = out.stderr.to_ascii_lowercase();
-        if stderr.contains("can't find session")
-            || stderr.contains("no server running")
-            || stderr.contains("session not found")
-        {
+        if is_no_server_or_session(&out.stderr.to_ascii_lowercase()) {
             return Ok(false);
         }
         Err(format!(
@@ -108,11 +122,7 @@ pub trait TmuxCli: Send + Sync {
         if out.ok() {
             return Ok(());
         }
-        let stderr = out.stderr.to_ascii_lowercase();
-        if stderr.contains("can't find session")
-            || stderr.contains("no server running")
-            || stderr.contains("session not found")
-        {
+        if is_no_server_or_session(&out.stderr.to_ascii_lowercase()) {
             return Ok(());
         }
         Err(format!(
@@ -133,8 +143,7 @@ pub trait TmuxCli: Send + Sync {
                 .filter(|s| !s.is_empty())
                 .collect());
         }
-        let stderr = out.stderr.to_ascii_lowercase();
-        if stderr.contains("no server running") {
+        if is_no_server_or_session(&out.stderr.to_ascii_lowercase()) {
             return Ok(Vec::new());
         }
         Err(format!(
@@ -148,8 +157,7 @@ pub trait TmuxCli: Send + Sync {
         if out.ok() {
             return Ok(());
         }
-        let stderr = out.stderr.to_ascii_lowercase();
-        if stderr.contains("no server running") {
+        if is_no_server_or_session(&out.stderr.to_ascii_lowercase()) {
             return Ok(());
         }
         Err(format!(
@@ -325,6 +333,73 @@ mod tests {
     async fn has_session_error_on_unexpected_stderr() {
         let cli = MockTmuxCli::new(|_| failure(2, "wild unexpected failure"));
         assert!(cli.has_session("foo").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn has_session_false_on_cold_socket_enoent() {
+        // Reproduces the first-run failure seen in 0.14.0 after the
+        // `lucode-v2-` socket rename: the per-project socket file doesn't
+        // exist yet, so tmux returns the OS errno string instead of
+        // "no server running".
+        let stderr =
+            "error connecting to /private/tmp/tmux-501/lucode-v2-20f49ececfb47119 \
+             (No such file or directory)";
+        let cli = MockTmuxCli::new(move |_| failure(1, stderr));
+        assert_eq!(
+            cli.has_session("session-foo~abcd1234-top").await.unwrap(),
+            false,
+            "cold-socket ENOENT must be treated as 'no session' so new-session can create it"
+        );
+    }
+
+    #[tokio::test]
+    async fn has_session_false_on_dead_server_socket_refused() {
+        // Socket file exists but the server died — connect() gets ECONNREFUSED.
+        // Same semantic as "no server running": nothing for us to reattach to.
+        let cli = MockTmuxCli::new(|_| {
+            failure(
+                1,
+                "error connecting to /private/tmp/tmux-501/lucode-v2-... (Connection refused)",
+            )
+        });
+        assert_eq!(cli.has_session("foo").await.unwrap(), false);
+    }
+
+    #[tokio::test]
+    async fn has_session_error_on_permission_denied() {
+        // Safety check: a genuine access error must still surface, not be
+        // silently swallowed as "no session".
+        let cli = MockTmuxCli::new(|_| {
+            failure(
+                1,
+                "error connecting to /private/tmp/tmux-501/lucode-v2-... (Permission denied)",
+            )
+        });
+        assert!(cli.has_session("foo").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn kill_session_tolerates_cold_socket_enoent() {
+        let cli = MockTmuxCli::new(|_| {
+            failure(
+                1,
+                "error connecting to /private/tmp/tmux-501/lucode-v2-... \
+                 (No such file or directory)",
+            )
+        });
+        assert!(cli.kill_session("foo").await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn list_sessions_returns_empty_on_cold_socket_enoent() {
+        let cli = MockTmuxCli::new(|_| {
+            failure(
+                1,
+                "error connecting to /private/tmp/tmux-501/lucode-v2-... \
+                 (No such file or directory)",
+            )
+        });
+        assert_eq!(cli.list_sessions().await.unwrap(), Vec::<String>::new());
     }
 
     #[tokio::test]
