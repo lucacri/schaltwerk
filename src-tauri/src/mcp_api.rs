@@ -3176,6 +3176,80 @@ mod tests {
         names
     }
 
+    #[test]
+    fn candidate_consolidation_report_records_initial_verdict() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let version_group_id = "group-candidate-verdict";
+        let round_id = "round-candidate-verdict";
+
+        let source = manager
+            .create_session_with_auto_flag(
+                "feature_v1",
+                None,
+                None,
+                false,
+                Some(version_group_id),
+                Some(1),
+            )
+            .expect("create source");
+        let source_ids = vec![source.id.clone()];
+        upsert_consolidation_round(
+            &db,
+            &repo_path,
+            round_id,
+            version_group_id,
+            &source_ids,
+            "confirm",
+        )
+        .expect("upsert round");
+        let candidate = create_round_session(
+            &manager,
+            "feature-consolidation-a",
+            version_group_id,
+            &source_ids,
+            round_id,
+            "candidate",
+            "confirm",
+        );
+
+        commit_in_worktree(
+            &candidate.worktree_path,
+            "merged.txt",
+            "candidate result",
+            "candidate consolidation result",
+        );
+        update_session_consolidation_report(
+            &db,
+            &repo_path,
+            &candidate.name,
+            "Use v1 as the base.",
+            Some(source.id.as_str()),
+            None,
+        )
+        .expect("set candidate report");
+
+        record_candidate_report_verdict(&db, &manager, round_id, &candidate)
+            .expect("record candidate verdict");
+
+        let round = get_consolidation_round(&db, &repo_path, round_id).expect("load round");
+        assert_eq!(round.status, "awaiting_confirmation");
+        assert_eq!(
+            round.recommended_session_id.as_deref(),
+            Some(candidate.id.as_str())
+        );
+        assert_eq!(
+            round.recommended_by_session_id.as_deref(),
+            Some(candidate.id.as_str())
+        );
+
+        let updated_candidate = db
+            .get_session_by_name(&repo_path, &candidate.name)
+            .expect("load candidate");
+        assert!(updated_candidate.ready_to_merge);
+    }
+
     #[tokio::test]
     async fn confirm_consolidation_winner_cleans_up_winning_candidate_and_judge() {
         let fixture = make_consolidation_round_fixture("confirm");
@@ -5786,6 +5860,46 @@ fn all_candidates_reported(candidate_sessions: &[Session]) -> bool {
         })
 }
 
+fn record_candidate_report_verdict(
+    db: &Database,
+    manager: &SessionManager,
+    round_id: &str,
+    candidate: &Session,
+) -> Result<(), (StatusCode, String)> {
+    let ready_to_merge = manager.mark_session_ready(&candidate.name).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!(
+                "Failed to update merge readiness for consolidation candidate '{}': {err}",
+                candidate.name
+            ),
+        )
+    })?;
+
+    update_consolidation_round_recommendation(
+        db,
+        round_id,
+        Some(&candidate.id),
+        Some(&candidate.id),
+        "awaiting_confirmation",
+    )
+    .map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to update consolidation recommendation: {err}"),
+        )
+    })?;
+
+    if !ready_to_merge {
+        warn!(
+            "Consolidation candidate '{}' filed a verdict but is not ready to merge",
+            candidate.name
+        );
+    }
+
+    Ok(())
+}
+
 fn confirmation_reason(
     round_sessions: &[Session],
     winner: &Session,
@@ -6200,15 +6314,6 @@ async fn update_consolidation_report(
             ));
         }
     };
-    let round_sessions = match list_round_sessions(&manager, round_id) {
-        Ok(sessions) => sessions,
-        Err(err) => {
-            return Ok(json_error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to list round sessions: {err}"),
-            ));
-        }
-    };
     let role = session
         .consolidation_role
         .clone()
@@ -6268,19 +6373,31 @@ async fn update_consolidation_report(
                 "Candidate reports must include base_session_id".to_string(),
             ));
         }
-        let candidate_sessions = candidate_sessions_for_round(&round_sessions);
-        let judge_sessions = judge_sessions_for_round(&round_sessions);
-        if round.status == "running"
-            && judge_sessions.is_empty()
-            && all_candidates_reported(&candidate_sessions)
+        if let Err((status, message)) =
+            record_candidate_report_verdict(&core.db, &manager, round_id, &session)
         {
-            if let Err(message) = create_and_start_judge_session(&app, &manager, &round).await {
+            return Ok(json_error_response(status, message));
+        }
+        request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
+        let updated_round_sessions = match list_round_sessions(&manager, round_id) {
+            Ok(sessions) => sessions,
+            Err(err) => {
                 return Ok(json_error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    message,
+                    format!("Failed to list updated round sessions: {err}"),
                 ));
             }
-            auto_judge_triggered = true;
+        };
+        let candidate_sessions = candidate_sessions_for_round(&updated_round_sessions);
+        let judge_sessions = judge_sessions_for_round(&updated_round_sessions);
+        if judge_sessions.is_empty() && all_candidates_reported(&candidate_sessions) {
+            if let Err(message) = create_and_start_judge_session(&app, &manager, &round).await {
+                error!(
+                    "Failed to auto-start optional consolidation judge for round '{round_id}': {message}"
+                );
+            } else {
+                auto_judge_triggered = true;
+            }
         }
     }
 

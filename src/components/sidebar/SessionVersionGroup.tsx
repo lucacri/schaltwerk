@@ -79,6 +79,12 @@ function getJudgeRecommendationLabel(
   return recommended.version_number ? `${agent} v${recommended.version_number}` : agent
 }
 
+function versionActivityTimestamp(version: SessionVersionGroupType['versions'][number]): number {
+  const info = version.session.info
+  return info.last_modified_ts
+    ?? (Date.parse(info.last_modified ?? info.created_at ?? '') || 0)
+}
+
 type ConsolidationActionId =
   | 'consolidate'
   | 'trigger-judge'
@@ -203,25 +209,31 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   const siblingInfos = group.versions.map(v => v.session.info)
   const hoveredSession = group.versions.find(v => v.session.info.session_id === hoveredSessionId)?.session.info
   const sortedJudgeSessions = [...judgeSessions]
-    .sort((a, b) => {
-      const aTs = a.session.info.last_modified_ts
-        ?? (Date.parse(a.session.info.last_modified ?? a.session.info.created_at ?? '') || 0)
-      const bTs = b.session.info.last_modified_ts
-        ?? (Date.parse(b.session.info.last_modified ?? b.session.info.created_at ?? '') || 0)
-      return bTs - aTs
-    })
+    .sort((a, b) => versionActivityTimestamp(b) - versionActivityTimestamp(a))
+  const sortedReportedCandidates = [...consolidationCandidates]
+    .sort((a, b) => versionActivityTimestamp(b) - versionActivityTimestamp(a))
   const activeJudge = sortedJudgeSessions[0]
   const latestJudge = sortedJudgeSessions
     .find(v => v.session.info.consolidation_recommended_session_id)
-  const focusJudge = latestJudge ?? activeJudge
+  const latestReportedCandidate = sortedReportedCandidates
+    .find(v => {
+      const report = v.session.info.consolidation_report?.trim()
+      const baseSessionId = v.session.info.consolidation_base_session_id?.trim()
+      return Boolean(report && baseSessionId)
+    })
+  const recommendationSource = latestJudge ?? latestReportedCandidate
+  const focusJudge = latestJudge ?? activeJudge ?? latestReportedCandidate
   const activeRoundId = focusJudge?.session.info.consolidation_round_id
     ?? consolidationCandidates[0]?.session.info.consolidation_round_id
   const selectedCandidate = selectedVersionInGroup?.session.info.is_consolidation
     && selectedVersionInGroup.session.info.consolidation_role !== 'judge'
       ? selectedVersionInGroup.session.info
       : null
-  const confirmWinnerSessionId = latestJudge
-    ? (selectedCandidate?.session_id ?? latestJudge.session.info.consolidation_recommended_session_id ?? null)
+  const confirmWinnerSessionId = recommendationSource
+    ? (selectedCandidate?.session_id
+      ?? recommendationSource.session.info.consolidation_recommended_session_id
+      ?? recommendationSource.session.info.session_id
+      ?? null)
     : null
 
   const hasMultipleVersions = group.versions.length >= 2
@@ -236,10 +248,13 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     ? Math.max(sourceVersions.findIndex(version => version.session.info.session_id === primaryVersion.session.info.session_id), 0)
     : 0
   const recommendationLabel = getJudgeRecommendationLabel(
-    latestJudge?.session.info.consolidation_recommended_session_id,
+    recommendationSource?.session.info.consolidation_recommended_session_id
+      ?? recommendationSource?.session.info.session_id,
     group.versions,
   )
-  const recommendedWinnerSessionId = latestJudge?.session.info.consolidation_recommended_session_id ?? null
+  const recommendedWinnerSessionId = recommendationSource?.session.info.consolidation_recommended_session_id
+    ?? recommendationSource?.session.info.session_id
+    ?? null
   const judgeCandidateSessionIds = new Set(focusJudge?.session.info.consolidation_sources ?? [])
   const isConsolidationFocusActive = Boolean(focusJudge)
   const maxTagLength = Math.max(

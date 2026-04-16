@@ -459,6 +459,53 @@ describe('SessionVersionGroup status summary', () => {
     expect(within(sourceList).getByText('feature-A-merge')).toHaveAttribute('data-hide-tree-connector', 'true')
   })
 
+  it('surfaces a reported consolidation candidate as the initial recommendation before a judge exists', () => {
+    const onConfirmConsolidationWinner = vi.fn()
+    const reportedCandidateGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
+        {
+          ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+              consolidation_round_id: 'round-123',
+              consolidation_report: 'Use v1 as the base and keep v2 tests.',
+              consolidation_base_session_id: 'feature-A_v1',
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={reportedCandidateGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onConfirmConsolidationWinner={onConfirmConsolidationWinner}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const lane = screen.getByTestId('version-group-consolidation-lane')
+    const banner = screen.getByTestId('version-group-judge-recommendation')
+    expect(banner).toHaveTextContent('Judge recommends claude v1')
+    expect(within(lane).getByText('feature-A-merge')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('confirm-consolidation-winner-banner-button'))
+
+    expect(onConfirmConsolidationWinner).toHaveBeenCalledWith('round-123', 'feature-A-merge')
+  })
+
   it('renders source versions without tree connectors in the parity source list', () => {
     const consolidatedGroup: SessionVersionGroupType = {
       ...baseGroup,

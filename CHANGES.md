@@ -2,6 +2,14 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Consolidation: surface candidate verdict immediately
+
+A consolidation candidate filing its report now acts as the round's initial recommendation, so the sidebar shows "Judge recommends …" and enables the confirm-winner banner the moment the agent finishes — no waiting for an optional judge session.
+
+- `update_consolidation_report` on the candidate branch now flips the candidate's `ready_to_merge` via `mark_session_ready` and calls `update_consolidation_round_recommendation` with the candidate id as both `recommended_session_id` and `recommended_by_session_id`, moving the round to `awaiting_confirmation`. The auto-judge kick-off still runs afterwards (when configured) but its failure is logged and does not tear down the verdict update.
+- `SessionVersionGroup` now derives the recommendation from the latest reported candidate (report + base_session_id present) when no judge verdict exists yet, so the banner, confirm button, dimming and round-id wiring all work before any judge session spins up. A judge verdict continues to take precedence as soon as one arrives.
+- Added the `candidate_consolidation_report_records_initial_verdict` Rust test and the `surfaces a reported consolidation candidate as the initial recommendation before a judge exists` UI test to lock the behavior in.
+
 ## macOS: activate WKWebView accessibility tree for external dictation tools
 
 Lucode now injects three `NSAccessibility` override methods onto NSApp's runtime class from the Tauri `.setup()` hook, teaching the app to advertise and accept the `AXManualAccessibility` and `AXEnhancedUserInterface` attributes. Without these overrides, the stock `tao` NSApplication returns `kAXErrorNotImplemented` (-25208) when any AX client tries to set those attributes, so WKWebView never populates its accessibility tree — and third-party dictation tools like Mac Whisper silently fail across every Lucode input surface (native `<input>`, CodeMirror, xterm, URL bar).
