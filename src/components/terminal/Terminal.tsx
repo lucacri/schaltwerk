@@ -824,15 +824,26 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             : calculateEffectiveColumns(proposed.cols);
 
         if (terminal.current.cols === desiredCols && terminal.current.rows === desiredRows) {
-            // Avoid no-op resizes. xterm.js can still perturb viewport scroll position when `resize()` is
-            // called with the current dimensions, which shows up as "scroll creeps up" when switching
-            // between terminals while scrolled away from bottom.
+            // Avoid no-op xterm resizes. xterm.js can still perturb viewport scroll position when
+            // `resize()` is called with the current dimensions, which shows up as "scroll creeps up"
+            // when switching between terminals while scrolled away from bottom.
             if (shouldForce) {
                 try {
                     xtermWrapperRef.current?.forceScrollbarRefresh();
                     xtermWrapperRef.current?.refresh();
                 } catch (error) {
                     logger.debug(`[Terminal ${terminalId}] No-op resize refresh failed`, error);
+                }
+                if (shouldImmediate) {
+                    // A forced+immediate fit signals an attach-time or visibility-restore redraw.
+                    // Even though xterm's own cols/rows already match, the PTY (and any tmux pane
+                    // behind it) must still see the resize so the next frame carries a fresh
+                    // viewport. Without this, session-switching a top terminal to a pane that
+                    // happens to share the previous container size leaves the content blank or
+                    // stale until the user manually resizes the OS window. force: true bypasses
+                    // the RAF throttle so the SIGWINCH lands synchronously with the attach.
+                    schedulePtyResize(terminalId, { cols: desiredCols, rows: desiredRows }, { force: true });
+                    lastEffectiveRef.current = { cols: desiredCols, rows: desiredRows };
                 }
             }
             return;

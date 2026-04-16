@@ -1066,6 +1066,102 @@ describe('Terminal', () => {
     }
   })
 
+  it('sends a PTY resize on attach-time forced fit even when xterm dimensions match (session top)', async () => {
+    renderTerminal({ terminalId: 'session-pty-resync-top', sessionName: 'pty-resync' })
+
+    await waitFor(() => {
+      expect(terminalHarness.acquireMock).toHaveBeenCalled()
+      expect(terminalHarness.instances.length).toBeGreaterThan(0)
+      expect(cleanupRegistryMock.addResizeObserver).toHaveBeenCalled()
+      expect(cleanupRegistryMock.addEventListener).toHaveBeenCalled()
+    })
+
+    const instance = terminalHarness.instances[0] as HarnessInstance
+    instance.raw.cols = 132
+    instance.raw.rows = 48
+    instance.fitAddon.proposeDimensions = vi.fn(() => ({ cols: instance.raw.cols, rows: instance.raw.rows }))
+
+    const roCalls = cleanupRegistryMock.addResizeObserver.mock.calls
+    const element = roCalls[roCalls.length - 1]?.[0] as HTMLDivElement | undefined
+    expect(element).toBeDefined()
+    Object.defineProperty(element!, 'clientWidth', { configurable: true, value: 800 })
+    Object.defineProperty(element!, 'clientHeight', { configurable: true, value: 600 })
+
+    const fontListenerCall = cleanupRegistryMock.addEventListener.mock.calls.find((call) => call[1] === 'font-size-changed')
+    const fontSizeHandler = fontListenerCall?.[2] as ((ev: Event) => void) | undefined
+    expect(fontSizeHandler).toBeTypeOf('function')
+
+    vi.useFakeTimers()
+    try {
+      vi.mocked(invoke).mockClear()
+
+      await act(async () => {
+        fontSizeHandler?.(new CustomEvent('font-size-changed', { detail: { terminalFontSize: 13, uiFontSize: 13 } }))
+        await vi.runAllTimersAsync()
+      })
+
+      const allCalls = vi.mocked(invoke).mock.calls
+      const resizeCalls = allCalls.filter(call => call[0] === TauriCommands.ResizeTerminal)
+      expect(resizeCalls.length).toBeGreaterThanOrEqual(1)
+      const latest = resizeCalls[resizeCalls.length - 1]
+      expect(latest[1]).toEqual({ id: 'session-pty-resync-top', cols: 132, rows: 48 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('sends a PTY resize on attach-time forced fit for spec clarification top terminal', async () => {
+    renderTerminal({
+      terminalId: 'spec-orchestrator-session-spec_pty_resync~deadbeef-top',
+      sessionName: 'spec-pty-resync',
+      specOrchestratorSessionName: 'spec-pty-resync',
+      agentType: 'claude',
+    })
+
+    await waitFor(() => {
+      expect(terminalHarness.acquireMock).toHaveBeenCalled()
+      expect(terminalHarness.instances.length).toBeGreaterThan(0)
+      expect(cleanupRegistryMock.addResizeObserver).toHaveBeenCalled()
+      expect(cleanupRegistryMock.addEventListener).toHaveBeenCalled()
+    })
+
+    const instance = terminalHarness.instances[0] as HarnessInstance
+    instance.raw.cols = 100
+    instance.raw.rows = 40
+    instance.fitAddon.proposeDimensions = vi.fn(() => ({ cols: instance.raw.cols, rows: instance.raw.rows }))
+
+    const roCalls = cleanupRegistryMock.addResizeObserver.mock.calls
+    const element = roCalls[roCalls.length - 1]?.[0] as HTMLDivElement | undefined
+    expect(element).toBeDefined()
+    Object.defineProperty(element!, 'clientWidth', { configurable: true, value: 800 })
+    Object.defineProperty(element!, 'clientHeight', { configurable: true, value: 600 })
+
+    const fontListenerCall = cleanupRegistryMock.addEventListener.mock.calls.find((call) => call[1] === 'font-size-changed')
+    const fontSizeHandler = fontListenerCall?.[2] as ((ev: Event) => void) | undefined
+    expect(fontSizeHandler).toBeTypeOf('function')
+
+    vi.useFakeTimers()
+    try {
+      vi.mocked(invoke).mockClear()
+
+      await act(async () => {
+        fontSizeHandler?.(new CustomEvent('font-size-changed', { detail: { terminalFontSize: 13, uiFontSize: 13 } }))
+        await vi.runAllTimersAsync()
+      })
+
+      const resizeCalls = vi.mocked(invoke).mock.calls.filter(call => call[0] === TauriCommands.ResizeTerminal)
+      expect(resizeCalls.length).toBeGreaterThanOrEqual(1)
+      const latest = resizeCalls[resizeCalls.length - 1]
+      expect(latest[1]).toEqual({
+        id: 'spec-orchestrator-session-spec_pty_resync~deadbeef-top',
+        cols: 100,
+        rows: 40,
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not render the loading overlay when the terminal is already hydrated', async () => {
     registryMocks.hasTerminalInstance.mockReturnValue(true)
     terminalHarness.setNextIsNew(false)

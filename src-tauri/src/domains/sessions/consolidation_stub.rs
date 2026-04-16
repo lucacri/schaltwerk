@@ -114,7 +114,7 @@ fn collect_branch_diff(session: &Session) -> String {
         return String::new();
     };
     let worktree = resolve_worktree_for_git(session);
-    run_git(&worktree, &["diff", "--stat", &range])
+    run_git(worktree, &["diff", "--stat", &range])
         .map(|out| truncate_bytes(&out, DIFF_BYTE_LIMIT))
         .unwrap_or_default()
 }
@@ -124,7 +124,7 @@ fn collect_branch_log(session: &Session) -> String {
         return String::new();
     };
     let worktree = resolve_worktree_for_git(session);
-    run_git(&worktree, &["log", "--oneline", &range])
+    run_git(worktree, &["log", "--oneline", &range])
         .map(|out| cap_lines(&out, LOG_LINE_LIMIT))
         .unwrap_or_default()
 }

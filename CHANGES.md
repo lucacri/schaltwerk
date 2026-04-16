@@ -2,14 +2,13 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
-## Sidebar: first-class "Clarified" status pill for specs
+## Terminal: send PTY resize on attach-time forced fit even when xterm dimensions match
 
-A spec whose `spec_stage` reached `clarified` used to keep showing "Clarifying" (or a stale "waiting/idle" badge) in the sidebar, and the inline text badge inside the name row duplicated the same information. The sidebar now renders a dedicated green "Clarified" pill and the stage becomes part of the shared status derivation, so every sidebar surface stays in sync.
+Extends the "Tmux agent terminal reattach stability" fix. The frontend's attach-time forced fit (`initial-fit`, `renderer-init`, `post-init`, `visibility`, `initial-raf`, `generic-resize-request`, `font-size-change`, `split-final`) short-circuits in `requestResize` when xterm's current cols/rows already equal the proposed dimensions, to avoid perturbing scroll position. Prior to this change, that short-circuit also skipped `schedulePtyResize`, so tmux never received a SIGWINCH on reattach — leaving the pane blank or showing stale content until the user manually resized the OS window. Now the same-size short-circuit still skips `xterm.resize()` (preserving scroll) but forwards the size to the PTY with `{ force: true }` so the SIGWINCH reaches tmux synchronously with the attach.
 
-- `sessionStatus.ts` extends `SidebarPrimaryStatus` with `clarified`, masks cached `waiting_for_input` / `idle` attention when the terminal is live (`isRunning === true`), and demotes a stale `attention_kind === 'idle'` on a clarified spec to the new clarified pill — so reopening a clarified spec no longer pins it in "idle" until attention is cleared.
-- `SessionCard`, `CompactVersionRow`, `SessionRailCard`, and `SessionVersionGroup` now all read from the centralized status derivation and render the green pill / group label when `primaryStatus === 'clarified'`. The legacy inline Draft/Clarified text badge on the session name row is removed — the pill is the single source of truth.
-- New translation key `session.clarified` in `en.json` and `zh.json`.
-- Covered by `sessionStatus.test.ts`, additions to `SessionCard.test.tsx`, `CompactVersionRow.test.tsx`, `SessionRailCard.test.tsx`, and a new `SessionVersionGroup.status.test.tsx` asserting the clarified/waiting/running/idle precedence for spec-state groups.
+- The fix is surgical: a single block added inside the existing equality-match branch of `requestResize` in `src/components/terminal/Terminal.tsx`. It is gated on `shouldForce && shouldImmediate`, which only happens on explicit forced+immediate fits, so the non-force ResizeObserver path (split-drag ticks) is untouched and does not spam SIGWINCH.
+- Affects both confirmed surfaces uniformly: the session top agent terminal (`session-*-top`) and the spec clarification top terminal (`spec-orchestrator-session-*~*-top`). Both pass through `isTopTerminalId`, both are tmux-backed per `is_agent_terminal` in `src-tauri/src/domains/terminal/lifecycle.rs`, and both mount through the same `<Terminal>` component.
+- Covered by two new regression tests in `src/components/terminal/Terminal.test.tsx` (`sends a PTY resize on attach-time forced fit even when xterm dimensions match (session top)` and `sends a PTY resize on attach-time forced fit for spec clarification top terminal`) that drive the frontend state machine directly via the captured `font-size-changed` handler (no real DOM timing) and assert `invoke(TauriCommands.ResizeTerminal, { id, cols, rows })` fires even when `proposeDimensions` returns the xterm's current dimensions.
 
 ## Consolidation: auto-file stub report when a candidate exits without reporting
 
