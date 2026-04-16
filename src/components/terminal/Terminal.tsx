@@ -12,10 +12,18 @@ import { Terminal as XTerm, type IDisposable } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
 import { invoke } from '@tauri-apps/api/core'
-import { startOrchestratorTop, startSessionTop, startSpecOrchestratorTop, AGENT_START_TIMEOUT_MESSAGE } from '../../common/agentSpawn'
+import { restartSessionTop, startOrchestratorTop, startSpecOrchestratorTop, AGENT_START_TIMEOUT_MESSAGE } from '../../common/agentSpawn'
 import { schedulePtyResize } from '../../common/ptyResizeScheduler'
 import { isTopTerminalId, sessionTerminalBase } from '../../common/terminalIdentity'
 import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
+import {
+    AGENT_STOPPED_STATE_CHANGED,
+    clearAgentStopped,
+    markAgentStopped,
+    readAgentStoppedState,
+    type AgentStoppedReason,
+    type AgentStoppedStateChangedDetail,
+} from '../../common/agentStoppedState'
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { useAtomValue, useSetAtom } from 'jotai'
 import { previewStateAtom, setPreviewUrlActionAtom } from '../../store/atoms/preview'
@@ -377,6 +385,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
     const hydratedRef = useRef<boolean>(existingInstance);
     const [agentLoading, setAgentLoading] = useState(false);
     const [agentStopped, setAgentStopped] = useState(false);
+    const [agentStoppedReason, setAgentStoppedReason] = useState<AgentStoppedReason>('stopped');
     const terminalEverStartedRef = useRef<boolean>(false);
     const [restartInFlight, setRestartInFlight] = useState(false);
     const hydratedOnceRef = useRef<boolean>(existingInstance);
@@ -568,11 +577,30 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         return false;
     }, []);
 
-    // Initialize agentStopped state from sessionStorage (only for agent top terminals)
     useEffect(() => {
         if (!isAgentTopTerminal) return;
-        const key = `schaltwerk:agent-stopped:${terminalId}`;
-        setAgentStopped(sessionStorage.getItem(key) === 'true');
+
+        const applyStoppedState = (stopped: boolean, reason: AgentStoppedReason) => {
+            setAgentStopped(stopped);
+            setAgentStoppedReason(stopped ? reason : 'stopped');
+            if (stopped) {
+                terminalEverStartedRef.current = true;
+            }
+        };
+
+        const handleStoppedStateChanged = (event: Event) => {
+            const detail = (event as CustomEvent<AgentStoppedStateChangedDetail>).detail;
+            if (detail?.terminalId !== terminalId) return;
+            applyStoppedState(detail.stopped, detail.reason);
+        };
+
+        window.addEventListener(AGENT_STOPPED_STATE_CHANGED, handleStoppedStateChanged);
+        const { stopped, reason } = readAgentStoppedState(terminalId);
+        applyStoppedState(stopped, reason);
+
+        return () => {
+            window.removeEventListener(AGENT_STOPPED_STATE_CHANGED, handleStoppedStateChanged);
+        };
     }, [isAgentTopTerminal, terminalId]);
 
     const applySizeUpdate = useCallback((cols: number, rows: number, reason: string, _force = false) => {
@@ -861,7 +889,8 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         if (!isAgentTopTerminal) return;
         setRestartInFlight(true);
         setAgentLoading(true);
-        sessionStorage.removeItem(`schaltwerk:agent-stopped:${terminalId}`);
+        setAgentStoppedReason('stopped');
+        clearAgentStopped(terminalId);
         clearTerminalStartedTracking([terminalId]);
         const isSpecOrchestratorTop = Boolean(specOrchestratorSessionName && terminalId.endsWith('-top'))
 
@@ -886,7 +915,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
              } else if (isCommander || (terminalId.includes('orchestrator') && terminalId.endsWith('-top'))) {
                  await startOrchestratorTop({ terminalId, measured });
              } else if (sessionName) {
-                 await startSessionTop({ sessionName, topId: terminalId, measured, agentType });
+                 await restartSessionTop({ sessionName, topId: terminalId, measured, agentType });
              }
              setAgentStopped(false);
          } catch (e) {
@@ -1011,8 +1040,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                     markTerminalStarted(id);
 
                     if (id === terminalId) {
-                        sessionStorage.removeItem(`schaltwerk:agent-stopped:${terminalId}`);
+                        clearAgentStopped(terminalId);
                         setAgentStopped(false);
+                        setAgentStoppedReason('stopped');
                         terminalEverStartedRef.current = true;
                         setRestartInFlight(false);
                     }
@@ -1036,6 +1066,38 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         };
     }, [terminalId]);
 
+    useEffect(() => {
+        if (!isAgentTopTerminal) return;
+        let unlisten: UnlistenFn | null = null;
+        void (async () => {
+            try {
+                unlisten = await listenEvent(SchaltEvent.AgentCrashed, (payload) => {
+                    if (payload?.terminal_id !== terminalId) return;
+
+                    terminalEverStartedRef.current = true;
+                    setAgentLoading(false);
+                    setRestartInFlight(false);
+                    setAgentStoppedReason('terminated');
+                    setAgentStopped(true);
+                    markAgentStopped(terminalId, 'terminated');
+                    clearTerminalStartedTracking([terminalId]);
+                    logger.info(`[Terminal ${terminalId}] Agent pane is terminated; showing restart overlay`);
+                });
+            } catch (e) {
+                logger.warn(`[Terminal ${terminalId}] Failed to attach AgentCrashed listener`, e);
+            }
+        })();
+        return () => {
+            if (unlisten) {
+                try {
+                    unlisten();
+                } catch (error) {
+                    logger.warn(`[Terminal ${terminalId}] Failed to remove AgentCrashed listener`, error);
+                }
+            }
+        };
+    }, [isAgentTopTerminal, terminalId]);
+
       // Listen for TerminalClosed events to detect when agent terminals are killed
       useEffect(() => {
           if (!isAgentTopTerminal) return;
@@ -1054,8 +1116,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                       if (terminalEverStartedRef.current && sigintTime && timeSinceSigint < RECENT_SIGINT_WINDOW_MS) {
                           // Respect the user's ^C: mark stopped and persist
                           setAgentLoading(false);
+                          setAgentStoppedReason('stopped');
                           setAgentStopped(true);
-                          sessionStorage.setItem(`schaltwerk:agent-stopped:${terminalId}`, 'true');
+                          markAgentStopped(terminalId, 'stopped');
                           // Allow future manual restarts
                           clearTerminalStartedTracking([terminalId]);
                           logger.info(`[Terminal ${terminalId}] Agent stopped by user (SIGINT detected ${timeSinceSigint}ms ago)`);
@@ -2001,8 +2064,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                 } else if (errorMessage.includes(AGENT_START_TIMEOUT_MESSAGE)) {
                     emitUiEvent(UiEvent.SpawnError, { error: errorMessage, terminalId });
                     terminalEverStartedRef.current = true;
+                    setAgentStoppedReason('stopped');
                     setAgentStopped(true);
-                    sessionStorage.setItem(`schaltwerk:agent-stopped:${terminalId}`, 'true');
+                    markAgentStopped(terminalId, 'stopped');
                     clearTerminalStartedTracking([terminalId]);
                 } else if (errorMessage.includes('not a git repository')) {
                     logger.error(`[Terminal ${terminalId}] Not a git repository:`, errorMessage);
@@ -2299,7 +2363,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
              {isAgentTopTerminal && agentStopped && hydrated && terminalEverStartedRef.current && (
                  <div className="absolute inset-0 flex items-center justify-center z-30">
                      <div className="flex items-center gap-2 bg-bg-elevated/90 border border-border-default rounded px-3 py-2 shadow-lg">
-                         <span className="text-sm text-text-secondary">Agent stopped</span>
+                         <span className="text-sm text-text-secondary">
+                             {agentStoppedReason === 'terminated' ? 'Session terminated' : 'Agent stopped'}
+                         </span>
                           <button
                               onClick={(e) => { e.stopPropagation(); void restartAgent(); }}
                               className="text-sm px-3 py-1 rounded text-text-inverse font-medium"

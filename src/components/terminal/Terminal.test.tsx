@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, waitFor, cleanup, act, fireEvent, type RenderOptions } from '@testing-library/react'
 import { Terminal, type TerminalProps } from './Terminal'
 import { listenEvent } from '../../common/eventSystem'
-import { startSessionTop, startSpecOrchestratorTop } from '../../common/agentSpawn'
+import { restartSessionTop, startSessionTop, startSpecOrchestratorTop } from '../../common/agentSpawn'
+import { markAgentStopped } from '../../common/agentStoppedState'
 import { writeTerminalBackend } from '../../terminal/transport/backend'
 import { TERMINAL_FILE_DRAG_TYPE } from '../../common/dragTypes'
 import { __resetTerminalTargetingForTest, getActiveAgentTerminalId, setActiveAgentTerminalId } from '../../common/terminalTargeting'
@@ -305,6 +306,7 @@ vi.mock('../../common/eventSystem', () => ({
     TerminalFocusRequested: 'TerminalFocusRequested',
     TerminalAgentStarted: 'TerminalAgentStarted',
     TerminalClosed: 'TerminalClosed',
+    AgentCrashed: 'AgentCrashed',
   },
 }))
 
@@ -322,6 +324,7 @@ vi.mock('../../common/terminalStartState', () => ({
 
 vi.mock('../../common/agentSpawn', () => ({
   startOrchestratorTop: vi.fn(async () => {}),
+  restartSessionTop: vi.fn(async () => {}),
   startSessionTop: vi.fn(async () => {}),
   startSpecOrchestratorTop: vi.fn(async () => {}),
   AGENT_START_TIMEOUT_MESSAGE: 'timeout',
@@ -399,6 +402,7 @@ beforeEach(() => {
   }))
   registryMocks.hasTerminalInstance.mockReturnValue(false)
   vi.mocked(startSessionTop).mockClear()
+  vi.mocked(restartSessionTop).mockClear()
   vi.mocked(startSpecOrchestratorTop).mockClear()
   __resetTerminalTargetingForTest()
 })
@@ -649,6 +653,93 @@ describe('Terminal', () => {
     await waitFor(() => {
       expect(getByText(/Agent stopped/i)).toBeVisible()
     })
+  })
+
+  it('shows terminated restart overlay when backend reports a reopened dead agent pane', async () => {
+    const handlers = new Map<string, Array<(payload: unknown) => void>>()
+    vi.mocked(listenEvent).mockImplementation(async (event, handler) => {
+      const key = String(event)
+      handlers.set(key, [...(handlers.get(key) ?? []), handler as (payload: unknown) => void])
+      return () => {}
+    })
+
+    const { getByText } = renderTerminal({
+      terminalId: 'session-dead-pane-top',
+      sessionName: 'dead-pane',
+      agentType: 'claude',
+    })
+
+    await waitFor(() => {
+      expect(terminalHarness.acquireMock).toHaveBeenCalled()
+    })
+
+    await act(async () => {
+      for (const handler of handlers.get('AgentCrashed') ?? []) {
+        handler({ terminal_id: 'session-dead-pane-top', session_name: 'dead-pane' })
+      }
+    })
+
+    await waitFor(() => {
+      expect(getByText(/Session terminated/i)).toBeVisible()
+    })
+  })
+
+  it('shows terminated restart overlay when dead-pane state is recorded before the crash listener observes it', async () => {
+    const { getByText } = renderTerminal({
+      terminalId: 'session-dead-state-top',
+      sessionName: 'dead-state',
+      agentType: 'claude',
+    })
+
+    await waitFor(() => {
+      expect(terminalHarness.acquireMock).toHaveBeenCalled()
+    })
+
+    act(() => {
+      markAgentStopped('session-dead-state-top', 'terminated')
+    })
+
+    await waitFor(() => {
+      expect(getByText(/Session terminated/i)).toBeVisible()
+    })
+  })
+
+  it('force restarts a session when clicking restart on a terminated overlay', async () => {
+    const handlers = new Map<string, Array<(payload: unknown) => void>>()
+    vi.mocked(listenEvent).mockImplementation(async (event, handler) => {
+      const key = String(event)
+      handlers.set(key, [...(handlers.get(key) ?? []), handler as (payload: unknown) => void])
+      return () => {}
+    })
+
+    const { getByRole } = renderTerminal({
+      terminalId: 'session-dead-restart-top',
+      sessionName: 'dead-restart',
+      agentType: 'codex',
+    })
+
+    await waitFor(() => {
+      expect(terminalHarness.acquireMock).toHaveBeenCalled()
+    })
+
+    vi.mocked(startSessionTop).mockClear()
+
+    await act(async () => {
+      for (const handler of handlers.get('AgentCrashed') ?? []) {
+        handler({ terminal_id: 'session-dead-restart-top', session_name: 'dead-restart' })
+      }
+    })
+
+    fireEvent.click(getByRole('button', { name: /restart/i }))
+
+    await waitFor(() => {
+      expect(restartSessionTop).toHaveBeenCalledWith(expect.objectContaining({
+        sessionName: 'dead-restart',
+        topId: 'session-dead-restart-top',
+        agentType: 'codex',
+      }))
+    })
+    expect(startSessionTop).not.toHaveBeenCalled()
   })
 
   it('reapplies configuration when reusing an existing terminal instance', async () => {

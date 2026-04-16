@@ -4,6 +4,7 @@ import {
   computeSpawnSize,
   RIGHT_EDGE_GUARD_COLUMNS,
   startSessionTop,
+  restartSessionTop,
   startOrchestratorTop,
   EXTENDED_AGENT_START_TIMEOUT_MS,
   AGENT_START_TIMEOUT_MESSAGE,
@@ -29,6 +30,17 @@ vi.mock('./uiEvents', async () => {
   }
 })
 
+vi.mock('./eventSystem', () => ({
+  SchaltEvent: {
+    AgentCrashed: 'schaltwerk:agent-crashed',
+  },
+  listenEvent: vi.fn(async () => () => {}),
+}))
+
+vi.mock('./agentStoppedState', () => ({
+  markAgentStopped: vi.fn(),
+}))
+
 vi.mock('./terminalStartState', () => ({
   isTerminalStartingOrStarted: vi.fn(() => false),
   markTerminalStarting: vi.fn(),
@@ -43,6 +55,8 @@ vi.mock('../utils/singleflight', () => ({
 import { invoke } from '@tauri-apps/api/core'
 import { bestBootstrapSize } from './terminalSizeCache'
 import { emitUiEvent, UiEvent } from './uiEvents'
+import { listenEvent, SchaltEvent } from './eventSystem'
+import { markAgentStopped } from './agentStoppedState'
 import { markTerminalStarting, clearTerminalStartState } from './terminalStartState'
 import { singleflight, hasInflight } from '../utils/singleflight'
 import { resetAgentLifecycleStateForTests } from './agentLifecycleTracker'
@@ -239,6 +253,84 @@ describe('agentSpawn', () => {
         sessionName: 'test-session',
         cols: 138, // 140 - 2
         rows: 50
+      })
+    })
+
+    it('force restarts a session top with terminal id and size', async () => {
+      await restartSessionTop({
+        sessionName: 'test-session',
+        topId: 'session-test-top',
+        measured: { cols: 140, rows: 50 },
+        agentType: 'codex',
+      })
+
+      expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreStartSessionAgentWithRestart, {
+        params: {
+          sessionName: 'test-session',
+          forceRestart: true,
+          terminalId: 'session-test-top',
+          agentType: 'codex',
+          cols: 138,
+          rows: 50,
+        }
+      })
+    })
+
+    it('times out force restart using the same agent start guard', async () => {
+      vi.useFakeTimers()
+      const pending = new Promise<never>(() => {})
+      vi.mocked(invoke).mockImplementation((cmd: string) => {
+        if (cmd === TauriCommands.SchaltwerkCoreGetSession) {
+          return Promise.resolve({ original_agent_type: null })
+        }
+        if (cmd === TauriCommands.SchaltwerkCoreStartSessionAgentWithRestart) {
+          return pending
+        }
+        return Promise.resolve(null)
+      })
+
+      try {
+        const startPromise = restartSessionTop({
+          sessionName: 'test-session',
+          topId: 'session-test-top'
+        })
+
+        const expectation = expect(startPromise).rejects.toThrow(AGENT_START_TIMEOUT_MESSAGE)
+
+        await vi.advanceTimersByTimeAsync(EXTENDED_AGENT_START_TIMEOUT_MS)
+
+        await expectation
+        expect(clearTerminalStartState).toHaveBeenCalledWith(['session-test-top'])
+        expect(getAgentStartTimeoutMetricForTests()).toBe(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('persists terminated state when backend reports a dead pane before terminal mount', async () => {
+      vi.mocked(listenEvent).mockImplementationOnce(async (event, handler) => {
+        expect(event).toBe(SchaltEvent.AgentCrashed)
+        void handler({
+          terminal_id: 'session-test-top',
+          session_name: 'test-session',
+        })
+        return () => {}
+      })
+
+      await startSessionTop({
+        sessionName: 'test-session',
+        topId: 'session-test-top'
+      })
+
+      expect(markAgentStopped).toHaveBeenCalledWith('session-test-top', 'terminated')
+      expect(clearTerminalStartState).toHaveBeenCalledWith(['session-test-top'])
+      const lifecycleCalls = vi.mocked(emitUiEvent).mock.calls.filter(
+        ([event]) => event === UiEvent.AgentLifecycle
+      )
+      expect(lifecycleCalls.at(-1)?.[1]).toMatchObject({
+        terminalId: 'session-test-top',
+        state: 'failed',
+        reason: 'Session terminated',
       })
     })
 

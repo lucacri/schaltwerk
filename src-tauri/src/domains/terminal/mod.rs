@@ -49,6 +49,9 @@ pub trait TerminalBackend: Send + Sync {
     async fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), String>;
     async fn close(&self, id: &str) -> Result<(), String>;
     async fn exists(&self, id: &str) -> Result<bool, String>;
+    async fn agent_pane_alive(&self, _id: &str) -> Result<bool, String> {
+        Ok(true)
+    }
     async fn snapshot(&self, id: &str, from_seq: Option<u64>) -> Result<TerminalSnapshot, String>;
     async fn queue_initial_command(
         &self,

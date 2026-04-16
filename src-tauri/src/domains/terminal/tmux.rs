@@ -241,6 +241,10 @@ impl TerminalBackend for TmuxAdapter {
         self.cli.has_session(id).await
     }
 
+    async fn agent_pane_alive(&self, id: &str) -> Result<bool, String> {
+        self.cli.session_has_live_pane(id).await
+    }
+
     async fn snapshot(&self, id: &str, from_seq: Option<u64>) -> Result<TerminalSnapshot, String> {
         let inner = self.inner.snapshot(id, from_seq).await?;
         Ok(TerminalSnapshot {
@@ -392,6 +396,33 @@ mod tests {
         assert_eq!(
             calls.last().unwrap(),
             &vec!["has-session".to_string(), "-t".into(), "t1".into()]
+        );
+    }
+
+    #[tokio::test]
+    async fn agent_pane_alive_delegates_to_cli_pane_liveness() {
+        use crate::domains::terminal::tmux_cmd::TmuxCliOutput;
+
+        let cli = MockTmuxCli::new(|args| match args.first().map(String::as_str) {
+            Some("list-panes") => TmuxCliOutput {
+                status: 0,
+                stdout: "0\n".into(),
+                stderr: String::new(),
+            },
+            _ => success(),
+        });
+        let adapter = TmuxAdapter::new(cli.clone());
+
+        assert!(adapter.agent_pane_alive("t1").await.unwrap());
+        assert_eq!(
+            cli.recorded_calls(),
+            vec![vec![
+                "list-panes".to_string(),
+                "-t".to_string(),
+                "t1".to_string(),
+                "-F".to_string(),
+                "#{pane_dead}".to_string(),
+            ]]
         );
     }
 

@@ -70,6 +70,27 @@ pub trait TmuxCli: Send + Sync {
         ))
     }
 
+    async fn session_has_live_pane(&self, name: &str) -> Result<bool, String> {
+        let out = self
+            .run(&["list-panes", "-t", name, "-F", "#{pane_dead}"])
+            .await?;
+        if out.ok() {
+            return Ok(out
+                .stdout
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .any(|line| line != "1"));
+        }
+        if is_no_server_or_session(&out.stderr.to_ascii_lowercase()) {
+            return Ok(false);
+        }
+        Err(format!(
+            "tmux list-panes failed (status {}): {}",
+            out.status, out.stderr
+        ))
+    }
+
     /// `tmux new-session -d -s <name> -x <cols> -y <rows> -c <cwd> [-e KEY=VAL ...] [-- command args...]`.
     async fn new_session_detached(
         &self,
@@ -345,8 +366,7 @@ mod tests {
         // `lucode-v2-` socket rename: the per-project socket file doesn't
         // exist yet, so tmux returns the OS errno string instead of
         // "no server running".
-        let stderr =
-            "error connecting to /private/tmp/tmux-501/lucode-v2-20f49ececfb47119 \
+        let stderr = "error connecting to /private/tmp/tmux-501/lucode-v2-20f49ececfb47119 \
              (No such file or directory)";
         let cli = MockTmuxCli::new(move |_| failure(1, stderr));
         assert_eq!(
@@ -380,6 +400,49 @@ mod tests {
             )
         });
         assert!(cli.has_session("foo").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn session_has_live_pane_true_when_pane_dead_is_zero() {
+        let cli = MockTmuxCli::new(|_| TmuxCliOutput {
+            status: 0,
+            stdout: "0\n".into(),
+            stderr: String::new(),
+        });
+
+        assert!(cli.session_has_live_pane("foo").await.unwrap());
+        assert_eq!(
+            cli.recorded_calls(),
+            vec![vec![
+                "list-panes".to_string(),
+                "-t".to_string(),
+                "foo".to_string(),
+                "-F".to_string(),
+                "#{pane_dead}".to_string(),
+            ]]
+        );
+    }
+
+    #[tokio::test]
+    async fn session_has_live_pane_false_when_all_panes_are_dead() {
+        let cli = MockTmuxCli::new(|_| TmuxCliOutput {
+            status: 0,
+            stdout: "1\n".into(),
+            stderr: String::new(),
+        });
+
+        assert!(!cli.session_has_live_pane("foo").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn session_has_live_pane_true_when_any_pane_is_live() {
+        let cli = MockTmuxCli::new(|_| TmuxCliOutput {
+            status: 0,
+            stdout: "1\n0\n".into(),
+            stderr: String::new(),
+        });
+
+        assert!(cli.session_has_live_pane("foo").await.unwrap());
     }
 
     #[tokio::test]

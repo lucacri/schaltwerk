@@ -177,6 +177,38 @@ fn emit_terminal_agent_started(
     }
 }
 
+fn emit_agent_crashed_for_dead_pane(
+    app: &tauri::AppHandle,
+    terminal_id: &str,
+    session_name: &str,
+    agent_type: &str,
+) {
+    #[derive(serde::Serialize, Clone)]
+    struct AgentCrashPayload<'a> {
+        terminal_id: &'a str,
+        agent_type: &'a str,
+        session_name: &'a str,
+        exit_code: Option<i32>,
+        buffer_size: usize,
+        last_seq: u64,
+    }
+
+    let payload = AgentCrashPayload {
+        terminal_id,
+        agent_type,
+        session_name,
+        exit_code: None,
+        buffer_size: 0,
+        last_seq: 0,
+    };
+
+    if let Err(err) = emit_event(app, SchaltEvent::AgentCrashed, &payload) {
+        log::warn!(
+            "Failed to emit agent-crashed event for reattached dead pane {terminal_id}: {err}"
+        );
+    }
+}
+
 #[derive(serde::Serialize, Clone)]
 struct SessionAddedPayload {
     session_name: String,
@@ -2531,6 +2563,7 @@ pub async fn schaltwerk_core_start_claude_with_restart(
             terminal_id_override: None,
             agent_type_override: None,
             skip_prompt: false,
+            prompt_override: None,
         },
     )
     .await
@@ -2544,6 +2577,67 @@ struct AgentStartParams {
     terminal_id_override: Option<String>,
     agent_type_override: Option<String>,
     skip_prompt: bool,
+    prompt_override: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AgentStartMode {
+    Fresh,
+    ForcedRestart,
+    Reattach,
+    DeadPaneSurfaceRestart,
+}
+
+impl AgentStartMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            AgentStartMode::Fresh => "fresh",
+            AgentStartMode::ForcedRestart => "forced_restart",
+            AgentStartMode::Reattach => "reattach",
+            AgentStartMode::DeadPaneSurfaceRestart => "dead_pane_surface_restart",
+        }
+    }
+}
+
+struct StartModeInputs {
+    force_restart: bool,
+    tmux_session_alive: bool,
+    agent_pane_alive: Option<bool>,
+    agent_type_override_differs: bool,
+}
+
+fn decide_agent_start_mode(inputs: StartModeInputs) -> AgentStartMode {
+    if inputs.force_restart {
+        return AgentStartMode::ForcedRestart;
+    }
+    if !inputs.tmux_session_alive {
+        return AgentStartMode::Fresh;
+    }
+    if inputs.agent_type_override_differs {
+        return AgentStartMode::ForcedRestart;
+    }
+    if inputs.agent_pane_alive == Some(false) {
+        return AgentStartMode::DeadPaneSurfaceRestart;
+    }
+    AgentStartMode::Reattach
+}
+
+fn does_agent_type_override_differ(
+    agent_type_override: Option<&str>,
+    recorded_agent_type: Option<&str>,
+) -> bool {
+    match (agent_type_override, recorded_agent_type) {
+        (Some(override_type), Some(recorded_type)) => override_type != recorded_type,
+        (Some(_), None) => true,
+        _ => false,
+    }
+}
+
+fn should_persist_prompt_override(start_mode: AgentStartMode) -> bool {
+    matches!(
+        start_mode,
+        AgentStartMode::Fresh | AgentStartMode::ForcedRestart
+    )
 }
 
 async fn schaltwerk_core_start_agent_in_terminal(
@@ -2558,6 +2652,7 @@ async fn schaltwerk_core_start_agent_in_terminal(
         terminal_id_override,
         agent_type_override,
         skip_prompt,
+        prompt_override,
     } = params;
     log::info!(
         "Starting agent for session: {session_name}, terminal_id_override={terminal_id_override:?}, agent_type_override={agent_type_override:?}, skip_prompt={skip_prompt}"
@@ -2573,9 +2668,13 @@ async fn schaltwerk_core_start_agent_in_terminal(
     let session = manager
         .get_session(&session_name)
         .map_err(|e| format!("Failed to get session: {e}"))?;
+    let recorded_agent_type = session.original_agent_type.clone();
+    let agent_type_override_differs = does_agent_type_override_differ(
+        agent_type_override.as_deref(),
+        recorded_agent_type.as_deref(),
+    );
     let agent_type = agent_type_override.clone().unwrap_or_else(|| {
-        session
-            .original_agent_type
+        recorded_agent_type
             .clone()
             .unwrap_or_else(|| db.get_agent_type().unwrap_or_else(|_| "claude".to_string()))
     });
@@ -2583,6 +2682,105 @@ async fn schaltwerk_core_start_agent_in_terminal(
     if agent_type == "terminal" {
         log::info!("Skipping agent startup for terminal-only session: {session_name}");
         return Ok("Terminal-only session - no agent to start".to_string());
+    }
+
+    let terminal_id =
+        terminal_id_override.unwrap_or_else(|| terminals::terminal_id_for_session_top(&session_name));
+    let terminal_manager = get_terminal_manager().await?;
+    let tmux_session_alive = terminal_manager.terminal_exists(&terminal_id).await?;
+    let agent_pane_alive = if tmux_session_alive && !force_restart && !agent_type_override_differs {
+        Some(terminal_manager.agent_pane_alive(&terminal_id).await?)
+    } else {
+        None
+    };
+    let start_mode = decide_agent_start_mode(StartModeInputs {
+        force_restart,
+        tmux_session_alive,
+        agent_pane_alive,
+        agent_type_override_differs,
+    });
+    let should_queue_initial_command = matches!(
+        start_mode,
+        AgentStartMode::Fresh | AgentStartMode::ForcedRestart
+    );
+    log::info!(
+        "Agent start branch for session '{session_name}' terminal={terminal_id}: branch={}, force_restart={force_restart}, tmux_session_alive={tmux_session_alive}, agent_pane_alive={agent_pane_alive:?}, agent_type_override_differs={agent_type_override_differs}",
+        start_mode.as_str()
+    );
+
+    if start_mode == AgentStartMode::ForcedRestart && tmux_session_alive {
+        log::info!("Terminal {terminal_id} exists, closing before forced restart");
+        terminal_manager.close_terminal(terminal_id.clone()).await?;
+    }
+
+    if let Some(prompt) = prompt_override.as_ref() {
+        if should_persist_prompt_override(start_mode) {
+            if let Err(err) = manager.update_session_initial_prompt(&session_name, prompt) {
+                log::warn!("Failed to update initial prompt for session '{session_name}': {err}");
+            }
+        } else {
+            log::warn!(
+                "Prompt override supplied for session '{session_name}', but branch={} reattaches an existing tmux session so the prompt will not be delivered to the live agent",
+                start_mode.as_str()
+            );
+        }
+    }
+
+    if !should_queue_initial_command {
+        let cwd = session.worktree_path.to_string_lossy().to_string();
+        log::info!("Checking permissions for reattach working directory: {cwd}");
+        if let Err(err) = terminals::ensure_cwd_access(&cwd) {
+            let message = format_agent_start_error(&err);
+            let _ = terminal_manager
+                .inject_terminal_error(
+                    terminal_id.clone(),
+                    cwd.clone(),
+                    message,
+                    cols.unwrap_or(80),
+                    rows.unwrap_or(24),
+                )
+                .await;
+            return Err(err);
+        }
+
+        let create_result = match (cols, rows) {
+            (Some(c), Some(r)) => {
+                terminal_manager
+                    .create_terminal_with_size(terminal_id.clone(), cwd.clone(), c, r)
+                    .await
+            }
+            _ => {
+                terminal_manager
+                    .create_terminal(terminal_id.clone(), cwd.clone())
+                    .await
+            }
+        };
+        if let Err(err) = create_result {
+            let message = format_agent_start_error(&err);
+            let _ = terminal_manager
+                .inject_terminal_error(
+                    terminal_id.clone(),
+                    session.worktree_path.to_string_lossy().to_string(),
+                    message,
+                    cols.unwrap_or(80),
+                    rows.unwrap_or(24),
+                )
+                .await;
+            return Err(err);
+        }
+
+        log::info!(
+            "Successfully reattached terminal {terminal_id} for session '{session_name}' using branch={}",
+            start_mode.as_str()
+        );
+
+        if start_mode == AgentStartMode::DeadPaneSurfaceRestart {
+            emit_agent_crashed_for_dead_pane(&app, &terminal_id, &session_name, &agent_type);
+        } else {
+            emit_terminal_agent_started(&app, &terminal_id, Some(&session_name));
+        }
+
+        return Ok(format!("Reattached existing {agent_type} session"));
     }
 
     // Resolve binary paths at command level (with caching)
@@ -2622,7 +2820,7 @@ async fn schaltwerk_core_start_agent_in_terminal(
     let spec = manager
         .start_claude_in_session_with_restart_and_binary(AgentLaunchParams {
             session_name: &session_name,
-            force_restart,
+            force_restart: start_mode == AgentStartMode::ForcedRestart,
             binary_paths: &binary_paths,
             amp_mcp_servers: amp_mcp_servers.as_ref(),
             agent_type_override: agent_type_override.as_deref(),
@@ -2650,11 +2848,6 @@ async fn schaltwerk_core_start_agent_in_terminal(
         .map(|m| (m.auto_send_initial_command, m.ready_marker.clone()))
         .unwrap_or((false, None));
 
-    // Use override terminal ID if provided, otherwise derive from session name
-    let terminal_id = terminal_id_override
-        .unwrap_or_else(|| terminals::terminal_id_for_session_top(&session_name));
-    let terminal_manager = get_terminal_manager().await?;
-
     // Check if we have permission to access the working directory
     log::info!("Checking permissions for working directory: {cwd}");
     if let Err(err) = terminals::ensure_cwd_access(&cwd) {
@@ -2672,15 +2865,8 @@ async fn schaltwerk_core_start_agent_in_terminal(
     }
     log::info!("Working directory access confirmed: {cwd}");
 
-    // Always relaunch: close existing terminal if present
-    if terminal_manager.terminal_exists(&terminal_id).await? {
-        log::info!(
-            "Terminal {terminal_id} exists, closing before restart (force_restart={force_restart})"
-        );
-        terminal_manager.close_terminal(terminal_id.clone()).await?;
-    }
-
-    if auto_send_initial_command
+    if should_queue_initial_command
+        && auto_send_initial_command
         && let Some(initial) = initial_command.clone().filter(|v| !v.trim().is_empty())
     {
         let dispatch_delay =
@@ -2918,7 +3104,11 @@ async fn schaltwerk_core_start_agent_in_terminal(
 
     log::info!("Successfully started agent in terminal: {terminal_id}");
 
-    emit_terminal_agent_started(&app, &terminal_id, Some(&session_name));
+    if start_mode == AgentStartMode::DeadPaneSurfaceRestart {
+        emit_agent_crashed_for_dead_pane(&app, &terminal_id, &session_name, &agent_type);
+    } else {
+        emit_terminal_agent_started(&app, &terminal_id, Some(&session_name));
+    }
 
     Ok(command)
 }
@@ -2942,13 +3132,6 @@ pub async fn schaltwerk_core_start_session_agent_with_restart(
         "[AGENT_LAUNCH_TRACE] schaltwerk_core_start_session_agent_with_restart called: session={session_name}, force_restart={force_restart}, terminal_id={terminal_id:?}, agent_type={agent_type:?}, skip_prompt={skip_prompt:?}, prompt_override={}",
         prompt.is_some()
     );
-    if let Some(prompt) = prompt.as_ref() {
-        let core = get_core_write().await?;
-        let manager = core.session_manager();
-        if let Err(err) = manager.update_session_initial_prompt(&session_name, prompt) {
-            log::warn!("Failed to update initial prompt for session '{session_name}': {err}");
-        }
-    }
     schaltwerk_core_start_agent_in_terminal(
         app,
         AgentStartParams {
@@ -2959,6 +3142,7 @@ pub async fn schaltwerk_core_start_session_agent_with_restart(
             terminal_id_override: terminal_id,
             agent_type_override: agent_type,
             skip_prompt: skip_prompt.unwrap_or(false),
+            prompt_override: prompt,
         },
     )
     .await
@@ -4506,6 +4690,98 @@ pub async fn session_try_autofix(
             log::error!("[autofix] Failed to restart agent for {session_name}: {e}");
             Err(format!("Autofix restart failed: {e}"))
         }
+    }
+}
+
+#[cfg(test)]
+mod agent_start_mode_tests {
+    use super::*;
+
+    #[test]
+    fn chooses_fresh_when_no_tmux_session_exists() {
+        let mode = decide_agent_start_mode(StartModeInputs {
+            force_restart: false,
+            tmux_session_alive: false,
+            agent_pane_alive: None,
+            agent_type_override_differs: false,
+        });
+
+        assert_eq!(mode, AgentStartMode::Fresh);
+    }
+
+    #[test]
+    fn chooses_reattach_for_existing_live_session_without_force() {
+        let mode = decide_agent_start_mode(StartModeInputs {
+            force_restart: false,
+            tmux_session_alive: true,
+            agent_pane_alive: Some(true),
+            agent_type_override_differs: false,
+        });
+
+        assert_eq!(mode, AgentStartMode::Reattach);
+    }
+
+    #[test]
+    fn surfaces_restart_for_existing_dead_pane_without_force() {
+        let mode = decide_agent_start_mode(StartModeInputs {
+            force_restart: false,
+            tmux_session_alive: true,
+            agent_pane_alive: Some(false),
+            agent_type_override_differs: false,
+        });
+
+        assert_eq!(mode, AgentStartMode::DeadPaneSurfaceRestart);
+    }
+
+    #[test]
+    fn force_restart_wins_over_existing_live_session() {
+        let mode = decide_agent_start_mode(StartModeInputs {
+            force_restart: true,
+            tmux_session_alive: true,
+            agent_pane_alive: Some(true),
+            agent_type_override_differs: false,
+        });
+
+        assert_eq!(mode, AgentStartMode::ForcedRestart);
+    }
+
+    #[test]
+    fn differing_agent_type_override_forces_restart() {
+        let mode = decide_agent_start_mode(StartModeInputs {
+            force_restart: false,
+            tmux_session_alive: true,
+            agent_pane_alive: Some(true),
+            agent_type_override_differs: true,
+        });
+
+        assert_eq!(mode, AgentStartMode::ForcedRestart);
+    }
+
+    #[test]
+    fn agent_type_override_differs_when_recorded_type_is_missing() {
+        assert!(does_agent_type_override_differ(Some("codex"), None));
+    }
+
+    #[test]
+    fn differing_agent_type_override_without_tmux_starts_fresh() {
+        let mode = decide_agent_start_mode(StartModeInputs {
+            force_restart: false,
+            tmux_session_alive: false,
+            agent_pane_alive: None,
+            agent_type_override_differs: true,
+        });
+
+        assert_eq!(mode, AgentStartMode::Fresh);
+    }
+
+    #[test]
+    fn prompt_override_persists_only_for_launching_modes() {
+        assert!(should_persist_prompt_override(AgentStartMode::Fresh));
+        assert!(should_persist_prompt_override(AgentStartMode::ForcedRestart));
+        assert!(!should_persist_prompt_override(AgentStartMode::Reattach));
+        assert!(!should_persist_prompt_override(
+            AgentStartMode::DeadPaneSurfaceRestart
+        ));
     }
 }
 

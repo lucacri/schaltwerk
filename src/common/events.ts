@@ -12,6 +12,7 @@ export enum SchaltEvent {
   TerminalAttention = 'schaltwerk:terminal-attention',
   TerminalClosed = 'schaltwerk:terminal-closed',
   TerminalAgentStarted = 'schaltwerk:terminal-agent-started',
+  AgentCrashed = 'schaltwerk:agent-crashed',
   TerminalForceScroll = 'schaltwerk:terminal-force-scroll',
   GlobalKeepAwakeStateChanged = 'schaltwerk:global-keep-awake-state-changed',
   PtyData = 'schaltwerk:pty-data',
@@ -276,6 +277,14 @@ export type EventPayloadMap = {
   [SchaltEvent.TerminalAttention]: { session_id: string, terminal_id: string, needs_attention: boolean, attention_kind?: SessionAttentionKind }
   [SchaltEvent.TerminalClosed]: { terminal_id: string }
   [SchaltEvent.TerminalAgentStarted]: { terminal_id: string, session_name?: string }
+  [SchaltEvent.AgentCrashed]: {
+    terminal_id: string
+    agent_type?: string
+    session_name?: string
+    exit_code?: number | null
+    buffer_size?: number
+    last_seq?: number
+  }
   [SchaltEvent.TerminalForceScroll]: { terminal_id: string }
   [SchaltEvent.GlobalKeepAwakeStateChanged]: GlobalKeepAwakeStatePayload
   [SchaltEvent.PtyData]: PtyDataPayload

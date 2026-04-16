@@ -554,6 +554,10 @@ impl TerminalManager {
         self.backend.exists(id).await
     }
 
+    pub async fn agent_pane_alive(&self, id: &str) -> Result<bool, String> {
+        self.backend.agent_pane_alive(id).await
+    }
+
     pub async fn queue_initial_command(
         &self,
         id: String,

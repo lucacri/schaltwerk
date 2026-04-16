@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../common/tauriCommands'
 import { bestBootstrapSize } from './terminalSizeCache'
 import { emitUiEvent, UiEvent } from './uiEvents'
+import { listenEvent, SchaltEvent } from './eventSystem'
 import { singleflight, hasInflight } from '../utils/singleflight'
 import { logger } from '../utils/logger'
 import { getErrorMessage } from '../types/errors'
@@ -17,6 +18,7 @@ import {
   markTerminalStarting,
   clearTerminalStartState,
 } from './terminalStartState'
+import { markAgentStopped } from './agentStoppedState'
 
 export { EXTENDED_AGENT_START_TIMEOUT_MS, DEFAULT_AGENT_START_TIMEOUT_MS } from './agentLifecycleTracker'
 
@@ -146,12 +148,117 @@ export async function startSessionTop(params: {
     const command = TauriCommands.SchaltwerkCoreStartSessionAgent
 
     await singleflight(topId, async () => {
+      let sawTerminatedPane = false
+      let unlistenCrash: (() => void) | null = null
       const lifecycleBase = {
         terminalId: topId,
         sessionName,
         agentType,
       }
-      const startPromise = invoke(command, { sessionName, cols, rows })
+      try {
+        unlistenCrash = await listenEvent(SchaltEvent.AgentCrashed, payload => {
+          if (payload.terminal_id !== topId) return
+          sawTerminatedPane = true
+          markAgentStopped(topId, 'terminated')
+          clearTerminalStartState([topId])
+        })
+      } catch (error) {
+        logger.warn(`[agentSpawn] Failed to attach AgentCrashed listener for ${topId}`, error)
+      }
+      const spawnedAt = Date.now()
+      recordAgentLifecycle({ ...lifecycleBase, state: 'spawned', whenMs: spawnedAt })
+      emitUiEvent(UiEvent.AgentLifecycle, { ...lifecycleBase, state: 'spawned', occurredAtMs: spawnedAt })
+
+      try {
+        const startPromise = invoke(command, { sessionName, cols, rows })
+        await withAgentStartTimeout(
+          startPromise,
+          timeoutMs,
+          { id: topId, command }
+        )
+        if (sawTerminatedPane) {
+          const failedAt = Date.now()
+          recordAgentLifecycle({ ...lifecycleBase, state: 'failed', whenMs: failedAt, reason: 'Session terminated' })
+          emitUiEvent(UiEvent.AgentLifecycle, {
+            ...lifecycleBase,
+            state: 'failed',
+            occurredAtMs: failedAt,
+            reason: 'Session terminated',
+          })
+          return
+        }
+        const readyAt = Date.now()
+        recordAgentLifecycle({ ...lifecycleBase, state: 'ready', whenMs: readyAt })
+        emitUiEvent(UiEvent.AgentLifecycle, { ...lifecycleBase, state: 'ready', occurredAtMs: readyAt })
+      } catch (error) {
+        const failedAt = Date.now()
+        const message = getErrorMessage(error)
+        recordAgentLifecycle({ ...lifecycleBase, state: 'failed', whenMs: failedAt, reason: message })
+        emitUiEvent(UiEvent.AgentLifecycle, {
+          ...lifecycleBase,
+          state: 'failed',
+          occurredAtMs: failedAt,
+          reason: message,
+        })
+        throw error
+      } finally {
+        unlistenCrash?.()
+      }
+    })
+  } catch (e) {
+    try {
+      clearTerminalStartState([topId])
+    } catch (cleanupErr) {
+      logger.debug(`[agentSpawn] Failed to clear terminal start state during error cleanup for ${topId}`, cleanupErr)
+    }
+    throw e
+  }
+}
+
+export async function restartSessionTop(params: {
+  sessionName: string
+  topId: string
+  projectOrchestratorId?: string | null
+  measured?: { cols?: number | null; rows?: number | null }
+  agentType?: string
+}) {
+  const { sessionName, topId, projectOrchestratorId, measured } = params
+  const agentType = params.agentType ?? DEFAULT_AGENT
+
+  logger.info(`[AGENT_LAUNCH_TRACE] restartSessionTop called: sessionName=${sessionName}, topId=${topId}, agentType=${agentType}`)
+
+  if (agentType === 'terminal') {
+    logger.info(`[agentSpawn] Skipping agent restart for terminal-only session: ${sessionName}`)
+    return
+  }
+
+  if (hasInflight(topId)) {
+    logger.info(`[AGENT_LAUNCH_TRACE] restartSessionTop skipped - already inflight: ${topId}`)
+    return
+  }
+
+  markTerminalStarting(topId, agentType)
+  try {
+    const { cols, rows } = computeSpawnSize({ topId, measured, projectOrchestratorId })
+    const timeoutMs = determineStartTimeoutMs(agentType)
+    const command = TauriCommands.SchaltwerkCoreStartSessionAgentWithRestart
+
+    await singleflight(topId, async () => {
+      const lifecycleBase = {
+        terminalId: topId,
+        sessionName,
+        agentType,
+      }
+      const startPromise = invoke(command, {
+        params: {
+          sessionName,
+          forceRestart: true,
+          terminalId: topId,
+          agentType,
+          cols,
+          rows,
+        }
+      })
       const spawnedAt = Date.now()
       recordAgentLifecycle({ ...lifecycleBase, state: 'spawned', whenMs: spawnedAt })
       emitUiEvent(UiEvent.AgentLifecycle, { ...lifecycleBase, state: 'spawned', occurredAtMs: spawnedAt })
@@ -182,7 +289,7 @@ export async function startSessionTop(params: {
     try {
       clearTerminalStartState([topId])
     } catch (cleanupErr) {
-      logger.debug(`[agentSpawn] Failed to clear terminal start state during error cleanup for ${topId}`, cleanupErr)
+      logger.debug(`[agentSpawn] Failed to clear terminal start state during restart error cleanup for ${topId}`, cleanupErr)
     }
     throw e
   }
