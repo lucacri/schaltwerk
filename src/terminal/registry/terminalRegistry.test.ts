@@ -471,7 +471,7 @@ describe('terminalRegistry stream flushing', () => {
     removeTerminalInstance('output-test')
   })
 
-  it('buffers output while detached and flushes when reattached', async () => {
+  it('drops detached top-terminal output instead of replaying it on attach', async () => {
     const rawWrite = vi.fn()
     const factory = () =>
       ({
@@ -492,8 +492,8 @@ describe('terminalRegistry stream flushing', () => {
         dispose: vi.fn(),
       } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
 
-    acquireTerminalInstance('detach-buffer-test', factory)
-    attachTerminalInstance('detach-buffer-test', document.createElement('div'))
+    acquireTerminalInstance('session-detach-buffer-top', factory)
+    attachTerminalInstance('session-detach-buffer-top', document.createElement('div'))
 
     const listener = addListenerMock.mock.calls[0][1] as (chunk: string) => void
 
@@ -503,19 +503,18 @@ describe('terminalRegistry stream flushing', () => {
     const firstWriteCallback = rawWrite.mock.calls[0][1] as unknown as () => void
     firstWriteCallback()
 
-    detachTerminalInstance('detach-buffer-test')
+    detachTerminalInstance('session-detach-buffer-top')
 
     listener('b')
     await vi.runAllTimersAsync()
     expect(rawWrite).toHaveBeenCalledTimes(1)
 
-    attachTerminalInstance('detach-buffer-test', document.createElement('div'))
+    attachTerminalInstance('session-detach-buffer-top', document.createElement('div'))
     await vi.runAllTimersAsync()
 
-    expect(rawWrite).toHaveBeenCalledTimes(2)
-    expect(rawWrite).toHaveBeenLastCalledWith('b', expect.any(Function))
+    expect(rawWrite).toHaveBeenCalledTimes(1)
 
-    removeTerminalInstance('detach-buffer-test')
+    removeTerminalInstance('session-detach-buffer-top')
   })
 
   it('selects all output for existing terminals', () => {

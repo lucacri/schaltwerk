@@ -31,7 +31,7 @@ use crate::shared::terminal_id::is_lucode_owned_tmux_session;
 
 pub struct TmuxAdapter {
     cli: Arc<dyn TmuxCli>,
-    inner: LocalPtyAdapter,
+    inner: Arc<dyn TerminalBackend>,
     tmux_binary: String,
     global_args: Vec<String>,
     last_sizes: Arc<Mutex<HashMap<String, (u16, u16)>>>,
@@ -48,7 +48,24 @@ impl TmuxAdapter {
         let global_args = cli.global_args();
         Self {
             cli,
-            inner: LocalPtyAdapter::new(),
+            inner: Arc::new(LocalPtyAdapter::new()),
+            tmux_binary,
+            global_args,
+            last_sizes: Arc::new(Mutex::new(HashMap::new())),
+            create_guards: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    #[cfg(test)]
+    fn new_with_backend_for_test(
+        cli: Arc<dyn TmuxCli>,
+        inner: Arc<dyn TerminalBackend>,
+    ) -> Self {
+        let tmux_binary = resolve_tmux_binary(cli.tmux_binary().to_string_lossy().as_ref());
+        let global_args = cli.global_args();
+        Self {
+            cli,
+            inner,
             tmux_binary,
             global_args,
             last_sizes: Arc::new(Mutex::new(HashMap::new())),
@@ -202,13 +219,6 @@ impl TerminalBackend for TmuxAdapter {
     }
 
     async fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), String> {
-        {
-            let sizes = self.last_sizes.lock().await;
-            if sizes.get(id) == Some(&(cols, rows)) {
-                return Ok(());
-            }
-        }
-
         self.inner.resize(id, cols, rows).await?;
         self.last_sizes
             .lock()
@@ -269,13 +279,7 @@ impl TerminalBackend for TmuxAdapter {
         rows: u16,
     ) -> Result<(), String> {
         self.inner
-            .inject_terminal_error(
-                id.to_string(),
-                cwd.to_string(),
-                message.to_string(),
-                cols,
-                rows,
-            )
+            .inject_terminal_error(id, cwd, message, cols, rows)
             .await
     }
 
@@ -313,6 +317,63 @@ impl TerminalBackend for TmuxAdapter {
 mod tests {
     use super::*;
     use crate::domains::terminal::tmux_cmd::testing::{MockTmuxCli, success};
+
+    #[derive(Default)]
+    struct RecordingBackend {
+        resize_calls: Mutex<Vec<(String, u16, u16)>>,
+    }
+
+    #[async_trait]
+    impl TerminalBackend for RecordingBackend {
+        async fn create(&self, _params: CreateParams) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn create_with_size(
+            &self,
+            _params: CreateParams,
+            _cols: u16,
+            _rows: u16,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn write(&self, _id: &str, _data: &[u8]) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn write_immediate(&self, _id: &str, _data: &[u8]) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), String> {
+            self.resize_calls
+                .lock()
+                .await
+                .push((id.to_string(), cols, rows));
+            Ok(())
+        }
+
+        async fn close(&self, _id: &str) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn exists(&self, _id: &str) -> Result<bool, String> {
+            Ok(true)
+        }
+
+        async fn snapshot(
+            &self,
+            _id: &str,
+            _from_seq: Option<u64>,
+        ) -> Result<TerminalSnapshot, String> {
+            Ok(TerminalSnapshot {
+                seq: 0,
+                start_seq: 0,
+                data: Vec::new(),
+            })
+        }
+    }
 
     #[test]
     fn resolve_tmux_binary_honors_absolute_paths() {
@@ -418,6 +479,32 @@ mod tests {
         let _ = adapter.create_with_size(params, 80, 24).await;
         assert_eq!(HAS_CALLS.load(Ordering::SeqCst), 1);
         assert_eq!(NEW_CALLS.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn same_size_resize_is_not_suppressed() {
+        let cli = MockTmuxCli::new(|_| success());
+        let inner = Arc::new(RecordingBackend::default());
+        let adapter = TmuxAdapter::new_with_backend_for_test(cli, inner.clone());
+
+        adapter
+            .resize("session-redraw~abcdef12-top", 120, 40)
+            .await
+            .unwrap();
+        adapter
+            .resize("session-redraw~abcdef12-top", 120, 40)
+            .await
+            .unwrap();
+
+        let calls = inner.resize_calls.lock().await.clone();
+        assert_eq!(
+            calls,
+            vec![
+                ("session-redraw~abcdef12-top".to_string(), 120, 40),
+                ("session-redraw~abcdef12-top".to_string(), 120, 40),
+            ],
+            "same-size resize must reach the inner PTY so tmux receives SIGWINCH and redraws"
+        );
     }
 
     #[tokio::test]

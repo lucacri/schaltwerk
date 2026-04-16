@@ -2,6 +2,10 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Tmux agent terminal reattach stability
+
+Agent terminals backed by tmux now reattach without replaying hidden output that arrived while the pane was detached. Same-size resize requests are also forwarded to tmux so selecting a long-running session triggers the expected viewport redraw instead of staying blank until a manual resize.
+
 ## Consolidation: surface candidate verdict immediately
 
 A consolidation candidate filing its report now acts as the round's initial recommendation, so the sidebar shows "Judge recommends …" and enables the confirm-winner banner the moment the agent finishes — no waiting for an optional judge session.

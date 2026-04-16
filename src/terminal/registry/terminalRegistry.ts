@@ -5,7 +5,11 @@ import {
   profileSwitchPhaseAsync,
 } from '../profiling/switchProfiler';
 import { disposeGpuRenderer } from '../gpu/gpuRendererRegistry';
-import { sessionTerminalBaseVariants, sanitizeSessionName } from '../../common/terminalIdentity';
+import {
+  isTopTerminalId,
+  sessionTerminalBaseVariants,
+  sanitizeSessionName,
+} from '../../common/terminalIdentity';
 import { terminalOutputManager } from '../stream/terminalOutputManager';
 import { slicePreservingSurrogates } from '../paste/bracketedPaste';
 
@@ -225,6 +229,14 @@ class TerminalInstanceRegistry {
 
     record.xterm.detach();
     record.attached = false;
+
+    if (isTopTerminalId(record.id)) {
+      record.pendingChunks = [];
+      record.pendingByteLength = 0;
+      record.tuiHoldRedraw = false;
+      record.flushAfterParse = false;
+      record.hadClearInBatch = false;
+    }
 
     if (record.rafHandle !== undefined) {
       try {
@@ -658,6 +670,10 @@ class TerminalInstanceRegistry {
         || chunk.includes(ALT_SCREEN_DISABLE_1047);
       const hasRedrawBoundary = has2J || hasH || hasAltScreenToggle;
       const boundaryOnly = isTui && hasRedrawBoundary && isLikelyRedrawBoundaryOnlyChunk(processedChunk);
+
+      if (!record.attached && isTopTerminalId(record.id)) {
+        return;
+      }
 
       if (processedChunk.length > 0) {
         record.pendingChunks.push(processedChunk);
