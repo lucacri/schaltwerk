@@ -1491,6 +1491,103 @@ fn test_convert_session_to_draft_preserves_content() {
     assert_eq!(converted.content, spec_content.to_string());
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_convert_version_group_to_spec_cancels_all_and_creates_one_spec() {
+    let env = TestEnvironment::new().unwrap();
+    let manager = env.get_session_manager().unwrap();
+
+    let spec_content = "# Shared task content for the group";
+    manager
+        .create_spec_session("feature-x_v1", spec_content)
+        .unwrap();
+    manager
+        .create_spec_session("feature-x_v2", spec_content)
+        .unwrap();
+
+    let v1 = manager
+        .start_spec_session("feature-x_v1", None, None, None)
+        .unwrap();
+    let v2 = manager
+        .start_spec_session("feature-x_v2", None, None, None)
+        .unwrap();
+
+    let new_spec_name = manager
+        .convert_version_group_to_spec_async("feature-x", &[v1.name.clone(), v2.name.clone()])
+        .await
+        .unwrap();
+
+    for name in [&v1.name, &v2.name] {
+        let cancelled = manager
+            .db_ref()
+            .get_session_by_name(&env.repo_path, name)
+            .unwrap();
+        assert_eq!(cancelled.status, SessionStatus::Cancelled);
+    }
+
+    let spec = manager.get_spec(&new_spec_name).unwrap();
+    assert_eq!(spec.content, spec_content);
+
+    assert!(!v1.worktree_path.exists());
+    assert!(!v2.worktree_path.exists());
+    assert!(!git::branch_exists(&env.repo_path, &v1.branch).unwrap());
+    assert!(!git::branch_exists(&env.repo_path, &v2.branch).unwrap());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_convert_version_group_to_spec_errors_when_no_running_sessions() {
+    let env = TestEnvironment::new().unwrap();
+    let manager = env.get_session_manager().unwrap();
+
+    let err = manager
+        .convert_version_group_to_spec_async("nothing", &[])
+        .await
+        .unwrap_err();
+    assert!(
+        err.to_string().to_lowercase().contains("no running"),
+        "error message should explain the missing running sessions, got: {err}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_convert_version_group_to_spec_skips_non_running_sessions() {
+    let env = TestEnvironment::new().unwrap();
+    let manager = env.get_session_manager().unwrap();
+
+    let spec_content = "# task body";
+    manager
+        .create_spec_session("feature-y_v1", spec_content)
+        .unwrap();
+    manager
+        .create_spec_session("feature-y_v2", spec_content)
+        .unwrap();
+
+    let v1 = manager
+        .start_spec_session("feature-y_v1", None, None, None)
+        .unwrap();
+    // v2 stays a spec (not running) and must be ignored without error
+
+    let new_spec_name = manager
+        .convert_version_group_to_spec_async(
+            "feature-y",
+            &[v1.name.clone(), "feature-y_v2".to_string()],
+        )
+        .await
+        .unwrap();
+
+    let spec = manager.get_spec(&new_spec_name).unwrap();
+    assert_eq!(spec.content, spec_content);
+
+    let cancelled = manager
+        .db_ref()
+        .get_session_by_name(&env.repo_path, &v1.name)
+        .unwrap();
+    assert_eq!(cancelled.status, SessionStatus::Cancelled);
+
+    // The untouched spec still exists
+    let untouched = manager.get_spec("feature-y_v2").unwrap();
+    assert_eq!(untouched.content, spec_content);
+}
+
 #[test]
 fn test_spec_session_ai_renaming_potential() {
     // This test demonstrates that spec sessions should have potential for AI renaming

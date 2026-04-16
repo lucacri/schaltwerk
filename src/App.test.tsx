@@ -1025,6 +1025,61 @@ describe('App.tsx', () => {
     expect(secondCancelIndex).toBeGreaterThan(firstCancelIndex)
   })
 
+  it('converts the version group to a single spec when modal convert action fires', async () => {
+    await renderApp()
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.TerminateVersionGroup, {
+        baseName: 'feature-a',
+        sessions: [
+          {
+            id: 'feature-a',
+            name: 'feature-a',
+            displayName: 'Feature A',
+            branch: 'schaltwerk/feature-a',
+            hasUncommittedChanges: false,
+          },
+          {
+            id: 'feature-a_v2',
+            name: 'feature-a_v2',
+            displayName: 'Feature A v2',
+            branch: 'schaltwerk/feature-a_v2',
+            hasUncommittedChanges: true,
+          },
+        ],
+      })
+    })
+
+    await waitFor(() => {
+      expect(terminateVersionGroupModalMock).toHaveBeenCalled()
+      const props = terminateVersionGroupModalMock.mock.calls.at(-1)?.[0] as { open: boolean }
+      expect(props.open).toBe(true)
+    })
+
+    const modalProps = terminateVersionGroupModalMock.mock.calls.at(-1)?.[0] as {
+      onConvertToSpec?: () => void
+    }
+    expect(typeof modalProps.onConvertToSpec).toBe('function')
+
+    await act(async () => {
+      modalProps.onConvertToSpec?.()
+    })
+
+    const invokeMock = await getInvokeMock()
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreConvertVersionGroupToSpec, {
+        baseName: 'feature-a',
+        sessionNames: ['feature-a', 'feature-a_v2'],
+        projectPath: '/Users/me/sample-project',
+      })
+    })
+  })
+
 })
 
 describe('validatePanelPercentage', () => {

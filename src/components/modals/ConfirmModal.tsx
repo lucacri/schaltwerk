@@ -16,6 +16,11 @@ interface ConfirmModalProps {
   confirmDisabled?: boolean
   loading?: boolean
   variant?: 'default' | 'danger' | 'warning' | 'success'
+  tertiaryText?: React.ReactNode
+  onTertiary?: () => void
+  tertiaryTitle?: string
+  tertiaryDisabled?: boolean
+  tertiaryVariant?: 'default' | 'warning' | 'success'
 }
 
 export function ConfirmModal({
@@ -31,6 +36,11 @@ export function ConfirmModal({
   confirmDisabled = false,
   loading = false,
   variant = 'default',
+  tertiaryText,
+  onTertiary,
+  tertiaryTitle,
+  tertiaryDisabled = false,
+  tertiaryVariant = 'warning',
 }: ConfirmModalProps) {
   const { t } = useTranslation()
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
@@ -82,6 +92,17 @@ export function ConfirmModal({
     success: 'success',
   }
 
+  const tertiaryVariants: Record<NonNullable<ConfirmModalProps['tertiaryVariant']>, 'primary' | 'warning' | 'success'> = {
+    default: 'primary',
+    warning: 'warning',
+    success: 'success',
+  }
+
+  const handleTertiary = () => {
+    if (loading || tertiaryDisabled) return
+    onTertiary?.()
+  }
+
   return (
     <ModalPortal>
       <div className="fixed inset-0 bg-bg-primary/50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
@@ -101,6 +122,16 @@ export function ConfirmModal({
               {cancelText}
               <span className="ml-1.5 text-xs opacity-60 group-hover:opacity-100">{t.confirmModal.escKey}</span>
             </Button>
+            {tertiaryText !== undefined && (
+              <Button
+                onClick={handleTertiary}
+                disabled={loading || tertiaryDisabled}
+                variant={tertiaryVariants[tertiaryVariant]}
+                title={tertiaryTitle}
+              >
+                {tertiaryText}
+              </Button>
+            )}
             <Button
               ref={confirmButtonRef}
               onClick={handleConfirm}

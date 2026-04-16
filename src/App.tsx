@@ -534,6 +534,7 @@ function AppContent() {
     sessions: [],
   })
   const [isTerminatingGroup, setIsTerminatingGroup] = useState(false)
+  const [isConvertingGroup, setIsConvertingGroup] = useState(false)
   const [openAsDraft, setOpenAsSpec] = useState(false)
   const [cachedPrompt, setCachedPrompt] = useState('')
   const [triggerOpenInApp, setTriggerOpenInApp] = useState<number>(0)
@@ -1285,6 +1286,26 @@ function AppContent() {
 
     setTerminateGroupModalState({ open: false, baseName: '', sessions: [] })
   }, [cancelSessionImmediate, terminateGroupModalState])
+
+  const handleConvertVersionGroupToSpec = useCallback(async () => {
+    if (!terminateGroupModalState.open || terminateGroupModalState.sessions.length === 0) return
+    if (isConvertingGroup || isTerminatingGroup) return
+
+    setIsConvertingGroup(true)
+    try {
+      await invoke<string>(TauriCommands.SchaltwerkCoreConvertVersionGroupToSpec, {
+        baseName: terminateGroupModalState.baseName,
+        sessionNames: terminateGroupModalState.sessions.map(s => s.name),
+        ...(projectPath ? { projectPath } : {}),
+      })
+      setTerminateGroupModalState({ open: false, baseName: '', sessions: [] })
+    } catch (error) {
+      logger.error('[App] Failed to convert version group to spec:', error)
+      alert(`Failed to convert version group to spec: ${error}`)
+    } finally {
+      setIsConvertingGroup(false)
+    }
+  }, [isConvertingGroup, isTerminatingGroup, projectPath, terminateGroupModalState])
 
   // Handle CLI directory argument
   useEffect(() => {
@@ -2595,11 +2616,13 @@ function AppContent() {
             baseName={terminateGroupModalState.baseName}
             sessions={terminateGroupModalState.sessions}
             onConfirm={() => { void handleTerminateVersionGroup() }}
+            onConvertToSpec={() => { void handleConvertVersionGroupToSpec() }}
             onCancel={() => {
-              if (isTerminatingGroup) return
+              if (isTerminatingGroup || isConvertingGroup) return
               setTerminateGroupModalState({ open: false, baseName: '', sessions: [] })
             }}
             loading={isTerminatingGroup}
+            converting={isConvertingGroup}
           />
 
           {/* Diff Viewer Modal with Review - render only when open */}

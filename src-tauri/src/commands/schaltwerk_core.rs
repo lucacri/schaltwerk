@@ -2509,6 +2509,54 @@ pub async fn schaltwerk_core_convert_session_to_draft(
 }
 
 #[tauri::command]
+pub async fn schaltwerk_core_convert_version_group_to_spec(
+    app: tauri::AppHandle,
+    base_name: String,
+    session_names: Vec<String>,
+    project_path: Option<String>,
+) -> Result<String, String> {
+    log::info!(
+        "Converting version group '{base_name}' ({} sessions) to a single spec",
+        session_names.len()
+    );
+
+    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let manager = core.session_manager();
+    let repo_path_str = core.repo_path.to_string_lossy().to_string();
+
+    for name in &session_names {
+        terminals::close_session_terminals_if_any(name).await;
+    }
+
+    match manager
+        .convert_version_group_to_spec_async(&base_name, &session_names)
+        .await
+    {
+        Ok(new_spec_name) => {
+            for name in &session_names {
+                terminals::close_session_terminals_if_any(name).await;
+                evict_session_cache_entry_for_repo(&repo_path_str, name).await;
+            }
+
+            if let Err(e) = manager.cleanup_orphaned_worktrees() {
+                log::warn!("Worktree cleanup after group convert failed (non-fatal): {e}");
+            }
+
+            events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SpecSync);
+            events::emit_selection_spec(&app, &new_spec_name);
+
+            Ok(new_spec_name)
+        }
+        Err(e) => {
+            log::error!("Failed to convert version group '{base_name}' to spec: {e}");
+            Err(format!(
+                "Failed to convert version group '{base_name}' to spec: {e}"
+            ))
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn schaltwerk_core_update_git_stats(
     session_id: String,
     project_path: Option<String>,

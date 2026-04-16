@@ -1549,6 +1549,7 @@ fn main() {
             schaltwerk_core_trigger_consolidation_judge,
             schaltwerk_core_confirm_consolidation_winner,
             schaltwerk_core_convert_session_to_draft,
+            schaltwerk_core_convert_version_group_to_spec,
             schaltwerk_core_update_git_stats,
             schaltwerk_core_cleanup_orphaned_worktrees,
             schaltwerk_core_start_claude,

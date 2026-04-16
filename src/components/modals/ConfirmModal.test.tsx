@@ -104,4 +104,60 @@ describe('ConfirmModal', () => {
       expect(onConfirm).toHaveBeenCalled()
     })
   })
+
+  it('renders an optional tertiary action between cancel and confirm', () => {
+    const onTertiary = vi.fn()
+    const onConfirm = vi.fn()
+    const onCancel = vi.fn()
+
+    render(
+      <ConfirmModal
+        open
+        title="Title"
+        confirmText="Confirm"
+        cancelText="Cancel"
+        tertiaryText="Tertiary"
+        onTertiary={onTertiary}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Tertiary/i }))
+    expect(onTertiary).toHaveBeenCalledTimes(1)
+    expect(onConfirm).not.toHaveBeenCalled()
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('omits tertiary button when tertiaryText is undefined', () => {
+    render(
+      <ConfirmModal
+        open
+        title="Title"
+        confirmText="Confirm"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+    expect(screen.queryByRole('button', { name: /Tertiary/i })).toBeNull()
+  })
+
+  it('disables tertiary when loading or tertiaryDisabled is true', () => {
+    const onTertiary = vi.fn()
+    render(
+      <ConfirmModal
+        open
+        title="Title"
+        confirmText="Confirm"
+        cancelText="Cancel"
+        tertiaryText="Tertiary"
+        tertiaryDisabled
+        onTertiary={onTertiary}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Tertiary/i }))
+    expect(onTertiary).not.toHaveBeenCalled()
+  })
 })

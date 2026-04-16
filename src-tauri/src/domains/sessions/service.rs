@@ -2979,6 +2979,97 @@ impl SessionManager {
         Ok(())
     }
 
+    pub async fn convert_version_group_to_spec_async(
+        &self,
+        base_name: &str,
+        session_names: &[String],
+    ) -> Result<String> {
+        let running = self.collect_running_sessions_for_group(base_name, session_names)?;
+        let (preserved_content, agent_type, display_name, epic_id) =
+            self.extract_group_spec_metadata(&running);
+
+        let mut cancel_failures: Vec<String> = Vec::new();
+        for session in &running {
+            if let Err(e) = self.fast_cancel_session(&session.name).await {
+                log::warn!(
+                    "Failed to cancel session '{}' during group convert (async): {e}",
+                    session.name
+                );
+                cancel_failures.push(session.name.clone());
+            }
+        }
+
+        let spec = self.create_spec_session_with_agent(
+            base_name,
+            &preserved_content,
+            agent_type.as_deref(),
+            display_name.as_deref(),
+            epic_id.as_deref(),
+        )?;
+
+        if cancel_failures.is_empty() {
+            log::info!(
+                "Converted version group '{base_name}' ({} sessions) to new spec '{}'",
+                running.len(),
+                spec.name
+            );
+        } else {
+            log::warn!(
+                "Created spec '{}' for group '{base_name}' but some sessions failed to cancel cleanly: {}",
+                spec.name,
+                cancel_failures.join(", ")
+            );
+        }
+
+        Ok(spec.name)
+    }
+
+    fn collect_running_sessions_for_group(
+        &self,
+        base_name: &str,
+        session_names: &[String],
+    ) -> Result<Vec<Session>> {
+        let mut running: Vec<Session> = Vec::with_capacity(session_names.len());
+        for name in session_names {
+            match self.db_manager.get_session_by_name(name) {
+                Ok(s) if s.session_state == SessionState::Running => running.push(s),
+                Ok(_) => log::warn!(
+                    "Skipping non-running session '{name}' during group convert of '{base_name}'"
+                ),
+                Err(e) => log::warn!(
+                    "Skipping unknown session '{name}' during group convert of '{base_name}': {e}"
+                ),
+            }
+        }
+        if running.is_empty() {
+            return Err(anyhow!(
+                "no running sessions found in version group '{base_name}'"
+            ));
+        }
+        Ok(running)
+    }
+
+    // Sessions inside a version group share spec content, agent_type, display_name, and epic_id
+    // (all frozen at launch from the parent spec and unreachable from the running-session code
+    // paths), so taking the first running session as anchor is deterministic in practice.
+    fn extract_group_spec_metadata(
+        &self,
+        running: &[Session],
+    ) -> (String, Option<String>, Option<String>, Option<String>) {
+        let anchor = running.first().expect("running must be non-empty");
+        let (spec_content, initial_prompt) = self
+            .db_manager
+            .get_session_task_content(&anchor.name)
+            .unwrap_or((None, None));
+        let preserved_content = spec_content.or(initial_prompt).unwrap_or_default();
+        (
+            preserved_content,
+            anchor.original_agent_type.clone(),
+            anchor.display_name.clone(),
+            anchor.epic_id.clone(),
+        )
+    }
+
     pub fn get_session(&self, name: &str) -> Result<Session> {
         self.db_manager.get_session_by_name(name)
     }

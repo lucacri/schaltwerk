@@ -42,4 +42,80 @@ describe('TerminateVersionGroupConfirmation', () => {
     fireEvent.click(getByText('Keep Sessions'))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
+
+  it('invokes onConvertToSpec when the Convert button is clicked', () => {
+    const onConfirm = vi.fn()
+    const onCancel = vi.fn()
+    const onConvertToSpec = vi.fn()
+
+    const { getByText } = render(
+      <TerminateVersionGroupConfirmation
+        open
+        baseName="feature-a"
+        sessions={[
+          {
+            id: 'feature-a_v1',
+            name: 'feature-a_v1',
+            displayName: 'feature-a_v1',
+            branch: 'feature-a-v1',
+            hasUncommittedChanges: false,
+          },
+        ]}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+        onConvertToSpec={onConvertToSpec}
+      />
+    )
+
+    fireEvent.click(getByText('Convert to Spec'))
+    expect(onConvertToSpec).toHaveBeenCalledTimes(1)
+    expect(onConfirm).not.toHaveBeenCalled()
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('omits Convert to Spec button when onConvertToSpec is not provided', () => {
+    const { queryByText } = render(
+      <TerminateVersionGroupConfirmation
+        open
+        baseName="feature-a"
+        sessions={[
+          {
+            id: 'feature-a_v1',
+            name: 'feature-a_v1',
+            displayName: 'feature-a_v1',
+            branch: 'feature-a-v1',
+            hasUncommittedChanges: false,
+          },
+        ]}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+    expect(queryByText('Convert to Spec')).toBeNull()
+  })
+
+  it('disables Convert to Spec while converting is true', () => {
+    const onConvertToSpec = vi.fn()
+    const { getByText } = render(
+      <TerminateVersionGroupConfirmation
+        open
+        baseName="feature-a"
+        sessions={[
+          {
+            id: 'feature-a_v1',
+            name: 'feature-a_v1',
+            displayName: 'feature-a_v1',
+            branch: 'feature-a-v1',
+            hasUncommittedChanges: false,
+          },
+        ]}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        onConvertToSpec={onConvertToSpec}
+        converting
+      />
+    )
+    fireEvent.click(getByText('Convert to Spec'))
+    expect(onConvertToSpec).not.toHaveBeenCalled()
+  })
 })
