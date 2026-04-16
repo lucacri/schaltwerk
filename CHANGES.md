@@ -6,6 +6,15 @@ Features and enhancements added on top of the original schaltwerk codebase.
 
 Agent terminals backed by tmux now reattach without replaying hidden output that arrived while the pane was detached. Same-size resize requests are also forwarded to tmux so selecting a long-running session triggers the expected viewport redraw instead of staying blank until a manual resize.
 
+## Terminal: fail fast when agent argv would overflow tmux/execve
+
+Launching an agent with an enormous `initial_prompt` used to surface an opaque "tmux new-session failed (status 1): command too long" unhandled promise rejection — Claude, Codex, Gemini, OpenCode, Amp, Kilocode, and Qwen all inline the prompt as an argv entry, and once the total argv exceeds the OS `ARG_MAX`, tmux refuses to spawn the session. Lucode now measures the argv size before handing it to tmux and raises a Lucode-branded error when it would exceed a 500 KB safety limit.
+
+- `TmuxCli::new_session_detached` in `src-tauri/src/domains/terminal/tmux_cmd.rs` sums the byte length of every argv entry (including `-e KEY=VAL` env pass-throughs) before invoking tmux. If the total exceeds `TMUX_ARGV_SOFT_LIMIT_BYTES = 500_000`, the method returns a clear error naming Lucode, the measured size, and the limit, instead of letting tmux fail with "command too long".
+- The guard sits at the single point every agent launch goes through, so it applies to both the first-launch path and `force_restart=true` without per-agent plumbing, and to Claude/Codex/Gemini/OpenCode/Amp/Kilocode/Qwen identically. Droid already avoids argv inlining and is unaffected.
+- The error propagates through the existing `create_terminal_with_app_and_size` → `inject_terminal_error` path, so users see the explanation inside the agent pane. This is deliberately fail-fast: no temp-file/stdin fallback is introduced — the goal is to replace the unhandled rejection with a diagnosable error, and gather telemetry on how often it fires before deciding on any further recovery strategy.
+- Covered by new unit tests in `tmux_cmd.rs`: the guard rejects oversize argv without calling tmux, counts env-var bytes toward the total, and lets realistic 8 KiB prompts through unchanged.
+
 ## Consolidation: surface candidate verdict immediately
 
 A consolidation candidate filing its report now acts as the round's initial recommendation, so the sidebar shows "Judge recommends …" and enables the confirm-winner banner the moment the agent finishes — no waiting for an optional judge session.

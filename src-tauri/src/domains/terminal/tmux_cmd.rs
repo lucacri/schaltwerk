@@ -11,6 +11,33 @@ use tokio::process::Command;
 
 use crate::domains::terminal::ApplicationSpec;
 
+/// Upper byte-length Lucode allows for the argv it hands to `tmux new-session`.
+///
+/// Chosen so that `argv + inherited envp + tmux's own global args` comfortably
+/// fits inside the OS `ARG_MAX` ceiling (1 MiB on macOS, 128 KiB–2 MiB on
+/// Linux). Anything above this is almost certainly a multi-hundred-KB prompt
+/// the user accidentally inlined; the UX goal is a clear error, not a shave
+/// to the last byte of headroom.
+pub(crate) const TMUX_ARGV_SOFT_LIMIT_BYTES: usize = 500_000;
+
+/// Returns `Err` if the combined byte length of `args` (counting one trailing
+/// NUL per entry, matching what `execve` writes into the arg area) exceeds
+/// `TMUX_ARGV_SOFT_LIMIT_BYTES`. Used to fail fast on oversized agent argv
+/// before tmux emits its own opaque `command too long` error.
+pub(crate) fn check_argv_size(args: &[String]) -> Result<(), String> {
+    let total: usize = args.iter().map(|a| a.len() + 1).sum();
+    if total > TMUX_ARGV_SOFT_LIMIT_BYTES {
+        return Err(format!(
+            "Lucode preflight: agent argv is {total} bytes, which exceeds \
+             Lucode's {TMUX_ARGV_SOFT_LIMIT_BYTES}-byte safety limit for \
+             tmux/execve. The initial prompt is too large to inline as a \
+             command-line argument. Shorten the prompt (or the session spec) \
+             and relaunch."
+        ));
+    }
+    Ok(())
+}
+
 /// Raw result of a tmux invocation.
 #[derive(Debug, Clone)]
 pub struct TmuxCliOutput {
@@ -127,6 +154,7 @@ pub trait TmuxCli: Send + Sync {
             }
         }
 
+        check_argv_size(&args)?;
         let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let out = self.run(&arg_refs).await?;
         if !out.ok() {
@@ -568,5 +596,92 @@ mod tests {
         );
         assert_eq!(cli.socket(), "lucode-deadbeef");
         assert_eq!(cli.config_path(), Path::new("/tmp/tmux.conf"));
+    }
+
+    #[test]
+    fn argv_size_accepts_small_argvs() {
+        let args: Vec<String> = vec!["new-session".into(), "-d".into(), "short".into()];
+        assert!(super::check_argv_size(&args).is_ok());
+    }
+
+    #[test]
+    fn argv_size_rejects_argv_over_limit() {
+        let huge = "x".repeat(super::TMUX_ARGV_SOFT_LIMIT_BYTES + 1);
+        let args: Vec<String> = vec!["new-session".into(), "-d".into(), huge];
+        let err = super::check_argv_size(&args).unwrap_err();
+        assert!(err.contains("Lucode"), "err should identify Lucode: {err}");
+        assert!(
+            err.contains(&super::TMUX_ARGV_SOFT_LIMIT_BYTES.to_string()),
+            "err should mention limit {}: {err}",
+            super::TMUX_ARGV_SOFT_LIMIT_BYTES
+        );
+    }
+
+    #[test]
+    fn argv_size_accounts_for_null_terminators() {
+        let per_arg = 100;
+        let needed = super::TMUX_ARGV_SOFT_LIMIT_BYTES / (per_arg + 1) + 2;
+        let args: Vec<String> = (0..needed).map(|_| "a".repeat(per_arg)).collect();
+        assert!(super::check_argv_size(&args).is_err());
+    }
+
+    #[tokio::test]
+    async fn new_session_detached_rejects_oversize_argv_without_calling_tmux() {
+        let cli = MockTmuxCli::new(|_| panic!("tmux must not be called for oversize argv"));
+        let huge_prompt = "p".repeat(super::TMUX_ARGV_SOFT_LIMIT_BYTES + 10);
+        let app = ApplicationSpec {
+            command: "claude".into(),
+            args: vec![huge_prompt],
+            env: vec![],
+            ready_timeout_ms: 0,
+        };
+        let err = cli
+            .new_session_detached("term1", 80, 24, "/tmp", Some(&app))
+            .await
+            .unwrap_err();
+        assert!(err.contains("Lucode"), "err must identify Lucode: {err}");
+        assert!(
+            err.contains("safety limit"),
+            "err must mention safety limit: {err}"
+        );
+        assert!(
+            cli.recorded_calls().is_empty(),
+            "tmux must not be invoked when argv exceeds the safety limit; calls: {:?}",
+            cli.recorded_calls()
+        );
+    }
+
+    #[tokio::test]
+    async fn new_session_detached_counts_env_bytes_toward_argv_limit() {
+        let cli = MockTmuxCli::new(|_| panic!("tmux must not be called for oversize argv"));
+        let half = super::TMUX_ARGV_SOFT_LIMIT_BYTES / 2;
+        let big_value = "v".repeat(half);
+        let app = ApplicationSpec {
+            command: "claude".into(),
+            args: vec!["p".repeat(half)],
+            env: vec![("FOO".into(), big_value)],
+            ready_timeout_ms: 0,
+        };
+        let err = cli
+            .new_session_detached("term1", 80, 24, "/tmp", Some(&app))
+            .await
+            .unwrap_err();
+        assert!(err.contains("Lucode"), "err must identify Lucode: {err}");
+    }
+
+    #[tokio::test]
+    async fn new_session_detached_accepts_realistic_prompt() {
+        let cli = MockTmuxCli::new(|_| success());
+        let realistic_prompt = "x".repeat(8 * 1024);
+        let app = ApplicationSpec {
+            command: "claude".into(),
+            args: vec![realistic_prompt],
+            env: vec![("FOO".into(), "bar".into())],
+            ready_timeout_ms: 0,
+        };
+        cli.new_session_detached("term1", 80, 24, "/tmp", Some(&app))
+            .await
+            .expect("8 KiB prompt must pass the argv guard");
+        assert_eq!(cli.recorded_calls().len(), 1);
     }
 }
