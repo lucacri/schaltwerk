@@ -359,4 +359,42 @@ describe('ForgeIssueDetail', () => {
       contextUrl: 'https://github.com/owner/repo/issues/42',
     })
   })
+
+  it('emits ContextualActionCreateSpecClarify for spec-clarify mode actions', () => {
+    const actions: ContextualAction[] = [
+      {
+        id: 'clarify-issue',
+        name: 'Clarify',
+        context: 'issue',
+        promptTemplate: 'Investigate issue #{{issue.number}}',
+        mode: 'spec-clarify',
+        isBuiltIn: false,
+      },
+    ]
+    mockUseContextualActions.mockReturnValue({
+      actions,
+      loading: false,
+      error: null,
+      saveActions: vi.fn(),
+      resetToDefaults: vi.fn(),
+      reloadActions: vi.fn(),
+    })
+
+    renderWithProviders(
+      <ForgeIssueDetail details={makeDetails()} onBack={onBack} forgeType="github" />,
+      { forgeOverrides: { hasRepository: true } }
+    )
+
+    fireEvent.click(screen.getByText('Actions'))
+    fireEvent.click(screen.getByText('Clarify'))
+
+    expect(mockEmitUiEvent).toHaveBeenCalledWith(UiEvent.ContextualActionCreateSpecClarify, {
+      prompt: 'Investigate issue #42',
+      name: 'Clarify',
+      contextType: 'issue',
+      contextNumber: '42',
+      contextTitle: 'Fix login bug',
+      contextUrl: 'https://github.com/owner/repo/issues/42',
+    })
+  })
 })

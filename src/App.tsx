@@ -100,6 +100,7 @@ import {
   type ContextualActionCreateSpecDetail,
 } from './common/uiEvents'
 import { clearTerminalStartState } from './common/terminalStartState'
+import { runContextualSpecClarify } from './hooks/contextualSpecClarify'
 import { sanitizeName } from './utils/sanitizeName'
 import { logger } from './utils/logger'
 import { installSmartDashGuards } from './utils/normalizeCliText'
@@ -2088,12 +2089,27 @@ function AppContent() {
     })
   })
 
+  const handleContextualSpecClarify = useEffectEvent((detail: ContextualActionCreateSpecDetail) => {
+    logger.info('[App] Contextual action spec-clarify - creating spec and starting clarification:', detail)
+    void runContextualSpecClarify({ detail }).catch(err => {
+      logger.error('[App] Contextual action spec-clarify failed:', err)
+      const description = err instanceof Error ? err.message : String(err)
+      toast?.pushToast({
+        tone: 'error',
+        title: 'Auto-clarify failed',
+        description: description || 'Spec was created but clarification could not start. Open it and click Clarify to retry.',
+      })
+    })
+  })
+
   useEffect(() => {
     const sessionCleanup = listenUiEvent(UiEvent.ContextualActionCreateSession, handleContextualSessionCreate)
     const specCleanup = listenUiEvent(UiEvent.ContextualActionCreateSpec, handleContextualSpecCreate)
+    const specClarifyCleanup = listenUiEvent(UiEvent.ContextualActionCreateSpecClarify, handleContextualSpecClarify)
     return () => {
       sessionCleanup()
       specCleanup()
+      specClarifyCleanup()
     }
   }, [])
 

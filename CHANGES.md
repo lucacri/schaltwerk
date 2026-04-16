@@ -2,6 +2,15 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Contextual action: one-click issue → spec with auto-clarify
+
+Forge issues can now be turned into a spec whose clarification agent is already investigating, in a single gesture. A new `spec-clarify` `ContextualActionMode` is available alongside `spec` and `session`: selecting an action with this mode from the issue detail view's Actions dropdown creates the spec (preserving `issueNumber` / `issueUrl`), spawns the spec clarification PTY in the background, and submits the clarification prompt automatically once the agent is ready. The user stays on the issue view; the new spec surfaces in the sidebar with the existing `clarification_started` indicator lit.
+
+- Frontend-only orchestration via `src/hooks/contextualSpecClarify.ts` chains the existing `SchaltwerkCoreCreateSpecSession`, `startSpecOrchestratorTop`, and `SchaltwerkCoreSubmitSpecClarificationPrompt` — no new backend commands.
+- The helper uses the backend-returned `Session.name` and `Session.id` for subsequent calls, so name collisions (`find_unique_session_paths` rename) do not break the chain, and the terminal ID matches the one `SpecEditor` later derives so opening the spec rebinds to the running PTY rather than respawning.
+- Errors during orchestrator start or prompt submission surface as an error toast; the partially-created spec remains in the sidebar so the user can open it and click Clarify manually to retry.
+- `ContextualActionMode` enum extended on both sides; serde `rename_all` switched to `kebab-case` (`"spec"` / `"session"` unchanged, `"spec-clarify"` added).
+
 ## Per-project agent plugin toggles (Claude terminal hooks)
 
 Lucode no longer injects its Claude terminal-signal hooks into each worktree's `.claude/settings.local.json`. The hook definitions now live in a bundled Claude Code plugin under `plugins/lucode-plugins/lucode-terminal-hooks/`, which Lucode installs once to `~/.claude/plugins/lucode-plugins/` on startup. Per-project enablement is written to `.claude/settings.json` as `"enabledPlugins": { "lucode-terminal-hooks@lucode-plugins": true }`.
@@ -88,22 +97,3 @@ Adds a "consolidation" session type for reviewing and reconciling code from mult
 ## Codex Auto-Approve by Default
 
 Lucode-launched Codex sessions now run with `--ask-for-approval never` so the agent no longer stops mid-run waiting for interactive command approval. Applies to fresh starts, resume-by-id, `__resume__` picker, `__continue__`, legacy `file://` URI resume, and orchestrator launches — everything that flows through `build_codex_command_with_config`. Lucode also strips user-supplied approval overrides (`--ask-for-approval`, `-a`, `--full-auto`, `--dangerously-bypass-approvals-and-sandbox`) from extra Codex CLI args so the non-interactive default stays authoritative. Sandbox mode selection is unchanged and remains the containment boundary; `danger-full-access` users lose prompts as an accepted tradeoff. No UI toggle is exposed.
-
-## Tmux-Backed Terminal Persistence (Breaking — Terminal Backend Generation v2)
-
-Per-project tmux server (socket `lucode-v2-{project_hash16}`) now hosts every Lucode terminal. Agent sessions (Claude, Codex, etc.) survive Lucode restarts and reattach on next launch.
-
-This is a generation-bumped implementation. The `lucode-v2-` socket prefix plus the crate version bump to `0.14.0` deliberately make it impossible for any pre-tmux Lucode build's state to be silently reattached by this build: the socket names no longer collide, and the version-stamped `tmux.conf` forces a server recycle on upgrade. Upgrading from an older Lucode installation without quitting its running terminals will orphan those sessions on the old socket; they must be closed manually or the old Lucode relaunched to recover them.
-
-- Per-project tmux socket derived from a 16-char SHA-256 of the canonical project path, hoisted into `shared::project_hash::project_hash16` so both the DB folder name and the tmux socket name share the same identity. The `lucode-v2-` prefix is enforced via `project_tmux_socket_name` and regression-tested.
-- Lucode-owned `tmux.conf` (status off, keys unbound, mouse off, `remain-on-exit on`, `destroy-unattached off`, `exit-empty off`, `history-limit 50000`, version-stamped with the crate version) provisioned atomically at startup; stamp mismatch on upgrade leaves stale servers to be recycled.
-- Startup preflight (`tmux -V ≥ 3.6`) fails fast with a human-readable message if tmux is missing or outdated. macOS only.
-- `TmuxAdapter` (in `domains::terminal::tmux`) implements `TerminalBackend` via composition over the internal `LocalPtyAdapter`: tmux owns the session and its scrollback; Lucode attaches a normal PTY client. Snapshots return `{ seq, start_seq: seq, data: [] }` — hydration is driven by the tmux attach redraw flowing through the same broadcast channel and coalescing layer as live output.
-- `TerminalManager::new_for_project(path)` is the production factory; `new_local` stays for tests that don't need persistence. `LocalPtyAdapter` is sealed to `pub(crate)` — it is no longer a user-facing backend, only the shared PTY/coalescer/idle-detector core that `TmuxAdapter` composes over.
-- Reattach-on-startup works implicitly: `TmuxAdapter::create_with_size` is a "create-if-missing, attach-if-exists" operation via `tmux has-session`. No explicit reconciliation loop is needed.
-- Orphan GC on project open: `ProjectManager::switch_to_project` prunes any `session-*` / `orchestrator-*` / `spec-orchestrator-*` tmux sessions on the project socket whose names aren't prefixed by a live DB session's wire-ID base. Multi-generation hash schemes are covered so in-flight upgrades don't accidentally kill attached agents.
-- Tmux attach clients disable Lucode's hydration buffer so tmux owns scrollback via `history-limit 50000`; direct local-PTY test paths keep their existing buffer semantics.
-
-## Configuration & Secrets
-
-- tmux must be installed on the host (`brew install tmux`). Lucode does not bundle tmux.

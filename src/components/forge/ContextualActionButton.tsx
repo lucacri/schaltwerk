@@ -17,7 +17,8 @@ export function ContextualActionButton({ context, variables }: ContextualActionB
 
     const matchingActions = useMemo(() => {
         return actions.filter(a =>
-            a.context === context || a.context === 'both'
+            (a.context === context || a.context === 'both') &&
+            (a.mode !== 'spec-clarify' || context === 'issue')
         )
     }, [actions, context])
 
@@ -43,6 +44,15 @@ export function ContextualActionButton({ context, variables }: ContextualActionB
 
         if (action.mode === 'spec') {
             emitUiEvent(UiEvent.ContextualActionCreateSpec, {
+                prompt,
+                name: action.name,
+                contextType: context,
+                contextNumber,
+                contextTitle,
+                contextUrl,
+            })
+        } else if (action.mode === 'spec-clarify') {
+            emitUiEvent(UiEvent.ContextualActionCreateSpecClarify, {
                 prompt,
                 name: action.name,
                 contextType: context,
@@ -103,7 +113,7 @@ export function ContextualActionButton({ context, variables }: ContextualActionB
                         >
                             <span className="flex-1">{action.name}</span>
                             <span className="text-xs px-1.5 py-0.5 rounded" style={{ color: 'var(--color-text-muted)', backgroundColor: 'var(--color-bg-tertiary)' }}>
-                                {action.mode}
+                                {action.mode === 'spec-clarify' ? 'spec + clarify' : action.mode}
                             </span>
                         </button>
                     ))}

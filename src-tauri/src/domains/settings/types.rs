@@ -383,10 +383,11 @@ pub enum ContextualActionContext {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum ContextualActionMode {
     Spec,
     Session,
+    SpecClarify,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -414,6 +415,39 @@ pub fn normalize_contextual_action(action: ContextualAction) -> ContextualAction
             .replace("{{mr.", "{{pr.")
             .replace("pr.headRefName", "pr.sourceBranch"),
         ..action
+    }
+}
+
+#[cfg(test)]
+mod contextual_action_mode_tests {
+    use super::*;
+
+    #[test]
+    fn contextual_action_mode_roundtrips_for_each_variant() {
+        assert_eq!(
+            serde_json::to_string(&ContextualActionMode::Spec).unwrap(),
+            "\"spec\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ContextualActionMode::Session).unwrap(),
+            "\"session\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ContextualActionMode::SpecClarify).unwrap(),
+            "\"spec-clarify\""
+        );
+        assert_eq!(
+            serde_json::from_str::<ContextualActionMode>("\"spec\"").unwrap(),
+            ContextualActionMode::Spec
+        );
+        assert_eq!(
+            serde_json::from_str::<ContextualActionMode>("\"session\"").unwrap(),
+            ContextualActionMode::Session
+        );
+        assert_eq!(
+            serde_json::from_str::<ContextualActionMode>("\"spec-clarify\"").unwrap(),
+            ContextualActionMode::SpecClarify
+        );
     }
 }
 

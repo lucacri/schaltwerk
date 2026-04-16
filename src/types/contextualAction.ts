@@ -1,7 +1,7 @@
 import type { AgentType } from './session'
 
 export type ContextualActionContext = 'pr' | 'issue' | 'both'
-export type ContextualActionMode = 'spec' | 'session'
+export type ContextualActionMode = 'spec' | 'session' | 'spec-clarify'
 
 export interface ContextualAction {
     id: string

@@ -481,7 +481,7 @@ export const SessionCard = memo<SessionCardProps>(
                   borderColor: "var(--color-accent-blue-border)",
                 }}
               >
-                {t.session.running}
+                {sessionState === "spec" ? t.session.clarifying : t.session.running}
               </span>
             )}
             {statusState.primaryStatus === "idle" && (

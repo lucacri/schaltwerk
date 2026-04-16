@@ -448,7 +448,7 @@ describe('SessionCard spec stage badges', () => {
 
     const card = screen.getByRole('button', { name: /selected session/i })
     expect(card.querySelector('.w-\\[6px\\]')).toBeInTheDocument()
-    expect(screen.getByText(/^running$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^clarifying$/i)).toBeInTheDocument()
   })
 
   it('shows waiting for input state for started specs that need input', () => {

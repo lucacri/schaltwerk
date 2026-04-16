@@ -444,12 +444,13 @@
     "running": "运行中",
     "ready": "✓ 就绪",
     "blocked": "⚠ 已阻塞",
-    "promoted": "★ 已推广",
+    "promoted": "★ 已晋升",
     "spec": "规格",
-    "complete": "% 完成",
-    "lastAgentOutput": "最后代理输出"
-  },
-  "shortcuts": {
+    "clarifying": "正在澄清",
+    "complete": "% 已完成",
+    "lastAgentOutput": "上次代理输出"
+    },
+    "shortcuts": {
     "sections": {
       "appearance": "字体控制",
       "navigation": "导航",

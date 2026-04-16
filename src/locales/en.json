@@ -446,6 +446,7 @@
     "blocked": "⚠ blocked",
     "promoted": "★ Promoted",
     "spec": "Spec",
+    "clarifying": "Clarifying",
     "complete": "% complete",
     "lastAgentOutput": "Last agent output"
   },

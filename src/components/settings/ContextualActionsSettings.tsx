@@ -113,7 +113,15 @@ export function ContextualActionsSettings({ onNotification, enabledAgents }: Con
         return options
     }, [visibleAgentTypes, visiblePresets, visibleVariants])
 
+    const directAgentSourceOptions = useMemo(() => [
+        { value: '', label: 'Default (Claude)' },
+        ...visibleAgentTypes.map(agent => ({ value: `agent:${agent}`, label: agent })),
+    ], [visibleAgentTypes])
+
     const getAgentSourceValue = useCallback((action: ContextualAction): string => {
+        if (action.mode === 'spec-clarify') {
+            return action.agentType ? `agent:${action.agentType}` : ''
+        }
         if (action.presetId) return `preset:${action.presetId}`
         if (action.variantId) return `variant:${action.variantId}`
         if (action.agentType) return `agent:${action.agentType}`
@@ -121,6 +129,10 @@ export function ContextualActionsSettings({ onNotification, enabledAgents }: Con
     }, [])
 
     const getAgentSourceOptions = useCallback((action: ContextualAction) => {
+        if (action.mode === 'spec-clarify') {
+            return directAgentSourceOptions
+        }
+
         const currentValue = getAgentSourceValue(action)
         if (!currentValue || agentSourceOptions.some(option => option.value === currentValue)) {
             return agentSourceOptions
@@ -138,7 +150,19 @@ export function ContextualActionsSettings({ onNotification, enabledAgents }: Con
             { value: currentValue, label: currentLabel },
             ...agentSourceOptions,
         ]
-    }, [agentSourceOptions, getAgentSourceValue])
+    }, [agentSourceOptions, directAgentSourceOptions, getAgentSourceValue])
+
+    const handleModeChange = useCallback((action: ContextualAction, value: string) => {
+        const mode = value as ContextualActionMode
+        handleUpdate(action.id, {
+            mode,
+            ...(mode === 'spec-clarify' ? {
+                context: action.context === 'pr' ? 'issue' : action.context,
+                presetId: undefined,
+                variantId: undefined,
+            } : {}),
+        })
+    }, [handleUpdate])
 
     const handleAgentSourceChange = useCallback((id: string, value: string) => {
         if (value.startsWith('preset:')) {
@@ -233,6 +257,7 @@ export function ContextualActionsSettings({ onNotification, enabledAgents }: Con
                                             <Label className="block mb-1">Context</Label>
                                             <Select
                                                 value={action.context}
+                                                aria-label="Context"
                                                 onChange={value => handleUpdate(action.id, { context: value as ContextualActionContext })}
                                                 options={[
                                                     { value: 'pr', label: 'PR/MR' },
@@ -245,10 +270,12 @@ export function ContextualActionsSettings({ onNotification, enabledAgents }: Con
                                             <Label className="block mb-1">Mode</Label>
                                             <Select
                                                 value={action.mode}
-                                                onChange={value => handleUpdate(action.id, { mode: value as ContextualActionMode })}
+                                                aria-label="Mode"
+                                                onChange={value => handleModeChange(action, value)}
                                                 options={[
                                                     { value: 'session', label: 'Create Session' },
                                                     { value: 'spec', label: 'Create Spec' },
+                                                    { value: 'spec-clarify', label: 'Create Spec + Clarify' },
                                                 ]}
                                             />
                                         </div>

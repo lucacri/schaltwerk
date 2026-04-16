@@ -56,6 +56,7 @@ export enum UiEvent {
   TerminateVersionGroup = 'schaltwerk:terminate-version-group',
   ContextualActionCreateSession = 'schaltwerk:contextual-action-create-session',
   ContextualActionCreateSpec = 'schaltwerk:contextual-action-create-spec',
+  ContextualActionCreateSpecClarify = 'schaltwerk:contextual-action-create-spec-clarify',
 }
 
 export interface PermissionErrorDetail {
@@ -327,6 +328,7 @@ export type UiEventPayloads = {
   [UiEvent.TerminateVersionGroup]: TerminateVersionGroupDetail
   [UiEvent.ContextualActionCreateSession]: ContextualActionCreateSessionDetail
   [UiEvent.ContextualActionCreateSpec]: ContextualActionCreateSpecDetail
+  [UiEvent.ContextualActionCreateSpecClarify]: ContextualActionCreateSpecDetail
 }
 
 type UiEventArgs<T extends UiEvent> = undefined extends UiEventPayloads[T]
