@@ -2,6 +2,15 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Sidebar: first-class "Clarified" status pill for specs
+
+A spec whose `spec_stage` reached `clarified` used to keep showing "Clarifying" (or a stale "waiting/idle" badge) in the sidebar, and the inline text badge inside the name row duplicated the same information. The sidebar now renders a dedicated green "Clarified" pill and the stage becomes part of the shared status derivation, so every sidebar surface stays in sync.
+
+- `sessionStatus.ts` extends `SidebarPrimaryStatus` with `clarified`, masks cached `waiting_for_input` / `idle` attention when the terminal is live (`isRunning === true`), and demotes a stale `attention_kind === 'idle'` on a clarified spec to the new clarified pill — so reopening a clarified spec no longer pins it in "idle" until attention is cleared.
+- `SessionCard`, `CompactVersionRow`, `SessionRailCard`, and `SessionVersionGroup` now all read from the centralized status derivation and render the green pill / group label when `primaryStatus === 'clarified'`. The legacy inline Draft/Clarified text badge on the session name row is removed — the pill is the single source of truth.
+- New translation key `session.clarified` in `en.json` and `zh.json`.
+- Covered by `sessionStatus.test.ts`, additions to `SessionCard.test.tsx`, `CompactVersionRow.test.tsx`, `SessionRailCard.test.tsx`, and a new `SessionVersionGroup.status.test.tsx` asserting the clarified/waiting/running/idle precedence for spec-state groups.
+
 ## Consolidation: auto-file stub report when a candidate exits without reporting
 
 A consolidation round used to stall forever if a candidate session was cancelled (or converted to a spec) before its agent called `lucode_consolidation_report`: `all_candidates_reported` would never return true, so neither the auto-judge nor the candidate-verdict banner could unblock the round. Lucode now auto-fills a stub report on the exiting candidate's behalf so the round can progress.

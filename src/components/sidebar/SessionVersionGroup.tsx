@@ -289,23 +289,32 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     }
 
     if (primaryStatus.sessionState === 'spec') {
-      if (primaryStatus.primaryStatus === 'waiting') {
-        return {
-          label: t.session.waitingForInput,
-          tone: 'amber' as HeaderStatusTone,
-        }
-      }
-
-      if (primaryVersion.session.info.spec_stage === 'clarified') {
-        return {
-          label: 'Clarified',
-          tone: 'green' as HeaderStatusTone,
-        }
-      }
-
-      return {
-        label: 'Draft',
-        tone: 'amber' as HeaderStatusTone,
+      switch (primaryStatus.primaryStatus) {
+        case 'waiting':
+          return {
+            label: t.session.waitingForInput,
+            tone: 'amber' as HeaderStatusTone,
+          }
+        case 'idle':
+          return {
+            label: t.session.idle,
+            tone: 'yellow' as HeaderStatusTone,
+          }
+        case 'running':
+          return {
+            label: t.session.clarifying,
+            tone: 'blue' as HeaderStatusTone,
+          }
+        case 'clarified':
+          return {
+            label: t.session.clarified,
+            tone: 'green' as HeaderStatusTone,
+          }
+        default:
+          return {
+            label: 'Draft',
+            tone: 'amber' as HeaderStatusTone,
+          }
       }
     }
 

@@ -10,7 +10,7 @@ import { useMultipleShortcutDisplays } from '../../keyboardShortcuts/useShortcut
 import { KeyboardShortcutAction } from '../../keyboardShortcuts/config'
 import { detectPlatformSafe } from '../../keyboardShortcuts/helpers'
 import { useTranslation } from '../../common/i18n'
-import { getSessionLifecycleState } from '../../utils/sessionState'
+import { getSidebarSessionStatus } from './sessionStatus'
 
 interface SessionRailCardProps {
   session: {
@@ -37,17 +37,20 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
   const info = session.info
   const sessionName = getSessionDisplayName(info)
   const sessionState = info.session_state
-  const lifecycleState = getSessionLifecycleState(info)
-  const specWaitingForInput = lifecycleState === SessionState.Spec
-    && info.clarification_started === true
-    && info.attention_required === true
-    && info.attention_kind !== 'idle'
-  const isWaitingForInput = lifecycleState === SessionState.Spec
-    ? specWaitingForInput
-    : info.attention_required === true && info.attention_kind === 'waiting_for_input'
-  const isIdle = info.attention_required === true && !isWaitingForInput
-  const isRunningState = (lifecycleState === 'running' || isRunning) && !isIdle && !isWaitingForInput
-  const accessibleState = isWaitingForInput ? 'waiting for input' : (isIdle ? 'idle' : lifecycleState)
+  const statusState = getSidebarSessionStatus(info, Boolean(info.is_blocked), isRunning)
+  const lifecycleState = statusState.sessionState
+  const isWaitingForInput = statusState.isWaitingForInput
+  const isIdle = statusState.isIdle
+  const isRunningState = isRunning || statusState.isActivelyRunning
+  const accessibleState = isRunningState
+    ? 'running'
+    : isWaitingForInput
+      ? 'waiting for input'
+      : isIdle
+        ? 'idle'
+        : statusState.primaryStatus === 'clarified'
+          ? 'clarified'
+          : lifecycleState
   const shortcuts = useMultipleShortcutDisplays([
     KeyboardShortcutAction.SwitchToSession1,
     KeyboardShortcutAction.SwitchToSession2,
@@ -160,7 +163,14 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
             ⏸ {t.sidebar.states.idle}
           </span>
           )}
-          {!isRunningState && !isIdle && lifecycleState === SessionState.Spec && (
+          {!isRunningState && !isIdle && statusState.primaryStatus === 'clarified' && (
+            <span
+              className="block w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: 'var(--color-accent-green)' }}
+              title={t.session.clarified}
+            />
+          )}
+          {!isRunningState && !isIdle && statusState.primaryStatus !== 'clarified' && lifecycleState === SessionState.Spec && (
             <span
               className="block w-1.5 h-1.5 rounded-full"
               style={{ backgroundColor: 'var(--color-accent-yellow)' }}

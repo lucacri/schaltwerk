@@ -281,6 +281,23 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
       )
     }
 
+    if (statusState.primaryStatus === 'clarified') {
+      return (
+        <span
+          data-testid="compact-row-status-clarified"
+          className="inline-flex items-center px-1.5 py-[1px] rounded border"
+          style={{
+            ...sessionText.badge,
+            backgroundColor: 'var(--color-accent-green-bg)',
+            color: 'var(--color-accent-green-light)',
+            borderColor: 'var(--color-accent-green-border)',
+          }}
+        >
+          {t.session.clarified}
+        </span>
+      )
+    }
+
     if (statusState.primaryStatus === 'running') {
       return (
         <span

@@ -186,6 +186,26 @@ describe('CompactVersionRow', () => {
     expect(screen.getByTestId('compact-row-status-running')).toBeInTheDocument()
   })
 
+  it('renders clarified state for clarified specs', () => {
+    renderRow({
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          session_state: 'spec',
+          status: 'spec',
+          spec_stage: 'clarified',
+          worktree_path: '',
+          attention_required: false,
+          clarification_started: true,
+        },
+      },
+    })
+
+    expect(screen.getByTestId('compact-row-status-clarified')).toBeInTheDocument()
+    expect(screen.getByText(/^Clarified$/)).toBeInTheDocument()
+  })
+
   it('renders clarification waiting state for started specs', () => {
     renderRow({
       session: {

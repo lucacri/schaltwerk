@@ -370,8 +370,8 @@ describe('SessionCard running tag', () => {
   })
 })
 
-describe('SessionCard spec stage badges', () => {
-  it('shows the clarified badge for spec sessions', () => {
+describe('SessionCard spec status pill', () => {
+  it('shows the clarified status pill for clarified spec sessions', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionCard
@@ -383,6 +383,8 @@ describe('SessionCard spec stage badges', () => {
               status: 'spec',
               spec_stage: 'clarified',
               worktree_path: '',
+              attention_required: false,
+              clarification_started: true,
             },
           }}
           index={0}
@@ -393,7 +395,10 @@ describe('SessionCard spec stage badges', () => {
       </SessionCardActionsProvider>
     )
 
-    expect(screen.getByText('Clarified')).toBeInTheDocument()
+    const pill = screen.getByTestId('session-card-status-pill')
+    expect(pill).toHaveTextContent(/^Clarified$/)
+    expect(pill.getAttribute('style')).toContain('background-color: var(--color-accent-green-bg)')
+    expect(screen.getAllByText(/^Clarified$/)).toHaveLength(1)
   })
 
   it('shows not started for specs whose clarification has not been started', () => {
@@ -422,7 +427,7 @@ describe('SessionCard spec stage badges', () => {
     expect(screen.getByText(/not started/i)).toBeInTheDocument()
   })
 
-  it('shows clarification running state for started specs', () => {
+  it('shows clarification running state for draft specs with an active clarification agent', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionCard
@@ -441,7 +446,7 @@ describe('SessionCard spec stage badges', () => {
           index={0}
           isSelected
           hasFollowUpMessage={false}
-          isRunning={false}
+          isRunning
         />
       </SessionCardActionsProvider>
     )
@@ -449,6 +454,120 @@ describe('SessionCard spec stage badges', () => {
     const card = screen.getByRole('button', { name: /selected session/i })
     expect(card.querySelector('.w-\\[6px\\]')).toBeInTheDocument()
     expect(screen.getByText(/^clarifying$/i)).toBeInTheDocument()
+  })
+
+  it('does not render an inline Draft stage badge next to the spec name', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              session_state: 'spec',
+              status: 'spec',
+              spec_stage: 'draft',
+              worktree_path: '',
+              attention_required: false,
+              clarification_started: true,
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.queryByText(/^Draft$/)).toBeNull()
+    expect(screen.getByText(/^Clarifying$/i)).toBeInTheDocument()
+  })
+
+  it('shows clarified for clarified specs without attention when not running', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              session_state: 'spec',
+              status: 'spec',
+              spec_stage: 'clarified',
+              worktree_path: '',
+              attention_required: false,
+              clarification_started: true,
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('session-card-status-pill')).toHaveTextContent(/^Clarified$/)
+    expect(screen.getAllByText(/^Clarified$/)).toHaveLength(1)
+  })
+
+  it('shows waiting for input for clarified specs with waiting attention when not running', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              session_state: 'spec',
+              status: 'spec',
+              spec_stage: 'clarified',
+              worktree_path: '',
+              attention_required: true,
+              attention_kind: 'waiting_for_input',
+              clarification_started: true,
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('session-card-status-pill')).toHaveTextContent(/waiting for input/i)
+    expect(screen.queryByText(/^Clarified$/)).toBeNull()
+  })
+
+  it('shows clarifying for clarified specs with stale waiting attention while running', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              session_state: 'spec',
+              status: 'spec',
+              spec_stage: 'clarified',
+              worktree_path: '',
+              attention_required: true,
+              attention_kind: 'waiting_for_input',
+              clarification_started: true,
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('session-card-status-pill')).toHaveTextContent(/^Clarifying$/)
+    expect(screen.queryByText(/waiting for input/i)).toBeNull()
   })
 
   it('shows waiting for input state for started specs that need input', () => {

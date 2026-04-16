@@ -400,19 +400,6 @@ export const SessionCard = memo<SessionCardProps>(
                   sessionName
                 )}
               </div>
-            {sessionState === "spec" && s.spec_stage && (
-              <span
-                className="flex-shrink-0"
-                style={{
-                  ...sessionText.badge,
-                  color: s.spec_stage === "clarified"
-                    ? "var(--color-accent-green-light)"
-                    : "var(--color-accent-yellow-light)",
-                }}
-              >
-                {s.spec_stage === "clarified" ? "Clarified" : "Draft"}
-              </span>
-            )}
             {hasFollowUpMessage && !isReadyToMerge && (
               <span
                 className="flex-shrink-0 inline-flex items-center gap-1"
@@ -454,6 +441,20 @@ export const SessionCard = memo<SessionCardProps>(
                 }}
               >
                 {t.session.notStarted}
+              </span>
+            )}
+            {statusState.primaryStatus === "clarified" && (
+              <span
+                data-testid="session-card-status-pill"
+                className="inline-flex items-center rounded border px-2 py-[1px]"
+                style={{
+                  ...sessionText.badge,
+                  backgroundColor: "var(--color-accent-green-bg)",
+                  color: "var(--color-accent-green-light)",
+                  borderColor: "var(--color-accent-green-border)",
+                }}
+              >
+                {t.session.clarified}
               </span>
             )}
             {statusState.primaryStatus === "waiting" && (

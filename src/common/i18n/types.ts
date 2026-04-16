@@ -450,6 +450,7 @@ export interface Translations {
     blocked: string
     promoted: string
     spec: string
+    clarified: string
     clarifying: string
     complete: string
     lastAgentOutput: string

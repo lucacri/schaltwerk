@@ -48,6 +48,73 @@ describe('SessionRailCard', () => {
     expect(screen.queryByText(/idle/i)).toBeNull()
   })
 
+  it('shows the running indicator for running sessions with stale waiting attention while live', () => {
+    const session = mockEnrichedSession('live-waiting-session', 'running', false)
+    session.info.attention_required = true
+    session.info.attention_kind = 'waiting_for_input'
+
+    const { container } = render(
+      <TestProviders>
+        <SessionRailCard
+          session={session}
+          index={0}
+          isSelected={false}
+          hasFollowUpMessage={false}
+          isRunning
+          onSelect={vi.fn()}
+        />
+      </TestProviders>
+    )
+
+    expect(container.querySelector('.progress-dot-1')).toBeTruthy()
+    expect(screen.queryByText(/waiting for input/i)).toBeNull()
+  })
+
+  it('shows the running indicator for spec sessions with stale waiting attention while live', () => {
+    const session = mockEnrichedSession('live-waiting-spec', 'spec', false)
+    session.info.clarification_started = true
+    session.info.attention_required = true
+    session.info.attention_kind = 'waiting_for_input'
+
+    const { container } = render(
+      <TestProviders>
+        <SessionRailCard
+          session={session}
+          index={0}
+          isSelected={false}
+          hasFollowUpMessage={false}
+          isRunning
+          onSelect={vi.fn()}
+        />
+      </TestProviders>
+    )
+
+    expect(container.querySelector('.progress-dot-1')).toBeTruthy()
+    expect(screen.queryByText(/waiting for input/i)).toBeNull()
+  })
+
+  it('shows the running indicator for running sessions with stale idle attention while live', () => {
+    const session = mockEnrichedSession('live-idle-session', 'running', false)
+    session.info.attention_required = true
+    session.info.attention_kind = 'idle'
+
+    const { container } = render(
+      <TestProviders>
+        <SessionRailCard
+          session={session}
+          index={0}
+          isSelected={false}
+          hasFollowUpMessage={false}
+          isRunning
+          onSelect={vi.fn()}
+        />
+      </TestProviders>
+    )
+
+    expect(container.querySelector('.progress-dot-1')).toBeTruthy()
+    expect(screen.queryByTitle('Idle')).toBeNull()
+  })
+
   it('does not expose ready state in the collapsed rail', () => {
     const session = mockEnrichedSession('mergeable-session', 'running', true)
     session.info.ready_to_merge = true

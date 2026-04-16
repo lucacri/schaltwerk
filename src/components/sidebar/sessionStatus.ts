@@ -4,7 +4,7 @@ import { getSessionLifecycleState } from '../../utils/sessionState'
 
 type SidebarSessionStatusSource = Pick<
   SessionInfo,
-  'status' | 'session_state' | 'clarification_started' | 'attention_required' | 'attention_kind' | 'ready_to_merge'
+  'status' | 'session_state' | 'spec_stage' | 'clarification_started' | 'attention_required' | 'attention_kind' | 'ready_to_merge'
 >
 
 export type SidebarPrimaryStatus =
@@ -12,6 +12,7 @@ export type SidebarPrimaryStatus =
   | 'waiting'
   | 'idle'
   | 'not_started'
+  | 'clarified'
   | 'running'
   | 'ready'
   | null
@@ -43,13 +44,23 @@ export function getSidebarSessionStatus(
   const runningWaitingForInput = sessionState !== SessionState.Spec
     && info.attention_required === true
     && info.attention_kind === 'waiting_for_input'
-  const isWaitingForInput = specWaitingForInput || runningWaitingForInput
-  const isIdle =
+  const rawWaiting = specWaitingForInput || runningWaitingForInput
+  const rawIdle =
     sessionState === SessionState.Spec
       ? info.attention_required === true && !specWaitingForInput
       : info.attention_required === true && !runningWaitingForInput
+  const isWaitingForInput = rawWaiting && !isRunning
+  const clarifiedSpecCanComplete =
+    sessionState === SessionState.Spec
+    && info.spec_stage === 'clarified'
+    && !isRunning
+    && !isBlocked
+  const isIdle = rawIdle && !isRunning && !(clarifiedSpecCanComplete && !isWaitingForInput)
+  const isClarifiedSpecComplete =
+    clarifiedSpecCanComplete
+    && !isWaitingForInput
   const isActivelyRunning =
-    !isIdle && !isWaitingForInput && (
+    !isClarifiedSpecComplete && !isIdle && !isWaitingForInput && (
       isSpecClarificationStarted
       || (sessionState === SessionState.Running && (info.ready_to_merge !== true || isRunning))
     )
@@ -60,13 +71,15 @@ export function getSidebarSessionStatus(
       ? 'waiting'
       : isIdle
         ? 'idle'
-        : specNotStarted
-          ? 'not_started'
-          : isActivelyRunning
-            ? 'running'
-            : info.ready_to_merge === true
-              ? 'ready'
-              : null
+        : isClarifiedSpecComplete
+          ? 'clarified'
+          : specNotStarted
+            ? 'not_started'
+            : isActivelyRunning
+              ? 'running'
+              : info.ready_to_merge === true
+                ? 'ready'
+                : null
 
   return {
     sessionState,
