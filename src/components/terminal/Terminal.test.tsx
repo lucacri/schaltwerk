@@ -940,7 +940,7 @@ describe('Terminal', () => {
     }
   })
 
-  it('drops mouse tracking sequences before sending to the backend', async () => {
+  it('passes SGR mouse reports to tmux while dropping X10 mouse reports in standard mode', async () => {
     const { instances } = terminalHarness
 
     renderTerminal({ terminalId: 'session-mouse-top', sessionName: 'demo' })
@@ -960,8 +960,10 @@ describe('Terminal', () => {
     onData?.('\u001b[M!!#')
     onData?.('\u001b[32m')
 
-    expect(writeTerminalBackend).toHaveBeenCalledTimes(1)
-    expect(writeTerminalBackend).toHaveBeenCalledWith('session-mouse-top', '\u001b[32m')
+    expect(writeTerminalBackend).toHaveBeenCalledTimes(3)
+    expect(writeTerminalBackend).toHaveBeenNthCalledWith(1, 'session-mouse-top', '\u001b[<1;2;3M')
+    expect(writeTerminalBackend).toHaveBeenNthCalledWith(2, 'session-mouse-top', '\u001b[<1;2;3m')
+    expect(writeTerminalBackend).toHaveBeenNthCalledWith(3, 'session-mouse-top', '\u001b[32m')
   })
 
   it('ignores duplicate resize observer measurements', async () => {

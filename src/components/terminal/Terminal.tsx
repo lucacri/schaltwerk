@@ -551,7 +551,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         return true;
     }, [terminalId]);
 
-    const shouldFilterMouseTracking = useCallback(() => {
+    const shouldFilterX10MouseTracking = useCallback(() => {
         const wrapper = xtermWrapperRef.current;
         if (!wrapper) return true;
         if (typeof wrapper.isTuiMode === 'function') {
@@ -560,12 +560,9 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
         return true;
     }, []);
 
-    const isMouseTrackingSequence = useCallback((data: string): boolean => {
+    const isX10MouseTrackingSequence = useCallback((data: string): boolean => {
         if (!data.startsWith('\u001b[')) return false;
         const body = data.slice(2);
-        if (/^<\d+;\d+;\d+[Mm]$/.test(body)) {
-            return true;
-        }
         if (body.startsWith('M') && body.length >= 4) {
             const b1 = body.charCodeAt(1);
             const b2 = body.charCodeAt(2);
@@ -1820,7 +1817,7 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                 return;
             }
 
-            if (isMouseTrackingSequence(data) && shouldFilterMouseTracking()) {
+            if (isX10MouseTrackingSequence(data) && shouldFilterX10MouseTracking()) {
                 return;
             }
 
