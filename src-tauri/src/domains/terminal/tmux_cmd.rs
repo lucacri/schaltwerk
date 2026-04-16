@@ -277,7 +277,11 @@ pub(crate) mod testing {
         async fn run(&self, args: &[&str]) -> Result<TmuxCliOutput, String> {
             let owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
             self.calls.lock().unwrap().push(owned.clone());
-            Ok((self.responder)(&owned))
+            let out = (self.responder)(&owned);
+            // Force a cooperative reschedule so concurrency tests can interleave
+            // pending racers between tmux CLI invocations.
+            tokio::task::yield_now().await;
+            Ok(out)
         }
     }
 

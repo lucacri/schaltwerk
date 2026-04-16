@@ -35,6 +35,11 @@ pub struct TmuxAdapter {
     tmux_binary: String,
     global_args: Vec<String>,
     last_sizes: Arc<Mutex<HashMap<String, (u16, u16)>>>,
+    // Serializes the has-session → new-session check-then-create sequence per
+    // terminal id. Without this, overlapping selection/hydration flows can both
+    // observe `has-session=false` on a cold-launch tmux server and race into
+    // `new-session`, producing a "duplicate session" failure for the loser.
+    create_guards: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
 }
 
 impl TmuxAdapter {
@@ -47,6 +52,23 @@ impl TmuxAdapter {
             tmux_binary,
             global_args,
             last_sizes: Arc::new(Mutex::new(HashMap::new())),
+            create_guards: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    async fn acquire_create_guard(&self, id: &str) -> Arc<Mutex<()>> {
+        let mut guards = self.create_guards.lock().await;
+        guards
+            .entry(id.to_string())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    }
+
+    async fn release_create_guard_if_idle(&self, id: &str, guard: Arc<Mutex<()>>) {
+        let mut guards = self.create_guards.lock().await;
+        // Two strong refs here (ours + the map's) means no other racer is waiting.
+        if Arc::strong_count(&guard) <= 2 {
+            guards.remove(id);
         }
     }
 
@@ -125,12 +147,20 @@ impl TerminalBackend for TmuxAdapter {
     ) -> Result<(), String> {
         let id = params.id.clone();
 
-        let session_exists = self.cli.has_session(&id).await?;
-        if !session_exists {
-            self.cli
-                .new_session_detached(&id, cols, rows, &params.cwd, params.app.as_ref())
-                .await?;
+        let guard = self.acquire_create_guard(&id).await;
+        let check_and_create = async {
+            let _held = guard.lock().await;
+            let exists = self.cli.has_session(&id).await?;
+            if !exists {
+                self.cli
+                    .new_session_detached(&id, cols, rows, &params.cwd, params.app.as_ref())
+                    .await?;
+            }
+            Ok::<bool, String>(exists)
         }
+        .await;
+        self.release_create_guard_if_idle(&id, guard).await;
+        let session_exists = check_and_create?;
 
         // Propagate agent env to the attaching client as well so interactive
         // commands inside the pane can observe them if tmux's update-environment
@@ -442,6 +472,118 @@ mod tests {
         let adapter = TmuxAdapter::new(cli);
 
         adapter.force_kill_all().await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn concurrent_create_with_same_id_issues_new_session_exactly_once() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+        let session_created = Arc::new(AtomicBool::new(false));
+        let new_session_calls = Arc::new(AtomicUsize::new(0));
+
+        let session_flag = session_created.clone();
+        let new_count = new_session_calls.clone();
+
+        let cli = MockTmuxCli::new(move |args| match args.first().map(String::as_str) {
+            Some("has-session") => {
+                if session_flag.load(Ordering::SeqCst) {
+                    crate::domains::terminal::tmux_cmd::testing::success()
+                } else {
+                    crate::domains::terminal::tmux_cmd::testing::failure(
+                        1,
+                        "can't find session: racing",
+                    )
+                }
+            }
+            Some("new-session") => {
+                new_count.fetch_add(1, Ordering::SeqCst);
+                let was_created = session_flag.swap(true, Ordering::SeqCst);
+                if was_created {
+                    crate::domains::terminal::tmux_cmd::testing::failure(
+                        1,
+                        "duplicate session: racing",
+                    )
+                } else {
+                    crate::domains::terminal::tmux_cmd::testing::success()
+                }
+            }
+            _ => crate::domains::terminal::tmux_cmd::testing::success(),
+        });
+
+        let adapter = Arc::new(TmuxAdapter::new(cli));
+
+        let spawn_create = |adapter: Arc<TmuxAdapter>| {
+            tokio::spawn(async move {
+                let params = CreateParams {
+                    id: "racing".into(),
+                    cwd: "/nonexistent-for-this-test".into(),
+                    app: None,
+                    disable_hydration_buffer: false,
+                };
+                adapter.create_with_size(params, 80, 24).await
+            })
+        };
+
+        let a = spawn_create(adapter.clone());
+        let b = spawn_create(adapter.clone());
+
+        let _ = a.await.expect("task A join");
+        let _ = b.await.expect("task B join");
+
+        assert_eq!(
+            new_session_calls.load(Ordering::SeqCst),
+            1,
+            "TOCTOU guard failed: new-session must fire exactly once for same-id concurrent creates"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn concurrent_create_with_different_ids_does_not_serialize() {
+        let cli = MockTmuxCli::new(|args| match args.first().map(String::as_str) {
+            Some("has-session") => crate::domains::terminal::tmux_cmd::testing::failure(
+                1,
+                "can't find session: x",
+            ),
+            _ => crate::domains::terminal::tmux_cmd::testing::success(),
+        });
+
+        let adapter = Arc::new(TmuxAdapter::new(cli.clone()));
+
+        let spawn_create = |adapter: Arc<TmuxAdapter>, id: &'static str| {
+            tokio::spawn(async move {
+                let params = CreateParams {
+                    id: id.into(),
+                    cwd: "/nonexistent-for-this-test".into(),
+                    app: None,
+                    disable_hydration_buffer: false,
+                };
+                adapter.create_with_size(params, 80, 24).await
+            })
+        };
+
+        let a = spawn_create(adapter.clone(), "term-a");
+        let b = spawn_create(adapter.clone(), "term-b");
+        let _ = a.await.expect("task A join");
+        let _ = b.await.expect("task B join");
+
+        let calls = cli.recorded_calls();
+        let has_a_pos = calls
+            .iter()
+            .position(|c| c.first().map(String::as_str) == Some("has-session") && c.get(2).map(String::as_str) == Some("term-a"))
+            .expect("has-session for term-a");
+        let has_b_pos = calls
+            .iter()
+            .position(|c| c.first().map(String::as_str) == Some("has-session") && c.get(2).map(String::as_str) == Some("term-b"))
+            .expect("has-session for term-b");
+        let new_first = calls
+            .iter()
+            .position(|c| c.first().map(String::as_str) == Some("new-session"))
+            .expect("at least one new-session");
+
+        assert!(
+            has_a_pos < new_first && has_b_pos < new_first,
+            "different ids should interleave in has-session before any new-session (got calls {calls:?})"
+        );
     }
 
     #[tokio::test]
