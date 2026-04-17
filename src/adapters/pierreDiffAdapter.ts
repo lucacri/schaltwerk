@@ -109,9 +109,10 @@ function flushHunkContext(builder: HunkBuilder): void {
   if (builder.pendingContextCount > 0) {
     builder.content.push({
       type: 'context',
-      lines: builder.pendingContextCount,
-      deletionLineIndex: builder.accumulator.deletionLines.length - builder.pendingContextCount,
-      additionLineIndex: builder.accumulator.additionLines.length - builder.pendingContextCount,
+      lines: builder.accumulator.additionLines.slice(
+        builder.accumulator.additionLines.length - builder.pendingContextCount
+      ),
+      noEOFCR: false,
     })
     builder.pendingContextCount = 0
   }
@@ -121,17 +122,21 @@ function flushHunkChanges(builder: HunkBuilder): void {
   if (builder.pendingDeletionCount > 0 || builder.pendingAdditionCount > 0) {
     builder.content.push({
       type: 'change',
-      deletions: builder.pendingDeletionCount,
-      deletionLineIndex: builder.accumulator.deletionLines.length - builder.pendingDeletionCount,
-      additions: builder.pendingAdditionCount,
-      additionLineIndex: builder.accumulator.additionLines.length - builder.pendingAdditionCount,
+      deletions: builder.accumulator.deletionLines.slice(
+        builder.accumulator.deletionLines.length - builder.pendingDeletionCount
+      ),
+      additions: builder.accumulator.additionLines.slice(
+        builder.accumulator.additionLines.length - builder.pendingAdditionCount
+      ),
+      noEOFCRDeletions: false,
+      noEOFCRAdditions: false,
     })
     builder.pendingDeletionCount = 0
     builder.pendingAdditionCount = 0
   }
 }
 
-function finalizeHunk(builder: HunkBuilder, collapsedBefore: number, unifiedLineStart: number, hunkDeletionLineIndex: number, hunkAdditionLineIndex: number): Hunk | null {
+function finalizeHunk(builder: HunkBuilder, collapsedBefore: number, unifiedLineStart: number): Hunk | null {
   flushHunkContext(builder)
   flushHunkChanges(builder)
 
@@ -151,16 +156,12 @@ function finalizeHunk(builder: HunkBuilder, collapsedBefore: number, unifiedLine
     additionCount: builder.additionCount,
     additionStart: builder.newLineStart,
     additionLines: builder.additionCount,
-    additionLineIndex: hunkAdditionLineIndex,
     deletionCount: builder.deletionCount,
     deletionStart: builder.oldLineStart,
     deletionLines: builder.deletionCount,
-    deletionLineIndex: hunkDeletionLineIndex,
     hunkContent: builder.content,
     hunkContext: undefined,
     hunkSpecs: undefined,
-    noEOFCRDeletions: false,
-    noEOFCRAdditions: false,
   }
 }
 
@@ -183,13 +184,11 @@ function convertLinesToHunks(lines: LineInfo[]): ConversionResult {
   let collapsedBefore = 0
   let builder: HunkBuilder | null = null
   let sectionIndex = 0
-  let hunkDeletionLineIndex = 0
-  let hunkAdditionLineIndex = 0
 
   for (const line of lines) {
     if (line.isCollapsible) {
       if (builder) {
-        const hunk = finalizeHunk(builder, collapsedBefore, unifiedLineNum - (builder.contextCount + builder.deletionCount + builder.additionCount), hunkDeletionLineIndex, hunkAdditionLineIndex)
+        const hunk = finalizeHunk(builder, collapsedBefore, unifiedLineNum - (builder.contextCount + builder.deletionCount + builder.additionCount))
         if (hunk) {
           hunks.push(hunk)
         }
@@ -215,8 +214,6 @@ function convertLinesToHunks(lines: LineInfo[]): ConversionResult {
     if (!builder) {
       const oldLineStart = line.oldLineNumber ?? unifiedLineNum
       const newLineStart = line.newLineNumber ?? unifiedLineNum
-      hunkDeletionLineIndex = accumulator.deletionLines.length
-      hunkAdditionLineIndex = accumulator.additionLines.length
       builder = createHunkBuilder(oldLineStart, newLineStart, accumulator)
     }
 
@@ -252,7 +249,7 @@ function convertLinesToHunks(lines: LineInfo[]): ConversionResult {
   }
 
   if (builder) {
-    const hunk = finalizeHunk(builder, collapsedBefore, unifiedLineNum - (builder.contextCount + builder.deletionCount + builder.additionCount), hunkDeletionLineIndex, hunkAdditionLineIndex)
+    const hunk = finalizeHunk(builder, collapsedBefore, unifiedLineNum - (builder.contextCount + builder.deletionCount + builder.additionCount))
     if (hunk) {
       hunks.push(hunk)
     }
@@ -327,9 +324,8 @@ export function convertDiffResponseToFileDiffMetadata(
     hunks,
     splitLineCount: Math.max(oldLineCount, newLineCount),
     unifiedLineCount: totalUnified,
-    isPartial: true,
-    deletionLines: accumulator.deletionLines,
-    additionLines: accumulator.additionLines,
+    oldLines: accumulator.deletionLines,
+    newLines: accumulator.additionLines,
     cacheKey,
   }
 
@@ -380,9 +376,8 @@ export function createEmptyFileDiff(filePath: string): FileDiffMetadata {
     hunks: [],
     splitLineCount: 0,
     unifiedLineCount: 0,
-    isPartial: true,
-    deletionLines: [],
-    additionLines: [],
+    oldLines: [],
+    newLines: [],
   }
 }
 
@@ -395,8 +390,7 @@ export function createBinaryFileDiff(filePath: string): FileDiffMetadata {
     hunks: [],
     splitLineCount: 0,
     unifiedLineCount: 0,
-    isPartial: true,
-    deletionLines: [],
-    additionLines: [],
+    oldLines: [],
+    newLines: [],
   }
 }

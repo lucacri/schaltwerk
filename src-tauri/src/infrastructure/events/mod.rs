@@ -42,6 +42,7 @@ pub enum SchaltEvent {
     OpenMergeModal,
     OpenGitlabMrModal,
     SelectAllRequested,
+    ViewProcessesRequested,
 }
 
 impl SchaltEvent {
@@ -88,6 +89,7 @@ impl SchaltEvent {
             SchaltEvent::OpenMergeModal => "schaltwerk:open-merge-modal",
             SchaltEvent::OpenGitlabMrModal => "schaltwerk:open-gitlab-mr-modal",
             SchaltEvent::SelectAllRequested => "schaltwerk:select-all-requested",
+            SchaltEvent::ViewProcessesRequested => "schaltwerk:view-processes-requested",
         }
     }
 }
@@ -153,6 +155,14 @@ mod tests {
         assert_eq!(
             SchaltEvent::SelectAllRequested.as_str(),
             "schaltwerk:select-all-requested"
+        );
+    }
+
+    #[test]
+    fn view_processes_requested_has_expected_wire_name() {
+        assert_eq!(
+            SchaltEvent::ViewProcessesRequested.as_str(),
+            "schaltwerk:view-processes-requested"
         );
     }
 }

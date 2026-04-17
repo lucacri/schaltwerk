@@ -124,6 +124,7 @@ export const TauriCommands = {
   IsGitRepository: 'is_git_repository',
   ListAvailableOpenApps: 'list_available_open_apps',
   ListInstalledFonts: 'list_installed_fonts',
+  ListLucodeTmuxServers: 'list_lucode_tmux_servers',
   ListProjectBranches: 'list_project_branches',
   OpenInApp: 'open_in_app',
   PasteAndSubmitTerminal: 'paste_and_submit_terminal',

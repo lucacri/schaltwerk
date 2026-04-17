@@ -41,6 +41,7 @@ export enum SchaltEvent {
   OpenMergeModal = 'schaltwerk:open-merge-modal',
   OpenGitlabMrModal = 'schaltwerk:open-gitlab-mr-modal',
   SelectAllRequested = 'schaltwerk:select-all-requested',
+  ViewProcessesRequested = 'schaltwerk:view-processes-requested',
 }
 
 export type SessionAttentionKind = 'idle' | 'waiting_for_input'
@@ -319,4 +320,5 @@ export type EventPayloadMap = {
   [SchaltEvent.OpenMergeModal]: OpenMergeModalPayload
   [SchaltEvent.OpenGitlabMrModal]: OpenGitlabMrModalPayload
   [SchaltEvent.SelectAllRequested]: null
+  [SchaltEvent.ViewProcessesRequested]: null
 }

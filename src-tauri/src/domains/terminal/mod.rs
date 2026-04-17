@@ -125,6 +125,7 @@ pub mod tmux;
 pub mod tmux_bootstrap;
 pub mod tmux_cmd;
 pub mod tmux_conf;
+pub mod tmux_inspect;
 pub mod tmux_preflight;
 pub mod utf8_stream;
 pub mod visible;

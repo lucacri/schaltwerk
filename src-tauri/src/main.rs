@@ -217,6 +217,28 @@ fn extend_process_path() {}
 use commands::*;
 
 #[tauri::command]
+async fn list_lucode_tmux_servers() -> Result<
+    Vec<lucode::domains::terminal::tmux_inspect::ServerInfo>,
+    String,
+> {
+    use lucode::domains::terminal::tmux_inspect::{ProjectLookup, list_lucode_tmux_servers};
+
+    let projects = projects::ProjectHistory::load()
+        .ok()
+        .map(|h| {
+            let recents = h.get_recent_projects();
+            let pairs: Vec<(&str, &str)> = recents
+                .iter()
+                .map(|p| (p.path.as_str(), p.name.as_str()))
+                .collect();
+            ProjectLookup::from_pairs(&pairs)
+        })
+        .unwrap_or_default();
+
+    list_lucode_tmux_servers(&projects).await
+}
+
+#[tauri::command]
 fn get_development_info() -> Result<serde_json::Value, String> {
     // Only return development info in debug builds
     if cfg!(debug_assertions) {
@@ -1266,6 +1288,9 @@ use tauri::Manager;
 const MACOS_SELECT_ALL_MENU_ID: &str = "lucode-select-all";
 
 #[cfg(target_os = "macos")]
+const MACOS_VIEW_PROCESSES_MENU_ID: &str = "lucode-view-processes";
+
+#[cfg(target_os = "macos")]
 fn build_app_menu<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<tauri::menu::Menu<R>, tauri::Error> {
@@ -1319,6 +1344,14 @@ fn build_app_menu<R: tauri::Runtime>(
         &[&PredefinedMenuItem::fullscreen(app, None)?],
     )?;
 
+    let view_processes = MenuItem::with_id(
+        app,
+        MACOS_VIEW_PROCESSES_MENU_ID,
+        "View Processes…",
+        true,
+        None::<&str>,
+    )?;
+
     let window_menu = Submenu::with_items(
         app,
         "Window",
@@ -1326,6 +1359,8 @@ fn build_app_menu<R: tauri::Runtime>(
         &[
             &PredefinedMenuItem::minimize(app, None)?,
             &PredefinedMenuItem::maximize(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &view_processes,
         ],
     )?;
 
@@ -1430,18 +1465,22 @@ fn main() {
 
     #[cfg(target_os = "macos")]
     let builder = builder.menu(build_app_menu).on_menu_event(|app, event| {
-        if event.id() != MACOS_SELECT_ALL_MENU_ID {
-            return;
-        }
-
-        if let Err(error) = emit_event(app, SchaltEvent::SelectAllRequested, &()) {
+        let id = event.id().as_ref();
+        if id == MACOS_SELECT_ALL_MENU_ID
+            && let Err(error) = emit_event(app, SchaltEvent::SelectAllRequested, &())
+        {
             log::warn!("[menu] Failed to emit select-all-requested event: {error}");
+        } else if id == MACOS_VIEW_PROCESSES_MENU_ID
+            && let Err(error) = emit_event(app, SchaltEvent::ViewProcessesRequested, &())
+        {
+            log::warn!("[menu] Failed to emit view-processes-requested event: {error}");
         }
     });
 
     let run_result = builder.invoke_handler(tauri::generate_handler![
             // Development info
             get_development_info,
+            list_lucode_tmux_servers,
             github_get_status,
             github_authenticate,
             github_connect_project,

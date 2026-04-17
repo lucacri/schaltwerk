@@ -18,6 +18,7 @@ import { CancelConfirmation } from './components/modals/CancelConfirmation'
 import { CloseConfirmation } from './components/modals/CloseConfirmation'
 import { DeleteSpecConfirmation } from './components/modals/DeleteSpecConfirmation'
 import { SettingsModal } from './components/modals/SettingsModal'
+import { ViewProcessesModal } from './components/diagnostics/ViewProcessesModal'
 import { SetupScriptApprovalModal } from './components/modals/SetupScriptApprovalModal'
 import { ProjectSelectorModal } from './components/modals/ProjectSelectorModal'
 import {
@@ -2377,6 +2378,7 @@ function AppContent() {
             setSettingsInitialTab(undefined)
           }}
         />
+        <ViewProcessesModal />
       </>
     )
   }
@@ -2681,6 +2683,8 @@ function AppContent() {
             }}
             onOpenTutorial={openOnboarding}
           />
+
+          <ViewProcessesModal />
 
           {/* Project Selector Modal */}
           <ProjectSelectorModal
