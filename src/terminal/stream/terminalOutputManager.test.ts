@@ -270,6 +270,63 @@ describe('terminalOutputManager', () => {
     expect(listenMock).toHaveBeenCalledTimes(1)
   })
 
+  it('rehydrates catch-up bytes from last seq and dispatches them', async () => {
+    const unlisten = vi.fn()
+    listenMock.mockResolvedValueOnce(unlisten)
+    invokeMock.mockResolvedValueOnce({ seq: 12, startSeq: 0, data: 'initial' })
+
+    const listener = vi.fn()
+    terminalOutputManager.addListener(TERMINAL_ID, listener)
+    await terminalOutputManager.ensureStarted(TERMINAL_ID)
+
+    const callback = listenMock.mock.calls[0][1] as (chunk: string) => void
+    callback('live') // advances seqCursor by 4 bytes → 16
+
+    invokeMock.mockResolvedValueOnce({ seq: 20, startSeq: 16, data: 'catchup' })
+
+    await terminalOutputManager.rehydrate(TERMINAL_ID)
+
+    expect(invokeMock).toHaveBeenNthCalledWith(2, TauriCommands.GetTerminalBuffer, {
+      id: TERMINAL_ID,
+      from_seq: 16,
+    })
+    expect(listener).toHaveBeenCalledWith('catchup')
+  })
+
+  it('rehydrate is a no-op before the stream has started', async () => {
+    await terminalOutputManager.rehydrate(TERMINAL_ID)
+    expect(invokeMock).not.toHaveBeenCalled()
+  })
+
+  it('rehydrate awaits an in-flight start before fetching', async () => {
+    const unlisten = vi.fn()
+    let resolver: () => void = () => {}
+    const listenPromise = new Promise<() => void>(resolve => {
+      resolver = () => resolve(unlisten)
+    })
+    listenMock.mockReturnValue(listenPromise)
+    invokeMock.mockResolvedValueOnce({ seq: 5, startSeq: 0, data: 'first' })
+
+    const listener = vi.fn()
+    terminalOutputManager.addListener(TERMINAL_ID, listener)
+
+    const startPromise = terminalOutputManager.ensureStarted(TERMINAL_ID)
+    const rehydratePromise = terminalOutputManager.rehydrate(TERMINAL_ID)
+
+    invokeMock.mockResolvedValueOnce({ seq: 7, startSeq: 5, data: 'delta' })
+    resolver()
+
+    await startPromise
+    await rehydratePromise
+
+    expect(invokeMock).toHaveBeenCalledTimes(2)
+    expect(invokeMock).toHaveBeenNthCalledWith(2, TauriCommands.GetTerminalBuffer, {
+      id: TERMINAL_ID,
+      from_seq: 5,
+    })
+    expect(listener).toHaveBeenCalledWith('delta')
+  })
+
   it('removes listener and stops dispatching chunks', async () => {
     const unlisten = vi.fn()
     listenMock.mockResolvedValueOnce(unlisten)

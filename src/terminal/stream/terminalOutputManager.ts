@@ -97,6 +97,20 @@ class TerminalOutputManager {
     }
   }
 
+  async rehydrate(id: string): Promise<void> {
+    const stream = this.streams.get(id)
+    if (!stream) return
+    if (stream.starting) {
+      try {
+        await stream.starting
+      } catch {
+        return
+      }
+    }
+    if (!stream.started) return
+    await profileSwitchPhaseAsync('hydration.rehydrate', () => this.hydrate(id, stream), { terminalId: id })
+  }
+
   async dispose(id: string): Promise<void> {
     const stream = this.streams.get(id)
     if (!stream) return

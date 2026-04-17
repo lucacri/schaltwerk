@@ -109,6 +109,7 @@ export interface TerminalInstanceRecord {
   lastSeq: number | null;
   initialized: boolean;
   attached: boolean;
+  hasBeenAttached: boolean;
   streamRegistered: boolean;
   bracketedPasteEnabled: boolean;
   controlSequenceTail: string;
@@ -159,6 +160,7 @@ class TerminalInstanceRegistry {
       lastSeq: null,
       initialized: false,
       attached: false,
+      hasBeenAttached: false,
       streamRegistered: false,
       bracketedPasteEnabled: false,
       controlSequenceTail: '',
@@ -207,11 +209,20 @@ class TerminalInstanceRegistry {
     }
 
     const bufBefore = record.xterm.raw.buffer?.active;
-    logger.debug(`[Registry] Attaching terminal ${id}: isTUI=${record.xterm.isTuiMode()}, wasAttached=${record.attached}, pendingChunks=${record.pendingChunks?.length ?? 0}, baseY=${bufBefore?.baseY}, viewportY=${bufBefore?.viewportY}`);
+    const wasAttachedBefore = record.attached;
+    const shouldRehydrate = !wasAttachedBefore && record.hasBeenAttached === true;
+    logger.debug(`[Registry] Attaching terminal ${id}: isTUI=${record.xterm.isTuiMode()}, wasAttached=${wasAttachedBefore}, pendingChunks=${record.pendingChunks?.length ?? 0}, baseY=${bufBefore?.baseY}, viewportY=${bufBefore?.viewportY}`);
 
     profileSwitchPhase('xterm.attach.registry', () => record.xterm.attach(container), { terminalId: id });
     record.attached = true;
+    record.hasBeenAttached = true;
     this.scheduleFlush(record, 'attach');
+
+    if (shouldRehydrate) {
+      void terminalOutputManager.rehydrate(id).catch(error => {
+        logger.debug(`[Registry] rehydrate failed for ${id}`, error);
+      });
+    }
 
     const bufAfter = record.xterm.raw.buffer?.active;
     logger.debug(`[Registry] Attached terminal ${id}: baseY=${bufAfter?.baseY}, viewportY=${bufAfter?.viewportY}`);

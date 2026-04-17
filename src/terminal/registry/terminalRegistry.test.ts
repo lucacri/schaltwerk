@@ -16,6 +16,7 @@ vi.mock('../stream/terminalOutputManager', () => ({
     addListener: vi.fn(),
     removeListener: vi.fn(),
     ensureStarted: vi.fn(async () => {}),
+    rehydrate: vi.fn(async () => {}),
     dispose: vi.fn(async () => {}),
   },
 }))
@@ -25,6 +26,8 @@ vi.mock('../gpu/gpuRendererRegistry', () => ({
 }))
 
 const addListenerMock = terminalOutputManager.addListener as unknown as ReturnType<typeof vi.fn>
+const ensureStartedMock = terminalOutputManager.ensureStarted as unknown as ReturnType<typeof vi.fn>
+const rehydrateMock = (terminalOutputManager as unknown as { rehydrate: ReturnType<typeof vi.fn> }).rehydrate
 
 describe('terminalRegistry stream flushing', () => {
   const rafHandles: number[] = []
@@ -788,5 +791,72 @@ describe('terminalRegistry stream flushing', () => {
     expect(totalWritten).toBeLessThanOrEqual(4 * 1024 * 1024 + 128 * 1024)
 
     removeTerminalInstance('cap-test')
+  })
+
+  it('rehydrates on reattach of an existing terminal record', async () => {
+    const rawWrite = vi.fn()
+    const factory = () =>
+      ({
+        raw: {
+          write: rawWrite,
+          scrollToBottom: vi.fn(),
+          buffer: {
+            active: {
+              baseY: 10,
+              viewportY: 10,
+            },
+          },
+        },
+        shouldFollowOutput: () => false,
+        isTuiMode: () => true,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('session-rehydrate-top', factory)
+    attachTerminalInstance('session-rehydrate-top', document.createElement('div'))
+
+    expect(ensureStartedMock).toHaveBeenCalledWith('session-rehydrate-top')
+    expect(rehydrateMock).not.toHaveBeenCalled()
+
+    detachTerminalInstance('session-rehydrate-top')
+
+    attachTerminalInstance('session-rehydrate-top', document.createElement('div'))
+
+    expect(rehydrateMock).toHaveBeenCalledWith('session-rehydrate-top')
+    expect(rehydrateMock).toHaveBeenCalledTimes(1)
+
+    removeTerminalInstance('session-rehydrate-top')
+  })
+
+  it('does not rehydrate on first attach of a brand new terminal', async () => {
+    const rawWrite = vi.fn()
+    const factory = () =>
+      ({
+        raw: {
+          write: rawWrite,
+          scrollToBottom: vi.fn(),
+          buffer: {
+            active: {
+              baseY: 0,
+              viewportY: 0,
+            },
+          },
+        },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('fresh-terminal-test', factory)
+    attachTerminalInstance('fresh-terminal-test', document.createElement('div'))
+
+    expect(ensureStartedMock).toHaveBeenCalledWith('fresh-terminal-test')
+    expect(rehydrateMock).not.toHaveBeenCalled()
+
+    removeTerminalInstance('fresh-terminal-test')
   })
 })
