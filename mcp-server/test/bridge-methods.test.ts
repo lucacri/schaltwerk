@@ -353,6 +353,33 @@ describe('LucodeBridge untested methods', () => {
     })
   })
 
+  describe('startImprovePlanRound', () => {
+    it('posts improve-plan options to the spec endpoint', async () => {
+      const payload = {
+        spec: 'alpha_spec',
+        round_id: 'round-plan',
+        candidate_sessions: ['alpha_spec-plan-a1b2c3d4-v1'],
+      }
+      fetchMock.mockResolvedValue(createResponse(payload))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.startImprovePlanRound('alpha_spec', {
+        candidateCount: 1,
+        agentType: 'codex',
+        baseBranch: 'main',
+      })
+
+      expect(result).toEqual(payload)
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/specs/alpha_spec/improve-plan')
+      expect(JSON.parse(String(init?.body))).toEqual({
+        candidate_count: 1,
+        agent_type: 'codex',
+        base_branch: 'main',
+      })
+    })
+  })
+
   describe('getWorktreeBaseDirectory', () => {
     it('fetches worktree base directory', async () => {
       const payload = { worktree_base_directory: '/custom/path', has_custom_directory: true }

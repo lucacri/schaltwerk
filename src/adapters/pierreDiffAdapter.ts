@@ -107,11 +107,10 @@ function createHunkBuilder(oldLineStart: number, newLineStart: number, accumulat
 
 function flushHunkContext(builder: HunkBuilder): void {
   if (builder.pendingContextCount > 0) {
+    const start = builder.accumulator.deletionLines.length - builder.pendingContextCount
     builder.content.push({
       type: 'context',
-      lines: builder.accumulator.additionLines.slice(
-        builder.accumulator.additionLines.length - builder.pendingContextCount
-      ),
+      lines: builder.accumulator.deletionLines.slice(start),
       noEOFCR: false,
     })
     builder.pendingContextCount = 0
@@ -120,14 +119,12 @@ function flushHunkContext(builder: HunkBuilder): void {
 
 function flushHunkChanges(builder: HunkBuilder): void {
   if (builder.pendingDeletionCount > 0 || builder.pendingAdditionCount > 0) {
+    const deletionStart = builder.accumulator.deletionLines.length - builder.pendingDeletionCount
+    const additionStart = builder.accumulator.additionLines.length - builder.pendingAdditionCount
     builder.content.push({
       type: 'change',
-      deletions: builder.accumulator.deletionLines.slice(
-        builder.accumulator.deletionLines.length - builder.pendingDeletionCount
-      ),
-      additions: builder.accumulator.additionLines.slice(
-        builder.accumulator.additionLines.length - builder.pendingAdditionCount
-      ),
+      deletions: builder.accumulator.deletionLines.slice(deletionStart),
+      additions: builder.accumulator.additionLines.slice(additionStart),
       noEOFCRDeletions: false,
       noEOFCRAdditions: false,
     })
@@ -310,7 +307,7 @@ export function convertDiffResponseToFileDiffMetadata(
     ? expandLinesWithSections(response.lines, expandedSections)
     : response.lines
 
-  const { hunks, collapsedSections, accumulator } = convertLinesToHunks(linesToConvert)
+  const { hunks, collapsedSections } = convertLinesToHunks(linesToConvert)
   const language = getLanguageFromExtension(response.fileInfo.language)
   const changeType = determineChangeType(response.lines)
 
@@ -324,8 +321,6 @@ export function convertDiffResponseToFileDiffMetadata(
     hunks,
     splitLineCount: Math.max(oldLineCount, newLineCount),
     unifiedLineCount: totalUnified,
-    oldLines: accumulator.deletionLines,
-    newLines: accumulator.additionLines,
     cacheKey,
   }
 
@@ -376,8 +371,6 @@ export function createEmptyFileDiff(filePath: string): FileDiffMetadata {
     hunks: [],
     splitLineCount: 0,
     unifiedLineCount: 0,
-    oldLines: [],
-    newLines: [],
   }
 }
 
@@ -390,7 +383,5 @@ export function createBinaryFileDiff(filePath: string): FileDiffMetadata {
     hunks: [],
     splitLineCount: 0,
     unifiedLineCount: 0,
-    oldLines: [],
-    newLines: [],
   }
 }

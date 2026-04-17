@@ -102,15 +102,13 @@ impl<'a> SessionFinalizer<'a> {
             return Ok(None);
         }
 
-        let mut stats =
-            git::calculate_git_stats_fast(&session.worktree_path, parent_branch).with_context(
-                || {
-                    format!(
-                        "Failed to calculate git stats for worktree at {}",
-                        session.worktree_path.display()
-                    )
-                },
-            )?;
+        let mut stats = git::calculate_git_stats_fast(&session.worktree_path, parent_branch)
+            .with_context(|| {
+                format!(
+                    "Failed to calculate git stats for worktree at {}",
+                    session.worktree_path.display()
+                )
+            })?;
 
         stats.session_id = session.id.clone();
         Ok(Some(stats))
@@ -132,7 +130,6 @@ impl<'a> SessionFinalizer<'a> {
         self.db_manager.create_session(session)?;
         Ok(())
     }
-
 }
 
 #[cfg(test)]
@@ -183,6 +180,7 @@ mod tests {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            pr_state: None,
             is_consolidation: false,
             consolidation_sources: None,
             consolidation_round_id: None,
@@ -286,9 +284,7 @@ mod tests {
         let mut session = create_test_session(PathBuf::from("/tmp/worktree"));
         session.session_state = SessionState::Spec;
 
-        let result = finalizer
-            .compute_git_stats(&session, "main")
-            .unwrap();
+        let result = finalizer.compute_git_stats(&session, "main").unwrap();
         assert!(result.is_none());
     }
 
@@ -303,9 +299,7 @@ mod tests {
 
         let session = create_test_session(PathBuf::from("/nonexistent/worktree"));
 
-        let result = finalizer
-            .compute_git_stats(&session, "main")
-            .unwrap();
+        let result = finalizer.compute_git_stats(&session, "main").unwrap();
         assert!(result.is_none());
     }
 

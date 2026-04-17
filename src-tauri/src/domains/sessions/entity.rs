@@ -109,6 +109,7 @@ pub struct Session {
     pub pr_number: Option<i64>,
     // GitHub PR URL linked to this session
     pub pr_url: Option<String>,
+    pub pr_state: Option<PrState>,
     pub is_consolidation: bool,
     pub consolidation_sources: Option<Vec<String>>,
     pub consolidation_round_id: Option<String>,
@@ -133,6 +134,7 @@ pub struct Spec {
     pub issue_url: Option<String>,
     pub pr_number: Option<i64>,
     pub pr_url: Option<String>,
+    pub improve_plan_round_id: Option<String>,
     pub repository_path: PathBuf,
     pub repository_name: String,
     pub content: String,
@@ -141,6 +143,37 @@ pub struct Spec {
     pub clarification_started: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PrState {
+    Open,
+    Succeeding,
+    Mred,
+}
+
+impl PrState {
+    pub fn as_str(&self) -> &str {
+        match self {
+            PrState::Open => "open",
+            PrState::Succeeding => "succeeding",
+            PrState::Mred => "mred",
+        }
+    }
+}
+
+impl FromStr for PrState {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "open" => Ok(PrState::Open),
+            "succeeding" => Ok(PrState::Succeeding),
+            "mred" => Ok(PrState::Mred),
+            _ => Err(format!("Invalid PR state: {s}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -374,6 +407,8 @@ pub struct SessionInfo {
     pub pr_number: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pr_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pr_state: Option<PrState>,
     #[serde(default)]
     pub is_consolidation: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

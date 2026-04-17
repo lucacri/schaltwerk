@@ -27,6 +27,7 @@ async fn spec_name_generation_updates_spec_display_name() {
         issue_url: None,
         pr_number: None,
         pr_url: None,
+        improve_plan_round_id: None,
         repository_path: repo_path.clone(),
         repository_name: "repo".to_string(),
         content: "Build the docs for the API".to_string(),

@@ -70,6 +70,7 @@ export enum SessionState {
 }
 
 export type SpecStage = 'draft' | 'clarified'
+export type PrState = 'open' | 'succeeding' | 'mred'
 
 export interface Epic {
     id: string
@@ -133,6 +134,7 @@ export interface SessionInfo {
     issue_url?: string
     pr_number?: number
     pr_url?: string
+    pr_state?: PrState
     is_consolidation?: boolean
     consolidation_sources?: string[]
     consolidation_round_id?: string | null
@@ -206,6 +208,7 @@ export interface RawSession {
     issue_url?: string
     pr_number?: number
     pr_url?: string
+    pr_state?: PrState
     is_consolidation?: boolean
     consolidation_sources?: string[]
     consolidation_round_id?: string | null
@@ -229,6 +232,7 @@ export interface RawSpec {
     repository_name: string
     content: string
     stage: SpecStage
+    improve_plan_round_id?: string | null
     attention_required: boolean
     clarification_started: boolean
     created_at: string

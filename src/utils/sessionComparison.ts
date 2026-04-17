@@ -33,6 +33,7 @@ const SESSION_INFO_KEYS: ReadonlyArray<keyof SessionInfo> = [
     'issue_url',
     'pr_number',
     'pr_url',
+    'pr_state',
     'diff_stats',
     'top_uncommitted_paths',
     'merge_conflicting_paths',

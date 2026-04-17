@@ -10,8 +10,13 @@ pub trait EpicMethods {
     fn list_epics(&self, repo_path: &Path) -> Result<Vec<Epic>>;
     fn get_epic_by_id(&self, repo_path: &Path, id: &str) -> Result<Epic>;
     fn get_epic_by_name(&self, repo_path: &Path, name: &str) -> Result<Epic>;
-    fn update_epic(&self, repo_path: &Path, id: &str, name: &str, color: Option<&str>)
-    -> Result<()>;
+    fn update_epic(
+        &self,
+        repo_path: &Path,
+        id: &str,
+        name: &str,
+        color: Option<&str>,
+    ) -> Result<()>;
     fn clear_epic_assignments(&self, repo_path: &Path, id: &str) -> Result<()>;
     fn delete_epic(&self, repo_path: &Path, id: &str) -> Result<()>;
 }
@@ -83,7 +88,13 @@ impl EpicMethods for Database {
             "UPDATE epics
              SET name = ?1, color = ?2, updated_at = ?3
              WHERE repository_path = ?4 AND id = ?5",
-            params![name, color, Utc::now().timestamp(), repo_path.to_string_lossy(), id],
+            params![
+                name,
+                color,
+                Utc::now().timestamp(),
+                repo_path.to_string_lossy(),
+                id
+            ],
         )?;
         Ok(())
     }
@@ -268,6 +279,7 @@ mod tests {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            improve_plan_round_id: None,
             repository_path: PathBuf::from("/repo"),
             repository_name: "repo".to_string(),
             content: "content".to_string(),
@@ -289,8 +301,7 @@ mod tests {
     fn duplicate_name_same_repo_fails() {
         let db = create_test_database();
         let repo = Path::new("/repo");
-        db.create_epic(repo, &make_epic("e1", "Dup", None))
-            .unwrap();
+        db.create_epic(repo, &make_epic("e1", "Dup", None)).unwrap();
         let result = db.create_epic(repo, &make_epic("e2", "Dup", None));
         assert!(result.is_err());
     }

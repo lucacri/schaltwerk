@@ -421,6 +421,7 @@ mod spec_clarification_prompt_tests {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            improve_plan_round_id: None,
             repository_path: PathBuf::from("/tmp/repo"),
             repository_name: "repo".to_string(),
             content: content.to_string(),
@@ -475,7 +476,10 @@ mod spec_clarification_prompt_tests {
     #[test]
     fn investigation_section_names_required_sources() {
         let prompt = default_prompt();
-        assert!(prompt.contains("CLAUDE.md"), "INVESTIGATION must name CLAUDE.md");
+        assert!(
+            prompt.contains("CLAUDE.md"),
+            "INVESTIGATION must name CLAUDE.md"
+        );
         assert!(prompt.contains("plans/"), "INVESTIGATION must name plans/");
         assert!(
             prompt.contains("lucode_spec_list"),
@@ -580,7 +584,11 @@ mod spec_clarification_prompt_tests {
     fn question_research_gate_covers_three_outcomes_and_both_agent_paths() {
         let prompt = default_prompt();
         assert_regex(&prompt, r"(?m)- Answered", "answered outcome");
-        assert_regex(&prompt, r"(?m)- Partially answered", "partially answered outcome");
+        assert_regex(
+            &prompt,
+            r"(?m)- Partially answered",
+            "partially answered outcome",
+        );
         assert_regex(&prompt, r"(?m)- Not answered", "not answered outcome");
         assert!(prompt.contains("Claude path:"), "Claude path guidance");
         assert!(
@@ -1296,10 +1304,7 @@ pub async fn forge_generate_writeback(
                 Ok(t) => t,
                 Err(_) => return String::new(),
             };
-            let parent_tree = match repo
-                .revparse_single(&parent)
-                .and_then(|o| o.peel_to_tree())
-            {
+            let parent_tree = match repo.revparse_single(&parent).and_then(|o| o.peel_to_tree()) {
                 Ok(t) => t,
                 Err(_) => return String::new(),
             };
@@ -2443,11 +2448,13 @@ pub async fn schaltwerk_core_cancel_session(
                     core.db.clone(),
                     core.repo_path.clone(),
                 );
-                if let Err(e) = lucode::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
-                    &db_manager,
-                    &info.session,
-                    "cancelled",
-                ) {
+                if let Err(e) =
+                    lucode::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
+                        &db_manager,
+                        &info.session,
+                        "cancelled",
+                    )
+                {
                     log::warn!("Cancel {name_for_bg}: stub report write failed: {e}");
                 }
             }
@@ -2865,8 +2872,8 @@ async fn schaltwerk_core_start_agent_in_terminal(
         return Ok("Terminal-only session - no agent to start".to_string());
     }
 
-    let terminal_id =
-        terminal_id_override.unwrap_or_else(|| terminals::terminal_id_for_session_top(&session_name));
+    let terminal_id = terminal_id_override
+        .unwrap_or_else(|| terminals::terminal_id_for_session_top(&session_name));
     let terminal_manager = get_terminal_manager().await?;
     let tmux_session_alive = terminal_manager.terminal_exists(&terminal_id).await?;
     let agent_pane_alive = if tmux_session_alive && !force_restart && !agent_type_override_differs {
@@ -4671,6 +4678,7 @@ mod tests {
                 issue_url: None,
                 pr_number: None,
                 pr_url: None,
+                pr_state: None,
                 is_consolidation: true,
                 consolidation_sources: Some(vec![
                     "feature_v1".to_string(),
@@ -4811,7 +4819,11 @@ pub async fn session_set_autofix(
         .map_err(|e| format!("Failed to get connection: {e}"))?;
     conn.execute(
         "UPDATE sessions SET ci_autofix_enabled = ?1 WHERE name = ?2 AND repository_path = ?3",
-        rusqlite::params![enabled, session_name, core.repo_path.to_string_lossy().as_ref()],
+        rusqlite::params![
+            enabled,
+            session_name,
+            core.repo_path.to_string_lossy().as_ref()
+        ],
     )
     .map_err(|e| format!("Failed to update autofix: {e}"))?;
     Ok(())
@@ -4901,12 +4913,8 @@ pub async fn session_try_autofix(
         "\n\n---\nCI failed on commit {commit_sha}. Failing jobs: {job_names}. Please inspect and fix."
     );
 
-    let prompt_override = session
-        .initial_prompt
-        .as_deref()
-        .unwrap_or("")
-        .to_string()
-        + &failure_suffix;
+    let prompt_override =
+        session.initial_prompt.as_deref().unwrap_or("").to_string() + &failure_suffix;
 
     let params = StartAgentParams {
         session_name: session_name.clone(),
@@ -5016,7 +5024,9 @@ mod agent_start_mode_tests {
     #[test]
     fn prompt_override_persists_only_for_launching_modes() {
         assert!(should_persist_prompt_override(AgentStartMode::Fresh));
-        assert!(should_persist_prompt_override(AgentStartMode::ForcedRestart));
+        assert!(should_persist_prompt_override(
+            AgentStartMode::ForcedRestart
+        ));
         assert!(!should_persist_prompt_override(AgentStartMode::Reattach));
         assert!(!should_persist_prompt_override(
             AgentStartMode::DeadPaneSurfaceRestart

@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use git2::{Oid, Repository};
 use hyper::StatusCode;
@@ -14,7 +14,7 @@ use lucode::binary_detection::{get_unsupported_reason, is_binary_file_by_extensi
 use lucode::domains::git;
 use lucode::domains::sessions::entity::{ChangedFile, Session, SessionStatus};
 use lucode::domains::workspace::diff_engine::{
-    add_collapsible_sections, calculate_diff_stats, compute_unified_diff, DiffLine, LineType,
+    DiffLine, LineType, add_collapsible_sections, calculate_diff_stats, compute_unified_diff,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -761,6 +761,7 @@ mod tests {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            pr_state: None,
             is_consolidation: false,
             consolidation_sources: None,
             consolidation_round_id: None,

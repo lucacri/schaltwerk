@@ -156,6 +156,7 @@ describe('sessionComparison', () => {
                 issue_url: 'https://github.com/example/repo/issues/42',
                 pr_number: 15,
                 pr_url: 'https://github.com/example/repo/pull/15',
+                pr_state: 'succeeding',
                 diff_stats: { files_changed: 1, additions: 2, deletions: 3, insertions: 4 },
                 top_uncommitted_paths: ['a.ts', 'b.ts'],
                 merge_conflicting_paths: ['c.ts'],
@@ -202,6 +203,7 @@ describe('sessionComparison', () => {
                 ['issue_url', 'https://github.com/example/repo/issues/42'],
                 ['pr_number', 15],
                 ['pr_url', 'https://github.com/example/repo/pull/15'],
+                ['pr_state', 'mred'],
             ]
 
             for (const [property, value] of propertyTests) {

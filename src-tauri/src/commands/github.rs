@@ -9,7 +9,7 @@ use lucode::services::{
     GitHubIssueComment, GitHubIssueDetails, GitHubIssueLabel, GitHubIssueSummary, GitHubPrDetails,
     GitHubPrFeedback, GitHubPrFeedbackComment, GitHubPrFeedbackStatusCheck, GitHubPrFeedbackThread,
     GitHubPrReview, GitHubPrReviewComment, GitHubPrSummary, GitHubStatusCheck, MergeMode,
-    PrCommitMode, PrContent, sanitize_branch_name,
+    PrCommitMode, PrContent, SessionMethods, sanitize_branch_name,
 };
 use lucode::shared::session_metadata_gateway::SessionMetadataGateway;
 use serde::{Deserialize, Serialize};
@@ -545,6 +545,27 @@ pub async fn github_create_session_pr_impl(
             .map_err(|e| format!("Failed to emit sessions refresh: {e}"))?;
     }
 
+    if let Some(pr_number) = parse_created_pr_number(&pr_result.url) {
+        let core = project.schaltwerk_core.read().await;
+        let session = core
+            .session_manager()
+            .get_session(&args.session_name)
+            .map_err(|e| format!("Failed to get session for PR link update: {e}"))?;
+        if let Err(err) = core.database().update_session_pr_info(
+            &session.id,
+            Some(pr_number),
+            Some(&pr_result.url),
+        ) {
+            warn!(
+                "Failed to persist PR link for session '{}': {err}",
+                args.session_name
+            );
+        }
+        if let Err(err) = emit_event(&app, SchaltEvent::SessionsRefreshed, &project.path) {
+            warn!("Failed to emit sessions refresh after PR link update: {err}");
+        }
+    }
+
     if args.cancel_after_pr
         && let Err(err) = schaltwerk_core_cancel_session(
             app.clone(),
@@ -563,6 +584,12 @@ pub async fn github_create_session_pr_impl(
         branch: pr_result.branch,
         url: pr_result.url,
     })
+}
+
+fn parse_created_pr_number(url: &str) -> Option<i64> {
+    let trimmed = url.trim_end_matches('/');
+    let (_, tail) = trimmed.rsplit_once("/pull/")?;
+    tail.split(['?', '#']).next()?.trim().parse().ok()
 }
 
 #[tauri::command]

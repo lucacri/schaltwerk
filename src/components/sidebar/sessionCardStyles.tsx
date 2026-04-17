@@ -4,6 +4,7 @@ import { theme, type AgentColor } from '../../common/theme'
 import { typography } from '../../common/typography'
 import { TauriCommands } from '../../common/tauriCommands'
 import { logger } from '../../utils/logger'
+import type { PrState } from '../../types/session'
 
 export const sessionText = {
   title: {
@@ -148,5 +149,47 @@ export function MetadataLinkBadge({
       {children}
       <span>{label}</span>
     </button>
+  )
+}
+
+export function PrStateBadge({ state }: { state?: PrState | null }) {
+  if (!state) return null
+
+  const config: Record<PrState, { label: string; color: string; bg: string; border: string }> = {
+    open: {
+      label: 'open',
+      color: 'var(--color-text-secondary)',
+      bg: 'var(--color-bg-elevated)',
+      border: 'var(--color-border-subtle)',
+    },
+    succeeding: {
+      label: 'ci green',
+      color: 'var(--color-accent-green-light)',
+      bg: 'var(--color-accent-green-bg)',
+      border: 'var(--color-accent-green-border)',
+    },
+    mred: {
+      label: 'merged',
+      color: 'var(--color-accent-violet-light)',
+      bg: 'var(--color-accent-violet-bg)',
+      border: 'var(--color-accent-violet-border)',
+    },
+  }
+  const style = config[state]
+
+  return (
+    <span
+      data-testid="session-card-pr-state"
+      className="inline-flex items-center rounded border px-1.5 py-[1px]"
+      style={{
+        ...sessionText.badge,
+        color: style.color,
+        backgroundColor: style.bg,
+        borderColor: style.border,
+      }}
+      title={`PR state: ${style.label}`}
+    >
+      {style.label}
+    </span>
   )
 }

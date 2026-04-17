@@ -471,6 +471,7 @@ mod service_unified_tests {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            pr_state: None,
             is_consolidation: false,
             consolidation_sources: None,
             consolidation_round_id: None,
@@ -1159,6 +1160,7 @@ mod service_unified_tests {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            improve_plan_round_id: None,
             repository_path: temp_dir.path().join("repo"),
             repository_name: "test-repo".to_string(),
             content: "Clarify this spec".to_string(),
@@ -1206,6 +1208,7 @@ mod service_unified_tests {
                 issue_url: None,
                 pr_number: None,
                 pr_url: None,
+                improve_plan_round_id: None,
                 repository_path: temp_dir.path().join("repo"),
                 repository_name: "test-repo".to_string(),
                 content: "Clarify this spec".to_string(),
@@ -2016,11 +2019,12 @@ mod service_unified_tests {
             copied_settings.exists(),
             "expected settings.local.json to be copied"
         );
-        let parsed: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(&copied_settings).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(parsed["key"], serde_json::Value::String("value".to_string()));
+        let parsed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&copied_settings).unwrap()).unwrap();
+        assert_eq!(
+            parsed["key"],
+            serde_json::Value::String("value".to_string())
+        );
         assert!(
             parsed.get("hooks").is_none(),
             "Lucode no longer injects hooks into settings.local.json"
@@ -2744,6 +2748,7 @@ impl SessionManager {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            pr_state: None,
             is_consolidation: params.is_consolidation,
             consolidation_sources: params.consolidation_source_ids,
             consolidation_round_id: params.consolidation_round_id.map(str::to_string),
@@ -2814,11 +2819,13 @@ impl SessionManager {
             return Ok(());
         }
 
-        if let Err(e) = crate::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
-            &self.db_manager,
-            &session,
-            "cancelled",
-        ) {
+        if let Err(e) =
+            crate::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
+                &self.db_manager,
+                &session,
+                "cancelled",
+            )
+        {
             log::warn!("Cancel {name}: stub report write failed: {e}");
         }
 
@@ -2841,11 +2848,13 @@ impl SessionManager {
 
         let session = self.db_manager.get_session_by_name(name)?;
 
-        if let Err(e) = crate::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
-            &self.db_manager,
-            &session,
-            "cancelled",
-        ) {
+        if let Err(e) =
+            crate::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
+                &self.db_manager,
+                &session,
+                "cancelled",
+            )
+        {
             log::warn!("Fast cancel {name}: stub report write failed: {e}");
         }
 
@@ -3223,6 +3232,7 @@ impl SessionManager {
                 issue_url: spec.issue_url.clone(),
                 pr_number: spec.pr_number,
                 pr_url: spec.pr_url.clone(),
+                pr_state: None,
                 is_consolidation: false,
                 consolidation_sources: None,
                 consolidation_round_id: None,
@@ -3292,6 +3302,7 @@ impl SessionManager {
                     issue_url: session.issue_url.clone(),
                     pr_number: session.pr_number,
                     pr_url: session.pr_url.clone(),
+                    pr_state: session.pr_state.clone(),
                     is_consolidation: session.is_consolidation,
                     consolidation_sources: session.consolidation_sources.clone(),
                     consolidation_round_id: session.consolidation_round_id.clone(),
@@ -3355,14 +3366,8 @@ impl SessionManager {
                 .or_else(|| default_agent_type.clone());
 
             let current_index = enriched.len();
-            let base_readiness = build_ready_to_merge_state(
-                &session_state,
-                worktree_exists,
-                None,
-                None,
-                None,
-                None,
-            );
+            let base_readiness =
+                build_ready_to_merge_state(&session_state, worktree_exists, None, None, None, None);
 
             let info = SessionInfo {
                 session_id: session.name.clone(),
@@ -3401,6 +3406,7 @@ impl SessionManager {
                 issue_url: session.issue_url.clone(),
                 pr_number: session.pr_number,
                 pr_url: session.pr_url.clone(),
+                pr_state: session.pr_state.clone(),
                 is_consolidation: session.is_consolidation,
                 consolidation_sources: session.consolidation_sources.clone(),
                 consolidation_round_id: session.consolidation_round_id.clone(),
@@ -4330,6 +4336,7 @@ impl SessionManager {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            improve_plan_round_id: None,
             repository_path: self.repo_path.clone(),
             repository_name: repo_name,
             content: spec_content.to_string(),
@@ -4393,6 +4400,7 @@ impl SessionManager {
             issue_url: spec.issue_url,
             pr_number: spec.pr_number,
             pr_url: spec.pr_url,
+            pr_state: None,
             amp_thread_id: None,
             is_consolidation: false,
             consolidation_sources: None,

@@ -63,6 +63,30 @@ const mockActions: SessionCardActions = {
 }
 
 describe('SessionCard dirty indicator', () => {
+  it('shows linked PR state when the session has a tracked PR', () => {
+    renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={{
+            ...baseSession,
+            info: {
+              ...baseSession.info,
+              pr_number: 42,
+              pr_url: 'https://github.com/owner/repo/pull/42',
+              pr_state: 'succeeding',
+            },
+          }}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('session-card-pr-state')).toHaveTextContent(/^ci green$/)
+  })
+
   it('shows dirty indicator for ready sessions with uncommitted changes', () => {
     const session: EnrichedSession = { 
       ...baseSession, 

@@ -15,7 +15,7 @@ import { KeyboardShortcutAction } from "../../keyboardShortcuts/config";
 import { detectPlatformSafe } from "../../keyboardShortcuts/helpers";
 import { useEpics } from "../../hooks/useEpics";
 import { useTranslation } from "../../common/i18n/useTranslation";
-import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, sessionText } from './sessionCardStyles'
+import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, PrStateBadge, sessionText } from './sessionCardStyles'
 import { resolveSwitchSessionShortcut } from './sessionShortcut'
 import { useSessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { useSessionActivity } from '../../store/hooks/useSessionActivity'
@@ -306,6 +306,7 @@ export const SessionCard = memo<SessionCardProps>(
             <VscGitPullRequest className="w-3 h-3" />
           </MetadataLinkBadge>
         )}
+        {s.pr_number && <PrStateBadge state={s.pr_state} />}
       </>
     )
 

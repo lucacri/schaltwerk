@@ -40,18 +40,17 @@ pub use crate::domains::merge::{
     UpdateSessionFromParentResult, types::MergeStateSnapshot, update_session_from_parent,
 };
 pub use crate::domains::network::diagnostics::{ConnectionVerdict, log_diagnostics};
-pub use crate::domains::sessions::lifecycle::bootstrapper::apply_agent_plugins_to_worktree;
 pub use crate::domains::power::types::GlobalState;
 pub use crate::domains::sessions::db_sessions::SessionMethods;
 pub use crate::domains::sessions::entity::EnrichedSession;
 pub use crate::domains::sessions::entity::{
-    EnrichedSession as EnrichedSessionEntity, FilterMode, Session, SessionState, SortMode,
+    EnrichedSession as EnrichedSessionEntity, FilterMode, PrState, Session, SessionState, SortMode,
 };
+pub use crate::domains::sessions::lifecycle::bootstrapper::apply_agent_plugins_to_worktree;
 pub use crate::domains::settings::{
     AgentBinaryConfig, AgentPreference, AgentPreset, AgentPresetSlot, AgentVariant,
     ContextualAction, ContextualActionContext, ContextualActionMode, DiffViewPreferences,
-    EnabledAgents, McpServerConfig, SessionPreferences, TerminalSettings,
-    TerminalUIPreferences,
+    EnabledAgents, McpServerConfig, SessionPreferences, TerminalSettings, TerminalUIPreferences,
 };
 pub use crate::domains::terminal::TerminalSnapshot;
 pub use crate::domains::terminal::{

@@ -151,6 +151,13 @@ const setWorktreeBaseDirectoryMock = mock(() =>
   Promise.resolve({ worktree_base_directory: '/new/path', has_custom_directory: true })
 )
 const startDraftSessionMock = mock(() => Promise.resolve())
+const startImprovePlanRoundMock = mock(() =>
+  Promise.resolve({
+    spec: 'alpha_spec',
+    round_id: 'round-plan',
+    candidate_sessions: ['alpha_spec-plan-a1b2c3d4-v1', 'alpha_spec-plan-a1b2c3d4-v2'],
+  })
+)
 const getPrFeedbackMock = mock(() =>
   Promise.resolve({
     state: 'OPEN',
@@ -216,6 +223,7 @@ describe('MCP tool handler logic', () => {
       promoteSession: promoteSessionMock,
       sendFollowUpMessage: sendFollowUpMessageMock,
       startDraftSession: startDraftSessionMock,
+      startImprovePlanRound: startImprovePlanRoundMock,
       setWorktreeBaseDirectory: setWorktreeBaseDirectoryMock,
       unlinkSessionFromPr: unlinkSessionFromPrMock,
       getPrFeedback: getPrFeedbackMock,
@@ -247,6 +255,7 @@ describe('MCP tool handler logic', () => {
     promoteSessionMock.mockClear()
     sendFollowUpMessageMock.mockClear()
     startDraftSessionMock.mockClear()
+    startImprovePlanRoundMock.mockClear()
     setWorktreeBaseDirectoryMock.mockClear()
     unlinkSessionFromPrMock.mockClear()
     getPrFeedbackMock.mockClear()
@@ -368,6 +377,35 @@ describe('MCP tool handler logic', () => {
           preset: 'Smarts',
         })
       ).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    })
+  })
+
+  describe('lucode_improve_plan', () => {
+    it('starts an improve-plan round and returns structured response', async () => {
+      const result = await callTool('lucode_improve_plan', {
+        session_name: 'alpha_spec',
+        candidate_count: 2,
+        agent_type: 'codex',
+      })
+
+      expect(startImprovePlanRoundMock).toHaveBeenCalledWith(
+        'alpha_spec',
+        {
+          candidateCount: 2,
+          agentType: 'codex',
+          baseBranch: undefined,
+        },
+        undefined,
+      )
+      expect(result.structuredContent).toEqual({
+        spec: 'alpha_spec',
+        round_id: 'round-plan',
+        candidate_sessions: ['alpha_spec-plan-a1b2c3d4-v1', 'alpha_spec-plan-a1b2c3d4-v2'],
+      })
+    })
+
+    it('rejects missing session_name', async () => {
+      await expect(callTool('lucode_improve_plan', {})).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
     })
   })
 

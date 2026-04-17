@@ -33,6 +33,8 @@ pub trait SpecMethods {
         pr_number: Option<i64>,
         pr_url: Option<&str>,
     ) -> Result<()>;
+    fn update_spec_improve_plan_round_id(&self, id: &str, round_id: Option<&str>) -> Result<()>;
+    fn get_spec_by_improve_plan_round_id(&self, repo_path: &Path, round_id: &str) -> Result<Spec>;
     fn delete_spec(&self, id: &str) -> Result<()>;
 }
 
@@ -43,10 +45,10 @@ impl SpecMethods for Database {
             "INSERT INTO specs (
                 id, name, display_name,
                 epic_id, issue_number, issue_url, pr_number, pr_url,
-                repository_path, repository_name, content,
+                improve_plan_round_id, repository_path, repository_name, content,
                 stage, attention_required, clarification_started,
                 created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
             params![
                 spec.id,
                 spec.name,
@@ -56,6 +58,7 @@ impl SpecMethods for Database {
                 spec.issue_url,
                 spec.pr_number,
                 spec.pr_url,
+                spec.improve_plan_round_id,
                 spec.repository_path.to_string_lossy(),
                 spec.repository_name,
                 spec.content,
@@ -75,7 +78,7 @@ impl SpecMethods for Database {
         let mut stmt = conn.prepare(
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
-                    repository_path, repository_name, content,
+                    improve_plan_round_id, repository_path, repository_name, content,
                     stage, attention_required, clarification_started,
                     created_at, updated_at
              FROM specs
@@ -91,7 +94,7 @@ impl SpecMethods for Database {
         let mut stmt = conn.prepare(
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
-                    repository_path, repository_name, content,
+                    improve_plan_round_id, repository_path, repository_name, content,
                     stage, attention_required, clarification_started,
                     created_at, updated_at
              FROM specs
@@ -106,7 +109,7 @@ impl SpecMethods for Database {
         let mut stmt = conn.prepare(
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
-                    repository_path, repository_name, content,
+                    improve_plan_round_id, repository_path, repository_name, content,
                     stage, attention_required, clarification_started,
                     created_at, updated_at
              FROM specs
@@ -223,6 +226,32 @@ impl SpecMethods for Database {
         Ok(())
     }
 
+    fn update_spec_improve_plan_round_id(&self, id: &str, round_id: Option<&str>) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE specs
+             SET improve_plan_round_id = ?1, updated_at = ?2
+             WHERE id = ?3",
+            params![round_id, Utc::now().timestamp(), id],
+        )?;
+        Ok(())
+    }
+
+    fn get_spec_by_improve_plan_round_id(&self, repo_path: &Path, round_id: &str) -> Result<Spec> {
+        let conn = self.get_conn()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, name, display_name,
+                    epic_id, issue_number, issue_url, pr_number, pr_url,
+                    improve_plan_round_id, repository_path, repository_name, content,
+                    stage, attention_required, clarification_started,
+                    created_at, updated_at
+             FROM specs
+             WHERE repository_path = ?1 AND improve_plan_round_id = ?2",
+        )?;
+        let spec = stmt.query_row(params![repo_path.to_string_lossy(), round_id], row_to_spec)?;
+        Ok(spec)
+    }
+
     fn delete_spec(&self, id: &str) -> Result<()> {
         let conn = self.get_conn()?;
         conn.execute("DELETE FROM specs WHERE id = ?1", params![id])?;
@@ -240,21 +269,25 @@ fn row_to_spec(row: &Row<'_>) -> rusqlite::Result<Spec> {
         issue_url: row.get(5)?,
         pr_number: row.get(6)?,
         pr_url: row.get(7)?,
-        repository_path: PathBuf::from(row.get::<_, String>(8)?),
-        repository_name: row.get(9)?,
-        content: row.get(10)?,
-        stage: row
-            .get::<_, String>(11)?
-            .parse()
-            .map_err(|err: String| rusqlite::Error::FromSqlConversionFailure(11, rusqlite::types::Type::Text, Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, err))))?,
-        attention_required: row.get(12)?,
-        clarification_started: row.get(13)?,
+        improve_plan_round_id: row.get(8)?,
+        repository_path: PathBuf::from(row.get::<_, String>(9)?),
+        repository_name: row.get(10)?,
+        content: row.get(11)?,
+        stage: row.get::<_, String>(12)?.parse().map_err(|err: String| {
+            rusqlite::Error::FromSqlConversionFailure(
+                12,
+                rusqlite::types::Type::Text,
+                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, err)),
+            )
+        })?,
+        attention_required: row.get(13)?,
+        clarification_started: row.get(14)?,
         created_at: {
-            let ts: i64 = row.get(14)?;
+            let ts: i64 = row.get(15)?;
             utc_from_epoch_seconds_lossy(ts)
         },
         updated_at: {
-            let ts: i64 = row.get(15)?;
+            let ts: i64 = row.get(16)?;
             utc_from_epoch_seconds_lossy(ts)
         },
     })
@@ -282,6 +315,7 @@ mod tests {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            improve_plan_round_id: None,
             repository_path: PathBuf::from(repo_path),
             repository_name: "test-repo".to_string(),
             content: "spec content".to_string(),
@@ -463,6 +497,7 @@ mod tests {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            improve_plan_round_id: None,
             repository_path: PathBuf::from("/repo"),
             repository_name: "test-repo".to_string(),
             content: "content".to_string(),

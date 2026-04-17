@@ -136,6 +136,25 @@ describe('useSessionPrefill', () => {
       expect(prefillData!.baseBranch).toBe('develop')
     })
 
+    it('surfaces an active Improve Plan warning for spec prefill', async () => {
+      vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+        if (cmd === TauriCommands.SchaltwerkCoreGetSpec) {
+          return {
+            name: 'test-session',
+            content: '# Spec Content',
+            improve_plan_round_id: 'round-1',
+          }
+        }
+        throw new Error('unexpected session fetch')
+      })
+
+      const { result } = renderHook(() => useSessionPrefill())
+
+      const prefillData = await result.current.fetchSessionForPrefill('test-session')
+
+      expect(prefillData?.warning).toContain('Improve Plan round is still active')
+    })
+
     it('handles missing parent_branch', async () => {
       const mockSessionData = {
         draft_content: 'Content',

@@ -6,6 +6,7 @@ const nullableString = { type: ['string', 'null'] } as const
 const nullableBoolean = { type: ['boolean', 'null'] } as const
 const nullableNumber = { type: ['number', 'null'] } as const
 const specStageEnum = ['draft', 'clarified'] as const
+const prStateEnum = ['open', 'succeeding', 'mred'] as const
 
 const epicSchema = {
   type: 'object',
@@ -33,6 +34,9 @@ const sessionSummarySchema = {
     worktree_path: nullableString,
     initial_prompt: nullableString,
     draft_content: nullableString,
+    pr_number: nullableNumber,
+    pr_url: nullableString,
+    pr_state: { anyOf: [{ enum: prStateEnum }, { type: 'null' }] },
   },
   required: ['name', 'status', 'ready_to_merge'],
   additionalProperties: false,
@@ -53,6 +57,9 @@ const taskSchema = {
     agent_type: nullableString,
     initial_prompt: nullableString,
     draft_content: nullableString,
+    pr_number: nullableNumber,
+    pr_url: nullableString,
+    pr_state: { anyOf: [{ enum: prStateEnum }, { type: 'null' }] },
   },
   required: ['name'],
   additionalProperties: false,
@@ -426,6 +433,18 @@ export const toolOutputSchemas = {
   lucode_spec_set_attention: {
     $schema: draft2020,
     ...specAttentionUpdateSchema,
+  },
+
+  lucode_improve_plan: {
+    $schema: draft2020,
+    type: 'object',
+    properties: {
+      spec: { type: 'string' },
+      round_id: { type: 'string' },
+      candidate_sessions: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['spec', 'round_id', 'candidate_sessions'],
+    additionalProperties: false,
   },
 
   lucode_diff_summary: {

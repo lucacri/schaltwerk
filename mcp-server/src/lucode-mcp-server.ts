@@ -70,6 +70,13 @@ interface LucodeDraftStartArgs {
   preset?: string
 }
 
+interface LucodeImprovePlanArgs {
+  session_name: string
+  candidate_count?: number
+  agent_type?: 'claude' | 'opencode' | 'gemini' | 'codex' | 'qwen' | 'droid' | 'amp' | 'kilocode'
+  base_branch?: string
+}
+
 interface LucodeDraftListArgs {
   json?: boolean
 }
@@ -666,6 +673,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         outputSchema: toolOutputSchemas.lucode_spec_set_attention
       },
       {
+        name: "lucode_improve_plan",
+        description: `Start an optional multi-agent plan improvement round for a clarified spec. Candidate sessions inspect the codebase and file markdown plans as consolidation reports; the judge winner is later confirmed with lucode_confirm_consolidation_winner, which writes the accepted plan back to the spec.`,
+        inputSchema: {
+          type: "object",
+          properties: {
+            session_name: {
+              type: "string",
+              description: "Name of the clarified spec session to improve."
+            },
+            candidate_count: {
+              type: "number",
+              description: "Number of plan candidates to start (default 2, maximum 6)."
+            },
+            agent_type: {
+              type: "string",
+              enum: ["claude", "opencode", "gemini", "codex", "qwen", "droid", "amp", "kilocode"],
+              description: "Agent type for candidate sessions when no preset is used."
+            },
+            base_branch: {
+              type: "string",
+              description: "Base branch for candidate worktrees."
+            }
+          },
+          required: ["session_name"],
+          additionalProperties: false
+        },
+        outputSchema: toolOutputSchemas.lucode_improve_plan
+      },
+      {
         name: "lucode_diff_summary",
         description: `List changed files for a session (or orchestrator when session is omitted) using merge-base(HEAD, parent_branch) semantics. Supports pagination through cursor and page_size and mirrors the desktop diff summary.` ,
         inputSchema: {
@@ -1192,6 +1228,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const payload = sanitizeSpecAttention(updated)
         response = buildStructuredResponse(payload, {
           summaryText: `Spec '${attentionArgs.session_name}' attention_required set to ${attentionArgs.attention_required}`,
+          jsonFirst: true
+        })
+        break
+      }
+
+      case "lucode_improve_plan": {
+        const improveArgs = args as Partial<LucodeImprovePlanArgs>
+        if (!improveArgs.session_name || improveArgs.session_name.trim().length === 0) {
+          throw new McpError(ErrorCode.InvalidParams, "'session_name' is required when invoking lucode_improve_plan.")
+        }
+
+        const result = await bridge.startImprovePlanRound(
+          improveArgs.session_name,
+          {
+            candidateCount: improveArgs.candidate_count,
+            agentType: improveArgs.agent_type,
+            baseBranch: improveArgs.base_branch,
+          },
+          projectPath,
+        )
+        response = buildStructuredResponse(result, {
+          summaryText: `Started improve-plan round '${result.round_id}' for spec '${result.spec}' with ${result.candidate_sessions.length} candidate session(s).`,
           jsonFirst: true
         })
         break

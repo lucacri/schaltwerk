@@ -9,7 +9,7 @@ use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::schaltwerk_core::db_project_config::{
     GitlabSource, ProjectConfigMethods, ProjectGitlabConfig,
 };
-use lucode::services::MergeMode;
+use lucode::services::{MergeMode, SessionMethods};
 use lucode::shared::session_metadata_gateway::SessionMetadataGateway;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
@@ -754,6 +754,27 @@ pub async fn gitlab_create_session_mr(
             .map_err(|e| format!("Failed to emit sessions refresh: {e}"))?;
     }
 
+    if let Some(mr_number) = parse_created_mr_number(&mr_result.url) {
+        let core = project.schaltwerk_core.read().await;
+        let session = core
+            .session_manager()
+            .get_session(&args.session_name)
+            .map_err(|e| format!("Failed to get session for MR link update: {e}"))?;
+        if let Err(err) = core.database().update_session_pr_info(
+            &session.id,
+            Some(mr_number),
+            Some(&mr_result.url),
+        ) {
+            warn!(
+                "Failed to persist MR link for session '{}': {err}",
+                args.session_name
+            );
+        }
+        if let Err(err) = emit_event(&app, SchaltEvent::SessionsRefreshed, &project.path) {
+            warn!("Failed to emit sessions refresh after MR link update: {err}");
+        }
+    }
+
     if args.cancel_after_mr
         && let Err(err) = schaltwerk_core_cancel_session(
             app.clone(),
@@ -772,6 +793,12 @@ pub async fn gitlab_create_session_mr(
         url: mr_result.url,
         source_branch: mr_result.source_branch,
     })
+}
+
+fn parse_created_mr_number(url: &str) -> Option<i64> {
+    let trimmed = url.trim_end_matches('/');
+    let (_, tail) = trimmed.rsplit_once("/merge_requests/")?;
+    tail.split(['?', '#']).next()?.trim().parse().ok()
 }
 
 fn emit_gitlab_status(app: &AppHandle, status: &GitlabStatusPayload) -> Result<(), String> {

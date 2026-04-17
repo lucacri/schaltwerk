@@ -13,6 +13,7 @@ export interface SessionPrefillData {
   fromDraft?: boolean
   originalSpecName?: string
   epicId?: string | null
+  warning?: string
 }
 
 export interface SessionData {
@@ -27,6 +28,7 @@ interface SpecData {
   content: string
   display_name?: string | null
   epic_id?: string | null
+  improve_plan_round_id?: string | null
 }
 
 /**
@@ -67,6 +69,7 @@ export function useSessionPrefill() {
 
       let displayName: string | undefined
       let epicId: string | null = null
+      let warning: string | undefined
 
       if (spec) {
         sessionData = {
@@ -74,6 +77,9 @@ export function useSessionPrefill() {
         }
         displayName = spec.display_name ?? undefined
         epicId = spec.epic_id ?? null
+        if (spec.improve_plan_round_id) {
+          warning = 'An Improve Plan round is still active for this spec. Starting implementation now is allowed, but the pending plan may still change the spec.'
+        }
         logger.info('[useSessionPrefill] Raw spec data:', spec)
       } else {
         sessionData = await invoke<SessionData>(TauriCommands.SchaltwerkCoreGetSession, { name: sessionName, ...projectScope })
@@ -94,6 +100,7 @@ export function useSessionPrefill() {
         fromDraft: true,
         originalSpecName: sessionName,
         epicId,
+        ...(warning ? { warning } : {}),
       }
       logger.info('[useSessionPrefill] Returning prefill data:', prefillData)
       return prefillData

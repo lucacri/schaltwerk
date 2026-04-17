@@ -29,6 +29,7 @@ export enum SchaltEvent {
   GitHubStatusChanged = 'schaltwerk:github-status-changed',
   GitLabStatusChanged = 'schaltwerk:gitlab-status-changed',
   ForgeStatusChanged = 'schaltwerk:forge-status-changed',
+  ForgePrDetailsRefreshed = 'schaltwerk:forge-pr-details-refreshed',
   ForgeConnectionIssue = 'schaltwerk:forge-connection-issue',
   NewerBuildAvailable = 'schaltwerk:newer-build-available',
   DevBackendError = 'schaltwerk:dev-backend-error',
@@ -151,6 +152,12 @@ export interface ForgeConnectionIssuePayload {
   verdict: ConnectionVerdict
   tauriProbeOk: boolean
   subprocessProbeOk: boolean
+}
+
+export interface ForgePrDetailsRefreshedPayload {
+  projectPath: string
+  prNumber: number
+  prState: 'open' | 'succeeding' | 'mred'
 }
 
 export interface GitHubPrPayload {
@@ -308,6 +315,7 @@ export type EventPayloadMap = {
   [SchaltEvent.GitHubStatusChanged]: GitHubStatusPayload
   [SchaltEvent.GitLabStatusChanged]: GitLabStatusPayload
   [SchaltEvent.ForgeStatusChanged]: ForgeStatusPayload
+  [SchaltEvent.ForgePrDetailsRefreshed]: ForgePrDetailsRefreshedPayload
   [SchaltEvent.ForgeConnectionIssue]: ForgeConnectionIssuePayload
   [SchaltEvent.NewerBuildAvailable]: NewerBuildAvailablePayload
   [SchaltEvent.DevBackendError]: DevBackendErrorPayload

@@ -38,6 +38,9 @@ export interface Session {
   consolidation_base_session_id?: string | null
   consolidation_recommended_session_id?: string | null
   consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null
+  pr_number?: number | null
+  pr_url?: string | null
+  pr_state?: 'open' | 'succeeding' | 'mred' | null
   promotion_reason?: string | null
 }
 
@@ -76,6 +79,12 @@ export interface SpecAttentionUpdateResult {
   session_id: string
   attention_required: boolean
   updated_at: string
+}
+
+export interface ImprovePlanRoundResult {
+  spec: string
+  round_id: string
+  candidate_sessions: string[]
 }
 
 export interface PresetLaunchSession {
@@ -602,6 +611,9 @@ export class LucodeBridge {
             consolidation_base_session_id?: string | null;
             consolidation_recommended_session_id?: string | null;
             consolidation_confirmation_mode?: 'confirm' | 'auto-promote' | null;
+            pr_number?: number | null;
+            pr_url?: string | null;
+            pr_state?: 'open' | 'succeeding' | 'mred' | null;
             promotion_reason?: string | null;
           };
         }>
@@ -637,6 +649,9 @@ export class LucodeBridge {
         consolidation_base_session_id: es.info.consolidation_base_session_id ?? undefined,
         consolidation_recommended_session_id: es.info.consolidation_recommended_session_id ?? undefined,
         consolidation_confirmation_mode: es.info.consolidation_confirmation_mode ?? undefined,
+        pr_number: es.info.pr_number ?? undefined,
+        pr_url: es.info.pr_url ?? undefined,
+        pr_state: es.info.pr_state ?? undefined,
         promotion_reason: es.info.promotion_reason ?? undefined,
       }))
       
@@ -1461,6 +1476,36 @@ export class LucodeBridge {
     return payload
   }
 
+  async startImprovePlanRound(
+    sessionName: string,
+    options?: { candidateCount?: number; agentType?: string; baseBranch?: string },
+    projectPath?: string
+  ): Promise<ImprovePlanRoundResult> {
+    if (!sessionName || sessionName.trim().length === 0) {
+      throw new Error('sessionName is required to start an improve-plan round')
+    }
+
+    const response = await this.fetchWithAutoPort(`/api/specs/${encodeURIComponent(sessionName)}/improve-plan`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getProjectHeaders(projectPath)
+      },
+      body: JSON.stringify({
+        candidate_count: options?.candidateCount,
+        agent_type: options?.agentType,
+        base_branch: options?.baseBranch,
+      })
+    })
+
+    const payload = await this.parseJsonResponse<ImprovePlanRoundResult>(response, 'improve plan round')
+    if (!payload) {
+      throw new Error('Improve plan round payload missing')
+    }
+
+    return payload
+  }
+
   async listSessionsByState(filter?: 'all' | 'active' | 'spec' | 'ready', projectPath?: string): Promise<Session[]> {
     try {
       if (filter === 'spec') {
@@ -1505,6 +1550,9 @@ export class LucodeBridge {
           original_agent_type?: string;
           pending_name_generation?: boolean;
           was_auto_generated?: boolean;
+          pr_number?: number | null;
+          pr_url?: string | null;
+          pr_state?: 'open' | 'succeeding' | 'mred' | null;
         };
       }>
       
@@ -1529,7 +1577,10 @@ export class LucodeBridge {
         ready_to_merge: es.info.ready_to_merge || false,
         original_agent_type: es.info.original_agent_type ?? undefined,
         pending_name_generation: es.info.pending_name_generation ?? false,
-        was_auto_generated: es.info.was_auto_generated ?? false
+        was_auto_generated: es.info.was_auto_generated ?? false,
+        pr_number: es.info.pr_number ?? undefined,
+        pr_url: es.info.pr_url ?? undefined,
+        pr_state: es.info.pr_state ?? undefined
       }))
       
       if (filter === 'ready') {

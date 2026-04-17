@@ -92,6 +92,7 @@ export function NewSessionModal({
     const [creating, setCreating] = useState(false)
     const [generatingName, setGeneratingName] = useState(false)
     const [validationError, setValidationError] = useState<string>('')
+    const [prefillWarning, setPrefillWarning] = useState<string | null>(null)
     const [persistedDefaults, setPersistedDefaults] = useState<PersistedSessionDefaults>({
         baseBranch: '',
         agentType: 'claude',
@@ -169,6 +170,7 @@ export function NewSessionModal({
         setPrompt(initialPrompt)
         promptRef.current = initialPrompt
         setValidationError('')
+        setPrefillWarning(null)
         setCreating(false)
         setGeneratingName(false)
         setCustomSettingsOpen(false)
@@ -241,6 +243,7 @@ export function NewSessionModal({
                 ...(detail.consolidationRole !== undefined ? { consolidationRole: detail.consolidationRole } : {}),
                 ...(detail.consolidationConfirmationMode !== undefined ? { consolidationConfirmationMode: detail.consolidationConfirmationMode } : {}),
             }))
+            setPrefillWarning(detail.warning ?? null)
         })
         return unsubscribe
     }, [open, favoriteOptions])
@@ -514,6 +517,21 @@ export function NewSessionModal({
                         </div>
                     ))}
                 </section>
+
+                {prefillWarning && (
+                    <div
+                        role="status"
+                        className="rounded-md border px-3 py-2"
+                        style={{
+                            ...typography.body,
+                            backgroundColor: 'rgba(var(--color-accent-yellow-rgb),0.12)',
+                            borderColor: 'var(--color-accent-yellow)',
+                            color: 'var(--color-text-primary)',
+                        }}
+                    >
+                        {prefillWarning}
+                    </div>
+                )}
 
                 {customSettingsOpen && !isSpecSelection && (
                     <NewSessionAdvancedPanel

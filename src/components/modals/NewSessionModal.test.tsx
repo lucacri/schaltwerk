@@ -477,12 +477,14 @@ describe('NewSessionModal — primary surface', () => {
                 epicId: 'epic-123',
                 issueNumber: 42,
                 prNumber: 99,
+                warning: 'An Improve Plan round is still active.',
             })
         })
         const nameInput = screen.getByLabelText('Agent Name') as HTMLInputElement
         expect(nameInput.value).toBe('prefilled_name')
         const prompt = screen.getByLabelText('Prompt') as HTMLTextAreaElement
         expect(prompt.value).toBe('Prefilled body')
+        expect(screen.getByRole('status')).toHaveTextContent('Improve Plan round is still active')
         fireEvent.click(screen.getByRole('button', { name: /Create/ }))
         await waitFor(() => {
             expect(onCreate).toHaveBeenCalled()

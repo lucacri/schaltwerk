@@ -15,7 +15,7 @@ import { useEpics } from '../../hooks/useEpics'
 import { useTranslation } from '../../common/i18n/useTranslation'
 import type { SessionInfo, SessionMonitorStatus } from '../../types/session'
 import { getSessionCardSurfaceClasses } from './SessionCard'
-import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, sessionText } from './sessionCardStyles'
+import { getAgentColorKey, MetadataLinkBadge, openMetadataLink, PrStateBadge, sessionText } from './sessionCardStyles'
 import { useSessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { useSessionActivity } from '../../store/hooks/useSessionActivity'
 import { getSidebarSessionStatus } from './sessionStatus'
@@ -342,6 +342,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
           <VscGitPullRequest className="w-3 h-3" />
         </MetadataLinkBadge>
       )}
+      {s.pr_number && <PrStateBadge state={s.pr_state} />}
     </>
   )
 

@@ -40,8 +40,14 @@ impl StandaloneCancellationCoordinator {
 
     /// Perform filesystem-only cancellation operations (no DB writes)
     /// This can run WITHOUT holding the core write lock
-    pub async fn cancel_filesystem_only(&self, config: CancellationConfig) -> Result<CancellationResult> {
-        info!("Canceling session '{}' (filesystem-only)", self.session.name);
+    pub async fn cancel_filesystem_only(
+        &self,
+        config: CancellationConfig,
+    ) -> Result<CancellationResult> {
+        info!(
+            "Canceling session '{}' (filesystem-only)",
+            self.session.name
+        );
 
         if self.session.session_state == SessionState::Spec {
             return Err(anyhow!(
@@ -60,16 +66,29 @@ impl StandaloneCancellationCoordinator {
         Self::check_uncommitted_changes(&self.session);
 
         if !config.skip_process_cleanup {
-            result.terminated_processes = Self::terminate_processes_async(&self.session, &mut result.errors).await;
+            result.terminated_processes =
+                Self::terminate_processes_async(&self.session, &mut result.errors).await;
         }
 
-        match Self::remove_worktree_async(&self.repo_path, &self.session.worktree_path, &self.session.name).await {
+        match Self::remove_worktree_async(
+            &self.repo_path,
+            &self.session.worktree_path,
+            &self.session.name,
+        )
+        .await
+        {
             Ok(()) => result.worktree_removed = true,
             Err(e) => result.errors.push(format!("Worktree removal failed: {e}")),
         }
 
         if !config.skip_branch_deletion {
-            match Self::delete_branch_async(&self.repo_path, &self.session.branch, &self.session.name).await {
+            match Self::delete_branch_async(
+                &self.repo_path,
+                &self.session.branch,
+                &self.session.name,
+            )
+            .await
+            {
                 Ok(()) => result.branch_deleted = true,
                 Err(e) => result.errors.push(format!("Branch deletion failed: {e}")),
             }
@@ -82,7 +101,10 @@ impl StandaloneCancellationCoordinator {
                 result.errors.len()
             );
         } else {
-            info!("Filesystem cancel {}: Successfully completed", self.session.name);
+            info!(
+                "Filesystem cancel {}: Successfully completed",
+                self.session.name
+            );
         }
 
         Ok(result)
@@ -128,7 +150,11 @@ impl StandaloneCancellationCoordinator {
         }
     }
 
-    async fn remove_worktree_async(repo_path: &Path, worktree_path: &Path, session_name: &str) -> Result<()> {
+    async fn remove_worktree_async(
+        repo_path: &Path,
+        worktree_path: &Path,
+        session_name: &str,
+    ) -> Result<()> {
         if !worktree_path.exists() {
             warn!(
                 "Cancel {}: Worktree path missing, skipping removal: {}",
@@ -180,7 +206,10 @@ impl<'a> CancellationCoordinator<'a> {
     }
 
     /// Create a standalone coordinator for filesystem-only operations
-    pub fn new_standalone(repo_path: &Path, session: &Session) -> StandaloneCancellationCoordinator {
+    pub fn new_standalone(
+        repo_path: &Path,
+        session: &Session,
+    ) -> StandaloneCancellationCoordinator {
         StandaloneCancellationCoordinator::new(repo_path.to_path_buf(), session.clone())
     }
 
@@ -321,11 +350,9 @@ impl<'a> CancellationCoordinator<'a> {
         // async termination without blocking the Tokio worker. Otherwise, block on the runtime.
         let result = match Handle::try_current() {
             Ok(handle) => std::thread::scope(|s| {
-                s.spawn(move || {
-                    handle.block_on(terminate_processes_with_cwd(&worktree_path))
-                })
-                .join()
-                .expect("terminate thread panicked")
+                s.spawn(move || handle.block_on(terminate_processes_with_cwd(&worktree_path)))
+                    .join()
+                    .expect("terminate thread panicked")
             }),
             Err(_) => tauri::async_runtime::block_on(terminate_processes_with_cwd(&worktree_path)),
         };
@@ -588,6 +615,7 @@ mod tests {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            pr_state: None,
             is_consolidation: false,
             consolidation_sources: None,
             consolidation_round_id: None,
@@ -611,8 +639,7 @@ mod tests {
         let db_manager = SessionDbManager::new(db, repo_path.clone());
         let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
 
-        let mut session =
-            create_test_session(&repo_path, repo_path.join(".lucode/worktrees/test"));
+        let mut session = create_test_session(&repo_path, repo_path.join(".lucode/worktrees/test"));
         session.session_state = SessionState::Spec;
 
         let result = coordinator.cancel_session(&session, CancellationConfig::default());
@@ -632,10 +659,8 @@ mod tests {
         let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
         let db_manager = SessionDbManager::new(db, repo_path.clone());
 
-        let session = create_test_session(
-            &repo_path,
-            repo_path.join(".lucode/worktrees/nonexistent"),
-        );
+        let session =
+            create_test_session(&repo_path, repo_path.join(".lucode/worktrees/nonexistent"));
         db_manager.create_session(&session).unwrap();
 
         let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
@@ -693,6 +718,7 @@ mod tests {
             issue_url: None,
             pr_number: None,
             pr_url: None,
+            pr_state: None,
             is_consolidation: false,
             consolidation_sources: None,
             consolidation_round_id: None,
@@ -723,13 +749,8 @@ mod tests {
         let db_manager = SessionDbManager::new(db, repo_path.clone());
 
         let worktree_path = repo_path.join(".lucode/worktrees/test");
-        git::create_worktree_from_base(
-            &repo_path,
-            "lucode/test-session",
-            &worktree_path,
-            "master",
-        )
-        .unwrap();
+        git::create_worktree_from_base(&repo_path, "lucode/test-session", &worktree_path, "master")
+            .unwrap();
 
         let session = create_test_session(&repo_path, worktree_path.clone());
         db_manager.create_session(&session).unwrap();
@@ -774,13 +795,8 @@ mod tests {
         let db_manager = SessionDbManager::new(db, repo_path.clone());
 
         let worktree_path = repo_path.join(".lucode/worktrees/test");
-        git::create_worktree_from_base(
-            &repo_path,
-            "lucode/test-session",
-            &worktree_path,
-            "master",
-        )
-        .unwrap();
+        git::create_worktree_from_base(&repo_path, "lucode/test-session", &worktree_path, "master")
+            .unwrap();
 
         let session = create_test_session(&repo_path, worktree_path.clone());
         db_manager.create_session(&session).unwrap();

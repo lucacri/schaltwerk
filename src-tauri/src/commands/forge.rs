@@ -13,7 +13,7 @@ use lucode::domains::git::service::{
 };
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::services::MergeMode;
-use lucode::services::{ConnectionVerdict, log_diagnostics};
+use lucode::services::{ConnectionVerdict, PrState, SessionMethods, log_diagnostics};
 use lucode::shared::session_metadata_gateway::SessionMetadataGateway;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
@@ -28,6 +28,80 @@ struct ForgeConnectionIssueEventPayload {
     verdict: ConnectionVerdict,
     tauri_probe_ok: bool,
     subprocess_probe_ok: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ForgePrDetailsRefreshedPayload {
+    project_path: String,
+    pr_number: i64,
+    pr_state: PrState,
+}
+
+fn parse_forge_pr_number(url: &str) -> Option<i64> {
+    let trimmed = url.trim_end_matches('/');
+    for marker in ["/pull/", "/merge_requests/"] {
+        if let Some((_, tail)) = trimmed.rsplit_once(marker) {
+            let number = tail.split(['?', '#']).next()?.trim();
+            return number.parse().ok();
+        }
+    }
+    None
+}
+
+fn pr_number_from_details(id: &str, details: &ForgePrDetails) -> Option<i64> {
+    id.parse()
+        .ok()
+        .or_else(|| details.summary.id.parse().ok())
+        .or_else(|| {
+            details
+                .summary
+                .url
+                .as_deref()
+                .and_then(parse_forge_pr_number)
+        })
+}
+
+fn is_merged_state(state: &str) -> bool {
+    state.eq_ignore_ascii_case("merged")
+}
+
+fn is_ci_green(details: &ForgePrDetails) -> bool {
+    if details
+        .ci_status
+        .as_ref()
+        .is_some_and(|ci| ci.state.eq_ignore_ascii_case("success"))
+    {
+        return true;
+    }
+
+    match &details.provider_data {
+        lucode::domains::git::service::ForgeProviderData::GitHub { status_checks, .. } => {
+            !status_checks.is_empty()
+                && status_checks.iter().all(|check| {
+                    check
+                        .conclusion
+                        .as_deref()
+                        .is_some_and(|conclusion| conclusion.eq_ignore_ascii_case("success"))
+                })
+        }
+        lucode::domains::git::service::ForgeProviderData::GitLab {
+            pipeline_status, ..
+        } => pipeline_status
+            .as_deref()
+            .is_some_and(|status| status.eq_ignore_ascii_case("success")),
+        lucode::domains::git::service::ForgeProviderData::None => false,
+    }
+}
+
+fn pr_state_from_details(details: &ForgePrDetails) -> PrState {
+    if is_merged_state(&details.summary.state) {
+        PrState::Mred
+    } else if is_ci_green(details) {
+        PrState::Succeeding
+    } else {
+        PrState::Open
+    }
 }
 
 fn format_forge_error(err: ForgeError) -> String {
@@ -220,6 +294,30 @@ pub async fn forge_get_pr_details(
     match provider.get_pr_details(&project.path, &id, &source).await {
         Ok(details) => {
             clear_connection_issue(hostname_hint);
+            if let Some(pr_number) = pr_number_from_details(&id, &details) {
+                let pr_state = pr_state_from_details(&details);
+                {
+                    let core = project.schaltwerk_core.read().await;
+                    if let Err(err) = core.db.update_session_pr_state_by_pr_number(
+                        &project.path,
+                        pr_number,
+                        pr_state.clone(),
+                    ) {
+                        warn!("Failed to persist PR state for PR #{pr_number}: {err}");
+                    }
+                }
+                let payload = ForgePrDetailsRefreshedPayload {
+                    project_path: project.path.to_string_lossy().to_string(),
+                    pr_number,
+                    pr_state,
+                };
+                if let Err(err) = emit_event(&app, SchaltEvent::ForgePrDetailsRefreshed, &payload) {
+                    warn!("Failed to emit forge PR details refresh event: {err}");
+                }
+                if let Err(err) = emit_event(&app, SchaltEvent::SessionsRefreshed, &project.path) {
+                    warn!("Failed to emit sessions refresh after PR state update: {err}");
+                }
+            }
             Ok(details)
         }
         Err(err) => {
@@ -384,6 +482,26 @@ pub async fn forge_create_session_pr(
 
         emit_event(&app, SchaltEvent::SessionsRefreshed, &project_path)
             .map_err(|e| format!("Failed to emit sessions refresh: {e}"))?;
+    }
+
+    if let Some(pr_number) = parse_forge_pr_number(&pr_result.url) {
+        let core = project.schaltwerk_core.read().await;
+        let session = core
+            .session_manager()
+            .get_session(&args.session_name)
+            .map_err(|e| format!("Failed to get session for PR link update: {e}"))?;
+        if let Err(err) =
+            core.db
+                .update_session_pr_info(&session.id, Some(pr_number), Some(&pr_result.url))
+        {
+            warn!(
+                "Failed to persist PR/MR link for session '{}': {err}",
+                args.session_name
+            );
+        }
+        if let Err(err) = emit_event(&app, SchaltEvent::SessionsRefreshed, &project_path) {
+            warn!("Failed to emit sessions refresh after PR link update: {err}");
+        }
     }
 
     if args.cancel_after_pr

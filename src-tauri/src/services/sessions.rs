@@ -354,6 +354,7 @@ mod tests {
                 issue_url: None,
                 pr_number: None,
                 pr_url: None,
+                pr_state: None,
                 is_consolidation: false,
                 consolidation_sources: None,
                 consolidation_round_id: None,
@@ -425,10 +426,11 @@ mod tests {
     #[tokio::test]
     async fn hydrates_runtime_attention_from_registry() {
         let registry = init_attention_registry();
-        registry
-            .lock()
-            .await
-            .update("one", true, Some(crate::domains::attention::SessionAttentionKind::Idle));
+        registry.lock().await.update(
+            "one",
+            true,
+            Some(crate::domains::attention::SessionAttentionKind::Idle),
+        );
         registry.lock().await.update("two", false, None);
 
         let backend = SuccessBackend {
@@ -469,7 +471,10 @@ mod tests {
             .expect("expected successful session listing");
 
         assert_eq!(sessions[0].attention_required, Some(true));
-        assert_eq!(sessions[0].attention_kind.as_deref(), Some("waiting_for_input"));
+        assert_eq!(
+            sessions[0].attention_kind.as_deref(),
+            Some("waiting_for_input")
+        );
     }
 
     #[test]

@@ -124,6 +124,11 @@ const sampleStructuredOutputs: Record<string, any> = {
     attention_required: true,
     updated_at: '2024-05-01T12:00:00Z',
   },
+  lucode_improve_plan: {
+    spec: 'alpha_spec',
+    round_id: 'round-plan',
+    candidate_sessions: ['alpha_spec-plan-a1b2c3d4-v1', 'alpha_spec-plan-a1b2c3d4-v2'],
+  },
   lucode_diff_summary: {
     scope: 'session',
     session_id: 'fiery_maxwell',

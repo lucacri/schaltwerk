@@ -124,6 +124,7 @@ export interface NewSessionPrefillDetail {
   issueUrl?: string
   prNumber?: number
   prUrl?: string
+  warning?: string
 }
 
 export interface SessionCreatedDetail {

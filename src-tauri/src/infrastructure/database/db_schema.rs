@@ -126,6 +126,7 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             id TEXT PRIMARY KEY,
             repository_path TEXT NOT NULL,
             version_group_id TEXT NOT NULL,
+            round_type TEXT NOT NULL DEFAULT 'implementation',
             confirmation_mode TEXT NOT NULL,
             status TEXT NOT NULL,
             source_session_ids TEXT NOT NULL,
@@ -138,6 +139,10 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
         )",
         [],
     )?;
+    let _ = conn.execute(
+        "ALTER TABLE consolidation_rounds ADD COLUMN round_type TEXT NOT NULL DEFAULT 'implementation'",
+        [],
+    );
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_consolidation_rounds_repo_group ON consolidation_rounds(repository_path, version_group_id)",
         [],
@@ -176,6 +181,7 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             issue_url TEXT,
             pr_number INTEGER,
             pr_url TEXT,
+            improve_plan_round_id TEXT,
             repository_path TEXT NOT NULL,
             repository_name TEXT NOT NULL,
             content TEXT NOT NULL,
@@ -372,6 +378,7 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN issue_url TEXT", []);
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN pr_number INTEGER", []);
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN pr_url TEXT", []);
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN pr_state TEXT", []);
     // Epic grouping (optional)
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN epic_id TEXT", []);
     // Consolidation session flag
@@ -421,14 +428,8 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
         "ALTER TABLE sessions ADD COLUMN ci_autofix_enabled BOOLEAN DEFAULT FALSE",
         [],
     );
-    let _ = conn.execute(
-        "ALTER TABLE sessions ADD COLUMN merged_at INTEGER",
-        [],
-    );
-    let _ = conn.execute(
-        "ALTER TABLE sessions ADD COLUMN stage TEXT",
-        [],
-    );
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN merged_at INTEGER", []);
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN stage TEXT", []);
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS autofix_attempts (
             session_name TEXT NOT NULL,
@@ -436,7 +437,7 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
             repository_path TEXT NOT NULL,
             attempted_at INTEGER NOT NULL,
             PRIMARY KEY (session_name, commit_sha, repository_path)
-        )"
+        )",
     )?;
     Ok(())
 }
@@ -449,6 +450,10 @@ fn apply_specs_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     let _ = conn.execute("ALTER TABLE specs ADD COLUMN issue_url TEXT", []);
     let _ = conn.execute("ALTER TABLE specs ADD COLUMN pr_number INTEGER", []);
     let _ = conn.execute("ALTER TABLE specs ADD COLUMN pr_url TEXT", []);
+    let _ = conn.execute(
+        "ALTER TABLE specs ADD COLUMN improve_plan_round_id TEXT",
+        [],
+    );
     let _ = conn.execute(
         "ALTER TABLE specs ADD COLUMN stage TEXT NOT NULL DEFAULT 'draft'",
         [],
@@ -477,8 +482,8 @@ fn apply_specs_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     let tx = conn.unchecked_transaction()?;
 
     tx.execute(
-        "INSERT INTO specs (id, name, display_name, epic_id, issue_number, issue_url, pr_number, pr_url, repository_path, repository_name, content, stage, attention_required, clarification_started, created_at, updated_at)
-         SELECT s.id, s.name, s.display_name, s.epic_id, s.issue_number, s.issue_url, s.pr_number, s.pr_url,
+        "INSERT INTO specs (id, name, display_name, epic_id, issue_number, issue_url, pr_number, pr_url, improve_plan_round_id, repository_path, repository_name, content, stage, attention_required, clarification_started, created_at, updated_at)
+         SELECT s.id, s.name, s.display_name, s.epic_id, s.issue_number, s.issue_url, s.pr_number, s.pr_url, NULL,
                 s.repository_path, s.repository_name,
                 COALESCE(s.spec_content, s.initial_prompt, ''),
                 'draft',
