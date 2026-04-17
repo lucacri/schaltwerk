@@ -1,5 +1,5 @@
 {
-  "version": "2.10",
+  "version": "2.11",
   "children": [
     {
       "type": "frame",
@@ -6706,8 +6706,8 @@
     {
       "type": "frame",
       "id": "p0uzk",
-      "x": 1245,
-      "y": 4478,
+      "x": 4168,
+      "y": 0,
       "name": "Composed Views",
       "width": 1200,
       "fill": "#0e0e12",
@@ -7031,6 +7031,35 @@
                           "gap": 6,
                           "children": [
                             {
+                              "id": "JHlnD",
+                              "type": "ref",
+                              "ref": "8yVBg",
+                              "width": 116,
+                              "name": "cardSpec",
+                              "x": 0,
+                              "y": 0,
+                              "descendants": {
+                                "kcqLC": {
+                                  "fill": "#5a5e62"
+                                },
+                                "OCEBg": {
+                                  "content": "Just Spec"
+                                },
+                                "OTy4h": {
+                                  "content": "⌘0"
+                                },
+                                "7OLge": {
+                                  "content": "prompt-only"
+                                },
+                                "JyA9h": {
+                                  "enabled": false
+                                },
+                                "rwpsx": {
+                                  "content": "spec"
+                                }
+                              }
+                            },
+                            {
                               "id": "89A3l",
                               "type": "ref",
                               "ref": "8yVBg",
@@ -7123,33 +7152,6 @@
                                 },
                                 "JyA9h": {
                                   "enabled": false
-                                }
-                              }
-                            },
-                            {
-                              "id": "JHlnD",
-                              "type": "ref",
-                              "ref": "8yVBg",
-                              "width": 116,
-                              "name": "cardSpec",
-                              "descendants": {
-                                "kcqLC": {
-                                  "fill": "#5a5e62"
-                                },
-                                "OCEBg": {
-                                  "content": "Just Spec"
-                                },
-                                "OTy4h": {
-                                  "content": "⌘9"
-                                },
-                                "7OLge": {
-                                  "content": "prompt-only"
-                                },
-                                "JyA9h": {
-                                  "enabled": false
-                                },
-                                "rwpsx": {
-                                  "content": "spec"
                                 }
                               }
                             }
