@@ -144,10 +144,14 @@ impl EnvLookup for SystemEnv {
     }
 }
 
+/// tmux's own convention: server sockets live in `$TMUX_TMPDIR/tmux-<uid>`,
+/// falling back to `/tmp/tmux-<uid>`. tmux does **not** honor `TMPDIR` (see
+/// the ENVIRONMENT section of `man tmux`), so neither do we — on macOS
+/// `TMPDIR` is always set to a per-user `/var/folders/...` dir that tmux
+/// never writes into.
 pub(crate) fn resolve_socket_dir<E: EnvLookup>(env: &E, uid: u32) -> PathBuf {
     let base = env
         .get("TMUX_TMPDIR")
-        .or_else(|| env.get("TMPDIR"))
         .unwrap_or_else(|| "/tmp".to_string());
     let trimmed = base.trim_end_matches('/');
     PathBuf::from(format!("{trimmed}/tmux-{uid}"))
@@ -549,11 +553,16 @@ mod tests {
     }
 
     #[test]
-    fn socket_dir_falls_back_to_tmpdir() {
-        let env = FakeEnv::with(&[("TMPDIR", "/fake/tmpdir/")]);
+    fn socket_dir_ignores_tmpdir_because_tmux_does() {
+        // Regression for the empty "No Lucode tmux servers running" state:
+        // tmux only honors TMUX_TMPDIR, never TMPDIR. On macOS, TMPDIR is
+        // always set to a per-user /var/folders/... dir that tmux never
+        // writes into, so falling back through TMPDIR would point scans at
+        // a path that doesn't exist even though live sockets sit in /tmp.
+        let env = FakeEnv::with(&[("TMPDIR", "/var/folders/nw/xyz/T/")]);
         assert_eq!(
             resolve_socket_dir(&env, 42),
-            PathBuf::from("/fake/tmpdir/tmux-42")
+            PathBuf::from("/tmp/tmux-42")
         );
     }
 
