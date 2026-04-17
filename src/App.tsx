@@ -12,6 +12,8 @@ import { PierreDiffProvider } from './components/diff/PierreDiffProvider'
 import type { HistoryItem, CommitFileChange } from './components/git-graph/types'
 import Split from 'react-split'
 import { NewSessionModal } from './components/modals/NewSessionModal'
+import { applyConsolidationDefaultFavorite } from './components/modals/newSession/consolidationPrefill'
+import type { ConsolidationDefaultFavorite } from './hooks/useClaudeSession'
 import { CancelConfirmation } from './components/modals/CancelConfirmation'
 import { CloseConfirmation } from './components/modals/CloseConfirmation'
 import { DeleteSpecConfirmation } from './components/modals/DeleteSpecConfirmation'
@@ -1605,6 +1607,21 @@ function AppContent() {
         const prompts = await loadGenerationPrompts()
         const prompt = renderGenerationPrompt(prompts.consolidation_prompt, { sessionList })
 
+        const [defaultFavorite, availablePresets] = await Promise.all([
+          invoke<ConsolidationDefaultFavorite | null>(
+            TauriCommands.SchaltwerkCoreGetConsolidationDefaultFavorite,
+          ).catch(() => null),
+          invoke<Array<{ id: string }>>(TauriCommands.GetAgentPresets).catch(() => [] as Array<{ id: string }>),
+        ])
+        const availablePresetIds = (availablePresets ?? []).map(p => p.id)
+        const favoriteDefaults = applyConsolidationDefaultFavorite(
+          {
+            agentType: defaultFavorite?.agentType ?? null,
+            presetId: defaultFavorite?.presetId ?? null,
+          },
+          { availablePresetIds },
+        )
+
         emitUiEvent(UiEvent.NewSessionPrefillPending)
         setNewSessionOpen(true)
 
@@ -1623,6 +1640,7 @@ function AppContent() {
             consolidationConfirmationMode: 'confirm',
             epicId: groupEpicId,
             consolidationSourceIds: sourceIds,
+            ...favoriteDefaults,
           })
         })
       })()

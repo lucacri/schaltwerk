@@ -10,6 +10,11 @@ interface ClaudeSessionOptions {
     terminalId?: string
 }
 
+export interface ConsolidationDefaultFavorite {
+    agentType: string | null
+    presetId: string | null
+}
+
 export function useClaudeSession() {
     const startClaude = useCallback(async (options: ClaudeSessionOptions = {}) => {
         try {
@@ -90,6 +95,31 @@ export function useClaudeSession() {
         }
     }, [])
 
+    const getConsolidationDefaultFavorite = useCallback(async (): Promise<ConsolidationDefaultFavorite> => {
+        try {
+            const value = await invoke<ConsolidationDefaultFavorite | null>(
+                TauriCommands.SchaltwerkCoreGetConsolidationDefaultFavorite,
+            )
+            return {
+                agentType: value?.agentType ?? null,
+                presetId: value?.presetId ?? null,
+            }
+        } catch (error) {
+            logger.error('Failed to get consolidation default favorite:', error)
+            return { agentType: DEFAULT_AGENT, presetId: null }
+        }
+    }, [])
+
+    const setConsolidationDefaultFavorite = useCallback(async (value: ConsolidationDefaultFavorite): Promise<boolean> => {
+        try {
+            await invoke(TauriCommands.SchaltwerkCoreSetConsolidationDefaultFavorite, { value })
+            return true
+        } catch (error) {
+            logger.error('Failed to set consolidation default favorite:', error)
+            return false
+        }
+    }, [])
+
     return {
         startClaude,
         getAgentType,
@@ -98,5 +128,7 @@ export function useClaudeSession() {
         setOrchestratorAgentType,
         getSpecClarificationAgentType,
         setSpecClarificationAgentType,
+        getConsolidationDefaultFavorite,
+        setConsolidationDefaultFavorite,
     }
 }

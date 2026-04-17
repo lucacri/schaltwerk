@@ -1,5 +1,5 @@
 import React from 'react'
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi, type Mock } from 'vitest'
 import { SettingsModal } from './SettingsModal'
@@ -692,6 +692,108 @@ describe('SettingsModal project settings navigation', () => {
     await waitFor(() => {
       expect(saveAllSettings).toHaveBeenCalledTimes(1)
       expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetSpecClarificationAgentType, { agentType: 'gemini' })
+    })
+  })
+
+  it('loads and saves the consolidation default favorite (agent)', async () => {
+    const saveAllSettings = vi.fn().mockResolvedValue({ success: true, savedSettings: [], failedSettings: [] })
+    useSettingsMock.mockReturnValue({
+      ...createDefaultUseSettingsValue(),
+      saveAllSettings,
+    })
+
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === TauriCommands.GetActiveProjectPath) return Promise.resolve('/tmp/project')
+      if (command === TauriCommands.SchaltwerkCoreGetConsolidationDefaultFavorite) {
+        return Promise.resolve({ agentType: 'codex', presetId: null })
+      }
+      if (command === TauriCommands.SchaltwerkCoreSetConsolidationDefaultFavorite) {
+        return Promise.resolve(undefined)
+      }
+      return baseInvokeImplementation(command, args)
+    })
+
+    renderWithProviders(<SettingsModal open={true} onClose={() => {}} />)
+    const user = userEvent.setup()
+
+    const projectNavButton = await screen.findByRole('button', { name: 'Project Settings' })
+    await user.click(projectNavButton)
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreGetConsolidationDefaultFavorite)
+    })
+
+    const trigger = await screen.findByLabelText(/default consolidation agent/i)
+    expect(trigger).toHaveTextContent(/codex/i)
+
+    await user.click(trigger)
+    const listbox = await screen.findByRole('listbox')
+    const geminiOption = within(listbox).getByRole('option', { name: /gemini/i })
+    await user.click(geminiOption)
+
+    await user.click(await screen.findByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(saveAllSettings).toHaveBeenCalledTimes(1)
+      expect(invokeMock).toHaveBeenCalledWith(
+        TauriCommands.SchaltwerkCoreSetConsolidationDefaultFavorite,
+        { value: { agentType: 'gemini', presetId: null } },
+      )
+    })
+  })
+
+  it('saves a preset selection to the consolidation default favorite', async () => {
+    const saveAllSettings = vi.fn().mockResolvedValue({ success: true, savedSettings: [], failedSettings: [] })
+    useSettingsMock.mockReturnValue({
+      ...createDefaultUseSettingsValue(),
+      saveAllSettings,
+    })
+
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      if (command === TauriCommands.GetActiveProjectPath) return Promise.resolve('/tmp/project')
+      if (command === TauriCommands.SchaltwerkCoreGetConsolidationDefaultFavorite) {
+        return Promise.resolve({ agentType: 'claude', presetId: null })
+      }
+      if (command === TauriCommands.GetAgentPresets) {
+        return Promise.resolve([
+          {
+            id: 'preset-fast',
+            name: 'Fast Preset',
+            slots: [{ agentType: 'claude' }],
+            isBuiltIn: false,
+          },
+        ])
+      }
+      if (command === TauriCommands.SchaltwerkCoreSetConsolidationDefaultFavorite) {
+        return Promise.resolve(undefined)
+      }
+      return baseInvokeImplementation(command, args)
+    })
+
+    renderWithProviders(<SettingsModal open={true} onClose={() => {}} />)
+    const user = userEvent.setup()
+
+    const projectNavButton = await screen.findByRole('button', { name: 'Project Settings' })
+    await user.click(projectNavButton)
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreGetConsolidationDefaultFavorite)
+    })
+
+    const trigger = await screen.findByLabelText(/default consolidation agent/i)
+    await user.click(trigger)
+    const listbox = await screen.findByRole('listbox')
+    const presetOption = within(listbox).getByRole('option', { name: /fast preset/i })
+    await user.click(presetOption)
+
+    await user.click(await screen.findByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(saveAllSettings).toHaveBeenCalledTimes(1)
+      expect(invokeMock).toHaveBeenCalledWith(
+        TauriCommands.SchaltwerkCoreSetConsolidationDefaultFavorite,
+        { value: { agentType: null, presetId: 'preset-fast' } },
+      )
     })
   })
 })

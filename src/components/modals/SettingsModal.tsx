@@ -56,7 +56,9 @@ import {
 import { DEFAULT_AUTONOMY_PROMPT_TEMPLATE } from '../../common/autonomyPrompt'
 import { loadContextualActionsAtom } from '../../store/atoms/contextualActions'
 import { setEnabledAgentsAtom } from '../../store/atoms/enabledAgents'
-import { useClaudeSession } from '../../hooks/useClaudeSession'
+import { useClaudeSession, type ConsolidationDefaultFavorite } from '../../hooks/useClaudeSession'
+import { useAgentPresets } from '../../hooks/useAgentPresets'
+import { agentDisplayName } from './newSession/favoriteOptions'
 
 const shortcutArraysEqual = (a: string[] = [], b: string[] = []) => {
     if (a.length !== b.length) return false
@@ -403,6 +405,8 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const [initialAgentCommandPrefix, setInitialAgentCommandPrefix] = useState<string>('')
     const [generationAgent, setGenerationAgent] = useState<string>('')
     const [specClarificationAgentType, setSpecClarificationAgentType] = useState<AgentType>(DEFAULT_AGENT)
+    const [consolidationDefault, setConsolidationDefault] = useState<ConsolidationDefaultFavorite>({ agentType: DEFAULT_AGENT, presetId: null })
+    const initialConsolidationDefaultRef = useRef<ConsolidationDefaultFavorite>({ agentType: DEFAULT_AGENT, presetId: null })
     const [generationCliArgs, setGenerationCliArgs] = useState<string>('')
     const [generationPrompts, setGenerationPrompts] = useState<DefaultGenerationPrompts>(EMPTY_DEFAULT_GENERATION_PROMPTS)
     const [defaultGenerationPrompts, setDefaultGenerationPrompts] = useState<DefaultGenerationPrompts>(EMPTY_DEFAULT_GENERATION_PROMPTS)
@@ -537,6 +541,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         }
         return enabledNonTerminalAgents.length > 0 ? enabledNonTerminalAgents : [DEFAULT_AGENT]
     }, [enabledAgents, specClarificationAgentType])
+
     const projectCategories = useMemo(() => {
         if (!projectAvailable) return []
         return PROJECT_CATEGORY_ORDER.map(id => CATEGORIES.find(category => category.id === id)).filter(
@@ -566,8 +571,43 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const {
         getSpecClarificationAgentType,
         setSpecClarificationAgentType: persistSpecClarificationAgentType,
+        getConsolidationDefaultFavorite,
+        setConsolidationDefaultFavorite: persistConsolidationDefaultFavorite,
     } = useClaudeSession()
+    const { presets: availablePresets } = useAgentPresets()
     const setStoredEnabledAgents = useSetAtom(setEnabledAgentsAtom)
+
+    const consolidationDefaultOptions = useMemo(() => {
+        const presetOptions = availablePresets
+            .filter(preset => preset.slots.length > 0 && preset.slots.every(slot => enabledAgents[slot.agentType]))
+            .map(preset => ({
+                value: `preset:${preset.id}`,
+                label: `${preset.name} (preset)`,
+            }))
+        const agentOptions = AGENT_TYPES
+            .filter(agent => agent !== 'terminal' && enabledAgents[agent])
+            .map(agent => ({
+                value: `agent:${agent}`,
+                label: agentDisplayName(agent),
+            }))
+        return [...presetOptions, ...agentOptions]
+    }, [availablePresets, enabledAgents])
+
+    const consolidationDefaultSelectionKey = useMemo(() => {
+        if (consolidationDefault.presetId) return `preset:${consolidationDefault.presetId}`
+        if (consolidationDefault.agentType) return `agent:${consolidationDefault.agentType}`
+        return ''
+    }, [consolidationDefault])
+
+    const parseConsolidationDefaultKey = useCallback((key: string): ConsolidationDefaultFavorite => {
+        if (key.startsWith('preset:')) {
+            return { agentType: null, presetId: key.slice('preset:'.length) }
+        }
+        if (key.startsWith('agent:')) {
+            return { agentType: key.slice('agent:'.length), presetId: null }
+        }
+        return { agentType: null, presetId: null }
+    }, [])
     
     const {
         actionButtons,
@@ -739,8 +779,9 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         let loadedRunScript: RunScript = { command: '', workingDirectory: '', environmentVariables: {} }
         let loadedMergePreferences: ProjectMergePreferences = { autoCancelAfterMerge: true, autoCancelAfterPr: false }
         let loadedSpecClarificationAgentType: AgentType = DEFAULT_AGENT
+        let loadedConsolidationDefault: ConsolidationDefaultFavorite = { agentType: DEFAULT_AGENT, presetId: null }
         let loadedDevErrorToasts = true
-        
+
         try {
             const results = await Promise.allSettled([
                 loadProjectSettings(),
@@ -748,6 +789,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                 loadRunScript(),
                 loadMergePreferences(),
                 getSpecClarificationAgentType(),
+                getConsolidationDefaultFavorite(),
             ])
             
             if (results[0].status === 'fulfilled') {
@@ -768,6 +810,9 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                 && results[4].value !== 'terminal'
             ) {
                 loadedSpecClarificationAgentType = results[4].value as AgentType
+            }
+            if (results[5].status === 'fulfilled') {
+                loadedConsolidationDefault = results[5].value
             }
         } catch (error) {
             // Project settings not available (likely no project open) - use defaults
@@ -836,6 +881,8 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         setGenerationAgent(loadedGenerationAgent)
         setSpecClarificationAgentType(loadedSpecClarificationAgentType)
         initialSpecClarificationAgentTypeRef.current = loadedSpecClarificationAgentType
+        setConsolidationDefault(loadedConsolidationDefault)
+        initialConsolidationDefaultRef.current = loadedConsolidationDefault
         setGenerationCliArgs(loadedGenerationCliArgs)
         setGenerationPrompts(loadedGenerationPrompts)
         setDefaultGenerationPrompts(loadedDefaultPrompts)
@@ -853,7 +900,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         applyShortcutOverrides(normalizedShortcuts)
         
         void loadBinaryConfigs()
-    }, [loadEnvVars, loadCliArgs, loadAgentPreferences, loadEnabledAgents, loadSessionPreferences, loadKeyboardShortcuts, loadProjectSettings, loadTerminalSettings, loadRunScript, loadMergePreferences, getSpecClarificationAgentType, loadBinaryConfigs, applyShortcutOverrides])
+    }, [loadEnvVars, loadCliArgs, loadAgentPreferences, loadEnabledAgents, loadSessionPreferences, loadKeyboardShortcuts, loadProjectSettings, loadTerminalSettings, loadRunScript, loadMergePreferences, getSpecClarificationAgentType, getConsolidationDefaultFavorite, loadBinaryConfigs, applyShortcutOverrides])
 
     useEffect(() => {
         if (!open) return
@@ -1177,6 +1224,24 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
             }
         }
 
+        if (
+            consolidationDefault.agentType !== initialConsolidationDefaultRef.current.agentType
+            || consolidationDefault.presetId !== initialConsolidationDefaultRef.current.presetId
+        ) {
+            try {
+                const saved = await persistConsolidationDefaultFavorite(consolidationDefault)
+                if (!saved) {
+                    result.failedSettings.push('consolidation default agent')
+                } else {
+                    result.savedSettings.push('consolidation default agent')
+                    initialConsolidationDefaultRef.current = consolidationDefault
+                }
+            } catch (error) {
+                logger.error('Failed to save consolidation default favorite:', error)
+                result.failedSettings.push('consolidation default agent')
+            }
+        }
+
         // Save run script
         try {
             await invoke(TauriCommands.SetProjectRunScript, { runScript })
@@ -1269,6 +1334,22 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                                 setHasUnsavedChanges(true)
                             }}
                             allowedAgents={specClarificationAllowedAgents}
+                        />
+                    </FormGroup>
+
+                    <FormGroup
+                        label={t.settings.projectGeneral.consolidationDefaultAgent}
+                        help={t.settings.projectGeneral.consolidationDefaultAgentDesc}
+                    >
+                        <Select
+                            aria-label={t.settings.projectGeneral.consolidationDefaultAgent}
+                            value={consolidationDefaultSelectionKey}
+                            onChange={(key) => {
+                                const next = parseConsolidationDefaultKey(key)
+                                setConsolidationDefault(next)
+                                setHasUnsavedChanges(true)
+                            }}
+                            options={consolidationDefaultOptions}
                         />
                     </FormGroup>
 

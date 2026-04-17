@@ -2,6 +2,17 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Settings: default agent / preset for consolidation
+
+Launching a consolidation round used to leave the user re-picking the favorite in `NewSessionModal` every time, and the judge's agent was inferred from whichever candidate was created first. The project-general settings pane now carries a persisted "Default consolidation agent" that accepts either a raw agent or a preset and is applied at candidate launch; the judge keeps inheriting from candidate[0], which now reflects the stored default.
+
+- Schema: `app_config` gets `consolidation_default_agent_type TEXT DEFAULT 'claude'` and `consolidation_default_preset_id TEXT DEFAULT NULL`, mirroring the `ContextualAction` shape that already allows agent-or-preset. Migration is idempotent via `ALTER TABLE ... ADD COLUMN`.
+- `AppConfigMethods::{get,set}_consolidation_default_favorite` round-trip a small `ConsolidationDefaultFavorite { agent_type, preset_id }` struct, and two new Tauri commands (`schaltwerk_core_get_consolidation_default_favorite`, `schaltwerk_core_set_consolidation_default_favorite`) expose them with empty-string normalization and a preset-clears-agent invariant.
+- `useClaudeSession` gets `getConsolidationDefaultFavorite` / `setConsolidationDefaultFavorite` helpers. `SettingsModal` renders a new row under project general that lists every enabled preset (all slots enabled) followed by every enabled raw agent, storing the result back through the setter.
+- `App.tsx`'s consolidation candidate prefill reads the default favorite and merges `{ presetId }` or `{ agentType }` into the emitted `UiEvent.NewSessionPrefill`, driving the existing `NewSessionModal` preset/agent selection without further changes. `applyConsolidationDefaultFavorite` encapsulates the precedence (preset beats agent, empty strings are ignored).
+- `NewSessionModal` now holds a pending preset id from the prefill until `useAgentPresets` finishes loading, so a preset default is no longer dropped when the modal opens before presets arrive.
+- Covered by: new DB/tauri tests in `db_app_config.rs` and `schaltwerk_core.rs` (default, agent→preset clearing, preset→agent clearing, DTO normalization), hook tests in `useClaudeSession.test.ts`, helper tests in `consolidationPrefill.test.ts`, a `SettingsModal.test.tsx` case that drives the full load → change → save round-trip, `NewSessionModal.test.tsx` coverage of the preset-load race, and `App.test.tsx` end-to-end tests that assert raw-agent and preset defaults reach the prefill detail.
+
 ## Terminal: send PTY resize on attach-time forced fit even when xterm dimensions match
 
 Extends the "Tmux agent terminal reattach stability" fix. The frontend's attach-time forced fit (`initial-fit`, `renderer-init`, `post-init`, `visibility`, `initial-raf`, `generic-resize-request`, `font-size-change`, `split-final`) short-circuits in `requestResize` when xterm's current cols/rows already equal the proposed dimensions, to avoid perturbing scroll position. Prior to this change, that short-circuit also skipped `schedulePtyResize`, so tmux never received a SIGWINCH on reattach — leaving the pane blank or showing stale content until the user manually resized the OS window. Now the same-size short-circuit still skips `xterm.resize()` (preserving scroll) but forwards the size to the PTY with `{ force: true }` so the SIGWINCH reaches tmux synchronously with the attach.

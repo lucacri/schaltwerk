@@ -2429,6 +2429,130 @@ describe('validatePanelPercentage', () => {
 
     cleanup()
   })
+
+  it('prefills consolidation sessions with the configured raw-agent default', async () => {
+    mockState.isGitRepo = true
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreGetConsolidationDefaultFavorite) {
+        return { agentType: 'codex', presetId: null }
+      }
+      if (cmd === TauriCommands.GetAgentPresets) {
+        return []
+      }
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    newSessionModalMock.mockClear()
+
+    let prefillDetail: Record<string, unknown> | undefined
+    const cleanup = listenUiEvent(UiEvent.NewSessionPrefill, (detail) => {
+      prefillDetail = detail as unknown as Record<string, unknown>
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.ConsolidateVersionGroup, {
+        baseName: 'feature-auth',
+        baseBranch: 'main',
+        versionGroupId: 'group-789',
+        sessions: [
+          {
+            id: 'session-1',
+            name: 'feature-auth_v1',
+            branch: 'lucode/feature-auth_v1',
+            worktreePath: '/tmp/feature-auth_v1',
+          },
+        ],
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      const props = newSessionModalMock.mock.calls.at(-1)?.[0] as { open: boolean; initialIsDraft: boolean }
+      expect(props.open).toBe(true)
+      expect(props.initialIsDraft).toBe(false)
+    })
+
+    await act(async () => {
+      await new Promise(resolve => requestAnimationFrame(resolve))
+    })
+
+    expect(prefillDetail).toEqual(expect.objectContaining({ agentType: 'codex' }))
+    expect(prefillDetail).not.toHaveProperty('presetId')
+
+    cleanup()
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
+
+  it('prefills consolidation sessions with the configured preset default', async () => {
+    mockState.isGitRepo = true
+    const invokeMock = await getInvokeMock()
+    invokeMock.mockImplementation(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === TauriCommands.SchaltwerkCoreGetConsolidationDefaultFavorite) {
+        return { agentType: null, presetId: 'review-duo' }
+      }
+      if (cmd === TauriCommands.GetAgentPresets) {
+        return [{ id: 'review-duo' }]
+      }
+      return defaultInvokeImpl(cmd, args)
+    })
+
+    await renderApp()
+
+    await clickElement(screen.getByTestId('open-project'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()
+    })
+
+    newSessionModalMock.mockClear()
+
+    let prefillDetail: Record<string, unknown> | undefined
+    const cleanup = listenUiEvent(UiEvent.NewSessionPrefill, (detail) => {
+      prefillDetail = detail as unknown as Record<string, unknown>
+    })
+
+    await act(async () => {
+      emitUiEvent(UiEvent.ConsolidateVersionGroup, {
+        baseName: 'feature-auth',
+        baseBranch: 'main',
+        versionGroupId: 'group-789',
+        sessions: [
+          {
+            id: 'session-1',
+            name: 'feature-auth_v1',
+            branch: 'lucode/feature-auth_v1',
+            worktreePath: '/tmp/feature-auth_v1',
+          },
+        ],
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      const props = newSessionModalMock.mock.calls.at(-1)?.[0] as { open: boolean; initialIsDraft: boolean }
+      expect(props.open).toBe(true)
+      expect(props.initialIsDraft).toBe(false)
+    })
+
+    await act(async () => {
+      await new Promise(resolve => requestAnimationFrame(resolve))
+    })
+
+    expect(prefillDetail).toEqual(expect.objectContaining({ presetId: 'review-duo' }))
+    expect(prefillDetail).not.toHaveProperty('agentType')
+
+    cleanup()
+    invokeMock.mockImplementation(defaultInvokeImpl)
+  })
 })
 
 describe('Multi-agent comparison logic', () => {

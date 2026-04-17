@@ -2,6 +2,12 @@ use super::connection::Database;
 use anyhow::Result;
 use rusqlite::params;
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ConsolidationDefaultFavorite {
+    pub agent_type: Option<String>,
+    pub preset_id: Option<String>,
+}
+
 pub trait AppConfigMethods {
     fn get_agent_type(&self) -> Result<String>;
     fn set_agent_type(&self, agent_type: &str) -> Result<()>;
@@ -9,6 +15,11 @@ pub trait AppConfigMethods {
     fn set_orchestrator_agent_type(&self, agent_type: &str) -> Result<()>;
     fn get_spec_clarification_agent_type(&self) -> Result<String>;
     fn set_spec_clarification_agent_type(&self, agent_type: &str) -> Result<()>;
+    fn get_consolidation_default_favorite(&self) -> Result<ConsolidationDefaultFavorite>;
+    fn set_consolidation_default_favorite(
+        &self,
+        value: &ConsolidationDefaultFavorite,
+    ) -> Result<()>;
     fn get_font_sizes(&self) -> Result<(i32, i32)>;
     fn set_font_sizes(&self, terminal_font_size: i32, ui_font_size: i32) -> Result<()>;
     fn get_default_base_branch(&self) -> Result<Option<String>>;
@@ -106,6 +117,48 @@ impl AppConfigMethods for Database {
             params![agent_type],
         )?;
 
+        Ok(())
+    }
+
+    fn get_consolidation_default_favorite(&self) -> Result<ConsolidationDefaultFavorite> {
+        let result: rusqlite::Result<(Option<String>, Option<String>)> = {
+            let conn = self.get_conn()?;
+            conn.query_row(
+                "SELECT consolidation_default_agent_type, consolidation_default_preset_id FROM app_config WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+        };
+
+        match result {
+            Ok((agent_type, preset_id)) => {
+                let preset_id = preset_id.filter(|s| !s.is_empty());
+                let agent_type = if preset_id.is_some() {
+                    None
+                } else {
+                    agent_type.filter(|s| !s.is_empty())
+                };
+                Ok(ConsolidationDefaultFavorite {
+                    agent_type,
+                    preset_id,
+                })
+            }
+            Err(_) => Ok(ConsolidationDefaultFavorite {
+                agent_type: Some("claude".to_string()),
+                preset_id: None,
+            }),
+        }
+    }
+
+    fn set_consolidation_default_favorite(
+        &self,
+        value: &ConsolidationDefaultFavorite,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE app_config SET consolidation_default_agent_type = ?1, consolidation_default_preset_id = ?2 WHERE id = 1",
+            params![value.agent_type, value.preset_id],
+        )?;
         Ok(())
     }
 
@@ -279,8 +332,10 @@ mod tests {
                 default_open_app,
                 terminal_font_size,
                 ui_font_size,
-                tutorial_completed
-            ) VALUES (1, 'claude', 'claude', 'claude', 'finder', 13, 12, FALSE)",
+                tutorial_completed,
+                consolidation_default_agent_type,
+                consolidation_default_preset_id
+            ) VALUES (1, 'claude', 'claude', 'claude', 'finder', 13, 12, FALSE, 'claude', NULL)",
             [],
         )
         .expect("Failed to initialize app_config");
@@ -445,6 +500,74 @@ mod tests {
     }
 
     #[test]
+    fn consolidation_default_favorite_defaults_to_claude_agent() {
+        let db = create_test_database();
+        let value = db
+            .get_consolidation_default_favorite()
+            .expect("Failed to read default");
+        assert_eq!(value.agent_type.as_deref(), Some("claude"));
+        assert!(value.preset_id.is_none());
+    }
+
+    #[test]
+    fn consolidation_default_favorite_set_agent_clears_preset() {
+        let db = create_test_database();
+        db.set_consolidation_default_favorite(&ConsolidationDefaultFavorite {
+            agent_type: None,
+            preset_id: Some("preset-xyz".to_string()),
+        })
+        .expect("set preset");
+        db.set_consolidation_default_favorite(&ConsolidationDefaultFavorite {
+            agent_type: Some("codex".to_string()),
+            preset_id: None,
+        })
+        .expect("set agent");
+        let value = db
+            .get_consolidation_default_favorite()
+            .expect("read");
+        assert_eq!(value.agent_type.as_deref(), Some("codex"));
+        assert!(value.preset_id.is_none());
+    }
+
+    #[test]
+    fn consolidation_default_favorite_read_prefers_preset_when_both_stored() {
+        let db = create_test_database();
+        {
+            let conn = db.get_conn().expect("connection");
+            conn.execute(
+                "UPDATE app_config SET consolidation_default_agent_type = 'codex', consolidation_default_preset_id = 'preset-1' WHERE id = 1",
+                [],
+            )
+            .expect("seed both columns");
+        }
+        let value = db
+            .get_consolidation_default_favorite()
+            .expect("read");
+        assert!(value.agent_type.is_none());
+        assert_eq!(value.preset_id.as_deref(), Some("preset-1"));
+    }
+
+    #[test]
+    fn consolidation_default_favorite_set_preset_clears_agent() {
+        let db = create_test_database();
+        db.set_consolidation_default_favorite(&ConsolidationDefaultFavorite {
+            agent_type: Some("claude".to_string()),
+            preset_id: None,
+        })
+        .expect("set agent");
+        db.set_consolidation_default_favorite(&ConsolidationDefaultFavorite {
+            agent_type: None,
+            preset_id: Some("preset-abc".to_string()),
+        })
+        .expect("set preset");
+        let value = db
+            .get_consolidation_default_favorite()
+            .expect("read");
+        assert!(value.agent_type.is_none());
+        assert_eq!(value.preset_id.as_deref(), Some("preset-abc"));
+    }
+
+    #[test]
     fn test_tutorial_completed_concurrent_access() {
         let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("app_config.db");
@@ -460,8 +583,10 @@ mod tests {
                     default_open_app,
                     terminal_font_size,
                     ui_font_size,
-                    tutorial_completed
-                ) VALUES (1, 'claude', 'claude', 'claude', 'finder', 13, 12, FALSE)",
+                    tutorial_completed,
+                    consolidation_default_agent_type,
+                    consolidation_default_preset_id
+                ) VALUES (1, 'claude', 'claude', 'claude', 'finder', 13, 12, FALSE, 'claude', NULL)",
                 [],
             )
             .expect("Failed to seed app_config");

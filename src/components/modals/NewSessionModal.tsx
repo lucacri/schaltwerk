@@ -97,6 +97,7 @@ export function NewSessionModal({
         agentType: 'claude',
     })
     const [passthrough, setPassthrough] = useState<PassthroughPrefillState>({})
+    const [pendingPrefillPresetId, setPendingPrefillPresetId] = useState<string | null>(null)
 
     const markdownEditorRef = useRef<MarkdownEditorRef>(null)
     const nameInputRef = useRef<HTMLInputElement>(null)
@@ -174,6 +175,7 @@ export function NewSessionModal({
         setAdvanced(createEmptyAdvancedState())
         setVersionCount(1)
         setPassthrough({})
+        setPendingPrefillPresetId(null)
         setSelectedFavoriteId(SPEC_FAVORITE_ID)
         requestAnimationFrame(() => {
             markdownEditorRef.current?.focusEnd()
@@ -185,9 +187,19 @@ export function NewSessionModal({
         if (favoriteOptions.length === 0) return
         const stillExists = favoriteOptions.some(option => option.id === selectedFavoriteId)
         if (!stillExists) {
+            if (selectedFavoriteId === pendingPrefillPresetId) return
             setSelectedFavoriteId(favoriteOptions[0].id)
         }
-    }, [open, favoriteOptions, selectedFavoriteId])
+    }, [open, favoriteOptions, selectedFavoriteId, pendingPrefillPresetId])
+
+    useEffect(() => {
+        if (!open) return
+        if (!pendingPrefillPresetId) return
+        const pendingPresetExists = favoriteOptions.some(option => option.id === pendingPrefillPresetId)
+        if (pendingPresetExists) {
+            setPendingPrefillPresetId(null)
+        }
+    }, [open, favoriteOptions, pendingPrefillPresetId])
 
     useEffect(() => {
         if (!open) return
@@ -204,8 +216,10 @@ export function NewSessionModal({
                 onPromptChangeRef.current?.(detail.taskContent)
             }
             if (detail.presetId) {
+                setPendingPrefillPresetId(detail.presetId)
                 setSelectedFavoriteId(detail.presetId)
             } else if (detail.agentType) {
+                setPendingPrefillPresetId(null)
                 const matchingAgent = favoriteOptions.find(
                     option => option.kind === 'agent' && option.agentType === detail.agentType,
                 )
@@ -279,6 +293,7 @@ export function NewSessionModal({
 
     const handleSelectFavorite = useCallback((option: FavoriteOption) => {
         if (option.disabled) return
+        setPendingPrefillPresetId(null)
         setSelectedFavoriteId(option.id)
         if (option.kind !== 'agent') {
             setVersionCount(1)
@@ -291,6 +306,10 @@ export function NewSessionModal({
 
     const handleCreate = useCallback(async () => {
         setValidationError('')
+        if (pendingPrefillPresetId && !favoriteOptions.some(option => option.id === pendingPrefillPresetId)) {
+            setValidationError('Preset is still loading')
+            return
+        }
         try {
             const payload = buildCreatePayload({
                 selection: selectedFavorite,
@@ -327,6 +346,8 @@ export function NewSessionModal({
         versionCount,
         onCreate,
         passthrough,
+        pendingPrefillPresetId,
+        favoriteOptions,
     ])
 
     useEffect(() => {

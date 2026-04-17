@@ -540,6 +540,23 @@ impl SessionDbManager {
             .map_err(|e| anyhow!("Failed to set spec clarification agent type: {e}"))
     }
 
+    pub fn get_consolidation_default_favorite(
+        &self,
+    ) -> Result<crate::infrastructure::database::db_app_config::ConsolidationDefaultFavorite> {
+        self.db
+            .get_consolidation_default_favorite()
+            .map_err(|e| anyhow!("Failed to get consolidation default favorite: {e}"))
+    }
+
+    pub fn set_consolidation_default_favorite(
+        &self,
+        value: &crate::infrastructure::database::db_app_config::ConsolidationDefaultFavorite,
+    ) -> Result<()> {
+        self.db
+            .set_consolidation_default_favorite(value)
+            .map_err(|e| anyhow!("Failed to set consolidation default favorite: {e}"))
+    }
+
     pub fn session_exists(&self, name: &str) -> bool {
         if self.get_session_by_name(name).is_ok() {
             return true;

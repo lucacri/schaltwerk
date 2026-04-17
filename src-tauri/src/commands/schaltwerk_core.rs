@@ -708,6 +708,98 @@ mod spec_clarification_prompt_tests {
     }
 }
 
+#[cfg(test)]
+mod consolidation_default_favorite_tests {
+    use super::{normalize_optional, ConsolidationDefaultFavoriteDto};
+    use lucode::infrastructure::database::Database;
+    use lucode::schaltwerk_core::db_app_config::{
+        AppConfigMethods, ConsolidationDefaultFavorite,
+    };
+
+    fn temp_db() -> (tempfile::TempDir, Database) {
+        let dir = tempfile::TempDir::new().expect("tempdir");
+        let path = dir.path().join("sessions.db");
+        let db = Database::new(Some(path)).expect("Failed to create database");
+        (dir, db)
+    }
+
+    #[test]
+    fn repository_default_returns_claude_agent() {
+        let (_dir, db) = temp_db();
+        let value = db
+            .get_consolidation_default_favorite()
+            .expect("read default");
+        assert_eq!(value.agent_type.as_deref(), Some("claude"));
+        assert!(value.preset_id.is_none());
+    }
+
+    #[test]
+    fn command_normalization_prefers_preset_and_clears_agent() {
+        let dto = ConsolidationDefaultFavoriteDto {
+            agent_type: Some("codex".to_string()),
+            preset_id: Some("  preset-1 ".to_string()),
+        };
+        let preset_id = normalize_optional(dto.preset_id);
+        let agent_type = if preset_id.is_some() {
+            None
+        } else {
+            normalize_optional(dto.agent_type)
+        };
+        assert_eq!(preset_id.as_deref(), Some("preset-1"));
+        assert!(agent_type.is_none());
+    }
+
+    #[test]
+    fn command_normalization_keeps_agent_when_preset_blank() {
+        let dto = ConsolidationDefaultFavoriteDto {
+            agent_type: Some(" codex ".to_string()),
+            preset_id: Some("".to_string()),
+        };
+        let preset_id = normalize_optional(dto.preset_id);
+        let agent_type = if preset_id.is_some() {
+            None
+        } else {
+            normalize_optional(dto.agent_type)
+        };
+        assert!(preset_id.is_none());
+        assert_eq!(agent_type.as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn command_normalization_returns_both_none_when_blank() {
+        let dto = ConsolidationDefaultFavoriteDto {
+            agent_type: Some("   ".to_string()),
+            preset_id: None,
+        };
+        let preset_id = normalize_optional(dto.preset_id);
+        let agent_type = if preset_id.is_some() {
+            None
+        } else {
+            normalize_optional(dto.agent_type)
+        };
+        assert!(preset_id.is_none());
+        assert!(agent_type.is_none());
+    }
+
+    #[test]
+    fn repository_round_trips_preset_and_clears_agent() {
+        let (_dir, db) = temp_db();
+        db.set_consolidation_default_favorite(&ConsolidationDefaultFavorite {
+            agent_type: Some("codex".to_string()),
+            preset_id: None,
+        })
+        .unwrap();
+        db.set_consolidation_default_favorite(&ConsolidationDefaultFavorite {
+            agent_type: None,
+            preset_id: Some("preset-xyz".to_string()),
+        })
+        .unwrap();
+        let value = db.get_consolidation_default_favorite().unwrap();
+        assert!(value.agent_type.is_none());
+        assert_eq!(value.preset_id.as_deref(), Some("preset-xyz"));
+    }
+}
+
 async fn resolve_generation_agent_and_args(
     fallback_agent: &str,
 ) -> (
@@ -3669,6 +3761,63 @@ pub async fn schaltwerk_core_get_spec_clarification_agent_type() -> Result<Strin
     core.db
         .get_spec_clarification_agent_type()
         .map_err(|e| format!("Failed to get spec clarification agent type: {e}"))
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsolidationDefaultFavoriteDto {
+    #[serde(default)]
+    pub agent_type: Option<String>,
+    #[serde(default)]
+    pub preset_id: Option<String>,
+}
+
+fn normalize_optional(value: Option<String>) -> Option<String> {
+    value.and_then(|s| {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_get_consolidation_default_favorite(
+) -> Result<ConsolidationDefaultFavoriteDto, String> {
+    let core = get_core_read().await?;
+    let value = core
+        .db
+        .get_consolidation_default_favorite()
+        .map_err(|e| format!("Failed to get consolidation default favorite: {e}"))?;
+    Ok(ConsolidationDefaultFavoriteDto {
+        agent_type: value.agent_type,
+        preset_id: value.preset_id,
+    })
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_set_consolidation_default_favorite(
+    value: ConsolidationDefaultFavoriteDto,
+) -> Result<(), String> {
+    let preset_id = normalize_optional(value.preset_id);
+    let agent_type = if preset_id.is_some() {
+        None
+    } else {
+        normalize_optional(value.agent_type)
+    };
+    let normalized = lucode::schaltwerk_core::db_app_config::ConsolidationDefaultFavorite {
+        agent_type,
+        preset_id,
+    };
+
+    let core = get_core_write().await?;
+    core.db
+        .set_consolidation_default_favorite(&normalized)
+        .map_err(|e| format!("Failed to set consolidation default favorite: {e}"))?;
+
+    Ok(())
 }
 
 #[tauri::command]

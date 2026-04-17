@@ -99,4 +99,40 @@ describe('useClaudeSession', () => {
 
     consoleErrorSpy.mockRestore()
   })
+
+  it('gets consolidation default favorite and normalizes shape', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    mockInvoke.mockResolvedValueOnce({ agentType: 'codex', presetId: null })
+    const { result } = renderHook(() => useClaudeSession())
+
+    const value = await result.current.getConsolidationDefaultFavorite()
+    expect(mockInvoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreGetConsolidationDefaultFavorite)
+    expect(value).toEqual({ agentType: 'codex', presetId: null })
+
+    mockInvoke.mockRejectedValueOnce(new Error('boom'))
+    const fallback = await result.current.getConsolidationDefaultFavorite()
+    expect(fallback).toEqual({ agentType: 'claude', presetId: null })
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('sets consolidation default favorite with the payload', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    mockInvoke.mockResolvedValueOnce(undefined)
+    const { result } = renderHook(() => useClaudeSession())
+    const ok = await result.current.setConsolidationDefaultFavorite({ agentType: 'claude', presetId: null })
+    expect(ok).toBe(true)
+    expect(mockInvoke).toHaveBeenCalledWith(
+      TauriCommands.SchaltwerkCoreSetConsolidationDefaultFavorite,
+      { value: { agentType: 'claude', presetId: null } },
+    )
+
+    mockInvoke.mockRejectedValueOnce(new Error('no'))
+    const failed = await result.current.setConsolidationDefaultFavorite({ agentType: null, presetId: 'p1' })
+    expect(failed).toBe(false)
+
+    consoleErrorSpy.mockRestore()
+  })
 })

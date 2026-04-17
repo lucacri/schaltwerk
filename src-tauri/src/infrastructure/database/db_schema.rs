@@ -81,7 +81,9 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             default_base_branch TEXT,
             terminal_font_size INTEGER DEFAULT 13,
             ui_font_size INTEGER DEFAULT 12,
-            dev_error_toasts_enabled BOOLEAN DEFAULT FALSE
+            dev_error_toasts_enabled BOOLEAN DEFAULT FALSE,
+            consolidation_default_agent_type TEXT DEFAULT 'claude',
+            consolidation_default_preset_id TEXT DEFAULT NULL
         )",
         [],
     )?;
@@ -99,8 +101,10 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             terminal_font_size,
             ui_font_size,
             tutorial_completed,
-            dev_error_toasts_enabled
-        ) VALUES (1, 'claude', 'claude', 'claude', NULL, 13, 12, FALSE, FALSE)",
+            dev_error_toasts_enabled,
+            consolidation_default_agent_type,
+            consolidation_default_preset_id
+        ) VALUES (1, 'claude', 'claude', 'claude', NULL, 13, 12, FALSE, FALSE, 'claude', NULL)",
         [],
     )?;
 
@@ -301,6 +305,14 @@ fn apply_app_config_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()
     );
     let _ = conn.execute(
         "ALTER TABLE app_config ADD COLUMN editor_overrides TEXT DEFAULT NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE app_config ADD COLUMN consolidation_default_agent_type TEXT DEFAULT 'claude'",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE app_config ADD COLUMN consolidation_default_preset_id TEXT DEFAULT NULL",
         [],
     );
     Ok(())

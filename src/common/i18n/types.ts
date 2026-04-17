@@ -195,6 +195,8 @@ export interface Translations {
     projectGeneral: {
       specClarificationAgent: string
       specClarificationAgentDesc: string
+      consolidationDefaultAgent: string
+      consolidationDefaultAgentDesc: string
       branchPrefix: string
       branchPrefixDesc: string
       worktreeBaseDirectory: string

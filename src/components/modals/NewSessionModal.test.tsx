@@ -350,6 +350,57 @@ describe('NewSessionModal — primary surface', () => {
         ])
     })
 
+    it('keeps a preset prefill selected until preset options finish loading', async () => {
+        let presets: AgentPreset[] = []
+        mockAgentPresets.mockImplementation(() => ({
+            presets,
+            loading: presets.length === 0,
+            error: null,
+            savePresets: vi.fn().mockResolvedValue(true),
+            reloadPresets: vi.fn().mockResolvedValue(undefined),
+        }))
+
+        const onClose = vi.fn()
+        const onCreate = vi.fn()
+        const store = createStore()
+        const renderModal = () => (
+            <JotaiProvider store={store}>
+                <ModalProvider>
+                    <NewSessionModal open={true} onClose={onClose} onCreate={onCreate} />
+                </ModalProvider>
+            </JotaiProvider>
+        )
+        const { rerender } = render(renderModal())
+
+        await act(async () => {
+            emitUiEvent(UiEvent.NewSessionPrefill, {
+                name: 'preset_consolidation',
+                taskContent: 'Consolidate these versions',
+                presetId: 'p-pair',
+            })
+        })
+
+        presets = [
+            { id: 'p-pair', name: 'Pair', slots: [{ agentType: 'claude' }, { agentType: 'codex' }], isBuiltIn: false },
+        ]
+        rerender(renderModal())
+
+        await waitFor(() => {
+            expect(getFavoriteButton(/Pair/).getAttribute('aria-pressed')).toBe('true')
+        })
+
+        fireEvent.click(screen.getByRole('button', { name: /^Create$/ }))
+        await waitFor(() => expect(onCreate).toHaveBeenCalled())
+        expect(onCreate.mock.calls[0][0]).toMatchObject({
+            agentType: 'claude',
+            versionCount: 2,
+            agentSlots: [
+                { agentType: 'claude', autonomyEnabled: undefined },
+                { agentType: 'codex', autonomyEnabled: undefined },
+            ],
+        })
+    })
+
     it('keeps the name in sync with the prompt until the user edits the name', () => {
         openModal()
         const nameInput = screen.getByLabelText('Agent Name') as HTMLInputElement
