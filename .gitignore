@@ -44,3 +44,5 @@ updater-private.key*
 
 # Test tracking (session-scoped, per-worktree)
 .tracked-tests
+
+.claude/scheduled_tasks.lock
