@@ -1,3 +1,7 @@
+static IMAGE_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "webp", "ico", "svg",
+];
+
 static BINARY_EXTENSIONS: &[&str] = &[
     // Image files
     "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "webp", "ico", "svg",
@@ -25,6 +29,34 @@ pub fn is_binary_file_by_extension(file_path: &str) -> bool {
     };
 
     BINARY_EXTENSIONS.iter().any(|candidate| *candidate == ext)
+}
+
+pub fn is_image_file_by_extension(file_path: &str) -> bool {
+    if file_path.is_empty() {
+        return false;
+    }
+
+    let ext = match file_path.split('.').next_back() {
+        Some(e) => e.to_lowercase(),
+        None => return false,
+    };
+
+    IMAGE_EXTENSIONS.iter().any(|candidate| *candidate == ext)
+}
+
+pub fn image_mime_type(file_path: &str) -> Option<&'static str> {
+    let ext = file_path.split('.').next_back()?.to_lowercase();
+    match ext.as_str() {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "gif" => Some("image/gif"),
+        "bmp" => Some("image/bmp"),
+        "tiff" | "tif" => Some("image/tiff"),
+        "webp" => Some("image/webp"),
+        "ico" => Some("image/x-icon"),
+        "svg" => Some("image/svg+xml"),
+        _ => None,
+    }
 }
 
 pub fn is_likely_binary_content(bytes: &[u8]) -> bool {
@@ -150,6 +182,26 @@ mod tests {
         assert!(is_binary_file_by_extension("Document.PDF"));
         assert!(is_binary_file_by_extension("Music.MP3"));
         assert!(is_binary_file_by_extension("Video.Mp4"));
+    }
+
+    #[test]
+    fn test_is_image_file_by_extension() {
+        assert!(is_image_file_by_extension("asset.png"));
+        assert!(is_image_file_by_extension("asset.JPG"));
+        assert!(is_image_file_by_extension("icons/logo.svg"));
+        assert!(!is_image_file_by_extension("archive.zip"));
+        assert!(!is_image_file_by_extension("document.pdf"));
+        assert!(!is_image_file_by_extension("src/main.rs"));
+    }
+
+    #[test]
+    fn test_image_mime_type() {
+        assert_eq!(image_mime_type("asset.png"), Some("image/png"));
+        assert_eq!(image_mime_type("photo.jpeg"), Some("image/jpeg"));
+        assert_eq!(image_mime_type("photo.jpg"), Some("image/jpeg"));
+        assert_eq!(image_mime_type("icon.svg"), Some("image/svg+xml"));
+        assert_eq!(image_mime_type("graphic.webp"), Some("image/webp"));
+        assert_eq!(image_mime_type("archive.zip"), None);
     }
 
     #[test]

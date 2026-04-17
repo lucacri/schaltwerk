@@ -1,7 +1,9 @@
 // Binary file extensions - keep in sync with Rust binary_detection.rs
-const BINARY_EXTENSIONS = [
-  // Image files
+const IMAGE_EXTENSIONS = [
   'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tif', 'webp', 'ico', 'svg',
+] as const
+
+const OTHER_BINARY_EXTENSIONS = [
   // Audio files
   'mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma',
   // Video files
@@ -20,7 +22,13 @@ const BINARY_EXTENSIONS = [
   'pyc', 'class', 'jar', 'war', 'ear', 'o', 'obj', 'lib', 'a'
 ] as const
 
+const BINARY_EXTENSIONS = [
+  ...IMAGE_EXTENSIONS,
+  ...OTHER_BINARY_EXTENSIONS,
+] as const
+
 // Create a Set for efficient lookups
+const IMAGE_EXTENSIONS_SET = new Set(IMAGE_EXTENSIONS)
 const BINARY_EXTENSIONS_SET = new Set(BINARY_EXTENSIONS)
 
 /**
@@ -45,6 +53,10 @@ export function getBinaryExtensions(): readonly string[] {
   return BINARY_EXTENSIONS
 }
 
+export function getImageExtensions(): readonly string[] {
+  return IMAGE_EXTENSIONS
+}
+
 /**
  * Check if a file extension is binary
  * @param extension - File extension (without dot)
@@ -52,4 +64,13 @@ export function getBinaryExtensions(): readonly string[] {
  */
 export function isBinaryExtension(extension: string): boolean {
   return BINARY_EXTENSIONS_SET.has(extension.toLowerCase() as typeof BINARY_EXTENSIONS[number])
+}
+
+export function isImageFileByExtension(filePath: string): boolean {
+  if (!filePath) return false
+
+  const ext = filePath.split('.').pop()?.toLowerCase()
+  if (!ext) return false
+
+  return IMAGE_EXTENSIONS_SET.has(ext as typeof IMAGE_EXTENSIONS[number])
 }

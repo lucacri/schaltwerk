@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { isBinaryFileByExtension, getBinaryExtensions, isBinaryExtension } from './binaryDetection'
+import {
+  getBinaryExtensions,
+  getImageExtensions,
+  isBinaryExtension,
+  isBinaryFileByExtension,
+  isImageFileByExtension,
+} from './binaryDetection'
 
 describe('binaryDetection', () => {
   describe('isBinaryFileByExtension', () => {
@@ -112,6 +118,22 @@ describe('binaryDetection', () => {
       // This test verifies the type is readonly, not runtime immutability
       expect(Array.isArray(extensions)).toBe(true)
       expect(extensions.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('isImageFileByExtension', () => {
+    it('detects all supported image extensions', () => {
+      for (const extension of getImageExtensions()) {
+        expect(isImageFileByExtension(`asset.${extension}`)).toBe(true)
+        expect(isImageFileByExtension(`asset.${extension.toUpperCase()}`)).toBe(true)
+      }
+    })
+
+    it('rejects non-image binary files and text files', () => {
+      expect(isImageFileByExtension('archive.zip')).toBe(false)
+      expect(isImageFileByExtension('document.pdf')).toBe(false)
+      expect(isImageFileByExtension('src/main.ts')).toBe(false)
+      expect(isImageFileByExtension('')).toBe(false)
     })
   })
 

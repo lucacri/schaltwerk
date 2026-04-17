@@ -890,7 +890,13 @@
     "startCommentThread": "Start comment thread",
     "copyFilePath": "Copy file path",
     "discardFileChanges": "Discard file changes",
-    "binaryFilesInList": "Binary files stay in the list so you can keep scrolling through other changes."
+    "binaryFilesInList": "Binary files stay in the list so you can keep scrolling through other changes.",
+    "imageBefore": "Before",
+    "imageAfter": "After",
+    "imagePreview": "Image preview",
+    "imageAdded": "Added",
+    "imageDeleted": "Deleted",
+    "imageTooLarge": "Image is too large to preview ({size}). Preview is limited to {limit}."
   },
   "fileContentViewer": {
     "loading": "Loading...",

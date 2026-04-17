@@ -13,6 +13,8 @@ import { useTranslation } from '../../common/i18n'
 import { LoadingSkeleton } from '../shared/LoadingSkeleton'
 import { useAtomValue } from 'jotai'
 import { projectPathAtom } from '../../store/atoms/project'
+import { isImageFileByExtension } from '../../utils/binaryDetection'
+import { ImageDiffPreview } from './ImageDiffPreview'
 
 interface FileContentViewerProps {
   filePath: string | null
@@ -189,7 +191,7 @@ export function FileContentViewer({
     }
 
     if (isBinary) {
-      return (
+      const fallback = (
         <div className="h-full flex items-center justify-center">
           <div className="text-center" style={{ color: 'var(--color-text-muted)' }}>
             <VscFileBinary className="mx-auto mb-2 text-4xl opacity-50" />
@@ -198,6 +200,21 @@ export function FileContentViewer({
           </div>
         </div>
       )
+
+      if (isImageFileByExtension(filePath)) {
+        return (
+          <ImageDiffPreview
+            filePath={filePath}
+            changeType="added"
+            mode="single"
+            sessionName={sessionName}
+            projectPath={projectPath}
+            fallback={fallback}
+          />
+        )
+      }
+
+      return fallback
     }
 
     if (content === null) {

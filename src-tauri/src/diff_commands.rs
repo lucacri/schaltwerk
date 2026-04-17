@@ -2,11 +2,13 @@ use crate::commands::session_lookup_cache::{current_repo_cache_key, global_sessi
 use crate::errors::SchaltError;
 use crate::get_core_read_for_project_path;
 use crate::get_project_manager;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use git2::{
     Delta, DiffFindOptions, DiffOptions, ErrorCode, ObjectType, Oid, Repository, Sort, Tree,
 };
 use lucode::binary_detection::{
-    get_unsupported_reason, is_binary_file_by_extension, is_likely_binary_content,
+    get_unsupported_reason, image_mime_type, is_binary_file_by_extension,
+    is_image_file_by_extension, is_likely_binary_content,
 };
 use lucode::domains::git;
 use lucode::domains::git::stats::build_changed_files_from_diff;
@@ -18,7 +20,77 @@ use lucode::domains::workspace::diff_engine::{
 };
 use lucode::domains::workspace::file_utils;
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Component, Path};
+
+#[derive(serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ImageDiffSide {
+    Old,
+    New,
+}
+
+#[derive(serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ImageOldSource {
+    Base,
+    Head,
+}
+
+const MAX_IMAGE_PREVIEW_BYTES: usize = 25 * 1024 * 1024;
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct ImagePreviewResponse {
+    #[serde(rename = "dataUrl")]
+    pub data_url: String,
+    #[serde(rename = "sizeBytes")]
+    pub size_bytes: usize,
+    #[serde(rename = "mimeType")]
+    pub mime_type: String,
+    #[serde(rename = "tooLarge")]
+    pub too_large: bool,
+    #[serde(rename = "maxBytes")]
+    pub max_bytes: usize,
+}
+
+fn build_image_preview_response(file_path: &str, bytes: &[u8]) -> Option<ImagePreviewResponse> {
+    let mime_type = image_mime_type(file_path)?;
+    if bytes.len() > MAX_IMAGE_PREVIEW_BYTES {
+        return Some(ImagePreviewResponse {
+            data_url: String::new(),
+            size_bytes: bytes.len(),
+            mime_type: mime_type.to_string(),
+            too_large: true,
+            max_bytes: MAX_IMAGE_PREVIEW_BYTES,
+        });
+    }
+    let encoded = BASE64_STANDARD.encode(bytes);
+    Some(ImagePreviewResponse {
+        data_url: format!("data:{mime_type};base64,{encoded}"),
+        size_bytes: bytes.len(),
+        mime_type: mime_type.to_string(),
+        too_large: false,
+        max_bytes: MAX_IMAGE_PREVIEW_BYTES,
+    })
+}
+
+fn validate_image_preview_path(field: &str, file_path: &str) -> Result<(), SchaltError> {
+    let path = Path::new(file_path);
+    let traverses = path.components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    });
+
+    if file_path.trim().is_empty() || path.is_absolute() || traverses {
+        return Err(SchaltError::invalid_input(
+            field,
+            format!("Image preview path must stay within the repository: {file_path}"),
+        ));
+    }
+
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn get_changed_files_from_main(
@@ -675,6 +747,42 @@ mod tests {
     }
 
     #[test]
+    fn image_preview_data_url_uses_file_mime_type() {
+        let response =
+            build_image_preview_response("assets/logo.svg", br#"<svg viewBox="0 0 1 1"></svg>"#)
+                .expect("image response");
+
+        assert_eq!(response.mime_type, "image/svg+xml");
+        assert_eq!(response.size_bytes, 29);
+        assert!(response.data_url.starts_with("data:image/svg+xml;base64,"));
+        assert!(!response.too_large);
+        assert_eq!(response.max_bytes, MAX_IMAGE_PREVIEW_BYTES);
+    }
+
+    #[test]
+    fn image_preview_flags_oversized_bytes_without_encoding() {
+        let payload = vec![0u8; MAX_IMAGE_PREVIEW_BYTES + 1];
+        let response =
+            build_image_preview_response("big.png", &payload).expect("image response");
+
+        assert!(response.too_large);
+        assert!(response.data_url.is_empty());
+        assert_eq!(response.size_bytes, payload.len());
+        assert_eq!(response.mime_type, "image/png");
+    }
+
+    #[test]
+    fn image_preview_paths_reject_absolute_paths() {
+        assert!(validate_image_preview_path("file_path", "/tmp/private.png").is_err());
+    }
+
+    #[test]
+    fn image_preview_paths_reject_parent_traversal() {
+        assert!(validate_image_preview_path("old_file_path", "../private.png").is_err());
+        assert!(validate_image_preview_path("old_file_path", "assets/../../private.png").is_err());
+    }
+
+    #[test]
     fn test_orchestrator_working_changes_empty_result() {
         let file_map: HashMap<String, String> = HashMap::new();
 
@@ -995,6 +1103,33 @@ fn read_blob_from_merge_base(
         .merge_base(head_oid, parent_commit.id())
         .unwrap_or(parent_commit.id());
     read_blob_from_commit_path(repo, Some(mb_oid), file_path)
+}
+
+fn read_blob_bytes_from_merge_base(
+    repo: &Repository,
+    parent_branch: &str,
+    file_path: &str,
+) -> Result<Option<Vec<u8>>, String> {
+    let head_oid = repo
+        .head()
+        .map_err(|e| format!("Failed to get HEAD: {e}"))?
+        .target()
+        .ok_or_else(|| "Missing HEAD target".to_string())?;
+    let parent_commit = repo
+        .revparse_single(parent_branch)
+        .map_err(|e| format!("Failed to resolve parent branch: {e}"))?
+        .peel_to_commit()
+        .map_err(|e| format!("Failed to peel parent commit: {e}"))?;
+    let mb_oid = repo
+        .merge_base(head_oid, parent_commit.id())
+        .unwrap_or(parent_commit.id());
+    let commit = repo
+        .find_commit(mb_oid)
+        .map_err(|e| format!("Find merge-base commit failed: {e}"))?;
+    let tree = commit
+        .tree()
+        .map_err(|e| format!("Failed to get merge-base tree: {e}"))?;
+    read_blob_bytes_from_tree(repo, Some(&tree), file_path)
 }
 
 fn read_workdir_text(path: &std::path::Path) -> Result<String, String> {
@@ -1470,6 +1605,102 @@ pub async fn compute_commit_unified_diff(
         is_binary: Some(false),
         unsupported_reason: None,
     })
+}
+
+#[tauri::command]
+pub async fn read_diff_image(
+    session_name: Option<String>,
+    file_path: String,
+    old_file_path: Option<String>,
+    side: ImageDiffSide,
+    project_path: Option<String>,
+    commit_hash: Option<String>,
+    old_source: Option<ImageOldSource>,
+) -> Result<Option<ImagePreviewResponse>, SchaltError> {
+    validate_image_preview_path("file_path", &file_path)?;
+    if let Some(old_path) = old_file_path.as_deref() {
+        validate_image_preview_path("old_file_path", old_path)?;
+    }
+
+    let lookup_path = match side {
+        ImageDiffSide::Old => old_file_path.as_deref().unwrap_or(file_path.as_str()),
+        ImageDiffSide::New => file_path.as_str(),
+    };
+
+    if !is_image_file_by_extension(lookup_path) {
+        return Err(SchaltError::invalid_input(
+            "file_path",
+            format!("Unsupported image file type: {lookup_path}"),
+        ));
+    }
+
+    if let Some(commit_hash) = commit_hash {
+        let resolved_repo_path =
+            resolve_repo_path_structured(None, project_path.as_deref()).await?;
+
+        let repo = Repository::open(&resolved_repo_path)
+            .map_err(|e| SchaltError::git("open_repository", e))?;
+        let oid = Oid::from_str(&commit_hash)
+            .or_else(|_| repo.revparse_single(&commit_hash).map(|obj| obj.id()))
+            .map_err(|e| SchaltError::git("resolve_commit", e))?;
+        let commit = repo
+            .find_commit(oid)
+            .map_err(|e| SchaltError::git("find_commit", e))?;
+
+        let bytes = match side {
+            ImageDiffSide::New => {
+                let tree = commit
+                    .tree()
+                    .map_err(|e| SchaltError::git("read_commit_tree", e))?;
+                read_blob_bytes_from_tree(&repo, Some(&tree), lookup_path)
+            }
+            ImageDiffSide::Old => {
+                let old_tree = if commit.parent_count() > 0 {
+                    commit.parent(0).ok().and_then(|parent| parent.tree().ok())
+                } else {
+                    None
+                };
+                read_blob_bytes_from_tree(&repo, old_tree.as_ref(), lookup_path)
+            }
+        }
+        .map_err(|message| SchaltError::DatabaseError { message })?;
+
+        return Ok(bytes.and_then(|data| build_image_preview_response(lookup_path, &data)));
+    }
+
+    let repo_root =
+        resolve_repo_path_structured(session_name.as_deref(), project_path.as_deref()).await?;
+    let repo = Repository::open(&repo_root).map_err(|e| SchaltError::git("open_repository", e))?;
+
+    let bytes = match side {
+        ImageDiffSide::New => {
+            let full_path = Path::new(&repo_root).join(&file_path);
+            if !full_path.exists() {
+                None
+            } else {
+                Some(std::fs::read(&full_path).map_err(|e| {
+                    SchaltError::io("read_image_file", full_path.to_string_lossy(), e)
+                })?)
+            }
+        }
+        ImageDiffSide::Old => {
+            if session_name.is_some() && old_source != Some(ImageOldSource::Head) {
+                let base_branch = resolve_base_branch_structured(
+                    session_name.as_deref(),
+                    project_path.as_deref(),
+                )
+                .await?;
+                read_blob_bytes_from_merge_base(&repo, &base_branch, lookup_path)
+                    .map_err(|message| SchaltError::DatabaseError { message })?
+            } else {
+                let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
+                read_blob_bytes_from_tree(&repo, head_tree.as_ref(), lookup_path)
+                    .map_err(|message| SchaltError::DatabaseError { message })?
+            }
+        }
+    };
+
+    Ok(bytes.and_then(|data| build_image_preview_response(lookup_path, &data)))
 }
 
 #[tauri::command]

@@ -890,7 +890,13 @@
     "startCommentThread": "开始评论线程",
     "copyFilePath": "复制文件路径",
     "discardFileChanges": "放弃文件更改",
-    "binaryFilesInList": "二进制文件保留在列表中，以便您可以继续浏览其他更改。"
+    "binaryFilesInList": "二进制文件保留在列表中，以便您可以继续浏览其他更改。",
+    "imageBefore": "之前",
+    "imageAfter": "之后",
+    "imagePreview": "图片预览",
+    "imageAdded": "新增",
+    "imageDeleted": "删除",
+    "imageTooLarge": "图片过大无法预览（{size}）。预览上限为 {limit}。"
   },
   "fileContentViewer": {
     "loading": "加载中...",

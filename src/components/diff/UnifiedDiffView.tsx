@@ -3366,6 +3366,11 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
         onDeleteComment={handleDeleteComment}
         onLineSelectionChange={handlePierreLineSelectionChange}
         onOpenFile={openFileHandler}
+        imagePreviewContext={{
+          sessionName: isCommanderView() ? null : sessionName,
+          projectPath: currentProjectPath,
+          oldSource: diffSource === 'uncommitted' ? 'head' : 'base',
+        }}
         themeId={themeId}
         diffStyle={diffLayoutPreference === 'split' ? 'split' : 'unified'}
         visibleFileSet={isLargeDiffMode ? undefined : visibleFileSet}
@@ -3572,6 +3577,10 @@ export const UnifiedDiffView = memo(function UnifiedDiffView({
               onDeleteComment={handleDeleteComment}
               onLineSelectionChange={handlePierreLineSelectionChange}
               onOpenFile={openFileHandler}
+              imagePreviewContext={{
+                projectPath: historyContext?.repoPath,
+                commitHash: historyContext?.commitHash,
+              }}
               themeId={themeId}
               diffStyle={diffLayoutPreference === 'split' ? 'split' : 'unified'}
               visibleFileSet={isLargeDiffMode ? undefined : visibleFileSet}

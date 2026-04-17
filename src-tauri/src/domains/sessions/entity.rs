@@ -49,6 +49,8 @@ pub struct ChangedFile {
     pub deletions: u32,
     pub changes: u32,
     pub is_binary: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_path: Option<String>,
 }
 
 impl ChangedFile {
@@ -60,6 +62,7 @@ impl ChangedFile {
             deletions: 0,
             changes: 0,
             is_binary: None,
+            previous_path: None,
         }
     }
 }

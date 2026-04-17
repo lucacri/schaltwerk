@@ -25,12 +25,25 @@ import { getPierreThemes, getPierreUnsafeCSS, getThemeType, type SchaltwerkTheme
 import { usePierreKeyboardNav } from '../../hooks/usePierreKeyboardNav'
 import type { FileDiffData } from './loadDiffs'
 import { listenUiEvent, UiEvent, type FontSizeChangedDetail } from '../../common/uiEvents'
+import { isImageFileByExtension } from '../../utils/binaryDetection'
+import { ImageDiffPreview } from './ImageDiffPreview'
 
 export interface ChangedFile {
   path: string
   change_type: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'unknown'
   additions?: number
   deletions?: number
+  changes?: number
+  is_binary?: boolean
+  previous_path?: string
+}
+
+export interface ImagePreviewContext {
+  sessionName?: string | null
+  projectPath?: string | null
+  repoPath?: string | null
+  commitHash?: string | null
+  oldSource?: 'base' | 'head'
 }
 
 export interface PierreDiffViewerProps {
@@ -60,6 +73,7 @@ export interface PierreDiffViewerProps {
   onDeleteComment?: (commentId: string) => void
   onLineSelectionChange?: (selection: { filePath: string; startLine: number; endLine: number; side: 'old' | 'new' } | null) => void
   onOpenFile?: (filePath: string) => Promise<OpenInAppRequest | undefined>
+  imagePreviewContext?: ImagePreviewContext
   themeId?: SchaltwerkThemeId
   diffStyle?: 'unified' | 'split'
   visibleFileSet?: Set<string>
@@ -455,6 +469,7 @@ export function PierreDiffViewer({
   onDeleteComment,
   onLineSelectionChange,
   onOpenFile,
+  imagePreviewContext,
   themeId = 'dark',
   diffStyle = 'unified',
   visibleFileSet: _visibleFileSet,
@@ -800,12 +815,29 @@ export function PierreDiffViewer({
                   <AnimatedText text="loading" size="sm" />
                 </div>
               ) : fileDiff.isBinary ? (
-                <div className="px-4 py-10 text-center text-slate-400">
-                  <div className="text-lg font-medium text-slate-200">{t.diffViewer.binaryFile}</div>
-                  <div className="text-sm text-slate-400">
-                    {fileDiff.unsupportedReason || t.diffViewer.fileCannotDisplay}
+                isImageFileByExtension(file.path) ? (
+                  <ImageDiffPreview
+                    filePath={file.path}
+                    oldFilePath={file.previous_path ?? fileDiff.file.previous_path}
+                    changeType={file.change_type}
+                    fallback={
+                      <div className="px-4 py-10 text-center text-slate-400">
+                        <div className="text-lg font-medium text-slate-200">{t.diffViewer.binaryFile}</div>
+                        <div className="text-sm text-slate-400">
+                          {fileDiff.unsupportedReason || t.diffViewer.fileCannotDisplay}
+                        </div>
+                      </div>
+                    }
+                    {...imagePreviewContext}
+                  />
+                ) : (
+                  <div className="px-4 py-10 text-center text-slate-400">
+                    <div className="text-lg font-medium text-slate-200">{t.diffViewer.binaryFile}</div>
+                    <div className="text-sm text-slate-400">
+                      {fileDiff.unsupportedReason || t.diffViewer.fileCannotDisplay}
+                    </div>
                   </div>
-                </div>
+                )
               ) : pierreDiff ? (
                 <div
                   className="pierre-diff-container"

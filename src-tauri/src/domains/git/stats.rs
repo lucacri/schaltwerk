@@ -125,6 +125,13 @@ pub fn build_changed_files_from_diff(diff: &Diff) -> Result<Vec<ChangedFile>> {
             files[entry_index].is_binary = Some(true);
         }
 
+        if matches!(delta.status(), git2::Delta::Renamed | git2::Delta::Copied)
+            && let Some(old_path) = delta.old_file().path().and_then(|p| p.to_str())
+            && old_path != path_str
+        {
+            files[entry_index].previous_path = Some(old_path.to_string());
+        }
+
         let stat_entry = stats_map.entry(path_str.to_string()).or_default();
         if is_binary {
             stat_entry.is_binary = true;
@@ -991,6 +998,44 @@ mod tests {
         assert_eq!(binary.deletions, 0);
         assert_eq!(binary.changes, 0);
         assert_eq!(binary.is_binary, Some(true));
+    }
+
+    #[test]
+    fn renamed_files_include_previous_path() {
+        let repo = init_repo();
+        let p = repo.path();
+
+        fs::write(p.join("old-logo.png"), b"png bytes").unwrap();
+        StdCommand::new("git")
+            .args(["add", "old-logo.png"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+        StdCommand::new("git")
+            .args(["commit", "-m", "add logo"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+
+        StdCommand::new("git")
+            .args(["checkout", "-b", "feature"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+        StdCommand::new("git")
+            .args(["mv", "old-logo.png", "new-logo.png"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+
+        let changed = get_changed_files(p, "main").expect("changed files");
+        let renamed = changed
+            .iter()
+            .find(|file| file.path == "new-logo.png")
+            .expect("renamed file");
+
+        assert_eq!(renamed.change_type, "renamed");
+        assert_eq!(renamed.previous_path.as_deref(), Some("old-logo.png"));
     }
 
     #[test]

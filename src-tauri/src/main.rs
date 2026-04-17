@@ -1676,6 +1676,7 @@ fn main() {
             diff_commands::get_commit_files,
             diff_commands::get_commit_file_contents,
             diff_commands::set_session_diff_base_branch,
+            diff_commands::read_diff_image,
             file_commands::read_project_file,
             // Project commands
             get_recent_projects,

@@ -895,6 +895,12 @@ export interface Translations {
     copyFilePath: string
     discardFileChanges: string
     binaryFilesInList: string
+    imageBefore: string
+    imageAfter: string
+    imagePreview: string
+    imageAdded: string
+    imageDeleted: string
+    imageTooLarge: string
   }
   fileContentViewer: {
     loading: string
