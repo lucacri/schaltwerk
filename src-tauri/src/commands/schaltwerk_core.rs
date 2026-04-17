@@ -1,6 +1,7 @@
 use crate::mcp_api::{
-    ConfirmConsolidationWinnerResponse, TriggerConsolidationJudgeResponse,
-    confirm_consolidation_winner_inner, maybe_auto_start_consolidation_judge,
+    ConfirmConsolidationWinnerResponse, ImprovePlanRoundResponse, StartImprovePlanRoundParams,
+    TriggerConsolidationJudgeResponse, confirm_consolidation_winner_inner,
+    maybe_auto_start_consolidation_judge, start_improve_plan_round_inner,
     trigger_consolidation_judge_inner, upsert_consolidation_round,
 };
 use crate::{
@@ -2030,6 +2031,29 @@ pub async fn schaltwerk_core_trigger_consolidation_judge(
     trigger_consolidation_judge_inner(&app, &round_id, early.unwrap_or(false))
         .await
         .map_err(|(_, message)| message)
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_start_improve_plan_round(
+    app: tauri::AppHandle,
+    name: String,
+    agent_type: Option<String>,
+    base_branch: Option<String>,
+    candidate_count: Option<usize>,
+    confirmation_mode: Option<String>,
+) -> Result<ImprovePlanRoundResponse, String> {
+    start_improve_plan_round_inner(
+        &app,
+        &name,
+        StartImprovePlanRoundParams {
+            agent_type,
+            base_branch,
+            candidate_count,
+            confirmation_mode,
+        },
+    )
+    .await
+    .map_err(|(_, message)| message)
 }
 
 #[tauri::command]

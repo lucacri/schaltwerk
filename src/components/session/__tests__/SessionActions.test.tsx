@@ -347,3 +347,97 @@ describe('SessionActions – Running state', () => {
     expect(screen.queryByLabelText('Restart terminals')).not.toBeInTheDocument()
   })
 })
+
+describe('SessionActions – Improve Plan action', () => {
+  const noGithub: GithubIntegrationValue = {
+    status: null,
+    loading: false,
+    isAuthenticating: false,
+    isConnecting: false,
+    isCreatingPr: () => false,
+    authenticate: vi.fn(),
+    connectProject: vi.fn(),
+    createReviewedPr: vi.fn(),
+    getCachedPrUrl: () => undefined,
+    canCreatePr: false,
+    isGhMissing: false,
+    hasRepository: false,
+    refreshStatus: vi.fn(),
+  }
+
+  function renderSpec(props: Partial<React.ComponentProps<typeof SessionActions>>) {
+    const store = createStore()
+    store.set(forgeBaseAtom, 'unknown')
+    return render(
+      <Provider store={store}>
+        <GitlabIntegrationContext.Provider value={defaultGitlabValue}>
+          <GithubIntegrationContext.Provider value={noGithub}>
+            <SessionActions
+              sessionState="spec"
+              sessionId="spec-1"
+              {...props}
+            />
+          </GithubIntegrationContext.Provider>
+        </GitlabIntegrationContext.Provider>
+      </Provider>
+    )
+  }
+
+  it('renders Improve Plan for clarified specs and invokes the handler', () => {
+    const onImprovePlanSpec = vi.fn()
+    renderSpec({ onImprovePlanSpec, canImprovePlanSpec: true, improvePlanActive: false })
+
+    const button = screen.getByLabelText('Improve Plan') as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    fireEvent.click(button)
+    expect(onImprovePlanSpec).toHaveBeenCalledWith('spec-1')
+  })
+
+  it('hides the Improve Plan action for draft specs', () => {
+    const onImprovePlanSpec = vi.fn()
+    renderSpec({ onImprovePlanSpec, canImprovePlanSpec: false, improvePlanActive: false })
+
+    expect(screen.queryByLabelText('Improve Plan')).not.toBeInTheDocument()
+  })
+
+  it('disables Improve Plan and does not call the handler when a round is active', () => {
+    const onImprovePlanSpec = vi.fn()
+    renderSpec({ onImprovePlanSpec, canImprovePlanSpec: false, improvePlanActive: true })
+
+    const button = screen.getByLabelText('Improve Plan') as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(onImprovePlanSpec).not.toHaveBeenCalled()
+  })
+
+  it('shows a loading state while starting and blocks extra invocations', () => {
+    const onImprovePlanSpec = vi.fn()
+    renderSpec({ onImprovePlanSpec, canImprovePlanSpec: true, improvePlanStarting: true })
+
+    const button = screen.getByLabelText('Improve Plan') as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(onImprovePlanSpec).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when onImprovePlanSpec prop is not supplied', () => {
+    renderSpec({})
+    expect(screen.queryByLabelText('Improve Plan')).not.toBeInTheDocument()
+  })
+
+  it('leaves refine and run controls intact alongside Improve Plan', () => {
+    const onImprovePlanSpec = vi.fn()
+    const onRefineSpec = vi.fn()
+    const onRunSpec = vi.fn()
+    renderSpec({
+      onImprovePlanSpec,
+      canImprovePlanSpec: true,
+      onRefineSpec,
+      onRunSpec,
+    })
+
+    expect(screen.getByLabelText('Clarify spec')).toBeInTheDocument()
+    expect(screen.getByLabelText('Run spec')).toBeInTheDocument()
+    expect(screen.getByLabelText('Improve Plan')).toBeInTheDocument()
+  })
+})

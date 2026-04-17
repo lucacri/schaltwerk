@@ -931,6 +931,10 @@ export interface Translations {
     saving: string
     refine: string
     run: string
+    improvePlan: string
+    improvingPlan: string
+    improvePlanTooltip: string
+    improvePlanActive: string
     previewMarkdown: string
     editMarkdown: string
     preview: string
@@ -1527,6 +1531,13 @@ export interface Translations {
     refineInOrchestrator: string
     runSpec: string
     deleteSpec: string
+    improvePlan: string
+    improvePlanTooltip: string
+    improvePlanActive: string
+    improvePlanStarting: string
+    improvePlanFailed: string
+    improvePlanStartedTitle: string
+    improvePlanStartedDescription: string
     createPrShortcut: string
     createGitlabMr: string
     createGitlabMrShortcut: string

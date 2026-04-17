@@ -348,6 +348,7 @@ mod tests {
                 ready_to_merge_checks: None,
                 spec_content: None,
                 spec_stage: None,
+                improve_plan_round_id: None,
                 clarification_started: None,
                 session_state: SessionState::Running,
                 issue_number: None,

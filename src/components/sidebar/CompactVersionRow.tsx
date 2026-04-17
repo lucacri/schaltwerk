@@ -129,7 +129,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   const modKey = platform === 'mac' ? '⌘' : 'Ctrl'
   const {
     onSelect, onCancel,
-    onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec,
+    onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec, onImprovePlanSpec, improvePlanStartingSessionId,
     onReset, onSwitchModel,
     onCreatePullRequest, onCreateGitlabMr,
     onMerge, onQuickMerge, onLinkPr, onPostToForge,
@@ -537,6 +537,10 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                 onRunSpec={onRunDraft}
                 onRefineSpec={onRefineSpec}
                 onDeleteSpec={onDeleteSpec}
+                onImprovePlanSpec={onImprovePlanSpec}
+                canImprovePlanSpec={s.spec_stage === 'clarified' && !s.improve_plan_round_id}
+                improvePlanActive={Boolean(s.improve_plan_round_id)}
+                improvePlanStarting={improvePlanStartingSessionId === s.session_id}
                 onCancel={onCancel}
                 onConvertToSpec={onConvertToSpec}
                 onPromoteVersion={onPromoteVersion}

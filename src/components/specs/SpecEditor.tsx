@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
-import { VscCopy, VscPlay, VscEye, VscEdit, VscComment, VscDiscard, VscSend } from 'react-icons/vsc'
+import { VscCopy, VscPlay, VscEye, VscEdit, VscComment, VscChecklist, VscDiscard, VscSend } from 'react-icons/vsc'
+import { useImprovePlanAction } from '../../hooks/useImprovePlanAction'
 import { AnimatedText } from '../common/AnimatedText'
 import { logger } from '../../utils/logger'
 import { MarkdownEditor, type MarkdownEditorRef } from './MarkdownEditor'
@@ -117,6 +118,14 @@ export function SpecEditor({
   const selectedSession = useMemo(() => sessions.find(session => session.info.session_id === sessionName) ?? null, [sessions, sessionName])
   const selectedEpic = selectedSession?.info.epic ?? null
   const specStage = selectedSession?.info.spec_stage ?? 'draft'
+  const improvePlanRoundId = selectedSession?.info.improve_plan_round_id ?? null
+  const improvePlanActive = Boolean(improvePlanRoundId)
+  const improvePlanAction = useImprovePlanAction({
+    logContext: 'SpecEditor',
+    onError: (message) => setError(message),
+  })
+  const improvingPlan = improvePlanAction.startingSessionId === sessionName
+  const canImprovePlan = specStage === 'clarified' && !improvePlanActive && !improvingPlan
 
   const [reviewComments, setReviewComments] = useState<SpecReviewComment[]>([])
   const [showCommentForm, setShowCommentForm] = useState(false)
@@ -352,6 +361,13 @@ export function SpecEditor({
       setClarifying(false)
     }
   }, [canClarify, clarificationAgentType, flushPendingSave, sessionName, specTerminalId])
+
+  const handleImprovePlan = useCallback(async () => {
+    if (!canImprovePlan) return
+    setError(null)
+    await flushPendingSave()
+    await improvePlanAction.start(sessionName)
+  }, [canImprovePlan, flushPendingSave, improvePlanAction, sessionName])
 
   const handleRunSpec = useCallback(async () => {
     if (!canRunSpec) return
@@ -769,6 +785,27 @@ export function SpecEditor({
                   t.specEditor.refine
                 )}
               </button>
+              {(specStage === 'clarified' || improvePlanActive) && (
+                <button
+                  onClick={() => { void handleImprovePlan() }}
+                  disabled={!canImprovePlan}
+                  aria-label={t.specEditor.improvePlan}
+                  className="px-3 py-1 rounded bg-bg-hover hover:bg-bg-hover text-text-primary flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={specText.toolbarButton}
+                  title={
+                    improvePlanActive
+                      ? t.specEditor.improvePlanActive
+                      : t.specEditor.improvePlanTooltip
+                  }
+                >
+                  <VscChecklist />
+                  {improvingPlan ? (
+                    <AnimatedText text={t.specEditor.improvingPlan} size="xs" />
+                  ) : (
+                    t.specEditor.improvePlan
+                  )}
+                </button>
+              )}
               <button
                 onClick={() => { void handleRunSpec() }}
                 disabled={!canRunSpec}

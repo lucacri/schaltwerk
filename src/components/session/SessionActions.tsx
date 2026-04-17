@@ -3,6 +3,7 @@ import {
   VscPlay,
   VscTrash,
   VscCheck,
+  VscChecklist,
   VscClose,
   VscArchive,
   VscStarFull,
@@ -47,6 +48,10 @@ interface SessionActionsProps {
   onRunSpec?: (sessionId: string) => void;
   onRefineSpec?: (sessionId: string) => void;
   onDeleteSpec?: (sessionId: string) => void;
+  onImprovePlanSpec?: (sessionId: string) => void;
+  canImprovePlanSpec?: boolean;
+  improvePlanActive?: boolean;
+  improvePlanStarting?: boolean;
   onCancel?: (sessionId: string, hasUncommitted: boolean) => void;
   onConvertToSpec?: (sessionId: string) => void;
   onPromoteVersion?: () => void;
@@ -81,6 +86,10 @@ export function SessionActions({
   onRunSpec,
   onRefineSpec,
   onDeleteSpec,
+  onImprovePlanSpec,
+  canImprovePlanSpec = false,
+  improvePlanActive = false,
+  improvePlanStarting = false,
   onCancel,
   onConvertToSpec,
   onPromoteVersion,
@@ -187,6 +196,25 @@ export function SessionActions({
               onClick={() => onRefineSpec(sessionId)}
               ariaLabel={t.sessionActions.refineSpec}
               tooltip={t.sessionActions.refineInOrchestrator}
+            />
+          )}
+          {onImprovePlanSpec && (canImprovePlanSpec || improvePlanActive) && (
+            <IconButton
+              icon={improvePlanStarting ? spinnerIcon : <VscChecklist />}
+              onClick={() => {
+                if (!canImprovePlanSpec || improvePlanActive || improvePlanStarting) return
+                onImprovePlanSpec(sessionId)
+              }}
+              ariaLabel={t.sessionActions.improvePlan}
+              tooltip={
+                improvePlanActive
+                  ? t.sessionActions.improvePlanActive
+                  : improvePlanStarting
+                    ? t.sessionActions.improvePlanStarting
+                    : t.sessionActions.improvePlanTooltip
+              }
+              disabled={!canImprovePlanSpec || improvePlanActive || improvePlanStarting}
+              className={!canImprovePlanSpec || improvePlanActive ? 'opacity-60' : undefined}
             />
           )}
           {onRunSpec && (

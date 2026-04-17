@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { invoke } from '@tauri-apps/api/core'
 import { VscCalendar, VscWatch, VscNotebook } from 'react-icons/vsc'
@@ -8,6 +8,7 @@ import { SessionActions } from '../session/SessionActions'
 import { logger } from '../../utils/logger'
 import { formatDateTime } from '../../utils/dateTime'
 import { useSessions } from '../../hooks/useSessions'
+import { useImprovePlanAction } from '../../hooks/useImprovePlanAction'
 import { emitUiEvent, UiEvent } from '../../common/uiEvents'
 import { getSessionDisplayName } from '../../utils/sessionDisplayName'
 import { isSessionMissingError } from '../../types/errors'
@@ -39,6 +40,17 @@ export function SpecMetadataPanel({ sessionName }: Props) {
   const [loading, setLoading] = useState(true)
   const { sessions } = useSessions()
   const projectPath = useAtomValue(projectPathAtom)
+  const improvePlanAction = useImprovePlanAction({ logContext: 'SpecMetadataPanel' })
+
+  const selectedSession = useMemo(
+    () => sessions.find(session => session.info.session_id === sessionName) ?? null,
+    [sessions, sessionName]
+  )
+  const canImprovePlan =
+    selectedSession?.info.spec_stage === 'clarified' &&
+    !selectedSession?.info.improve_plan_round_id
+  const improvePlanActive = Boolean(selectedSession?.info.improve_plan_round_id)
+  const improvePlanStarting = improvePlanAction.startingSessionId === sessionName
 
   useEffect(() => {
     const loadMetadata = async () => {
@@ -124,6 +136,10 @@ export function SpecMetadataPanel({ sessionName }: Props) {
           sessionId={sessionName}
           onRunSpec={(id) => handleRunSpec(id)}
           onDeleteSpec={(id) => { void handleDeleteSpec(id) }}
+          onImprovePlanSpec={(id) => { void improvePlanAction.start(id) }}
+          canImprovePlanSpec={canImprovePlan}
+          improvePlanActive={improvePlanActive}
+          improvePlanStarting={improvePlanStarting}
         />
       </div>
 

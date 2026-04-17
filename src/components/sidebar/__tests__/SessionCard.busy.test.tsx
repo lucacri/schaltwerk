@@ -66,6 +66,7 @@ const mockActions: SessionCardActions = {
   onRunDraft: vi.fn(),
   onRefineSpec: vi.fn(),
   onDeleteSpec: vi.fn(),
+  onImprovePlanSpec: vi.fn(),
   onReset: vi.fn(),
   onSwitchModel: vi.fn(),
   onCreatePullRequest: vi.fn(),

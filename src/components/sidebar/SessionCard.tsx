@@ -173,7 +173,7 @@ export const SessionCard = memo<SessionCardProps>(
     }) => {
     const {
       onSelect, onCancel,
-      onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec,
+      onConvertToSpec, onRunDraft, onRefineSpec, onDeleteSpec, onImprovePlanSpec, improvePlanStartingSessionId,
       onReset, onSwitchModel,
       onCreatePullRequest, onCreateGitlabMr,
       onMerge, onQuickMerge, onRename, onLinkPr, onPostToForge,
@@ -778,6 +778,10 @@ export const SessionCard = memo<SessionCardProps>(
             onRunSpec={onRunDraft}
             onRefineSpec={onRefineSpec}
             onDeleteSpec={onDeleteSpec}
+            onImprovePlanSpec={onImprovePlanSpec}
+            canImprovePlanSpec={s.spec_stage === 'clarified' && !s.improve_plan_round_id}
+            improvePlanActive={Boolean(s.improve_plan_round_id)}
+            improvePlanStarting={improvePlanStartingSessionId === s.session_id}
             onCancel={onCancel}
             onConvertToSpec={onConvertToSpec}
             onPromoteVersion={onPromoteVersion}

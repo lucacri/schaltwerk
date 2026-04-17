@@ -62,6 +62,7 @@ import { SidebarSectionHeader } from './SidebarSectionHeader'
 import { getEpicAccentScheme } from '../../utils/epicColors'
 import { projectForgeAtom } from '../../store/atoms/forge'
 import { SessionCardActionsProvider, type SessionCardActions } from '../../contexts/SessionCardActionsContext'
+import { useImprovePlanAction } from '../../hooks/useImprovePlanAction'
 import { getSessionLifecycleState } from '../../utils/sessionState'
 import { sidebarViewModeAtom } from '../../store/atoms/sidebarViewMode'
 import { KanbanView } from './KanbanView'
@@ -1371,6 +1372,8 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         })()
     }, [setCurrentFocus, setFocusForSession, setSelection])
 
+    const improvePlanAction = useImprovePlanAction({ logContext: 'Sidebar' })
+
     const handleRefineSpecShortcut = useCallback(() => {
         if (isAnyModalOpen()) return
         if (selection.kind !== 'session' || !selection.payload) return
@@ -1607,6 +1610,9 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 hasUncommittedChanges: false,
             })
         },
+        onImprovePlanSpec: (sessionId) => {
+            void improvePlanAction.start(sessionId)
+        },
         onReset: (sessionId) => {
             void (async () => {
                 const currentSelection = selection.kind === 'session' && selection.payload === sessionId
@@ -1630,6 +1636,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         onPostToForge: (sessionId) => {
             setForgeWritebackSessionId(sessionId)
         },
+        improvePlanStartingSessionId: improvePlanAction.startingSessionId,
     }
 
     return (

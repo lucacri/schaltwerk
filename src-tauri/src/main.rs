@@ -1586,6 +1586,7 @@ fn main() {
             schaltwerk_core_get_session_agent_content,
             schaltwerk_core_cancel_session,
             schaltwerk_core_trigger_consolidation_judge,
+            schaltwerk_core_start_improve_plan_round,
             schaltwerk_core_confirm_consolidation_winner,
             schaltwerk_core_convert_session_to_draft,
             schaltwerk_core_convert_version_group_to_spec,

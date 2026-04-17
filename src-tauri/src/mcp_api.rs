@@ -4397,6 +4397,108 @@ mod tests {
     }
 
     #[test]
+    fn validate_start_improve_plan_round_rejects_draft_spec() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        manager
+            .create_spec_session("draft-spec", "Still draft")
+            .expect("create spec");
+
+        let err = validate_start_improve_plan_round_preconditions(&db, &manager, "draft-spec")
+            .expect_err("draft spec should be rejected");
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert!(err.1.contains("clarified"));
+    }
+
+    #[test]
+    fn validate_start_improve_plan_round_accepts_clarified_spec_without_active_round() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let spec = manager
+            .create_spec_session("clarified-spec", "Ready for plan")
+            .expect("create spec");
+        db.update_spec_stage(&spec.id, SpecStage::Clarified)
+            .expect("clarify spec");
+
+        let (resolved, version_group_id) =
+            validate_start_improve_plan_round_preconditions(&db, &manager, "clarified-spec")
+                .expect("clarified spec should pass validation");
+        assert_eq!(resolved.name, "clarified-spec");
+        assert_eq!(version_group_id, format!("plan-{}", spec.id));
+    }
+
+    #[test]
+    fn validate_start_improve_plan_round_rejects_when_active_round_linked() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let spec = manager
+            .create_spec_session("busy-spec", "Clarified")
+            .expect("create spec");
+        db.update_spec_stage(&spec.id, SpecStage::Clarified)
+            .expect("clarify spec");
+
+        let round_id = "active-plan-round".to_string();
+        let version_group_id = format!("plan-{}", spec.id);
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            &round_id,
+            &version_group_id,
+            &[spec.id.clone()],
+            "confirm",
+            "plan",
+        )
+        .expect("upsert plan round");
+        db.update_spec_improve_plan_round_id(&spec.id, Some(&round_id))
+            .expect("link active plan round");
+
+        let err = validate_start_improve_plan_round_preconditions(&db, &manager, "busy-spec")
+            .expect_err("active plan round should block starting another");
+        assert_eq!(err.0, StatusCode::CONFLICT);
+        assert!(err.1.contains(&round_id));
+    }
+
+    #[test]
+    fn validate_start_improve_plan_round_clears_stale_promoted_link() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let spec = manager
+            .create_spec_session("recovered-spec", "Clarified")
+            .expect("create spec");
+        db.update_spec_stage(&spec.id, SpecStage::Clarified)
+            .expect("clarify spec");
+
+        let round_id = "stale-plan-round".to_string();
+        let version_group_id = format!("plan-{}", spec.id);
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            &round_id,
+            &version_group_id,
+            &[spec.id.clone()],
+            "confirm",
+            "plan",
+        )
+        .expect("upsert plan round");
+        update_consolidation_round_status(&db, &repo_path, &round_id, "promoted")
+            .expect("mark round promoted");
+        db.update_spec_improve_plan_round_id(&spec.id, Some(&round_id))
+            .expect("link stale plan round");
+
+        validate_start_improve_plan_round_preconditions(&db, &manager, "recovered-spec")
+            .expect("promoted round link should be cleared automatically");
+
+        let refreshed = db
+            .get_spec_by_name(&repo_path, "recovered-spec")
+            .expect("reload spec");
+        assert_eq!(refreshed.improve_plan_round_id, None);
+    }
+
+    #[test]
     fn parse_reset_selection_request_with_session_selection() {
         let payload = parse_reset_selection_request(
             br#"{ "selection": "session", "session_name": "my-session", "skip_prompt": true }"#,
@@ -5203,11 +5305,30 @@ struct ImprovePlanRoundRequest {
     confirmation_mode: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-struct ImprovePlanRoundResponse {
-    spec: String,
-    round_id: String,
-    candidate_sessions: Vec<String>,
+#[derive(Debug, Clone, Default)]
+pub(crate) struct StartImprovePlanRoundParams {
+    pub agent_type: Option<String>,
+    pub base_branch: Option<String>,
+    pub candidate_count: Option<usize>,
+    pub confirmation_mode: Option<String>,
+}
+
+impl From<ImprovePlanRoundRequest> for StartImprovePlanRoundParams {
+    fn from(value: ImprovePlanRoundRequest) -> Self {
+        Self {
+            agent_type: value.agent_type,
+            base_branch: value.base_branch,
+            candidate_count: value.candidate_count,
+            confirmation_mode: value.confirmation_mode,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct ImprovePlanRoundResponse {
+    pub spec: String,
+    pub round_id: String,
+    pub candidate_sessions: Vec<String>,
 }
 
 fn build_plan_candidate_prompt(spec: &Spec) -> String {
@@ -5263,28 +5384,29 @@ async fn start_improve_plan_round(
         }
     };
 
-    let core = match get_core_write().await {
-        Ok(core) => core,
-        Err(err) => {
-            return Ok(json_error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Internal error: {err}"),
-            ));
-        }
-    };
-    let manager = core.session_manager();
-    let spec = match manager.get_spec(name) {
-        Ok(spec) => spec,
-        Err(err) => {
-            return Ok(json_error_response(
-                StatusCode::NOT_FOUND,
-                format!("Spec '{name}' not found: {err}"),
-            ));
-        }
-    };
+    match start_improve_plan_round_inner(&app, name, payload.into()).await {
+        Ok(response) => Ok(json_response(
+            StatusCode::CREATED,
+            serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string()),
+        )),
+        Err((status, message)) => Ok(json_error_response(status, message)),
+    }
+}
+
+pub(crate) fn validate_start_improve_plan_round_preconditions(
+    db: &Database,
+    manager: &SessionManager,
+    name: &str,
+) -> Result<(Spec, String), (StatusCode, String)> {
+    let spec = manager.get_spec(name).map_err(|err| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Spec '{name}' not found: {err}"),
+        )
+    })?;
 
     if spec.stage != SpecStage::Clarified {
-        return Ok(json_error_response(
+        return Err((
             StatusCode::BAD_REQUEST,
             "Improve Plan can only start from a clarified spec".to_string(),
         ));
@@ -5292,13 +5414,13 @@ async fn start_improve_plan_round(
 
     let version_group_id = format!("plan-{}", spec.id);
     if let Some(active_round_id) = spec.improve_plan_round_id.as_deref() {
-        match get_consolidation_round(&core.db, manager.repo_path(), active_round_id) {
+        match get_consolidation_round(db, manager.repo_path(), active_round_id) {
             Ok(round)
                 if round.round_type == "plan"
                     && round.status != "promoted"
                     && round.status != "cancelled" =>
             {
-                return Ok(json_error_response(
+                return Err((
                     StatusCode::CONFLICT,
                     format!(
                         "Spec '{}' already has an active Improve Plan round '{}'",
@@ -5307,48 +5429,62 @@ async fn start_improve_plan_round(
                 ));
             }
             Ok(_) => {
-                if let Err(err) = core.db.update_spec_improve_plan_round_id(&spec.id, None) {
-                    return Ok(json_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        format!("Failed to clear stale plan round link: {err}"),
-                    ));
-                }
+                db.update_spec_improve_plan_round_id(&spec.id, None)
+                    .map_err(|err| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Failed to clear stale plan round link: {err}"),
+                        )
+                    })?;
             }
             Err(err) => {
                 warn!(
                     "Spec '{}' references missing Improve Plan round '{}': {err}",
                     spec.name, active_round_id
                 );
-                if let Err(err) = core.db.update_spec_improve_plan_round_id(&spec.id, None) {
-                    return Ok(json_error_response(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        format!("Failed to clear stale plan round link: {err}"),
-                    ));
-                }
+                db.update_spec_improve_plan_round_id(&spec.id, None)
+                    .map_err(|err| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Failed to clear stale plan round link: {err}"),
+                        )
+                    })?;
             }
         }
     }
 
-    match get_active_plan_round_for_group(&core.db, manager.repo_path(), &version_group_id) {
-        Ok(Some(round)) => {
-            return Ok(json_error_response(
-                StatusCode::CONFLICT,
-                format!(
-                    "Spec '{}' already has an active Improve Plan round '{}'",
-                    spec.name, round.id
-                ),
-            ));
-        }
-        Ok(None) => {}
-        Err(err) => {
-            return Ok(json_error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to check active Improve Plan rounds: {err}"),
-            ));
-        }
+    match get_active_plan_round_for_group(db, manager.repo_path(), &version_group_id) {
+        Ok(Some(round)) => Err((
+            StatusCode::CONFLICT,
+            format!(
+                "Spec '{}' already has an active Improve Plan round '{}'",
+                spec.name, round.id
+            ),
+        )),
+        Ok(None) => Ok((spec, version_group_id)),
+        Err(err) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to check active Improve Plan rounds: {err}"),
+        )),
     }
+}
 
-    let candidate_count = payload.candidate_count.unwrap_or(2).clamp(1, 6);
+pub(crate) async fn start_improve_plan_round_inner(
+    app: &tauri::AppHandle,
+    name: &str,
+    params: StartImprovePlanRoundParams,
+) -> Result<ImprovePlanRoundResponse, (StatusCode, String)> {
+    let core = get_core_write().await.map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Internal error: {err}"),
+        )
+    })?;
+    let manager = core.session_manager();
+    let (spec, version_group_id) =
+        validate_start_improve_plan_round_preconditions(&core.db, &manager, name)?;
+
+    let candidate_count = params.candidate_count.unwrap_or(2).clamp(1, 6);
     let round_id = Uuid::new_v4().to_string();
     let round_slug = round_id
         .split('-')
@@ -5356,12 +5492,12 @@ async fn start_improve_plan_round(
         .filter(|slug| !slug.is_empty())
         .unwrap_or("round");
     let source_ids = vec![spec.id.clone()];
-    let confirmation_mode = payload.confirmation_mode.as_deref().unwrap_or("confirm");
+    let confirmation_mode = params.confirmation_mode.as_deref().unwrap_or("confirm");
     let prompt = build_plan_candidate_prompt(&spec);
     let mut candidate_sessions = Vec::new();
     let mut created_session_names = Vec::new();
 
-    if let Err(err) = upsert_consolidation_round_with_type(
+    upsert_consolidation_round_with_type(
         &core.db,
         manager.repo_path(),
         &round_id,
@@ -5369,12 +5505,13 @@ async fn start_improve_plan_round(
         &source_ids,
         confirmation_mode,
         "plan",
-    ) {
-        return Ok(json_error_response(
+    )
+    .map_err(|err| {
+        (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to persist plan round: {err}"),
-        ));
-    }
+        )
+    })?;
 
     if let Err(err) = core
         .db
@@ -5387,7 +5524,7 @@ async fn start_improve_plan_round(
                 "Failed to mark plan round '{round_id}' cancelled after link failure: {cancel_err}"
             );
         }
-        return Ok(json_error_response(
+        return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to link spec to plan round: {err}"),
         ));
@@ -5398,7 +5535,7 @@ async fn start_improve_plan_round(
         let session = match manager.create_session_with_agent(SessionCreationParams {
             name: &session_name,
             prompt: Some(&prompt),
-            base_branch: payload.base_branch.as_deref(),
+            base_branch: params.base_branch.as_deref(),
             custom_branch: None,
             use_existing_branch: false,
             sync_with_origin: false,
@@ -5406,7 +5543,7 @@ async fn start_improve_plan_round(
             version_group_id: Some(&version_group_id),
             version_number: Some((index + 1) as i32),
             epic_id: spec.epic_id.as_deref(),
-            agent_type: payload.agent_type.as_deref(),
+            agent_type: params.agent_type.as_deref(),
             pr_number: None,
             is_consolidation: true,
             consolidation_source_ids: Some(source_ids.clone()),
@@ -5424,7 +5561,7 @@ async fn start_improve_plan_round(
                     &created_session_names,
                 )
                 .await;
-                return Ok(json_error_response(
+                return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     format!(
                         "Failed to create plan candidate: {err}.{}",
@@ -5458,7 +5595,7 @@ async fn start_improve_plan_round(
                 &created_session_names,
             )
             .await;
-            return Ok(json_error_response(
+            return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!(
                     "Failed to start plan candidate '{}': {err}.{}",
@@ -5471,16 +5608,12 @@ async fn start_improve_plan_round(
         candidate_sessions.push(session.name);
     }
 
-    request_sessions_refresh(&app, SessionsRefreshReason::SessionLifecycle);
-    let response = ImprovePlanRoundResponse {
+    request_sessions_refresh(app, SessionsRefreshReason::SessionLifecycle);
+    Ok(ImprovePlanRoundResponse {
         spec: spec.name,
         round_id,
         candidate_sessions,
-    };
-    Ok(json_response(
-        StatusCode::CREATED,
-        serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string()),
-    ))
+    })
 }
 
 async fn delete_draft(name: &str, app: tauri::AppHandle) -> Result<Response<String>, hyper::Error> {

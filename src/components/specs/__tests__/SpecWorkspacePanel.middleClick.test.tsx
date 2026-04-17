@@ -3,7 +3,7 @@ import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import { SpecWorkspacePanel } from '../SpecWorkspacePanel'
 import { SessionState, EnrichedSession } from '../../../types/session'
 
-vi.mock('../../plans/SpecEditor', () => ({
+vi.mock('../SpecEditor', () => ({
   SpecEditor: ({ sessionName }: { sessionName: string }) => (
     <div data-testid="mock-spec-editor">{sessionName}</div>
   )

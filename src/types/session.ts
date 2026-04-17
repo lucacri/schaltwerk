@@ -124,6 +124,7 @@ export interface SessionInfo {
     ready_to_merge_checks?: SessionReadyToMergeCheck[]
     spec_content?: string
     spec_stage?: SpecStage
+    improve_plan_round_id?: string | null
     clarification_started?: boolean
     original_agent_type?: AgentType
     diff_stats?: DiffStats

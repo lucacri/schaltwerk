@@ -397,6 +397,8 @@ pub struct SessionInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_stage: Option<SpecStage>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub improve_plan_round_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub clarification_started: Option<bool>,
     pub session_state: SessionState,
     #[serde(skip_serializing_if = "Option::is_none")]

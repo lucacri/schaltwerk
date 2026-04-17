@@ -81,6 +81,7 @@ pub use schaltwerk_core::{
     schaltwerk_core_start_spec_orchestrator,
     schaltwerk_core_submit_spec_clarification_prompt,
     schaltwerk_core_start_session_agent_with_restart,
+    schaltwerk_core_start_improve_plan_round,
     schaltwerk_core_trigger_consolidation_judge,
     schaltwerk_core_update_git_stats, schaltwerk_core_update_session_state,
     schaltwerk_core_update_spec_content,

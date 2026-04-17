@@ -390,6 +390,108 @@ describe('SpecEditor keyboard shortcuts', () => {
     expect(runButton.className).toContain('bg-accent-green')
   })
 
+  it('starts an Improve Plan round when the button is clicked on a clarified spec', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'improve-plan-spec',
+          stable_id: 'improve-plan-spec-stable-id',
+          spec_stage: 'clarified',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="improve-plan-spec" allowClarificationControls />
+      </TestProviders>
+    )
+
+    const improveButton = await screen.findByRole('button', { name: 'Improve Plan' })
+    expect(improveButton).toBeInTheDocument()
+    expect(improveButton).not.toBeDisabled()
+
+    fireEvent.click(improveButton)
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreStartImprovePlanRound, {
+        name: 'improve-plan-spec',
+      })
+    })
+  })
+
+  it('hides the Improve Plan button when the spec is still draft', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'draft-plan-spec',
+          stable_id: 'draft-plan-spec-stable-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="draft-plan-spec" allowClarificationControls />
+      </TestProviders>
+    )
+
+    await screen.findByRole('button', { name: 'Clarify' })
+    expect(screen.queryByRole('button', { name: 'Improve Plan' })).toBeNull()
+  })
+
+  it('disables the Improve Plan button when a round is already active', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'active-plan-spec',
+          stable_id: 'active-plan-spec-stable-id',
+          spec_stage: 'clarified',
+          improve_plan_round_id: 'round-abc',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="active-plan-spec" allowClarificationControls />
+      </TestProviders>
+    )
+
+    const improveButton = await screen.findByRole('button', { name: 'Improve Plan' })
+    expect(improveButton).toBeDisabled()
+    fireEvent.click(improveButton)
+    expect(invoke).not.toHaveBeenCalledWith(
+      TauriCommands.SchaltwerkCoreStartImprovePlanRound,
+      expect.anything()
+    )
+  })
+
   it('opens the start-from-spec flow when Run is clicked', async () => {
     sessionsMock = [
       {

@@ -7,6 +7,8 @@ export interface SessionCardActions {
   onRunDraft: (sessionId: string) => void
   onRefineSpec: (sessionId: string) => void
   onDeleteSpec: (sessionId: string) => void
+  onImprovePlanSpec: (sessionId: string) => void
+  improvePlanStartingSessionId?: string | null
   onReset: (sessionId: string) => void
   onSwitchModel: (sessionId: string) => void
   onCreatePullRequest: (sessionId: string) => void
@@ -35,23 +37,29 @@ export function SessionCardActionsProvider({ actions, children }: ProviderProps)
   const ref = useRef(actions)
   ref.current = actions
 
-  const stable = useMemo<SessionCardActions>(() => ({
-    onSelect: (...args) => ref.current.onSelect(...args),
-    onCancel: (...args) => ref.current.onCancel(...args),
-    onConvertToSpec: (...args) => ref.current.onConvertToSpec(...args),
-    onRunDraft: (...args) => ref.current.onRunDraft(...args),
-    onRefineSpec: (...args) => ref.current.onRefineSpec(...args),
-    onDeleteSpec: (...args) => ref.current.onDeleteSpec(...args),
-    onReset: (...args) => ref.current.onReset(...args),
-    onSwitchModel: (...args) => ref.current.onSwitchModel(...args),
-    onCreatePullRequest: (...args) => ref.current.onCreatePullRequest(...args),
-    onCreateGitlabMr: (...args) => ref.current.onCreateGitlabMr(...args),
-    onMerge: (...args) => ref.current.onMerge(...args),
-    onQuickMerge: (...args) => ref.current.onQuickMerge(...args),
-    onRename: (...args) => ref.current.onRename(...args),
-    onLinkPr: (...args) => ref.current.onLinkPr(...args),
-    onPostToForge: (...args) => ref.current.onPostToForge(...args),
+  const stableCallbacks = useMemo(() => ({
+    onSelect: (...args: Parameters<SessionCardActions['onSelect']>) => ref.current.onSelect(...args),
+    onCancel: (...args: Parameters<SessionCardActions['onCancel']>) => ref.current.onCancel(...args),
+    onConvertToSpec: (...args: Parameters<SessionCardActions['onConvertToSpec']>) => ref.current.onConvertToSpec(...args),
+    onRunDraft: (...args: Parameters<SessionCardActions['onRunDraft']>) => ref.current.onRunDraft(...args),
+    onRefineSpec: (...args: Parameters<SessionCardActions['onRefineSpec']>) => ref.current.onRefineSpec(...args),
+    onDeleteSpec: (...args: Parameters<SessionCardActions['onDeleteSpec']>) => ref.current.onDeleteSpec(...args),
+    onImprovePlanSpec: (...args: Parameters<SessionCardActions['onImprovePlanSpec']>) => ref.current.onImprovePlanSpec(...args),
+    onReset: (...args: Parameters<SessionCardActions['onReset']>) => ref.current.onReset(...args),
+    onSwitchModel: (...args: Parameters<SessionCardActions['onSwitchModel']>) => ref.current.onSwitchModel(...args),
+    onCreatePullRequest: (...args: Parameters<SessionCardActions['onCreatePullRequest']>) => ref.current.onCreatePullRequest(...args),
+    onCreateGitlabMr: (...args: Parameters<SessionCardActions['onCreateGitlabMr']>) => ref.current.onCreateGitlabMr(...args),
+    onMerge: (...args: Parameters<SessionCardActions['onMerge']>) => ref.current.onMerge(...args),
+    onQuickMerge: (...args: Parameters<SessionCardActions['onQuickMerge']>) => ref.current.onQuickMerge(...args),
+    onRename: (...args: Parameters<SessionCardActions['onRename']>) => ref.current.onRename(...args),
+    onLinkPr: (...args: Parameters<SessionCardActions['onLinkPr']>) => ref.current.onLinkPr(...args),
+    onPostToForge: (...args: Parameters<SessionCardActions['onPostToForge']>) => ref.current.onPostToForge(...args),
   }), [])
+
+  const stable = useMemo<SessionCardActions>(() => ({
+    ...stableCallbacks,
+    improvePlanStartingSessionId: actions.improvePlanStartingSessionId ?? null,
+  }), [stableCallbacks, actions.improvePlanStartingSessionId])
 
   return (
     <SessionCardActionsContext.Provider value={stable}>

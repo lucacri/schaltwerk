@@ -2,6 +2,21 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Improve Plan button for clarified specs
+
+The Improve Plan flow was already wired through MCP (`lucode_improve_plan` / `POST /api/specs/{name}/improve-plan`), but the desktop app had no visible action for it — so users on the clarified stage had to leave the app to start a plan round. A new `Improve Plan` button now appears on clarified specs in the sidebar card, the compact version row, the spec metadata panel, and the spec editor toolbar. It is hidden for draft specs and disabled with a tooltip when a plan round is already active. The button invokes a new Tauri command `schaltwerk_core_start_improve_plan_round` that reuses the same backend validation, rollback, and session-refresh logic as the MCP HTTP route by delegating to a shared `start_improve_plan_round_inner` helper. `SessionInfo` now carries `improve_plan_round_id` so the UI can detect active rounds without a second fetch. Success and failure both surface through the existing toast provider, and errors go through the project logger.
+
+- `src-tauri/src/mcp_api.rs` splits `start_improve_plan_round` into a thin HTTP adapter plus `start_improve_plan_round_inner(app, name, StartImprovePlanRoundParams)` and a pure `validate_start_improve_plan_round_preconditions(db, manager, name)` helper. Four new unit tests cover draft rejection, clarified acceptance, active-round conflict, and stale-promoted-link clearing.
+- New Tauri command `schaltwerk_core_start_improve_plan_round` in `commands/schaltwerk_core.rs`, registered via `commands/mod.rs` and `main.rs`, returns `ImprovePlanRoundResponse` (spec name, round id, candidate session names).
+- `SessionInfo` gains `improve_plan_round_id: Option<String>`, populated from `spec.improve_plan_round_id` in the spec enrichment path. Mirrored in `src/types/session.ts`.
+- `SessionActions` gains `onImprovePlanSpec`, `canImprovePlanSpec`, `improvePlanActive`, `improvePlanStarting` props and a `VscChecklist` icon button between Refine and Run with tooltip rules for draft / clarified / active / starting states.
+- `SessionCard`, `CompactVersionRow`, and `SpecMetadataPanel` forward eligibility from `s.spec_stage` / `s.improve_plan_round_id` and wire the handler.
+- `Sidebar` handles the action globally via `handleImprovePlanSpec`, which calls `TauriCommands.SchaltwerkCoreStartImprovePlanRound` and surfaces success/error toasts. `SpecMetadataPanel` and `SpecEditor` invoke the same command locally.
+- `SessionCardActionsContext` picks up `onImprovePlanSpec` plus `improvePlanStartingSessionId`; `SessionCard` and `CompactVersionRow` turn that id into per-row `improvePlanStarting`, so the sidebar IconButton renders a spinner during the async call (the fix for the earlier sidebar inconsistency). Style-guide and existing `SessionCard`/`CompactVersionRow`/`SessionVersionGroup` tests get the new mock field.
+- A shared `src/hooks/useImprovePlanAction.ts` hook handles the Tauri invoke, success/error toasts, and `logger` error path in one place, so Sidebar, SpecMetadataPanel, and SpecEditor all use the same flow (and expose the same `startingSessionId`).
+- i18n strings under `sessionActions.improvePlan*` and `specEditor.improvePlan*` in `en.json`, `zh.json`, and `types.ts`.
+- Frontend test coverage in `SessionActions.test.tsx` (renders/invokes/disables/loading/hidden) and `SpecEditor.test.tsx` (starts, hidden on draft, disabled when active). The previously-broken `SpecWorkspacePanel.middleClick.test.tsx` mock path (`../../plans/SpecEditor` → `../SpecEditor`) is corrected so the test no longer bypasses its own `vi.mock`.
+
 ## Settings: default agent / preset for consolidation
 
 Launching a consolidation round used to leave the user re-picking the favorite in `NewSessionModal` every time, and the judge's agent was inferred from whichever candidate was created first. The project-general settings pane now carries a persisted "Default consolidation agent" that accepts either a raw agent or a preset and is applied at candidate launch; the judge keeps inheriting from candidate[0], which now reflects the stored default.

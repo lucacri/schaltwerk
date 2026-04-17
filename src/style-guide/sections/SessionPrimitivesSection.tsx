@@ -93,6 +93,7 @@ const noopSessionCardActions: SessionCardActions = {
   onRunDraft: () => {},
   onRefineSpec: () => {},
   onDeleteSpec: () => {},
+  onImprovePlanSpec: () => {},
   onReset: () => {},
   onSwitchModel: () => {},
   onCreatePullRequest: () => {},
