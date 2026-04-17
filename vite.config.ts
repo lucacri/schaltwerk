@@ -2,6 +2,43 @@ import { resolve } from 'path'
 import { defineConfig } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
+const mermaidVendorPackages = [
+  '@braintree/sanitize-url',
+  '@chevrotain',
+  '@iconify',
+  '@mermaid-js',
+  '@types/d3',
+  '@upsetjs',
+  'chevrotain',
+  'chevrotain-allstar',
+  'cose-base',
+  'cytoscape',
+  'cytoscape-cose-bilkent',
+  'cytoscape-fcose',
+  'd3',
+  'd3-',
+  'dagre-d3-es',
+  'dayjs',
+  'dompurify',
+  'katex',
+  'khroma',
+  'langium',
+  'layout-base',
+  'lodash-es',
+  'marked',
+  'mermaid',
+  'mlly',
+  'package-manager-detector',
+  'roughjs',
+  'stylis',
+  'tinyexec',
+  'ts-dedent',
+  'uuid',
+]
+
+function isMermaidVendor(id: string): boolean {
+  return mermaidVendorPackages.some(pkg => id.includes(`/node_modules/${pkg}`))
+}
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({
@@ -59,6 +96,9 @@ export default defineConfig(({ command }) => ({
           }
           if (id.includes('react-markdown') || id.includes('remark-') || id.includes('rehype-')) {
             return 'markdown-vendor';
+          }
+          if (isMermaidVendor(id)) {
+            return 'mermaid-vendor';
           }
           if (id.includes('clsx') || id.includes('react-icons') || id.includes('react-split')) {
             return 'ui-vendor';

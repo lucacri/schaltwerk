@@ -1,6 +1,11 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MarkdownRenderer } from './MarkdownRenderer'
+
+const mermaidMock = vi.hoisted(() => ({
+  initialize: vi.fn(),
+  render: vi.fn(),
+}))
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -14,7 +19,25 @@ vi.mock('../../common/i18n', () => ({
   useTranslation: () => ({ t: { toasts: { failedToOpenLink: '', failedToOpenLinkDesc: '' } } }),
 }))
 
+vi.mock('mermaid', () => ({
+  default: mermaidMock,
+}))
+
 describe('MarkdownRenderer', () => {
+  beforeEach(() => {
+    document.documentElement.removeAttribute('style')
+    mermaidMock.initialize.mockClear()
+    mermaidMock.render.mockReset()
+    mermaidMock.render.mockResolvedValue({
+      svg: '<svg role="img" aria-label="Mermaid diagram"><text>Diagram</text></svg>',
+      diagramType: 'flowchart',
+    })
+  })
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('style')
+  })
+
   it('applies markdown-github-light class to the container', () => {
     render(<MarkdownRenderer content="# Hello" />)
     const container = screen.getByText('Hello').closest('.markdown-renderer')
@@ -64,5 +87,44 @@ describe('MarkdownRenderer', () => {
     )
     const img = screen.getByAltText('alt')
     expect(img).toHaveAttribute('src', 'https://github.com/image.png')
+  })
+
+  it('renders mermaid fenced code blocks as diagrams using theme CSS variables', async () => {
+    document.documentElement.style.setProperty('--color-bg-elevated', '#101820')
+    document.documentElement.style.setProperty('--color-text-primary', '#f8f8f2')
+    document.documentElement.style.setProperty('--color-border-subtle', '#3e3e44')
+    document.documentElement.style.setProperty('--color-accent-blue', '#66d9ef')
+
+    render(<MarkdownRenderer content={'```mermaid\ngraph TD;\n  A-->B\n```'} />)
+
+    await waitFor(() => {
+      expect(mermaidMock.render).toHaveBeenCalledWith(
+        expect.stringMatching(/^mermaid-/),
+        'graph TD;\n  A-->B'
+      )
+    })
+
+    expect(mermaidMock.initialize).toHaveBeenCalledWith(expect.objectContaining({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: 'base',
+      themeVariables: expect.objectContaining({
+        primaryColor: '#101820',
+        primaryTextColor: '#f8f8f2',
+        primaryBorderColor: '#3e3e44',
+        lineColor: '#66d9ef',
+      }),
+    }))
+    expect(screen.getByLabelText('Mermaid diagram')).toBeInTheDocument()
+    expect(screen.queryByText('graph TD;')).not.toBeInTheDocument()
+  })
+
+  it('keeps non-mermaid fenced code blocks as styled code', () => {
+    render(<MarkdownRenderer content={'```typescript\nconst value = 1\n```'} />)
+
+    const code = screen.getByText('const value = 1')
+    expect(code.tagName).toBe('CODE')
+    expect(code).toHaveClass('language-typescript')
+    expect(mermaidMock.render).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { Children, isValidElement, memo, useCallback, useEffect, useMemo, useState } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { invoke } from '@tauri-apps/api/core'
@@ -8,6 +8,15 @@ import { logger } from '../../utils/logger'
 import { useOptionalToast } from '../../common/toast/ToastProvider'
 import { useTranslation } from '../../common/i18n'
 import type { ForgeType } from '../../types/forgeTypes'
+import { MermaidDiagram } from './MermaidDiagram'
+
+function isMermaidLanguage(className?: string): boolean {
+  return className?.split(/\s+/).includes('language-mermaid') ?? false
+}
+
+function codeText(children: React.ReactNode): string {
+  return String(children).replace(/\n$/, '')
+}
 
 export interface ForgeContext {
   forgeType: ForgeType
@@ -224,6 +233,9 @@ const customComponents: Partial<Components> = {
         </code>
       )
     }
+    if (isMermaidLanguage(className)) {
+      return <MermaidDiagram source={codeText(children).trim()} />
+    }
     return (
       <code
         className={className}
@@ -243,15 +255,25 @@ const customComponents: Partial<Components> = {
       </code>
     )
   },
-  pre: ({ children }) => (
-    <pre style={{
-      marginTop: '1em',
-      marginBottom: '1em',
-      overflow: 'auto'
-    }}>
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => {
+    const child = Children.toArray(children)[0]
+    if (isValidElement(child)) {
+      const props = child.props as { className?: string }
+      if (isMermaidLanguage(props.className) || child.type === MermaidDiagram) {
+        return <>{children}</>
+      }
+    }
+
+    return (
+      <pre style={{
+        marginTop: '1em',
+        marginBottom: '1em',
+        overflow: 'auto'
+      }}>
+        {children}
+      </pre>
+    )
+  },
   ul: ({ children }) => (
     <ul style={{
       marginTop: '1em',
