@@ -164,8 +164,16 @@
       "alwaysShowLargeDiffsDesc": "始终渲染大型差异而不是默认折叠。禁用时，超过 500 行或 100KB 的差异将被折叠以提高性能。",
       "idleNotifications": "空闲通知",
       "notifyOnIdle": "空闲时通知",
+      "notificationMode": "注意通知模式",
+      "notificationModes": {
+        "off": "关闭",
+        "dock": "仅 Dock",
+        "system": "仅系统",
+        "both": "Dock 和系统"
+      },
       "rememberIdleSessions": "切换时记住空闲会话",
       "testNotification": "测试通知",
+      "testNotificationSession": "测试会话",
       "skipConfirmationInfo": "跳过确认对话框：",
       "skipConfirmationInfoItems": {
         "applies": "适用于带有「不再询问」选项的对话框",

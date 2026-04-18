@@ -38,7 +38,7 @@ import { useKeyboardShortcutsConfig } from '../../contexts/KeyboardShortcutsCont
 import { getAllCodexModels } from '../../common/codexModels'
 import { emitUiEvent, UiEvent } from '../../common/uiEvents'
 import type { SettingsCategory } from '../../types/settings'
-import { requestDockBounce } from '../../utils/attentionBridge'
+import { requestDockBounce, sendAttentionSystemNotification } from '../../utils/attentionBridge'
 import { MarkdownEditor } from '../specs/MarkdownEditor'
 import { useModal } from '../../contexts/ModalContext'
 import { ResizableModal } from '../shared/ResizableModal'
@@ -392,7 +392,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const [sessionPreferences, setSessionPreferences] = useState<SessionPreferences>({
         skip_confirmation_modals: false,
         always_show_large_diffs: false,
-        attention_notification_mode: 'dock',
+        attention_notification_mode: 'both',
         remember_idle_baseline: true
     })
     const [mergePreferences, setMergePreferences] = useState<ProjectMergePreferences>({
@@ -639,6 +639,23 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         () => sessionPreferences.attention_notification_mode !== 'off',
         [sessionPreferences.attention_notification_mode]
     )
+
+    const attentionNotificationModeOptions = useMemo(() => [
+        { value: 'off', label: t.settings.sessions.notificationModes.off },
+        { value: 'dock', label: t.settings.sessions.notificationModes.dock },
+        { value: 'system', label: t.settings.sessions.notificationModes.system },
+        { value: 'both', label: t.settings.sessions.notificationModes.both },
+    ], [t.settings.sessions.notificationModes])
+
+    const handleTestAttentionNotification = useCallback(() => {
+        const mode = sessionPreferences.attention_notification_mode
+        if (mode === 'dock' || mode === 'both') {
+            void requestDockBounce()
+        }
+        if (mode === 'system' || mode === 'both') {
+            void sendAttentionSystemNotification(t.settings.sessions.testNotificationSession)
+        }
+    }, [sessionPreferences.attention_notification_mode, t.settings.sessions.testNotificationSession])
 
 
     // Normalize smart dashes some platforms insert automatically (Safari/macOS)
@@ -2956,14 +2973,17 @@ fi`}
                                 <h4 className="text-body font-medium text-text-primary">
                                     {t.settings.sessions.idleNotifications}
                                 </h4>
-                                <Toggle
-                                    checked={attentionNotificationsEnabled}
-                                    onChange={(checked) => setSessionPreferences({
-                                        ...sessionPreferences,
-                                        attention_notification_mode: checked ? 'dock' : 'off',
-                                    })}
-                                    label={t.settings.sessions.notifyOnIdle}
-                                />
+                                <FormGroup label={t.settings.sessions.notificationMode}>
+                                    <Select
+                                        value={sessionPreferences.attention_notification_mode}
+                                        onChange={(value) => setSessionPreferences({
+                                            ...sessionPreferences,
+                                            attention_notification_mode: value as AttentionNotificationMode,
+                                        })}
+                                        options={attentionNotificationModeOptions}
+                                        aria-label={t.settings.sessions.notificationMode}
+                                    />
+                                </FormGroup>
                                 <div className={attentionNotificationsEnabled ? '' : 'opacity-50'}>
                                     <Checkbox
                                         checked={sessionPreferences.remember_idle_baseline}
@@ -2976,7 +2996,7 @@ fi`}
                                     />
                                 </div>
                                 {attentionNotificationsEnabled && (
-                                    <Button className="mt-2" onClick={() => { void requestDockBounce() }}>
+                                    <Button className="mt-2" onClick={handleTestAttentionNotification}>
                                         {t.settings.sessions.testNotification}
                                     </Button>
                                 )}

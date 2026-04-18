@@ -164,8 +164,16 @@
       "alwaysShowLargeDiffsDesc": "Always render large diffs instead of collapsing them by default. When disabled, diffs over 500 lines or 100KB will be collapsed for performance.",
       "idleNotifications": "Idle Notifications",
       "notifyOnIdle": "Notify on idle",
+      "notificationMode": "Attention notification mode",
+      "notificationModes": {
+        "off": "Off",
+        "dock": "Dock only",
+        "system": "System only",
+        "both": "Dock and system"
+      },
       "rememberIdleSessions": "Remember idle sessions when I switch away",
       "testNotification": "Test notification",
+      "testNotificationSession": "Test session",
       "skipConfirmationInfo": "Skip Confirmation Dialogs:",
       "skipConfirmationInfoItems": {
         "applies": "Applies to dialogs that have \"Don't ask me again\" options",

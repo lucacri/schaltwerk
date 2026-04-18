@@ -112,7 +112,7 @@ function detachDomListeners(): void {
   state.windowHandlers = null
   for (const unlisten of state.tauriUnlisten) {
     try {
-      const result = unlisten()
+      const result = (unlisten as () => void | Promise<void>)()
       if (result instanceof Promise) {
         result.catch(error =>
           logger.debug('[windowForegroundBus] async unlisten error', error),

@@ -168,8 +168,16 @@ export interface Translations {
       alwaysShowLargeDiffsDesc: string
       idleNotifications: string
       notifyOnIdle: string
+      notificationMode: string
+      notificationModes: {
+        off: string
+        dock: string
+        system: string
+        both: string
+      }
       rememberIdleSessions: string
       testNotification: string
+      testNotificationSession: string
       skipConfirmationInfo: string
       skipConfirmationInfoItems: {
         applies: string

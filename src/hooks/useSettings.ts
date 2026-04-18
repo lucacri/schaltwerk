@@ -378,7 +378,7 @@ export const useSettings = () => {
         const defaults: SessionPreferences = {
             skip_confirmation_modals: false,
             always_show_large_diffs: false,
-            attention_notification_mode: 'dock',
+            attention_notification_mode: 'both',
             remember_idle_baseline: true
         }
         try {

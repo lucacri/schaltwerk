@@ -142,9 +142,11 @@ vi.mock('../settings/SettingsArchivesSection', () => ({
 
 vi.mock('../../utils/attentionBridge', () => ({
   requestDockBounce: vi.fn(),
+  sendAttentionSystemNotification: vi.fn(),
 }))
 
 const requestDockBounceMock = vi.mocked((await import('../../utils/attentionBridge')).requestDockBounce)
+const sendAttentionSystemNotificationMock = vi.mocked((await import('../../utils/attentionBridge')).sendAttentionSystemNotification)
 
 const pushToastMock = vi.fn()
 
@@ -262,7 +264,7 @@ const createDefaultUseSettingsValue = () => ({
   loadSessionPreferences: vi.fn().mockResolvedValue({
     skip_confirmation_modals: false,
     always_show_large_diffs: false,
-    attention_notification_mode: 'dock',
+    attention_notification_mode: 'both',
     remember_idle_baseline: true
   }),
   loadMergePreferences: vi.fn().mockResolvedValue({ autoCancelAfterMerge: true }),
@@ -299,6 +301,7 @@ describe('SettingsModal loading indicators', () => {
     invokeMock.mockClear()
     invokeMock.mockImplementation(baseInvokeImplementation)
     requestDockBounceMock.mockReset()
+    sendAttentionSystemNotificationMock.mockReset()
     // jsdom doesn't provide confirm by default; provide a stub for tests
     window.confirm = vi.fn() as unknown as typeof window.confirm
   })
@@ -360,6 +363,69 @@ describe('SettingsModal loading indicators', () => {
     await waitFor(() => expect(requestDockBounceMock).toHaveBeenCalled())
   })
 
+  it('exposes all attention notification modes and saves the selected mode', async () => {
+    const saveAllSettings = vi.fn().mockResolvedValue({ success: true, savedSettings: [], failedSettings: [] })
+    const settingsValue = createDefaultUseSettingsValue()
+    settingsValue.saveAllSettings = saveAllSettings
+    useSettingsMock.mockReturnValue(settingsValue)
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <SettingsModal
+        open={true}
+        onClose={() => {}}
+      />
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Sessions' }))
+    const modeSelect = await screen.findByRole('combobox', { name: 'Attention notification mode' })
+    await user.click(modeSelect)
+
+    expect(await screen.findByRole('option', { name: 'Off' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Dock only' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'System only' })).toBeInTheDocument()
+    await user.click(screen.getByRole('option', { name: 'Dock and system' }))
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(saveAllSettings).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ attention_notification_mode: 'both' }),
+        expect.anything()
+      )
+    })
+  })
+
+  it('uses the selected system notification mode for the test button', async () => {
+    const settingsValue = createDefaultUseSettingsValue()
+    settingsValue.loadSessionPreferences = vi.fn().mockResolvedValue({
+      skip_confirmation_modals: false,
+      always_show_large_diffs: false,
+      attention_notification_mode: 'system',
+      remember_idle_baseline: true
+    })
+    useSettingsMock.mockReturnValue(settingsValue)
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <SettingsModal
+        open={true}
+        onClose={() => {}}
+      />
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Sessions' }))
+    await user.click(await screen.findByText('Test notification'))
+
+    await waitFor(() => expect(sendAttentionSystemNotificationMock).toHaveBeenCalledWith('Test session'))
+    expect(requestDockBounceMock).not.toHaveBeenCalled()
+  })
+
   it('disables remember idle baseline toggle when notifications are off', async () => {
     const settingsValue = createDefaultUseSettingsValue()
     settingsValue.loadSessionPreferences = vi.fn().mockResolvedValue({
@@ -398,6 +464,7 @@ describe('SettingsModal initial tab handling', () => {
       return baseInvokeImplementation(command, args)
     })
     requestDockBounceMock.mockReset()
+    sendAttentionSystemNotificationMock.mockReset()
   })
 
   it('opens the specified initial tab when provided', async () => {

@@ -11,6 +11,7 @@ import {
   getCurrentWindowLabel,
   reportAttentionSnapshot,
   requestDockBounce,
+  sendAttentionSystemNotification,
 } from '../utils/attentionBridge'
 import { logger } from '../utils/logger'
 
@@ -20,8 +21,16 @@ interface AttentionPreferences {
 }
 
 const DEFAULT_PREFERENCES: AttentionPreferences = {
-  mode: 'dock',
+  mode: 'both',
   rememberBaseline: true,
+}
+
+const shouldRequestDockAttention = (mode: AttentionNotificationMode): boolean => {
+  return mode === 'dock' || mode === 'both'
+}
+
+const shouldSendSystemNotification = (mode: AttentionNotificationMode): boolean => {
+  return mode === 'system' || mode === 'both'
 }
 
 interface UseAttentionNotificationsOptions {
@@ -290,10 +299,11 @@ export function useAttentionNotifications({
 
     const newIdleSessions = attentionSessions.filter(item => !previousAttentionKeysRef.current.has(item.sessionKey))
 
-    const notificationsEnabled = preferencesRef.current.mode !== 'off'
+    const notificationMode = preferencesRef.current.mode
+    const notificationsEnabled = notificationMode !== 'off'
 
     if (!visibility.isForeground && notificationsEnabled && newIdleSessions.length > 0) {
-      let shouldBounce = false
+      const sessionsToNotify: AttentionSession[] = []
 
       for (const session of newIdleSessions) {
         if (preferencesRef.current.rememberBaseline && baselineRef.current.has(session.sessionKey)) {
@@ -302,12 +312,19 @@ export function useAttentionNotifications({
         if (notifiedRef.current.has(session.sessionKey)) {
           continue
         }
-        shouldBounce = true
+        sessionsToNotify.push(session)
         notifiedRef.current.add(session.sessionKey)
       }
 
-      if (shouldBounce) {
-        void requestDockBounce()
+      if (sessionsToNotify.length > 0) {
+        if (shouldRequestDockAttention(notificationMode)) {
+          void requestDockBounce()
+        }
+        if (shouldSendSystemNotification(notificationMode)) {
+          for (const session of sessionsToNotify) {
+            void sendAttentionSystemNotification(session.displayName)
+          }
+        }
       }
     }
 

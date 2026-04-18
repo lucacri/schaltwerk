@@ -141,6 +141,13 @@ install:
         echo "MCP server embedded in app bundle"
     fi
 
+    SIGNING_IDENTITY="$(bash scripts/ensure-local-macos-signing-identity.sh)"
+    if [ -n "$SIGNING_IDENTITY" ]; then
+        echo "Signing Lucode with local identity: $SIGNING_IDENTITY"
+        codesign --force --deep --timestamp=none --sign "$SIGNING_IDENTITY" "$APP_PATH"
+        codesign --verify --deep --strict "$APP_PATH"
+    fi
+
     # Always install to /Applications for simplicity
     INSTALL_DIR="/Applications"
 
@@ -240,6 +247,13 @@ install-fast:
         cp mcp-server/package.json "$MCP_DIR/"
         cp -R mcp-server/node_modules "$MCP_DIR/"
         echo "MCP server embedded in app bundle"
+    fi
+
+    SIGNING_IDENTITY="$(bash scripts/ensure-local-macos-signing-identity.sh)"
+    if [ -n "$SIGNING_IDENTITY" ]; then
+        echo "Signing Lucode with local identity: $SIGNING_IDENTITY"
+        codesign --force --deep --timestamp=none --sign "$SIGNING_IDENTITY" "$APP_PATH"
+        codesign --verify --deep --strict "$APP_PATH"
     fi
 
     # Always install to /Applications for simplicity

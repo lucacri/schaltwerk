@@ -163,14 +163,14 @@ fn default_language() -> String {
 #[serde(rename_all = "lowercase")]
 pub enum AttentionNotificationMode {
     Off,
-    #[default]
     Dock,
     System,
+    #[default]
     Both,
 }
 
 fn default_attention_mode() -> AttentionNotificationMode {
-    AttentionNotificationMode::Dock
+    AttentionNotificationMode::Both
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
@@ -231,6 +231,19 @@ impl Default for SessionPreferences {
             attention_notification_mode: default_attention_mode(),
             remember_idle_baseline: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod session_preferences_tests {
+    use super::*;
+
+    #[test]
+    fn defaults_to_both_attention_notification_channels() {
+        assert_eq!(
+            SessionPreferences::default().attention_notification_mode,
+            AttentionNotificationMode::Both
+        );
     }
 }
 

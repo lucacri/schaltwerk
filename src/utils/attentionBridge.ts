@@ -1,7 +1,9 @@
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow, UserAttentionType } from '@tauri-apps/api/window'
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification'
 import { TauriCommands } from '../common/tauriCommands'
 import { logger } from './logger'
+import { isMacOS } from './platform'
 
 export interface AttentionSnapshotResponse {
   totalCount: number
@@ -29,6 +31,31 @@ export async function requestDockBounce(): Promise<void> {
   }
 }
 
+export async function sendAttentionSystemNotification(sessionName: string): Promise<void> {
+  try {
+    if (!await isMacOS()) {
+      return
+    }
+
+    const hasPermission = await isPermissionGranted()
+    const permission = hasPermission ? 'granted' : await requestPermission()
+    if (permission !== 'granted') {
+      logger.debug(
+        '[attentionBridge] Notification permission not granted; skipping system notification',
+        { permission }
+      )
+      return
+    }
+
+    sendNotification({
+      title: 'Lucode needs attention',
+      body: `${sessionName} is waiting for input.`,
+    })
+  } catch (error) {
+    logger.debug('[attentionBridge] Failed to send system notification:', error)
+  }
+}
+
 export async function reportAttentionSnapshot(windowLabel: string, sessionKeys: string[]): Promise<AttentionSnapshotResponse> {
   try {
     const response = await invoke<AttentionSnapshotResponse>(TauriCommands.ReportAttentionSnapshot, {
@@ -44,4 +71,3 @@ export async function reportAttentionSnapshot(windowLabel: string, sessionKeys: 
     return { totalCount: 0, badgeLabel: null }
   }
 }
-

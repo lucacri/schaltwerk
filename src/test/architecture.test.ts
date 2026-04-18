@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -161,6 +161,33 @@ describe('Tauri Command Architecture', () => {
       'Use TauriCommands enum instead',
     );
   }, ARCH_RULE_TIMEOUT);
+});
+
+describe('macOS attention notification wiring', () => {
+  it('grants only the Tauri notification permissions required for attention banners', () => {
+    const capabilityPath = path.join(projectRoot, 'src-tauri/capabilities/default.json');
+    const capability = JSON.parse(fs.readFileSync(capabilityPath, 'utf8')) as {
+      permissions?: string[];
+    };
+
+    expect(capability.permissions).toContain('notification:allow-is-permission-granted');
+    expect(capability.permissions).toContain('notification:allow-request-permission');
+    expect(capability.permissions).toContain('notification:allow-notify');
+    expect(capability.permissions).not.toContain('notification:default');
+  });
+
+  it('signs macOS install builds with the stable local identity helper before copying to Applications', () => {
+    const justfile = fs.readFileSync(path.join(projectRoot, 'justfile'), 'utf8');
+    const signingHelper = 'scripts/ensure-local-macos-signing-identity.sh';
+    const installRecipe = justfile.slice(justfile.indexOf('\ninstall:'), justfile.indexOf('\n# Install with fast compilation'));
+    const fastInstallRecipe = justfile.slice(justfile.indexOf('\ninstall-fast:'), justfile.indexOf('\n# Find an available port'));
+
+    for (const recipe of [installRecipe, fastInstallRecipe]) {
+      expect(recipe).toContain(signingHelper);
+      expect(recipe.indexOf(signingHelper)).toBeGreaterThan(-1);
+      expect(recipe.indexOf('sudo cp -R "$APP_PATH" "$INSTALL_DIR/"')).toBeGreaterThan(recipe.indexOf(signingHelper));
+    }
+  });
 });
 
 describe('Event System Architecture', () => {
