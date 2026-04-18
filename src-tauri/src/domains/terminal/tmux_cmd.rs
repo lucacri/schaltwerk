@@ -61,10 +61,16 @@ impl TmuxCliOutput {
 /// every other kind of failure must bubble up as a real error. Keying on the
 /// OS `errno` strings (`no such file or directory`, `connection refused`) is
 /// stable across tmux versions because those come from `strerror(3)`.
+///
+/// `no current target` covers tmux 3.6's cmd-find behavior when the server is
+/// live but has zero sessions: any `-t <name>` lookup fails the resolver's
+/// "current" fallback before the name-match error fires, producing this
+/// string instead of `can't find session`.
 fn is_no_server_or_session(stderr_lower: &str) -> bool {
     stderr_lower.contains("can't find session")
         || stderr_lower.contains("no server running")
         || stderr_lower.contains("session not found")
+        || stderr_lower.contains("no current target")
         || stderr_lower.contains("no such file or directory")
         || stderr_lower.contains("connection refused")
 }
@@ -380,6 +386,20 @@ mod tests {
             let cli = MockTmuxCli::new(move |_| failure(1, msg));
             assert_eq!(cli.has_session("foo").await.unwrap(), false, "msg: {msg}");
         }
+    }
+
+    #[tokio::test]
+    async fn has_session_false_on_empty_server_no_current_target() {
+        // tmux 3.6 behavior: when the per-project server is running but has
+        // zero sessions, `has-session -t <name>` writes "no current target" to
+        // stderr instead of "can't find session". Older tmux versions always
+        // used the latter. Must be classified as "no session" so cold starts
+        // can create the first session on the live-but-empty server.
+        let cli = MockTmuxCli::new(|_| failure(1, "no current target\n"));
+        assert_eq!(
+            cli.has_session("orchestrator-foo-top").await.unwrap(),
+            false
+        );
     }
 
     #[tokio::test]
