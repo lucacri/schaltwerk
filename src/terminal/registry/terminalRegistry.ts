@@ -12,6 +12,8 @@ import {
 } from '../../common/terminalIdentity';
 import { terminalOutputManager } from '../stream/terminalOutputManager';
 import { slicePreservingSurrogates } from '../paste/bracketedPaste';
+import { windowForegroundBus } from './windowForegroundBus';
+import { listenUiEvent, UiEvent } from '../../common/uiEvents';
 
 const ESC = '\x1b';
 const CLEAR_SCROLLBACK_SEQ = `${ESC}[3J`;
@@ -107,6 +109,7 @@ export interface TerminalInstanceRecord {
   xterm: XtermTerminal;
   refCount: number;
   lastSeq: number | null;
+  detachedAtSeq: number | null;
   initialized: boolean;
   attached: boolean;
   hasBeenAttached: boolean;
@@ -139,6 +142,8 @@ type TerminalInstanceFactory = () => XtermTerminal;
 
 class TerminalInstanceRegistry {
   private instances = new Map<string, TerminalInstanceRecord>();
+  private foregroundUnsubscribe: (() => void) | null = null;
+  private uiEventUnsubscribers: Array<() => void> = [];
 
   acquire(id: string, factory: TerminalInstanceFactory): AcquireTerminalResult {
     const existing = this.instances.get(id);
@@ -148,6 +153,8 @@ class TerminalInstanceRegistry {
       // Don't set attached=true here - wait for actual attach() call.
       // This ensures TUI terminals skip accumulating content until truly attached.
       this.ensureStream(existing);
+      this.ensureForegroundSubscription();
+      this.ensureUiEventSubscriptions();
       return { record: existing, isNew: false };
     }
 
@@ -158,6 +165,7 @@ class TerminalInstanceRegistry {
       xterm: created,
       refCount: 1,
       lastSeq: null,
+      detachedAtSeq: null,
       initialized: false,
       attached: false,
       hasBeenAttached: false,
@@ -173,6 +181,8 @@ class TerminalInstanceRegistry {
     this.instances.set(id, record);
     logger.debug(`[Registry] Created new terminal ${id}, refCount: 1`);
     this.ensureStream(record);
+    this.ensureForegroundSubscription();
+    this.ensureUiEventSubscriptions();
     return { record, isNew: true };
   }
 
@@ -198,7 +208,62 @@ class TerminalInstanceRegistry {
       this.instances.delete(id);
       record.xterm.dispose();
       logger.debug(`[Registry] Disposed terminal ${id} (refCount reached 0)`);
+      if (this.instances.size === 0) {
+        this.tearDownForegroundSubscription();
+        this.tearDownUiEventSubscriptions();
+      }
     }
+  }
+
+  private ensureForegroundSubscription(): void {
+    if (this.foregroundUnsubscribe) return;
+    this.foregroundUnsubscribe = windowForegroundBus.subscribe(() => {
+      this.refreshAttached();
+    });
+  }
+
+  private tearDownForegroundSubscription(): void {
+    if (!this.foregroundUnsubscribe) return;
+    try {
+      this.foregroundUnsubscribe();
+    } catch (error) {
+      logger.debug('[Registry] Failed to unsubscribe from foreground bus', error);
+    }
+    this.foregroundUnsubscribe = null;
+  }
+
+  private refreshAttached(): void {
+    for (const record of this.instances.values()) {
+      if (!record.attached) continue;
+      try {
+        record.xterm.refresh();
+      } catch (error) {
+        logger.debug(`[Registry] refresh failed for ${record.id}`, error);
+      }
+    }
+  }
+
+  private ensureUiEventSubscriptions(): void {
+    if (this.uiEventUnsubscribers.length > 0) return;
+    this.uiEventUnsubscribers.push(
+      listenUiEvent(UiEvent.ProjectSwitchComplete, () => this.refreshAttached()),
+      listenUiEvent(UiEvent.SelectionChanged, detail => {
+        if (detail && (detail.kind === 'session' || detail.kind === 'orchestrator')) {
+          this.refreshAttached();
+        }
+      }),
+    );
+  }
+
+  private tearDownUiEventSubscriptions(): void {
+    for (const unsub of this.uiEventUnsubscribers) {
+      try {
+        unsub();
+      } catch (error) {
+        logger.debug('[Registry] Failed to unsubscribe ui event', error);
+      }
+    }
+    this.uiEventUnsubscribers = [];
   }
 
   attach(id: string, container: HTMLElement): void {
@@ -219,7 +284,9 @@ class TerminalInstanceRegistry {
     this.scheduleFlush(record, 'attach');
 
     if (shouldRehydrate) {
-      void terminalOutputManager.rehydrate(id).catch(error => {
+      const fromSeq = record.detachedAtSeq;
+      record.detachedAtSeq = null;
+      void terminalOutputManager.rehydrate(id, fromSeq).catch(error => {
         logger.debug(`[Registry] rehydrate failed for ${id}`, error);
       });
     }
@@ -247,6 +314,7 @@ class TerminalInstanceRegistry {
       record.tuiHoldRedraw = false;
       record.flushAfterParse = false;
       record.hadClearInBatch = false;
+      record.detachedAtSeq = terminalOutputManager.getSeqCursor(record.id);
     }
 
     if (record.rafHandle !== undefined) {
@@ -339,6 +407,8 @@ class TerminalInstanceRegistry {
       disposeGpuRenderer(id, 'registry-clear');
     }
     this.instances.clear();
+    this.tearDownForegroundSubscription();
+    this.tearDownUiEventSubscriptions();
   }
 
   releaseByPredicate(predicate: (id: string) => boolean): void {

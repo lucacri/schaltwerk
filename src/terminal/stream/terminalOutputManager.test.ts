@@ -347,4 +347,47 @@ describe('terminalOutputManager', () => {
     expect(listenerA).not.toHaveBeenCalled()
     expect(listenerB).toHaveBeenCalledWith('chunk')
   })
+
+  it('rehydrates from the caller-provided baseline instead of the live seqCursor', async () => {
+    const unlisten = vi.fn()
+    listenMock.mockResolvedValueOnce(unlisten)
+    invokeMock.mockResolvedValueOnce({ seq: 20, startSeq: 0, data: 'initial' })
+
+    const listener = vi.fn()
+    terminalOutputManager.addListener(TERMINAL_ID, listener)
+    await terminalOutputManager.ensureStarted(TERMINAL_ID)
+
+    expect(terminalOutputManager.getSeqCursor(TERMINAL_ID)).toBe(20)
+
+    invokeMock.mockResolvedValueOnce({ seq: 32, startSeq: 12, data: 'delta-from-12' })
+    await terminalOutputManager.rehydrate(TERMINAL_ID, 12)
+
+    expect(invokeMock).toHaveBeenNthCalledWith(2, TauriCommands.GetTerminalBuffer, {
+      id: TERMINAL_ID,
+      from_seq: 12,
+    })
+    expect(listener).toHaveBeenCalledWith('delta-from-12')
+    expect(terminalOutputManager.getSeqCursor(TERMINAL_ID)).toBe(32)
+  })
+
+  it('rehydrate without fromSeq still falls back to the live seqCursor', async () => {
+    const unlisten = vi.fn()
+    listenMock.mockResolvedValueOnce(unlisten)
+    invokeMock.mockResolvedValueOnce({ seq: 9, startSeq: 0, data: 'initial' })
+
+    terminalOutputManager.addListener(TERMINAL_ID, vi.fn())
+    await terminalOutputManager.ensureStarted(TERMINAL_ID)
+
+    invokeMock.mockResolvedValueOnce({ seq: 14, startSeq: 9, data: 'delta' })
+    await terminalOutputManager.rehydrate(TERMINAL_ID)
+
+    expect(invokeMock).toHaveBeenNthCalledWith(2, TauriCommands.GetTerminalBuffer, {
+      id: TERMINAL_ID,
+      from_seq: 9,
+    })
+  })
+
+  it('getSeqCursor returns null before hydration starts', () => {
+    expect(terminalOutputManager.getSeqCursor('never-started-terminal')).toBeNull()
+  })
 })

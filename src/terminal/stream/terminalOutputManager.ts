@@ -97,7 +97,7 @@ class TerminalOutputManager {
     }
   }
 
-  async rehydrate(id: string): Promise<void> {
+  async rehydrate(id: string, fromSeq?: number | null): Promise<void> {
     const stream = this.streams.get(id)
     if (!stream) return
     if (stream.starting) {
@@ -108,7 +108,21 @@ class TerminalOutputManager {
       }
     }
     if (!stream.started) return
-    await profileSwitchPhaseAsync('hydration.rehydrate', () => this.hydrate(id, stream), { terminalId: id })
+    const override = fromSeq ?? undefined
+    await profileSwitchPhaseAsync(
+      'hydration.rehydrate',
+      () => this.hydrate(id, stream, override),
+      { terminalId: id },
+    )
+  }
+
+  getSeqCursor(id: string): number | null {
+    const stream = this.streams.get(id)
+    if (stream && stream.seqCursor !== null && stream.seqCursor !== undefined) {
+      return stream.seqCursor
+    }
+    const fallback = this.lastSeqById.get(id)
+    return typeof fallback === 'number' ? fallback : null
   }
 
   async dispose(id: string): Promise<void> {
@@ -161,8 +175,15 @@ class TerminalOutputManager {
     }
   }
 
-  private async hydrate(id: string, stream: TerminalStream): Promise<number | null> {
-    const fallbackSeq = stream.seqCursor ?? this.lastSeqById.get(id) ?? null
+  private async hydrate(
+    id: string,
+    stream: TerminalStream,
+    fromSeqOverride?: number,
+  ): Promise<number | null> {
+    const fallbackSeq =
+      fromSeqOverride !== undefined
+        ? fromSeqOverride
+        : stream.seqCursor ?? this.lastSeqById.get(id) ?? null
     try {
       const snapshot = await profileSwitchPhaseAsync(
         'hydration.fetch',

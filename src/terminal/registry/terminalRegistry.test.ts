@@ -18,6 +18,7 @@ vi.mock('../stream/terminalOutputManager', () => ({
     ensureStarted: vi.fn(async () => {}),
     rehydrate: vi.fn(async () => {}),
     dispose: vi.fn(async () => {}),
+    getSeqCursor: vi.fn(() => null),
   },
 }))
 
@@ -25,9 +26,37 @@ vi.mock('../gpu/gpuRendererRegistry', () => ({
   disposeGpuRenderer: vi.fn(),
 }))
 
+vi.mock('./windowForegroundBus', () => {
+  let subscriber: (() => void) | null = null
+  return {
+    windowForegroundBus: {
+      subscribe: vi.fn((cb: () => void) => {
+        subscriber = cb
+        return () => {
+          if (subscriber === cb) subscriber = null
+        }
+      }),
+      isForeground: () => true,
+      __fireForTests: () => subscriber?.(),
+    },
+  }
+})
+
+import { windowForegroundBus } from './windowForegroundBus'
+import { UiEvent, type SelectionChangedDetail, type ProjectSwitchCompleteDetail } from '../../common/uiEvents'
+const fireForeground = (windowForegroundBus as unknown as {
+  __fireForTests: () => void
+}).__fireForTests
+const foregroundSubscribeMock = windowForegroundBus.subscribe as unknown as ReturnType<typeof vi.fn>
+
+function fireUiEvent<T>(event: UiEvent, detail: T): void {
+  window.dispatchEvent(new CustomEvent(String(event), { detail }))
+}
+
 const addListenerMock = terminalOutputManager.addListener as unknown as ReturnType<typeof vi.fn>
 const ensureStartedMock = terminalOutputManager.ensureStarted as unknown as ReturnType<typeof vi.fn>
 const rehydrateMock = (terminalOutputManager as unknown as { rehydrate: ReturnType<typeof vi.fn> }).rehydrate
+const getSeqCursorMock = (terminalOutputManager as unknown as { getSeqCursor: ReturnType<typeof vi.fn> }).getSeqCursor
 
 describe('terminalRegistry stream flushing', () => {
   const rafHandles: number[] = []
@@ -824,10 +853,263 @@ describe('terminalRegistry stream flushing', () => {
 
     attachTerminalInstance('session-rehydrate-top', document.createElement('div'))
 
-    expect(rehydrateMock).toHaveBeenCalledWith('session-rehydrate-top')
+    expect(rehydrateMock).toHaveBeenCalledWith('session-rehydrate-top', null)
     expect(rehydrateMock).toHaveBeenCalledTimes(1)
 
     removeTerminalInstance('session-rehydrate-top')
+  })
+
+  it('snapshots the dispatch cursor on detach and passes it as the rehydrate baseline', async () => {
+    const factory = () =>
+      ({
+        raw: {
+          write: vi.fn(),
+          scrollToBottom: vi.fn(),
+          buffer: { active: { baseY: 10, viewportY: 10 } },
+        },
+        shouldFollowOutput: () => false,
+        isTuiMode: () => true,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+        refresh: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('session-cursor-snapshot-top', factory)
+    attachTerminalInstance('session-cursor-snapshot-top', document.createElement('div'))
+
+    getSeqCursorMock.mockReturnValueOnce(4096)
+    detachTerminalInstance('session-cursor-snapshot-top')
+
+    attachTerminalInstance('session-cursor-snapshot-top', document.createElement('div'))
+
+    expect(rehydrateMock).toHaveBeenCalledWith('session-cursor-snapshot-top', 4096)
+    expect(rehydrateMock).toHaveBeenCalledTimes(1)
+
+    removeTerminalInstance('session-cursor-snapshot-top')
+  })
+
+  it('clears the snapshot after the reattach rehydrate fires', async () => {
+    const factory = () =>
+      ({
+        raw: {
+          write: vi.fn(),
+          scrollToBottom: vi.fn(),
+          buffer: { active: { baseY: 0, viewportY: 0 } },
+        },
+        shouldFollowOutput: () => false,
+        isTuiMode: () => true,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+        refresh: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('session-cursor-clear-top', factory)
+    attachTerminalInstance('session-cursor-clear-top', document.createElement('div'))
+
+    getSeqCursorMock.mockReturnValueOnce(1000)
+    detachTerminalInstance('session-cursor-clear-top')
+    attachTerminalInstance('session-cursor-clear-top', document.createElement('div'))
+    expect(rehydrateMock).toHaveBeenLastCalledWith('session-cursor-clear-top', 1000)
+
+    getSeqCursorMock.mockReturnValueOnce(2500)
+    detachTerminalInstance('session-cursor-clear-top')
+    attachTerminalInstance('session-cursor-clear-top', document.createElement('div'))
+    expect(rehydrateMock).toHaveBeenLastCalledWith('session-cursor-clear-top', 2500)
+    expect(rehydrateMock).toHaveBeenCalledTimes(2)
+
+    removeTerminalInstance('session-cursor-clear-top')
+  })
+
+  it('subscribes to the foreground bus and refreshes every attached xterm', async () => {
+    const refreshA = vi.fn()
+    const refreshB = vi.fn()
+
+    const makeFactory = (refresh: () => void) => () =>
+      ({
+        raw: {
+          write: vi.fn(),
+          scrollToBottom: vi.fn(),
+          buffer: { active: { baseY: 0, viewportY: 0 } },
+        },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+        refresh,
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('foreground-a', makeFactory(refreshA))
+    acquireTerminalInstance('foreground-b', makeFactory(refreshB))
+    attachTerminalInstance('foreground-a', document.createElement('div'))
+    attachTerminalInstance('foreground-b', document.createElement('div'))
+
+    expect(foregroundSubscribeMock).toHaveBeenCalled()
+
+    fireForeground()
+
+    expect(refreshA).toHaveBeenCalledTimes(1)
+    expect(refreshB).toHaveBeenCalledTimes(1)
+
+    removeTerminalInstance('foreground-a')
+    removeTerminalInstance('foreground-b')
+  })
+
+  it('does not refresh xterms that are currently detached on foreground transition', async () => {
+    const refresh = vi.fn()
+    const factory = () =>
+      ({
+        raw: {
+          write: vi.fn(),
+          scrollToBottom: vi.fn(),
+          buffer: { active: { baseY: 0, viewportY: 0 } },
+        },
+        shouldFollowOutput: () => false,
+        isTuiMode: () => true,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+        refresh,
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('foreground-detached', factory)
+    attachTerminalInstance('foreground-detached', document.createElement('div'))
+    detachTerminalInstance('foreground-detached')
+
+    fireForeground()
+    expect(refresh).not.toHaveBeenCalled()
+
+    removeTerminalInstance('foreground-detached')
+  })
+
+  it('swallows refresh errors so one bad xterm does not skip the rest', async () => {
+    const refreshBad = vi.fn(() => { throw new Error('boom') })
+    const refreshGood = vi.fn()
+    const makeFactory = (refresh: () => void) => () =>
+      ({
+        raw: {
+          write: vi.fn(),
+          scrollToBottom: vi.fn(),
+          buffer: { active: { baseY: 0, viewportY: 0 } },
+        },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+        refresh,
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('foreground-bad', makeFactory(refreshBad))
+    acquireTerminalInstance('foreground-good', makeFactory(refreshGood))
+    attachTerminalInstance('foreground-bad', document.createElement('div'))
+    attachTerminalInstance('foreground-good', document.createElement('div'))
+
+    fireForeground()
+    expect(refreshBad).toHaveBeenCalledTimes(1)
+    expect(refreshGood).toHaveBeenCalledTimes(1)
+
+    removeTerminalInstance('foreground-bad')
+    removeTerminalInstance('foreground-good')
+  })
+
+  it('refreshes attached xterms when a project switch completes', async () => {
+    const refresh = vi.fn()
+    const factory = () =>
+      ({
+        raw: { write: vi.fn(), scrollToBottom: vi.fn(), buffer: { active: { baseY: 0, viewportY: 0 } } },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+        refresh,
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('proj-rebind', factory)
+    attachTerminalInstance('proj-rebind', document.createElement('div'))
+
+    const detail: ProjectSwitchCompleteDetail = { projectPath: '/repo' }
+    fireUiEvent(UiEvent.ProjectSwitchComplete, detail)
+
+    expect(refresh).toHaveBeenCalledTimes(1)
+    removeTerminalInstance('proj-rebind')
+  })
+
+  it('refreshes attached xterms when the selection changes to a session or orchestrator', async () => {
+    const refresh = vi.fn()
+    const factory = () =>
+      ({
+        raw: { write: vi.fn(), scrollToBottom: vi.fn(), buffer: { active: { baseY: 0, viewportY: 0 } } },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+        refresh,
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('bottom-tab-survives', factory)
+    attachTerminalInstance('bottom-tab-survives', document.createElement('div'))
+
+    const sessionDetail: SelectionChangedDetail = { kind: 'session', payload: 's1', sessionState: 'running' }
+    fireUiEvent(UiEvent.SelectionChanged, sessionDetail)
+    expect(refresh).toHaveBeenCalledTimes(1)
+
+    const orchDetail: SelectionChangedDetail = { kind: 'orchestrator', payload: 'orch' }
+    fireUiEvent(UiEvent.SelectionChanged, orchDetail)
+    expect(refresh).toHaveBeenCalledTimes(2)
+
+    removeTerminalInstance('bottom-tab-survives')
+  })
+
+  it('tears down ui-event subscriptions when the registry empties', async () => {
+    const factory = () =>
+      ({
+        raw: { write: vi.fn(), scrollToBottom: vi.fn(), buffer: { active: { baseY: 0, viewportY: 0 } } },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+        refresh: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('cleanup-temp', factory)
+    removeTerminalInstance('cleanup-temp')
+
+    expect(() =>
+      fireUiEvent(UiEvent.ProjectSwitchComplete, { projectPath: '/repo' } as ProjectSwitchCompleteDetail),
+    ).not.toThrow()
+  })
+
+  it('does not snapshot a cursor for bottom (non-top) terminals', async () => {
+    const factory = () =>
+      ({
+        raw: {
+          write: vi.fn(),
+          scrollToBottom: vi.fn(),
+          buffer: { active: { baseY: 0, viewportY: 0 } },
+        },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+        refresh: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('session-foo-bottom-0', factory)
+    attachTerminalInstance('session-foo-bottom-0', document.createElement('div'))
+    detachTerminalInstance('session-foo-bottom-0')
+    attachTerminalInstance('session-foo-bottom-0', document.createElement('div'))
+
+    expect(getSeqCursorMock).not.toHaveBeenCalled()
+    expect(rehydrateMock).toHaveBeenCalledWith('session-foo-bottom-0', null)
+
+    removeTerminalInstance('session-foo-bottom-0')
   })
 
   it('does not rehydrate on first attach of a brand new terminal', async () => {
