@@ -1,7 +1,11 @@
-import { memo, useCallback, useEffect, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { clsx } from "clsx";
 import { useAtomValue } from "jotai";
-import { VscIssues, VscGitPullRequest } from "react-icons/vsc";
+import { VscIssues, VscGitPullRequest, VscCopy, VscGitMerge, VscTrash } from "react-icons/vsc";
+import { DropdownMenu, type DropdownMenuItem } from "../ui/DropdownMenu";
+import { writeClipboard } from "../../utils/clipboard";
+import { logger } from "../../utils/logger";
 import { SessionActions } from "../session/SessionActions";
 import { SessionInfo, SessionMonitorStatus } from "../../types/session";
 import { UncommittedIndicator } from "../common/UncommittedIndicator";
@@ -249,6 +253,70 @@ export const SessionCard = memo<SessionCardProps>(
     const [isExpanded, setIsExpanded] = useState<boolean>(isSelected || !canCollapse);
     const showExpandedDetails = !canCollapse || isExpanded;
 
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+    const handleContextMenu = useCallback((event: React.MouseEvent) => {
+      if (isBusy) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setContextMenu({ x: event.clientX, y: event.clientY });
+    }, [isBusy]);
+
+    const dismissContextMenu = useCallback(() => {
+      setContextMenu(null);
+    }, []);
+
+    const contextMenuItems = useMemo<DropdownMenuItem[]>(() => {
+      const items: DropdownMenuItem[] = []
+
+      items.push({
+        kind: 'action',
+        key: 'copy-name',
+        label: 'Copy Name',
+        icon: <VscCopy className="h-3.5 w-3.5" />,
+        onSelect: () => {
+          void writeClipboard(s.display_name || s.session_id).then((ok) => {
+            if (!ok) logger.warn('[SessionCard] Copy name failed')
+          })
+        },
+      })
+
+      if (s.branch) {
+        items.push({
+          kind: 'action',
+          key: 'copy-branch',
+          label: 'Copy Branch',
+          icon: <VscGitMerge className="h-3.5 w-3.5" />,
+          onSelect: () => {
+            void writeClipboard(s.branch).then((ok) => {
+              if (!ok) logger.warn('[SessionCard] Copy branch failed')
+            })
+          },
+        })
+      }
+
+      const hasUncommitted = (s.diff_stats?.files_changed ?? 0) > 0
+      const destructive = sessionState === 'spec' && onDeleteSpec
+        ? { key: 'delete-spec', label: 'Delete Spec', handler: () => onDeleteSpec?.(s.session_id) }
+        : onCancel
+          ? { key: 'cancel-session', label: 'Cancel Session', handler: () => onCancel?.(s.session_id, hasUncommitted) }
+          : null
+
+      if (destructive) {
+        items.push({ kind: 'separator', key: 'sep-danger' })
+        items.push({
+          kind: 'action',
+          key: destructive.key,
+          label: destructive.label,
+          icon: <VscTrash className="h-3.5 w-3.5" />,
+          destructive: true,
+          onSelect: destructive.handler,
+        })
+      }
+
+      return items
+    }, [s.branch, s.display_name, s.session_id, s.diff_stats?.files_changed, sessionState, onCancel, onDeleteSpec])
+
     useEffect(() => {
       if (!canCollapse) {
         setIsExpanded(true);
@@ -337,6 +405,7 @@ export const SessionCard = memo<SessionCardProps>(
         }}
         onMouseEnter={() => onHover?.(session.info.session_id)}
         onMouseLeave={() => onHover?.(null)}
+        onContextMenu={handleContextMenu}
         data-session-id={session.info.session_id}
         data-session-selected={isSelected ? "true" : "false"}
         className={clsx(
@@ -811,6 +880,25 @@ export const SessionCard = memo<SessionCardProps>(
           )}
         </div>
         )}
+        {contextMenu && typeof document !== 'undefined' && contextMenuItems.length > 0
+          ? createPortal(
+              <div
+                style={{
+                  position: 'fixed',
+                  top: contextMenu.y,
+                  left: contextMenu.x,
+                  zIndex: theme.layers.dropdownMenu,
+                }}
+              >
+                <DropdownMenu
+                  items={contextMenuItems}
+                  onDismiss={dismissContextMenu}
+                  ariaLabel="Session actions"
+                />
+              </div>,
+              document.body,
+            )
+          : null}
       </div>
     );
 });

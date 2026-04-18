@@ -35,13 +35,13 @@ export function Checkbox({ checked, onChange, label, disabled = false, indetermi
   return (
     <label
       className={clsx(
-        'inline-flex items-start gap-2.5 text-text-primary',
+        'inline-flex items-center gap-2 text-text-primary',
         disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
         className,
       )}
       style={labelTextStyle}
     >
-      <span className="relative mt-0.5 inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center">
+      <span className="relative inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center">
         <input
           ref={inputRef}
           type="checkbox"

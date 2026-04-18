@@ -229,7 +229,7 @@ export function Select({
         <span className={clsx('truncate', selectedOption ? 'text-text-primary' : 'text-text-muted')}>
           {selectedOption?.label ?? placeholder}
         </span>
-        <svg aria-hidden="true" viewBox="0 0 16 16" className={clsx('h-4 w-4 shrink-0 text-text-muted transition-transform duration-150', open ? 'rotate-180' : undefined)}>
+        <svg aria-hidden="true" viewBox="0 0 16 16" className={clsx('h-3.5 w-3.5 shrink-0 text-text-tertiary transition-transform duration-150', open ? 'rotate-180' : undefined)}>
           <path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
         </svg>
       </button>

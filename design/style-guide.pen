@@ -1053,7 +1053,7 @@
       "y": 200,
       "name": "component/Button",
       "reusable": true,
-      "height": 32,
+      "height": 30,
       "fill": "$bg-tertiary",
       "cornerRadius": 4,
       "stroke": {
@@ -1075,7 +1075,7 @@
           "fill": "$text-primary",
           "content": "Button",
           "fontFamily": "Inter",
-          "fontSize": 13,
+          "fontSize": 14,
           "fontWeight": "500"
         }
       ]
@@ -1271,7 +1271,7 @@
                   "name": "pb1",
                   "descendants": {
                     "92GL2": {
-                      "fill": "#ffffff"
+                      "fill": "$text-inverse"
                     }
                   }
                 },
@@ -1305,7 +1305,7 @@
                   "name": "pb2",
                   "descendants": {
                     "92GL2": {
-                      "fill": "#ffffff"
+                      "fill": "$text-inverse"
                     }
                   }
                 },
@@ -1339,7 +1339,7 @@
                   "name": "pb3",
                   "descendants": {
                     "92GL2": {
-                      "fill": "#ffffff"
+                      "fill": "$text-inverse"
                     }
                   }
                 },
@@ -1374,7 +1374,7 @@
                   "name": "pb4",
                   "descendants": {
                     "92GL2": {
-                      "fill": "#ffffff"
+                      "fill": "$text-inverse"
                     }
                   }
                 },
@@ -1422,14 +1422,15 @@
                   "id": "xppAl",
                   "type": "ref",
                   "ref": "m04tr",
-                  "fill": "$accent-red",
+                  "fill": "$accent-red-bg",
                   "stroke": {
-                    "thickness": 0
+                    "thickness": 1,
+                    "fill": "$accent-red-border"
                   },
                   "name": "rb1",
                   "descendants": {
                     "92GL2": {
-                      "fill": "#ffffff",
+                      "fill": "$accent-red",
                       "content": "Delete"
                     }
                   }
@@ -1457,7 +1458,7 @@
                   "id": "lh3MH",
                   "type": "ref",
                   "ref": "m04tr",
-                  "fill": "#c54350",
+                  "fill": "$accent-red",
                   "stroke": {
                     "thickness": 0
                   },
@@ -1492,15 +1493,16 @@
                   "id": "L77MW",
                   "type": "ref",
                   "ref": "m04tr",
-                  "fill": "$accent-red",
+                  "fill": "$accent-red-bg",
                   "stroke": {
-                    "thickness": 0
+                    "thickness": 1,
+                    "fill": "$accent-red-border"
                   },
                   "opacity": 0.5,
                   "name": "rb3",
                   "descendants": {
                     "92GL2": {
-                      "fill": "#ffffff",
+                      "fill": "$accent-red",
                       "content": "Delete"
                     }
                   }
@@ -1658,14 +1660,15 @@
                   "id": "N4B8q",
                   "type": "ref",
                   "ref": "m04tr",
-                  "fill": "$accent-amber",
+                  "fill": "$accent-amber-bg",
                   "stroke": {
-                    "thickness": 0
+                    "thickness": 1,
+                    "fill": "$accent-amber-border"
                   },
                   "name": "wb1",
                   "descendants": {
                     "92GL2": {
-                      "fill": "$text-inverse",
+                      "fill": "$accent-amber",
                       "content": "Warn"
                     }
                   }
@@ -1714,14 +1717,15 @@
                   "id": "rzyQk",
                   "type": "ref",
                   "ref": "m04tr",
-                  "fill": "$accent-green",
+                  "fill": "$accent-green-bg",
                   "stroke": {
-                    "thickness": 0
+                    "thickness": 1,
+                    "fill": "$accent-green-border"
                   },
                   "name": "sb1",
                   "descendants": {
                     "92GL2": {
-                      "fill": "$text-inverse",
+                      "fill": "$accent-green",
                       "content": "Confirm"
                     }
                   }
@@ -2922,7 +2926,7 @@
       "name": "component/TextInput",
       "reusable": true,
       "width": 240,
-      "height": 32,
+      "height": 30,
       "fill": "$control-bg",
       "cornerRadius": 4,
       "stroke": {
@@ -2943,7 +2947,7 @@
           "fill": "$text-primary",
           "content": "Input text",
           "fontFamily": "Inter",
-          "fontSize": 13,
+          "fontSize": 14,
           "fontWeight": "normal"
         }
       ]
@@ -2977,9 +2981,9 @@
           "textGrowth": "fixed-width",
           "width": 220,
           "content": "Textarea content goes here...",
-          "lineHeight": 1.4,
+          "lineHeight": 1.35,
           "fontFamily": "Inter",
-          "fontSize": 13,
+          "fontSize": 14,
           "fontWeight": "normal"
         }
       ]
@@ -3075,7 +3079,7 @@
       "name": "component/Select",
       "reusable": true,
       "width": 200,
-      "height": 32,
+      "height": 30,
       "fill": "$control-bg",
       "cornerRadius": 4,
       "stroke": {
@@ -3097,7 +3101,7 @@
           "fill": "$text-primary",
           "content": "Select option",
           "fontFamily": "Inter",
-          "fontSize": 13,
+          "fontSize": 14,
           "fontWeight": "normal"
         },
         {
@@ -3164,7 +3168,7 @@
               "fill": "$text-secondary",
               "content": "Label",
               "fontFamily": "Inter",
-              "fontSize": 12,
+              "fontSize": 13,
               "fontWeight": "500"
             }
           ]
@@ -3212,7 +3216,7 @@
           "fill": "$text-primary",
           "content": "Section Title",
           "fontFamily": "Inter",
-          "fontSize": 13,
+          "fontSize": 14,
           "fontWeight": "600"
         },
         {
@@ -3240,7 +3244,7 @@
       "id": "E63Gg",
       "x": 0,
       "y": 4478,
-      "name": "Navigation",
+      "name": "Search",
       "width": 1200,
       "fill": "$bg-secondary",
       "layout": "vertical",
@@ -3252,7 +3256,7 @@
           "id": "QzdA8",
           "name": "navTitle",
           "fill": "$text-primary",
-          "content": "Navigation",
+          "content": "Search",
           "fontFamily": "Inter",
           "fontSize": 28,
           "fontWeight": "600"
@@ -3264,78 +3268,6 @@
           "fill": "$border-subtle",
           "width": "fill_container",
           "height": 1
-        },
-        {
-          "type": "text",
-          "id": "Ajd9s",
-          "name": "tabLabel",
-          "fill": "$text-muted",
-          "content": "TABS",
-          "fontFamily": "Inter",
-          "fontSize": 11,
-          "fontWeight": "600",
-          "letterSpacing": 1.2
-        },
-        {
-          "type": "frame",
-          "id": "DrAu8",
-          "name": "Tab Bar Example",
-          "width": "fill_container",
-          "height": 36,
-          "fill": "$bg-primary",
-          "stroke": {
-            "align": "inside",
-            "thickness": {
-              "bottom": 1
-            },
-            "fill": "$border-subtle"
-          },
-          "children": [
-            {
-              "id": "WmT9J",
-              "type": "ref",
-              "ref": "YLJ7o",
-              "name": "at1",
-              "descendants": {
-                "s6hpl": {
-                  "content": "Sessions"
-                }
-              }
-            },
-            {
-              "id": "zNGWc",
-              "type": "ref",
-              "ref": "tGeUQ",
-              "name": "it1",
-              "descendants": {
-                "5WIjK": {
-                  "content": "Specs"
-                }
-              }
-            },
-            {
-              "id": "ENO5F",
-              "type": "ref",
-              "ref": "tGeUQ",
-              "name": "it2",
-              "descendants": {
-                "5WIjK": {
-                  "content": "Settings"
-                }
-              }
-            },
-            {
-              "id": "9215O",
-              "type": "ref",
-              "ref": "tGeUQ",
-              "name": "it3",
-              "descendants": {
-                "5WIjK": {
-                  "content": "Forge"
-                }
-              }
-            }
-          ]
         },
         {
           "type": "text",
@@ -3566,10 +3498,11 @@
       "reusable": true,
       "width": 280,
       "height": 32,
-      "fill": "$bg-elevated",
-      "cornerRadius": 4,
+      "fill": "$bg-secondary",
       "stroke": {
-        "thickness": 1,
+        "thickness": {
+          "bottom": 1
+        },
         "fill": "$border-subtle"
       },
       "gap": 8,
@@ -5101,11 +5034,11 @@
                                   "type": "frame",
                                   "id": "EkdYM",
                                   "name": "scAgent",
-                                  "fill": "#c45d521f",
+                                  "fill": "#f754641f",
                                   "cornerRadius": 4,
                                   "stroke": {
                                     "thickness": 1,
-                                    "fill": "#c45d5280"
+                                    "fill": "#f7546480"
                                   },
                                   "padding": [
                                     1,
@@ -5117,7 +5050,7 @@
                                       "type": "text",
                                       "id": "jkXTD",
                                       "name": "scAgentText",
-                                      "fill": "#c45d52",
+                                      "fill": "#f75464",
                                       "content": "codex",
                                       "fontFamily": "Inter",
                                       "fontSize": 10,
@@ -6541,11 +6474,11 @@
                   "id": "cvrdC1",
                   "name": "versionRowDirtyChip",
                   "height": 16,
-                  "fill": "#ef9b411f",
+                  "fill": "#be8f381f",
                   "cornerRadius": 4,
                   "stroke": {
                     "thickness": 1,
-                    "fill": "#ef9b4180"
+                    "fill": "#be8f3880"
                   },
                   "padding": [
                     2,
@@ -6557,7 +6490,7 @@
                       "type": "text",
                       "id": "cvrdT1",
                       "name": "versionRowDirtyText",
-                      "fill": "#ef9b41",
+                      "fill": "#be8f38",
                       "content": "1 dirty",
                       "fontFamily": "Inter",
                       "fontSize": 10,
@@ -7816,69 +7749,6 @@
                       ]
                     },
                     {
-                      "type": "frame",
-                      "id": "fr",
-                      "name": "Search Toggle Row",
-                      "width": "fill_container",
-                      "padding": [
-                        6,
-                        0
-                      ],
-                      "justifyContent": "space_between",
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "tn",
-                          "name": "searchModeLabel",
-                          "fill": "#8f939b",
-                          "content": "Quick filters",
-                          "fontFamily": "Inter",
-                          "fontSize": 11,
-                          "fontWeight": "500"
-                        },
-                        {
-                          "type": "frame",
-                          "id": "fq",
-                          "name": "searchToggleButton",
-                          "fill": "#181a1d",
-                          "cornerRadius": 4,
-                          "stroke": {
-                            "thickness": 1,
-                            "fill": "#383b3f"
-                          },
-                          "gap": 6,
-                          "padding": [
-                            2,
-                            8
-                          ],
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "to",
-                              "name": "searchToggleIcon",
-                              "fill": "#c4c6cc",
-                              "content": "⌕",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "600"
-                            },
-                            {
-                              "type": "text",
-                              "id": "tp",
-                              "name": "searchToggleText",
-                              "fill": "#c4c6cc",
-                              "content": "Search",
-                              "fontFamily": "Inter",
-                              "fontSize": 11,
-                              "fontWeight": "500"
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
                       "id": "3ZuLd",
                       "type": "ref",
                       "ref": "dW8n0",
@@ -8316,11 +8186,11 @@
                               "type": "frame",
                               "id": "8nezV",
                               "name": "versionGroupStateBadge",
-                              "fill": "#1c2b22",
+                              "fill": "#548af71f",
                               "cornerRadius": 999,
                               "stroke": {
                                 "thickness": 1,
-                                "fill": "#2f5a41"
+                                "fill": "#548af780"
                               },
                               "gap": 6,
                               "padding": [
@@ -8333,7 +8203,7 @@
                                   "type": "ellipse",
                                   "id": "tvwel",
                                   "name": "statusDot",
-                                  "fill": "#6aab73",
+                                  "fill": "#548af7",
                                   "width": 6,
                                   "height": 6
                                 },
@@ -8341,7 +8211,7 @@
                                   "type": "text",
                                   "id": "YbvoS",
                                   "name": "statusText",
-                                  "fill": "#9ed5a8",
+                                  "fill": "#759cf3",
                                   "content": "Running",
                                   "fontFamily": "Inter",
                                   "fontSize": 11,
@@ -8683,15 +8553,15 @@
                                   "fill": "$accent-blue"
                                 },
                                 "cvrdC1": {
-                                  "fill": "#ef9b411f",
+                                  "fill": "#be8f381f",
                                   "stroke": {
                                     "thickness": 1,
-                                    "fill": "#ef9b4180"
+                                    "fill": "#be8f3880"
                                   }
                                 },
                                 "cvrdT1": {
                                   "content": "1 dirty",
-                                  "fill": "#ef9b41"
+                                  "fill": "#be8f38"
                                 },
                                 "cvraC1": {
                                   "fill": "$bg-hover",
@@ -8741,15 +8611,15 @@
                               "name": "r6",
                               "descendants": {
                                 "WkQeg": {
-                                  "fill": "#c45d52"
+                                  "fill": "#f75464"
                                 },
                                 "BIvue": {
                                   "content": "v2",
-                                  "fill": "#c45d52"
+                                  "fill": "#f75464"
                                 },
                                 "gdx0e": {
                                   "content": "codex",
-                                  "fill": "#c45d52"
+                                  "fill": "#f75464"
                                 },
                                 "cvrdC1": {
                                   "fill": "$bg-elevated",
@@ -8816,15 +8686,15 @@
                               "name": "r7",
                               "descendants": {
                                 "WkQeg": {
-                                  "fill": "#ef9b41"
+                                  "fill": "#be8f38"
                                 },
                                 "BIvue": {
                                   "content": "v3",
-                                  "fill": "#ef9b41"
+                                  "fill": "#be8f38"
                                 },
                                 "gdx0e": {
                                   "content": "gemini",
-                                  "fill": "#ef9b41"
+                                  "fill": "#be8f38"
                                 },
                                 "cvrdC1": {
                                   "fill": "$accent-red-bg",
@@ -8938,15 +8808,15 @@
                               "content": "-8"
                             },
                             "3DbRz": {
-                              "fill": "#c45d521f",
+                              "fill": "#f754641f",
                               "stroke": {
                                 "thickness": 1,
-                                "fill": "#c45d5280"
+                                "fill": "#f7546480"
                               }
                             },
                             "UCCgw": {
                               "content": "codex",
-                              "fill": "#c45d52"
+                              "fill": "#f75464"
                             },
                             "O6dxT": {
                               "content": "lucode/fix-terminal-leak"
@@ -8980,20 +8850,6 @@
                   ]
                 }
               ]
-            },
-            {
-              "id": "8FbI3",
-              "type": "ref",
-              "ref": "PnJAA",
-              "name": "Session Context Popup",
-              "width": 176,
-              "x": 424,
-              "y": 24,
-              "descendants": {
-                "s1xPs": {
-                  "content": "Delete"
-                }
-              }
             }
           ]
         },
@@ -9468,15 +9324,15 @@
                           "content": "-12"
                         },
                         "3DbRz": {
-                          "fill": "#c45d521f",
+                          "fill": "#f754641f",
                           "stroke": {
                             "thickness": 1,
-                            "fill": "#c45d5280"
+                            "fill": "#f7546480"
                           }
                         },
                         "UCCgw": {
                           "content": "codex",
-                          "fill": "#c45d52"
+                          "fill": "#f75464"
                         },
                         "O6dxT": {
                           "content": "lucode/terminal-focus-leak"
@@ -9791,10 +9647,10 @@
                           "content": "-4"
                         },
                         "3DbRz": {
-                          "fill": "#c45d521f",
+                          "fill": "#f754641f",
                           "stroke": {
                             "thickness": 1,
-                            "fill": "#c45d5280"
+                            "fill": "#f7546480"
                           }
                         },
                         "UCCgw": {
@@ -9914,15 +9770,15 @@
                               "content": "-21"
                             },
                             "3DbRz": {
-                              "fill": "#c45d521f",
+                              "fill": "#f754641f",
                               "stroke": {
                                 "thickness": 1,
-                                "fill": "#c45d5280"
+                                "fill": "#f7546480"
                               }
                             },
                             "UCCgw": {
                               "content": "codex",
-                              "fill": "#c45d52"
+                              "fill": "#f75464"
                             },
                             "O6dxT": {
                               "content": "lucode/v2-merge-resolver"
@@ -9988,10 +9844,10 @@
                               "content": "-19"
                             },
                             "3DbRz": {
-                              "fill": "#c45d521f",
+                              "fill": "#f754641f",
                               "stroke": {
                                 "thickness": 1,
-                                "fill": "#c45d5280"
+                                "fill": "#f7546480"
                               }
                             },
                             "UCCgw": {
@@ -10064,10 +9920,10 @@
                           "content": "-2"
                         },
                         "3DbRz": {
-                          "fill": "#c45d521f",
+                          "fill": "#f754641f",
                           "stroke": {
                             "thickness": 1,
-                            "fill": "#c45d5280"
+                            "fill": "#f7546480"
                           }
                         },
                         "UCCgw": {
@@ -10167,15 +10023,15 @@
                           "content": "-8"
                         },
                         "3DbRz": {
-                          "fill": "#c45d521f",
+                          "fill": "#f754641f",
                           "stroke": {
                             "thickness": 1,
-                            "fill": "#c45d5280"
+                            "fill": "#f7546480"
                           }
                         },
                         "UCCgw": {
                           "content": "codex",
-                          "fill": "#c45d52"
+                          "fill": "#f75464"
                         },
                         "O6dxT": {
                           "content": "lucode/fix-terminal-leak"
@@ -10348,11 +10204,11 @@
                   "type": "frame",
                   "id": "DLtAj",
                   "name": "versionGroupStateBadge",
-                  "fill": "#1c2b22",
+                  "fill": "#548af71f",
                   "cornerRadius": 999,
                   "stroke": {
                     "thickness": 1,
-                    "fill": "#2f5a41"
+                    "fill": "#548af780"
                   },
                   "gap": 6,
                   "padding": [
@@ -10365,7 +10221,7 @@
                       "type": "ellipse",
                       "id": "7dk9g",
                       "name": "statusDot",
-                      "fill": "#6aab73",
+                      "fill": "#548af7",
                       "width": 6,
                       "height": 6
                     },
@@ -10373,7 +10229,7 @@
                       "type": "text",
                       "id": "B8590",
                       "name": "statusText",
-                      "fill": "#9ed5a8",
+                      "fill": "#759cf3",
                       "content": "Running",
                       "fontFamily": "Inter",
                       "fontSize": 11,
@@ -10557,15 +10413,15 @@
                       "fill": "$accent-blue"
                     },
                     "cvrdC1": {
-                      "fill": "#ef9b411f",
+                      "fill": "#be8f381f",
                       "stroke": {
                         "thickness": 1,
-                        "fill": "#ef9b4180"
+                        "fill": "#be8f3880"
                       }
                     },
                     "cvrdT1": {
                       "content": "1 dirty",
-                      "fill": "#ef9b41"
+                      "fill": "#be8f38"
                     },
                     "cvraC1": {
                       "fill": "$bg-hover",
@@ -10615,15 +10471,15 @@
                   "name": "r2",
                   "descendants": {
                     "WkQeg": {
-                      "fill": "#c45d52"
+                      "fill": "#f75464"
                     },
                     "BIvue": {
                       "content": "v2",
-                      "fill": "#c45d52"
+                      "fill": "#f75464"
                     },
                     "gdx0e": {
                       "content": "codex",
-                      "fill": "#c45d52"
+                      "fill": "#f75464"
                     },
                     "cvrdC1": {
                       "fill": "$bg-elevated",
@@ -10696,15 +10552,15 @@
                   "name": "r3",
                   "descendants": {
                     "WkQeg": {
-                      "fill": "#ef9b41"
+                      "fill": "#be8f38"
                     },
                     "BIvue": {
                       "content": "v3",
-                      "fill": "#ef9b41"
+                      "fill": "#be8f38"
                     },
                     "gdx0e": {
                       "content": "gemini",
-                      "fill": "#ef9b41"
+                      "fill": "#be8f38"
                     },
                     "cvrdC1": {
                       "fill": "$accent-red-bg",
@@ -10883,11 +10739,11 @@
                   "type": "frame",
                   "id": "9aga5",
                   "name": "versionGroupStateBadge",
-                  "fill": "#1c2b22",
+                  "fill": "#548af71f",
                   "cornerRadius": 999,
                   "stroke": {
                     "thickness": 1,
-                    "fill": "#2f5a41"
+                    "fill": "#548af780"
                   },
                   "gap": 6,
                   "padding": [
@@ -10900,7 +10756,7 @@
                       "type": "ellipse",
                       "id": "KmlIu",
                       "name": "statusDot",
-                      "fill": "#6aab73",
+                      "fill": "#548af7",
                       "width": 6,
                       "height": 6
                     },
@@ -10908,7 +10764,7 @@
                       "type": "text",
                       "id": "yX3V1",
                       "name": "statusText",
-                      "fill": "#9ed5a8",
+                      "fill": "#759cf3",
                       "content": "Running",
                       "fontFamily": "Inter",
                       "fontSize": 11,
@@ -11518,11 +11374,11 @@
                               "id": "WqPoK",
                               "name": "versionRowDirtyChip",
                               "height": 16,
-                              "fill": "#ef9b411f",
+                              "fill": "#be8f381f",
                               "cornerRadius": 4,
                               "stroke": {
                                 "thickness": 1,
-                                "fill": "#ef9b4180"
+                                "fill": "#be8f3880"
                               },
                               "layout": "vertical",
                               "padding": [
@@ -11536,7 +11392,7 @@
                                   "type": "text",
                                   "id": "xgwob",
                                   "name": "versionRowDirtyText",
-                                  "fill": "#ef9b41",
+                                  "fill": "#be8f38",
                                   "content": "1 dirty",
                                   "fontFamily": "$font-sans",
                                   "fontSize": 10,
@@ -11711,7 +11567,7 @@
                       "name": "versionRowAccent",
                       "width": 4,
                       "height": "fill_container",
-                      "fill": "#d4a72c"
+                      "fill": "#bbb529"
                     },
                     {
                       "type": "frame",
@@ -11727,7 +11583,7 @@
                           "type": "text",
                           "id": "QujTP",
                           "name": "versionIndexText",
-                          "fill": "#d4a72c",
+                          "fill": "#bbb529",
                           "content": "🏆",
                           "fontFamily": "Inter",
                           "fontSize": 16,
@@ -11753,11 +11609,11 @@
                           "id": "7bAmS",
                           "name": "versionRowAgentChip",
                           "height": 16,
-                          "fill": "#c45d521f",
+                          "fill": "#f754641f",
                           "cornerRadius": 4,
                           "stroke": {
                             "thickness": 1,
-                            "fill": "#c45d5280"
+                            "fill": "#f7546480"
                           },
                           "layout": "vertical",
                           "padding": [
@@ -11771,7 +11627,7 @@
                               "type": "text",
                               "id": "6baVG",
                               "name": "versionRowAgentText",
-                              "fill": "#c45d52",
+                              "fill": "#f75464",
                               "content": "codex",
                               "fontFamily": "Inter",
                               "fontSize": 10,
@@ -11992,7 +11848,7 @@
                       "name": "versionRowAccent",
                       "width": 4,
                       "height": "fill_container",
-                      "fill": "#ef9b41"
+                      "fill": "#be8f38"
                     },
                     {
                       "type": "frame",
@@ -12008,7 +11864,7 @@
                           "type": "text",
                           "id": "qpSxu",
                           "name": "versionIndexText",
-                          "fill": "#ef9b41",
+                          "fill": "#be8f38",
                           "content": "v3",
                           "fontFamily": "Inter",
                           "fontSize": 16,
@@ -12034,11 +11890,11 @@
                           "id": "jGil8",
                           "name": "versionRowAgentChip",
                           "height": 16,
-                          "fill": "#ef9b411f",
+                          "fill": "#be8f381f",
                           "cornerRadius": 4,
                           "stroke": {
                             "thickness": 1,
-                            "fill": "#ef9b4180"
+                            "fill": "#be8f3880"
                           },
                           "layout": "vertical",
                           "padding": [
@@ -12052,7 +11908,7 @@
                               "type": "text",
                               "id": "Kvdum",
                               "name": "versionRowAgentText",
-                              "fill": "#ef9b41",
+                              "fill": "#be8f38",
                               "content": "gemini",
                               "fontFamily": "Inter",
                               "fontSize": 10,
@@ -12372,11 +12228,11 @@
                   "type": "frame",
                   "id": "9kldz",
                   "name": "versionGroupStateBadge",
-                  "fill": "#1c2b22",
+                  "fill": "#548af71f",
                   "cornerRadius": 999,
                   "stroke": {
                     "thickness": 1,
-                    "fill": "#2f5a41"
+                    "fill": "#548af780"
                   },
                   "gap": 6,
                   "padding": [
@@ -12389,7 +12245,7 @@
                       "type": "ellipse",
                       "id": "5Wabz",
                       "name": "statusDot",
-                      "fill": "#6aab73",
+                      "fill": "#548af7",
                       "width": 6,
                       "height": 6
                     },
@@ -12397,7 +12253,7 @@
                       "type": "text",
                       "id": "tpfON",
                       "name": "statusText",
-                      "fill": "#9ed5a8",
+                      "fill": "#759cf3",
                       "content": "Running",
                       "fontFamily": "Inter",
                       "fontSize": 11,
@@ -12893,11 +12749,11 @@
                               "id": "WJd11",
                               "name": "versionRowDirtyChip",
                               "height": 16,
-                              "fill": "#ef9b411f",
+                              "fill": "#be8f381f",
                               "cornerRadius": 4,
                               "stroke": {
                                 "thickness": 1,
-                                "fill": "#ef9b4180"
+                                "fill": "#be8f3880"
                               },
                               "layout": "vertical",
                               "padding": [
@@ -12911,7 +12767,7 @@
                                   "type": "text",
                                   "id": "H5MuY",
                                   "name": "versionRowDirtyText",
-                                  "fill": "#ef9b41",
+                                  "fill": "#be8f38",
                                   "content": "1 dirty",
                                   "fontFamily": "$font-sans",
                                   "fontSize": 10,
@@ -13087,7 +12943,7 @@
                       "name": "versionRowAccent",
                       "width": 4,
                       "height": "fill_container",
-                      "fill": "#c45d52"
+                      "fill": "#f75464"
                     },
                     {
                       "type": "frame",
@@ -13103,7 +12959,7 @@
                           "type": "text",
                           "id": "JaElg",
                           "name": "versionIndexText",
-                          "fill": "#c45d52",
+                          "fill": "#f75464",
                           "content": "v2",
                           "fontFamily": "Inter",
                           "fontSize": 16,
@@ -13129,11 +12985,11 @@
                           "id": "ZO2MD",
                           "name": "versionRowAgentChip",
                           "height": 16,
-                          "fill": "#c45d521f",
+                          "fill": "#f754641f",
                           "cornerRadius": 4,
                           "stroke": {
                             "thickness": 1,
-                            "fill": "#c45d5280"
+                            "fill": "#f7546480"
                           },
                           "layout": "vertical",
                           "padding": [
@@ -13147,7 +13003,7 @@
                               "type": "text",
                               "id": "MPNfp",
                               "name": "versionRowAgentText",
-                              "fill": "#c45d52",
+                              "fill": "#f75464",
                               "content": "codex",
                               "fontFamily": "Inter",
                               "fontSize": 10,
@@ -13368,7 +13224,7 @@
                       "name": "versionRowAccent",
                       "width": 4,
                       "height": "fill_container",
-                      "fill": "#ef9b41"
+                      "fill": "#be8f38"
                     },
                     {
                       "type": "frame",
@@ -13384,7 +13240,7 @@
                           "type": "text",
                           "id": "alAfr",
                           "name": "versionIndexText",
-                          "fill": "#ef9b41",
+                          "fill": "#be8f38",
                           "content": "v3",
                           "fontFamily": "Inter",
                           "fontSize": 16,
@@ -13410,11 +13266,11 @@
                           "id": "q6urc",
                           "name": "versionRowAgentChip",
                           "height": 16,
-                          "fill": "#ef9b411f",
+                          "fill": "#be8f381f",
                           "cornerRadius": 4,
                           "stroke": {
                             "thickness": 1,
-                            "fill": "#ef9b4180"
+                            "fill": "#be8f3880"
                           },
                           "layout": "vertical",
                           "padding": [
@@ -13428,7 +13284,7 @@
                               "type": "text",
                               "id": "yvEmX",
                               "name": "versionRowAgentText",
-                              "fill": "#ef9b41",
+                              "fill": "#be8f38",
                               "content": "gemini",
                               "fontFamily": "Inter",
                               "fontSize": 10,
@@ -13622,6 +13478,50 @@
               ]
             }
           ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "jpw9F",
+      "x": 0,
+      "y": -120,
+      "name": "Version Marker v1",
+      "fill": "$accent-blue",
+      "cornerRadius": 9999,
+      "gap": 12,
+      "padding": [
+        10,
+        20
+      ],
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "text",
+          "id": "o2vWW",
+          "fill": "$text-inverse",
+          "content": "PEN VERSION",
+          "fontFamily": "JetBrains Mono",
+          "fontSize": 12,
+          "fontWeight": "700",
+          "letterSpacing": 1.5
+        },
+        {
+          "type": "ellipse",
+          "id": "wy87V",
+          "name": "dot",
+          "fill": "$text-inverse",
+          "width": 4,
+          "height": 4
+        },
+        {
+          "type": "text",
+          "id": "ZHF6D",
+          "fill": "$text-inverse",
+          "content": "2026-04-17 · post-audit cleanup 6",
+          "fontFamily": "Inter",
+          "fontSize": 13,
+          "fontWeight": "600"
         }
       ]
     }

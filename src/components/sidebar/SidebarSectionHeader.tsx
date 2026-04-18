@@ -26,11 +26,12 @@ export function SidebarSectionHeader({
       className="w-full px-2 py-1.5 flex items-center gap-2 text-left rounded-md hover:bg-bg-hover/30 transition-colors"
     >
       <span
-        className="uppercase tracking-wider"
+        className="uppercase"
         style={{
           fontSize: theme.fontSize.caption,
           color: 'var(--color-text-secondary)',
           lineHeight: theme.lineHeight.compact,
+          letterSpacing: '0.1em',
         }}
       >
         {title}
@@ -41,8 +42,8 @@ export function SidebarSectionHeader({
         style={{
           fontSize: theme.fontSize.caption,
           fontWeight: 600,
-          color: 'var(--color-text-muted)',
-          backgroundColor: 'var(--color-bg-elevated)',
+          color: 'var(--color-text-tertiary)',
+          backgroundColor: 'var(--color-bg-tertiary)',
           borderColor: 'var(--color-border-subtle)',
           lineHeight: theme.lineHeight.compact,
         }}
@@ -51,7 +52,7 @@ export function SidebarSectionHeader({
       </span>
       <div data-testid="sidebar-section-divider" className="flex-1 h-px bg-border-subtle" />
       <svg
-        className={clsx('w-3 h-3 text-text-muted transition-transform', collapsed && '-rotate-90')}
+        className={clsx('w-3.5 h-3.5 text-text-muted transition-transform', collapsed && '-rotate-90')}
         data-testid="sidebar-section-chevron"
         fill="none"
         stroke="currentColor"

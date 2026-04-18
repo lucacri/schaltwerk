@@ -33,10 +33,11 @@ export function FavoriteCard({
             disabled={disabled}
             title={tooltip}
             onClick={onClick}
-            className="relative flex min-h-[72px] min-w-[140px] overflow-hidden rounded-lg text-left transition-opacity"
+            className="relative flex min-h-[82px] min-w-[180px] overflow-hidden rounded-lg text-left transition-opacity"
             style={{
                 backgroundColor: 'var(--color-bg-primary)',
-                border: `2px solid ${selected ? 'var(--color-accent-blue)' : 'var(--color-border-default)'}`,
+                border: '1px solid var(--color-border-default)',
+                boxShadow: selected ? '0 0 0 1px var(--color-accent-blue) inset' : 'none',
                 opacity: disabled ? 0.55 : 1,
                 cursor: disabled ? 'not-allowed' : 'pointer',
             }}

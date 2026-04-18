@@ -59,6 +59,7 @@ const SWATCH_GROUPS: Array<{ title: string; items: SwatchDefinition[] }> = [
       { name: 'accent-red', cssVariable: '--color-accent-red', kind: 'background' },
       { name: 'accent-violet', cssVariable: '--color-accent-violet', kind: 'background' },
       { name: 'accent-cyan', cssVariable: '--color-accent-cyan', kind: 'background' },
+      { name: 'accent-yellow', cssVariable: '--color-accent-yellow', kind: 'background' },
     ],
   },
   {

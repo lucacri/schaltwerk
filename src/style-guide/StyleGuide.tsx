@@ -9,6 +9,7 @@ import { CommonSection } from './sections/CommonSection'
 import { SettingsSection } from './sections/SettingsSection'
 import { DialogsSection } from './sections/DialogsSection'
 import { ColorReferenceSection } from './sections/ColorReferenceSection'
+import { TypographySection } from './sections/TypographySection'
 
 function subscribeToSystemTheme(callback: () => void) {
   if (typeof window === 'undefined') {
@@ -84,6 +85,7 @@ export function StyleGuide() {
         <SettingsSection />
         <DialogsSection />
         <ColorReferenceSection resolvedTheme={resolvedTheme} />
+        <TypographySection />
       </main>
     </div>
   )

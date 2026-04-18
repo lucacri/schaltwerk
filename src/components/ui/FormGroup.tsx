@@ -29,10 +29,10 @@ export function FormGroup({ label, htmlFor, required, help, error, children, cla
     : children
 
   return (
-    <div className={clsx('space-y-2', className)}>
+    <div className={clsx('space-y-1.5', className)}>
       {label ? <Label id={labelId} htmlFor={htmlFor} required={required}>{label}</Label> : null}
       {content}
-      {help ? <p id={helpId} className="text-text-muted" style={captionTextStyle}>{help}</p> : null}
+      {help ? <p id={helpId} className="text-text-tertiary" style={captionTextStyle}>{help}</p> : null}
       {error ? <p id={errorId} className="text-accent-red" style={captionTextStyle}>{error}</p> : null}
     </div>
   )

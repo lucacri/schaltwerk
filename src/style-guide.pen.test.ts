@@ -65,8 +65,6 @@ describe('design/style-guide.pen', () => {
       'Agents Sidebar View',
       'Sidebar Top Bar',
       'Orchestrator Entry',
-      'Search Toggle Row',
-      'searchToggleButton',
       'Specs Section',
       'Running Section',
       'Epic Group',
@@ -75,8 +73,11 @@ describe('design/style-guide.pen', () => {
       'Version Group',
       'Version Group Header',
       'Consolidation Candidate Lane',
-      'Session Context Popup',
     ]))
+
+    expect(descendantNames).not.toContain('Search Toggle Row')
+    expect(descendantNames).not.toContain('searchToggleButton')
+    expect(descendantNames).not.toContain('Session Context Popup')
 
     expect(findNamedNode(composedViews?.children ?? [], 'New Session Modal View')).toBeDefined()
     expect(findNamedNode(composedViews?.children ?? [], 'Agents Sidebar View')).toBeDefined()

@@ -12,15 +12,17 @@ export interface ToggleProps {
   size?: ToggleSize
 }
 
-const sizeStyles: Record<ToggleSize, { track: string; knob: string; translate: string }> = {
+const sizeStyles: Record<ToggleSize, { track: string; knob: string; padding: string; translate: string }> = {
   sm: {
     track: 'h-4 w-8',
     knob: 'h-3 w-3',
+    padding: 'p-[1px]',
     translate: 'translate-x-4',
   },
   md: {
     track: 'h-5 w-9',
-    knob: 'h-4 w-4',
+    knob: 'h-3.5 w-3.5',
+    padding: 'p-[2px]',
     translate: 'translate-x-4',
   },
 }
@@ -40,8 +42,9 @@ export function Toggle({ checked, onChange, label, disabled = false, size = 'md'
         }
       }}
       className={clsx(
-        'relative inline-flex shrink-0 items-center rounded-full border p-[1px] transition-[background-color,border-color,opacity] duration-150 ease-out focus-visible:outline-none focus-visible:border-[var(--control-border-focus)] disabled:cursor-not-allowed disabled:opacity-50',
+        'relative inline-flex shrink-0 items-center rounded-full border transition-[background-color,border-color,opacity] duration-150 ease-out focus-visible:outline-none focus-visible:border-[var(--control-border-focus)] disabled:cursor-not-allowed disabled:opacity-50',
         config.track,
+        config.padding,
         checked
           ? 'border-[var(--color-accent-blue-border)] bg-accent-blue'
           : 'border-[var(--control-border)] bg-[var(--control-bg)] hover:bg-[var(--control-bg-hover)]',
@@ -63,7 +66,7 @@ export function Toggle({ checked, onChange, label, disabled = false, size = 'md'
   }
 
   return (
-    <label className={clsx('inline-flex items-center gap-3 text-text-primary', disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer')} style={labelTextStyle}>
+    <label className={clsx('inline-flex items-center gap-2 text-text-primary', disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer')} style={labelTextStyle}>
       {button}
       <span>{label}</span>
     </label>

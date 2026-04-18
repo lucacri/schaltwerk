@@ -127,11 +127,10 @@ export function IconButton({
         aria-pressed={ariaPressed}
         className={clsx(
           'inline-flex items-center justify-center',
-          'px-1.5 py-1 rounded border',
-          'transition-colors duration-150', // Smooth color transitions only
-          'text-[12px]', // Medium text size for better visibility
-          'bg-[var(--icon-button-bg)] text-[var(--icon-button-text)] border-[var(--icon-button-border)]',
-          !disabled && 'hover:bg-[var(--icon-button-hover-bg)] hover:border-[var(--icon-button-hover-border)]',
+          'p-1.5 rounded',
+          'transition-colors duration-150',
+          'bg-[var(--icon-button-bg)] text-[var(--icon-button-text)]',
+          !disabled && 'hover:bg-[var(--icon-button-hover-bg)]',
           disabled && 'opacity-50 cursor-not-allowed',
           !disabled && 'cursor-pointer',
           className

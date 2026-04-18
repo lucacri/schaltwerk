@@ -909,4 +909,60 @@ describe('SessionCard promoted badge', () => {
 
     expect(screen.queryByTestId('consolidation-auto-stub-badge')).toBeNull()
   })
+
+  describe('context menu', () => {
+    const renderCard = (actions: Partial<SessionCardActions> = {}, session = baseSession) => {
+      const resolvedActions: SessionCardActions = {
+        ...mockActions,
+        ...actions,
+      }
+      renderWithProviders(
+        <SessionCardActionsProvider actions={resolvedActions}>
+          <SessionCard
+            session={session}
+            index={0}
+            isSelected={false}
+            hasFollowUpMessage={false}
+            isRunning={false}
+          />
+        </SessionCardActionsProvider>
+      )
+      return resolvedActions
+    }
+
+    const openMenu = () => {
+      const card = screen.getByRole('button', { name: /Select session/i })
+      fireEvent.contextMenu(card)
+    }
+
+    it('opens a menu on right-click with Copy Name, Copy Branch, and a destructive action', () => {
+      renderCard()
+      openMenu()
+      const menu = screen.getByRole('menu', { name: 'Session actions' })
+      const items = menu.querySelectorAll('[role="menuitem"]')
+      const labels = Array.from(items).map((el) => el.textContent)
+      expect(labels).toEqual(['Copy Name', 'Copy Branch', 'Cancel Session'])
+    })
+
+    it('swaps the destructive action to Delete Spec for spec sessions', () => {
+      const specSession: EnrichedSession = {
+        ...baseSession,
+        info: { ...baseInfo, session_state: 'spec', branch: '' },
+      }
+      renderCard({}, specSession)
+      openMenu()
+      expect(screen.queryByRole('menuitem', { name: 'Copy Branch' })).toBeNull()
+      expect(screen.getByRole('menuitem', { name: 'Delete Spec' })).toBeInTheDocument()
+    })
+
+    it('invokes onCancel with uncommitted flag derived from diff stats', async () => {
+      const onCancel = vi.fn()
+      renderCard({ onCancel })
+      openMenu()
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Cancel Session' }))
+      await waitFor(() => {
+        expect(onCancel).toHaveBeenCalledWith('s1', true)
+      })
+    })
+  })
 })

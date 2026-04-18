@@ -32,10 +32,10 @@ export function EpicGroupHeader({
     return (
         <div
             data-testid={`epic-header-${epic.id}`}
-            className="mb-2 rounded border"
+            className="mb-2 rounded-md border"
             style={{
                 backgroundColor: 'var(--color-bg-tertiary)',
-                borderColor: 'var(--color-border-default)',
+                borderColor: 'var(--color-border-subtle)',
                 borderLeftWidth: '3px',
                 borderLeftColor: scheme?.DEFAULT ?? 'var(--color-text-muted)',
             }}
@@ -48,10 +48,10 @@ export function EpicGroupHeader({
                     style={{ color: 'var(--color-text-primary)' }}
                 >
                     <span
-                        className={clsx('transition-transform', collapsed ? 'rotate-0' : 'rotate-90')}
+                        className={clsx('transition-transform text-text-muted', collapsed ? 'rotate-0' : 'rotate-90')}
                         aria-hidden="true"
                     >
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                             <path
                                 fillRule="evenodd"
                                 d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
@@ -65,11 +65,11 @@ export function EpicGroupHeader({
                     />
                     <span className="truncate">{epic.name}</span>
                 </button>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2.5 flex-shrink-0">
                     <span
                         style={{
                             ...typography.caption,
-                            color: 'var(--color-text-muted)',
+                            color: 'var(--color-text-tertiary)',
                         }}
                     >
                         {countLabel}

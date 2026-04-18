@@ -504,7 +504,7 @@ export function NewSessionModal({
                     className="flex shrink-0 flex-wrap gap-2 pb-1"
                 >
                     {favoriteOptions.map(option => (
-                        <div key={option.id} style={{ width: 160 }}>
+                        <div key={option.id} style={{ width: 180 }}>
                             <FavoriteCard
                                 title={option.title}
                                 summary={option.summary}
