@@ -8,6 +8,8 @@ use std::time::Duration;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::time::timeout;
 
+pub mod launch_script;
+
 static START_LOCKS: LazyLock<AsyncMutex<HashMap<String, Arc<AsyncMutex<()>>>>> =
     LazyLock::new(|| AsyncMutex::new(HashMap::new()));
 

@@ -2,6 +2,16 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Terminal: deliver oversize agent prompts through a launch script
+
+Agent prompts that push the tmux `new-session` argv above Lucode's conservative 14 KB tmux-IPC budget now route through a temporary `0600` shell script instead of being sent directly through tmux. The script exports the same environment, captures large argv entries through quoted heredocs, removes itself, and `exec`s the original agent command so the pane still ends up running the agent as the foreground process. Normal launches below the threshold keep the existing inline path.
+
+- `tmux_cmd.rs` now exposes `TMUX_IPC_SOFT_LIMIT_BYTES = 14_000` behavior through `argv_exceeds_tmux_ipc`, while keeping the existing 500 KB hard guard for exec-scale failures.
+- `agent_launcher::launch_script` renders and writes `lucode-launch-*.sh` scripts with random 16-hex heredoc sentinels, shell-safe env exports, owner-only permissions, and self-deletion before exec.
+- `schaltwerk_core_start_agent_in_terminal` prepares the final direct or shell-chain command first, then swaps only oversized launches to `sh <script>`, keeping setup-script and Amp shell-chain behavior intact.
+- Startup now removes stale `lucode-launch-*.sh` files older than one hour from the temp directory as a best-effort cleanup for crashes before self-deletion.
+- Covered by Rust tests for the tmux IPC threshold, heredoc sentinel shape, self-delete ordering, env export ordering, shell metacharacter roundtrip, 0600 permissions, oversized routing, and stale-script cleanup.
+
 ## Improve Plan button for clarified specs
 
 The Improve Plan flow was already wired through MCP (`lucode_improve_plan` / `POST /api/specs/{name}/improve-plan`), but the desktop app had no visible action for it — so users on the clarified stage had to leave the app to start a plan round. A new `Improve Plan` button now appears on clarified specs in the sidebar card, the compact version row, the spec metadata panel, and the spec editor toolbar. It is hidden for draft specs and disabled with a tooltip when a plan round is already active. The button invokes a new Tauri command `schaltwerk_core_start_improve_plan_round` that reuses the same backend validation, rollback, and session-refresh logic as the MCP HTTP route by delegating to a shared `start_improve_plan_round_inner` helper. `SessionInfo` now carries `improve_plan_round_id` so the UI can detect active rounds without a second fetch. Success and failure both surface through the existing toast provider, and errors go through the project logger.

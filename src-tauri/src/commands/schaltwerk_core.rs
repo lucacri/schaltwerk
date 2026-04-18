@@ -3237,59 +3237,58 @@ async fn schaltwerk_core_start_agent_in_terminal(
     let (agent_name, final_args) =
         agent_launcher::apply_command_prefix(command_prefix, agent_name, final_args);
 
-    // Create terminal with initial size if provided
-    let create_result = if use_shell_chain {
-        let sh_cmd = "sh".to_string();
+    let (launch_command, launch_args, launch_env) = if use_shell_chain {
         let Some(chained_command) = shell_cmd.take() else {
             log::error!("Shell chain requested without prepared command");
             return Err("Failed to construct shell command chain".to_string());
         };
-        let mut sh_args: Vec<String> = vec!["-lc".to_string(), chained_command];
-        if let (Some(c), Some(r)) = (cols, rows) {
+        (
+            "sh".to_string(),
+            vec!["-lc".to_string(), chained_command],
+            env_vars,
+        )
+    } else {
+        (agent_name.clone(), final_args, env_vars)
+    };
+
+    let prepared_launch = agent_launcher::launch_script::prepare_terminal_launch(
+        launch_command,
+        launch_args,
+        launch_env,
+    )?;
+    if let Some(path) = prepared_launch.launch_script_path.as_ref() {
+        log::info!(
+            "Routing oversized agent launch for terminal {terminal_id} through launch script {}",
+            path.display()
+        );
+    }
+
+    // Create terminal with initial size if provided
+    let create_result = match (cols, rows) {
+        (Some(c), Some(r)) => {
             use lucode::services::CreateTerminalWithAppAndSizeParams;
             terminal_manager
                 .create_terminal_with_app_and_size(CreateTerminalWithAppAndSizeParams {
                     id: terminal_id.clone(),
                     cwd,
-                    command: sh_cmd,
-                    args: std::mem::take(&mut sh_args),
-                    env: env_vars,
+                    command: prepared_launch.command,
+                    args: prepared_launch.args,
+                    env: prepared_launch.env,
                     cols: c,
                     rows: r,
                 })
                 .await
-        } else {
-            terminal_manager
-                .create_terminal_with_app(terminal_id.clone(), cwd, sh_cmd, sh_args, env_vars)
-                .await
         }
-    } else {
-        match (cols, rows) {
-            (Some(c), Some(r)) => {
-                use lucode::services::CreateTerminalWithAppAndSizeParams;
-                terminal_manager
-                    .create_terminal_with_app_and_size(CreateTerminalWithAppAndSizeParams {
-                        id: terminal_id.clone(),
-                        cwd,
-                        command: agent_name.clone(),
-                        args: final_args,
-                        env: env_vars.clone(),
-                        cols: c,
-                        rows: r,
-                    })
-                    .await
-            }
-            _ => {
-                terminal_manager
-                    .create_terminal_with_app(
-                        terminal_id.clone(),
-                        cwd,
-                        agent_name.clone(),
-                        final_args,
-                        env_vars,
-                    )
-                    .await
-            }
+        _ => {
+            terminal_manager
+                .create_terminal_with_app(
+                    terminal_id.clone(),
+                    cwd,
+                    prepared_launch.command,
+                    prepared_launch.args,
+                    prepared_launch.env,
+                )
+                .await
         }
     };
 

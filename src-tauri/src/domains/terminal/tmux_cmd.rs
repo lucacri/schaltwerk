@@ -18,14 +18,28 @@ use crate::domains::terminal::ApplicationSpec;
 /// Linux). Anything above this is almost certainly a multi-hundred-KB prompt
 /// the user accidentally inlined; the UX goal is a clear error, not a shave
 /// to the last byte of headroom.
-pub(crate) const TMUX_ARGV_SOFT_LIMIT_BYTES: usize = 500_000;
+pub const TMUX_ARGV_SOFT_LIMIT_BYTES: usize = 500_000;
+pub(crate) const TMUX_IPC_SOFT_LIMIT_BYTES: usize = 14_000;
+
+fn argv_size_bytes(args: &[String]) -> usize {
+    args.iter().map(|a| a.len() + 1).sum()
+}
+
+pub fn argv_exceeds_tmux_ipc(args: &[String]) -> bool {
+    argv_size_bytes(args) > TMUX_IPC_SOFT_LIMIT_BYTES
+}
 
 /// Returns `Err` if the combined byte length of `args` (counting one trailing
 /// NUL per entry, matching what `execve` writes into the arg area) exceeds
 /// `TMUX_ARGV_SOFT_LIMIT_BYTES`. Used to fail fast on oversized agent argv
 /// before tmux emits its own opaque `command too long` error.
-pub(crate) fn check_argv_size(args: &[String]) -> Result<(), String> {
-    let total: usize = args.iter().map(|a| a.len() + 1).sum();
+pub fn check_argv_size(args: &[String]) -> Result<(), String> {
+    let total = argv_size_bytes(args);
+    if argv_exceeds_tmux_ipc(args) {
+        log::debug!(
+            "tmux argv is {total} bytes, above Lucode's {TMUX_IPC_SOFT_LIMIT_BYTES}-byte IPC soft limit"
+        );
+    }
     if total > TMUX_ARGV_SOFT_LIMIT_BYTES {
         return Err(format!(
             "Lucode preflight: agent argv is {total} bytes, which exceeds \
@@ -643,6 +657,18 @@ mod tests {
         let needed = super::TMUX_ARGV_SOFT_LIMIT_BYTES / (per_arg + 1) + 2;
         let args: Vec<String> = (0..needed).map(|_| "a".repeat(per_arg)).collect();
         assert!(super::check_argv_size(&args).is_err());
+    }
+
+    #[test]
+    fn argv_exceeds_tmux_ipc_below_threshold_is_false() {
+        let args: Vec<String> = vec!["new-session".into(), "p".repeat(13 * 1024)];
+        assert!(!super::argv_exceeds_tmux_ipc(&args));
+    }
+
+    #[test]
+    fn argv_exceeds_tmux_ipc_above_threshold_is_true() {
+        let args: Vec<String> = vec!["new-session".into(), "p".repeat(15 * 1024)];
+        assert!(super::argv_exceeds_tmux_ipc(&args));
     }
 
     #[tokio::test]

@@ -1404,6 +1404,13 @@ fn main() {
         "[startup] Effective PATH: {}",
         std::env::var("PATH").unwrap_or_default()
     );
+    match lucode::schaltwerk_core::cleanup_stale_launch_scripts() {
+        Ok(removed) if removed > 0 => {
+            log::info!("Removed {removed} stale launch script(s) from temp directory");
+        }
+        Ok(_) => {}
+        Err(err) => log::warn!("Failed to clean stale launch scripts: {err}"),
+    }
 
     // Preflight: Lucode requires tmux >= 3.6 for persistent terminals. Fail fast
     // with a human-readable message if the binary is missing or outdated.
