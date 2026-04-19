@@ -747,6 +747,16 @@ impl SessionDbManager {
         Ok(())
     }
 
+    pub fn delete_consolidation_round(&self, round_id: &str) -> Result<()> {
+        let conn = self.db.get_conn()?;
+        conn.execute(
+            "DELETE FROM consolidation_rounds
+             WHERE repository_path = ?1 AND id = ?2",
+            params![self.repo_path.to_string_lossy().to_string(), round_id],
+        )?;
+        Ok(())
+    }
+
     pub fn update_consolidation_round_confirmation(
         &self,
         round_id: &str,
@@ -800,6 +810,56 @@ impl SessionDbManager {
             ],
         )?;
         Ok(())
+    }
+
+    pub fn clear_auto_stub_consolidation_report_by_name(
+        &self,
+        session_name: &str,
+    ) -> Result<usize> {
+        let conn = self.db.get_conn()?;
+        let affected = conn.execute(
+            "UPDATE sessions
+             SET consolidation_report = NULL,
+                 consolidation_report_source = NULL,
+                 consolidation_base_session_id = NULL,
+                 consolidation_recommended_session_id = NULL,
+                 updated_at = ?1
+             WHERE repository_path = ?2
+               AND name = ?3
+               AND consolidation_report_source = ?4",
+            params![
+                Utc::now().timestamp(),
+                self.repo_path.to_string_lossy().to_string(),
+                session_name,
+                crate::domains::sessions::consolidation_stub::STUB_SOURCE,
+            ],
+        )?;
+        Ok(affected)
+    }
+
+    pub fn clear_auto_stub_consolidation_report_by_id(
+        &self,
+        session_id: &str,
+    ) -> Result<usize> {
+        let conn = self.db.get_conn()?;
+        let affected = conn.execute(
+            "UPDATE sessions
+             SET consolidation_report = NULL,
+                 consolidation_report_source = NULL,
+                 consolidation_base_session_id = NULL,
+                 consolidation_recommended_session_id = NULL,
+                 updated_at = ?1
+             WHERE repository_path = ?2
+               AND id = ?3
+               AND consolidation_report_source = ?4",
+            params![
+                Utc::now().timestamp(),
+                self.repo_path.to_string_lossy().to_string(),
+                session_id,
+                crate::domains::sessions::consolidation_stub::STUB_SOURCE,
+            ],
+        )?;
+        Ok(affected)
     }
 }
 

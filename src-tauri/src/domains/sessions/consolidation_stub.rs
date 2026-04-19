@@ -21,6 +21,20 @@ pub enum StubWriteOutcome {
     NoRound,
 }
 
+pub fn delete_stub_report_for_session_name(
+    db_manager: &SessionDbManager,
+    session_name: &str,
+) -> Result<usize> {
+    db_manager.clear_auto_stub_consolidation_report_by_name(session_name)
+}
+
+pub fn delete_stub_report_for_session_id(
+    db_manager: &SessionDbManager,
+    session_id: &str,
+) -> Result<usize> {
+    db_manager.clear_auto_stub_consolidation_report_by_id(session_id)
+}
+
 pub fn ensure_stub_report_for_candidate(
     db_manager: &SessionDbManager,
     session: &Session,
@@ -360,6 +374,77 @@ mod tests {
         let reloaded = manager.get_session_by_name(&session.name).unwrap();
         let second = ensure_stub_report_for_candidate(&manager, &reloaded, "cancelled").unwrap();
         assert_eq!(second, StubWriteOutcome::AlreadyReported);
+    }
+
+    #[test]
+    fn delete_stub_report_for_session_name_only_clears_auto_stub() {
+        let (_tmp, repo, manager) = setup();
+        let session = make_session(&repo, "cand", Some("candidate"), Some("r-1"));
+        use crate::domains::sessions::db_sessions::SessionMethods;
+        manager.db_ref().create_session(&session).unwrap();
+        manager
+            .upsert_consolidation_round("r-1", "group-1", &[], "confirm")
+            .unwrap();
+
+        ensure_stub_report_for_candidate(&manager, &session, "cancelled").unwrap();
+
+        let affected = delete_stub_report_for_session_name(&manager, &session.name).unwrap();
+        assert_eq!(affected, 1);
+
+        let loaded = manager.get_session_by_name(&session.name).unwrap();
+        assert!(loaded.consolidation_report.is_none());
+        assert!(loaded.consolidation_report_source.is_none());
+    }
+
+    #[test]
+    fn delete_stub_report_for_session_name_preserves_agent_report() {
+        let (_tmp, repo, manager) = setup();
+        let session = make_session(&repo, "cand", Some("candidate"), Some("r-1"));
+        use crate::domains::sessions::db_sessions::SessionMethods;
+        manager.db_ref().create_session(&session).unwrap();
+        manager
+            .upsert_consolidation_round("r-1", "group-1", &[], "confirm")
+            .unwrap();
+
+        manager
+            .update_session_consolidation_report(
+                &session.name,
+                "## Real agent report",
+                Some(&session.id),
+                None,
+                AGENT_SOURCE,
+            )
+            .unwrap();
+
+        let affected = delete_stub_report_for_session_name(&manager, &session.name).unwrap();
+        assert_eq!(affected, 0);
+
+        let loaded = manager.get_session_by_name(&session.name).unwrap();
+        assert_eq!(
+            loaded.consolidation_report.as_deref(),
+            Some("## Real agent report")
+        );
+        assert_eq!(loaded.consolidation_report_source.as_deref(), Some(AGENT_SOURCE));
+    }
+
+    #[test]
+    fn delete_stub_report_for_session_id_only_clears_auto_stub() {
+        let (_tmp, repo, manager) = setup();
+        let session = make_session(&repo, "cand", Some("candidate"), Some("r-1"));
+        use crate::domains::sessions::db_sessions::SessionMethods;
+        manager.db_ref().create_session(&session).unwrap();
+        manager
+            .upsert_consolidation_round("r-1", "group-1", &[], "confirm")
+            .unwrap();
+
+        ensure_stub_report_for_candidate(&manager, &session, "cancelled").unwrap();
+
+        let affected = delete_stub_report_for_session_id(&manager, &session.id).unwrap();
+        assert_eq!(affected, 1);
+
+        let loaded = manager.get_session_by_name(&session.name).unwrap();
+        assert!(loaded.consolidation_report.is_none());
+        assert!(loaded.consolidation_report_source.is_none());
     }
 
     #[test]

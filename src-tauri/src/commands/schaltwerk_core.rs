@@ -2514,16 +2514,25 @@ pub async fn schaltwerk_core_cancel_session(
 
         if cancel_result.is_ok()
             && let Some(round_id) = consolidation_round_id
-            && let Ok(core) = get_core_write().await
         {
-            let manager = core.session_manager();
-            let _ = maybe_auto_start_consolidation_judge(
-                &app_for_refresh,
-                &core.db,
-                &manager,
-                &round_id,
-            )
-            .await;
+            let auto_judge_context = match get_core_read().await {
+                Ok(core) => Some((core.db.clone(), core.session_manager())),
+                Err(error) => {
+                    log::warn!(
+                        "Cancel {name_for_bg}: failed to prepare auto-judge context: {error}"
+                    );
+                    None
+                }
+            };
+            if let Some((db, manager)) = auto_judge_context {
+                let _ = maybe_auto_start_consolidation_judge(
+                    &app_for_refresh,
+                    &db,
+                    &manager,
+                    &round_id,
+                )
+                .await;
+            }
         }
 
         match cancel_result {
