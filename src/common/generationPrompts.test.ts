@@ -120,7 +120,8 @@ describe('generationPrompts', () => {
 
     expect(prompts.consolidation_prompt).toContain('{sessionList}')
     expect(prompts.consolidation_prompt).toContain('lucode_consolidation_report')
-    expect(prompts.consolidation_prompt).toContain('Do not call lucode_promote directly for a multi-agent consolidation round')
+    expect(prompts.consolidation_prompt).toContain('Do not call lucode_promote directly')
+    expect(prompts.consolidation_prompt).toContain('starts a synthesis judge')
     expect(prompts.review_pr_prompt).toContain('{{pr.title}}')
     expect(prompts.review_pr_prompt).toContain('{{pr.number}}')
     expect(prompts.review_pr_prompt).toContain('gh pr diff {{pr.number}}')

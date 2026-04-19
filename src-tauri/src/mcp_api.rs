@@ -35,17 +35,217 @@ use lucode::domains::sessions::entity::{Session, SessionStatus, Spec, SpecStage}
 use lucode::domains::sessions::service::SessionCreationParams;
 use lucode::domains::settings::{AgentPreset, setup_script::SetupScriptService};
 use lucode::infrastructure::attention_bridge::clear_session_attention_state;
-use lucode::infrastructure::database::Database;
-use lucode::infrastructure::database::SpecMethods;
-use lucode::infrastructure::database::db_project_config::ProjectConfigMethods;
+use lucode::infrastructure::database::{Database, SpecMethods};
+use lucode::infrastructure::database::db_project_config::{DEFAULT_BRANCH_PREFIX, ProjectConfigMethods};
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
-use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
+use lucode::schaltwerk_core::db_app_config::{AppConfigMethods, ConsolidationDefaultFavorite};
 use lucode::schaltwerk_core::{SessionManager, SessionState};
 use lucode::services::SessionMethods;
 use lucode::services::sessions::compute_git_enrichment_parallel;
+use lucode::shared::branch::format_branch_name;
 use lucode::shared::terminal_id::terminal_id_for_orchestrator_top;
 
 mod diff_api;
+
+async fn resolve_consolidation_judge_agent_type(db: &Database) -> String {
+    let favorite = db.get_consolidation_default_favorite().unwrap_or_default();
+    let presets = if let Some(settings_manager) = SETTINGS_MANAGER.get() {
+        let settings = settings_manager.lock().await;
+        settings.get_agent_presets()
+    } else {
+        Vec::new()
+    };
+    resolve_consolidation_judge_agent_type_inner(&favorite, &presets)
+}
+
+fn resolve_consolidation_judge_agent_type_inner(
+    favorite: &ConsolidationDefaultFavorite,
+    presets: &[AgentPreset],
+) -> String {
+    if let Some(preset_id) = favorite.preset_id.as_deref() {
+        if let Some(preset) = presets.iter().find(|p| p.id == preset_id) {
+            if let Some(slot) = preset.slots.first() {
+                return slot.agent_type.clone();
+            }
+            log::warn!(
+                "Consolidation favorite preset '{preset_id}' has no slots; falling back to 'claude'"
+            );
+        } else {
+            log::warn!(
+                "Consolidation favorite preset '{preset_id}' not found; falling back to 'claude'"
+            );
+        }
+    }
+    favorite
+        .agent_type
+        .as_deref()
+        .filter(|s: &&str| !s.trim().is_empty())
+        .unwrap_or("claude")
+        .to_string()
+}
+
+fn resolve_implementation_judge_root_name(candidates: &[Session]) -> Result<String, String> {
+    debug_assert!(!candidates.is_empty());
+    let mut bases = candidates
+        .iter()
+        .map(|c| strip_version_suffix(&c.name).to_string())
+        .collect::<Vec<_>>();
+    bases.sort();
+    bases.dedup();
+    if bases.len() != 1 {
+        return Err(format!(
+            "Consolidation candidates must share the same original name; found: {}",
+            bases.join(", ")
+        ));
+    }
+    Ok(bases.remove(0))
+}
+
+fn build_judge_session_name(candidates: &[Session], now_ms: i64) -> Result<String, String> {
+    let root = resolve_implementation_judge_root_name(candidates)?;
+    Ok(format!("{root}-judge-{now_ms}"))
+}
+
+fn internal<E: std::fmt::Display>(err: E) -> (StatusCode, String) {
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}
+
+fn bad_request<E: std::fmt::Display>(err: E) -> (StatusCode, String) {
+    (StatusCode::BAD_REQUEST, err.to_string())
+}
+
+fn rename_judge_to_root(
+    db: &Database,
+    manager: &SessionManager,
+    judge: &Session,
+    new_branch_name: &str,
+    new_display_name: &str,
+) -> anyhow::Result<()> {
+    let repo_path = manager.repo_path();
+
+    // Update display name in database
+    db.update_session_display_name(&judge.id, new_display_name)?;
+
+    // Rename the git branch
+    if judge.branch != new_branch_name {
+        lucode::domains::git::branches::rename_branch(repo_path, &judge.branch, new_branch_name)?;
+
+        // Update worktree to use new branch
+        lucode::services::worktrees::update_worktree_branch(&judge.worktree_path, new_branch_name)?;
+
+        // Update branch name in database
+        db.update_session_branch(&judge.id, new_branch_name)?;
+    }
+
+    // Clear pending name generation flag
+    db.set_pending_name_generation(&judge.id, false)?;
+
+    Ok(())
+}
+
+async fn promote_judge_session<RefreshFn, CancelFn, CancelFuture>(
+    db: &Database,
+    manager: &SessionManager,
+    round: &ConsolidationRoundRecord,
+    confirmed_by: &str,
+    refresh_fn: &mut RefreshFn,
+    cancel_fn: &mut CancelFn,
+) -> Result<ConfirmConsolidationWinnerResponse, (StatusCode, String)>
+where
+    RefreshFn: FnMut(SessionsRefreshReason) -> anyhow::Result<()>,
+    CancelFn: FnMut(&str) -> CancelFuture,
+    CancelFuture: Future<Output = anyhow::Result<()>>,
+{
+    let round_sessions = list_round_sessions(manager, &round.id).map_err(internal)?;
+    let candidates = candidate_sessions_for_round(&round_sessions);
+    let mut judges = active_judge_sessions_for_round(&round_sessions);
+    let judge = judges.pop().ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            "round has no judge session".to_string(),
+        )
+    })?;
+    let extra_judges = judges;
+
+    let root_name = resolve_implementation_judge_root_name(&candidates).map_err(bad_request)?;
+    debug_assert_ne!(
+        root_name, judge.name,
+        "judge raw name is expected to carry the -judge-<ts> infix"
+    );
+
+    let branch_prefix = db
+        .get_project_branch_prefix(manager.repo_path())
+        .unwrap_or_else(|_| DEFAULT_BRANCH_PREFIX.into());
+    let new_branch = format_branch_name(&branch_prefix, &root_name);
+    if lucode::domains::git::branches::branch_exists(manager.repo_path(), &new_branch)
+        .map_err(internal)?
+    {
+        return Err((
+            StatusCode::CONFLICT,
+            format!("Target branch '{new_branch}' already exists"),
+        ));
+    }
+
+    rename_judge_to_root(db, manager, &judge, &new_branch, &root_name).map_err(internal)?;
+    update_consolidation_round_confirmation(db, &round.id, &judge.id, confirmed_by)
+        .map_err(internal)?;
+
+    let mut candidate_sessions_cancelled = Vec::new();
+    let mut source_sessions_cancelled = Vec::new();
+    let mut judge_sessions_cancelled = Vec::new();
+    let mut failures = Vec::new();
+
+    // Collect all sessions to cancel: candidates, extra judges, and sources
+    let mut to_cancel = Vec::new();
+    for c in candidates.iter().chain(extra_judges.iter()) {
+        if c.status == SessionStatus::Active && c.id != judge.id {
+            to_cancel.push(c.clone());
+        }
+    }
+    for source_id in &round.source_session_ids {
+        let Ok(source) = manager.get_session_by_id(source_id) else {
+            continue;
+        };
+        if source.status == SessionStatus::Active
+            && source.id != judge.id
+            && !to_cancel.iter().any(|s| s.id == source.id)
+        {
+            to_cancel.push(source);
+        }
+    }
+
+    for session in to_cancel {
+        let role = session.consolidation_role.as_deref().unwrap_or("source");
+        match cancel_fn(&session.name).await {
+            Ok(()) => match role {
+                "judge" => judge_sessions_cancelled.push(session.name.clone()),
+                "candidate" => candidate_sessions_cancelled.push(session.name.clone()),
+                _ => source_sessions_cancelled.push(session.name.clone()),
+            },
+            Err(e) => failures.push(format!("{}: {e}", session.name)),
+        }
+    }
+
+    if let Err(e) = refresh_fn(SessionsRefreshReason::SessionLifecycle) {
+        failures.push(format!("refresh: {e}"));
+    }
+
+    if !failures.is_empty() {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, failures.join("; ")));
+    }
+
+    candidate_sessions_cancelled.sort();
+    source_sessions_cancelled.sort();
+    judge_sessions_cancelled.sort();
+    Ok(ConfirmConsolidationWinnerResponse {
+        round_id: round.id.clone(),
+        winner_session_name: judge.name.clone(),
+        promoted_session_name: root_name,
+        candidate_sessions_cancelled,
+        source_sessions_cancelled,
+        judge_sessions_cancelled,
+    })
+}
 
 pub async fn handle_mcp_request(
     req: Request<Incoming>,
@@ -1385,18 +1585,9 @@ fn list_round_sessions(manager: &SessionManager, round_id: &str) -> anyhow::Resu
         .collect())
 }
 
-fn build_judge_prompt(
-    candidate_sessions: &[Session],
-    source_session_ids: &[String],
-    round_type: &str,
-) -> String {
-    let mut prompt = if round_type == "plan" {
-        String::from("Review every Improve Plan candidate for this Lucode plan round.\n\n")
-    } else {
-        String::from(
-            "Review every consolidation candidate for this Lucode consolidation round.\n\n",
-        )
-    };
+fn build_plan_judge_prompt(candidate_sessions: &[Session], source_session_ids: &[String]) -> String {
+    let mut prompt =
+        String::from("Review every Improve Plan candidate for this Lucode plan round.\n\n");
     prompt.push_str("Source sessions:\n");
     for source in source_session_ids {
         prompt.push_str(&format!("- {source}\n"));
@@ -1424,16 +1615,83 @@ fn build_judge_prompt(
         }
         prompt.push_str(&format!("  report:\n{report}\n\n"));
     }
-    if round_type == "plan" {
-        prompt.push_str(
-            "Choose the strongest implementation plan. File your reasoning through lucode_consolidation_report with recommended_session_id set to the winning candidate session ID. Do not call lucode_promote directly.",
-        );
-    } else {
-        prompt.push_str(
-            "Choose the strongest consolidation candidate. File your reasoning through lucode_consolidation_report with recommended_session_id set to the winning candidate session ID. Do not call lucode_promote directly.",
-        );
-    }
+    prompt.push_str(
+        "Choose the strongest implementation plan. File your reasoning through lucode_consolidation_report with recommended_session_id set to the winning candidate session ID. Do not call lucode_promote directly.",
+    );
     prompt
+}
+
+fn build_judge_synthesis_prompt(candidate_sessions: &[Session], source_session_ids: &[String]) -> String {
+    let mut prompt = String::from("You are the synthesis judge for this Lucode consolidation round.\n\n");
+    prompt.push_str(&format!(
+        "{} parallel agents have each produced an independent implementation of the same task, \
+        checked in on their own branches/worktrees listed below. Your job is NOT to pick one — \
+        your job is to synthesize the best possible implementation by combining the strongest \
+        ideas and code from all candidates.\n\n",
+        candidate_sessions.len()
+    ));
+    prompt.push_str("You are working in your own isolated judge worktree. Read each candidate's branch \
+        (git diff against the parent branch) and their consolidation report for intent, then \
+        commit a coherent synthesized implementation on YOUR branch. Your branch is what \
+        will ship; your session will be promoted under the original spec name on acceptance.\n\n");
+
+    prompt.push_str("Source sessions:\n");
+    for source in source_session_ids {
+        prompt.push_str(&format!("- {source}\n"));
+    }
+    prompt.push_str("\nCandidates:\n");
+    for candidate in candidate_sessions {
+        let report = candidate
+            .consolidation_report
+            .as_deref()
+            .unwrap_or("<missing report>");
+        let base = candidate
+            .consolidation_base_session_id
+            .as_deref()
+            .unwrap_or("<missing base>");
+        let report_source = candidate
+            .consolidation_report_source
+            .as_deref()
+            .unwrap_or("agent");
+        let branch = &candidate.branch;
+        let worktree = candidate
+            .worktree_path
+            .to_str()
+            .unwrap_or("<missing worktree>");
+
+        prompt.push_str(&format!(
+            "- name: {}\n  branch: {}\n  worktree_path: {}\n  base_session_id: {}\n  report_source: {}\n",
+            candidate.name, branch, worktree, base, report_source
+        ));
+        if report_source == "auto_stub" {
+            prompt.push_str("  note: This candidate has only an auto-filed stub report.\n");
+        }
+        prompt.push_str(&format!("  report:\n{report}\n\n"));
+    }
+
+    prompt.push_str(
+        "When the synthesized implementation is committed and verified on your branch:\n\
+        1. Run the project's required verification.\n\
+        2. File lucode_consolidation_report from this judge session with `base_session_id` \
+           set to the source session ID you used as the conceptual base.\n\
+        3. Do NOT set `recommended_session_id` for implementation rounds.\n\
+        4. Do NOT call `lucode_promote` directly.\n\n\
+        Lucode will promote this judge session after user confirmation, or immediately when \
+        the round is configured for auto-promotion.",
+    );
+    prompt
+}
+
+fn build_judge_prompt(
+    candidate_sessions: &[Session],
+    source_session_ids: &[String],
+    round_type: &str,
+) -> String {
+    if round_type == "plan" {
+        build_plan_judge_prompt(candidate_sessions, source_session_ids)
+    } else {
+        build_judge_synthesis_prompt(candidate_sessions, source_session_ids)
+    }
 }
 
 async fn diff_summary(req: Request<Incoming>) -> Result<Response<String>, hyper::Error> {
@@ -3177,10 +3435,10 @@ mod tests {
         manager: SessionManager,
         round_id: String,
         version_group_id: String,
-        source_winner: Session,
-        source_loser: Session,
+        _source_winner: Session,
+        _source_loser: Session,
         winning_candidate: Session,
-        losing_candidate: Session,
+        _losing_candidate: Session,
         judge: Session,
     }
 
@@ -3257,7 +3515,7 @@ mod tests {
 
         let winning_candidate = create_round_session(
             &manager,
-            "feature-consolidation-a",
+            "feature_candidate_v1",
             &version_group_id,
             &source_ids,
             &round_id,
@@ -3266,7 +3524,7 @@ mod tests {
         );
         let losing_candidate = create_round_session(
             &manager,
-            "feature-consolidation-b",
+            "feature_candidate_v2",
             &version_group_id,
             &source_ids,
             &round_id,
@@ -3275,7 +3533,7 @@ mod tests {
         );
         let judge = create_round_session(
             &manager,
-            "feature-consolidation-judge",
+            "feature_candidate_judge",
             &version_group_id,
             &source_ids,
             &round_id,
@@ -3336,10 +3594,10 @@ mod tests {
             manager,
             round_id,
             version_group_id,
-            source_winner,
-            source_loser,
+            _source_winner: source_winner,
+            _source_loser: source_loser,
             winning_candidate,
-            losing_candidate,
+            _losing_candidate: losing_candidate,
             judge,
         }
     }
@@ -3497,13 +3755,14 @@ mod tests {
             )
             .expect("create source");
         let source_ids = vec![source.id.clone()];
-        upsert_consolidation_round(
+        upsert_consolidation_round_with_type(
             &db,
             &repo_path,
             round_id,
             version_group_id,
             &source_ids,
             "confirm",
+            "plan",
         )
         .expect("upsert round");
         let candidate = create_round_session(
@@ -3576,13 +3835,14 @@ mod tests {
             )
             .expect("create source");
         let source_ids = vec![source.id.clone()];
-        upsert_consolidation_round(
+        upsert_consolidation_round_with_type(
             &db,
             &repo_path,
             round_id,
             version_group_id,
             &source_ids,
             "confirm",
+            "plan",
         )
         .expect("upsert round");
 
@@ -3762,13 +4022,14 @@ mod tests {
             )
             .expect("create source");
         let source_ids = vec![source.id.clone()];
-        upsert_consolidation_round(
+        upsert_consolidation_round_with_type(
             &db,
             &repo_path,
             round_id,
             version_group_id,
             &source_ids,
             "confirm",
+            "plan",
         )
         .expect("upsert round");
         let candidate = create_round_session(
@@ -3839,25 +4100,18 @@ mod tests {
         .await
         .expect("confirm winner");
 
-        assert_eq!(response.promoted_session_name, fixture.source_winner.name);
-        assert_eq!(
-            response.source_sessions_cancelled,
-            vec![fixture.source_loser.name.clone()]
-        );
+        assert_eq!(response.promoted_session_name, "feature_candidate");
         assert_eq!(
             response.candidate_sessions_cancelled,
             vec![
-                fixture.winning_candidate.name.clone(),
-                fixture.losing_candidate.name.clone(),
+                "feature_candidate_v1".to_string(),
+                "feature_candidate_v2".to_string(),
             ]
         );
-        assert_eq!(
-            response.judge_sessions_cancelled,
-            vec![fixture.judge.name.clone()]
-        );
+        assert_eq!(response.judge_sessions_cancelled, Vec::<String>::new());
         assert_eq!(
             active_version_group_sessions(&fixture.manager, &fixture.version_group_id),
-            vec![fixture.source_winner.name.clone()]
+            vec![fixture.judge.name.clone()]
         );
     }
 
@@ -3866,7 +4120,7 @@ mod tests {
         let fixture = make_consolidation_round_fixture("confirm");
         let db = fixture.db.clone();
         let repo_path = fixture.repo_path.clone();
-        let judge_name = fixture.judge.name.clone();
+        let fail_candidate_name = "feature_candidate_v1".to_string();
 
         let err = confirm_consolidation_winner_with_callbacks(
             &fixture.db,
@@ -3882,10 +4136,10 @@ mod tests {
                 let session_name = session_name.to_string();
                 let db = db.clone();
                 let repo_path = repo_path.clone();
-                let judge_name = judge_name.clone();
+                let fail_name = fail_candidate_name.clone();
                 async move {
-                    if session_name == judge_name {
-                        anyhow::bail!("forced judge cleanup failure");
+                    if session_name == fail_name {
+                        anyhow::bail!("forced candidate cleanup failure");
                     }
                     SessionManager::new(db, repo_path)
                         .fast_cancel_session(&session_name)
@@ -3894,10 +4148,10 @@ mod tests {
             },
         )
         .await
-        .expect_err("judge cleanup should fail");
+        .expect_err("candidate cleanup should fail");
 
         assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
-        assert!(err.1.contains(&fixture.judge.name));
+        assert!(err.1.contains("feature_candidate_v1"));
 
         let round = get_consolidation_round(&fixture.db, &fixture.repo_path, &fixture.round_id)
             .expect("load confirmed round");
@@ -4912,6 +5166,660 @@ mod tests {
 
         let parsed: serde_json::Value = serde_json::from_str(response.body()).expect("valid JSON");
         assert_eq!(parsed["error"], "GitHub CLI (gh) is not installed");
+    }
+
+    fn session_fixture(name: &str) -> Session {
+        Session {
+            id: format!("id-{}", name),
+            name: name.to_string(),
+            display_name: Some(name.to_string()),
+            version_group_id: None,
+            version_number: None,
+            epic_id: None,
+            repository_path: PathBuf::from("/tmp/repo"),
+            repository_name: "repo".to_string(),
+            parent_branch: "main".to_string(),
+            branch: format!("lucode/{}", name),
+            original_parent_branch: None,
+            worktree_path: PathBuf::from(format!("/tmp/{}", name)),
+            status: SessionStatus::Active,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_activity: None,
+            initial_prompt: None,
+            ready_to_merge: false,
+            original_agent_type: Some("claude".to_string()),
+            pending_name_generation: false,
+            was_auto_generated: false,
+            spec_content: None,
+            session_state: SessionState::Running,
+            resume_allowed: true,
+            amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
+            pr_number: None,
+            pr_url: None,
+            pr_state: None,
+            is_consolidation: false,
+            consolidation_sources: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_report_source: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
+            promotion_reason: None,
+            ci_autofix_enabled: false,
+            merged_at: None,
+        }
+    }
+
+    #[test]
+    fn judge_agent_type_defaults_to_app_config_favorite_agent() {
+        let favorite = ConsolidationDefaultFavorite {
+            agent_type: Some("codex".to_string()),
+            preset_id: None,
+        };
+        let agent = resolve_consolidation_judge_agent_type_inner(&favorite, &[]);
+        assert_eq!(agent, "codex");
+    }
+
+    #[test]
+    fn judge_agent_type_resolves_preset_to_first_slot_agent() {
+        let favorite = ConsolidationDefaultFavorite {
+            agent_type: None,
+            preset_id: Some("preset-1".to_string()),
+        };
+        let preset = make_preset(
+            "preset-1",
+            "Preset 1",
+            vec![
+                make_preset_slot("opencode", None),
+                make_preset_slot("claude", None),
+            ],
+        );
+        let agent = resolve_consolidation_judge_agent_type_inner(&favorite, &[preset]);
+        assert_eq!(agent, "opencode");
+    }
+
+    #[test]
+    fn judge_agent_type_falls_back_to_claude_when_favorite_unset_or_preset_missing() {
+        let favorite = ConsolidationDefaultFavorite {
+            agent_type: None,
+            preset_id: Some("missing-id".to_string()),
+        };
+        let agent = resolve_consolidation_judge_agent_type_inner(&favorite, &[]);
+        assert_eq!(agent, "claude");
+
+        let favorite_empty = ConsolidationDefaultFavorite {
+            agent_type: None,
+            preset_id: None,
+        };
+        let agent_empty = resolve_consolidation_judge_agent_type_inner(&favorite_empty, &[]);
+        assert_eq!(agent_empty, "claude");
+    }
+
+    #[test]
+    fn judge_session_name_strips_version_suffix_from_candidate_base() {
+        let cand = session_fixture("feature_v2");
+        let name = build_judge_session_name(&[cand], 1_700_000_000_000).expect("single base");
+        assert_eq!(name, "feature-judge-1700000000000");
+    }
+
+    #[test]
+    fn judge_session_name_handles_unversioned_candidate_name() {
+        let cand = session_fixture("feature");
+        let name = build_judge_session_name(&[cand], 1_700_000_000_000).expect("single base");
+        assert_eq!(name, "feature-judge-1700000000000");
+    }
+
+    #[test]
+    fn judge_session_name_errors_on_mismatched_candidate_bases() {
+        let cands = vec![session_fixture("alpha_v1"), session_fixture("beta_v2")];
+        let err = build_judge_session_name(&cands, 1_700_000_000_000)
+            .expect_err("mismatched bases must error explicitly");
+        assert!(err.contains("same original name"));
+    }
+
+    fn sess_with_paths(name: &str, branch: &str, worktree: &str) -> Session {
+        let mut s = session_fixture(name);
+        s.branch = branch.to_string();
+        s.worktree_path = PathBuf::from(worktree);
+        s
+    }
+
+    #[test]
+    fn synthesis_prompt_includes_every_candidate_branch_and_worktree_path() {
+        let candidates = vec![
+            sess_with_paths("feature_v1", "lucode/feature_v1", ".lucode/worktrees/feature_v1"),
+            sess_with_paths("feature_v2", "lucode/feature_v2", ".lucode/worktrees/feature_v2"),
+        ];
+        let prompt = build_judge_synthesis_prompt(&candidates, &["src_a".into(), "src_b".into()]);
+        assert!(prompt.contains("lucode/feature_v1"));
+        assert!(prompt.contains("lucode/feature_v2"));
+        assert!(prompt.contains(".lucode/worktrees/feature_v1"));
+        assert!(prompt.contains(".lucode/worktrees/feature_v2"));
+    }
+
+    #[test]
+    fn synthesis_prompt_instructs_synthesis_not_selection() {
+        let prompt = build_judge_synthesis_prompt(&[sess_with_paths("x_v1", "b", "w")], &[]);
+        assert!(!prompt.contains("Choose the strongest"));
+        assert!(prompt.contains("synthesize"));
+        assert!(prompt.contains("lucode_consolidation_report"));
+        assert!(prompt.contains("base_session_id"));
+        assert!(prompt.contains("Do NOT set `recommended_session_id` for implementation rounds"));
+        assert!(prompt.contains("Do NOT call `lucode_promote` directly"));
+    }
+
+    #[test]
+    fn plan_judge_prompt_unchanged() {
+        let prompt = build_plan_judge_prompt(&[sess_with_paths("p_v1", "b", "w")], &[]);
+        assert!(prompt.contains("Choose the strongest implementation plan"));
+        assert!(prompt.contains("recommended_session_id"));
+    }
+
+    #[tokio::test]
+    async fn candidate_report_for_implementation_does_not_become_a_verdict() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = create_manager(&repo_path);
+
+        let round_id = "round-1";
+        let group_id = "group-1";
+
+        let s1 = manager.create_session_with_agent(SessionCreationParams {
+            name: "feat_v1",
+            prompt: None,
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(group_id),
+            version_number: Some(1),
+            epic_id: None,
+            agent_type: Some("claude"),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: Some(vec!["source".to_string()]),
+            consolidation_round_id: Some(round_id),
+            consolidation_role: Some("candidate"),
+            consolidation_confirmation_mode: Some("confirm"),
+        }).expect("create s1");
+        
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            round_id,
+            group_id,
+            &["source".to_string()],
+            "confirm",
+            "implementation",
+        )
+        .expect("create round");
+
+        record_candidate_report_verdict(&db, &manager, round_id, &s1).expect("record");
+
+        let round = get_consolidation_round(&db, &repo_path, round_id).expect("get round");
+        assert!(round.recommended_session_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn candidate_report_for_plan_round_still_records_verdict() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = create_manager(&repo_path);
+
+        let round_id = "round-plan";
+        let group_id = "group-plan";
+
+        let s1 = manager.create_session_with_agent(SessionCreationParams {
+            name: "plan_v1",
+            prompt: None,
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(group_id),
+            version_number: Some(1),
+            epic_id: None,
+            agent_type: Some("claude"),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: Some(vec!["source".to_string()]),
+            consolidation_round_id: Some(round_id),
+            consolidation_role: Some("candidate"),
+            consolidation_confirmation_mode: Some("confirm"),
+        }).expect("create s1");
+        
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            round_id,
+            group_id,
+            &["source".to_string()],
+            "confirm",
+            "plan",
+        )
+        .expect("create round");
+
+        record_candidate_report_verdict(&db, &manager, round_id, &s1).expect("record");
+
+        let round = get_consolidation_round(&db, &repo_path, round_id).expect("get round");
+        assert_eq!(round.recommended_session_id.as_deref(), Some(s1.id.as_str()));
+    }
+
+    #[tokio::test]
+    async fn promote_judge_session_renames_display_name_to_version_group_root() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = create_manager(&repo_path);
+
+        let group_id = "group-1";
+        let round_id = "round-1";
+
+        let c1 = manager.create_session_with_agent(SessionCreationParams {
+            name: "feat_v1",
+            prompt: None,
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(group_id),
+            version_number: Some(1),
+            epic_id: None,
+            agent_type: Some("claude"),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: None,
+            consolidation_round_id: Some(round_id),
+            consolidation_role: Some("candidate"),
+            consolidation_confirmation_mode: Some("confirm"),
+        }).expect("create c1");
+
+        let judge_raw_name = "feat-judge-12345";
+        let judge = manager.create_session_with_agent(SessionCreationParams {
+            name: judge_raw_name,
+            prompt: None,
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(group_id),
+            version_number: None,
+            epic_id: None,
+            agent_type: Some("claude"),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: Some(vec![c1.name.clone()]),
+            consolidation_round_id: Some(round_id),
+            consolidation_role: Some("judge"),
+            consolidation_confirmation_mode: Some("confirm"),
+        }).expect("create judge");
+
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            round_id,
+            group_id,
+            &[c1.id.clone()],
+            "confirm",
+            "implementation",
+        )
+        .expect("create round");
+
+        db.set_project_branch_prefix(&repo_path, "lucode").expect("set prefix");
+        
+        let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
+        repo.update_consolidation_round_status(round_id, "awaiting_confirmation").expect("set status");
+
+        let mut refresh_called = false;
+        let mut cancelled_sessions = Vec::new();
+
+        promote_judge_session(
+            &db,
+            &manager,
+            &get_consolidation_round(&db, &repo_path, round_id).unwrap(),
+            "user",
+            &mut |_| { refresh_called = true; Ok(()) },
+            &mut |name: &str| { 
+                cancelled_sessions.push(name.to_string());
+                Box::pin(async { Ok(()) })
+            },
+        ).await.expect("promote success");
+
+        assert_eq!(judge.name, judge_raw_name);
+        let updated_judge = manager.get_session(judge_raw_name).expect("get judge");
+        assert_eq!(updated_judge.display_name.as_deref(), Some("feat"));
+        assert_eq!(updated_judge.branch, "lucode/feat");
+        assert!(cancelled_sessions.contains(&c1.name));
+        
+        let round = get_consolidation_round(&db, &repo_path, round_id).expect("get round");
+        assert_eq!(round.status, "promoted");
+    }
+
+    #[tokio::test]
+    async fn confirm_consolidation_implementation_promotes_judge_session() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = create_manager(&repo_path);
+
+        let group_id = "group-1";
+        let round_id = "round-1";
+
+        let c1 = manager.create_session_with_agent(SessionCreationParams {
+            name: "feat_v1",
+            prompt: None,
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(group_id),
+            version_number: Some(1),
+            epic_id: None,
+            agent_type: Some("claude"),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: None,
+            consolidation_round_id: Some(round_id),
+            consolidation_role: Some("candidate"),
+            consolidation_confirmation_mode: Some("confirm"),
+        }).expect("create c1");
+
+        let judge_raw_name = "feat-judge-12345";
+        let judge = manager.create_session_with_agent(SessionCreationParams {
+            name: judge_raw_name,
+            prompt: None,
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(group_id),
+            version_number: None,
+            epic_id: None,
+            agent_type: Some("claude"),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: Some(vec![c1.name.clone()]),
+            consolidation_round_id: Some(round_id),
+            consolidation_role: Some("judge"),
+            consolidation_confirmation_mode: Some("confirm"),
+        }).expect("create judge");
+
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            round_id,
+            group_id,
+            &[c1.id.clone()],
+            "confirm",
+            "implementation",
+        )
+        .expect("create round");
+
+        db.set_project_branch_prefix(&repo_path, "lucode").expect("set prefix");
+        
+        let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
+        repo.update_consolidation_round_status(round_id, "awaiting_confirmation").expect("set status");
+
+        let mut refresh_called = false;
+        let mut cancelled_sessions = Vec::new();
+
+        confirm_consolidation_winner_with_callbacks(
+            &db,
+            &manager,
+            ConfirmConsolidationWinnerParams {
+                round_id,
+                winner_session_id: &judge.id,
+                override_reason: None,
+                confirmed_by: "user",
+            },
+            &mut |_| { refresh_called = true; Ok(()) },
+            &mut |name: &str| { 
+                cancelled_sessions.push(name.to_string());
+                Box::pin(async { Ok(()) })
+            },
+        ).await.expect("confirm success");
+
+        let updated_judge = manager.get_session(judge_raw_name).expect("get judge");
+        assert_eq!(updated_judge.display_name.as_deref(), Some("feat"));
+        assert_eq!(updated_judge.branch, "lucode/feat");
+        assert!(cancelled_sessions.contains(&c1.name));
+    }
+
+    #[tokio::test]
+    async fn confirm_consolidation_implementation_ignores_winner_id_pointing_at_candidate() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = create_manager(&repo_path);
+
+        let group_id = "group-1";
+        let round_id = "round-1";
+
+        let c1 = manager.create_session_with_agent(SessionCreationParams {
+            name: "feat_v1",
+            prompt: None,
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(group_id),
+            version_number: Some(1),
+            epic_id: None,
+            agent_type: Some("claude"),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: None,
+            consolidation_round_id: Some(round_id),
+            consolidation_role: Some("candidate"),
+            consolidation_confirmation_mode: Some("confirm"),
+        }).expect("create c1");
+
+        let judge_raw_name = "feat-judge-12345";
+        let judge = manager.create_session_with_agent(SessionCreationParams {
+            name: judge_raw_name,
+            prompt: None,
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(group_id),
+            version_number: None,
+            epic_id: None,
+            agent_type: Some("claude"),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: Some(vec![c1.name.clone()]),
+            consolidation_round_id: Some(round_id),
+            consolidation_role: Some("judge"),
+            consolidation_confirmation_mode: Some("confirm"),
+        }).expect("create judge");
+
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            round_id,
+            group_id,
+            &[c1.id.clone()],
+            "confirm",
+            "implementation",
+        )
+        .expect("create round");
+
+        db.set_project_branch_prefix(&repo_path, "lucode").expect("set prefix");
+        
+        let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
+        repo.update_consolidation_round_status(round_id, "awaiting_confirmation").expect("set status");
+
+        confirm_consolidation_winner_with_callbacks(
+            &db,
+            &manager,
+            ConfirmConsolidationWinnerParams {
+                round_id,
+                winner_session_id: &c1.id, // Pointing at candidate
+                override_reason: None,
+                confirmed_by: "user",
+            },
+            &mut |_| Ok(()),
+            &mut |_: &str| Box::pin(async { Ok(()) }),
+        ).await.expect("confirm success");
+
+        assert_eq!(judge.name, judge_raw_name);
+        let updated_judge = manager.get_session(judge_raw_name).expect("get judge");
+        assert_eq!(updated_judge.display_name.as_deref(), Some("feat"));
+    }
+
+    #[tokio::test]
+    async fn judge_report_auto_promote_triggers_judge_promotion_path_for_implementation() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = create_manager(&repo_path);
+
+        let group_id = "group-1";
+        let round_id = "round-1";
+
+        let c1 = manager.create_session_with_agent(SessionCreationParams {
+            name: "feat_v1",
+            prompt: None,
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(group_id),
+            version_number: Some(1),
+            epic_id: None,
+            agent_type: Some("claude"),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: None,
+            consolidation_round_id: Some(round_id),
+            consolidation_role: Some("candidate"),
+            consolidation_confirmation_mode: Some("auto-promote"),
+        }).expect("create c1");
+
+        let judge_raw_name = "feat-judge-12345";
+        let judge = manager.create_session_with_agent(SessionCreationParams {
+            name: judge_raw_name,
+            prompt: None,
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(group_id),
+            version_number: None,
+            epic_id: None,
+            agent_type: Some("claude"),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: Some(vec![c1.name.clone()]),
+            consolidation_round_id: Some(round_id),
+            consolidation_role: Some("judge"),
+            consolidation_confirmation_mode: Some("auto-promote"),
+        }).expect("create judge");
+
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            round_id,
+            group_id,
+            &[c1.id.clone()],
+            "auto-promote",
+            "implementation",
+        )
+        .expect("create round");
+
+        db.set_project_branch_prefix(&repo_path, "lucode").expect("set prefix");
+        
+        let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
+        repo.update_consolidation_round_status(round_id, "awaiting_confirmation").expect("set status");
+
+        let _payload = serde_json::json!({
+            "report": "synthesized best of both",
+            "base_session_id": "source"
+        });
+        
+        // This simulates what update_consolidation_report does
+        let winner_id = judge.id.as_str();
+        confirm_consolidation_winner_with_callbacks(
+            &db,
+            &manager,
+            ConfirmConsolidationWinnerParams {
+                round_id,
+                winner_session_id: winner_id,
+                override_reason: None,
+                confirmed_by: "judge",
+            },
+            &mut |_| Ok(()),
+            &mut |_: &str| Box::pin(async { Ok(()) }),
+        ).await.expect("auto-promote confirm success");
+
+        let updated_judge = manager.get_session(judge_raw_name).expect("get judge");
+        assert_eq!(updated_judge.display_name.as_deref(), Some("feat"));
+        
+        let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
+        let round = repo.get_consolidation_round(round_id).expect("get round");
+        assert_eq!(round.status, "promoted");
+    }
+
+    #[tokio::test]
+    async fn manual_trigger_returns_existing_synthesis_judge_without_duplicate() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = create_manager(&repo_path);
+
+        let group_id = "group-1";
+        let round_id = "round-1";
+
+        let c1 = manager.create_session_with_agent(SessionCreationParams {
+            name: "feat_v1",
+            prompt: None,
+            base_branch: Some("main"),
+            custom_branch: None,
+            use_existing_branch: false,
+            sync_with_origin: false,
+            was_auto_generated: false,
+            version_group_id: Some(group_id),
+            version_number: Some(1),
+            epic_id: None,
+            agent_type: Some("claude"),
+            pr_number: None,
+            is_consolidation: true,
+            consolidation_source_ids: None,
+            consolidation_round_id: Some(round_id),
+            consolidation_role: Some("candidate"),
+            consolidation_confirmation_mode: Some("confirm"),
+        }).expect("create c1");
+
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            round_id,
+            group_id,
+            &[c1.id.clone()],
+            "confirm",
+            "implementation",
+        )
+        .expect("create round");
+
+        db.set_project_branch_prefix(&repo_path, "lucode").expect("set prefix");
+
+        let (judge1, created1) = ensure_synthesis_judge_session(None, &db, &manager, &get_consolidation_round(&db, &repo_path, round_id).unwrap()).await.expect("first trigger");
+        assert!(created1);
+
+        let (judge2, created2) = ensure_synthesis_judge_session(None, &db, &manager, &get_consolidation_round(&db, &repo_path, round_id).unwrap()).await.expect("second trigger");
+        assert!(!created2);
+        assert_eq!(judge1.id, judge2.id);
     }
 }
 
@@ -7260,6 +8168,20 @@ fn record_candidate_report_verdict(
     round_id: &str,
     candidate: &Session,
 ) -> Result<(), (StatusCode, String)> {
+    let round = match get_consolidation_round(db, manager.repo_path(), round_id) {
+        Ok(round) => round,
+        Err(err) => {
+            return Err((
+                StatusCode::NOT_FOUND,
+                format!("Consolidation round '{round_id}' not found: {err}"),
+            ));
+        }
+    };
+
+    if round.round_type == "implementation" {
+        return Ok(());
+    }
+
     let ready_to_merge = manager.mark_session_ready(&candidate.name).map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -7415,8 +8337,8 @@ pub(crate) async fn maybe_auto_start_consolidation_judge(
         return false;
     }
 
-    match create_and_start_judge_session(app, db, manager, &round).await {
-        Ok(_) => true,
+    match ensure_synthesis_judge_session(Some(app), db, manager, &round).await {
+        Ok((_, created)) => created,
         Err(e) => {
             log::warn!("Auto-judge check: failed to start judge for round '{round_id}': {e}");
             false
@@ -7442,11 +8364,8 @@ where
         return Err("No consolidation candidates found for this round".to_string());
     }
 
-    let judge_name = format!(
-        "{}-judge-{}",
-        candidate_sessions[0].name,
-        chrono::Utc::now().timestamp_millis()
-    );
+    let judge_name =
+        build_judge_session_name(&candidate_sessions, chrono::Utc::now().timestamp_millis())?;
     let candidate_names = candidate_sessions
         .iter()
         .map(|session| session.name.clone())
@@ -7456,9 +8375,7 @@ where
         &round.source_session_ids,
         &round.round_type,
     );
-    let agent_type = candidate_sessions
-        .iter()
-        .find_map(|session| session.original_agent_type.clone());
+    let agent_type = Some(resolve_consolidation_judge_agent_type(db).await);
 
     let session = manager
         .create_session_with_agent(lucode::domains::sessions::service::SessionCreationParams {
@@ -7510,20 +8427,61 @@ where
 }
 
 async fn create_and_start_judge_session(
-    app: &tauri::AppHandle,
+    app: Option<&tauri::AppHandle>,
     db: &Database,
     manager: &SessionManager,
     round: &ConsolidationRoundRecord,
 ) -> Result<Session, String> {
-    let app_for_refresh = app.clone();
-    create_and_start_judge_session_with_launcher(
-        db,
-        manager,
-        round,
-        |params| schaltwerk_core_start_session_agent_with_restart(app.clone(), params),
-        move |reason| request_sessions_refresh(&app_for_refresh, reason),
-    )
-    .await
+    match app {
+        Some(handle) => {
+            let app_for_refresh = handle.clone();
+            create_and_start_judge_session_with_launcher(
+                db,
+                manager,
+                round,
+                |params| schaltwerk_core_start_session_agent_with_restart(handle.clone(), params),
+                move |reason| request_sessions_refresh(&app_for_refresh, reason),
+            )
+            .await
+        }
+        None => {
+            create_and_start_judge_session_with_launcher(
+                db,
+                manager,
+                round,
+                |_params| async { Ok::<String, String>(String::new()) },
+                |_reason| {},
+            )
+            .await
+        }
+    }
+}
+
+fn active_judge_sessions_for_round(round_sessions: &[Session]) -> Vec<Session> {
+    round_sessions
+        .iter()
+        .filter(|s| {
+            s.status == SessionStatus::Active && s.consolidation_role.as_deref() == Some("judge")
+        })
+        .cloned()
+        .collect()
+}
+
+async fn ensure_synthesis_judge_session(
+    app: Option<&tauri::AppHandle>,
+    db: &Database,
+    manager: &SessionManager,
+    round: &ConsolidationRoundRecord,
+) -> Result<(Session, bool), String> {
+    let round_sessions = list_round_sessions(manager, &round.id).map_err(|err| err.to_string())?;
+    if let Some(existing) = active_judge_sessions_for_round(&round_sessions)
+        .into_iter()
+        .next()
+    {
+        return Ok((existing, false));
+    }
+    let judge = create_and_start_judge_session(app, db, manager, round).await?;
+    Ok((judge, true))
 }
 
 pub(crate) async fn confirm_consolidation_winner_inner(
@@ -7602,20 +8560,21 @@ where
     })?;
 
     let candidate_sessions = candidate_sessions_for_round(&round_sessions);
-    let winner = candidate_sessions
-        .iter()
-        .find(|session| session.id == winner_session_id || session.name == winner_session_id)
-        .cloned()
-        .ok_or_else(|| {
-            (
-                StatusCode::BAD_REQUEST,
-                format!(
-                    "Winner session '{winner_session_id}' is not a candidate in round '{round_id}'"
-                ),
-            )
-        })?;
 
     if round.round_type == "plan" {
+        let winner = candidate_sessions
+            .iter()
+            .find(|session| session.id == winner_session_id || session.name == winner_session_id)
+            .cloned()
+            .ok_or_else(|| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!(
+                        "Winner session '{winner_session_id}' is not a candidate in round '{round_id}'"
+                    ),
+                )
+            })?;
+
         if round.status != "awaiting_confirmation" {
             return Err((
                 StatusCode::BAD_REQUEST,
@@ -7721,6 +8680,38 @@ where
             judge_sessions_cancelled,
         });
     }
+
+    if round.status != "awaiting_confirmation" {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Consolidation round '{round_id}' has no judge recommendation to confirm yet"),
+        ));
+    }
+
+    if round.round_type == "implementation" {
+        return promote_judge_session(
+            db,
+            manager,
+            &round,
+            confirmed_by,
+            &mut refresh_fn,
+            &mut cancel_fn,
+        )
+        .await;
+    }
+
+    let winner = candidate_sessions
+        .iter()
+        .find(|session| session.id == winner_session_id || session.name == winner_session_id)
+        .cloned()
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "Winner session '{winner_session_id}' is not a candidate in round '{round_id}'"
+                ),
+            )
+        })?;
 
     let base_session_id = winner
         .consolidation_base_session_id
@@ -7868,7 +8859,7 @@ pub(crate) async fn trigger_consolidation_judge_inner(
         ));
     }
 
-    let session = create_and_start_judge_session(app, &db, &manager, &round)
+    let (session, _) = ensure_synthesis_judge_session(Some(app), &db, &manager, &round)
         .await
         .map_err(|message| (StatusCode::INTERNAL_SERVER_ERROR, message))?;
 
@@ -8064,7 +9055,7 @@ async fn update_consolidation_report(
     match prepared.action {
         PostReportAction::None => {}
         PostReportAction::StartJudge { round } => {
-            match create_and_start_judge_session(&app, &prepared.db, &prepared.manager, &round)
+            match create_and_start_judge_session(Some(&app), &prepared.db, &prepared.manager, &round)
                 .await
             {
                 Ok(_) => {

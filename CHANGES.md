@@ -27,6 +27,16 @@ The Improve Plan flow was already wired through MCP (`lucode_improve_plan` / `PO
 - i18n strings under `sessionActions.improvePlan*` and `specEditor.improvePlan*` in `en.json`, `zh.json`, and `types.ts`.
 - Frontend test coverage in `SessionActions.test.tsx` (renders/invokes/disables/loading/hidden) and `SpecEditor.test.tsx` (starts, hidden on draft, disabled when active). The previously-broken `SpecWorkspacePanel.middleClick.test.tsx` mock path (`../../plans/SpecEditor` → `../SpecEditor`) is corrected so the test no longer bypasses its own `vi.mock`.
 
+## Refactored Judge Step for implementation rounds
+
+The consolidation judge for implementation rounds now synthesizes a new best-of implementation instead of picking a candidate session. The judge session itself is promoted—under the original spec name—on acceptance. Candidate reports no longer act as implementation winners and serve only as completion signals to trigger the judge.
+
+- Judge agent type is now sourced from the global `app_config.consolidation_default_agent_type` setting.
+- Judge creation is idempotent across report, cancellation, and manual triggers.
+- Frontend displays "Judge synthesizing" state and "Judge ready — promote {rootName}" flow.
+- Workflow and candidate prompts updated to reflect the synthesis-based consolidation.
+- Plan rounds (`round_type == "plan"`) remain unchanged using the analyst-pick flow.
+
 ## Settings: default agent / preset for consolidation
 
 Launching a consolidation round used to leave the user re-picking the favorite in `NewSessionModal` every time, and the judge's agent was inferred from whichever candidate was created first. The project-general settings pane now carries a persisted "Default consolidation agent" that accepts either a raw agent or a preset and is applied at candidate launch; the judge keeps inheriting from candidate[0], which now reflects the stored default.

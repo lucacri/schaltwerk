@@ -215,13 +215,18 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   const activeJudge = sortedJudgeSessions[0]
   const latestJudge = sortedJudgeSessions
     .find(v => v.session.info.consolidation_recommended_session_id)
+  const isSynthesisJudgeReady = Boolean(latestJudge && latestJudge.session.info.consolidation_recommended_session_id === latestJudge.session.info.session_id)
+  const isSynthesisJudgeActive = Boolean(activeJudge && !latestJudge)
+  
   const latestReportedCandidate = sortedReportedCandidates
     .find(v => {
       const report = v.session.info.consolidation_report?.trim()
       const baseSessionId = v.session.info.consolidation_base_session_id?.trim()
       return Boolean(report && baseSessionId)
     })
-  const recommendationSource = latestJudge ?? latestReportedCandidate
+  
+  // Implementation rounds only confirm through the judge
+  const recommendationSource = latestJudge ?? (!isSynthesisJudgeActive ? latestReportedCandidate : null)
   const focusJudge = latestJudge ?? activeJudge ?? latestReportedCandidate
   const activeRoundId = focusJudge?.session.info.consolidation_round_id
     ?? consolidationCandidates[0]?.session.info.consolidation_round_id
@@ -433,8 +438,9 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     ...consolidationCandidates,
     ...sourceVersions,
   ]
-  const sourceListRows = recommendationLabel ? sourceVersions : visibleVersionRows
-  const consolidationLaneRows = recommendationLabel ? consolidationCandidates : []
+  const showConsolidationLane = Boolean(recommendationLabel || isSynthesisJudgeActive)
+  const sourceListRows = showConsolidationLane ? sourceVersions : visibleVersionRows
+  const consolidationLaneRows = showConsolidationLane ? consolidationCandidates : []
 
   return (
     <div className="mb-2 relative">
@@ -533,7 +539,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                 )}
                 {activeRoundId && onTriggerConsolidationJudge && renderHeaderAction(
                   'trigger-consolidation-judge-button',
-                  latestJudge ? 'Re-run consolidation judge' : 'Run consolidation judge',
+                  latestJudge ? 'Re-run synthesis judge' : 'Run synthesis judge',
                   <VscRefresh className="h-3.5 w-3.5" aria-hidden="true" />,
                   () => runConsolidationAction('trigger-judge', () => onTriggerConsolidationJudge(
                     activeRoundId,
@@ -547,7 +553,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                 )}
                 {activeRoundId && confirmWinnerSessionId && onConfirmConsolidationWinner && renderHeaderAction(
                   'confirm-consolidation-winner-button',
-                  selectedCandidate ? 'Confirm selected consolidation winner' : 'Confirm judge recommendation',
+                  isSynthesisJudgeReady ? `Promote ${group.baseName}` : (selectedCandidate ? 'Confirm selected consolidation winner' : 'Confirm judge recommendation'),
                   <VscCheck className="h-3.5 w-3.5" aria-hidden="true" />,
                   () => runConsolidationAction('confirm-winner-header', () => onConfirmConsolidationWinner(activeRoundId, confirmWinnerSessionId)),
                   {
@@ -582,7 +588,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
               </div>
             )}
 
-            {recommendationLabel && (
+            {showConsolidationLane && (
               <div className={clsx(sourceListRows.length > 0 && 'mt-3')}>
                 <div
                   data-testid="version-group-consolidation-lane"
@@ -593,66 +599,85 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                   }}
                 >
                   <div
-                    className="mb-2"
+                    className="mb-2 flex items-center justify-between"
                     style={{
                       ...sessionText.badge,
                       color: 'var(--color-accent-violet)',
                     }}
                   >
-                    CONSOLIDATION
-                  </div>
-                  <div
-                    data-testid="version-group-judge-recommendation"
-                    className="flex items-center justify-between gap-3 rounded-md border px-2.5 py-2"
-                    style={{
-                      ...sessionText.meta,
-                      borderColor: 'var(--color-accent-violet-border)',
-                      backgroundColor: 'var(--color-accent-violet-bg)',
-                      color: 'var(--color-text-secondary)',
-                    }}
-                  >
-                    <span>
-                      Judge recommends{' '}
-                      <span style={{ color: 'var(--color-text-primary)' }}>
-                        {recommendationLabel}
+                    <span>CONSOLIDATION</span>
+                    {isSynthesisJudgeActive && (
+                      <span className="flex items-center gap-1.5 opacity-80">
+                        <VscRefresh className="h-3 w-3 animate-spin" />
+                        Judge is synthesizing...
                       </span>
-                    </span>
-                    {activeRoundId && confirmWinnerSessionId && onConfirmConsolidationWinner && (() => {
-                      const isBannerBusy = busyActionId === 'confirm-winner-banner'
-                      const isBannerDisabled = busyActionId !== null
-                      return (
-                        <button
-                          type="button"
-                          data-testid="confirm-consolidation-winner-banner-button"
-                          disabled={isBannerDisabled}
-                          aria-busy={isBannerBusy}
-                          className="relative inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                          title="Confirm judge recommendation"
-                          style={{
-                            backgroundColor: 'var(--color-bg-hover)',
-                            color: 'var(--color-accent-green)',
-                            borderColor: 'var(--color-border-subtle)',
-                          }}
-                          onClick={() => runConsolidationAction('confirm-winner-banner', () => onConfirmConsolidationWinner(activeRoundId, confirmWinnerSessionId))}
-                        >
-                          <span className={clsx('inline-flex items-center justify-center', isBannerBusy && 'invisible')}>
-                            <VscCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                          </span>
-                          {isBannerBusy && (
-                            <span
-                              data-testid="consolidation-action-spinner"
-                              aria-hidden="true"
-                              className="absolute h-3.5 w-3.5 rounded-full border-2 border-solid animate-spin"
-                              style={{
-                                borderColor: 'var(--color-accent-green)',
-                                borderTopColor: 'transparent',
-                              }}
-                            />
-                          )}
-                        </button>
-                      )
-                    })()}
+                    )}
                   </div>
+                  {recommendationLabel && (
+                    <div
+                      data-testid="version-group-judge-recommendation"
+                      className="flex items-center justify-between gap-3 rounded-md border px-2.5 py-2"
+                      style={{
+                        ...sessionText.meta,
+                        borderColor: 'var(--color-accent-violet-border)',
+                        backgroundColor: 'var(--color-accent-violet-bg)',
+                        color: 'var(--color-text-secondary)',
+                      }}
+                    >
+                      <span>
+                        {isSynthesisJudgeReady ? (
+                          <>
+                            Judge ready — promote{' '}
+                            <span style={{ color: 'var(--color-text-primary)' }}>
+                              {group.baseName}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            Judge recommends{' '}
+                            <span style={{ color: 'var(--color-text-primary)' }}>
+                              {recommendationLabel}
+                            </span>
+                          </>
+                        )}
+                      </span>
+                      {activeRoundId && confirmWinnerSessionId && onConfirmConsolidationWinner && (() => {
+                        const isBannerBusy = busyActionId === 'confirm-winner-banner'
+                        const isBannerDisabled = busyActionId !== null
+                        return (
+                          <button
+                            type="button"
+                            data-testid="confirm-consolidation-winner-banner-button"
+                            disabled={isBannerDisabled}
+                            aria-busy={isBannerBusy}
+                            className="relative inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                            title="Confirm judge recommendation"
+                            style={{
+                              backgroundColor: 'var(--color-bg-hover)',
+                              color: 'var(--color-accent-green)',
+                              borderColor: 'var(--color-border-subtle)',
+                            }}
+                            onClick={() => runConsolidationAction('confirm-winner-banner', () => onConfirmConsolidationWinner(activeRoundId, confirmWinnerSessionId))}
+                          >
+                            <span className={clsx('inline-flex items-center justify-center', isBannerBusy && 'invisible')}>
+                              <VscCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                            </span>
+                            {isBannerBusy && (
+                              <span
+                                data-testid="consolidation-action-spinner"
+                                aria-hidden="true"
+                                className="absolute h-3.5 w-3.5 rounded-full border-2 border-solid animate-spin"
+                                style={{
+                                  borderColor: 'var(--color-accent-green)',
+                                  borderTopColor: 'transparent',
+                                }}
+                              />
+                            )}
+                          </button>
+                        )
+                      })()}
+                    </div>
+                  )}
                   {consolidationLaneRows.length > 0 && (
                     <div data-testid="version-group-consolidation-candidates" className="mt-2 space-y-1.5">
                       {consolidationLaneRows.map((version, versionIndex) => (

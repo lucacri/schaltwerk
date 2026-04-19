@@ -588,6 +588,15 @@ impl SettingsService {
         self.settings.agent_presets.clone()
     }
 
+    pub fn resolve_preset_first_slot_agent(&self, preset_id: &str) -> Option<String> {
+        self.settings
+            .agent_presets
+            .iter()
+            .find(|p| p.id == preset_id)
+            .and_then(|p| p.slots.first())
+            .map(|s| s.agent_type.clone())
+    }
+
     pub fn set_agent_presets(
         &mut self,
         presets: Vec<AgentPreset>,

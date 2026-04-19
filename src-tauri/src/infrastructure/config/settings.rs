@@ -385,6 +385,10 @@ impl SettingsManager {
         self.service.get_agent_presets()
     }
 
+    pub fn resolve_preset_first_slot_agent(&self, preset_id: &str) -> Option<String> {
+        self.service.resolve_preset_first_slot_agent(preset_id)
+    }
+
     pub fn set_agent_presets(
         &mut self,
         presets: Vec<crate::domains::settings::AgentPreset>,

@@ -200,7 +200,7 @@
       "specClarificationAgent": "Spec clarification agent",
       "specClarificationAgentDesc": "Choose which installed agent opens when you clarify specs in this project.",
       "consolidationDefaultAgent": "Default consolidation agent",
-      "consolidationDefaultAgentDesc": "Pre-select this agent or preset when launching a consolidation round. Applies to candidates; the judge inherits from the first candidate.",
+      "consolidationDefaultAgentDesc": "Agent used for the synthesis judge. Candidate launches keep using it as the default too.",
       "branchPrefix": "Branch Prefix",
       "branchPrefixDesc": "Configure the default Git branch prefix used when creating new Lucode sessions. Leave empty to use session names directly as branch names. Use slashes to nest groups. Spaces will be converted to hyphens automatically.",
       "worktreeBaseDirectory": "Worktree Base Directory",

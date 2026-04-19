@@ -4,7 +4,7 @@ description: Compare parallel Lucode sessions for the same spec and promote the 
 
 # Consolidate Lucode Sessions
 
-Use this workflow when multiple Lucode sessions worked on the same spec and you need to choose the best implementation, merge the strongest ideas from sibling branches, and promote a dedicated consolidation session as the winner.
+Use this workflow when multiple Lucode sessions worked on the same spec and you need to contribute your strongest implementation to a consolidation round. Lucode will eventually use a synthesis judge to produce the final version that ships.
 
 ## Arguments
 
@@ -40,32 +40,32 @@ For the chosen group, show the session names and branch names. Ask for any custo
 
 ## Step 5: Use the current consolidation session as the destination
 
-Lucode should create a dedicated consolidation session before these instructions run.
+Lucode should create a dedicated candidate session before these instructions run.
 
-Apply all consolidation changes into the current session branch. Leave the source sessions unchanged so `lucode_promote` can compare against them later.
+Apply all consolidation changes into the current session branch. Leave the source sessions unchanged.
 
 ## Step 6: Consolidate into the current session branch
 
-Use the current consolidation session branch as the destination branch.
+Use the current session branch as the destination branch.
 
 1. Review every sibling branch with `git diff main...{branch}`.
 2. Compare each branch against the recovered spec context, not just code style.
-3. Pick the strongest branch as the conceptual base, then apply its best ideas into the current consolidation session branch. Remember which source session was the base — its session ID becomes the `winner_session_id` you pass to `lucode_promote`.
+3. Pick one branch as your conceptual base, then apply its best ideas into your current session branch. Remember which source session was the base — its session ID becomes the `base_session_id` you pass to `lucode_consolidation_report`.
 4. Incorporate any valuable improvements from the remaining branches.
 5. Run the project's verification commands.
-6. **Rebase the consolidation branch onto the latest trunk before promoting.** Rebasing now prevents a later merge attempt from hitting conflicts that would otherwise require a fresh agent run to resolve — at a point where the consolidation context is gone.
-   1. From inside the consolidation session worktree, fetch the latest trunk. Prefer the tracked remote (`git fetch origin main`); if no remote tracking branch exists, fall back to the local `main`.
-   2. Rebase the current consolidation branch onto `origin/main` (`git rebase origin/main`), or onto local `main` (`git rebase main`) if no remote is tracked.
-   3. If the rebase is clean, re-run the project's verification commands. They must pass before proceeding to promote.
-   4. If the rebase produces conflicts, resolve them in the worktree using the full context of what was just consolidated from every sibling branch. Use `git add` for resolved paths, then `git rebase --continue`. Repeat until the rebase finishes. After a clean finish, re-run the project's verification commands. They must pass before proceeding to promote.
-   5. Do not call `lucode_promote` until the rebase is clean **and** verification is green on the rebased branch.
+6. **Rebase your candidate branch onto the latest trunk before filing your report.** Rebasing now ensures your candidate implementation is current and clean for the final synthesis judge.
+   1. From inside the session worktree, fetch the latest trunk. Prefer the tracked remote (`git fetch origin main`); if no remote tracking branch exists, fall back to the local `main`.
+   2. Rebase the current branch onto `origin/main` (`git rebase origin/main`), or onto local `main` (`git rebase main`) if no remote is tracked.
+   3. If the rebase is clean, re-run the project's verification commands. They must pass before proceeding.
+   4. If the rebase produces conflicts, resolve them in the worktree using the full context of what you just consolidated. Use `git add` for resolved paths, then `git rebase --continue`. Repeat until the rebase finishes. After a clean finish, re-run the project's verification commands. They must pass before proceeding.
+   5. Do not file your report until the rebase is clean **and** verification is green on the rebased branch.
 7. Call `lucode_consolidation_report` with:
    - `session_name`: the current consolidation session name
    - `report`: a structured explanation of which candidate base you chose, what you kept from each sibling, and any trade-offs
    - `base_session_id`: the session ID of the source version you chose as the strongest base (take it from the session list that was injected into your prompt)
 
-Lucode uses the filed report as the durable completion signal for the round. When every candidate files a report, Lucode will trigger the judge automatically by default, or the user can trigger and confirm it from the UI. Do not call `lucode_promote` directly for a multi-agent consolidation round. If report filing fails, surface that clearly.
+Lucode uses the filed report as the durable completion signal for your candidate session. When every candidate files a report, Lucode will start a synthesis judge by default. Do not call `lucode_promote` directly.
 
 ## Step 7: Report
 
-Report the promoted session name, the promotion reason, and any cleanup failures. Do not reference Lucode slash commands that may not exist in the current agent.
+Report that your candidate implementation is ready and you have filed your report. Do not reference Lucode slash commands that may not exist in the current agent.

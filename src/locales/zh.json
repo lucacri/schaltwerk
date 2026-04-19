@@ -200,7 +200,7 @@
       "specClarificationAgent": "规格澄清代理",
       "specClarificationAgentDesc": "选择在此项目中澄清规格时启动的已安装代理。",
       "consolidationDefaultAgent": "默认合并代理",
-      "consolidationDefaultAgentDesc": "启动合并轮次时预选此代理或预设。应用于候选；裁判从第一个候选继承。",
+      "consolidationDefaultAgentDesc": "用于合成裁判的代理。候选启动也将继续默认使用它。",
       "branchPrefix": "分支前缀",
       "branchPrefixDesc": "配置创建新 Lucode 会话时使用的默认 Git 分支前缀。留空将直接使用会话名称作为分支名称。使用斜杠嵌套分组。空格将自动转换为连字符。",
       "mergeDefaults": "合并默认设置",

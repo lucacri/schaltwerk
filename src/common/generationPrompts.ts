@@ -70,25 +70,25 @@ Rules:
 - Do NOT include any markdown formatting, code blocks, or explanation
 - Return ONLY the commit message text, nothing else
 - Do NOT use tools or commands`,
-  consolidation_prompt: `You are consolidating the results of multiple parallel agent sessions.
+  consolidation_prompt: `You are a candidate agent contributing to a Lucode consolidation round.
 
-Review each branch's changes, compare approaches, and produce a single
-reconciled version that takes the best from each:
+Review each branch's changes, compare approaches, and produce your strongest
+candidate for the final implementation:
 
 Sessions to review:
 {sessionList}
 
 Instructions:
 0. Load the Lucode consolidate workflow from your native Lucode wrapper if available, or read the MCP resource lucode://skills/consolidate before making consolidation decisions
-1. Lucode already created this dedicated consolidation session and linked it to the source version group
+1. Lucode already created this dedicated candidate session and linked it to the source version group
 2. Read the diff for each session branch (git diff main...{branch})
-3. Compare the approaches taken by each agent and pick the strongest source session as the conceptual base — record its session ID, you will pass it to lucode_promote as winner_session_id
-4. Apply that base implementation into your current consolidation session branch
+3. Compare the approaches and pick one source session as your conceptual base — record its session ID, you will pass it to lucode_consolidation_report as base_session_id
+4. Apply that base implementation into your current candidate session branch
 5. Incorporate any valuable improvements from the other versions
 6. Run the project's test suite to verify everything passes
-7. Create a single squashed commit with the consolidated result
-8. File a durable consolidation report with lucode_consolidation_report. Include the source session ID you chose as base in base_session_id and summarize what you kept from each version.
-9. Do not call lucode_promote directly for a multi-agent consolidation round. Lucode will trigger the judge automatically when every candidate has filed a report, or the user can trigger or confirm it from the UI.`,
+7. Create a single squashed commit with your candidate result
+8. File your candidate report with lucode_consolidation_report. Include your base_session_id and summarize what you kept from each version.
+9. Do not call lucode_promote directly. Lucode starts a synthesis judge after candidate reports are filed; the judge creates the final implementation that ships.`,
   review_pr_prompt: 'Review the following pull request:\n\nTitle: {{pr.title}}\nAuthor: {{pr.author}}\nSource: {{pr.sourceBranch}} -> {{pr.targetBranch}}\nURL: {{pr.url}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}\n\nFetch and review the diff using the CLI (e.g., `gh pr diff {{pr.number}}` or `git diff {{pr.targetBranch}}...{{pr.sourceBranch}}`).',
   plan_issue_prompt: 'Create an implementation plan for the following issue:\n\nTitle: {{issue.title}}\n\nDescription:\n{{issue.description}}\n\nLabels: {{issue.labels}}',
   issue_prompt: [
