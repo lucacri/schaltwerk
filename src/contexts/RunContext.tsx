@@ -1,10 +1,12 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
+import { useAtomValue } from 'jotai'
 import { useSessions } from '../hooks/useSessions'
 import { SessionState, type EnrichedSession } from '../types/session'
 import { getSessionLifecycleState } from '../utils/sessionState'
 import { listenEvent, SchaltEvent } from '../common/eventSystem'
 import { specOrchestratorTerminalId, stableSessionTerminalId } from '../common/terminalIdentity'
 import { logger } from '../utils/logger'
+import { clarifierResumedSpecsAtom } from '../store/atoms/clarifierResume'
 
 interface RunContextType {
     runningSessions: Set<string>
@@ -15,11 +17,16 @@ interface RunContextType {
 
 const RunContext = createContext<RunContextType | undefined>(undefined)
 
-function isSessionActivelyRunning(session: EnrichedSession): boolean {
+function isSessionActivelyRunning(
+    session: EnrichedSession,
+    resumedSpecs: ReadonlySet<string>,
+): boolean {
     const lifecycleState = getSessionLifecycleState(session.info)
 
     if (lifecycleState === SessionState.Spec) {
-        return session.info.clarification_started === true && session.info.attention_required !== true
+        if (session.info.clarification_started !== true) return false
+        if (session.info.attention_required !== true) return true
+        return resumedSpecs.has(session.info.session_id)
     }
 
     return lifecycleState === SessionState.Running && session.info.attention_required !== true
@@ -28,6 +35,7 @@ function isSessionActivelyRunning(session: EnrichedSession): boolean {
 export function RunProvider({ children }: { children: ReactNode }) {
     const [runningSessions, setRunningSessions] = useState<Set<string>>(new Set())
     const { allSessions } = useSessions()
+    const resumedSpecs = useAtomValue(clarifierResumedSpecsAtom)
     const allSessionsRef = useRef(allSessions)
     allSessionsRef.current = allSessions
 
@@ -59,7 +67,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
 
             const allowed = new Set<string>(
                 allSessions
-                    .filter(isSessionActivelyRunning)
+                    .filter(session => isSessionActivelyRunning(session, resumedSpecs))
                     .map(session => session.info.session_id)
             )
 
@@ -72,10 +80,16 @@ export function RunProvider({ children }: { children: ReactNode }) {
                     changed = true
                 }
             })
+            allowed.forEach(id => {
+                if (resumedSpecs.has(id) && !next.has(id)) {
+                    next.add(id)
+                    changed = true
+                }
+            })
 
             return changed || next.size !== prev.size ? next : prev
         })
-    }, [allSessions])
+    }, [allSessions, resumedSpecs])
 
     useEffect(() => {
         let stopAgentStarted: (() => void) | null = null

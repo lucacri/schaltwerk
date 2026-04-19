@@ -595,6 +595,51 @@ describe('SessionCard spec status pill', () => {
     expect(screen.queryByText(/waiting for input/i)).toBeNull()
   })
 
+  it('flips a stale waiting spec back to Clarifying when it becomes running', () => {
+    const session: EnrichedSession = {
+      ...baseSession,
+      info: {
+        ...baseSession.info,
+        session_state: 'spec',
+        status: 'spec',
+        spec_stage: 'clarified',
+        worktree_path: '',
+        attention_required: true,
+        attention_kind: 'waiting_for_input',
+        clarification_started: true,
+      },
+    }
+
+    const { rerender } = renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={session}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('session-card-status-pill')).toHaveTextContent(/waiting for input/i)
+
+    rerender(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={session}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.queryByText(/waiting for input/i)).toBeNull()
+    expect(screen.getByTestId('session-card-status-pill')).toHaveTextContent(/^Clarifying$/)
+  })
+
   it('shows waiting for input state for started specs that need input', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>

@@ -3,9 +3,12 @@ import { renderHook, act } from '@testing-library/react'
 import { RunProvider, useRun } from './RunContext'
 import type { EnrichedSession } from '../types/session'
 import { listenEvent } from '../common/eventSystem'
+import { Provider, createStore } from 'jotai'
+import { clearClarifierResumedAtom, markClarifierResumedAtom } from '../store/atoms/clarifierResume'
 
 let mockAllSessions: EnrichedSession[] = []
 const listeners: Record<string, (payload: any) => void> = {}
+let store: ReturnType<typeof createStore>
 
 vi.mock('../hooks/useSessions', () => ({
   useSessions: () => ({
@@ -39,7 +42,11 @@ vi.mock('../common/eventSystem', () => ({
 }))
 
 function wrapper({ children }: { children: React.ReactNode }) {
-  return <RunProvider>{children}</RunProvider>
+  return (
+    <Provider store={store}>
+      <RunProvider>{children}</RunProvider>
+    </Provider>
+  )
 }
 
 function makeSession(
@@ -71,6 +78,7 @@ describe('RunContext', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAllSessions = []
+    store = createStore()
     Object.keys(listeners).forEach(key => delete listeners[key])
   })
 
@@ -172,6 +180,65 @@ describe('RunContext', () => {
     rerender()
 
     expect(result.current.isSessionRunning('alpha')).toBe(false)
+  })
+
+  it('keeps a waiting spec in runningSessions when clarifierResumedSpecsAtom includes it', async () => {
+    mockAllSessions = [
+      makeSession('spec-1', 'spec', {
+        clarification_started: true,
+        attention_required: true,
+        attention_kind: 'waiting_for_input',
+      }),
+    ]
+    store.set(markClarifierResumedAtom, 'spec-1')
+
+    const { result } = renderHook(() => useRun(), { wrapper })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(result.current.isSessionRunning('spec-1')).toBe(true)
+  })
+
+  it('drops the spec from runningSessions when clarifierResumedSpecsAtom no longer includes it', async () => {
+    mockAllSessions = [
+      makeSession('spec-1', 'spec', {
+        clarification_started: true,
+        attention_required: true,
+        attention_kind: 'waiting_for_input',
+      }),
+    ]
+    store.set(markClarifierResumedAtom, 'spec-1')
+
+    const { result, rerender } = renderHook(() => useRun(), { wrapper })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(result.current.isSessionRunning('spec-1')).toBe(true)
+
+    act(() => {
+      store.set(clearClarifierResumedAtom, 'spec-1')
+    })
+    rerender()
+
+    expect(result.current.isSessionRunning('spec-1')).toBe(false)
+  })
+
+  it('does not include non-spec waiting sessions even when atom contains the id', async () => {
+    mockAllSessions = [
+      makeSession('run-1', 'running', {
+        attention_required: true,
+        attention_kind: 'waiting_for_input',
+      }),
+    ]
+    store.set(markClarifierResumedAtom, 'run-1')
+
+    const { result } = renderHook(() => useRun(), { wrapper })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(result.current.isSessionRunning('run-1')).toBe(false)
   })
 
   it('keeps terminal listeners stable across session refreshes', async () => {

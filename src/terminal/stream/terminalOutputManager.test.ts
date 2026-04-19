@@ -54,15 +54,46 @@ describe('terminalOutputManager', () => {
       id: TERMINAL_ID,
       from_seq: null
     })
-    expect(listener).toHaveBeenCalledWith('snapshot-data')
+    expect(listener).toHaveBeenCalledWith('snapshot-data', { source: 'hydration' })
     expect(listenMock).toHaveBeenCalledWith(TERMINAL_ID, expect.any(Function))
 
     const callback = listenMock.mock.calls[0][1] as (chunk: string) => void
     callback('live-chunk')
-    expect(listener).toHaveBeenCalledWith('live-chunk')
+    expect(listener).toHaveBeenCalledWith('live-chunk', { source: 'live' })
 
     await terminalOutputManager.dispose(TERMINAL_ID)
     expect(unlisten).toHaveBeenCalled()
+  })
+
+  it('marks hydrated chunks as hydration source', async () => {
+    const unlisten = vi.fn()
+    listenMock.mockResolvedValueOnce(unlisten)
+    invokeMock.mockResolvedValueOnce({ seq: 15, startSeq: 0, data: 'existing buffer' })
+
+    const calls: Array<{ chunk: string; source?: string }> = []
+    terminalOutputManager.addListener(TERMINAL_ID, (chunk, meta) => {
+      calls.push({ chunk, source: meta?.source })
+    })
+    await terminalOutputManager.ensureStarted(TERMINAL_ID)
+
+    expect(calls[0]).toEqual({ chunk: 'existing buffer', source: 'hydration' })
+  })
+
+  it('marks subscribed chunks as live source', async () => {
+    const unlisten = vi.fn()
+    listenMock.mockResolvedValueOnce(unlisten)
+    invokeMock.mockResolvedValueOnce({ seq: 0, startSeq: 0, data: '' })
+
+    const calls: Array<{ chunk: string; source?: string }> = []
+    terminalOutputManager.addListener(TERMINAL_ID, (chunk, meta) => {
+      calls.push({ chunk, source: meta?.source })
+    })
+    await terminalOutputManager.ensureStarted(TERMINAL_ID)
+
+    const callback = listenMock.mock.calls[0][1] as (chunk: string) => void
+    callback('fresh output')
+
+    expect(calls.at(-1)).toEqual({ chunk: 'fresh output', source: 'live' })
   })
 
   it('dispatches large hydration snapshots in bounded chunks', async () => {
@@ -104,7 +135,7 @@ describe('terminalOutputManager', () => {
     const bytes = new TextEncoder().encode('plugin-data')
     callback({ seq: 7, bytes })
 
-    expect(listener).toHaveBeenCalledWith('plugin-data')
+    expect(listener).toHaveBeenCalledWith('plugin-data', { source: 'live' })
     expect(ackMock).toHaveBeenCalledWith(TERMINAL_ID, 7, bytes.length)
 
     await terminalOutputManager.dispose(TERMINAL_ID)
@@ -161,9 +192,9 @@ describe('terminalOutputManager', () => {
       from_seq: 9,
     })
 
-    expect(listener).toHaveBeenCalledWith('first-snapshot')
-    expect(listener).toHaveBeenCalledWith('live')
-    expect(listener).toHaveBeenCalledWith('after-restart')
+    expect(listener).toHaveBeenCalledWith('first-snapshot', { source: 'hydration' })
+    expect(listener).toHaveBeenCalledWith('live', { source: 'live' })
+    expect(listener).toHaveBeenCalledWith('after-restart', { source: 'hydration' })
   })
 
   it('dispatches chunks to multiple listeners', async () => {
@@ -181,8 +212,8 @@ describe('terminalOutputManager', () => {
     const callback = listenMock.mock.calls[0][1] as (chunk: string) => void
     callback('hello world')
 
-    expect(listenerA).toHaveBeenCalledWith('hello world')
-    expect(listenerB).toHaveBeenCalledWith('hello world')
+    expect(listenerA).toHaveBeenCalledWith('hello world', { source: 'live' })
+    expect(listenerB).toHaveBeenCalledWith('hello world', { source: 'live' })
   })
 
   it('forces text presentation for record button symbol', async () => {
@@ -200,7 +231,7 @@ describe('terminalOutputManager', () => {
     callback(`recording ${emojiVariant} plain ${plainVariant}`)
 
     const expectedTextVariant = '\u23fa\uFE0E'
-    expect(listener).toHaveBeenCalledWith(`recording ${expectedTextVariant} plain ${expectedTextVariant}`)
+    expect(listener).toHaveBeenCalledWith(`recording ${expectedTextVariant} plain ${expectedTextVariant}`, { source: 'live' })
   })
 
   it('forces text presentation for pause symbol', async () => {
@@ -218,7 +249,7 @@ describe('terminalOutputManager', () => {
     callback(`status ${emojiVariant} plain ${plainVariant}`)
 
     const expectedTextVariant = '\u23f8\uFE0E'
-    expect(listener).toHaveBeenCalledWith(`status ${expectedTextVariant} plain ${expectedTextVariant}`)
+    expect(listener).toHaveBeenCalledWith(`status ${expectedTextVariant} plain ${expectedTextVariant}`, { source: 'live' })
   })
 
   it('ignores non-string chunks from standard stream', async () => {
@@ -290,7 +321,7 @@ describe('terminalOutputManager', () => {
       id: TERMINAL_ID,
       from_seq: 16,
     })
-    expect(listener).toHaveBeenCalledWith('catchup')
+    expect(listener).toHaveBeenCalledWith('catchup', { source: 'hydration' })
   })
 
   it('rehydrate is a no-op before the stream has started', async () => {
@@ -324,7 +355,7 @@ describe('terminalOutputManager', () => {
       id: TERMINAL_ID,
       from_seq: 5,
     })
-    expect(listener).toHaveBeenCalledWith('delta')
+    expect(listener).toHaveBeenCalledWith('delta', { source: 'hydration' })
   })
 
   it('removes listener and stops dispatching chunks', async () => {
@@ -345,7 +376,7 @@ describe('terminalOutputManager', () => {
     callback('chunk')
 
     expect(listenerA).not.toHaveBeenCalled()
-    expect(listenerB).toHaveBeenCalledWith('chunk')
+    expect(listenerB).toHaveBeenCalledWith('chunk', { source: 'live' })
   })
 
   it('rehydrates from the caller-provided baseline instead of the live seqCursor', async () => {
@@ -366,7 +397,7 @@ describe('terminalOutputManager', () => {
       id: TERMINAL_ID,
       from_seq: 12,
     })
-    expect(listener).toHaveBeenCalledWith('delta-from-12')
+    expect(listener).toHaveBeenCalledWith('delta-from-12', { source: 'hydration' })
     expect(terminalOutputManager.getSeqCursor(TERMINAL_ID)).toBe(32)
   })
 

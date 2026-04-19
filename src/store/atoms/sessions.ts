@@ -1,18 +1,19 @@
 import { atom } from 'jotai'
 import type { Getter, Setter } from 'jotai'
 import { invoke } from '@tauri-apps/api/core'
+import type { UnlistenFn } from '@tauri-apps/api/event'
 import { AGENT_TYPES, type EnrichedSession, type AgentType, type Epic } from '../../types/session'
 import { FilterMode, getDefaultFilterMode, isValidFilterMode } from '../../types/sessionFilters'
 import { TauriCommands } from '../../common/tauriCommands'
 import { searchSessions as searchSessionsUtil } from '../../utils/sessionFilters'
 import { SessionState, type SessionReadyToMergeCheck, type SessionInfo } from '../../types/session'
-import { listenEvent, SchaltEvent } from '../../common/eventSystem'
+import { listenEvent, listenTerminalOutput, SchaltEvent } from '../../common/eventSystem'
 import { projectPathAtom } from './project'
 import { setSelectionFilterModeActionAtom, clearTerminalTrackingActionAtom } from './selection'
-import { matchesProjectScope, type GitOperationFailedPayload, type GitOperationPayload, type SessionsRefreshedEventPayload } from '../../common/events'
+import { matchesProjectScope, type FollowUpMessagePayload, type GitOperationFailedPayload, type GitOperationPayload, type SessionsRefreshedEventPayload } from '../../common/events'
 import { hasInflight, singleflight } from '../../utils/singleflight'
 import { stableSessionTerminalId, isTopTerminalId } from '../../common/terminalIdentity'
-import { emitUiEvent, UiEvent } from '../../common/uiEvents'
+import { emitUiEvent, listenUiEvent, UiEvent } from '../../common/uiEvents'
 import { isTerminalStartingOrStarted, clearTerminalStartState, markTerminalStarted } from '../../common/terminalStartState'
 import { startSessionTop, computeProjectOrchestratorId } from '../../common/agentSpawn'
 import { releaseSessionTerminals } from '../../terminal/registry/terminalRegistry'
@@ -22,6 +23,7 @@ import { closePreview } from '../../features/preview/previewIframeRegistry'
 import { buildPreviewKey, clearPreviewStateActionAtom } from './preview'
 import { calculateLogicalSessionCounts, groupSessionsByVersion } from '../../utils/sessionVersions'
 import { getSessionLifecycleState, isSpec } from '../../utils/sessionState'
+import { clearClarifierResumedAtom, markClarifierResumedAtom } from './clarifierResume'
 
 type MergeModeOption = 'squash' | 'reapply'
 
@@ -1497,6 +1499,62 @@ export const initializeSessionsEventsActionAtom = atom(
             return Boolean(getSessionInActiveProject(sessionId))
         }
 
+        const waitingTerminalOutputUnlisteners = new Map<string, UnlistenFn | null>()
+
+        const tearDownWaitingOutputSubscription = (sessionId: string) => {
+            const unlisten = waitingTerminalOutputUnlisteners.get(sessionId)
+            if (!waitingTerminalOutputUnlisteners.has(sessionId)) return
+            waitingTerminalOutputUnlisteners.delete(sessionId)
+            if (!unlisten) return
+            try {
+                unlisten()
+            } catch (error) {
+                logger.warn('[SessionsAtoms] failed to unlisten waiting-output', error)
+            }
+        }
+
+        const ensureWaitingOutputSubscription = (sessionId: string) => {
+            tearDownWaitingOutputSubscription(sessionId)
+            const terminalId = stableSessionTerminalId(sessionId, 'top')
+            waitingTerminalOutputUnlisteners.set(sessionId, null)
+            void listenTerminalOutput(terminalId, (_chunk, meta) => {
+                if (meta?.source !== 'live') return
+                const unlisten = waitingTerminalOutputUnlisteners.get(sessionId)
+                waitingTerminalOutputUnlisteners.delete(sessionId)
+                if (unlisten) {
+                    try {
+                        unlisten()
+                    } catch (error) {
+                        logger.warn('[SessionsAtoms] failed to unlisten waiting-output', error)
+                    }
+                }
+                emitUiEvent(UiEvent.SpecClarificationActivity, {
+                    sessionName: sessionId,
+                    terminalId,
+                    source: 'terminal-output',
+                })
+            }).then(unlisten => {
+                if (!waitingTerminalOutputUnlisteners.has(sessionId)) {
+                    try {
+                        unlisten()
+                    } catch (error) {
+                        logger.warn('[SessionsAtoms] late waiting-output unlisten failed', error)
+                    }
+                    return
+                }
+                waitingTerminalOutputUnlisteners.set(sessionId, unlisten)
+            }).catch(error => {
+                waitingTerminalOutputUnlisteners.delete(sessionId)
+                logger.warn('[SessionsAtoms] failed to subscribe to waiting top terminal output', error)
+            })
+        }
+
+        const tearDownAllWaitingOutputSubscriptions = () => {
+            for (const sessionId of [...waitingTerminalOutputUnlisteners.keys()]) {
+                tearDownWaitingOutputSubscription(sessionId)
+            }
+        }
+
         await register(SchaltEvent.TerminalAgentStarted, (payload) => {
             const event = payload as { terminal_id?: string | null; session_name?: string | null }
             if (!event?.terminal_id) {
@@ -1725,6 +1783,29 @@ export const initializeSessionsEventsActionAtom = atom(
             }
         })
 
+        await register(SchaltEvent.FollowUpMessage, (payload) => {
+            const event = payload as FollowUpMessagePayload
+            if (event.message_type !== 'user') return
+            emitUiEvent(UiEvent.SpecClarificationActivity, {
+                sessionName: event.session_name,
+                terminalId: event.terminal_id,
+                source: 'user-submit',
+            })
+        })
+
+        const unlistenActivity = listenUiEvent(UiEvent.SpecClarificationActivity, (detail) => {
+            const target = getSessionInActiveProject(detail.sessionName)
+            if (!target) return
+            const lifecycle = getSessionLifecycleState(target.info)
+            const isWaitingSpec = lifecycle === SessionState.Spec
+                && target.info.clarification_started === true
+                && target.info.attention_required === true
+                && target.info.attention_kind === 'waiting_for_input'
+            if (!isWaitingSpec) return
+            set(markClarifierResumedAtom, detail.sessionName)
+        })
+        unlisteners.push(unlistenActivity)
+
         await register(SchaltEvent.TerminalAttention, (payload) => {
             const event = payload as {
                 session_id: string
@@ -1740,6 +1821,7 @@ export const initializeSessionsEventsActionAtom = atom(
             const needsAttention = event.needs_attention ?? false
 
             if (hasSessionInActiveProject(event.session_id)) {
+                const target = getSessionInActiveProject(event.session_id)
                 const activeProject = get(projectPathAtom)
                 if (activeProject) {
                     updateCrossProjectAttention(activeProject, event.session_id, needsAttention)
@@ -1767,6 +1849,18 @@ export const initializeSessionsEventsActionAtom = atom(
                     }
                     return updated
                 })
+                if ((event.attention_kind === 'waiting_for_input' && needsAttention) || !needsAttention) {
+                    set(clearClarifierResumedAtom, event.session_id)
+                }
+                const lifecycle = target ? getSessionLifecycleState(target.info) : undefined
+                const isClarifyingSpec = lifecycle === SessionState.Spec
+                    && target?.info.clarification_started === true
+
+                if (isClarifyingSpec && needsAttention && event.attention_kind === 'waiting_for_input') {
+                    ensureWaitingOutputSubscription(event.session_id)
+                } else {
+                    tearDownWaitingOutputSubscription(event.session_id)
+                }
                 syncSnapshotsFromAtom(get, set)
                 if (activeProject) {
                     setCrossProjectCounts(set, activeProject, recomputeCrossProjectCounts(activeProject))
@@ -1993,6 +2087,7 @@ export const initializeSessionsEventsActionAtom = atom(
             })
 
             if (removed) {
+                tearDownWaitingOutputSubscription(event.session_name)
                 releaseSessionTerminals(event.session_name)
                 suppressedAutoStart.delete(event.session_name)
                 const topId = stableSessionTerminalId(event.session_name, 'top')
@@ -2052,6 +2147,7 @@ export const initializeSessionsEventsActionAtom = atom(
                 activityFlushTimer = null
             }
             activityBuffer.clear()
+            tearDownAllWaitingOutputSubscriptions()
             sessionsEventsCleanup = null
             sessionsRefreshedReloadPending = false
             sessionsEventHandlersForTests.clear()

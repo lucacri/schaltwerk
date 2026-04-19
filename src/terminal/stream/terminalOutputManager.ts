@@ -8,7 +8,12 @@ import { logger } from '../../utils/logger'
 import { slicePreservingSurrogates } from '../paste/bracketedPaste'
 import { profileSwitchPhaseAsync } from '../profiling/switchProfiler'
 
-type TerminalStreamListener = (chunk: string) => void
+export type TerminalOutputSource = 'hydration' | 'live'
+export interface TerminalOutputMeta {
+  source: TerminalOutputSource
+}
+
+type TerminalStreamListener = (chunk: string, meta?: TerminalOutputMeta) => void
 
 interface TerminalBufferResponse {
   seq: number
@@ -217,7 +222,7 @@ class TerminalOutputManager {
         if (typeof chunk !== 'string' || chunk.length === 0) {
           return
         }
-        this.dispatch(id, chunk)
+        this.dispatch(id, chunk, { source: 'live' })
       })
     } catch (error) {
       logger.debug(`[TerminalOutput] standard listener failed for ${id}`, error)
@@ -237,7 +242,7 @@ class TerminalOutputManager {
       try {
         const text = decoder.decode(message.bytes, { stream: true })
         if (text && text.length > 0) {
-          this.dispatch(id, text)
+          this.dispatch(id, text, { source: 'live' })
         }
       } catch (error) {
         logger.debug(`[TerminalOutput] decode failed for ${id}`, error)
@@ -248,14 +253,14 @@ class TerminalOutputManager {
     })
   }
 
-  private dispatch(id: string, chunk: string): void {
+  private dispatch(id: string, chunk: string, meta?: TerminalOutputMeta): void {
     const stream = this.streams.get(id)
     if (!stream) return
     const normalized = enforceTextPresentation(chunk)
     this.updateSeqCursor(id, stream, normalized)
     for (const listener of stream.listeners) {
       try {
-        listener(normalized)
+        listener(normalized, meta)
       } catch (error) {
         logger.debug(`[TerminalOutput] listener error for ${id}`, error)
       }
@@ -264,7 +269,7 @@ class TerminalOutputManager {
 
   private async dispatchHydrationData(id: string, data: string): Promise<void> {
     if (data.length <= HYDRATION_DISPATCH_CHUNK_SIZE) {
-      this.dispatch(id, data)
+      this.dispatch(id, data, { source: 'hydration' })
       return
     }
 
@@ -274,7 +279,7 @@ class TerminalOutputManager {
       if (chunk.length === 0) {
         break
       }
-      this.dispatch(id, chunk)
+      this.dispatch(id, chunk, { source: 'hydration' })
       offset += chunk.length
       if (offset < data.length) {
         await new Promise<void>(resolve => {
@@ -285,8 +290,8 @@ class TerminalOutputManager {
   }
 
   // Test hook for injecting output into a terminal stream without Tauri
-  __emit(id: string, chunk: string): void {
-    this.dispatch(id, chunk)
+  __emit(id: string, chunk: string, meta: TerminalOutputMeta = { source: 'live' }): void {
+    this.dispatch(id, chunk, meta)
   }
 
   private updateSeqCursor(id: string, stream: TerminalStream, chunk: string): void {

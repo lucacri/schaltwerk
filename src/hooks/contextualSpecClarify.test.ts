@@ -60,6 +60,11 @@ describe('runContextualSpecClarify', () => {
         specName: '42-fix-login-bug',
       }),
     )
+    expect(emitUiEvent).toHaveBeenCalledWith(UiEvent.SpecClarificationActivity, {
+      sessionName: '42-fix-login-bug',
+      terminalId: expect.stringContaining('spec-id-123'),
+      source: 'user-submit',
+    })
   })
 
   it('uses the backend-returned name when it differs from the requested name (collision)', async () => {

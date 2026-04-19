@@ -14,6 +14,7 @@ import type { AgentType } from '../../types/session'
 import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../../common/tauriCommands'
 import { attachTerminalInstance } from '../../terminal/registry/terminalRegistry'
+import { emitUiEvent, UiEvent } from '../../common/uiEvents'
 
 const ATLAS_CONTRAST_BASE = 1.1
 
@@ -311,7 +312,13 @@ vi.mock('../../common/eventSystem', () => ({
 }))
 
 vi.mock('../../common/uiEvents', () => ({
-  UiEvent: { TerminalResizeRequest: 'TerminalResizeRequest', NewSpecRequest: 'NewSpecRequest', GlobalNewSessionShortcut: 'GlobalNewSessionShortcut', GlobalMarkReadyShortcut: 'GlobalMarkReadyShortcut' },
+  UiEvent: {
+    TerminalResizeRequest: 'TerminalResizeRequest',
+    NewSpecRequest: 'NewSpecRequest',
+    GlobalNewSessionShortcut: 'GlobalNewSessionShortcut',
+    GlobalMarkReadyShortcut: 'GlobalMarkReadyShortcut',
+    SpecClarificationActivity: 'schaltwerk:spec-clarification-activity',
+  },
   emitUiEvent: vi.fn(),
   listenUiEvent: vi.fn(() => () => {}),
 }))
@@ -390,6 +397,7 @@ beforeEach(() => {
   cleanupRegistryMock.addTimeout.mockClear()
   cleanupRegistryMock.addInterval.mockClear()
   vi.mocked(writeTerminalBackend).mockClear()
+  vi.mocked(emitUiEvent).mockClear()
   vi.mocked(invoke).mockReset()
   vi.mocked(invoke).mockImplementation(async () => ({ fontFamily: null }))
   const navigatorAny = navigator as Navigator & { userAgent?: string }
@@ -789,6 +797,87 @@ describe('Terminal', () => {
 
     const instance = terminalHarness.instances[0] as HarnessInstance
     expect(instance.raw.onData).toHaveBeenCalled()
+  })
+
+  it('emits clarification activity when Enter is submitted in a spec orchestrator top terminal', async () => {
+    renderTerminal({
+      terminalId: 'session-spec-top',
+      specOrchestratorSessionName: 'spec-1',
+    })
+
+    await waitFor(() => {
+      expect(terminalHarness.instances.length).toBeGreaterThan(0)
+    })
+
+    const instance = terminalHarness.instances[0] as HarnessInstance
+    const onData = instance.raw.onData.mock.calls[0]?.[0] as ((data: string) => void) | undefined
+    vi.mocked(emitUiEvent).mockClear()
+
+    onData?.('\r')
+
+    expect(emitUiEvent).toHaveBeenCalledWith(UiEvent.SpecClarificationActivity, {
+      sessionName: 'spec-1',
+      terminalId: 'session-spec-top',
+      source: 'user-submit',
+    })
+  })
+
+  it('does not emit clarification activity for ordinary spec terminal input', async () => {
+    renderTerminal({
+      terminalId: 'session-spec-top',
+      specOrchestratorSessionName: 'spec-1',
+    })
+
+    await waitFor(() => {
+      expect(terminalHarness.instances.length).toBeGreaterThan(0)
+    })
+
+    const instance = terminalHarness.instances[0] as HarnessInstance
+    const onData = instance.raw.onData.mock.calls[0]?.[0] as ((data: string) => void) | undefined
+    vi.mocked(emitUiEvent).mockClear()
+
+    onData?.('a')
+
+    expect(emitUiEvent).not.toHaveBeenCalledWith(UiEvent.SpecClarificationActivity, expect.anything())
+  })
+
+  it('does not emit clarification activity for read-only spec terminal input', async () => {
+    renderTerminal({
+      terminalId: 'session-spec-top',
+      specOrchestratorSessionName: 'spec-1',
+      readOnly: true,
+    })
+
+    await waitFor(() => {
+      expect(terminalHarness.instances.length).toBeGreaterThan(0)
+    })
+
+    const instance = terminalHarness.instances[0] as HarnessInstance
+    const onData = instance.raw.onData.mock.calls[0]?.[0] as ((data: string) => void) | undefined
+    vi.mocked(emitUiEvent).mockClear()
+
+    onData?.('\r')
+
+    expect(emitUiEvent).not.toHaveBeenCalledWith(UiEvent.SpecClarificationActivity, expect.anything())
+  })
+
+  it('does not emit clarification activity for non-spec terminal Enter input', async () => {
+    renderTerminal({
+      terminalId: 'session-run-top',
+      sessionName: 'run-1',
+    })
+
+    await waitFor(() => {
+      expect(terminalHarness.instances.length).toBeGreaterThan(0)
+    })
+
+    const instance = terminalHarness.instances[0] as HarnessInstance
+    const onData = instance.raw.onData.mock.calls[0]?.[0] as ((data: string) => void) | undefined
+    vi.mocked(emitUiEvent).mockClear()
+
+    onData?.('\r')
+
+    expect(emitUiEvent).not.toHaveBeenCalledWith(UiEvent.SpecClarificationActivity, expect.anything())
   })
 
   it('only forwards input for the active agent tab terminal', async () => {

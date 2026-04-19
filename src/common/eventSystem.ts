@@ -49,11 +49,11 @@ export async function listenEvent<T extends SchaltEvent>(
 
 export async function listenTerminalOutput(
   terminalId: string,
-  handler: (payload: string) => void | Promise<void>
+  handler: (payload: string, meta?: { source: 'live' }) => void | Promise<void>
 ): Promise<UnlistenFn> {
   const eventName = terminalOutputEventName(terminalId)
   const unlisten = await tauriListen(eventName, (event) => {
-    void handler(event.payload as string)
+    void handler(event.payload as string, { source: 'live' })
   })
   return wrapUnlisten(unlisten, eventName)
 }

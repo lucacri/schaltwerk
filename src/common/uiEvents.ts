@@ -57,6 +57,7 @@ export enum UiEvent {
   ContextualActionCreateSession = 'schaltwerk:contextual-action-create-session',
   ContextualActionCreateSpec = 'schaltwerk:contextual-action-create-spec',
   ContextualActionCreateSpecClarify = 'schaltwerk:contextual-action-create-spec-clarify',
+  SpecClarificationActivity = 'schaltwerk:spec-clarification-activity',
 }
 
 export interface PermissionErrorDetail {
@@ -275,6 +276,12 @@ export interface ContextualActionCreateSpecDetail {
   contextUrl?: string
 }
 
+export interface SpecClarificationActivityDetail {
+  sessionName: string
+  terminalId?: string
+  source: 'user-submit' | 'agent-started' | 'attention-clear' | 'terminal-output'
+}
+
 export type UiEventPayloads = {
   [UiEvent.PermissionError]: PermissionErrorDetail
   [UiEvent.BackgroundStartMarked]: { terminalId: string }
@@ -330,6 +337,7 @@ export type UiEventPayloads = {
   [UiEvent.ContextualActionCreateSession]: ContextualActionCreateSessionDetail
   [UiEvent.ContextualActionCreateSpec]: ContextualActionCreateSpecDetail
   [UiEvent.ContextualActionCreateSpecClarify]: ContextualActionCreateSpecDetail
+  [UiEvent.SpecClarificationActivity]: SpecClarificationActivityDetail
 }
 
 type UiEventArgs<T extends UiEvent> = undefined extends UiEventPayloads[T]

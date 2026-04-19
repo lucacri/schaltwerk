@@ -78,4 +78,9 @@ export async function runContextualSpecClarify({
     terminalId,
     specName,
   })
+  emitUiEvent(UiEvent.SpecClarificationActivity, {
+    sessionName: specName,
+    terminalId,
+    source: 'user-submit',
+  })
 }

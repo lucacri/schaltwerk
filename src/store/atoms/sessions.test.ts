@@ -5,12 +5,20 @@ vi.mock('@tauri-apps/api/core', () => ({
 }))
 
 const listeners: Record<string, (payload: unknown) => void> = {}
+const terminalOutputListeners: Record<string, (chunk: string, meta?: { source?: string }) => void> = {}
+const uiListeners: Record<string, Array<(detail: unknown) => void>> = {}
 
 vi.mock('../../common/eventSystem', () => ({
     listenEvent: vi.fn(async (event: string, handler: (payload: unknown) => void) => {
         listeners[event] = handler
         return () => {
             delete listeners[event]
+        }
+    }),
+    listenTerminalOutput: vi.fn(async (terminalId: string, handler: (chunk: string, meta?: { source?: string }) => void) => {
+        terminalOutputListeners[terminalId] = handler
+        return () => {
+            delete terminalOutputListeners[terminalId]
         }
     }),
     SchaltEvent: {
@@ -21,6 +29,7 @@ vi.mock('../../common/eventSystem', () => ({
         GitOperationStarted: 'schaltwerk:git-operation-started',
         GitOperationCompleted: 'schaltwerk:git-operation-completed',
         GitOperationFailed: 'schaltwerk:git-operation-failed',
+        FollowUpMessage: 'schaltwerk:follow-up-message',
         SessionActivity: 'schaltwerk:session-activity',
         TerminalAttention: 'schaltwerk:terminal-attention',
         TerminalAgentStarted: 'schaltwerk:terminal-agent-started',
@@ -34,9 +43,20 @@ vi.mock('../../common/agentSpawn', () => ({
 }))
 
 vi.mock('../../common/uiEvents', () => ({
-    emitUiEvent: vi.fn(),
+    emitUiEvent: vi.fn((event: string, detail: unknown) => {
+        for (const listener of uiListeners[event] ?? []) {
+            listener(detail)
+        }
+    }),
+    listenUiEvent: vi.fn((event: string, handler: (detail: unknown) => void) => {
+        uiListeners[event] = [...(uiListeners[event] ?? []), handler]
+        return () => {
+            uiListeners[event] = (uiListeners[event] ?? []).filter(listener => listener !== handler)
+        }
+    }),
     UiEvent: {
         PermissionError: 'permission-error',
+        SpecClarificationActivity: 'schaltwerk:spec-clarification-activity',
     },
 }))
 
@@ -123,7 +143,8 @@ import {
     sessionActivityMapAtom,
 } from './sessions'
 import { projectPathAtom } from './project'
-import { listenEvent as listenEventMock } from '../../common/eventSystem'
+import { listenEvent as listenEventMock, listenTerminalOutput } from '../../common/eventSystem'
+import { emitUiEvent, UiEvent } from '../../common/uiEvents'
 import { releaseSessionTerminals } from '../../terminal/registry/terminalRegistry'
 import { startSessionTop } from '../../common/agentSpawn'
 import { singleflight as singleflightMock } from '../../utils/singleflight'
@@ -139,6 +160,10 @@ import {
     setElementPickerActiveActionAtom,
     setPreviewUrlActionAtom,
 } from './preview'
+import {
+    clarifierResumedSpecsAtom,
+    markClarifierResumedAtom,
+} from './clarifierResume'
 
 const createSession = (overrides: Partial<EnrichedSession['info']>): EnrichedSession => ({
     info: {
@@ -167,6 +192,31 @@ const createSession = (overrides: Partial<EnrichedSession['info']>): EnrichedSes
     terminals: [],
 })
 
+const makeSpecClarifying = (
+    sessionId: string,
+    overrides: Partial<EnrichedSession['info']> = {}
+): EnrichedSession => createSession({
+    session_id: sessionId,
+    display_name: sessionId,
+    status: 'spec',
+    session_state: SessionState.Spec,
+    session_type: 'worktree',
+    branch: '',
+    worktree_path: '',
+    clarification_started: true,
+    ...overrides,
+})
+
+const makeRunningSession = (
+    sessionId: string,
+    overrides: Partial<EnrichedSession['info']> = {}
+): EnrichedSession => createSession({
+    session_id: sessionId,
+    display_name: sessionId,
+    session_state: SessionState.Running,
+    ...overrides,
+})
+
 describe('sessions atoms', () => {
     let store: ReturnType<typeof createStore>
 
@@ -183,6 +233,8 @@ describe('sessions atoms', () => {
         store = createStore()
         vi.clearAllMocks()
         Object.keys(listeners).forEach(key => delete listeners[key])
+        Object.keys(terminalOutputListeners).forEach(key => delete terminalOutputListeners[key])
+        Object.keys(uiListeners).forEach(key => delete uiListeners[key])
         __resetSessionsTestingState()
         vi.useFakeTimers()
         vi.setSystemTime(new Date('2024-01-01T00:00:00.000Z'))
@@ -438,6 +490,187 @@ describe('sessions atoms', () => {
         const session = store.get(allSessionsAtom).find(s => s.info.session_id === 'kind-session')
         expect(session?.info.attention_required).toBe(true)
         expect(session?.info.attention_kind).toBe('waiting_for_input')
+    })
+
+    it('clears clarifierResumedSpecs when a spec re-enters waiting_for_input', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(allSessionsAtom, [makeSpecClarifying('spec-1')])
+        store.set(markClarifierResumedAtom, 'spec-1')
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'spec-1',
+            terminal_id: stableSessionTerminalId('spec-1', 'top'),
+            needs_attention: true,
+            attention_kind: 'waiting_for_input',
+        })
+
+        expect(store.get(clarifierResumedSpecsAtom).has('spec-1')).toBe(false)
+    })
+
+    it('clears clarifierResumedSpecs when attention is cleared by the backend', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(allSessionsAtom, [
+            makeSpecClarifying('spec-1', {
+                attention_required: true,
+                attention_kind: 'waiting_for_input',
+            }),
+        ])
+        store.set(markClarifierResumedAtom, 'spec-1')
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'spec-1',
+            terminal_id: stableSessionTerminalId('spec-1', 'top'),
+            needs_attention: false,
+        })
+
+        expect(store.get(clarifierResumedSpecsAtom).has('spec-1')).toBe(false)
+    })
+
+    it('marks spec as resumed when SpecClarificationActivity fires while waiting', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(allSessionsAtom, [
+            makeSpecClarifying('spec-1', {
+                attention_required: true,
+                attention_kind: 'waiting_for_input',
+            }),
+        ])
+
+        emitUiEvent(UiEvent.SpecClarificationActivity, {
+            sessionName: 'spec-1',
+            source: 'user-submit',
+        })
+
+        expect(store.get(clarifierResumedSpecsAtom).has('spec-1')).toBe(true)
+    })
+
+    it('ignores SpecClarificationActivity for non-spec sessions', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(allSessionsAtom, [
+            makeRunningSession('run-1', {
+                attention_required: true,
+                attention_kind: 'waiting_for_input',
+            }),
+        ])
+
+        emitUiEvent(UiEvent.SpecClarificationActivity, {
+            sessionName: 'run-1',
+            source: 'user-submit',
+        })
+
+        expect(store.get(clarifierResumedSpecsAtom).has('run-1')).toBe(false)
+    })
+
+    it('marks spec as resumed when an MCP user FollowUpMessage arrives while waiting', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(allSessionsAtom, [
+            makeSpecClarifying('spec-1', {
+                attention_required: true,
+                attention_kind: 'waiting_for_input',
+            }),
+        ])
+
+        listeners['schaltwerk:follow-up-message']?.({
+            session_name: 'spec-1',
+            message: 'thanks for the question',
+            timestamp: 1,
+            terminal_id: stableSessionTerminalId('spec-1', 'top'),
+            message_type: 'user',
+        })
+
+        expect(store.get(clarifierResumedSpecsAtom).has('spec-1')).toBe(true)
+    })
+
+    it('ignores system FollowUpMessage events', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(allSessionsAtom, [
+            makeSpecClarifying('spec-1', {
+                attention_required: true,
+                attention_kind: 'waiting_for_input',
+            }),
+        ])
+
+        listeners['schaltwerk:follow-up-message']?.({
+            session_name: 'spec-1',
+            message: 'system note',
+            timestamp: 1,
+            terminal_id: stableSessionTerminalId('spec-1', 'top'),
+            message_type: 'system',
+        })
+
+        expect(store.get(clarifierResumedSpecsAtom).has('spec-1')).toBe(false)
+    })
+
+    it('marks spec as resumed when its top terminal emits live output while armed', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(allSessionsAtom, [makeSpecClarifying('spec-1')])
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'spec-1',
+            terminal_id: stableSessionTerminalId('spec-1', 'top'),
+            needs_attention: true,
+            attention_kind: 'waiting_for_input',
+        })
+        await Promise.resolve()
+
+        terminalOutputListeners[stableSessionTerminalId('spec-1', 'top')]?.('agent thinking...', { source: 'live' })
+
+        expect(store.get(clarifierResumedSpecsAtom).has('spec-1')).toBe(true)
+    })
+
+    it('ignores hydration replay on the top terminal', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(allSessionsAtom, [makeSpecClarifying('spec-1')])
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'spec-1',
+            terminal_id: stableSessionTerminalId('spec-1', 'top'),
+            needs_attention: true,
+            attention_kind: 'waiting_for_input',
+        })
+        await Promise.resolve()
+
+        terminalOutputListeners[stableSessionTerminalId('spec-1', 'top')]?.('replayed scrollback', { source: 'hydration' })
+
+        expect(store.get(clarifierResumedSpecsAtom).has('spec-1')).toBe(false)
+    })
+
+    it('does not subscribe to terminal output for non-waiting spec attention events', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(allSessionsAtom, [makeSpecClarifying('spec-1')])
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'spec-1',
+            terminal_id: stableSessionTerminalId('spec-1', 'top'),
+            needs_attention: true,
+            attention_kind: 'idle',
+        })
+        await Promise.resolve()
+
+        terminalOutputListeners[stableSessionTerminalId('spec-1', 'top')]?.('noise', { source: 'live' })
+
+        expect(store.get(clarifierResumedSpecsAtom).has('spec-1')).toBe(false)
+    })
+
+    it('unsubscribes after the first live output observation', async () => {
+        const unlistenSpy = vi.fn()
+        vi.mocked(listenTerminalOutput).mockImplementationOnce(async (terminalId, handler) => {
+            terminalOutputListeners[terminalId] = handler as (chunk: string, meta?: { source?: string }) => void
+            return unlistenSpy
+        })
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(allSessionsAtom, [makeSpecClarifying('spec-1')])
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'spec-1',
+            terminal_id: stableSessionTerminalId('spec-1', 'top'),
+            needs_attention: true,
+            attention_kind: 'waiting_for_input',
+        })
+        await Promise.resolve()
+
+        terminalOutputListeners[stableSessionTerminalId('spec-1', 'top')]?.('one', { source: 'live' })
+
+        expect(unlistenSpy).toHaveBeenCalledTimes(1)
     })
 
     it('preserves live attention_kind when snapshots do not include it yet', async () => {

@@ -1847,6 +1847,15 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
                 logger.debug(`[Terminal ${terminalId}] Interrupt signal detected (${keyCombo})`);
             }
 
+            const isSubmit = data.includes('\r') || data.includes('\n')
+            if (isSubmit && specOrchestratorSessionName && terminalId.endsWith('-top')) {
+                emitUiEvent(UiEvent.SpecClarificationActivity, {
+                    sessionName: specOrchestratorSessionName,
+                    terminalId,
+                    source: 'user-submit',
+                })
+            }
+
             writeTerminalBackend(terminalId, data).catch(err => logger.debug('[Terminal] write ignored (backend not ready yet)', err));
         });
 

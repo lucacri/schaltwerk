@@ -301,6 +301,11 @@ describe('SpecEditor keyboard shortcuts', () => {
         }
       )
     })
+    expect(emitUiEvent).toHaveBeenCalledWith(UiEvent.SpecClarificationActivity, {
+      sessionName: 'clarify-spec',
+      terminalId: specOrchestratorTerminalId('clarify-spec-stable-id'),
+      source: 'user-submit',
+    })
   })
 
   it('flushes pending spec edits before submitting Clarify', async () => {
@@ -951,6 +956,11 @@ describe('SpecEditor keyboard shortcuts', () => {
           needsDelayedSubmit: true,
         })
       )
+    })
+    expect(emitUiEvent).toHaveBeenCalledWith(UiEvent.SpecClarificationActivity, {
+      sessionName,
+      terminalId: specOrchestratorTerminalId(stableId),
+      source: 'user-submit',
     })
 
     await waitFor(() => {

@@ -354,6 +354,11 @@ export function SpecEditor({
         specName: sessionName,
         ...(clarificationAgentType ? { agentType: clarificationAgentType } : {}),
       })
+      emitUiEvent(UiEvent.SpecClarificationActivity, {
+        sessionName,
+        terminalId: specTerminalId,
+        source: 'user-submit',
+      })
     } catch (e: unknown) {
       logger.error('[SpecEditor] Failed to submit spec clarification prompt:', e)
       setError(String(e))
@@ -575,6 +580,11 @@ export function SpecEditor({
         data: reviewText,
         useBracketedPaste,
         needsDelayedSubmit,
+      })
+      emitUiEvent(UiEvent.SpecClarificationActivity, {
+        sessionName,
+        terminalId,
+        source: 'user-submit',
       })
 
       void setSelection({ kind: 'session', payload: sessionName, sessionState: 'spec' }, false, true)
