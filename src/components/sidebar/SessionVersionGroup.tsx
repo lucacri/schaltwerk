@@ -203,6 +203,8 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   const consolidationCandidates = consolidationSessions.filter(v => v.session.info.consolidation_role !== 'judge')
   const judgeSessions = consolidationSessions.filter(v => v.session.info.consolidation_role === 'judge')
   const hasConsolidationVersion = consolidationCandidates.length > 0
+  const isConsolidationDimActive = consolidationCandidates.length > 0 || judgeSessions.length > 0
+  const isConsolidationMuteActive = judgeSessions.length > 0
   const sourceVersions = group.versions.filter(v => !v.session.info.is_consolidation)
   const selectedSourceVersion = selectedVersionInGroup?.session.info.is_consolidation ? null : selectedVersionInGroup
   const primaryVersion = selectedSourceVersion ?? sourceVersions[0] ?? group.versions[0]
@@ -257,11 +259,6 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
       ?? recommendationSource?.session.info.session_id,
     group.versions,
   )
-  const recommendedWinnerSessionId = recommendationSource?.session.info.consolidation_recommended_session_id
-    ?? recommendationSource?.session.info.session_id
-    ?? null
-  const judgeCandidateSessionIds = new Set(focusJudge?.session.info.consolidation_sources ?? [])
-  const isConsolidationFocusActive = Boolean(focusJudge)
   const maxTagLength = Math.max(
     ...group.versions.map(v => {
       const agent = (v.session.info.original_agent_type || '').toLowerCase()
@@ -278,15 +275,18 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   const groupDescription = group.versions
     .map(version => (version.session.info.current_task || version.session.info.spec_content || '').trim())
     .find(Boolean) || undefined
-  const primaryStatus = primaryVersion
+  const headerVersion = isConsolidationMuteActive && activeJudge
+    ? activeJudge
+    : primaryVersion
+  const primaryStatus = headerVersion
     ? getSidebarSessionStatus(
-        primaryVersion.session.info,
-        Boolean(primaryVersion.session.info.is_blocked),
-        isSessionRunning?.(primaryVersion.session.info.session_id) || false,
+        headerVersion.session.info,
+        Boolean(headerVersion.session.info.is_blocked),
+        isSessionRunning?.(headerVersion.session.info.session_id) || false,
       )
     : null
   const headerStatus = (() => {
-    if (!primaryVersion || !primaryStatus) {
+    if (!headerVersion || !primaryStatus) {
       return {
         label: t.session.notStarted,
         tone: 'neutral' as HeaderStatusTone,
@@ -387,19 +387,16 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     hideTreeConnector = true,
   ) => {
     const isSelected = isVersionSelected(version.session.info.session_id, version.session.info)
-    const willBeDeleted = isPreviewingDeletion && hasSelectedVersion && !isSelected
+    const isSourceVersion = !version.session.info.is_consolidation
+    const willBeDeleted =
+      (isPreviewingDeletion && hasSelectedVersion && !isSelected)
+      || (isConsolidationDimActive && isSourceVersion)
+    const isMuted = isConsolidationMuteActive && isSourceVersion
     const isConsolidationSourceHighlighted = hoveredSession?.is_consolidation
       ? hoveredSession.consolidation_sources?.includes(version.session.info.session_id)
       : false
     const isHighlighted = (version.session.info.is_consolidation && version.session.info.consolidation_sources?.includes(hoveredSessionId || ''))
       || hoveredSessionId === version.session.info.session_id
-    const isConsolidationCandidate = version.session.info.consolidation_role !== 'judge'
-      && (
-        version.session.info.is_consolidation
-        || judgeCandidateSessionIds.has(version.session.info.session_id)
-        || version.session.info.session_id === recommendedWinnerSessionId
-      )
-    const isDimmedForConsolidation = isConsolidationFocusActive && !isConsolidationCandidate
 
     return (
       <CompactVersionRow
@@ -430,7 +427,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
         onHover={setHoveredSessionId}
         isHighlighted={isHighlighted}
         isConsolidationSourceHighlighted={Boolean(isConsolidationSourceHighlighted)}
-        isDimmedForConsolidation={isDimmedForConsolidation}
+        isMuted={isMuted}
       />
     )
   }

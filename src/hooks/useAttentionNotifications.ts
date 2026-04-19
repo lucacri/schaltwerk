@@ -14,6 +14,7 @@ import {
   sendAttentionSystemNotification,
 } from '../utils/attentionBridge'
 import { logger } from '../utils/logger'
+import { groupSessionsByVersion } from '../utils/sessionVersions'
 
 interface AttentionPreferences {
   mode: AttentionNotificationMode
@@ -65,6 +66,21 @@ export const shouldCountSessionForAttention = (session: EnrichedSession): boolea
   const requiresAttention = session.info.attention_required === true
   const isReadyToMerge = session.info.ready_to_merge === true
   return requiresAttention && !isReadyToMerge
+}
+
+export const computeMutedSourceSessionIds = (sessions: EnrichedSession[]): Set<string> => {
+  const muted = new Set<string>()
+  for (const group of groupSessionsByVersion(sessions)) {
+    const hasJudge = group.versions.some(v =>
+      v.session.info.is_consolidation && v.session.info.consolidation_role === 'judge'
+    )
+    if (!hasJudge) continue
+    for (const version of group.versions) {
+      if (version.session.info.is_consolidation) continue
+      muted.add(version.session.info.session_id)
+    }
+  }
+  return muted
 }
 
 export const isSessionActivelyRunning = (session: EnrichedSession): boolean => {
@@ -276,8 +292,12 @@ export function useAttentionNotifications({
   }, [visibility.isForeground])
 
   useEffect(() => {
+    const mutedSourceIds = projectPath ? computeMutedSourceSessionIds(sessions) : new Set<string>()
     const attentionSessions: AttentionSession[] = (projectPath
-      ? sessions.filter(shouldCountSessionForAttention)
+      ? sessions.filter(session =>
+          shouldCountSessionForAttention(session)
+          && !mutedSourceIds.has(session.info.session_id),
+        )
       : []
     ).map(session => {
       const sessionId = session.info.session_id

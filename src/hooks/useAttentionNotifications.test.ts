@@ -1,7 +1,12 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '../test/flushPromises'
-import { shouldCountSessionForAttention, isSessionActivelyRunning, useAttentionNotifications } from './useAttentionNotifications'
+import {
+  computeMutedSourceSessionIds,
+  isSessionActivelyRunning,
+  shouldCountSessionForAttention,
+  useAttentionNotifications,
+} from './useAttentionNotifications'
 import type { EnrichedSession } from '../types/session'
 import type { AttentionNotificationMode } from './useSettings'
 
@@ -44,6 +49,10 @@ const createSession = (
     session_state: overrides.session_state ?? 'running',
     ready_to_merge: overrides.ready_to_merge ?? false,
     attention_required: overrides.attention_required ?? false,
+    attention_kind: overrides.attention_kind,
+    version_group_id: overrides.version_group_id,
+    is_consolidation: overrides.is_consolidation,
+    consolidation_role: overrides.consolidation_role,
   },
   status: undefined,
   terminals: [],
@@ -280,5 +289,129 @@ describe('isSessionActivelyRunning', () => {
     })
 
     expect(isSessionActivelyRunning(session)).toBe(false)
+  })
+})
+
+describe('computeMutedSourceSessionIds', () => {
+  it('returns source session IDs of version groups that contain a judge session', () => {
+    const sessions: EnrichedSession[] = [
+      createSession({ session_id: 'feature-A_v1', version_group_id: 'group-A' }),
+      createSession({ session_id: 'feature-A_v2', version_group_id: 'group-A' }),
+      createSession({
+        session_id: 'feature-A-judge',
+        version_group_id: 'group-A',
+        is_consolidation: true,
+        consolidation_role: 'judge',
+      }),
+      createSession({ session_id: 'feature-B_v1', version_group_id: 'group-B' }),
+    ]
+
+    expect(computeMutedSourceSessionIds(sessions)).toEqual(
+      new Set(['feature-A_v1', 'feature-A_v2'])
+    )
+  })
+
+  it('returns empty set when no judge session exists', () => {
+    const sessions: EnrichedSession[] = [
+      createSession({ session_id: 'feature-A_v1', version_group_id: 'group-A' }),
+      createSession({
+        session_id: 'feature-A-merge',
+        version_group_id: 'group-A',
+        is_consolidation: true,
+        consolidation_role: 'candidate',
+      }),
+    ]
+
+    expect(computeMutedSourceSessionIds(sessions)).toEqual(new Set())
+  })
+
+  it('does not mute sessions outside the judge group', () => {
+    const sessions: EnrichedSession[] = [
+      createSession({ session_id: 'feature-A_v1', version_group_id: 'group-A' }),
+      createSession({
+        session_id: 'feature-A-judge',
+        version_group_id: 'group-A',
+        is_consolidation: true,
+        consolidation_role: 'judge',
+      }),
+      createSession({ session_id: 'feature-B_v1', version_group_id: 'group-B' }),
+    ]
+
+    expect(computeMutedSourceSessionIds(sessions)).toEqual(new Set(['feature-A_v1']))
+  })
+
+  it('ignores sessions without a version_group_id', () => {
+    const sessions: EnrichedSession[] = [
+      createSession({ session_id: 'solo' }),
+      createSession({
+        session_id: 'feature-A-judge',
+        version_group_id: 'group-A',
+        is_consolidation: true,
+        consolidation_role: 'judge',
+      }),
+    ]
+
+    expect(computeMutedSourceSessionIds(sessions)).toEqual(new Set())
+  })
+})
+
+describe('useAttentionNotifications with consolidation judge', () => {
+  beforeEach(() => {
+    hookMocks.invoke.mockReset()
+    hookMocks.invoke.mockResolvedValue({
+      attention_notification_mode: 'both',
+      remember_idle_baseline: false,
+    })
+    hookMocks.isForeground = false
+    hookMocks.requestDockBounce.mockReset()
+    hookMocks.requestDockBounce.mockResolvedValue(undefined)
+    hookMocks.sendAttentionSystemNotification.mockReset()
+    hookMocks.sendAttentionSystemNotification.mockResolvedValue(undefined)
+    hookMocks.getCurrentWindowLabel.mockReset()
+    hookMocks.getCurrentWindowLabel.mockResolvedValue('main')
+    hookMocks.reportAttentionSnapshot.mockReset()
+    hookMocks.reportAttentionSnapshot.mockResolvedValue({ totalCount: 0, badgeLabel: null })
+  })
+
+  it('does not bounce the dock or notify when an idle source has a sibling judge session', async () => {
+    const judge = createSession({
+      session_id: 'feature-A-judge',
+      version_group_id: 'group-A',
+      is_consolidation: true,
+      consolidation_role: 'judge',
+    })
+    const initialSource = createSession({
+      session_id: 'feature-A_v1',
+      version_group_id: 'group-A',
+      attention_required: false,
+    })
+    const idleSource = createSession({
+      session_id: 'feature-A_v1',
+      display_name: 'feature-A_v1',
+      version_group_id: 'group-A',
+      attention_required: true,
+      attention_kind: 'idle',
+    })
+
+    const rendered = renderHook(
+      ({ sessions }) => useAttentionNotifications({
+        sessions,
+        projectPath: '/repo',
+      }),
+      {
+        initialProps: { sessions: [judge, initialSource] },
+      }
+    )
+    await flushPromises()
+    hookMocks.requestDockBounce.mockClear()
+    hookMocks.sendAttentionSystemNotification.mockClear()
+
+    await act(async () => {
+      rendered.rerender({ sessions: [judge, idleSource] })
+    })
+    await flushPromises()
+
+    expect(hookMocks.requestDockBounce).not.toHaveBeenCalled()
+    expect(hookMocks.sendAttentionSystemNotification).not.toHaveBeenCalled()
   })
 })

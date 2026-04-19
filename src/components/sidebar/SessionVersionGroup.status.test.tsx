@@ -16,19 +16,22 @@ vi.mock('./CompactVersionRow', () => ({
     session,
     hideTreeConnector,
     siblings,
-    isDimmedForConsolidation,
+    willBeDeleted,
+    isMuted,
   }: {
     session: EnrichedSession
     hideTreeConnector?: boolean
     siblings?: EnrichedSession['info'][]
-    isDimmedForConsolidation?: boolean
+    willBeDeleted?: boolean
+    isMuted?: boolean
   }) => (
     <div
       data-testid="compact-version-row"
       data-session-id={session.info.session_id}
       data-hide-tree-connector={hideTreeConnector ? 'true' : 'false'}
       data-sibling-count={siblings?.length ?? 0}
-      data-dimmed-for-consolidation={isDimmedForConsolidation ? 'true' : 'false'}
+      data-will-be-deleted={willBeDeleted ? 'true' : 'false'}
+      data-muted={isMuted ? 'true' : 'false'}
     >
       {session.info.session_id}
     </div>
@@ -970,13 +973,54 @@ describe('SessionVersionGroup status summary', () => {
     expect(candidateRows[0]).toHaveAttribute('data-session-id', 'feature-A-merge')
   })
 
-  it('dims source rows that are not judge candidates or the recommended winner', () => {
+  it('marks source rows for deletion as soon as a consolidation candidate exists (no judge yet)', () => {
+    const candidateOnlyGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
+        {
+          ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+              consolidation_round_id: 'round-123',
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={candidateOnlyGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const rows = screen.getAllByTestId('compact-version-row')
+    const rowBySessionId = new Map(rows.map(row => [row.getAttribute('data-session-id'), row]))
+    expect(rowBySessionId.get('feature-A_v1')).toHaveAttribute('data-will-be-deleted', 'true')
+    expect(rowBySessionId.get('feature-A_v2')).toHaveAttribute('data-will-be-deleted', 'true')
+    expect(rowBySessionId.get('feature-A-merge')).toHaveAttribute('data-will-be-deleted', 'false')
+    expect(rowBySessionId.get('feature-A_v1')).toHaveAttribute('data-muted', 'false')
+    expect(rowBySessionId.get('feature-A_v2')).toHaveAttribute('data-muted', 'false')
+  })
+
+  it('mutes source rows once a judge session exists for the round', () => {
     const judgeGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
         createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
         createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
-        createVersion({ id: 'feature-A_v3', sessionState: 'running', versionNumber: 3 }),
         {
           ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }),
           session: {
@@ -986,7 +1030,6 @@ describe('SessionVersionGroup status summary', () => {
               consolidation_role: 'judge',
               consolidation_round_id: 'round-123',
               consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
-              consolidation_recommended_session_id: 'feature-A_v2',
             },
             status: undefined,
             terminals: [],
@@ -1008,45 +1051,39 @@ describe('SessionVersionGroup status summary', () => {
 
     const rows = screen.getAllByTestId('compact-version-row')
     const rowBySessionId = new Map(rows.map(row => [row.getAttribute('data-session-id'), row]))
-
-    expect(rowBySessionId.get('feature-A_v1')).toHaveAttribute('data-dimmed-for-consolidation', 'false')
-    expect(rowBySessionId.get('feature-A_v2')).toHaveAttribute('data-dimmed-for-consolidation', 'false')
-    expect(rowBySessionId.get('feature-A_v3')).toHaveAttribute('data-dimmed-for-consolidation', 'true')
+    expect(rowBySessionId.get('feature-A_v1')).toHaveAttribute('data-muted', 'true')
+    expect(rowBySessionId.get('feature-A_v2')).toHaveAttribute('data-muted', 'true')
+    expect(rowBySessionId.get('feature-A_v1')).toHaveAttribute('data-will-be-deleted', 'true')
+    expect(rowBySessionId.get('feature-A_v2')).toHaveAttribute('data-will-be-deleted', 'true')
   })
 
-  it('uses the recommending judge sources when a newer judge session has no recommendation', () => {
-    const judgeGroup: SessionVersionGroupType = {
+  it('derives the group header pill from the judge once a judge session exists', () => {
+    const idleSourcesJudgeRunningGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
-        createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
-        createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
-        createVersion({ id: 'feature-A_v3', sessionState: 'running', versionNumber: 3 }),
+        createVersion({
+          id: 'feature-A_v1',
+          sessionState: 'running',
+          versionNumber: 1,
+          attentionRequired: true,
+          attentionKind: 'idle',
+        }),
+        createVersion({
+          id: 'feature-A_v2',
+          sessionState: 'running',
+          versionNumber: 2,
+          attentionRequired: true,
+          attentionKind: 'idle',
+        }),
         {
-          ...createVersion({ id: 'feature-A-judge-new', sessionState: 'running' }),
+          ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }),
           session: {
             info: {
-              ...createVersion({ id: 'feature-A-judge-new', sessionState: 'running' }).session.info,
-              is_consolidation: true,
-              consolidation_role: 'judge',
-              consolidation_round_id: 'round-456',
-              consolidation_sources: ['feature-A_v1'],
-              last_modified_ts: 200,
-            },
-            status: undefined,
-            terminals: [],
-          },
-        },
-        {
-          ...createVersion({ id: 'feature-A-judge-recommended', sessionState: 'running' }),
-          session: {
-            info: {
-              ...createVersion({ id: 'feature-A-judge-recommended', sessionState: 'running' }).session.info,
+              ...createVersion({ id: 'feature-A-judge', sessionState: 'running' }).session.info,
               is_consolidation: true,
               consolidation_role: 'judge',
               consolidation_round_id: 'round-123',
-              consolidation_sources: ['feature-A_v2'],
-              consolidation_recommended_session_id: 'feature-A_v2',
-              last_modified_ts: 100,
+              attention_required: false,
             },
             status: undefined,
             terminals: [],
@@ -1058,7 +1095,7 @@ describe('SessionVersionGroup status summary', () => {
     render(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionVersionGroup
-          group={judgeGroup}
+          group={idleSourcesJudgeRunningGroup}
           selection={{ kind: 'session', payload: 'unrelated' }}
           startIndex={0}
           {...requiredCallbacks}
@@ -1066,12 +1103,58 @@ describe('SessionVersionGroup status summary', () => {
       </SessionCardActionsProvider>
     )
 
-    const rows = screen.getAllByTestId('compact-version-row')
-    const rowBySessionId = new Map(rows.map(row => [row.getAttribute('data-session-id'), row]))
+    const header = screen.getByTestId('version-group-header-status')
+    expect(header).toHaveTextContent('Running')
+    expect(header).not.toHaveTextContent('Idle')
+  })
 
-    expect(rowBySessionId.get('feature-A_v1')).toHaveAttribute('data-dimmed-for-consolidation', 'true')
-    expect(rowBySessionId.get('feature-A_v2')).toHaveAttribute('data-dimmed-for-consolidation', 'false')
-    expect(rowBySessionId.get('feature-A_v3')).toHaveAttribute('data-dimmed-for-consolidation', 'true')
+  it('keeps the header pill derived from sources when only candidates (no judge) exist', () => {
+    const candidateOnlyGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({
+          id: 'feature-A_v1',
+          sessionState: 'running',
+          versionNumber: 1,
+          attentionRequired: true,
+          attentionKind: 'idle',
+        }),
+        createVersion({
+          id: 'feature-A_v2',
+          sessionState: 'running',
+          versionNumber: 2,
+          attentionRequired: true,
+          attentionKind: 'idle',
+        }),
+        {
+          ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-merge', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+              consolidation_round_id: 'round-123',
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={candidateOnlyGroup}
+          selection={{ kind: 'session', payload: 'feature-A_v1' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const header = screen.getByTestId('version-group-header-status')
+    expect(header).toHaveTextContent('Idle')
   })
 })
 

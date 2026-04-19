@@ -437,12 +437,6 @@ describe('CompactVersionRow', () => {
     expect(row.style.getPropertyValue('--session-card-hover-bg')).toBe('var(--color-accent-blue-bg)')
   })
 
-  it('dims the entire row when it is not a consolidation candidate', () => {
-    renderRow({ isDimmedForConsolidation: true })
-
-    expect(screen.getByTestId('compact-version-row')).toHaveStyle({ opacity: '0.55' })
-  })
-
   it('renders the tree connector by default', () => {
     renderRow()
 
@@ -507,5 +501,72 @@ describe('CompactVersionRow', () => {
     expect(dots).toHaveLength(2)
     expect(dots[0]).toHaveAttribute('title', 'codex (v1)')
     expect(dots[1]).toHaveAttribute('title', 'gemini (v3)')
+  })
+})
+
+describe('CompactVersionRow mute behavior', () => {
+  it('hides the idle pill when isMuted is true', () => {
+    renderRow({
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          attention_required: true,
+          attention_kind: 'idle',
+        },
+      },
+      isMuted: true,
+    })
+
+    expect(screen.queryByTestId('compact-row-status-idle')).toBeNull()
+  })
+
+  it('hides the waiting pill when isMuted is true', () => {
+    renderRow({
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          attention_required: true,
+          attention_kind: 'waiting_for_input',
+        },
+      },
+      isMuted: true,
+    })
+
+    expect(screen.queryByTestId('compact-row-status-waiting')).toBeNull()
+  })
+
+  it('still shows the running indicator when isMuted is true but the session is actively running', () => {
+    renderRow({
+      isRunning: true,
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          attention_required: false,
+          session_state: 'running',
+        },
+      },
+      isMuted: true,
+    })
+
+    expect(screen.getByTestId('compact-row-status-running')).toBeInTheDocument()
+  })
+
+  it('still shows the idle pill when isMuted is false (regression guard)', () => {
+    renderRow({
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          attention_required: true,
+          attention_kind: 'idle',
+        },
+      },
+      isMuted: false,
+    })
+
+    expect(screen.getByTestId('compact-row-status-idle')).toBeInTheDocument()
   })
 })

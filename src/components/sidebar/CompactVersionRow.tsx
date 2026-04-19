@@ -46,7 +46,7 @@ interface CompactVersionRowProps {
   onHover?: (sessionId: string | null) => void
   isHighlighted?: boolean
   isConsolidationSourceHighlighted?: boolean
-  isDimmedForConsolidation?: boolean
+  isMuted?: boolean
 }
 
 type AccentVars = {
@@ -122,7 +122,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   onHover,
   isHighlighted = false,
   isConsolidationSourceHighlighted = false,
-  isDimmedForConsolidation = false,
+  isMuted = false,
 }) => {
   const shortcuts = useMultipleShortcutDisplays([...SESSION_SWITCH_SHORTCUT_ACTIONS])
   const platform = detectPlatformSafe()
@@ -198,7 +198,6 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
     '--session-card-border': isSelected ? 'var(--color-accent-blue-border)' : surface.style['--session-card-border'],
     '--session-card-bg': isSelected ? 'var(--color-accent-blue-bg)' : surface.style['--session-card-bg'],
     '--session-card-hover-bg': isSelected ? 'var(--color-accent-blue-bg)' : surface.style['--session-card-hover-bg'],
-    opacity: isDimmedForConsolidation ? 0.55 : undefined,
   }
 
   const handleEpicChange = useCallback(
@@ -213,6 +212,10 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   }, [s.session_id])
 
   const statusIndicator = (() => {
+    if (isMuted && (statusState.primaryStatus === 'idle' || statusState.primaryStatus === 'waiting')) {
+      return null
+    }
+
     if (statusState.primaryStatus === 'blocked') {
       return (
         <span
