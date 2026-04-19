@@ -708,6 +708,74 @@ describe('sessions atoms', () => {
         expect(session?.info.attention_kind).toBe('waiting_for_input')
     })
 
+    it('clears waiting attention for a spec in clarification when TerminalAttention needs_attention=false arrives', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(projectPathAtom, '/projects/alpha')
+
+        store.set(allSessionsAtom, [
+            createSession({
+                session_id: 'spec-clear',
+                status: 'spec',
+                session_state: SessionState.Spec,
+                worktree_path: '',
+                clarification_started: true,
+                attention_required: true,
+                attention_kind: 'waiting_for_input',
+            }),
+        ])
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'spec-clear',
+            terminal_id: stableSessionTerminalId('spec-clear', 'top'),
+            needs_attention: false,
+        })
+
+        const session = store.get(allSessionsAtom).find(s => s.info.session_id === 'spec-clear')
+        expect(session?.info.attention_required).toBe(false)
+        expect(session?.info.attention_kind).toBeUndefined()
+    })
+
+    it('preserves a terminal attention clear for specs across stale snapshots', async () => {
+        await store.set(initializeSessionsEventsActionAtom)
+        store.set(projectPathAtom, '/projects/alpha')
+
+        const waitingSpec: EnrichedSession = createSession({
+            session_id: 'spec-alpha',
+            status: 'spec',
+            session_state: SessionState.Spec,
+            worktree_path: '',
+            clarification_started: true,
+            attention_required: true,
+            attention_kind: 'waiting_for_input',
+        })
+        store.set(allSessionsAtom, [waitingSpec])
+
+        listeners['schaltwerk:terminal-attention']?.({
+            session_id: 'spec-alpha',
+            terminal_id: stableSessionTerminalId('spec-alpha', 'top'),
+            needs_attention: false,
+        })
+
+        listeners['schaltwerk:sessions-refreshed']?.({
+            projectPath: '/projects/alpha',
+            sessions: [createSession({
+                session_id: 'spec-alpha',
+                status: 'spec',
+                session_state: SessionState.Spec,
+                worktree_path: '',
+                clarification_started: true,
+                attention_required: true,
+                attention_kind: 'waiting_for_input',
+            })],
+        })
+
+        await vi.advanceTimersByTimeAsync(0)
+
+        const session = store.get(allSessionsAtom).find(s => s.info.session_id === 'spec-alpha')
+        expect(session?.info.attention_required).toBe(false)
+        expect(session?.info.attention_kind).toBeUndefined()
+    })
+
     it('cleans up cached sessions when closing a background project', async () => {
         const { invoke } = await import('@tauri-apps/api/core')
         vi.mocked(invoke).mockImplementation(async (cmd) => {

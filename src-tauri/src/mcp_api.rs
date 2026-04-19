@@ -7498,7 +7498,8 @@ where
 
     if let Err(err) = launch_result {
         let rollback_failures =
-            rollback_created_preset_sessions(manager, db, &[session.name.clone()]).await;
+            rollback_created_preset_sessions(manager, db, std::slice::from_ref(&session.name))
+                .await;
         return Err(format!(
             "Failed to start judge: {err}.{}",
             rollback_suffix(&rollback_failures)
@@ -7904,7 +7905,7 @@ async fn update_consolidation_report(
     enum PostReportAction {
         None,
         StartJudge {
-            round: ConsolidationRoundRecord,
+            round: Box<ConsolidationRoundRecord>,
         },
         AutoPromote {
             recommended_session_id: String,
@@ -8030,7 +8031,9 @@ async fn update_consolidation_report(
             let candidate_sessions = candidate_sessions_for_round(&updated_round_sessions);
             let judge_sessions = judge_sessions_for_round(&updated_round_sessions);
             if judge_sessions.is_empty() && all_candidates_reported(&candidate_sessions) {
-                PostReportAction::StartJudge { round }
+                PostReportAction::StartJudge {
+                    round: Box::new(round),
+                }
             } else {
                 PostReportAction::None
             }

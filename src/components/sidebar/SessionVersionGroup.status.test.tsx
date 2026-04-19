@@ -235,6 +235,64 @@ describe('SessionVersionGroup status summary', () => {
     expect(screen.getByTestId('version-group-header-status')).not.toHaveTextContent('Clarified')
   })
 
+  it('transitions from clarified to clarifying in the group header when attention clears and isSessionRunning returns true', () => {
+    const waitingGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({
+          id: 'feature-A_spec',
+          sessionState: 'spec',
+          specStage: 'clarified',
+          clarificationStarted: true,
+          attentionRequired: true,
+          attentionKind: 'waiting_for_input',
+        }),
+      ],
+    }
+
+    const { rerender } = render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={waitingGroup}
+          selection={{ kind: 'session', payload: 'feature-A_spec' }}
+          startIndex={0}
+          isSessionRunning={() => false}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('version-group-header-status')).toHaveTextContent(/waiting for input/i)
+
+    const clearedGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({
+          id: 'feature-A_spec',
+          sessionState: 'spec',
+          specStage: 'clarified',
+          clarificationStarted: true,
+          attentionRequired: false,
+        }),
+      ],
+    }
+
+    rerender(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={clearedGroup}
+          selection={{ kind: 'session', payload: 'feature-A_spec' }}
+          startIndex={0}
+          isSessionRunning={(sessionId) => sessionId === 'feature-A_spec'}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('version-group-header-status')).toHaveTextContent('Clarifying')
+    expect(screen.getByTestId('version-group-header-status')).not.toHaveTextContent(/waiting for input/i)
+  })
+
   it('shows clarified in the group header for a clarified spec with idle attention', () => {
     const clarifiedGroup: SessionVersionGroupType = {
       ...baseGroup,

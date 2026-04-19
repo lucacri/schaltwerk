@@ -241,6 +241,56 @@ describe('RunContext', () => {
     expect(result.current.isSessionRunning('run-1')).toBe(false)
   })
 
+  it('keeps a clarifying spec in runningSessions after attention clears', async () => {
+    mockAllSessions = [
+      makeSession('spec-alpha', 'spec', {
+        clarification_started: true,
+        attention_required: false,
+      }),
+    ]
+    const { result, rerender } = renderHook(() => useRun(), { wrapper })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    act(() => {
+      listeners['schaltwerk:terminal-agent-started']?.({
+        session_name: 'spec-alpha',
+        terminal_id: 'session-spec-alpha~deadbeef-top',
+      })
+    })
+    expect(result.current.isSessionRunning('spec-alpha')).toBe(true)
+
+    mockAllSessions = [
+      makeSession('spec-alpha', 'spec', {
+        clarification_started: true,
+        attention_required: true,
+        attention_kind: 'waiting_for_input',
+      }),
+    ]
+    rerender()
+
+    expect(result.current.isSessionRunning('spec-alpha')).toBe(false)
+
+    mockAllSessions = [
+      makeSession('spec-alpha', 'spec', {
+        clarification_started: true,
+        attention_required: false,
+      }),
+    ]
+    rerender()
+
+    act(() => {
+      listeners['schaltwerk:terminal-agent-started']?.({
+        session_name: 'spec-alpha',
+        terminal_id: 'session-spec-alpha~deadbeef-top',
+      })
+    })
+
+    expect(result.current.isSessionRunning('spec-alpha')).toBe(true)
+  })
+
   it('keeps terminal listeners stable across session refreshes', async () => {
     mockAllSessions = [makeSession('alpha', 'running')]
     const { rerender } = renderHook(() => useRun(), { wrapper })

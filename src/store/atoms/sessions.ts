@@ -745,14 +745,23 @@ async function applySessionsSnapshot(
         resolved = deduped.map(session => {
             const live = liveAttention.get(session.info.session_id)
             const liveKind = liveAttentionKinds.get(session.info.session_id)
+            const isSpec = session.info.session_state === SessionState.Spec
+            const preferLiveSpecClear = isSpec
+                && live === false
+                && session.info.attention_required === true
             if ((live != null && session.info.attention_required == null)
-                || (liveKind != null && session.info.attention_kind == null)) {
+                || (liveKind != null && session.info.attention_kind == null)
+                || preferLiveSpecClear) {
                 return {
                     ...session,
                     info: {
                         ...session.info,
-                        attention_required: live ?? session.info.attention_required,
-                        attention_kind: liveKind ?? session.info.attention_kind,
+                        attention_required: preferLiveSpecClear
+                            ? false
+                            : (live ?? session.info.attention_required),
+                        attention_kind: preferLiveSpecClear
+                            ? undefined
+                            : (liveKind ?? session.info.attention_kind),
                     },
                 }
             }
@@ -1832,7 +1841,10 @@ export const initializeSessionsEventsActionAtom = atom(
                         return prev
                     }
                     const target = prev[targetIndex]
-                    const nextAttention = needsAttention ? true : undefined
+                    const targetIsSpec = target.info.session_state === SessionState.Spec
+                    const nextAttention = needsAttention
+                        ? true
+                        : targetIsSpec ? false : undefined
                     const nextAttentionKind = needsAttention ? event.attention_kind : undefined
                     if (target.info.attention_required === nextAttention
                         && target.info.attention_kind === nextAttentionKind) {

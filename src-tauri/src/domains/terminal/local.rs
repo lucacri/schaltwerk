@@ -127,6 +127,10 @@ fn attention_update_for_signals(
     }
 }
 
+fn user_input_is_submission(bytes: &[u8]) -> bool {
+    bytes.iter().any(|b| *b == b'\r' || *b == b'\n')
+}
+
 pub(crate) fn max_buffer_size_for_terminal(terminal_id: &str) -> usize {
     if lifecycle::is_agent_terminal(terminal_id) {
         AGENT_MAX_BUFFER_SIZE
@@ -1250,25 +1254,34 @@ impl TerminalBackend for LocalPtyAdapter {
     async fn write(&self, id: &str, data: &[u8]) -> Result<(), String> {
         let start = Instant::now();
 
-        if let Some(writer) = self.pty_writers.lock().await.get_mut(id) {
-            writer
-                .write_all(data)
-                .map_err(|e| format!("Write failed: {e}"))?;
+        let wrote = {
+            let mut writers = self.pty_writers.lock().await;
+            if let Some(writer) = writers.get_mut(id) {
+                writer
+                    .write_all(data)
+                    .map_err(|e| format!("Write failed: {e}"))?;
+                writer.flush().map_err(|e| format!("Flush failed: {e}"))?;
+                true
+            } else {
+                false
+            }
+        };
 
-            // Always flush immediately to ensure input appears without delay
-            // This is critical for responsive terminal behavior, especially for pasted text
-            writer.flush().map_err(|e| format!("Flush failed: {e}"))?;
-
+        if wrote {
             let elapsed = start.elapsed();
             if elapsed.as_millis() > 20 {
                 warn!("Terminal {id} slow write: {}ms", elapsed.as_millis());
             }
-
-            Ok(())
         } else {
             warn!("Terminal {id} not found for write");
-            Ok(())
+            return Ok(());
         }
+
+        if is_session_top_terminal_id(id) && user_input_is_submission(data) {
+            self.maybe_clear_waiting_for_input_on_submit(id).await;
+        }
+
+        Ok(())
     }
 
     async fn write_immediate(&self, id: &str, data: &[u8]) -> Result<(), String> {
@@ -1635,6 +1648,26 @@ impl LocalPtyAdapter {
         }
 
         Ok(())
+    }
+
+    async fn maybe_clear_waiting_for_input_on_submit(&self, id: &str) {
+        let session_id = {
+            let mut terminals = self.terminals.write().await;
+            let Some(state) = terminals.get_mut(id) else {
+                return;
+            };
+            if state.attention_kind != Some(TerminalAttentionKind::WaitingForInput) {
+                return;
+            }
+            let Some(session_id) = state.session_id.clone() else {
+                return;
+            };
+            state.attention_kind = None;
+            session_id
+        };
+
+        let reader_state = self.reader_state();
+        Self::emit_attention_update(&reader_state, id, session_id, false, None).await;
     }
 }
 
@@ -2490,5 +2523,133 @@ mod tests {
             state.attention_kind,
             Some(TerminalAttentionKind::WaitingForInput)
         );
+    }
+
+    async fn seed_top_terminal_with_waiting(
+        adapter: &LocalPtyAdapter,
+        id: &str,
+        session_id: &str,
+    ) {
+        let mut terminals = adapter.terminals.write().await;
+        terminals.insert(
+            id.to_string(),
+            TerminalState {
+                buffer: Vec::new(),
+                seq: 0,
+                start_seq: 0,
+                max_buffer_size: DEFAULT_MAX_BUFFER_SIZE,
+                last_output: SystemTime::now(),
+                screen: VisibleScreen::new(24, 80, id.to_string()),
+                idle_detector: IdleDetector::new(IDLE_THRESHOLD_MS, id.to_string()),
+                session_id: Some(session_id.to_string()),
+                attention_profile: Some(AttentionProfile::Claude),
+                attention_kind: Some(TerminalAttentionKind::WaitingForInput),
+                pending_notifications: Vec::new(),
+                pending_window_titles: Vec::new(),
+            },
+        );
+        drop(terminals);
+
+        let mut writers = adapter.pty_writers.lock().await;
+        writers.insert(id.to_string(), Box::new(Vec::<u8>::new()) as Box<dyn Write + Send>);
+    }
+
+    #[tokio::test]
+    async fn user_input_enter_clears_waiting_for_input_on_top_terminal() {
+        let adapter = LocalPtyAdapter::new();
+        let id = "session-foo-top";
+
+        seed_top_terminal_with_waiting(&adapter, id, "session-foo").await;
+
+        <LocalPtyAdapter as TerminalBackend>::write(&adapter, id, b"hello\r")
+            .await
+            .expect("write ok");
+
+        let terminals = adapter.terminals.read().await;
+        let state = terminals.get(id).expect("terminal state should exist");
+        assert_eq!(state.attention_kind, None);
+    }
+
+    #[tokio::test]
+    async fn user_input_without_enter_preserves_waiting_for_input() {
+        let adapter = LocalPtyAdapter::new();
+        let id = "session-foo-top";
+
+        seed_top_terminal_with_waiting(&adapter, id, "session-foo").await;
+
+        <LocalPtyAdapter as TerminalBackend>::write(&adapter, id, b"abc")
+            .await
+            .expect("write ok");
+
+        let terminals = adapter.terminals.read().await;
+        let state = terminals.get(id).expect("terminal state should exist");
+        assert_eq!(
+            state.attention_kind,
+            Some(TerminalAttentionKind::WaitingForInput)
+        );
+    }
+
+    #[tokio::test]
+    async fn user_input_enter_on_bottom_terminal_does_not_clear_waiting_for_input() {
+        let adapter = LocalPtyAdapter::new();
+        let id = "session-foo-bottom-0";
+
+        seed_top_terminal_with_waiting(&adapter, id, "session-foo").await;
+
+        <LocalPtyAdapter as TerminalBackend>::write(&adapter, id, b"\r")
+            .await
+            .expect("write ok");
+
+        let terminals = adapter.terminals.read().await;
+        let state = terminals.get(id).expect("terminal state should exist");
+        assert_eq!(
+            state.attention_kind,
+            Some(TerminalAttentionKind::WaitingForInput)
+        );
+    }
+
+    #[tokio::test]
+    async fn user_input_enter_updates_session_attention_registry() {
+        let fresh = Arc::new(Mutex::new(
+            crate::domains::attention::SessionAttentionState::default(),
+        ));
+        crate::domains::attention::set_session_attention_state(Arc::clone(&fresh));
+        let registry = crate::domains::attention::get_session_attention_state()
+            .expect("attention registry must be initialized for the test");
+
+        let session_name = unique_id("attention-registry-session");
+        let terminal_id = format!("session-{session_name}-top");
+
+        registry.lock().await.update(
+            &session_name,
+            true,
+            Some(crate::domains::attention::SessionAttentionKind::WaitingForInput),
+        );
+
+        let adapter = LocalPtyAdapter::new();
+        seed_top_terminal_with_waiting(&adapter, &terminal_id, &session_name).await;
+
+        <LocalPtyAdapter as TerminalBackend>::write(&adapter, &terminal_id, b"ok\n")
+            .await
+            .expect("write ok");
+
+        let mut observed = None;
+        for _ in 0..200 {
+            tokio::task::yield_now().await;
+            let guard = registry.lock().await;
+            let status = guard
+                .get(&session_name)
+                .expect("attention state should exist for the test session");
+            if !status.needs_attention {
+                observed = Some(status);
+                break;
+            }
+            drop(guard);
+        }
+
+        let status =
+            observed.expect("registry should reflect the input-driven attention clear");
+        assert!(!status.needs_attention);
+        assert_eq!(status.kind, None);
     }
 }

@@ -115,6 +115,51 @@ describe('SessionRailCard', () => {
     expect(screen.queryByTitle('Idle')).toBeNull()
   })
 
+  it('transitions from waiting for input to running when attention clears and isRunning becomes true', () => {
+    const waitingSession = mockEnrichedSession('transition-spec', 'spec', false)
+    waitingSession.info.clarification_started = true
+    waitingSession.info.attention_required = true
+    waitingSession.info.attention_kind = 'waiting_for_input'
+    waitingSession.info.spec_stage = 'clarified'
+
+    const { rerender, container } = render(
+      <TestProviders>
+        <SessionRailCard
+          session={waitingSession}
+          index={0}
+          isSelected={false}
+          hasFollowUpMessage={false}
+          isRunning={false}
+          onSelect={vi.fn()}
+        />
+      </TestProviders>
+    )
+
+    expect(screen.getByLabelText(/waiting for input/i)).toBeInTheDocument()
+
+    const clearedSession = mockEnrichedSession('transition-spec', 'spec', false)
+    clearedSession.info.clarification_started = true
+    clearedSession.info.attention_required = undefined
+    clearedSession.info.attention_kind = undefined
+    clearedSession.info.spec_stage = 'clarified'
+
+    rerender(
+      <TestProviders>
+        <SessionRailCard
+          session={clearedSession}
+          index={0}
+          isSelected={false}
+          hasFollowUpMessage={false}
+          isRunning
+          onSelect={vi.fn()}
+        />
+      </TestProviders>
+    )
+
+    expect(container.querySelector('.progress-dot-1')).toBeTruthy()
+    expect(screen.queryByText(/waiting for input/i)).toBeNull()
+  })
+
   it('does not expose ready state in the collapsed rail', () => {
     const session = mockEnrichedSession('mergeable-session', 'running', true)
     session.info.ready_to_merge = true

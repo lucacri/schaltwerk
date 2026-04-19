@@ -640,6 +640,60 @@ describe('SessionCard spec status pill', () => {
     expect(screen.getByTestId('session-card-status-pill')).toHaveTextContent(/^Clarifying$/)
   })
 
+  it('transitions from "Waiting for input" to "Clarifying" when attention clears and isRunning is true', () => {
+    const waitingSession: EnrichedSession = {
+      ...baseSession,
+      info: {
+        ...baseSession.info,
+        session_state: 'spec',
+        status: 'spec',
+        spec_stage: 'clarified',
+        worktree_path: '',
+        attention_required: true,
+        attention_kind: 'waiting_for_input',
+        clarification_started: true,
+      },
+    }
+
+    const { rerender } = renderWithProviders(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={waitingSession}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning={false}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('session-card-status-pill')).toHaveTextContent(/waiting for input/i)
+
+    const clearedSession: EnrichedSession = {
+      ...waitingSession,
+      info: {
+        ...waitingSession.info,
+        attention_required: undefined,
+        attention_kind: undefined,
+      },
+    }
+
+    rerender(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionCard
+          session={clearedSession}
+          index={0}
+          isSelected
+          hasFollowUpMessage={false}
+          isRunning
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.getByTestId('session-card-status-pill')).toHaveTextContent(/^Clarifying$/)
+    expect(screen.queryByText(/waiting for input/i)).toBeNull()
+  })
+
   it('shows waiting for input state for started specs that need input', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>

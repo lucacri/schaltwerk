@@ -227,6 +227,89 @@ describe('CompactVersionRow', () => {
     expect(screen.queryByTestId('compact-row-status-running')).toBeNull()
   })
 
+  it('transitions from waiting to running when attention clears and isRunning becomes true', () => {
+    const { rerender } = (() => {
+      const props: ComponentProps<typeof CompactVersionRow> = {
+        session: {
+          ...baseSession,
+          info: {
+            ...baseSession.info,
+            session_state: 'spec',
+            status: 'spec',
+            spec_stage: 'clarified',
+            worktree_path: '',
+            attention_required: true,
+            attention_kind: 'waiting_for_input',
+            clarification_started: true,
+          },
+        },
+        index: 1,
+        isSelected: false,
+        hasFollowUpMessage: false,
+        showPromoteIcon: false,
+        willBeDeleted: false,
+        isPromotionPreview: false,
+        isRunning: false,
+        isResetting: false,
+        disableMerge: false,
+        mergeStatus: 'idle',
+        isBusy: false,
+        isHighlighted: false,
+        isConsolidationSourceHighlighted: false,
+        onHover: vi.fn(),
+      }
+
+      return renderWithProviders(
+        <SessionCardActionsProvider actions={mockActions}>
+          <CompactVersionRow {...props} />
+        </SessionCardActionsProvider>
+      )
+    })()
+
+    expect(screen.getByTestId('compact-row-status-waiting')).toBeInTheDocument()
+    expect(screen.getByText(/waiting for input/i)).toBeInTheDocument()
+
+    const clearedProps: ComponentProps<typeof CompactVersionRow> = {
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          session_state: 'spec',
+          status: 'spec',
+          spec_stage: 'clarified',
+          worktree_path: '',
+          attention_required: undefined,
+          attention_kind: undefined,
+          clarification_started: true,
+        },
+      },
+      index: 1,
+      isSelected: false,
+      hasFollowUpMessage: false,
+      showPromoteIcon: false,
+      willBeDeleted: false,
+      isPromotionPreview: false,
+      isRunning: true,
+      isResetting: false,
+      disableMerge: false,
+      mergeStatus: 'idle',
+      isBusy: false,
+      isHighlighted: false,
+      isConsolidationSourceHighlighted: false,
+      onHover: vi.fn(),
+    }
+
+    rerender(
+      <SessionCardActionsProvider actions={mockActions}>
+        <CompactVersionRow {...clearedProps} />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.queryByTestId('compact-row-status-waiting')).toBeNull()
+    expect(screen.queryByText(/waiting for input/i)).toBeNull()
+    expect(screen.getByTestId('compact-row-status-running')).toBeInTheDocument()
+  })
+
   it('does not render ready state when session is ready to merge', () => {
     renderRow({
       session: {

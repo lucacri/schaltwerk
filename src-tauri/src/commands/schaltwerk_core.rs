@@ -3588,6 +3588,17 @@ fn request_spec_sessions_refresh(app: Option<&tauri::AppHandle>) {
     }
 }
 
+fn clear_spec_attention_after_user_reply(
+    db: &lucode::infrastructure::database::Database,
+    spec_id: &str,
+    spec_name: &str,
+) -> Result<(), String> {
+    db.update_spec_attention_required(spec_id, false)
+        .map_err(|e| format!("Failed to clear spec attention for '{spec_name}': {e}"))?;
+    clear_session_attention_state(spec_name.to_string());
+    Ok(())
+}
+
 pub async fn submit_spec_clarification_prompt_impl(
     app: Option<tauri::AppHandle>,
     terminal_id: String,
@@ -3636,11 +3647,22 @@ pub async fn submit_spec_clarification_prompt_impl(
         .await
         .map_err(|err| format!("Failed to submit clarification prompt to {terminal_id}: {err}"))?;
 
+    let mut needs_refresh = false;
+
+    if spec.attention_required {
+        clear_spec_attention_after_user_reply(&db, &spec.id, &spec.name)?;
+        needs_refresh = true;
+    }
+
     if !spec.clarification_started {
         db.update_spec_clarification_started(&spec.id, true)
             .map_err(|e| {
                 format!("Failed to update clarification_started for '{spec_name}': {e}")
             })?;
+        needs_refresh = true;
+    }
+
+    if needs_refresh {
         request_spec_sessions_refresh(app.as_ref());
     }
 
@@ -4551,6 +4573,45 @@ mod tests {
         assert!(should_spawn_spec_name_generation(None));
         assert!(should_spawn_spec_name_generation(Some(false)));
         assert!(!should_spawn_spec_name_generation(Some(true)));
+    }
+
+    #[test]
+    fn clear_spec_attention_after_user_reply_flips_db_flag() {
+        use chrono::Utc;
+        use lucode::infrastructure::database::Database;
+        use lucode::infrastructure::database::db_specs::SpecMethods;
+        use std::path::PathBuf;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("temp dir");
+        let db = Database::new(Some(temp_dir.path().join("clear.db"))).expect("database");
+        let now = Utc::now();
+        let spec = lucode::domains::sessions::entity::Spec {
+            id: "spec-waiting".to_string(),
+            name: "waiting-spec".to_string(),
+            display_name: None,
+            epic_id: None,
+            issue_number: None,
+            issue_url: None,
+            pr_number: None,
+            pr_url: None,
+            improve_plan_round_id: None,
+            repository_path: PathBuf::from("/repo"),
+            repository_name: "repo".to_string(),
+            content: "".to_string(),
+            stage: lucode::domains::sessions::entity::SpecStage::Clarified,
+            attention_required: true,
+            clarification_started: true,
+            created_at: now,
+            updated_at: now,
+        };
+        db.create_spec(&spec).expect("create spec");
+
+        super::clear_spec_attention_after_user_reply(&db, &spec.id, &spec.name)
+            .expect("helper clears attention");
+
+        let reloaded = db.get_spec_by_id(&spec.id).expect("spec reload");
+        assert!(!reloaded.attention_required);
     }
 
     #[tokio::test]
