@@ -12,6 +12,7 @@ pub trait SpecMethods {
     fn get_spec_by_id(&self, id: &str) -> Result<Spec>;
     fn list_specs(&self, repo_path: &Path) -> Result<Vec<Spec>>;
     fn update_spec_content(&self, id: &str, content: &str) -> Result<()>;
+    fn update_spec_implementation_plan(&self, id: &str, plan: Option<&str>) -> Result<()>;
     fn update_spec_display_name(&self, id: &str, display_name: &str) -> Result<()>;
     fn update_spec_epic_id(&self, id: &str, epic_id: Option<&str>) -> Result<()>;
     fn update_spec_stage(&self, id: &str, stage: SpecStage) -> Result<()>;
@@ -46,9 +47,9 @@ impl SpecMethods for Database {
                 id, name, display_name,
                 epic_id, issue_number, issue_url, pr_number, pr_url,
                 improve_plan_round_id, repository_path, repository_name, content,
-                stage, attention_required, clarification_started,
+                implementation_plan, stage, attention_required, clarification_started,
                 created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 spec.id,
                 spec.name,
@@ -62,6 +63,7 @@ impl SpecMethods for Database {
                 spec.repository_path.to_string_lossy(),
                 spec.repository_name,
                 spec.content,
+                spec.implementation_plan,
                 spec.stage.as_str(),
                 spec.attention_required,
                 spec.clarification_started,
@@ -79,7 +81,7 @@ impl SpecMethods for Database {
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
                     improve_plan_round_id, repository_path, repository_name, content,
-                    stage, attention_required, clarification_started,
+                    implementation_plan, stage, attention_required, clarification_started,
                     created_at, updated_at
              FROM specs
              WHERE repository_path = ?1 AND name = ?2",
@@ -95,7 +97,7 @@ impl SpecMethods for Database {
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
                     improve_plan_round_id, repository_path, repository_name, content,
-                    stage, attention_required, clarification_started,
+                    implementation_plan, stage, attention_required, clarification_started,
                     created_at, updated_at
              FROM specs
              WHERE id = ?1",
@@ -110,7 +112,7 @@ impl SpecMethods for Database {
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
                     improve_plan_round_id, repository_path, repository_name, content,
-                    stage, attention_required, clarification_started,
+                    implementation_plan, stage, attention_required, clarification_started,
                     created_at, updated_at
              FROM specs
              WHERE repository_path = ?1
@@ -131,6 +133,17 @@ impl SpecMethods for Database {
              SET content = ?1, updated_at = ?2
              WHERE id = ?3",
             params![content, Utc::now().timestamp(), id],
+        )?;
+        Ok(())
+    }
+
+    fn update_spec_implementation_plan(&self, id: &str, plan: Option<&str>) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE specs
+             SET implementation_plan = ?1, updated_at = ?2
+             WHERE id = ?3",
+            params![plan, Utc::now().timestamp(), id],
         )?;
         Ok(())
     }
@@ -243,7 +256,7 @@ impl SpecMethods for Database {
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
                     improve_plan_round_id, repository_path, repository_name, content,
-                    stage, attention_required, clarification_started,
+                    implementation_plan, stage, attention_required, clarification_started,
                     created_at, updated_at
              FROM specs
              WHERE repository_path = ?1 AND improve_plan_round_id = ?2",
@@ -273,21 +286,22 @@ fn row_to_spec(row: &Row<'_>) -> rusqlite::Result<Spec> {
         repository_path: PathBuf::from(row.get::<_, String>(9)?),
         repository_name: row.get(10)?,
         content: row.get(11)?,
-        stage: row.get::<_, String>(12)?.parse().map_err(|err: String| {
+        implementation_plan: row.get(12)?,
+        stage: row.get::<_, String>(13)?.parse().map_err(|err: String| {
             rusqlite::Error::FromSqlConversionFailure(
-                12,
+                13,
                 rusqlite::types::Type::Text,
                 Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, err)),
             )
         })?,
-        attention_required: row.get(13)?,
-        clarification_started: row.get(14)?,
+        attention_required: row.get(14)?,
+        clarification_started: row.get(15)?,
         created_at: {
-            let ts: i64 = row.get(15)?;
+            let ts: i64 = row.get(16)?;
             utc_from_epoch_seconds_lossy(ts)
         },
         updated_at: {
-            let ts: i64 = row.get(16)?;
+            let ts: i64 = row.get(17)?;
             utc_from_epoch_seconds_lossy(ts)
         },
     })
@@ -319,6 +333,7 @@ mod tests {
             repository_path: PathBuf::from(repo_path),
             repository_name: "test-repo".to_string(),
             content: "spec content".to_string(),
+            implementation_plan: None,
             stage: SpecStage::Draft,
             attention_required: false,
             clarification_started: false,
@@ -400,6 +415,37 @@ mod tests {
         let specs = db.list_specs(Path::new("/repo-a")).unwrap();
         assert_eq!(specs.len(), 1);
         assert_eq!(specs[0].id, "s1");
+    }
+
+    #[test]
+    fn update_spec_implementation_plan_roundtrip() {
+        let db = create_test_database();
+        db.create_spec(&make_spec("s1", "plan-spec", "/repo"))
+            .unwrap();
+        assert!(
+            db.get_spec_by_id("s1")
+                .unwrap()
+                .implementation_plan
+                .is_none()
+        );
+
+        db.update_spec_implementation_plan("s1", Some("My plan body"))
+            .unwrap();
+        assert_eq!(
+            db.get_spec_by_id("s1")
+                .unwrap()
+                .implementation_plan
+                .as_deref(),
+            Some("My plan body"),
+        );
+
+        db.update_spec_implementation_plan("s1", None).unwrap();
+        assert!(
+            db.get_spec_by_id("s1")
+                .unwrap()
+                .implementation_plan
+                .is_none()
+        );
     }
 
     #[test]
@@ -501,6 +547,7 @@ mod tests {
             repository_path: PathBuf::from("/repo"),
             repository_name: "test-repo".to_string(),
             content: "content".to_string(),
+            implementation_plan: None,
             stage: SpecStage::Draft,
             attention_required: false,
             clarification_started: false,

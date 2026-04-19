@@ -1,3 +1,4 @@
+pub mod action_prompts;
 pub mod activity;
 pub mod autonomy;
 pub mod cache;

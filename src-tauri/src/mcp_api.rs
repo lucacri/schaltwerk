@@ -1585,115 +1585,6 @@ fn list_round_sessions(manager: &SessionManager, round_id: &str) -> anyhow::Resu
         .collect())
 }
 
-fn build_plan_judge_prompt(candidate_sessions: &[Session], source_session_ids: &[String]) -> String {
-    let mut prompt =
-        String::from("Review every Improve Plan candidate for this Lucode plan round.\n\n");
-    prompt.push_str("Source sessions:\n");
-    for source in source_session_ids {
-        prompt.push_str(&format!("- {source}\n"));
-    }
-    prompt.push_str("\nCandidates:\n");
-    for candidate in candidate_sessions {
-        let report = candidate
-            .consolidation_report
-            .as_deref()
-            .unwrap_or("<missing report>");
-        let base = candidate
-            .consolidation_base_session_id
-            .as_deref()
-            .unwrap_or("<missing base>");
-        let report_source = candidate
-            .consolidation_report_source
-            .as_deref()
-            .unwrap_or("agent");
-        prompt.push_str(&format!(
-            "- {}\n  base_session_id: {}\n  report_source: {}\n",
-            candidate.name, base, report_source
-        ));
-        if report_source == "auto_stub" {
-            prompt.push_str("  note: This candidate has only an auto-filed stub report.\n");
-        }
-        prompt.push_str(&format!("  report:\n{report}\n\n"));
-    }
-    prompt.push_str(
-        "Choose the strongest implementation plan. File your reasoning through lucode_consolidation_report with recommended_session_id set to the winning candidate session ID. Do not call lucode_promote directly.",
-    );
-    prompt
-}
-
-fn build_judge_synthesis_prompt(candidate_sessions: &[Session], source_session_ids: &[String]) -> String {
-    let mut prompt = String::from("You are the synthesis judge for this Lucode consolidation round.\n\n");
-    prompt.push_str(&format!(
-        "{} parallel agents have each produced an independent implementation of the same task, \
-        checked in on their own branches/worktrees listed below. Your job is NOT to pick one — \
-        your job is to synthesize the best possible implementation by combining the strongest \
-        ideas and code from all candidates.\n\n",
-        candidate_sessions.len()
-    ));
-    prompt.push_str("You are working in your own isolated judge worktree. Read each candidate's branch \
-        (git diff against the parent branch) and their consolidation report for intent, then \
-        commit a coherent synthesized implementation on YOUR branch. Your branch is what \
-        will ship; your session will be promoted under the original spec name on acceptance.\n\n");
-
-    prompt.push_str("Source sessions:\n");
-    for source in source_session_ids {
-        prompt.push_str(&format!("- {source}\n"));
-    }
-    prompt.push_str("\nCandidates:\n");
-    for candidate in candidate_sessions {
-        let report = candidate
-            .consolidation_report
-            .as_deref()
-            .unwrap_or("<missing report>");
-        let base = candidate
-            .consolidation_base_session_id
-            .as_deref()
-            .unwrap_or("<missing base>");
-        let report_source = candidate
-            .consolidation_report_source
-            .as_deref()
-            .unwrap_or("agent");
-        let branch = &candidate.branch;
-        let worktree = candidate
-            .worktree_path
-            .to_str()
-            .unwrap_or("<missing worktree>");
-
-        prompt.push_str(&format!(
-            "- name: {}\n  branch: {}\n  worktree_path: {}\n  base_session_id: {}\n  report_source: {}\n",
-            candidate.name, branch, worktree, base, report_source
-        ));
-        if report_source == "auto_stub" {
-            prompt.push_str("  note: This candidate has only an auto-filed stub report.\n");
-        }
-        prompt.push_str(&format!("  report:\n{report}\n\n"));
-    }
-
-    prompt.push_str(
-        "When the synthesized implementation is committed and verified on your branch:\n\
-        1. Run the project's required verification.\n\
-        2. File lucode_consolidation_report from this judge session with `base_session_id` \
-           set to the source session ID you used as the conceptual base.\n\
-        3. Do NOT set `recommended_session_id` for implementation rounds.\n\
-        4. Do NOT call `lucode_promote` directly.\n\n\
-        Lucode will promote this judge session after user confirmation, or immediately when \
-        the round is configured for auto-promotion.",
-    );
-    prompt
-}
-
-fn build_judge_prompt(
-    candidate_sessions: &[Session],
-    source_session_ids: &[String],
-    round_type: &str,
-) -> String {
-    if round_type == "plan" {
-        build_plan_judge_prompt(candidate_sessions, source_session_ids)
-    } else {
-        build_judge_synthesis_prompt(candidate_sessions, source_session_ids)
-    }
-}
-
 async fn diff_summary(req: Request<Incoming>) -> Result<Response<String>, hyper::Error> {
     let query = req.uri().query().unwrap_or("");
     let mut session_param: Option<String> = None;
@@ -2061,6 +1952,7 @@ mod tests {
             repository_path: PathBuf::from("/tmp/mock"),
             repository_name: "mock".to_string(),
             content: content.unwrap_or_default().to_string(),
+            implementation_plan: None,
             stage: SpecStage::Draft,
             attention_required: false,
             clarification_started: false,
@@ -3940,10 +3832,15 @@ mod tests {
 
         let round = get_consolidation_round(&fixture.db, &fixture.repo_path, &fixture.round_id)
             .expect("load round");
+        let judge_templates = JudgePromptTemplates {
+            plan: lucode::domains::settings::default_plan_judge_prompt_template(),
+            synthesis: lucode::domains::settings::default_judge_prompt_template(),
+        };
         let result = create_and_start_judge_session_with_launcher(
             &fixture.db,
             &fixture.manager,
             &round,
+            &judge_templates,
             |params| async move {
                 assert!(params.session_name.contains("judge"));
                 Err("forced judge launch failure".to_string())
@@ -3983,10 +3880,15 @@ mod tests {
             .expect("load round");
         let launched: std::cell::RefCell<Vec<String>> =
             std::cell::RefCell::new(Vec::new());
+        let judge_templates = JudgePromptTemplates {
+            plan: lucode::domains::settings::default_plan_judge_prompt_template(),
+            synthesis: lucode::domains::settings::default_judge_prompt_template(),
+        };
         let session = create_and_start_judge_session_with_launcher(
             &fixture.db,
             &fixture.manager,
             &round,
+            &judge_templates,
             |params| {
                 launched.borrow_mut().push(params.session_name.clone());
                 async { Ok("started".to_string()) }
@@ -4238,8 +4140,11 @@ mod tests {
             .get_spec_by_name(&fixture.repo_path, &fixture.spec.name)
             .expect("load updated spec");
         assert_eq!(updated_spec.improve_plan_round_id, None);
-        assert!(updated_spec.content.contains("## Implementation Plan"));
-        assert!(updated_spec.content.contains("1. Change the backend."));
+        assert_eq!(updated_spec.content, fixture.spec.content);
+        assert_eq!(
+            updated_spec.implementation_plan.as_deref(),
+            Some("1. Change the backend.\n2. Update the UI.")
+        );
 
         let round = get_consolidation_round(&fixture.db, &fixture.repo_path, &fixture.round_id)
             .expect("load plan round");
@@ -4875,6 +4780,8 @@ mod tests {
         };
 
         let core_for_launcher = Arc::clone(&core);
+        let plan_template =
+            lucode::domains::settings::default_plan_candidate_prompt_template();
         start_improve_plan_round_with_launcher(
             &db,
             &manager,
@@ -4883,6 +4790,7 @@ mod tests {
                 candidate_count: Some(1),
                 ..Default::default()
             },
+            &plan_template,
             move |_params| {
                 let core_for_read = Arc::clone(&core_for_launcher);
                 async move {
@@ -4914,6 +4822,8 @@ mod tests {
 
         let launched: std::cell::RefCell<Vec<String>> =
             std::cell::RefCell::new(Vec::new());
+        let plan_template =
+            lucode::domains::settings::default_plan_candidate_prompt_template();
         let result = start_improve_plan_round_with_launcher(
             &db,
             &manager,
@@ -4922,6 +4832,7 @@ mod tests {
                 candidate_count: Some(2),
                 ..StartImprovePlanRoundParams::default()
             },
+            &plan_template,
             |params| {
                 let name = params.session_name.clone();
                 launched.borrow_mut().push(name.clone());
@@ -5101,32 +5012,6 @@ mod tests {
     }
 
     #[test]
-    fn write_implementation_plan_section_appends_to_original_content() {
-        let updated = write_implementation_plan_section(
-            "# Task\n\nOriginal request stays here.",
-            "1. Write tests.\n2. Implement.",
-        );
-
-        assert_eq!(
-            updated,
-            "# Task\n\nOriginal request stays here.\n\n## Implementation Plan\n\n1. Write tests.\n2. Implement."
-        );
-    }
-
-    #[test]
-    fn write_implementation_plan_section_replaces_only_existing_plan_section() {
-        let updated = write_implementation_plan_section(
-            "# Task\n\nOriginal.\n\n## Implementation Plan\n\nOld plan.\n\n## Notes\n\nKeep this.",
-            "New plan.",
-        );
-
-        assert_eq!(
-            updated,
-            "# Task\n\nOriginal.\n\n## Implementation Plan\n\nNew plan.\n\n## Notes\n\nKeep this."
-        );
-    }
-
-    #[test]
     fn pr_feedback_response_success_path_returns_structured_json() {
         let payload = crate::commands::github::GitHubPrFeedbackPayload {
             state: "OPEN".to_string(),
@@ -5295,7 +5180,12 @@ mod tests {
             sess_with_paths("feature_v1", "lucode/feature_v1", ".lucode/worktrees/feature_v1"),
             sess_with_paths("feature_v2", "lucode/feature_v2", ".lucode/worktrees/feature_v2"),
         ];
-        let prompt = build_judge_synthesis_prompt(&candidates, &["src_a".into(), "src_b".into()]);
+        let template = lucode::domains::settings::default_judge_prompt_template();
+        let prompt = lucode::domains::sessions::action_prompts::render_synthesis_judge_prompt(
+            &template,
+            &candidates,
+            &["src_a".into(), "src_b".into()],
+        );
         assert!(prompt.contains("lucode/feature_v1"));
         assert!(prompt.contains("lucode/feature_v2"));
         assert!(prompt.contains(".lucode/worktrees/feature_v1"));
@@ -5304,7 +5194,12 @@ mod tests {
 
     #[test]
     fn synthesis_prompt_instructs_synthesis_not_selection() {
-        let prompt = build_judge_synthesis_prompt(&[sess_with_paths("x_v1", "b", "w")], &[]);
+        let template = lucode::domains::settings::default_judge_prompt_template();
+        let prompt = lucode::domains::sessions::action_prompts::render_synthesis_judge_prompt(
+            &template,
+            &[sess_with_paths("x_v1", "b", "w")],
+            &[],
+        );
         assert!(!prompt.contains("Choose the strongest"));
         assert!(prompt.contains("synthesize"));
         assert!(prompt.contains("lucode_consolidation_report"));
@@ -5315,7 +5210,12 @@ mod tests {
 
     #[test]
     fn plan_judge_prompt_unchanged() {
-        let prompt = build_plan_judge_prompt(&[sess_with_paths("p_v1", "b", "w")], &[]);
+        let template = lucode::domains::settings::default_plan_judge_prompt_template();
+        let prompt = lucode::domains::sessions::action_prompts::render_plan_judge_prompt(
+            &template,
+            &[sess_with_paths("p_v1", "b", "w")],
+            &[],
+        );
         assert!(prompt.contains("Choose the strongest implementation plan"));
         assert!(prompt.contains("recommended_session_id"));
     }
@@ -6493,13 +6393,20 @@ pub(crate) struct ImprovePlanRoundResponse {
     pub candidate_sessions: Vec<String>,
 }
 
-fn build_plan_candidate_prompt(spec: &Spec) -> String {
-    format!(
-        "You are preparing an implementation plan for this clarified Lucode spec.\n\n\
-Inspect the repository as needed. Do not implement code. Write a concise, actionable Markdown implementation plan, then call lucode_consolidation_report with your plan as report and base_session_id set to '{}'.\n\n\
-Spec content:\n\n{}",
-        spec.id, spec.content
-    )
+async fn resolve_plan_candidate_prompt_template(app: &tauri::AppHandle) -> String {
+    match crate::get_settings_manager(app).await {
+        Ok(settings_manager) => {
+            let manager = settings_manager.lock().await;
+            manager
+                .get_generation_settings()
+                .plan_candidate_prompt_template
+                .unwrap_or_else(lucode::domains::settings::default_plan_candidate_prompt_template)
+        }
+        Err(err) => {
+            warn!("Failed to load plan candidate prompt template, using default: {err}");
+            lucode::domains::settings::default_plan_candidate_prompt_template()
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -6574,6 +6481,7 @@ fn create_improve_plan_round_start_context(
     manager: &SessionManager,
     name: &str,
     params: &StartImprovePlanRoundParams,
+    plan_candidate_template: &str,
 ) -> Result<ImprovePlanRoundStartContext, ImprovePlanRoundCreateFailure> {
     let (spec, version_group_id) =
         validate_start_improve_plan_round_preconditions(db, manager, name).map_err(
@@ -6595,7 +6503,10 @@ fn create_improve_plan_round_start_context(
         .unwrap_or("round");
     let source_ids = vec![spec.id.clone()];
     let confirmation_mode = params.confirmation_mode.as_deref().unwrap_or("confirm");
-    let prompt = build_plan_candidate_prompt(&spec);
+    let prompt = lucode::domains::sessions::action_prompts::render_plan_candidate_prompt(
+        plan_candidate_template,
+        &spec,
+    );
     let mut created_session_names: Vec<String> = Vec::new();
     let mut candidate_sessions: Vec<String> = Vec::new();
     let mut launches: Vec<PlanCandidateLaunch> = Vec::new();
@@ -6682,6 +6593,7 @@ async fn start_improve_plan_round_with_launcher<Launch, LaunchFuture, Refresh>(
     manager: &SessionManager,
     name: &str,
     params: StartImprovePlanRoundParams,
+    plan_candidate_template: &str,
     mut launch: Launch,
     refresh: Refresh,
 ) -> Result<ImprovePlanRoundResponse, (StatusCode, String)>
@@ -6690,7 +6602,13 @@ where
     LaunchFuture: Future<Output = Result<String, String>>,
     Refresh: FnOnce(SessionsRefreshReason),
 {
-    let context = match create_improve_plan_round_start_context(db, manager, name, &params) {
+    let context = match create_improve_plan_round_start_context(
+        db,
+        manager,
+        name,
+        &params,
+        plan_candidate_template,
+    ) {
         Ok(context) => context,
         Err(failure) => {
             let rollback_failures = rollback_improve_plan_round_creation(
@@ -6878,12 +6796,14 @@ pub(crate) async fn start_improve_plan_round_inner(
         (core.db.clone(), core.session_manager())
     };
 
+    let plan_candidate_template = resolve_plan_candidate_prompt_template(app).await;
     let app_for_refresh = app.clone();
     start_improve_plan_round_with_launcher(
         &db,
         &manager,
         name,
         params,
+        &plan_candidate_template,
         |start_params| schaltwerk_core_start_session_agent_with_restart(app.clone(), start_params),
         move |reason| request_sessions_refresh(&app_for_refresh, reason),
     )
@@ -7333,50 +7253,6 @@ fn parse_pr_number_from_url(url: &str) -> Option<u64> {
     let (_, tail) = trimmed.rsplit_once("/pull/")?;
     let number_str = tail.split(['?', '#']).next()?.trim();
     number_str.parse().ok()
-}
-
-const IMPLEMENTATION_PLAN_HEADING: &str = "## Implementation Plan";
-
-fn write_implementation_plan_section(content: &str, plan: &str) -> String {
-    let plan = plan.trim();
-    let normalized_section = format!("{IMPLEMENTATION_PLAN_HEADING}\n\n{plan}");
-    let lines = content.lines().collect::<Vec<_>>();
-    let Some(start_index) = lines
-        .iter()
-        .position(|line| line.trim() == IMPLEMENTATION_PLAN_HEADING)
-    else {
-        let prefix = content.trim_end();
-        if prefix.is_empty() {
-            return normalized_section;
-        }
-        return format!("{prefix}\n\n{normalized_section}");
-    };
-
-    let end_index = lines
-        .iter()
-        .enumerate()
-        .skip(start_index + 1)
-        .find_map(|(index, line)| {
-            let trimmed = line.trim();
-            (trimmed.starts_with("## ") && trimmed != IMPLEMENTATION_PLAN_HEADING).then_some(index)
-        })
-        .unwrap_or(lines.len());
-
-    let mut output = String::new();
-    let before = lines[..start_index].join("\n");
-    if !before.trim().is_empty() {
-        output.push_str(before.trim_end());
-        output.push_str("\n\n");
-    }
-    output.push_str(&normalized_section);
-
-    let after = lines[end_index..].join("\n");
-    if !after.trim().is_empty() {
-        output.push_str("\n\n");
-        output.push_str(after.trim_start());
-    }
-
-    output
 }
 
 fn pr_feedback_result_to_response(
@@ -8350,6 +8226,7 @@ async fn create_and_start_judge_session_with_launcher<Launch, LaunchFuture, Refr
     db: &Database,
     manager: &SessionManager,
     round: &ConsolidationRoundRecord,
+    judge_prompt_templates: &JudgePromptTemplates,
     mut launch: Launch,
     refresh: Refresh,
 ) -> Result<Session, String>
@@ -8370,11 +8247,19 @@ where
         .iter()
         .map(|session| session.name.clone())
         .collect::<Vec<_>>();
-    let prompt = build_judge_prompt(
-        &candidate_sessions,
-        &round.source_session_ids,
-        &round.round_type,
-    );
+    let prompt = if round.round_type == "plan" {
+        lucode::domains::sessions::action_prompts::render_plan_judge_prompt(
+            &judge_prompt_templates.plan,
+            &candidate_sessions,
+            &round.source_session_ids,
+        )
+    } else {
+        lucode::domains::sessions::action_prompts::render_synthesis_judge_prompt(
+            &judge_prompt_templates.synthesis,
+            &candidate_sessions,
+            &round.source_session_ids,
+        )
+    };
     let agent_type = Some(resolve_consolidation_judge_agent_type(db).await);
 
     let session = manager
@@ -8426,20 +8311,64 @@ where
     Ok(session)
 }
 
+struct JudgePromptTemplates {
+    plan: String,
+    synthesis: String,
+}
+
+async fn resolve_judge_prompt_templates(app: Option<&tauri::AppHandle>) -> JudgePromptTemplates {
+    let Some(app) = app else {
+        return JudgePromptTemplates {
+            plan: lucode::domains::settings::default_plan_judge_prompt_template(),
+            synthesis: lucode::domains::settings::default_judge_prompt_template(),
+        };
+    };
+
+    match crate::get_settings_manager(app).await {
+        Ok(settings_manager) => {
+            let manager = settings_manager.lock().await;
+            let generation = manager.get_generation_settings();
+            JudgePromptTemplates {
+                plan: generation
+                    .plan_judge_prompt_template
+                    .unwrap_or_else(lucode::domains::settings::default_plan_judge_prompt_template),
+                synthesis: generation
+                    .judge_prompt_template
+                    .unwrap_or_else(lucode::domains::settings::default_judge_prompt_template),
+            }
+        }
+        Err(err) => {
+            warn!("Failed to load judge prompt templates, using defaults: {err}");
+            JudgePromptTemplates {
+                plan: lucode::domains::settings::default_plan_judge_prompt_template(),
+                synthesis: lucode::domains::settings::default_judge_prompt_template(),
+            }
+        }
+    }
+}
+
 async fn create_and_start_judge_session(
     app: Option<&tauri::AppHandle>,
     db: &Database,
     manager: &SessionManager,
     round: &ConsolidationRoundRecord,
 ) -> Result<Session, String> {
+    let templates = resolve_judge_prompt_templates(app).await;
     match app {
         Some(handle) => {
             let app_for_refresh = handle.clone();
+            let handle_for_launch = handle.clone();
             create_and_start_judge_session_with_launcher(
                 db,
                 manager,
                 round,
-                |params| schaltwerk_core_start_session_agent_with_restart(handle.clone(), params),
+                &templates,
+                move |params| {
+                    schaltwerk_core_start_session_agent_with_restart(
+                        handle_for_launch.clone(),
+                        params,
+                    )
+                },
                 move |reason| request_sessions_refresh(&app_for_refresh, reason),
             )
             .await
@@ -8449,6 +8378,7 @@ async fn create_and_start_judge_session(
                 db,
                 manager,
                 round,
+                &templates,
                 |_params| async { Ok::<String, String>(String::new()) },
                 |_reason| {},
             )
@@ -8603,12 +8533,11 @@ where
                     format!("No spec is linked to plan round '{round_id}': {err}"),
                 )
             })?;
-        let updated_content = write_implementation_plan_section(&spec.content, plan);
-        SpecMethods::update_spec_content(db, &spec.id, &updated_content).map_err(|err| {
+        SpecMethods::update_spec_implementation_plan(db, &spec.id, Some(plan)).map_err(|err| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!(
-                    "Failed to write implementation plan to spec '{}': {err}",
+                    "Failed to persist implementation plan for spec '{}': {err}",
                     spec.name
                 ),
             )

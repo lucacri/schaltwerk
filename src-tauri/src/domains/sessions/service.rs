@@ -115,17 +115,12 @@ pub(crate) fn compute_rebased_onto_parent_with_repo(
     repo.graph_descendant_of(session_oid, parent_oid).ok()
 }
 
-const FORCE_RESTART_CONTINUATION_PREAMBLE: &str = concat!(
-    "This is a continuation of prior work in this worktree, not a fresh start.\n",
-    "There are already committed and/or uncommitted changes in this worktree. Before doing anything else, inspect the current state with git status and git diff and continue from what is already there instead of redoing completed work.\n\n",
-    "The original spec follows below.\n\n",
-);
-
 fn build_force_restart_prompt<'a>(
     worktree_path: &Path,
     session_branch: &str,
     parent_branch: &str,
     initial_prompt: Option<&'a str>,
+    force_restart_template: &str,
 ) -> Option<Cow<'a, str>> {
     let prompt = initial_prompt?;
     let has_uncommitted_changes = match git::has_uncommitted_changes(worktree_path) {
@@ -145,9 +140,12 @@ fn build_force_restart_prompt<'a>(
         return Some(Cow::Borrowed(prompt));
     }
 
-    Some(Cow::Owned(format!(
-        "{FORCE_RESTART_CONTINUATION_PREAMBLE}{prompt}"
-    )))
+    Some(Cow::Owned(
+        crate::domains::sessions::action_prompts::render_force_restart_prompt(
+            force_restart_template,
+            prompt,
+        ),
+    ))
 }
 
 /// Info needed for session cancellation (extracted with brief lock, then released)
@@ -353,6 +351,7 @@ pub struct AgentLaunchParams<'a> {
     pub amp_mcp_servers: Option<&'a HashMap<String, crate::domains::settings::McpServerConfig>>,
     pub agent_type_override: Option<&'a str>,
     pub skip_prompt: bool,
+    pub force_restart_prompt_template: Option<&'a str>,
 }
 
 use crate::{
@@ -574,6 +573,7 @@ mod service_unified_tests {
         manager: &SessionManager,
         session_name: &str,
     ) -> AgentLaunchSpec {
+        let template = crate::domains::settings::default_force_restart_prompt_template();
         manager
             .start_claude_in_session_with_restart_and_binary(AgentLaunchParams {
                 session_name,
@@ -582,6 +582,7 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
+                force_restart_prompt_template: Some(&template),
             })
             .unwrap()
     }
@@ -831,6 +832,7 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
+                force_restart_prompt_template: None,
             })
             .unwrap();
         let shell1 = &cmd1.shell_command;
@@ -847,6 +849,7 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
+                force_restart_prompt_template: None,
             })
             .unwrap();
         let shell2 = &cmd2.shell_command;
@@ -899,6 +902,7 @@ mod service_unified_tests {
                     amp_mcp_servers: None,
                     agent_type_override: None,
                     skip_prompt: false,
+                    force_restart_prompt_template: None,
                 });
 
             // Should succeed for all supported agents
@@ -948,6 +952,7 @@ mod service_unified_tests {
             amp_mcp_servers: None,
             agent_type_override: None,
             skip_prompt: false,
+            force_restart_prompt_template: None,
         });
 
         assert!(result.is_ok());
@@ -981,6 +986,7 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
+                force_restart_prompt_template: None,
             })
             .expect("Amp launch spec should build");
 
@@ -1065,6 +1071,7 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
+                force_restart_prompt_template: None,
             })
             .expect("expected OpenCode command");
         let shell_command = &cmd.shell_command;
@@ -1116,6 +1123,7 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
+                force_restart_prompt_template: None,
             })
             .expect("expected OpenCode command");
         let first_shell = &cmd_first.shell_command;
@@ -1150,6 +1158,7 @@ mod service_unified_tests {
                 amp_mcp_servers: None,
                 agent_type_override: None,
                 skip_prompt: false,
+                force_restart_prompt_template: None,
             })
             .expect("expected OpenCode command");
         let second_shell = &cmd_second.shell_command;
@@ -1211,6 +1220,7 @@ mod service_unified_tests {
             repository_path: temp_dir.path().join("repo"),
             repository_name: "test-repo".to_string(),
             content: "Clarify this spec".to_string(),
+            implementation_plan: None,
             stage: SpecStage::Draft,
             attention_required: true,
             clarification_started: true,
@@ -1259,6 +1269,7 @@ mod service_unified_tests {
                 repository_path: temp_dir.path().join("repo"),
                 repository_name: "test-repo".to_string(),
                 content: "Clarify this spec".to_string(),
+                implementation_plan: None,
                 stage: SpecStage::Draft,
                 attention_required: false,
                 clarification_started: false,
@@ -1975,6 +1986,7 @@ mod service_unified_tests {
             amp_mcp_servers: None,
             agent_type_override: None,
             skip_prompt: false,
+            force_restart_prompt_template: None,
         });
 
         // Should return an error with supported agent types listed
@@ -3321,6 +3333,7 @@ impl SessionManager {
                 ready_to_merge: false,
                 ready_to_merge_checks: None,
                 spec_content: Some(spec.content.clone()),
+                spec_implementation_plan: spec.implementation_plan.clone(),
                 spec_stage: Some(spec.stage.clone()),
                 improve_plan_round_id: spec.improve_plan_round_id.clone(),
                 clarification_started: Some(spec.clarification_started),
@@ -3392,6 +3405,7 @@ impl SessionManager {
                     ready_to_merge: session.ready_to_merge,
                     ready_to_merge_checks: None,
                     spec_content: session.spec_content.clone(),
+                    spec_implementation_plan: None,
                     spec_stage: Some(SpecStage::Draft),
                     improve_plan_round_id: None,
                     clarification_started: None,
@@ -3497,6 +3511,7 @@ impl SessionManager {
                 ready_to_merge: base_readiness.ready_to_merge,
                 ready_to_merge_checks: Some(base_readiness.checks),
                 spec_content: session.spec_content.clone(),
+                spec_implementation_plan: None,
                 spec_stage: None,
                 improve_plan_round_id: None,
                 clarification_started: None,
@@ -3609,6 +3624,7 @@ impl SessionManager {
         session_name: &str,
         force_restart: bool,
     ) -> Result<AgentLaunchSpec> {
+        let template = crate::domains::settings::default_force_restart_prompt_template();
         self.start_claude_in_session_with_restart_and_binary(AgentLaunchParams {
             session_name,
             force_restart,
@@ -3616,6 +3632,7 @@ impl SessionManager {
             amp_mcp_servers: None,
             agent_type_override: None,
             skip_prompt: false,
+            force_restart_prompt_template: if force_restart { Some(template.as_str()) } else { None },
         })
     }
 
@@ -3631,6 +3648,7 @@ impl SessionManager {
             amp_mcp_servers: None,
             agent_type_override: None,
             skip_prompt: false,
+            force_restart_prompt_template: None,
         })
     }
 
@@ -3655,6 +3673,7 @@ impl SessionManager {
             amp_mcp_servers: None,
             agent_type_override: None,
             skip_prompt: false,
+            force_restart_prompt_template: None,
         })
     }
 
@@ -3669,6 +3688,7 @@ impl SessionManager {
             amp_mcp_servers: _amp_mcp_servers,
             agent_type_override,
             skip_prompt,
+            force_restart_prompt_template,
         } = params;
         let session = self.db_manager.get_session_by_name(session_name)?;
         let requested_agent_type =
@@ -3684,12 +3704,25 @@ impl SessionManager {
         let agent_type = resolve_launch_agent(&requested_agent_type, binary_paths)?;
 
         let registry = crate::domains::agents::unified::AgentRegistry::new();
+        let fallback_template;
         let force_restart_prompt = if force_restart {
+            let template = match force_restart_prompt_template {
+                Some(t) if !t.is_empty() => t,
+                _ => {
+                    log::warn!(
+                        "force_restart=true but no force_restart_prompt_template supplied for session '{session_name}'; using default"
+                    );
+                    fallback_template =
+                        crate::domains::settings::default_force_restart_prompt_template();
+                    fallback_template.as_str()
+                }
+            };
             build_force_restart_prompt(
                 &session.worktree_path,
                 &session.branch,
                 &session.parent_branch,
                 session.initial_prompt.as_deref(),
+                template,
             )
         } else {
             None
@@ -4439,6 +4472,7 @@ impl SessionManager {
             repository_path: self.repo_path.clone(),
             repository_name: repo_name,
             content: spec_content.to_string(),
+            implementation_plan: None,
             stage: SpecStage::Draft,
             attention_required: false,
             clarification_started: false,

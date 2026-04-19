@@ -370,6 +370,18 @@ export interface Translations {
       autonomyTemplate: string
       autonomyTemplateDesc: string
       autonomyTemplateHint: string
+      forceRestartTemplate: string
+      forceRestartTemplateDesc: string
+      forceRestartTemplateHint: string
+      planCandidateTemplate: string
+      planCandidateTemplateDesc: string
+      planCandidateTemplateHint: string
+      planJudgeTemplate: string
+      planJudgeTemplateDesc: string
+      planJudgeTemplateHint: string
+      judgeTemplate: string
+      judgeTemplateDesc: string
+      judgeTemplateHint: string
       rawAgentOrder: string
       rawAgentOrderDesc: string
       rawAgentOrderEmpty: string
@@ -990,6 +1002,7 @@ export interface Translations {
     cancelReview: string
     sendReviewComments: string
     finishReview: string
+    implementationPlanHeading: string
   }
   specPicker: {
     searchSpecs: string

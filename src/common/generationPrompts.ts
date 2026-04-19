@@ -12,6 +12,10 @@ export interface GenerationSettingsPrompts {
   issue_prompt?: string | null
   pr_prompt?: string | null
   autonomy_prompt_template?: string | null
+  force_restart_prompt_template?: string | null
+  plan_candidate_prompt_template?: string | null
+  plan_judge_prompt_template?: string | null
+  judge_prompt_template?: string | null
 }
 
 export interface DefaultGenerationPrompts {
@@ -23,6 +27,10 @@ export interface DefaultGenerationPrompts {
   issue_prompt: string
   pr_prompt: string
   autonomy_prompt_template?: string
+  force_restart_prompt_template?: string
+  plan_candidate_prompt_template?: string
+  plan_judge_prompt_template?: string
+  judge_prompt_template?: string
 }
 
 const FALLBACK_DEFAULT_GENERATION_PROMPTS: DefaultGenerationPrompts = {
@@ -111,6 +119,10 @@ Instructions:
     '{commentsSection}',
   ].join('\n'),
   autonomy_prompt_template: DEFAULT_AUTONOMY_PROMPT_TEMPLATE,
+  force_restart_prompt_template: '',
+  plan_candidate_prompt_template: '',
+  plan_judge_prompt_template: '',
+  judge_prompt_template: '',
 }
 
 export function resolveGenerationPrompts(
@@ -126,6 +138,13 @@ export function resolveGenerationPrompts(
     issue_prompt: settings.issue_prompt ?? defaults.issue_prompt,
     pr_prompt: settings.pr_prompt ?? defaults.pr_prompt,
     autonomy_prompt_template: settings.autonomy_prompt_template ?? defaults.autonomy_prompt_template,
+    force_restart_prompt_template:
+      settings.force_restart_prompt_template ?? defaults.force_restart_prompt_template,
+    plan_candidate_prompt_template:
+      settings.plan_candidate_prompt_template ?? defaults.plan_candidate_prompt_template,
+    plan_judge_prompt_template:
+      settings.plan_judge_prompt_template ?? defaults.plan_judge_prompt_template,
+    judge_prompt_template: settings.judge_prompt_template ?? defaults.judge_prompt_template,
   }
 }
 

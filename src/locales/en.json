@@ -366,6 +366,18 @@
       "autonomyTemplate": "Autonomy prompt template",
       "autonomyTemplateDesc": "This text is appended to the initial prompt when Full autonomous is enabled for a session launch.",
       "autonomyTemplateHint": "Shared across agents in v1. Reset restores the default autonomy instruction block.",
+      "forceRestartTemplate": "Force restart prompt",
+      "forceRestartTemplateDesc": "Prepended to the initial prompt when an agent is restarted with existing commits or uncommitted changes in the worktree.",
+      "forceRestartTemplateHint": "Use {BASE_SPEC_CONTENT} to place the session's initial prompt inside the template.",
+      "planCandidateTemplate": "Improve Plan candidate prompt",
+      "planCandidateTemplateDesc": "Sent to each Improve Plan candidate session when a plan round starts.",
+      "planCandidateTemplateHint": "Placeholders: {BASE_SPEC_CONTENT}, {SPEC_ID}.",
+      "planJudgeTemplate": "Plan round judge prompt",
+      "planJudgeTemplateDesc": "Sent to the judge session that picks the winning candidate in an Improve Plan round.",
+      "planJudgeTemplateHint": "Placeholders: {SOURCE_SESSIONS_BLOCK}, {CANDIDATES_BLOCK}.",
+      "judgeTemplate": "Synthesis judge prompt",
+      "judgeTemplateDesc": "Sent to the synthesis judge that combines consolidation candidates into the shipping implementation.",
+      "judgeTemplateHint": "Placeholders: {CANDIDATE_COUNT}, {SOURCE_SESSIONS_BLOCK}, {CANDIDATES_BLOCK}.",
       "rawAgentOrder": "Raw Agent Order",
       "rawAgentOrderDesc": "Reorder how enabled raw agents appear in the Start New Agent modal. Position determines the ⌘1–⌘9 shortcuts.",
       "rawAgentOrderEmpty": "Enable at least one agent above to reorder.",
@@ -985,7 +997,8 @@
     "discardPendingComments": "Discard pending comments",
     "cancelReview": "Cancel Review",
     "sendReviewComments": "Send review comments",
-    "finishReview": "Finish Review ({count})"
+    "finishReview": "Finish Review ({count})",
+    "implementationPlanHeading": "Implementation Plan"
   },
   "specPicker": {
     "searchSpecs": "Search specs...",

@@ -1034,3 +1034,92 @@ describe('SpecEditor keyboard shortcuts', () => {
     expect(screen.getByText('Lines 2-5')).toBeInTheDocument()
   })
 })
+
+describe('SpecEditor implementation plan preview', () => {
+  beforeEach(() => {
+    specContentMock = {
+      content: 'Spec body',
+      displayName: 'Plan Spec',
+      hasData: true,
+    }
+    sessionsMock = []
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('renders the implementation plan block in preview mode when the field is populated', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'plan-present',
+          stable_id: 'plan-present-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+          spec_implementation_plan: '1. Step one.\n2. Step two.',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="plan-present" />
+      </TestProviders>
+    )
+
+    await screen.findByText('draft')
+    const previewButton = screen.queryByTitle('Preview markdown')
+    if (previewButton) {
+      fireEvent.click(previewButton)
+    }
+
+    const planBlock = await screen.findByTestId('spec-implementation-plan')
+    expect(planBlock).toBeInTheDocument()
+    expect(planBlock).toHaveTextContent('Step one')
+    expect(planBlock).toHaveTextContent('Implementation Plan')
+  })
+
+  it('does not render the plan block when the field is empty', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'plan-missing',
+          stable_id: 'plan-missing-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+          spec_implementation_plan: '   ',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="plan-missing" />
+      </TestProviders>
+    )
+
+    await screen.findByText('draft')
+    const previewButton = screen.queryByTitle('Preview markdown')
+    if (previewButton) {
+      fireEvent.click(previewButton)
+    }
+
+    expect(screen.queryByTestId('spec-implementation-plan')).toBeNull()
+  })
+})

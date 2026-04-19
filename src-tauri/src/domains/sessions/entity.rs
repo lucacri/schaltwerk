@@ -141,6 +141,8 @@ pub struct Spec {
     pub repository_path: PathBuf,
     pub repository_name: String,
     pub content: String,
+    #[serde(default)]
+    pub implementation_plan: Option<String>,
     pub stage: SpecStage,
     pub attention_required: bool,
     pub clarification_started: bool,
@@ -397,6 +399,8 @@ pub struct SessionInfo {
     pub ready_to_merge_checks: Option<Vec<SessionReadyToMergeCheck>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spec_implementation_plan: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_stage: Option<SpecStage>,
     #[serde(skip_serializing_if = "Option::is_none")]

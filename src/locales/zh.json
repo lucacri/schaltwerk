@@ -366,6 +366,18 @@
       "autonomyTemplate": "自主执行提示模板",
       "autonomyTemplateDesc": "当会话启动时启用“完全自主”后，这段文本会追加到初始提示词末尾。",
       "autonomyTemplateHint": "v1 在所有代理之间共享。重置会恢复默认的自主执行指令块。",
+      "forceRestartTemplate": "强制重启提示",
+      "forceRestartTemplateDesc": "当工作树中存在提交或未提交的更改时,在强制重启代理前附加此提示。",
+      "forceRestartTemplateHint": "使用 {BASE_SPEC_CONTENT} 将会话的初始提示嵌入模板。",
+      "planCandidateTemplate": "改进计划候选提示",
+      "planCandidateTemplateDesc": "计划轮开始时发送给每个改进计划候选会话。",
+      "planCandidateTemplateHint": "占位符:{BASE_SPEC_CONTENT}、{SPEC_ID}。",
+      "planJudgeTemplate": "改进计划裁判提示",
+      "planJudgeTemplateDesc": "发送给在改进计划轮中挑选胜者的裁判会话。",
+      "planJudgeTemplateHint": "占位符:{SOURCE_SESSIONS_BLOCK}、{CANDIDATES_BLOCK}。",
+      "judgeTemplate": "整合裁判提示",
+      "judgeTemplateDesc": "发送给整合候选并在自己的分支上综合出最终实现的裁判会话。",
+      "judgeTemplateHint": "占位符:{CANDIDATE_COUNT}、{SOURCE_SESSIONS_BLOCK}、{CANDIDATES_BLOCK}。",
       "rawAgentOrder": "原始代理顺序",
       "rawAgentOrderDesc": "调整已启用的原始代理在“启动新代理”弹窗中的排列顺序。顺序决定 ⌘1–⌘9 快捷键。",
       "rawAgentOrderEmpty": "请先在上方启用至少一个代理。",
@@ -985,7 +997,8 @@
     "discardPendingComments": "放弃待处理的评论",
     "cancelReview": "取消审核",
     "sendReviewComments": "发送审核评论",
-    "finishReview": "完成审核 ({count})"
+    "finishReview": "完成审核 ({count})",
+    "implementationPlanHeading": "实施计划"
   },
   "specPicker": {
     "searchSpecs": "搜索规格...",

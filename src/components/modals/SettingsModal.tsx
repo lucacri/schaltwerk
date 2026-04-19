@@ -301,7 +301,14 @@ const CODEX_REASONING_OPTIONS: AgentPreferenceMetadataOption[] = [
     { value: 'xhigh', label: 'Extra high' },
 ]
 
-type GenerationPromptKey = Exclude<keyof DefaultGenerationPrompts, 'autonomy_prompt_template'>
+type GenerationPromptKey = Exclude<
+    keyof DefaultGenerationPrompts,
+    | 'autonomy_prompt_template'
+    | 'force_restart_prompt_template'
+    | 'plan_candidate_prompt_template'
+    | 'plan_judge_prompt_template'
+    | 'judge_prompt_template'
+>
 
 const EMPTY_DEFAULT_GENERATION_PROMPTS: DefaultGenerationPrompts = {
     name_prompt: '',
@@ -312,6 +319,12 @@ const EMPTY_DEFAULT_GENERATION_PROMPTS: DefaultGenerationPrompts = {
     issue_prompt: '',
     pr_prompt: '',
 }
+
+type ActionPromptTemplateKey =
+    | 'force_restart_prompt_template'
+    | 'plan_candidate_prompt_template'
+    | 'plan_judge_prompt_template'
+    | 'judge_prompt_template'
 
 const AGENT_PREFERENCE_METADATA: Record<AgentType, AgentPreferenceMetadata> = {
     claude: {},
@@ -412,6 +425,18 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const [defaultGenerationPrompts, setDefaultGenerationPrompts] = useState<DefaultGenerationPrompts>(EMPTY_DEFAULT_GENERATION_PROMPTS)
     const [autonomyPromptTemplate, setAutonomyPromptTemplate] = useState<string>(DEFAULT_AUTONOMY_PROMPT_TEMPLATE)
     const [defaultAutonomyPromptTemplate, setDefaultAutonomyPromptTemplate] = useState<string>(DEFAULT_AUTONOMY_PROMPT_TEMPLATE)
+    const [actionPromptTemplates, setActionPromptTemplates] = useState<Record<ActionPromptTemplateKey, string>>({
+        force_restart_prompt_template: '',
+        plan_candidate_prompt_template: '',
+        plan_judge_prompt_template: '',
+        judge_prompt_template: '',
+    })
+    const [defaultActionPromptTemplates, setDefaultActionPromptTemplates] = useState<Record<ActionPromptTemplateKey, string>>({
+        force_restart_prompt_template: '',
+        plan_candidate_prompt_template: '',
+        plan_judge_prompt_template: '',
+        judge_prompt_template: '',
+    })
     const [showCustomPrompts, setShowCustomPrompts] = useState<boolean>(false)
     const reloadContextualActions = useSetAtom(loadContextualActionsAtom)
     const platform = useMemo(() => detectPlatformSafe(), [])
@@ -857,6 +882,18 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         let loadedDefaultPrompts = EMPTY_DEFAULT_GENERATION_PROMPTS
         let loadedAutonomyPromptTemplate = DEFAULT_AUTONOMY_PROMPT_TEMPLATE
         let loadedDefaultAutonomyPromptTemplate = DEFAULT_AUTONOMY_PROMPT_TEMPLATE
+        let loadedActionPromptTemplates: Record<ActionPromptTemplateKey, string> = {
+            force_restart_prompt_template: '',
+            plan_candidate_prompt_template: '',
+            plan_judge_prompt_template: '',
+            judge_prompt_template: '',
+        }
+        let loadedDefaultActionPromptTemplates: Record<ActionPromptTemplateKey, string> = {
+            force_restart_prompt_template: '',
+            plan_candidate_prompt_template: '',
+            plan_judge_prompt_template: '',
+            judge_prompt_template: '',
+        }
         try {
             const [genSettings, defaults] = await Promise.all([
                 invoke<GenerationSettingsPrompts & { agent: string | null; cli_args: string | null }>(TauriCommands.GetGenerationSettings),
@@ -870,6 +907,26 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
             loadedGenerationCliArgs = genSettings.cli_args ?? ''
             loadedDefaultAutonomyPromptTemplate = defaults?.autonomy_prompt_template ?? DEFAULT_AUTONOMY_PROMPT_TEMPLATE
             loadedAutonomyPromptTemplate = genSettings.autonomy_prompt_template ?? loadedDefaultAutonomyPromptTemplate
+            loadedDefaultActionPromptTemplates = {
+                force_restart_prompt_template: defaults?.force_restart_prompt_template ?? '',
+                plan_candidate_prompt_template: defaults?.plan_candidate_prompt_template ?? '',
+                plan_judge_prompt_template: defaults?.plan_judge_prompt_template ?? '',
+                judge_prompt_template: defaults?.judge_prompt_template ?? '',
+            }
+            loadedActionPromptTemplates = {
+                force_restart_prompt_template:
+                    genSettings.force_restart_prompt_template
+                    ?? loadedDefaultActionPromptTemplates.force_restart_prompt_template,
+                plan_candidate_prompt_template:
+                    genSettings.plan_candidate_prompt_template
+                    ?? loadedDefaultActionPromptTemplates.plan_candidate_prompt_template,
+                plan_judge_prompt_template:
+                    genSettings.plan_judge_prompt_template
+                    ?? loadedDefaultActionPromptTemplates.plan_judge_prompt_template,
+                judge_prompt_template:
+                    genSettings.judge_prompt_template
+                    ?? loadedDefaultActionPromptTemplates.judge_prompt_template,
+            }
             loadedGenerationPrompts = {
                 name_prompt: genSettings.name_prompt ?? loadedDefaultPrompts.name_prompt,
                 commit_prompt: genSettings.commit_prompt ?? loadedDefaultPrompts.commit_prompt,
@@ -905,6 +962,8 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         setDefaultGenerationPrompts(loadedDefaultPrompts)
         setAutonomyPromptTemplate(loadedAutonomyPromptTemplate)
         setDefaultAutonomyPromptTemplate(loadedDefaultAutonomyPromptTemplate)
+        setActionPromptTemplates(loadedActionPromptTemplates)
+        setDefaultActionPromptTemplates(loadedDefaultActionPromptTemplates)
         setEnabledAgents(loadedEnabledAgents)
         setShowCustomPrompts((Object.keys(loadedGenerationPrompts) as GenerationPromptKey[]).some(key => {
             return (loadedGenerationPrompts[key] ?? '').trim() !== (loadedDefaultPrompts[key] ?? '').trim()
@@ -1076,9 +1135,15 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         agent: string,
         cliArgs: string,
         prompts: DefaultGenerationPrompts,
-        autonomyTemplate: string
+        autonomyTemplate: string,
+        actionTemplates: Record<ActionPromptTemplateKey, string>,
     ) => {
         try {
+            const actionTemplateOverride = (key: ActionPromptTemplateKey) => {
+                const next = actionTemplates[key] ?? ''
+                const defaultValue = defaultActionPromptTemplates[key] ?? ''
+                return next.trim() !== defaultValue.trim() ? next : null
+            }
             await invoke(TauriCommands.SetGenerationSettings, {
                 settings: {
                     agent: agent || null,
@@ -1091,13 +1156,17 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                     issue_prompt: prompts.issue_prompt.trim() !== defaultGenerationPrompts.issue_prompt.trim() ? prompts.issue_prompt : null,
                     pr_prompt: prompts.pr_prompt.trim() !== defaultGenerationPrompts.pr_prompt.trim() ? prompts.pr_prompt : null,
                     autonomy_prompt_template: autonomyTemplate.trim() !== defaultAutonomyPromptTemplate.trim() ? autonomyTemplate : null,
+                    force_restart_prompt_template: actionTemplateOverride('force_restart_prompt_template'),
+                    plan_candidate_prompt_template: actionTemplateOverride('plan_candidate_prompt_template'),
+                    plan_judge_prompt_template: actionTemplateOverride('plan_judge_prompt_template'),
+                    judge_prompt_template: actionTemplateOverride('judge_prompt_template'),
                 },
             })
             void reloadContextualActions()
         } catch (error) {
             logger.error('Failed to save generation settings:', error)
         }
-    }, [defaultAutonomyPromptTemplate, defaultGenerationPrompts, reloadContextualActions])
+    }, [defaultActionPromptTemplates, defaultAutonomyPromptTemplate, defaultGenerationPrompts, reloadContextualActions])
 
     const handleBinaryPathChange = async (agent: AgentType, path: string | null) => {
         try {
@@ -2755,7 +2824,7 @@ fi`}
                                     value={generationAgent}
                                     onChange={(value) => {
                                         setGenerationAgent(value)
-                                        void saveGenerationSettings(value, generationCliArgs, generationPrompts, autonomyPromptTemplate)
+                                        void saveGenerationSettings(value, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)
                                     }}
                                     options={[
                                         { value: '', label: t.settings.generation.agentDefault },
@@ -2776,7 +2845,7 @@ fi`}
                                     aria-label={t.settings.generation.cliArgs}
                                     value={generationCliArgs}
                                     onChange={(e) => setGenerationCliArgs(e.target.value)}
-                                    onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, autonomyPromptTemplate)}
+                                    onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)}
                                     placeholder={t.settings.generation.cliArgsPlaceholder}
                                 />
                             </FormGroup>
@@ -2829,7 +2898,7 @@ fi`}
                                                                                     [prompt.key]: defaultGenerationPrompts[prompt.key],
                                                                                 }
                                                                                 setGenerationPrompts(nextPrompts)
-                                                                                void saveGenerationSettings(generationAgent, generationCliArgs, nextPrompts, autonomyPromptTemplate)
+                                                                                void saveGenerationSettings(generationAgent, generationCliArgs, nextPrompts, autonomyPromptTemplate, actionPromptTemplates)
                                                                             }}
                                                                         >
                                                                             {t.settings.generation.resetToDefault}
@@ -2847,7 +2916,7 @@ fi`}
                                                                     ...prev,
                                                                     [prompt.key]: e.target.value,
                                                                 }))}
-                                                                onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, autonomyPromptTemplate)}
+                                                                onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)}
                                                                 placeholder={prompt.placeholder}
                                                                 className="min-h-[100px]"
                                                                 rows={6}
@@ -2878,46 +2947,137 @@ fi`}
     const renderAutonomyTemplateSettings = () => {
         const autonomyTemplateIsCustom = autonomyPromptTemplate.trim() !== defaultAutonomyPromptTemplate.trim()
 
-        return (
-            <div className="space-y-3">
-                <SectionHeader
-                    title={t.settings.agentConfiguration.autonomyTemplate}
-                    description={t.settings.agentConfiguration.autonomyTemplateDesc}
-                    className="border-b-0 pb-0"
-                />
-
-                <div className="flex items-center justify-between gap-3">
-                    <p className="text-caption text-text-tertiary">
-                        {t.settings.agentConfiguration.autonomyTemplateHint}
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <span className={`text-caption ${autonomyTemplateIsCustom ? 'text-accent-blue' : 'text-text-muted'}`}>
-                            {autonomyTemplateIsCustom ? t.settings.generation.customized : t.settings.generation.usingDefault}
-                        </span>
-                        {autonomyTemplateIsCustom && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                    setAutonomyPromptTemplate(defaultAutonomyPromptTemplate)
-                                    void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, defaultAutonomyPromptTemplate)
-                                }}
-                            >
-                                {t.settings.generation.resetToDefault}
-                            </Button>
-                        )}
+        const renderActionTemplateBlock = (
+            key: ActionPromptTemplateKey,
+            title: string,
+            description: string,
+            hint: string,
+        ) => {
+            const value = actionPromptTemplates[key] ?? ''
+            const defaultValue = defaultActionPromptTemplates[key] ?? ''
+            const isCustom = value.trim() !== defaultValue.trim()
+            return (
+                <div className="space-y-3" key={key}>
+                    <SectionHeader
+                        title={title}
+                        description={description}
+                        className="border-b-0 pb-0"
+                    />
+                    <div className="flex items-center justify-between gap-3">
+                        <p className="text-caption text-text-tertiary">{hint}</p>
+                        <div className="flex items-center gap-2">
+                            <span className={`text-caption ${isCustom ? 'text-accent-blue' : 'text-text-muted'}`}>
+                                {isCustom ? t.settings.generation.customized : t.settings.generation.usingDefault}
+                            </span>
+                            {isCustom && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        const nextTemplates = { ...actionPromptTemplates, [key]: defaultValue }
+                                        setActionPromptTemplates(nextTemplates)
+                                        void saveGenerationSettings(
+                                            generationAgent,
+                                            generationCliArgs,
+                                            generationPrompts,
+                                            autonomyPromptTemplate,
+                                            nextTemplates,
+                                        )
+                                    }}
+                                >
+                                    {t.settings.generation.resetToDefault}
+                                </Button>
+                            )}
+                        </div>
                     </div>
+                    <Textarea
+                        aria-label={title}
+                        value={value}
+                        onChange={(e) => {
+                            setActionPromptTemplates(prev => ({ ...prev, [key]: e.target.value }))
+                        }}
+                        onBlur={() => void saveGenerationSettings(
+                            generationAgent,
+                            generationCliArgs,
+                            generationPrompts,
+                            autonomyPromptTemplate,
+                            actionPromptTemplates,
+                        )}
+                        monospace
+                        rows={10}
+                        resize="vertical"
+                    />
+                </div>
+            )
+        }
+
+        return (
+            <div className="space-y-6">
+                <div className="space-y-3">
+                    <SectionHeader
+                        title={t.settings.agentConfiguration.autonomyTemplate}
+                        description={t.settings.agentConfiguration.autonomyTemplateDesc}
+                        className="border-b-0 pb-0"
+                    />
+
+                    <div className="flex items-center justify-between gap-3">
+                        <p className="text-caption text-text-tertiary">
+                            {t.settings.agentConfiguration.autonomyTemplateHint}
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <span className={`text-caption ${autonomyTemplateIsCustom ? 'text-accent-blue' : 'text-text-muted'}`}>
+                                {autonomyTemplateIsCustom ? t.settings.generation.customized : t.settings.generation.usingDefault}
+                            </span>
+                            {autonomyTemplateIsCustom && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        setAutonomyPromptTemplate(defaultAutonomyPromptTemplate)
+                                        void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, defaultAutonomyPromptTemplate, actionPromptTemplates)
+                                    }}
+                                >
+                                    {t.settings.generation.resetToDefault}
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+
+                    <Textarea
+                        aria-label={t.settings.agentConfiguration.autonomyTemplate}
+                        value={autonomyPromptTemplate}
+                        onChange={(e) => setAutonomyPromptTemplate(e.target.value)}
+                        onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)}
+                        monospace
+                        rows={10}
+                        resize="vertical"
+                    />
                 </div>
 
-                <Textarea
-                    aria-label={t.settings.agentConfiguration.autonomyTemplate}
-                    value={autonomyPromptTemplate}
-                    onChange={(e) => setAutonomyPromptTemplate(e.target.value)}
-                    onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, autonomyPromptTemplate)}
-                    monospace
-                    rows={10}
-                    resize="vertical"
-                />
+                {renderActionTemplateBlock(
+                    'force_restart_prompt_template',
+                    t.settings.agentConfiguration.forceRestartTemplate,
+                    t.settings.agentConfiguration.forceRestartTemplateDesc,
+                    t.settings.agentConfiguration.forceRestartTemplateHint,
+                )}
+                {renderActionTemplateBlock(
+                    'plan_candidate_prompt_template',
+                    t.settings.agentConfiguration.planCandidateTemplate,
+                    t.settings.agentConfiguration.planCandidateTemplateDesc,
+                    t.settings.agentConfiguration.planCandidateTemplateHint,
+                )}
+                {renderActionTemplateBlock(
+                    'plan_judge_prompt_template',
+                    t.settings.agentConfiguration.planJudgeTemplate,
+                    t.settings.agentConfiguration.planJudgeTemplateDesc,
+                    t.settings.agentConfiguration.planJudgeTemplateHint,
+                )}
+                {renderActionTemplateBlock(
+                    'judge_prompt_template',
+                    t.settings.agentConfiguration.judgeTemplate,
+                    t.settings.agentConfiguration.judgeTemplateDesc,
+                    t.settings.agentConfiguration.judgeTemplateHint,
+                )}
             </div>
         )
     }

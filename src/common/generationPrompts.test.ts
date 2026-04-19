@@ -25,6 +25,10 @@ const defaults: DefaultGenerationPrompts = {
   issue_prompt: 'default issue prompt {title} {body} {comments}',
   pr_prompt: 'default pr prompt {title} {branch} {body} {comments}',
   autonomy_prompt_template: '## Agent Instructions\n\nDefault autonomy template',
+  force_restart_prompt_template: 'default force restart {BASE_SPEC_CONTENT}',
+  plan_candidate_prompt_template: 'default plan candidate {BASE_SPEC_CONTENT} {SPEC_ID}',
+  plan_judge_prompt_template: 'default plan judge {CANDIDATES_BLOCK}',
+  judge_prompt_template: 'default synthesis judge {CANDIDATE_COUNT} {CANDIDATES_BLOCK}',
 }
 
 describe('generationPrompts', () => {
@@ -66,6 +70,22 @@ describe('generationPrompts', () => {
       issue_prompt: 'custom issue {title}',
       pr_prompt: 'custom pr {title}',
       autonomy_prompt_template: 'custom autonomy instructions',
+    })
+  })
+
+  it('resolves action prompt templates with saved overrides', () => {
+    const settings: GenerationSettingsPrompts = {
+      force_restart_prompt_template: 'custom restart {BASE_SPEC_CONTENT}',
+      plan_candidate_prompt_template: null,
+      plan_judge_prompt_template: 'custom plan judge {CANDIDATES_BLOCK}',
+      judge_prompt_template: 'custom synthesis judge {CANDIDATE_COUNT}',
+    }
+
+    expect(resolveGenerationPrompts(settings, defaults)).toMatchObject({
+      force_restart_prompt_template: 'custom restart {BASE_SPEC_CONTENT}',
+      plan_candidate_prompt_template: defaults.plan_candidate_prompt_template,
+      plan_judge_prompt_template: 'custom plan judge {CANDIDATES_BLOCK}',
+      judge_prompt_template: 'custom synthesis judge {CANDIDATE_COUNT}',
     })
   })
 

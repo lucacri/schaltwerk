@@ -185,6 +185,7 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             repository_path TEXT NOT NULL,
             repository_name TEXT NOT NULL,
             content TEXT NOT NULL,
+            implementation_plan TEXT,
             stage TEXT NOT NULL DEFAULT 'draft',
             attention_required BOOLEAN NOT NULL DEFAULT FALSE,
             clarification_started BOOLEAN NOT NULL DEFAULT FALSE,
@@ -464,6 +465,10 @@ fn apply_specs_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     );
     let _ = conn.execute(
         "ALTER TABLE specs ADD COLUMN clarification_started BOOLEAN NOT NULL DEFAULT FALSE",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE specs ADD COLUMN implementation_plan TEXT",
         [],
     );
     let _ = conn.execute(

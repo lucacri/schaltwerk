@@ -118,6 +118,7 @@ export function SpecEditor({
   const selectedSession = useMemo(() => sessions.find(session => session.info.session_id === sessionName) ?? null, [sessions, sessionName])
   const selectedEpic = selectedSession?.info.epic ?? null
   const specStage = selectedSession?.info.spec_stage ?? 'draft'
+  const implementationPlan = selectedSession?.info.spec_implementation_plan?.trim() || null
   const improvePlanRoundId = selectedSession?.info.improve_plan_round_id ?? null
   const improvePlanActive = Boolean(improvePlanRoundId)
   const improvePlanAction = useImprovePlanAction({
@@ -868,7 +869,24 @@ export function SpecEditor({
           />
         </div>
         <div style={{ display: viewMode === 'preview' ? 'block' : 'none' }} className="h-full">
-          <MarkdownRenderer content={currentContent} className="h-full" />
+          {implementationPlan ? (
+            <div className="h-full overflow-auto">
+              <MarkdownRenderer content={currentContent} fillHeight={false} />
+              <div
+                data-testid="spec-implementation-plan"
+                className="border-t border-border-subtle"
+              >
+                <div
+                  style={{ ...typography.caption, color: 'var(--color-text-tertiary)', padding: '16px 16px 0' }}
+                >
+                  {t.specEditor.implementationPlanHeading}
+                </div>
+                <MarkdownRenderer content={implementationPlan} fillHeight={false} />
+              </div>
+            </div>
+          ) : (
+            <MarkdownRenderer content={currentContent} className="h-full" />
+          )}
         </div>
         <div style={{ display: viewMode === 'review' ? 'flex' : 'none', flexDirection: 'column' }} className="h-full relative">
           <div className="flex-1 min-h-0 overflow-auto">

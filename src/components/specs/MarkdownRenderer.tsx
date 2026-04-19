@@ -28,6 +28,7 @@ interface MarkdownRendererProps {
   content: string
   className?: string
   forgeContext?: ForgeContext
+  fillHeight?: boolean
 }
 
 const LinkComponent = memo(function LinkComponent({ href, children }: { href?: string; children: React.ReactNode }) {
@@ -377,6 +378,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   content,
   className = '',
   forgeContext,
+  fillHeight = true,
 }: MarkdownRendererProps) {
   const components = useMemo(() => {
     if (!forgeContext || forgeContext.forgeType !== 'gitlab') {
@@ -395,8 +397,9 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
       className={`markdown-renderer markdown-github-light ${className}`}
       style={{
         padding: '16px',
-        overflowY: 'auto',
-        height: '100%',
+        ...(fillHeight
+          ? { overflowY: 'auto' as const, height: '100%' }
+          : {}),
         backgroundColor: 'var(--color-bg-primary)',
         color: 'var(--color-text-primary)',
         fontSize: theme.fontSize.body,

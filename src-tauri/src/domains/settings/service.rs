@@ -1142,6 +1142,10 @@ mod tests {
             issue_prompt: None,
             pr_prompt: None,
             autonomy_prompt_template: None,
+            force_restart_prompt_template: None,
+            plan_candidate_prompt_template: None,
+            plan_judge_prompt_template: None,
+            judge_prompt_template: None,
         };
         service
             .set_generation_settings(settings)
@@ -1174,6 +1178,10 @@ mod tests {
             issue_prompt: Some("Issue prompt {title} {comments}".to_string()),
             pr_prompt: Some("PR prompt {title} {branch}".to_string()),
             autonomy_prompt_template: Some("Autonomy template".to_string()),
+            force_restart_prompt_template: Some("Force restart template {BASE_SPEC_CONTENT}".to_string()),
+            plan_candidate_prompt_template: Some("Plan template {BASE_SPEC_CONTENT} {SPEC_ID}".to_string()),
+            plan_judge_prompt_template: Some("Plan judge template {CANDIDATES_BLOCK}".to_string()),
+            judge_prompt_template: Some("Synthesis judge template {CANDIDATE_COUNT} {CANDIDATES_BLOCK}".to_string()),
         };
         service
             .set_generation_settings(settings)
@@ -1199,6 +1207,22 @@ mod tests {
         assert_eq!(loaded.issue_prompt, Some("Issue prompt {title} {comments}".to_string()));
         assert_eq!(loaded.pr_prompt, Some("PR prompt {title} {branch}".to_string()));
         assert_eq!(loaded.autonomy_prompt_template, Some("Autonomy template".to_string()));
+        assert_eq!(
+            loaded.force_restart_prompt_template,
+            Some("Force restart template {BASE_SPEC_CONTENT}".to_string())
+        );
+        assert_eq!(
+            loaded.plan_candidate_prompt_template,
+            Some("Plan template {BASE_SPEC_CONTENT} {SPEC_ID}".to_string())
+        );
+        assert_eq!(
+            loaded.plan_judge_prompt_template,
+            Some("Plan judge template {CANDIDATES_BLOCK}".to_string())
+        );
+        assert_eq!(
+            loaded.judge_prompt_template,
+            Some("Synthesis judge template {CANDIDATE_COUNT} {CANDIDATES_BLOCK}".to_string())
+        );
     }
 
     #[test]

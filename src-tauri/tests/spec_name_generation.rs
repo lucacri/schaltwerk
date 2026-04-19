@@ -31,6 +31,7 @@ async fn spec_name_generation_updates_spec_display_name() {
         repository_path: repo_path.clone(),
         repository_name: "repo".to_string(),
         content: "Build the docs for the API".to_string(),
+        implementation_plan: None,
         stage: SpecStage::Draft,
         attention_required: false,
         clarification_started: false,

@@ -89,6 +89,102 @@ fn resolve_prompt(custom: Option<&str>, default_prompt: fn() -> String) -> Strin
         .unwrap_or_else(default_prompt)
 }
 
+pub fn default_force_restart_prompt_template() -> String {
+    concat!(
+        "This is a continuation of prior work in this worktree, not a fresh start.\n",
+        "There are already committed and/or uncommitted changes in this worktree. ",
+        "Before doing anything else, inspect the current state with git status and ",
+        "git diff and continue from what is already there instead of redoing completed work.\n\n",
+        "The original spec follows below.\n\n",
+        "{BASE_SPEC_CONTENT}",
+    )
+    .to_string()
+}
+
+pub fn default_plan_candidate_prompt_template() -> String {
+    concat!(
+        "You are preparing an implementation plan for this clarified Lucode spec.\n\n",
+        "Inspect the repository as needed. Do not implement code. Write a concise, ",
+        "actionable Markdown implementation plan, then call lucode_consolidation_report ",
+        "with your plan as report and base_session_id set to '{SPEC_ID}'.\n\n",
+        "Spec content:\n\n{BASE_SPEC_CONTENT}",
+    )
+    .to_string()
+}
+
+pub fn default_plan_judge_prompt_template() -> String {
+    concat!(
+        "Review every Improve Plan candidate for this Lucode plan round.\n\n",
+        "Source sessions:\n{SOURCE_SESSIONS_BLOCK}\n",
+        "Candidates:\n{CANDIDATES_BLOCK}\n",
+        "Choose the strongest implementation plan. File your reasoning through ",
+        "lucode_consolidation_report with recommended_session_id set to the winning ",
+        "candidate session ID. Do not call lucode_promote directly.",
+    )
+    .to_string()
+}
+
+pub fn default_judge_prompt_template() -> String {
+    concat!(
+        "You are the synthesis judge for this Lucode consolidation round.\n\n",
+        "{CANDIDATE_COUNT} parallel agents have each produced an independent ",
+        "implementation of the same task, checked in on their own branches/worktrees ",
+        "listed below. Your job is NOT to pick one — your job is to synthesize the ",
+        "best possible implementation by combining the strongest ideas and code from ",
+        "all candidates.\n\n",
+        "You are working in your own isolated judge worktree. Read each candidate's ",
+        "branch (git diff against the parent branch) and their consolidation report ",
+        "for intent, then commit a coherent synthesized implementation on YOUR branch. ",
+        "Your branch is what will ship; your session will be promoted under the ",
+        "original spec name on acceptance.\n\n",
+        "Source sessions:\n{SOURCE_SESSIONS_BLOCK}\n",
+        "Candidates:\n{CANDIDATES_BLOCK}\n",
+        "When the synthesized implementation is committed and verified on your branch:\n",
+        "1. Run the project's required verification.\n",
+        "2. File lucode_consolidation_report from this judge session with `base_session_id` ",
+        "set to the source session ID you used as the conceptual base.\n",
+        "3. Do NOT set `recommended_session_id` for implementation rounds.\n",
+        "4. Do NOT call `lucode_promote` directly.\n\n",
+        "Lucode will promote this judge session after user confirmation, or immediately ",
+        "when the round is configured for auto-promotion.",
+    )
+    .to_string()
+}
+
+#[cfg(test)]
+mod action_template_default_tests {
+    use super::*;
+
+    #[test]
+    fn force_restart_template_contains_base_spec_content_placeholder() {
+        assert!(default_force_restart_prompt_template().contains("{BASE_SPEC_CONTENT}"));
+    }
+
+    #[test]
+    fn plan_candidate_template_contains_required_placeholders() {
+        let tmpl = default_plan_candidate_prompt_template();
+        assert!(tmpl.contains("{BASE_SPEC_CONTENT}"));
+        assert!(tmpl.contains("{SPEC_ID}"));
+    }
+
+    #[test]
+    fn plan_judge_template_contains_block_placeholders() {
+        let tmpl = default_plan_judge_prompt_template();
+        assert!(tmpl.contains("{SOURCE_SESSIONS_BLOCK}"));
+        assert!(tmpl.contains("{CANDIDATES_BLOCK}"));
+        assert!(tmpl.contains("recommended_session_id"));
+    }
+
+    #[test]
+    fn judge_template_contains_synthesis_placeholders() {
+        let tmpl = default_judge_prompt_template();
+        assert!(tmpl.contains("{CANDIDATE_COUNT}"));
+        assert!(tmpl.contains("{SOURCE_SESSIONS_BLOCK}"));
+        assert!(tmpl.contains("{CANDIDATES_BLOCK}"));
+        assert!(tmpl.contains("synthesis judge"));
+    }
+}
+
 pub fn default_contextual_actions(generation: &GenerationSettings) -> Vec<ContextualAction> {
     normalize_contextual_actions(vec![
         ContextualAction {

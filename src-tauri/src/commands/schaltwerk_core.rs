@@ -451,6 +451,7 @@ mod spec_clarification_prompt_tests {
             repository_path: PathBuf::from("/tmp/repo"),
             repository_name: "repo".to_string(),
             content: content.to_string(),
+            implementation_plan: None,
             created_at: now,
             updated_at: now,
             stage: lucode::domains::sessions::entity::SpecStage::Draft,
@@ -3142,14 +3143,30 @@ async fn schaltwerk_core_start_agent_in_terminal(
         None
     };
 
+    let force_restart = start_mode == AgentStartMode::ForcedRestart;
+    let force_restart_prompt_template = if force_restart {
+        Some(if let Some(settings_manager) = SETTINGS_MANAGER.get() {
+            let settings = settings_manager.lock().await;
+            settings
+                .get_generation_settings()
+                .force_restart_prompt_template
+                .unwrap_or_else(lucode::domains::settings::default_force_restart_prompt_template)
+        } else {
+            lucode::domains::settings::default_force_restart_prompt_template()
+        })
+    } else {
+        None
+    };
+
     let spec = manager
         .start_claude_in_session_with_restart_and_binary(AgentLaunchParams {
             session_name: &session_name,
-            force_restart: start_mode == AgentStartMode::ForcedRestart,
+            force_restart,
             binary_paths: &binary_paths,
             amp_mcp_servers: amp_mcp_servers.as_ref(),
             agent_type_override: agent_type_override.as_deref(),
             skip_prompt,
+            force_restart_prompt_template: force_restart_prompt_template.as_deref(),
         })
         .map_err(|e| {
             log::error!("Failed to build {agent_type} command for session {session_name}: {e}");
@@ -4703,6 +4720,7 @@ mod tests {
             repository_path: PathBuf::from("/repo"),
             repository_name: "repo".to_string(),
             content: "".to_string(),
+            implementation_plan: None,
             stage: lucode::domains::sessions::entity::SpecStage::Clarified,
             attention_required: true,
             clarification_started: true,

@@ -347,6 +347,7 @@ mod tests {
                 ready_to_merge: false,
                 ready_to_merge_checks: None,
                 spec_content: None,
+                spec_implementation_plan: None,
                 spec_stage: None,
                 improve_plan_round_id: None,
                 clarification_started: None,

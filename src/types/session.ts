@@ -123,6 +123,7 @@ export interface SessionInfo {
     ready_to_merge?: boolean
     ready_to_merge_checks?: SessionReadyToMergeCheck[]
     spec_content?: string
+    spec_implementation_plan?: string | null
     spec_stage?: SpecStage
     improve_plan_round_id?: string | null
     clarification_started?: boolean
@@ -232,6 +233,7 @@ export interface RawSpec {
     repository_path: string
     repository_name: string
     content: string
+    implementation_plan?: string | null
     stage: SpecStage
     improve_plan_round_id?: string | null
     attention_required: boolean

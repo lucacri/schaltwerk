@@ -790,6 +790,10 @@ pub struct DefaultGenerationPrompts {
     pub issue_prompt: String,
     pub pr_prompt: String,
     pub autonomy_prompt_template: String,
+    pub force_restart_prompt_template: String,
+    pub plan_candidate_prompt_template: String,
+    pub plan_judge_prompt_template: String,
+    pub judge_prompt_template: String,
 }
 
 #[tauri::command]
@@ -803,6 +807,13 @@ pub fn get_default_generation_prompts() -> DefaultGenerationPrompts {
         issue_prompt: lucode::domains::settings::default_issue_session_prompt_template(),
         pr_prompt: lucode::domains::settings::default_pr_session_prompt_template(),
         autonomy_prompt_template: lucode::domains::settings::default_autonomy_prompt_template(),
+        force_restart_prompt_template:
+            lucode::domains::settings::default_force_restart_prompt_template(),
+        plan_candidate_prompt_template:
+            lucode::domains::settings::default_plan_candidate_prompt_template(),
+        plan_judge_prompt_template:
+            lucode::domains::settings::default_plan_judge_prompt_template(),
+        judge_prompt_template: lucode::domains::settings::default_judge_prompt_template(),
     }
 }
 
@@ -1560,5 +1571,18 @@ mod tests {
         assert!(prompts.pr_prompt.contains("{branch}"));
         assert!(prompts.autonomy_prompt_template.contains("## Agent Instructions"));
         assert!(prompts.autonomy_prompt_template.contains("Complete the work by creating a squashed commit"));
+    }
+
+    #[test]
+    fn get_default_generation_prompts_includes_action_templates() {
+        let prompts = get_default_generation_prompts();
+        assert!(prompts.force_restart_prompt_template.contains("{BASE_SPEC_CONTENT}"));
+        assert!(prompts.plan_candidate_prompt_template.contains("{BASE_SPEC_CONTENT}"));
+        assert!(prompts.plan_candidate_prompt_template.contains("{SPEC_ID}"));
+        assert!(prompts.plan_judge_prompt_template.contains("{CANDIDATES_BLOCK}"));
+        assert!(prompts.plan_judge_prompt_template.contains("{SOURCE_SESSIONS_BLOCK}"));
+        assert!(prompts.judge_prompt_template.contains("{CANDIDATES_BLOCK}"));
+        assert!(prompts.judge_prompt_template.contains("{CANDIDATE_COUNT}"));
+        assert!(prompts.judge_prompt_template.contains("synthesis judge"));
     }
 }

@@ -271,6 +271,14 @@ pub struct GenerationSettings {
     pub pr_prompt: Option<String>,
     #[serde(default)]
     pub autonomy_prompt_template: Option<String>,
+    #[serde(default)]
+    pub force_restart_prompt_template: Option<String>,
+    #[serde(default)]
+    pub plan_candidate_prompt_template: Option<String>,
+    #[serde(default)]
+    pub plan_judge_prompt_template: Option<String>,
+    #[serde(default)]
+    pub judge_prompt_template: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
