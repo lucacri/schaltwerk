@@ -10,7 +10,9 @@ use super::lifecycle::{self, LifecycleDeps};
 use super::submission::build_submission_payload;
 use super::visible::VisibleScreen;
 use super::{CreateParams, TerminalBackend, TerminalSnapshot};
-use crate::infrastructure::attention_bridge::update_session_attention_state;
+use crate::infrastructure::attention_bridge::{
+    update_session_attention_state, update_session_attention_state_immediate,
+};
 use crate::infrastructure::events::{SchaltEvent, emit_event};
 use crate::infrastructure::keep_awake_bridge::handle_terminal_attention;
 use crate::shared::terminal_id::is_session_top_terminal_id;
@@ -1587,14 +1589,12 @@ impl LocalPtyAdapter {
         drop(handle_guard);
 
         handle_terminal_attention(session_id.clone(), needs_attention);
-        update_session_attention_state(
-            session_id,
-            needs_attention,
-            attention_kind.map(|kind| match kind {
-                TerminalAttentionKind::Idle => "idle".to_string(),
-                TerminalAttentionKind::WaitingForInput => "waiting_for_input".to_string(),
-            }),
-        );
+        let attention_kind = attention_kind.map(|kind| match kind {
+            TerminalAttentionKind::Idle => "idle",
+            TerminalAttentionKind::WaitingForInput => "waiting_for_input",
+        });
+        update_session_attention_state_immediate(&session_id, needs_attention, attention_kind)
+            .await;
     }
 
     pub async fn configure_attention_profile(
@@ -2525,11 +2525,7 @@ mod tests {
         );
     }
 
-    async fn seed_top_terminal_with_waiting(
-        adapter: &LocalPtyAdapter,
-        id: &str,
-        session_id: &str,
-    ) {
+    async fn seed_top_terminal_with_waiting(adapter: &LocalPtyAdapter, id: &str, session_id: &str) {
         let mut terminals = adapter.terminals.write().await;
         terminals.insert(
             id.to_string(),
@@ -2551,7 +2547,10 @@ mod tests {
         drop(terminals);
 
         let mut writers = adapter.pty_writers.lock().await;
-        writers.insert(id.to_string(), Box::new(Vec::<u8>::new()) as Box<dyn Write + Send>);
+        writers.insert(
+            id.to_string(),
+            Box::new(Vec::<u8>::new()) as Box<dyn Write + Send>,
+        );
     }
 
     #[tokio::test]
@@ -2647,8 +2646,7 @@ mod tests {
             drop(guard);
         }
 
-        let status =
-            observed.expect("registry should reflect the input-driven attention clear");
+        let status = observed.expect("registry should reflect the input-driven attention clear");
         assert!(!status.needs_attention);
         assert_eq!(status.kind, None);
     }

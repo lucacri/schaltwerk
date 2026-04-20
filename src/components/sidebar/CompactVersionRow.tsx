@@ -302,14 +302,15 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
     }
 
     if (statusState.primaryStatus === 'running') {
+      const runningLabel = sessionState === 'spec' ? t.session.clarifying : 'Active'
       return (
         <span
           data-testid="compact-row-status-running"
           className="inline-flex items-center"
-          aria-label="Active"
-          title="Active"
+          aria-label={runningLabel}
+          title={runningLabel}
         >
-          <ProgressIndicator size="sm" />
+          {sessionState === 'spec' ? t.session.clarifying : <ProgressIndicator size="sm" />}
         </span>
       )
     }

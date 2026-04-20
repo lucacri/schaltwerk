@@ -42,8 +42,11 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
   const isWaitingForInput = statusState.isWaitingForInput
   const isIdle = statusState.isIdle
   const isRunningState = isRunning || statusState.isActivelyRunning
-  const accessibleState = isRunningState
-    ? 'running'
+  const isClarifyingState = isRunningState && sessionState === SessionState.Spec
+  const accessibleState = isClarifyingState
+    ? t.session.clarifying
+    : isRunningState
+      ? 'running'
     : isWaitingForInput
       ? 'waiting for input'
       : isIdle

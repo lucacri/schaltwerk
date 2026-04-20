@@ -10,7 +10,9 @@ use crate::{
     get_core_write_for_project_path, get_file_watcher_manager, get_settings_manager,
     get_terminal_manager,
 };
-use lucode::infrastructure::attention_bridge::clear_session_attention_state;
+use lucode::infrastructure::attention_bridge::{
+    clear_session_attention_state, clear_session_attention_state_immediate,
+};
 use lucode::infrastructure::database::db_specs::SpecMethods as _;
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
@@ -742,11 +744,9 @@ mod spec_clarification_prompt_tests {
 
 #[cfg(test)]
 mod consolidation_default_favorite_tests {
-    use super::{normalize_optional, ConsolidationDefaultFavoriteDto};
+    use super::{ConsolidationDefaultFavoriteDto, normalize_optional};
     use lucode::infrastructure::database::Database;
-    use lucode::schaltwerk_core::db_app_config::{
-        AppConfigMethods, ConsolidationDefaultFavorite,
-    };
+    use lucode::schaltwerk_core::db_app_config::{AppConfigMethods, ConsolidationDefaultFavorite};
 
     fn temp_db() -> (tempfile::TempDir, Database) {
         let dir = tempfile::TempDir::new().expect("tempdir");
@@ -3692,14 +3692,14 @@ fn request_spec_sessions_refresh(app: Option<&tauri::AppHandle>) {
     }
 }
 
-fn clear_spec_attention_after_user_reply(
+async fn clear_spec_attention_after_user_reply(
     db: &lucode::infrastructure::database::Database,
     spec_id: &str,
     spec_name: &str,
 ) -> Result<(), String> {
     db.update_spec_attention_required(spec_id, false)
         .map_err(|e| format!("Failed to clear spec attention for '{spec_name}': {e}"))?;
-    clear_session_attention_state(spec_name.to_string());
+    clear_session_attention_state_immediate(spec_name).await;
     Ok(())
 }
 
@@ -3754,7 +3754,7 @@ pub async fn submit_spec_clarification_prompt_impl(
     let mut needs_refresh = false;
 
     if spec.attention_required {
-        clear_spec_attention_after_user_reply(&db, &spec.id, &spec.name)?;
+        clear_spec_attention_after_user_reply(&db, &spec.id, &spec.name).await?;
         needs_refresh = true;
     }
 
@@ -3949,8 +3949,8 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
 }
 
 #[tauri::command]
-pub async fn schaltwerk_core_get_consolidation_default_favorite(
-) -> Result<ConsolidationDefaultFavoriteDto, String> {
+pub async fn schaltwerk_core_get_consolidation_default_favorite()
+-> Result<ConsolidationDefaultFavoriteDto, String> {
     let core = get_core_read().await?;
     let value = core
         .db
@@ -4679,8 +4679,8 @@ mod tests {
         assert!(!should_spawn_spec_name_generation(Some(true)));
     }
 
-    #[test]
-    fn clear_spec_attention_after_user_reply_flips_db_flag() {
+    #[tokio::test]
+    async fn clear_spec_attention_after_user_reply_flips_db_flag() {
         use chrono::Utc;
         use lucode::infrastructure::database::Database;
         use lucode::infrastructure::database::db_specs::SpecMethods;
@@ -4712,6 +4712,7 @@ mod tests {
         db.create_spec(&spec).expect("create spec");
 
         super::clear_spec_attention_after_user_reply(&db, &spec.id, &spec.name)
+            .await
             .expect("helper clears attention");
 
         let reloaded = db.get_spec_by_id(&spec.id).expect("spec reload");

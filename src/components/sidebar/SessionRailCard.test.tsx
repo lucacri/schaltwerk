@@ -115,14 +115,14 @@ describe('SessionRailCard', () => {
     expect(screen.queryByTitle('Idle')).toBeNull()
   })
 
-  it('transitions from waiting for input to running when attention clears and isRunning becomes true', () => {
+  it('transitions from waiting for input to clarifying when spec attention clears and isRunning becomes true', () => {
     const waitingSession = mockEnrichedSession('transition-spec', 'spec', false)
     waitingSession.info.clarification_started = true
     waitingSession.info.attention_required = true
     waitingSession.info.attention_kind = 'waiting_for_input'
     waitingSession.info.spec_stage = 'clarified'
 
-    const { rerender, container } = render(
+    const { rerender } = render(
       <TestProviders>
         <SessionRailCard
           session={waitingSession}
@@ -156,8 +156,8 @@ describe('SessionRailCard', () => {
       </TestProviders>
     )
 
-    expect(container.querySelector('.progress-dot-1')).toBeTruthy()
-    expect(screen.queryByText(/waiting for input/i)).toBeNull()
+    expect(screen.getByRole('button', { name: /clarifying/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /waiting for input/i })).toBeNull()
   })
 
   it('does not expose ready state in the collapsed rail', () => {

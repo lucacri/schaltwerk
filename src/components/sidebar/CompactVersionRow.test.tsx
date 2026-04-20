@@ -227,7 +227,7 @@ describe('CompactVersionRow', () => {
     expect(screen.queryByTestId('compact-row-status-running')).toBeNull()
   })
 
-  it('transitions from waiting to running when attention clears and isRunning becomes true', () => {
+  it('transitions from waiting to clarifying when spec attention clears and isRunning becomes true', () => {
     const { rerender } = (() => {
       const props: ComponentProps<typeof CompactVersionRow> = {
         session: {
@@ -307,7 +307,7 @@ describe('CompactVersionRow', () => {
 
     expect(screen.queryByTestId('compact-row-status-waiting')).toBeNull()
     expect(screen.queryByText(/waiting for input/i)).toBeNull()
-    expect(screen.getByTestId('compact-row-status-running')).toBeInTheDocument()
+    expect(screen.getByTestId('compact-row-status-running')).toHaveTextContent(/^Clarifying$/)
   })
 
   it('does not render ready state when session is ready to merge', () => {
