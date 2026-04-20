@@ -342,6 +342,7 @@ mod tests {
                 session_type: SessionType::Worktree,
                 container_status: None,
                 original_agent_type: None,
+                original_agent_model: None,
                 current_task: None,
                 diff_stats: None,
                 ready_to_merge: false,

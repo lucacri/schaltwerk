@@ -166,6 +166,8 @@ export const TauriCommands = {
   SchaltwerkCoreGetSpecClarificationAgentType: 'schaltwerk_core_get_spec_clarification_agent_type',
   SchaltwerkCoreGetConsolidationDefaultFavorite: 'schaltwerk_core_get_consolidation_default_favorite',
   SchaltwerkCoreSetConsolidationDefaultFavorite: 'schaltwerk_core_set_consolidation_default_favorite',
+  SchaltwerkCoreGetConsolidationStats: 'schaltwerk_core_get_consolidation_stats',
+  SchaltwerkCoreUpdateConsolidationOutcomeVertical: 'schaltwerk_core_update_consolidation_outcome_vertical',
   SchaltwerkCoreGetArchiveMaxEntries: 'schaltwerk_core_get_archive_max_entries',
   SchaltwerkCoreGetFontSizes: 'schaltwerk_core_get_font_sizes',
   SchaltwerkCoreGetTheme: 'schaltwerk_core_get_theme',

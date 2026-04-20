@@ -26,7 +26,8 @@ use lucode::services::get_project_files_with_status;
 use lucode::services::repository;
 use lucode::services::{AgentManifest, parse_agent_command};
 use lucode::services::{
-    EnrichedSessionEntity as EnrichedSession, FilterMode, Session, SessionState, SortMode,
+    ConsolidationStats, ConsolidationStatsFilter, EnrichedSessionEntity as EnrichedSession,
+    FilterMode, Session, SessionState, SortMode,
 };
 use lucode::services::{MergeMode, MergeOutcome, MergePreview, MergeService};
 use lucode::services::{
@@ -2099,6 +2100,34 @@ pub async fn schaltwerk_core_confirm_consolidation_winner(
 }
 
 #[tauri::command]
+pub async fn schaltwerk_core_get_consolidation_stats(
+    repository_path: Option<String>,
+    vertical: Option<String>,
+) -> Result<ConsolidationStats, String> {
+    let core = get_core_read_for_project_path(repository_path.as_deref()).await?;
+    let repo =
+        lucode::domains::sessions::SessionDbManager::new(core.db.clone(), core.repo_path.clone());
+    repo.get_consolidation_stats(ConsolidationStatsFilter {
+        repository_path,
+        vertical,
+    })
+    .map_err(|err| format!("Failed to load consolidation stats: {err}"))
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_update_consolidation_outcome_vertical(
+    round_id: String,
+    vertical: String,
+    project_path: Option<String>,
+) -> Result<(), String> {
+    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let repo =
+        lucode::domains::sessions::SessionDbManager::new(core.db.clone(), core.repo_path.clone());
+    repo.update_consolidation_outcome_vertical(&round_id, &vertical)
+        .map_err(|err| format!("Failed to update consolidation outcome vertical: {err}"))
+}
+
+#[tauri::command]
 pub async fn schaltwerk_core_rename_version_group(
     app: tauri::AppHandle,
     base_name: String,
@@ -2966,6 +2995,17 @@ fn should_persist_prompt_override(start_mode: AgentStartMode) -> bool {
     )
 }
 
+fn normalized_model_preference(
+    preferences: &lucode::domains::settings::AgentPreference,
+) -> Option<String> {
+    preferences
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 async fn schaltwerk_core_start_agent_in_terminal(
     app: tauri::AppHandle,
     params: AgentStartParams,
@@ -3240,6 +3280,14 @@ async fn schaltwerk_core_start_agent_in_terminal(
 
     let (mut env_vars, cli_args, preferences) =
         agent_ctx::collect_agent_env_and_cli(&agent_kind, &repo_path, &db).await;
+    let original_agent_model = normalized_model_preference(&preferences);
+    if let Err(err) = db.set_session_original_settings_with_model(
+        &session.id,
+        &agent_type,
+        original_agent_model.as_deref(),
+    ) {
+        log::warn!("Failed to persist original agent settings for '{session_name}': {err}");
+    }
     log::info!(
         "Creating terminal with {agent_name} directly: {terminal_id} with {} env vars and CLI args: '{cli_args}'",
         env_vars.len()
@@ -3854,6 +3902,18 @@ pub async fn schaltwerk_core_set_agent_type(agent_type: String) -> Result<(), St
         .map_err(|e| format!("Failed to set agent type: {e}"))
 }
 
+async fn resolve_agent_model_for_capture(agent_type: &str) -> Option<String> {
+    let settings_manager = SETTINGS_MANAGER.get()?;
+    let manager = settings_manager.lock().await;
+    manager
+        .get_agent_preferences(agent_type)
+        .model
+        .and_then(|model| {
+            let trimmed = model.trim().to_string();
+            (!trimmed.is_empty()).then_some(trimmed)
+        })
+}
+
 #[tauri::command]
 pub async fn schaltwerk_core_set_session_agent_type(
     app: tauri::AppHandle,
@@ -3874,9 +3934,11 @@ pub async fn schaltwerk_core_set_session_agent_type(
         .get_session_by_name(&core.repo_path, &session_name)
         .map_err(|e| format!("Failed to find session {session_name}: {e}"))?;
 
+    let model = resolve_agent_model_for_capture(&agent_type).await;
+
     // Update session's original settings to use the new agent type
     core.db
-        .set_session_original_settings(&session.id, &agent_type)
+        .set_session_original_settings_with_model(&session.id, &agent_type, model.as_deref())
         .map_err(|e| format!("Failed to update session agent type: {e}"))?;
 
     log::info!(
@@ -4884,6 +4946,7 @@ mod tests {
                 initial_prompt: None,
                 ready_to_merge: false,
                 original_agent_type: Some("claude".to_string()),
+                original_agent_model: None,
                 pending_name_generation: false,
                 was_auto_generated: false,
                 spec_content: None,

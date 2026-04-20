@@ -25,6 +25,7 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             initial_prompt TEXT,
             ready_to_merge BOOLEAN DEFAULT FALSE,
             original_agent_type TEXT,
+            original_agent_model TEXT,
             pending_name_generation BOOLEAN DEFAULT FALSE,
             was_auto_generated BOOLEAN DEFAULT FALSE,
             spec_content TEXT,
@@ -143,8 +144,70 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
         "ALTER TABLE consolidation_rounds ADD COLUMN round_type TEXT NOT NULL DEFAULT 'implementation'",
         [],
     );
+    let _ = conn.execute(
+        "ALTER TABLE consolidation_rounds ADD COLUMN vertical TEXT NOT NULL DEFAULT 'other'",
+        [],
+    );
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_consolidation_rounds_repo_group ON consolidation_rounds(repository_path, version_group_id)",
+        [],
+    )?;
+
+    let has_candidate_round_id: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('consolidation_outcome_candidates') WHERE name = 'round_id'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    let candidates_table_exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='consolidation_outcome_candidates'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if candidates_table_exists > 0 && has_candidate_round_id == 0 {
+        let _ = conn.execute("DROP TABLE IF EXISTS consolidation_outcome_candidates", []);
+        let _ = conn.execute("DROP TABLE IF EXISTS consolidation_outcomes", []);
+    }
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS consolidation_outcomes (
+            round_id TEXT PRIMARY KEY,
+            repository_path TEXT NOT NULL,
+            repository_name TEXT NOT NULL,
+            version_group_id TEXT NOT NULL,
+            round_type TEXT NOT NULL,
+            vertical TEXT NOT NULL,
+            confirmed_session_id TEXT NOT NULL,
+            confirmed_session_name TEXT NOT NULL,
+            confirmed_by TEXT NOT NULL,
+            confirmed_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS consolidation_outcome_candidates (
+            round_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            session_name TEXT NOT NULL,
+            agent_type TEXT,
+            model TEXT,
+            outcome TEXT NOT NULL CHECK (outcome IN ('winner', 'loser')),
+            PRIMARY KEY (round_id, session_id),
+            FOREIGN KEY(round_id) REFERENCES consolidation_outcomes(round_id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_consolidation_outcomes_repo_vertical_time
+            ON consolidation_outcomes(repository_path, vertical, confirmed_at)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_consolidation_outcome_candidates_round
+            ON consolidation_outcome_candidates(round_id, outcome)",
         [],
     )?;
 
@@ -334,6 +397,10 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
     );
     let _ = conn.execute(
         "ALTER TABLE sessions ADD COLUMN original_agent_type TEXT",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE sessions ADD COLUMN original_agent_model TEXT",
         [],
     );
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN display_name TEXT", []);

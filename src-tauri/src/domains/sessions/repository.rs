@@ -11,6 +11,8 @@ use chrono::Utc;
 use git2::Repository;
 use log::{debug, warn};
 use rusqlite::params;
+use serde::Serialize;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -21,6 +23,7 @@ pub struct ConsolidationRoundRecord {
     pub round_type: String,
     pub confirmation_mode: String,
     pub status: String,
+    pub vertical: String,
     pub source_session_ids: Vec<String>,
     pub recommended_session_id: Option<String>,
     pub recommended_by_session_id: Option<String>,
@@ -44,7 +47,90 @@ fn consolidation_round_from_row(
         recommended_by_session_id: row.get(8).ok(),
         confirmed_session_id: row.get(9).ok(),
         confirmed_by: row.get(10).ok(),
+        vertical: row.get(11).unwrap_or_else(|_| "other".to_string()),
     })
+}
+
+pub const CONSOLIDATION_VERTICALS: [&str; 10] = [
+    "frontend",
+    "backend",
+    "fullstack",
+    "infra",
+    "testing",
+    "planning",
+    "design",
+    "docs",
+    "data",
+    "other",
+];
+
+#[derive(Debug, Clone)]
+pub struct ConsolidationOutcomeCandidateInput {
+    pub session_id: String,
+    pub session_name: String,
+    pub agent_type: Option<String>,
+    pub model: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConsolidationOutcomeInput {
+    pub round_id: String,
+    pub version_group_id: String,
+    pub round_type: String,
+    pub vertical: String,
+    pub confirmed_session_id: String,
+    pub confirmed_session_name: String,
+    pub confirmed_by: String,
+    pub candidates: Vec<ConsolidationOutcomeCandidateInput>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConsolidationStatsFilter {
+    pub repository_path: Option<String>,
+    pub vertical: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConsolidationStatsProject {
+    pub repository_path: String,
+    pub repository_name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConsolidationModelWinRate {
+    pub model: String,
+    pub agent_types: Vec<String>,
+    pub wins: u32,
+    pub losses: u32,
+    pub total: u32,
+    pub win_rate: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ConsolidationStats {
+    pub selected_project: Option<String>,
+    pub selected_vertical: Option<String>,
+    pub projects: Vec<ConsolidationStatsProject>,
+    pub verticals: Vec<String>,
+    pub last_week: Vec<ConsolidationModelWinRate>,
+    pub all_time: Vec<ConsolidationModelWinRate>,
+}
+
+pub fn default_consolidation_vertical(round_type: &str) -> &'static str {
+    if round_type == "plan" {
+        "planning"
+    } else {
+        "other"
+    }
+}
+
+pub fn normalize_consolidation_vertical(vertical: &str) -> &str {
+    let trimmed = vertical.trim();
+    if CONSOLIDATION_VERTICALS.contains(&trimmed) {
+        trimmed
+    } else {
+        "other"
+    }
 }
 
 #[derive(Clone)]
@@ -466,6 +552,17 @@ impl SessionDbManager {
             .map_err(|e| anyhow!("Failed to set session original settings: {e}"))
     }
 
+    pub fn set_session_original_settings_with_model(
+        &self,
+        session_id: &str,
+        agent_type: &str,
+        model: Option<&str>,
+    ) -> Result<()> {
+        self.db
+            .set_session_original_settings_with_model(session_id, agent_type, model)
+            .map_err(|e| anyhow!("Failed to set session original settings: {e}"))
+    }
+
     pub fn set_session_activity(
         &self,
         session_id: &str,
@@ -623,6 +720,7 @@ impl SessionDbManager {
             source_session_ids,
             confirmation_mode,
             "implementation",
+            "other",
         )
     }
 
@@ -633,18 +731,21 @@ impl SessionDbManager {
         source_session_ids: &[String],
         confirmation_mode: &str,
         round_type: &str,
+        vertical: &str,
     ) -> Result<()> {
         let conn = self.db.get_conn()?;
         let now = Utc::now().timestamp();
+        let vertical = normalize_consolidation_vertical(vertical);
         conn.execute(
             "INSERT INTO consolidation_rounds (
-                id, repository_path, version_group_id, round_type, confirmation_mode, status, source_session_ids, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, 'running', ?6, ?7, ?7)
+                id, repository_path, version_group_id, round_type, confirmation_mode, status, source_session_ids, created_at, updated_at, vertical
+            ) VALUES (?1, ?2, ?3, ?4, ?5, 'running', ?6, ?7, ?7, ?8)
             ON CONFLICT(id) DO UPDATE SET
                 round_type = excluded.round_type,
                 confirmation_mode = excluded.confirmation_mode,
                 source_session_ids = excluded.source_session_ids,
-                updated_at = excluded.updated_at",
+                updated_at = excluded.updated_at,
+                vertical = excluded.vertical",
             params![
                 round_id,
                 self.repo_path.to_string_lossy().to_string(),
@@ -653,6 +754,7 @@ impl SessionDbManager {
                 confirmation_mode,
                 serde_json::to_string(source_session_ids)?,
                 now,
+                vertical,
             ],
         )?;
         Ok(())
@@ -662,7 +764,7 @@ impl SessionDbManager {
         let conn = self.db.get_conn()?;
         let mut stmt = conn.prepare(
             "SELECT id, repository_path, version_group_id, round_type, confirmation_mode, status, source_session_ids,
-                    recommended_session_id, recommended_by_session_id, confirmed_session_id, confirmed_by
+                    recommended_session_id, recommended_by_session_id, confirmed_session_id, confirmed_by, vertical
              FROM consolidation_rounds
              WHERE repository_path = ?1 AND id = ?2",
         )?;
@@ -681,7 +783,7 @@ impl SessionDbManager {
         let conn = self.db.get_conn()?;
         let mut stmt = conn.prepare(
             "SELECT id, repository_path, version_group_id, round_type, confirmation_mode, status, source_session_ids,
-                    recommended_session_id, recommended_by_session_id, confirmed_session_id, confirmed_by
+                    recommended_session_id, recommended_by_session_id, confirmed_session_id, confirmed_by, vertical
              FROM consolidation_rounds
              WHERE repository_path = ?1
                AND version_group_id = ?2
@@ -781,6 +883,246 @@ impl SessionDbManager {
         Ok(())
     }
 
+    pub fn confirm_consolidation_round_with_outcome(
+        &self,
+        input: ConsolidationOutcomeInput,
+    ) -> Result<()> {
+        let conn = self.db.get_conn()?;
+        let now = Utc::now().timestamp();
+        let repository_path = self.repo_path.to_string_lossy().to_string();
+        let repository_name = self
+            .repo_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("Project")
+            .to_string();
+        let vertical = normalize_consolidation_vertical(&input.vertical).to_string();
+
+        conn.execute(
+            "INSERT OR IGNORE INTO consolidation_outcomes (
+                round_id, repository_path, repository_name, version_group_id, round_type, vertical,
+                confirmed_session_id, confirmed_session_name, confirmed_by, confirmed_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                input.round_id,
+                repository_path,
+                repository_name,
+                input.version_group_id,
+                input.round_type,
+                vertical,
+                input.confirmed_session_id,
+                input.confirmed_session_name,
+                input.confirmed_by,
+                now,
+            ],
+        )?;
+
+        for candidate in &input.candidates {
+            let outcome = if candidate.session_id == input.confirmed_session_id
+                || candidate.session_name == input.confirmed_session_name
+            {
+                "winner"
+            } else {
+                "loser"
+            };
+            conn.execute(
+                "INSERT OR IGNORE INTO consolidation_outcome_candidates (
+                    round_id, session_id, session_name, agent_type, model, outcome
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    input.round_id,
+                    candidate.session_id,
+                    candidate.session_name,
+                    candidate.agent_type,
+                    candidate.model,
+                    outcome,
+                ],
+            )?;
+        }
+
+        conn.execute(
+            "UPDATE consolidation_rounds
+             SET confirmed_session_id = ?1,
+                 confirmed_by = ?2,
+                 status = 'promoted',
+                 updated_at = ?3
+             WHERE id = ?4",
+            params![
+                input.confirmed_session_id,
+                input.confirmed_by,
+                now,
+                input.round_id,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_consolidation_outcome_vertical(
+        &self,
+        round_id: &str,
+        vertical: &str,
+    ) -> Result<()> {
+        let conn = self.db.get_conn()?;
+        let vertical = normalize_consolidation_vertical(vertical);
+        conn.execute(
+            "UPDATE consolidation_outcomes SET vertical = ?1 WHERE round_id = ?2",
+            params![vertical, round_id],
+        )?;
+        conn.execute(
+            "UPDATE consolidation_rounds SET vertical = ?1, updated_at = ?2 WHERE id = ?3",
+            params![vertical, Utc::now().timestamp(), round_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_consolidation_stats(
+        &self,
+        filter: ConsolidationStatsFilter,
+    ) -> Result<ConsolidationStats> {
+        let conn = self.db.get_conn()?;
+        let selected_project = filter.repository_path.clone();
+        let selected_vertical = filter.vertical.clone();
+
+        let mut projects_stmt = conn.prepare(
+            "SELECT DISTINCT repository_path, repository_name
+             FROM consolidation_outcomes
+             ORDER BY repository_name ASC, repository_path ASC",
+        )?;
+        let projects = projects_stmt
+            .query_map([], |row| {
+                Ok(ConsolidationStatsProject {
+                    repository_path: row.get(0)?,
+                    repository_name: row.get(1)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+
+        let mut verticals_stmt = conn.prepare(
+            "SELECT DISTINCT vertical
+             FROM consolidation_outcomes
+             ORDER BY vertical ASC",
+        )?;
+        let mut verticals = verticals_stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        for vertical in CONSOLIDATION_VERTICALS {
+            if !verticals.iter().any(|value| value == vertical) {
+                verticals.push(vertical.to_string());
+            }
+        }
+        verticals.sort();
+
+        let all_time = self.aggregate_consolidation_stats(&filter, None)?;
+        let last_week = self.aggregate_consolidation_stats(
+            &filter,
+            Some(Utc::now().timestamp() - 7 * 24 * 60 * 60),
+        )?;
+
+        Ok(ConsolidationStats {
+            selected_project,
+            selected_vertical,
+            projects,
+            verticals,
+            last_week,
+            all_time,
+        })
+    }
+
+    fn aggregate_consolidation_stats(
+        &self,
+        filter: &ConsolidationStatsFilter,
+        since_ts: Option<i64>,
+    ) -> Result<Vec<ConsolidationModelWinRate>> {
+        let conn = self.db.get_conn()?;
+        let mut sql = String::from(
+            "SELECT COALESCE(c.model, c.agent_type, 'unknown') AS model_key,
+                    c.agent_type,
+                    c.outcome
+             FROM consolidation_outcome_candidates c
+             JOIN consolidation_outcomes o ON o.round_id = c.round_id
+             WHERE 1=1",
+        );
+        let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        if let Some(repository_path) = filter.repository_path.as_deref() {
+            sql.push_str(" AND o.repository_path = ?");
+            values.push(Box::new(repository_path.to_string()));
+        }
+        if let Some(vertical) = filter
+            .vertical
+            .as_deref()
+            .map(normalize_consolidation_vertical)
+            .filter(|vertical| !vertical.is_empty())
+        {
+            sql.push_str(" AND o.vertical = ?");
+            values.push(Box::new(vertical.to_string()));
+        }
+        if let Some(since_ts) = since_ts {
+            sql.push_str(" AND o.confirmed_at >= ?");
+            values.push(Box::new(since_ts));
+        }
+
+        let value_refs = values
+            .iter()
+            .map(|value| value.as_ref() as &dyn rusqlite::ToSql)
+            .collect::<Vec<_>>();
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(value_refs.as_slice(), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+
+        #[derive(Default)]
+        struct Accumulator {
+            agent_types: BTreeSet<String>,
+            wins: u32,
+            losses: u32,
+        }
+
+        let mut grouped: BTreeMap<String, Accumulator> = BTreeMap::new();
+        for row in rows {
+            let (model, agent_type, outcome) = row?;
+            let accumulator = grouped.entry(model).or_default();
+            if let Some(agent_type) = agent_type.filter(|value| !value.trim().is_empty()) {
+                accumulator.agent_types.insert(agent_type);
+            }
+            if outcome == "winner" {
+                accumulator.wins += 1;
+            } else {
+                accumulator.losses += 1;
+            }
+        }
+
+        let mut stats = grouped
+            .into_iter()
+            .map(|(model, acc)| {
+                let total = acc.wins + acc.losses;
+                ConsolidationModelWinRate {
+                    model,
+                    agent_types: acc.agent_types.into_iter().collect(),
+                    wins: acc.wins,
+                    losses: acc.losses,
+                    total,
+                    win_rate: if total == 0 {
+                        0.0
+                    } else {
+                        acc.wins as f64 / total as f64
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+        stats.sort_by(|a, b| {
+            b.win_rate
+                .partial_cmp(&a.win_rate)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| b.total.cmp(&a.total))
+                .then_with(|| a.model.cmp(&b.model))
+        });
+        Ok(stats)
+    }
+
     pub fn update_session_consolidation_report(
         &self,
         session_name: &str,
@@ -837,10 +1179,7 @@ impl SessionDbManager {
         Ok(affected)
     }
 
-    pub fn clear_auto_stub_consolidation_report_by_id(
-        &self,
-        session_id: &str,
-    ) -> Result<usize> {
+    pub fn clear_auto_stub_consolidation_report_by_id(&self, session_id: &str) -> Result<usize> {
         let conn = self.db.get_conn()?;
         let affected = conn.execute(
             "UPDATE sessions

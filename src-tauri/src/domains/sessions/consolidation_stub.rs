@@ -235,6 +235,7 @@ mod tests {
             initial_prompt: None,
             ready_to_merge: false,
             original_agent_type: None,
+            original_agent_model: None,
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
@@ -424,7 +425,10 @@ mod tests {
             loaded.consolidation_report.as_deref(),
             Some("## Real agent report")
         );
-        assert_eq!(loaded.consolidation_report_source.as_deref(), Some(AGENT_SOURCE));
+        assert_eq!(
+            loaded.consolidation_report_source.as_deref(),
+            Some(AGENT_SOURCE)
+        );
     }
 
     #[test]

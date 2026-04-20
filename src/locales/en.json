@@ -1346,6 +1346,8 @@
     "specsTitle": "Specs Workspace",
     "preview": "Preview",
     "previewTitle": "Web Preview",
+    "stats": "Stats",
+    "statsTitle": "Consolidation Stats",
     "forgeIssues": "Issues",
     "forgeIssuesTitle": "Issues",
     "forgePrs": "Pull Requests",

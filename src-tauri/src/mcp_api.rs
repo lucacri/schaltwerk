@@ -32,11 +32,16 @@ use lucode::domains::git::service::{ForgeType, detect_forge};
 use lucode::domains::merge::MergeMode;
 use lucode::domains::sessions::apply_git_enrichment;
 use lucode::domains::sessions::entity::{Session, SessionStatus, Spec, SpecStage};
+use lucode::domains::sessions::repository::{
+    ConsolidationOutcomeCandidateInput, ConsolidationOutcomeInput, default_consolidation_vertical,
+};
 use lucode::domains::sessions::service::SessionCreationParams;
 use lucode::domains::settings::{AgentPreset, setup_script::SetupScriptService};
 use lucode::infrastructure::attention_bridge::clear_session_attention_state;
+use lucode::infrastructure::database::db_project_config::{
+    DEFAULT_BRANCH_PREFIX, ProjectConfigMethods,
+};
 use lucode::infrastructure::database::{Database, SpecMethods};
-use lucode::infrastructure::database::db_project_config::{DEFAULT_BRANCH_PREFIX, ProjectConfigMethods};
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::schaltwerk_core::db_app_config::{AppConfigMethods, ConsolidationDefaultFavorite};
 use lucode::schaltwerk_core::{SessionManager, SessionState};
@@ -187,8 +192,17 @@ where
     }
 
     rename_judge_to_root(db, manager, &judge, &new_branch, &root_name).map_err(internal)?;
-    update_consolidation_round_confirmation(db, &round.id, &judge.id, confirmed_by)
-        .map_err(internal)?;
+    let mut outcome_sessions = candidates.clone();
+    outcome_sessions.push(judge.clone());
+    confirm_consolidation_round_with_outcome(
+        db,
+        manager.repo_path(),
+        round,
+        &judge,
+        &outcome_sessions,
+        confirmed_by,
+    )
+    .map_err(internal)?;
 
     let mut candidate_sessions_cancelled = Vec::new();
     let mut source_sessions_cancelled = Vec::new();
@@ -993,6 +1007,7 @@ struct ConsolidationRoundRecord {
     round_type: String,
     confirmation_mode: String,
     status: String,
+    vertical: String,
     source_session_ids: Vec<String>,
     recommended_session_id: Option<String>,
     recommended_by_session_id: Option<String>,
@@ -1458,6 +1473,7 @@ pub(crate) fn upsert_consolidation_round_with_type(
         source_session_ids,
         confirmation_mode,
         round_type,
+        default_consolidation_vertical(round_type),
     )
 }
 
@@ -1481,6 +1497,7 @@ fn get_consolidation_round(
         recommended_by_session_id: round.recommended_by_session_id,
         confirmed_session_id: round.confirmed_session_id,
         confirmed_by: round.confirmed_by,
+        vertical: round.vertical,
     })
 }
 
@@ -1505,6 +1522,7 @@ fn get_active_plan_round_for_group(
                 recommended_by_session_id: round.recommended_by_session_id,
                 confirmed_session_id: round.confirmed_session_id,
                 confirmed_by: round.confirmed_by,
+                vertical: round.vertical,
             })
         })
 }
@@ -1547,14 +1565,34 @@ fn update_consolidation_round_recommendation(
     )
 }
 
-fn update_consolidation_round_confirmation(
+fn confirm_consolidation_round_with_outcome(
     db: &Database,
-    round_id: &str,
-    confirmed_session_id: &str,
+    repo_path: &Path,
+    round: &ConsolidationRoundRecord,
+    winner: &Session,
+    candidate_sessions: &[Session],
     confirmed_by: &str,
 ) -> anyhow::Result<()> {
-    let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), PathBuf::new());
-    repo.update_consolidation_round_confirmation(round_id, confirmed_session_id, confirmed_by)
+    let repo =
+        lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
+    repo.confirm_consolidation_round_with_outcome(ConsolidationOutcomeInput {
+        round_id: round.id.clone(),
+        version_group_id: round.version_group_id.clone(),
+        round_type: round.round_type.clone(),
+        vertical: round.vertical.clone(),
+        confirmed_session_id: winner.id.clone(),
+        confirmed_session_name: winner.name.clone(),
+        confirmed_by: confirmed_by.to_string(),
+        candidates: candidate_sessions
+            .iter()
+            .map(|session| ConsolidationOutcomeCandidateInput {
+                session_id: session.id.clone(),
+                session_name: session.name.clone(),
+                agent_type: session.original_agent_type.clone(),
+                model: session.original_agent_model.clone(),
+            })
+            .collect(),
+    })
 }
 
 fn update_session_consolidation_report(
@@ -2913,8 +2951,7 @@ mod tests {
         )
         .expect("insert other repo round");
 
-        delete_consolidation_round(&db, &repo_path, "round-target")
-            .expect("delete target round");
+        delete_consolidation_round(&db, &repo_path, "round-target").expect("delete target round");
 
         assert!(get_consolidation_round(&db, &repo_path, "round-target").is_err());
         let other_round = get_consolidation_round(&db, &other_repo_path, "round-other")
@@ -2956,6 +2993,7 @@ mod tests {
             initial_prompt: None,
             ready_to_merge: false,
             original_agent_type: Some("claude".to_string()),
+            original_agent_model: None,
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
@@ -4859,12 +4897,9 @@ mod tests {
             .expect("reload spec");
         assert_eq!(refreshed_spec.improve_plan_round_id, None);
 
-        let active_round = get_active_plan_round_for_group(
-            &db,
-            &repo_path,
-            &format!("plan-{}", spec.id),
-        )
-        .expect("query active round");
+        let active_round =
+            get_active_plan_round_for_group(&db, &repo_path, &format!("plan-{}", spec.id))
+                .expect("query active round");
         assert!(
             active_round.is_none(),
             "failed start must not leave a round row"
@@ -5074,6 +5109,7 @@ mod tests {
             initial_prompt: None,
             ready_to_merge: false,
             original_agent_type: Some("claude".to_string()),
+            original_agent_model: None,
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
@@ -5177,8 +5213,16 @@ mod tests {
     #[test]
     fn synthesis_prompt_includes_every_candidate_branch_and_worktree_path() {
         let candidates = vec![
-            sess_with_paths("feature_v1", "lucode/feature_v1", ".lucode/worktrees/feature_v1"),
-            sess_with_paths("feature_v2", "lucode/feature_v2", ".lucode/worktrees/feature_v2"),
+            sess_with_paths(
+                "feature_v1",
+                "lucode/feature_v1",
+                ".lucode/worktrees/feature_v1",
+            ),
+            sess_with_paths(
+                "feature_v2",
+                "lucode/feature_v2",
+                ".lucode/worktrees/feature_v2",
+            ),
         ];
         let template = lucode::domains::settings::default_judge_prompt_template();
         let prompt = lucode::domains::sessions::action_prompts::render_synthesis_judge_prompt(
@@ -5229,26 +5273,28 @@ mod tests {
         let round_id = "round-1";
         let group_id = "group-1";
 
-        let s1 = manager.create_session_with_agent(SessionCreationParams {
-            name: "feat_v1",
-            prompt: None,
-            base_branch: Some("main"),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(group_id),
-            version_number: Some(1),
-            epic_id: None,
-            agent_type: Some("claude"),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: Some(vec!["source".to_string()]),
-            consolidation_round_id: Some(round_id),
-            consolidation_role: Some("candidate"),
-            consolidation_confirmation_mode: Some("confirm"),
-        }).expect("create s1");
-        
+        let s1 = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat_v1",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: Some(1),
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec!["source".to_string()]),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create s1");
+
         upsert_consolidation_round_with_type(
             &db,
             &repo_path,
@@ -5275,26 +5321,28 @@ mod tests {
         let round_id = "round-plan";
         let group_id = "group-plan";
 
-        let s1 = manager.create_session_with_agent(SessionCreationParams {
-            name: "plan_v1",
-            prompt: None,
-            base_branch: Some("main"),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(group_id),
-            version_number: Some(1),
-            epic_id: None,
-            agent_type: Some("claude"),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: Some(vec!["source".to_string()]),
-            consolidation_round_id: Some(round_id),
-            consolidation_role: Some("candidate"),
-            consolidation_confirmation_mode: Some("confirm"),
-        }).expect("create s1");
-        
+        let s1 = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "plan_v1",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: Some(1),
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec!["source".to_string()]),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create s1");
+
         upsert_consolidation_round_with_type(
             &db,
             &repo_path,
@@ -5309,7 +5357,10 @@ mod tests {
         record_candidate_report_verdict(&db, &manager, round_id, &s1).expect("record");
 
         let round = get_consolidation_round(&db, &repo_path, round_id).expect("get round");
-        assert_eq!(round.recommended_session_id.as_deref(), Some(s1.id.as_str()));
+        assert_eq!(
+            round.recommended_session_id.as_deref(),
+            Some(s1.id.as_str())
+        );
     }
 
     #[tokio::test]
@@ -5321,46 +5372,50 @@ mod tests {
         let group_id = "group-1";
         let round_id = "round-1";
 
-        let c1 = manager.create_session_with_agent(SessionCreationParams {
-            name: "feat_v1",
-            prompt: None,
-            base_branch: Some("main"),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(group_id),
-            version_number: Some(1),
-            epic_id: None,
-            agent_type: Some("claude"),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: None,
-            consolidation_round_id: Some(round_id),
-            consolidation_role: Some("candidate"),
-            consolidation_confirmation_mode: Some("confirm"),
-        }).expect("create c1");
+        let c1 = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat_v1",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: Some(1),
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: None,
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create c1");
 
         let judge_raw_name = "feat-judge-12345";
-        let judge = manager.create_session_with_agent(SessionCreationParams {
-            name: judge_raw_name,
-            prompt: None,
-            base_branch: Some("main"),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(group_id),
-            version_number: None,
-            epic_id: None,
-            agent_type: Some("claude"),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: Some(vec![c1.name.clone()]),
-            consolidation_round_id: Some(round_id),
-            consolidation_role: Some("judge"),
-            consolidation_confirmation_mode: Some("confirm"),
-        }).expect("create judge");
+        let judge = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: judge_raw_name,
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: None,
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![c1.name.clone()]),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("judge"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create judge");
 
         upsert_consolidation_round_with_type(
             &db,
@@ -5373,10 +5428,12 @@ mod tests {
         )
         .expect("create round");
 
-        db.set_project_branch_prefix(&repo_path, "lucode").expect("set prefix");
-        
+        db.set_project_branch_prefix(&repo_path, "lucode")
+            .expect("set prefix");
+
         let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
-        repo.update_consolidation_round_status(round_id, "awaiting_confirmation").expect("set status");
+        repo.update_consolidation_round_status(round_id, "awaiting_confirmation")
+            .expect("set status");
 
         let mut refresh_called = false;
         let mut cancelled_sessions = Vec::new();
@@ -5386,19 +5443,24 @@ mod tests {
             &manager,
             &get_consolidation_round(&db, &repo_path, round_id).unwrap(),
             "user",
-            &mut |_| { refresh_called = true; Ok(()) },
-            &mut |name: &str| { 
+            &mut |_| {
+                refresh_called = true;
+                Ok(())
+            },
+            &mut |name: &str| {
                 cancelled_sessions.push(name.to_string());
                 Box::pin(async { Ok(()) })
             },
-        ).await.expect("promote success");
+        )
+        .await
+        .expect("promote success");
 
         assert_eq!(judge.name, judge_raw_name);
         let updated_judge = manager.get_session(judge_raw_name).expect("get judge");
         assert_eq!(updated_judge.display_name.as_deref(), Some("feat"));
         assert_eq!(updated_judge.branch, "lucode/feat");
         assert!(cancelled_sessions.contains(&c1.name));
-        
+
         let round = get_consolidation_round(&db, &repo_path, round_id).expect("get round");
         assert_eq!(round.status, "promoted");
     }
@@ -5412,46 +5474,50 @@ mod tests {
         let group_id = "group-1";
         let round_id = "round-1";
 
-        let c1 = manager.create_session_with_agent(SessionCreationParams {
-            name: "feat_v1",
-            prompt: None,
-            base_branch: Some("main"),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(group_id),
-            version_number: Some(1),
-            epic_id: None,
-            agent_type: Some("claude"),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: None,
-            consolidation_round_id: Some(round_id),
-            consolidation_role: Some("candidate"),
-            consolidation_confirmation_mode: Some("confirm"),
-        }).expect("create c1");
+        let c1 = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat_v1",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: Some(1),
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: None,
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create c1");
 
         let judge_raw_name = "feat-judge-12345";
-        let judge = manager.create_session_with_agent(SessionCreationParams {
-            name: judge_raw_name,
-            prompt: None,
-            base_branch: Some("main"),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(group_id),
-            version_number: None,
-            epic_id: None,
-            agent_type: Some("claude"),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: Some(vec![c1.name.clone()]),
-            consolidation_round_id: Some(round_id),
-            consolidation_role: Some("judge"),
-            consolidation_confirmation_mode: Some("confirm"),
-        }).expect("create judge");
+        let judge = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: judge_raw_name,
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: None,
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![c1.name.clone()]),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("judge"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create judge");
 
         upsert_consolidation_round_with_type(
             &db,
@@ -5464,10 +5530,12 @@ mod tests {
         )
         .expect("create round");
 
-        db.set_project_branch_prefix(&repo_path, "lucode").expect("set prefix");
-        
+        db.set_project_branch_prefix(&repo_path, "lucode")
+            .expect("set prefix");
+
         let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
-        repo.update_consolidation_round_status(round_id, "awaiting_confirmation").expect("set status");
+        repo.update_consolidation_round_status(round_id, "awaiting_confirmation")
+            .expect("set status");
 
         let mut refresh_called = false;
         let mut cancelled_sessions = Vec::new();
@@ -5481,12 +5549,17 @@ mod tests {
                 override_reason: None,
                 confirmed_by: "user",
             },
-            &mut |_| { refresh_called = true; Ok(()) },
-            &mut |name: &str| { 
+            &mut |_| {
+                refresh_called = true;
+                Ok(())
+            },
+            &mut |name: &str| {
                 cancelled_sessions.push(name.to_string());
                 Box::pin(async { Ok(()) })
             },
-        ).await.expect("confirm success");
+        )
+        .await
+        .expect("confirm success");
 
         let updated_judge = manager.get_session(judge_raw_name).expect("get judge");
         assert_eq!(updated_judge.display_name.as_deref(), Some("feat"));
@@ -5503,46 +5576,50 @@ mod tests {
         let group_id = "group-1";
         let round_id = "round-1";
 
-        let c1 = manager.create_session_with_agent(SessionCreationParams {
-            name: "feat_v1",
-            prompt: None,
-            base_branch: Some("main"),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(group_id),
-            version_number: Some(1),
-            epic_id: None,
-            agent_type: Some("claude"),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: None,
-            consolidation_round_id: Some(round_id),
-            consolidation_role: Some("candidate"),
-            consolidation_confirmation_mode: Some("confirm"),
-        }).expect("create c1");
+        let c1 = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat_v1",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: Some(1),
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: None,
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create c1");
 
         let judge_raw_name = "feat-judge-12345";
-        let judge = manager.create_session_with_agent(SessionCreationParams {
-            name: judge_raw_name,
-            prompt: None,
-            base_branch: Some("main"),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(group_id),
-            version_number: None,
-            epic_id: None,
-            agent_type: Some("claude"),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: Some(vec![c1.name.clone()]),
-            consolidation_round_id: Some(round_id),
-            consolidation_role: Some("judge"),
-            consolidation_confirmation_mode: Some("confirm"),
-        }).expect("create judge");
+        let judge = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: judge_raw_name,
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: None,
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![c1.name.clone()]),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("judge"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create judge");
 
         upsert_consolidation_round_with_type(
             &db,
@@ -5555,10 +5632,12 @@ mod tests {
         )
         .expect("create round");
 
-        db.set_project_branch_prefix(&repo_path, "lucode").expect("set prefix");
-        
+        db.set_project_branch_prefix(&repo_path, "lucode")
+            .expect("set prefix");
+
         let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
-        repo.update_consolidation_round_status(round_id, "awaiting_confirmation").expect("set status");
+        repo.update_consolidation_round_status(round_id, "awaiting_confirmation")
+            .expect("set status");
 
         confirm_consolidation_winner_with_callbacks(
             &db,
@@ -5571,7 +5650,9 @@ mod tests {
             },
             &mut |_| Ok(()),
             &mut |_: &str| Box::pin(async { Ok(()) }),
-        ).await.expect("confirm success");
+        )
+        .await
+        .expect("confirm success");
 
         assert_eq!(judge.name, judge_raw_name);
         let updated_judge = manager.get_session(judge_raw_name).expect("get judge");
@@ -5587,46 +5668,50 @@ mod tests {
         let group_id = "group-1";
         let round_id = "round-1";
 
-        let c1 = manager.create_session_with_agent(SessionCreationParams {
-            name: "feat_v1",
-            prompt: None,
-            base_branch: Some("main"),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(group_id),
-            version_number: Some(1),
-            epic_id: None,
-            agent_type: Some("claude"),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: None,
-            consolidation_round_id: Some(round_id),
-            consolidation_role: Some("candidate"),
-            consolidation_confirmation_mode: Some("auto-promote"),
-        }).expect("create c1");
+        let c1 = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat_v1",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: Some(1),
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: None,
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("auto-promote"),
+            })
+            .expect("create c1");
 
         let judge_raw_name = "feat-judge-12345";
-        let judge = manager.create_session_with_agent(SessionCreationParams {
-            name: judge_raw_name,
-            prompt: None,
-            base_branch: Some("main"),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(group_id),
-            version_number: None,
-            epic_id: None,
-            agent_type: Some("claude"),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: Some(vec![c1.name.clone()]),
-            consolidation_round_id: Some(round_id),
-            consolidation_role: Some("judge"),
-            consolidation_confirmation_mode: Some("auto-promote"),
-        }).expect("create judge");
+        let judge = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: judge_raw_name,
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: None,
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec![c1.name.clone()]),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("judge"),
+                consolidation_confirmation_mode: Some("auto-promote"),
+            })
+            .expect("create judge");
 
         upsert_consolidation_round_with_type(
             &db,
@@ -5639,16 +5724,18 @@ mod tests {
         )
         .expect("create round");
 
-        db.set_project_branch_prefix(&repo_path, "lucode").expect("set prefix");
-        
+        db.set_project_branch_prefix(&repo_path, "lucode")
+            .expect("set prefix");
+
         let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
-        repo.update_consolidation_round_status(round_id, "awaiting_confirmation").expect("set status");
+        repo.update_consolidation_round_status(round_id, "awaiting_confirmation")
+            .expect("set status");
 
         let _payload = serde_json::json!({
             "report": "synthesized best of both",
             "base_session_id": "source"
         });
-        
+
         // This simulates what update_consolidation_report does
         let winner_id = judge.id.as_str();
         confirm_consolidation_winner_with_callbacks(
@@ -5662,11 +5749,13 @@ mod tests {
             },
             &mut |_| Ok(()),
             &mut |_: &str| Box::pin(async { Ok(()) }),
-        ).await.expect("auto-promote confirm success");
+        )
+        .await
+        .expect("auto-promote confirm success");
 
         let updated_judge = manager.get_session(judge_raw_name).expect("get judge");
         assert_eq!(updated_judge.display_name.as_deref(), Some("feat"));
-        
+
         let repo = lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.clone());
         let round = repo.get_consolidation_round(round_id).expect("get round");
         assert_eq!(round.status, "promoted");
@@ -5681,25 +5770,27 @@ mod tests {
         let group_id = "group-1";
         let round_id = "round-1";
 
-        let c1 = manager.create_session_with_agent(SessionCreationParams {
-            name: "feat_v1",
-            prompt: None,
-            base_branch: Some("main"),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(group_id),
-            version_number: Some(1),
-            epic_id: None,
-            agent_type: Some("claude"),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: None,
-            consolidation_round_id: Some(round_id),
-            consolidation_role: Some("candidate"),
-            consolidation_confirmation_mode: Some("confirm"),
-        }).expect("create c1");
+        let c1 = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat_v1",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: Some(1),
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: None,
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create c1");
 
         upsert_consolidation_round_with_type(
             &db,
@@ -5712,12 +5803,27 @@ mod tests {
         )
         .expect("create round");
 
-        db.set_project_branch_prefix(&repo_path, "lucode").expect("set prefix");
+        db.set_project_branch_prefix(&repo_path, "lucode")
+            .expect("set prefix");
 
-        let (judge1, created1) = ensure_synthesis_judge_session(None, &db, &manager, &get_consolidation_round(&db, &repo_path, round_id).unwrap()).await.expect("first trigger");
+        let (judge1, created1) = ensure_synthesis_judge_session(
+            None,
+            &db,
+            &manager,
+            &get_consolidation_round(&db, &repo_path, round_id).unwrap(),
+        )
+        .await
+        .expect("first trigger");
         assert!(created1);
 
-        let (judge2, created2) = ensure_synthesis_judge_session(None, &db, &manager, &get_consolidation_round(&db, &repo_path, round_id).unwrap()).await.expect("second trigger");
+        let (judge2, created2) = ensure_synthesis_judge_session(
+            None,
+            &db,
+            &manager,
+            &get_consolidation_round(&db, &repo_path, round_id).unwrap(),
+        )
+        .await
+        .expect("second trigger");
         assert!(!created2);
         assert_eq!(judge1.id, judge2.id);
     }
@@ -6447,10 +6553,12 @@ async fn rollback_improve_plan_round_creation(
         manager.repo_path().to_path_buf(),
     );
     for name in session_names {
-        if let Err(err) = lucode::domains::sessions::consolidation_stub::delete_stub_report_for_session_name(
-            &db_manager,
-            name,
-        ) {
+        if let Err(err) =
+            lucode::domains::sessions::consolidation_stub::delete_stub_report_for_session_name(
+                &db_manager,
+                name,
+            )
+        {
             failures.push(format!("{name}: delete auto-stub: {err}"));
         }
     }
@@ -6459,10 +6567,12 @@ async fn rollback_improve_plan_round_creation(
         if let Err(err) = db.update_spec_improve_plan_round_id(spec_id, None) {
             failures.push(format!("clear spec plan round link: {err}"));
         }
-        if let Err(err) = lucode::domains::sessions::consolidation_stub::delete_stub_report_for_session_id(
-            &db_manager,
-            spec_id,
-        ) {
+        if let Err(err) =
+            lucode::domains::sessions::consolidation_stub::delete_stub_report_for_session_id(
+                &db_manager,
+                spec_id,
+            )
+        {
             failures.push(format!("delete spec auto-stub: {err}"));
         }
     }
@@ -6483,16 +6593,16 @@ fn create_improve_plan_round_start_context(
     params: &StartImprovePlanRoundParams,
     plan_candidate_template: &str,
 ) -> Result<ImprovePlanRoundStartContext, ImprovePlanRoundCreateFailure> {
-    let (spec, version_group_id) =
-        validate_start_improve_plan_round_preconditions(db, manager, name).map_err(
-            |(status, message)| ImprovePlanRoundCreateFailure {
-                status,
-                message,
-                spec_id: None,
-                round_id: None,
-                created_session_names: Vec::new(),
-            },
-        )?;
+    let (spec, version_group_id) = validate_start_improve_plan_round_preconditions(
+        db, manager, name,
+    )
+    .map_err(|(status, message)| ImprovePlanRoundCreateFailure {
+        status,
+        message,
+        spec_id: None,
+        round_id: None,
+        created_session_names: Vec::new(),
+    })?;
 
     let candidate_count = params.candidate_count.unwrap_or(2).clamp(1, 6);
     let round_id = Uuid::new_v4().to_string();
@@ -8553,14 +8663,20 @@ where
                 )
             })?;
 
-        update_consolidation_round_confirmation(db, round_id, &winner.id, confirmed_by).map_err(
-            |err| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to update plan round confirmation: {err}"),
-                )
-            },
-        )?;
+        confirm_consolidation_round_with_outcome(
+            db,
+            manager.repo_path(),
+            &round,
+            &winner,
+            &candidate_sessions,
+            confirmed_by,
+        )
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to confirm plan round: {err}"),
+            )
+        })?;
 
         let mut candidate_sessions_cancelled = Vec::new();
         let mut judge_sessions_cancelled = Vec::new();
@@ -8674,14 +8790,20 @@ where
     )
     .await?;
 
-    update_consolidation_round_confirmation(db, round_id, &winner.id, confirmed_by).map_err(
-        |err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to update consolidation round confirmation: {err}"),
-            )
-        },
-    )?;
+    confirm_consolidation_round_with_outcome(
+        db,
+        manager.repo_path(),
+        &round,
+        &winner,
+        &candidate_sessions,
+        confirmed_by,
+    )
+    .map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to confirm consolidation round: {err}"),
+        )
+    })?;
 
     let mut candidate_sessions_cancelled = Vec::new();
     let mut judge_sessions_cancelled = Vec::new();
@@ -8754,13 +8876,12 @@ pub(crate) async fn trigger_consolidation_judge_inner(
         })?;
         let db = core.db.clone();
         let manager = core.session_manager();
-        let round =
-            get_consolidation_round(&db, manager.repo_path(), round_id).map_err(|err| {
-                (
-                    StatusCode::NOT_FOUND,
-                    format!("Consolidation round '{round_id}' not found: {err}"),
-                )
-            })?;
+        let round = get_consolidation_round(&db, manager.repo_path(), round_id).map_err(|err| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("Consolidation round '{round_id}' not found: {err}"),
+            )
+        })?;
         let candidate_sessions = list_round_sessions(&manager, round_id)
             .map(|sessions| candidate_sessions_for_round(&sessions))
             .map_err(|err| {
@@ -8855,15 +8976,12 @@ async fn update_consolidation_report(
                 format!("Session '{name}' not found: {error}"),
             )
         })?;
-        let round_id = session
-            .consolidation_round_id
-            .clone()
-            .ok_or_else(|| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    format!("Session '{name}' is not attached to a consolidation round"),
-                )
-            })?;
+        let round_id = session.consolidation_round_id.clone().ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!("Session '{name}' is not attached to a consolidation round"),
+            )
+        })?;
 
         update_session_consolidation_report(
             &db,
@@ -8881,12 +8999,13 @@ async fn update_consolidation_report(
             )
         })?;
 
-        let round = get_consolidation_round(&db, manager.repo_path(), &round_id).map_err(|err| {
-            (
-                StatusCode::NOT_FOUND,
-                format!("Consolidation round '{round_id}' not found: {err}"),
-            )
-        })?;
+        let round =
+            get_consolidation_round(&db, manager.repo_path(), &round_id).map_err(|err| {
+                (
+                    StatusCode::NOT_FOUND,
+                    format!("Consolidation round '{round_id}' not found: {err}"),
+                )
+            })?;
         let role = session
             .consolidation_role
             .clone()
@@ -8942,12 +9061,13 @@ async fn update_consolidation_report(
                 record_candidate_report_verdict(&db, &manager, &round_id, &session)?;
             }
 
-            let updated_round_sessions = list_round_sessions(&manager, &round_id).map_err(|err| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to list updated round sessions: {err}"),
-                )
-            })?;
+            let updated_round_sessions =
+                list_round_sessions(&manager, &round_id).map_err(|err| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to list updated round sessions: {err}"),
+                    )
+                })?;
             let candidate_sessions = candidate_sessions_for_round(&updated_round_sessions);
             let judge_sessions = judge_sessions_for_round(&updated_round_sessions);
             if judge_sessions.is_empty() && all_candidates_reported(&candidate_sessions) {
@@ -8984,8 +9104,13 @@ async fn update_consolidation_report(
     match prepared.action {
         PostReportAction::None => {}
         PostReportAction::StartJudge { round } => {
-            match create_and_start_judge_session(Some(&app), &prepared.db, &prepared.manager, &round)
-                .await
+            match create_and_start_judge_session(
+                Some(&app),
+                &prepared.db,
+                &prepared.manager,
+                &round,
+            )
+            .await
             {
                 Ok(_) => {
                     auto_judge_triggered = true;

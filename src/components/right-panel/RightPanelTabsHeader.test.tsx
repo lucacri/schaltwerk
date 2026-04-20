@@ -13,6 +13,7 @@ const renderHeader = (overrides: Partial<Parameters<typeof RightPanelTabsHeader>
     showSpecTab: false,
     showSpecsTab: false,
     showPreviewTab: false,
+    showStatsTab: false,
     showForgeIssuesTab: false,
     showForgePrsTab: false,
     onSelectTab: vi.fn(),
@@ -31,7 +32,8 @@ describe('RightPanelTabsHeader', () => {
       showHistoryTab: false,
       showSpecTab: false,
       showSpecsTab: false,
-      showPreviewTab: false
+      showPreviewTab: false,
+      showStatsTab: false
     })
 
     expect(container).toBeEmptyDOMElement()
@@ -44,7 +46,8 @@ describe('RightPanelTabsHeader', () => {
       showHistoryTab: true,
       showSpecTab: true,
       showSpecsTab: true,
-      showPreviewTab: true
+      showPreviewTab: true,
+      showStatsTab: true
     })
 
     expect(screen.getByTitle('Changes')).toBeInTheDocument()
@@ -53,6 +56,7 @@ describe('RightPanelTabsHeader', () => {
     expect(screen.getByTitle('Spec')).toHaveAttribute('data-onboarding', 'specs-workspace-tab')
     expect(screen.getByTitle('Specs Workspace')).toHaveAttribute('data-onboarding', 'specs-workspace-tab')
     expect(screen.getByTitle('Web Preview')).toBeInTheDocument()
+    expect(screen.getByTitle('Consolidation Stats')).toBeInTheDocument()
   })
 
   it('invokes onSelectTab with the chosen tab', async () => {

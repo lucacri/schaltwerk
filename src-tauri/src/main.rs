@@ -31,11 +31,11 @@ mod version_check;
 use crate::commands::sessions_refresh::{SessionsRefreshReason, request_sessions_refresh};
 use crate::errors::SchaltError;
 use clap::Parser;
+use lucode::domains::agent_plugins::install_bundled_lucode_plugins;
 use lucode::domains::power::global_service::{
     GlobalInhibitorService, set_global_keep_awake_service,
 };
 use lucode::domains::terminal::submission::submission_options_for_agent;
-use lucode::domains::agent_plugins::install_bundled_lucode_plugins;
 use lucode::domains::{attention::AttentionStateRegistry, git::repository};
 use lucode::infrastructure::config::SettingsManager;
 use lucode::project_manager::ProjectManager;
@@ -219,10 +219,8 @@ fn extend_process_path() {}
 use commands::*;
 
 #[tauri::command]
-async fn list_lucode_tmux_servers() -> Result<
-    Vec<lucode::domains::terminal::tmux_inspect::ServerInfo>,
-    String,
-> {
+async fn list_lucode_tmux_servers()
+-> Result<Vec<lucode::domains::terminal::tmux_inspect::ServerInfo>, String> {
     use lucode::domains::terminal::tmux_inspect::{ProjectLookup, list_lucode_tmux_servers};
 
     let projects = projects::ProjectHistory::load()
@@ -1630,6 +1628,8 @@ fn main() {
             schaltwerk_core_get_spec_clarification_agent_type,
             schaltwerk_core_set_consolidation_default_favorite,
             schaltwerk_core_get_consolidation_default_favorite,
+            schaltwerk_core_get_consolidation_stats,
+            schaltwerk_core_update_consolidation_outcome_vertical,
             schaltwerk_core_get_font_sizes,
             schaltwerk_core_set_font_sizes,
             schaltwerk_core_get_theme,

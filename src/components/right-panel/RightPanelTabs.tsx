@@ -33,6 +33,7 @@ import { SPLIT_GUTTER_SIZE } from '../../common/splitLayout'
 import { invoke } from '@tauri-apps/api/core'
 import { TauriCommands } from '../../common/tauriCommands'
 import { rightPanelTabAtom } from '../../store/atoms/rightPanelTab'
+import { ConsolidationStatsPanel } from './ConsolidationStatsPanel'
 
 interface RightPanelTabsProps {
   onOpenHistoryDiff?: (payload: { repoPath: string; commit: HistoryItem; files: CommitFileChange[]; initialFilePath?: string | null }) => void
@@ -396,15 +397,20 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const showHistoryTab = isCommander || isRunningSession
   const showSpecsTab = isCommander
   const showPreviewTab = isCommander || isRunningSession
+  const showStatsTab = isCommander || isRunningSession
   const showForgeIssuesTab = forgeIntegration.forgeType !== 'unknown' && (isCommander || isRunningSession) && forgeIntegration.hasSources
   const showForgePrsTab = showForgeIssuesTab
-  const tabsPresent = showChangesTab || showInfoTab || showSpecTab || showHistoryTab || showSpecsTab || showPreviewTab || showForgeIssuesTab || showForgePrsTab
+  const tabsPresent = showChangesTab || showInfoTab || showSpecTab || showHistoryTab || showSpecsTab || showPreviewTab || showStatsTab || showForgeIssuesTab || showForgePrsTab
 
   useEffect(() => {
-    if ((activeTab === 'forge-issues' && !showForgeIssuesTab) || (activeTab === 'forge-prs' && !showForgePrsTab)) {
+    if (
+      (activeTab === 'forge-issues' && !showForgeIssuesTab) ||
+      (activeTab === 'forge-prs' && !showForgePrsTab) ||
+      (activeTab === 'stats' && !showStatsTab)
+    ) {
       void setRightPanelTab('changes')
     }
-  }, [activeTab, showForgeIssuesTab, showForgePrsTab, setRightPanelTab])
+  }, [activeTab, showForgeIssuesTab, showForgePrsTab, showStatsTab, setRightPanelTab])
 
   // Enable split mode when viewing Changes for normal running sessions
   const useSplitMode = isRunningSession && activeTab === 'changes'
@@ -452,6 +458,7 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
           showSpecTab={showSpecTab}
           showSpecsTab={showSpecsTab}
           showPreviewTab={showPreviewTab}
+          showStatsTab={showStatsTab}
           showForgeIssuesTab={showForgeIssuesTab}
           showForgePrsTab={showForgePrsTab}
           onSelectTab={tab => { void setRightPanelTab(tab) }}
@@ -565,6 +572,8 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
                 onPickerClose={() => setShowSpecPicker(false)}
                 onReviewModeChange={handleSpecReviewModeChange}
               />
+            ) : activeTab === 'stats' ? (
+              <ConsolidationStatsPanel />
             ) : activeTab === 'agent' ? (
               effectiveSelection.kind === 'session' ? (
                 <SpecContentView

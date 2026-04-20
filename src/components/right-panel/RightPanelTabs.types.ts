@@ -1,1 +1,1 @@
-export type TabKey = 'changes' | 'agent' | 'info' | 'history' | 'specs' | 'preview' | 'forge-issues' | 'forge-prs'
+export type TabKey = 'changes' | 'agent' | 'info' | 'history' | 'specs' | 'preview' | 'stats' | 'forge-issues' | 'forge-prs'

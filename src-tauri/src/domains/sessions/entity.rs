@@ -92,6 +92,7 @@ pub struct Session {
     pub ready_to_merge: bool,
     // If present, captures the agent type that originally opened this session (e.g., "claude" or "opencode")
     pub original_agent_type: Option<String>,
+    pub original_agent_model: Option<String>,
     // Internal flag to decide whether we should auto-generate a display name post-start
     pub pending_name_generation: bool,
     // True if the session name was auto-generated (e.g., docker-style names)
@@ -389,6 +390,8 @@ pub struct SessionInfo {
     pub container_status: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub original_agent_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_agent_model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_task: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

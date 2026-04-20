@@ -1,6 +1,6 @@
 import React from 'react'
 import clsx from 'clsx'
-import { VscDiff, VscGitCommit, VscGitPullRequest, VscInfo, VscIssues, VscNotebook, VscPreview } from 'react-icons/vsc'
+import { VscDiff, VscGraph, VscGitCommit, VscGitPullRequest, VscInfo, VscIssues, VscNotebook, VscPreview } from 'react-icons/vsc'
 import type { TabKey } from './RightPanelTabs.types'
 import { useTranslation } from '../../common/i18n'
 import './RightPanelTabsHeader.css'
@@ -14,6 +14,7 @@ interface RightPanelTabsHeaderProps {
   showSpecTab: boolean
   showSpecsTab: boolean
   showPreviewTab: boolean
+  showStatsTab: boolean
   showForgeIssuesTab: boolean
   showForgePrsTab: boolean
   onSelectTab: (tab: TabKey) => void
@@ -47,6 +48,7 @@ export const RightPanelTabsHeader = ({
   showSpecTab,
   showSpecsTab,
   showPreviewTab,
+  showStatsTab,
   showForgeIssuesTab,
   showForgePrsTab,
   onSelectTab
@@ -126,6 +128,15 @@ export const RightPanelTabsHeader = ({
       label: t.rightPanelTabs.preview,
       title: t.rightPanelTabs.previewTitle,
       icon: <VscPreview className={baseTabIconClass} />
+    })
+  }
+
+  if (showStatsTab) {
+    descriptors.push({
+      key: 'stats',
+      label: t.rightPanelTabs.stats,
+      title: t.rightPanelTabs.statsTitle,
+      icon: <VscGraph className={baseTabIconClass} />
     })
   }
 

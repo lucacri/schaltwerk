@@ -1357,6 +1357,8 @@ export interface Translations {
     specsTitle: string
     preview: string
     previewTitle: string
+    stats: string
+    statsTitle: string
     forgeIssues: string
     forgeIssuesTitle: string
     forgePrs: string
