@@ -6,6 +6,7 @@ use git2::{
 };
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Mutex;
 
 static WORKTREE_MUTEX: Mutex<()> = Mutex::new(());
@@ -365,6 +366,115 @@ pub fn remove_worktree(repo_path: &Path, worktree_path: &Path) -> Result<()> {
     }
 }
 
+pub fn force_remove_worktree(repo_path: &Path, worktree_path: &Path) -> Result<()> {
+    let _lock = WORKTREE_MUTEX
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .args(["worktree", "remove", "--force", "--force"])
+        .arg(worktree_path)
+        .output()
+        .with_context(|| {
+            format!(
+                "Failed to run git worktree remove --force for {}",
+                worktree_path.display()
+            )
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let message = if stderr.is_empty() { stdout } else { stderr };
+        log::warn!(
+            "git worktree remove --force failed for {}: {}",
+            worktree_path.display(),
+            message
+        );
+
+        if worktree_path.exists() {
+            fast_remove_dir(worktree_path)?;
+        }
+    }
+
+    remove_worktree_lock_for_path_unlocked(repo_path, worktree_path)?;
+    prune_worktrees_unlocked(repo_path)?;
+    Ok(())
+}
+
+pub fn worktree_lock_reason(repo_path: &Path, worktree_path: &Path) -> Result<Option<String>> {
+    let repo = Repository::open(repo_path)?;
+    let Some(worktree_name) = matching_worktree_name(&repo, worktree_path)? else {
+        return Ok(None);
+    };
+
+    let lock_path = repo
+        .path()
+        .join("worktrees")
+        .join(worktree_name)
+        .join("locked");
+    if !lock_path.exists() {
+        return Ok(None);
+    }
+
+    let reason = fs::read_to_string(&lock_path)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if reason.is_empty() {
+        Ok(Some("Worktree is locked".to_string()))
+    } else {
+        Ok(Some(reason))
+    }
+}
+
+fn matching_worktree_name(repo: &Repository, worktree_path: &Path) -> Result<Option<String>> {
+    let canonical_target_path = worktree_path
+        .canonicalize()
+        .unwrap_or_else(|_| worktree_path.to_path_buf());
+    let worktrees = repo.worktrees()?;
+
+    for wt_name in worktrees.iter().flatten() {
+        let Ok(wt) = repo.find_worktree(wt_name) else {
+            continue;
+        };
+        let wt_path = wt.path();
+        let canonical_wt_path = wt_path
+            .canonicalize()
+            .unwrap_or_else(|_| wt_path.to_path_buf());
+        if canonical_wt_path == canonical_target_path || wt_path == worktree_path {
+            return Ok(Some(wt_name.to_string()));
+        }
+    }
+
+    Ok(None)
+}
+
+fn remove_worktree_lock_for_path_unlocked(repo_path: &Path, worktree_path: &Path) -> Result<()> {
+    let repo = Repository::open(repo_path)?;
+    let Some(worktree_name) = matching_worktree_name(&repo, worktree_path)? else {
+        return Ok(());
+    };
+
+    let lock_path = repo
+        .path()
+        .join("worktrees")
+        .join(worktree_name)
+        .join("locked");
+    if lock_path.exists() {
+        fs::remove_file(&lock_path).with_context(|| {
+            format!(
+                "Failed to remove worktree lock file {}",
+                lock_path.display()
+            )
+        })?;
+    }
+
+    Ok(())
+}
+
 fn fast_remove_dir(path: &Path) -> Result<()> {
     let trash_dir = path
         .parent()
@@ -440,6 +550,10 @@ pub fn prune_worktrees(repo_path: &Path) -> Result<()> {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
 
+    prune_worktrees_unlocked(repo_path)
+}
+
+fn prune_worktrees_unlocked(repo_path: &Path) -> Result<()> {
     let repo = Repository::open(repo_path)?;
     let worktrees = repo.worktrees()?;
 

@@ -10,6 +10,17 @@ export interface Translations {
       warningUncommitted: string
       allCommitted: string
       forceCancel: string
+      blockedTitle: string
+      blockedBody: string
+      forceRemove: string
+      blockedUncommitted: string
+      blockedOrphaned: string
+      blockedLocked: string
+      blockedGitError: string
+      affectedFiles: string
+      expectedPath: string
+      lockReason: string
+      gitOperation: string
       cancelSession: string
       keepSession: string
     }

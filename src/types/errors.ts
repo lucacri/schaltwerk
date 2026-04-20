@@ -1,3 +1,5 @@
+import type { CancelBlocker } from '../common/events'
+
 export type SchaltError =
   | { type: 'SessionNotFound'; data: { session_id: string } }
   | { type: 'SessionAlreadyExists'; data: { session_id: string } }
@@ -18,6 +20,7 @@ export type SchaltError =
       type: 'InvalidSessionState'
       data: { session_id: string; current_state: string; expected_state: string }
     }
+  | { type: 'CancelBlocked'; data: { blocker: CancelBlocker } }
   | { type: 'AgentNotFound'; data: { agent_name: string } }
   | { type: 'ConfigError'; data: { key: string; message: string } }
 
@@ -58,6 +61,8 @@ export function getErrorMessage(error: unknown): string {
         return `Merge conflict in ${error.data.files.length} file(s): ${error.data.message}`
       case 'InvalidSessionState':
         return `Session '${error.data.session_id}' is in state '${error.data.current_state}', expected '${error.data.expected_state}'`
+      case 'CancelBlocked':
+        return getCancelBlockerMessage(error.data.blocker)
       case 'AgentNotFound':
         return `Agent '${error.data.agent_name}' not found`
       case 'ConfigError':
@@ -78,6 +83,19 @@ export function getErrorMessage(error: unknown): string {
   }
 
   return 'An unknown error occurred'
+}
+
+function getCancelBlockerMessage(blocker: CancelBlocker): string {
+  switch (blocker.type) {
+    case 'UncommittedChanges':
+      return `Session cancel blocked by uncommitted changes in ${blocker.data.files.length} file(s)`
+    case 'OrphanedWorktree':
+      return `Session cancel blocked because the worktree is missing: ${blocker.data.expected_path}`
+    case 'WorktreeLocked':
+      return `Session cancel blocked because the worktree is locked: ${blocker.data.reason}`
+    case 'GitError':
+      return `Session cancel blocked by git error during ${blocker.data.operation}: ${blocker.data.message}`
+  }
 }
 
 export function isSessionMissingError(error: unknown): boolean {

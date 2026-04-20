@@ -1,3 +1,4 @@
+use crate::domains::sessions::lifecycle::cancellation::CancelBlocker;
 use serde::Serialize;
 use std::fmt;
 
@@ -51,6 +52,9 @@ pub enum SchaltError {
         session_id: String,
         current_state: String,
         expected_state: String,
+    },
+    CancelBlocked {
+        blocker: CancelBlocker,
     },
     AgentNotFound {
         agent_name: String,
@@ -163,6 +167,9 @@ impl fmt::Display for SchaltError {
                     f,
                     "Session '{session_id}' is in state '{current_state}', expected '{expected_state}'"
                 )
+            }
+            Self::CancelBlocked { blocker } => {
+                write!(f, "Session cancel blocked: {blocker:?}")
             }
             Self::AgentNotFound { agent_name } => {
                 write!(f, "Agent '{agent_name}' not found")

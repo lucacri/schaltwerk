@@ -29,6 +29,20 @@ describe('SchaltError helpers', () => {
     expect(getErrorMessage(error)).toContain('Git operation')
   })
 
+  it('generates useful messages for cancel blockers', () => {
+    const error: SchaltError = {
+      type: 'CancelBlocked',
+      data: {
+        blocker: {
+          type: 'UncommittedChanges',
+          data: { files: ['src/App.tsx', 'README.md'] }
+        }
+      }
+    }
+
+    expect(getErrorMessage(error)).toBe('Session cancel blocked by uncommitted changes in 2 file(s)')
+  })
+
   it('returns stringified message for unknown errors', () => {
     const err = new Error('custom failure')
     expect(getErrorMessage(err)).toBe('custom failure')

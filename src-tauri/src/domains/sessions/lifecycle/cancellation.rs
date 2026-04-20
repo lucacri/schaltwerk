@@ -4,6 +4,8 @@ use crate::domains::sessions::process_cleanup::terminate_processes_with_cwd;
 use crate::domains::sessions::repository::SessionDbManager;
 use anyhow::{Context, Result, anyhow};
 use log::{info, warn};
+use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::path::{Path, PathBuf};
 use tokio::runtime::Handle;
 
@@ -33,6 +35,70 @@ pub struct CancellationResult {
     pub errors: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum CancelBlocker {
+    UncommittedChanges { files: Vec<String> },
+    OrphanedWorktree { expected_path: PathBuf },
+    WorktreeLocked { reason: String },
+    GitError { operation: String, message: String },
+}
+
+#[derive(Debug, Clone)]
+pub struct CancelBlockedError {
+    pub blocker: CancelBlocker,
+}
+
+impl CancelBlockedError {
+    pub fn new(blocker: CancelBlocker) -> Self {
+        Self { blocker }
+    }
+}
+
+impl fmt::Display for CancelBlockedError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Session cancel blocked: {:?}", self.blocker)
+    }
+}
+
+impl std::error::Error for CancelBlockedError {}
+
+fn detect_cancel_blocker_for(
+    repo_path: &Path,
+    session: &Session,
+    config: &CancellationConfig,
+) -> Result<Option<CancelBlocker>> {
+    if config.force {
+        return Ok(None);
+    }
+
+    if !session.worktree_path.exists() {
+        return Ok(Some(CancelBlocker::OrphanedWorktree {
+            expected_path: session.worktree_path.clone(),
+        }));
+    }
+
+    match git::worktree_lock_reason(repo_path, &session.worktree_path) {
+        Ok(Some(reason)) => return Ok(Some(CancelBlocker::WorktreeLocked { reason })),
+        Ok(None) => {}
+        Err(error) => {
+            return Ok(Some(CancelBlocker::GitError {
+                operation: "inspect_worktree_lock".to_string(),
+                message: error.to_string(),
+            }));
+        }
+    }
+
+    match git::uncommitted_sample_paths(&session.worktree_path, 50) {
+        Ok(files) if !files.is_empty() => Ok(Some(CancelBlocker::UncommittedChanges { files })),
+        Ok(_) => Ok(None),
+        Err(error) => Ok(Some(CancelBlocker::GitError {
+            operation: "inspect_uncommitted_changes".to_string(),
+            message: error.to_string(),
+        })),
+    }
+}
+
 impl StandaloneCancellationCoordinator {
     pub fn new(repo_path: PathBuf, session: Session) -> Self {
         Self { repo_path, session }
@@ -54,6 +120,14 @@ impl StandaloneCancellationCoordinator {
                 "Cannot cancel spec session '{}'. Use archive or delete spec operations instead.",
                 self.session.name
             ));
+        }
+
+        if let Some(blocker) = detect_cancel_blocker_for(&self.repo_path, &self.session, &config)? {
+            warn!(
+                "Cancel {} blocked during filesystem preflight: {:?}",
+                self.session.name, blocker
+            );
+            return Err(CancelBlockedError::new(blocker).into());
         }
 
         let mut result = CancellationResult {
@@ -227,6 +301,14 @@ impl<'a> CancellationCoordinator<'a> {
             ));
         }
 
+        if let Some(blocker) = self.detect_cancel_blocker(session, &config)? {
+            warn!(
+                "Cancel {} blocked during sync preflight: {:?}",
+                session.name, blocker
+            );
+            return Err(CancelBlockedError::new(blocker).into());
+        }
+
         let mut result = CancellationResult {
             terminated_processes: Vec::new(),
             worktree_removed: false,
@@ -276,6 +358,14 @@ impl<'a> CancellationCoordinator<'a> {
             ));
         }
 
+        if let Some(blocker) = self.detect_cancel_blocker(session, &config)? {
+            warn!(
+                "Cancel {} blocked during async preflight: {:?}",
+                session.name, blocker
+            );
+            return Err(CancelBlockedError::new(blocker).into());
+        }
+
         let mut result = CancellationResult {
             terminated_processes: Vec::new(),
             worktree_removed: false,
@@ -316,6 +406,79 @@ impl<'a> CancellationCoordinator<'a> {
             );
         } else {
             info!("Fast cancel {}: Successfully completed", session.name);
+        }
+
+        Ok(result)
+    }
+
+    pub fn detect_cancel_blocker(
+        &self,
+        session: &Session,
+        config: &CancellationConfig,
+    ) -> Result<Option<CancelBlocker>> {
+        detect_cancel_blocker_for(self.repo_path, session, config)
+    }
+
+    pub async fn force_cancel_session_async(
+        &self,
+        session: &Session,
+    ) -> Result<CancellationResult> {
+        info!("Force canceling session '{}'", session.name);
+
+        if session.session_state == SessionState::Spec {
+            return Err(anyhow!(
+                "Cannot force cancel spec session '{}'. Use archive or delete spec operations instead.",
+                session.name
+            ));
+        }
+
+        let mut result = CancellationResult {
+            terminated_processes: Vec::new(),
+            worktree_removed: false,
+            branch_deleted: false,
+            errors: Vec::new(),
+        };
+
+        result.terminated_processes = self
+            .terminate_session_processes_async(session, &mut result.errors)
+            .await;
+
+        match Self::force_remove_worktree_async(
+            self.repo_path,
+            &session.worktree_path,
+            &session.name,
+        )
+        .await
+        {
+            Ok(()) => result.worktree_removed = true,
+            Err(error) => {
+                let message = format!("Force worktree removal failed: {error}");
+                warn!("Force cancel {}: {}", session.name, message);
+                result.errors.push(message);
+            }
+        }
+
+        match Self::force_delete_branch_async(self.repo_path, &session.branch, &session.name).await
+        {
+            Ok(()) => result.branch_deleted = true,
+            Err(error) => {
+                let message = format!("Force branch deletion failed: {error}");
+                warn!("Force cancel {}: {}", session.name, message);
+                result.errors.push(message);
+            }
+        }
+
+        self.delete_session_row(&session.id)?;
+
+        if !result.errors.is_empty() {
+            warn!(
+                "Force cancel {}: Completed with {} cleanup error(s): {:?}",
+                session.name,
+                result.errors.len(),
+                result.errors
+            );
+        } else {
+            info!("Force cancel {}: Successfully completed", session.name);
         }
 
         Ok(result)
@@ -481,6 +644,12 @@ impl<'a> CancellationCoordinator<'a> {
         Ok(())
     }
 
+    fn delete_session_row(&self, session_id: &str) -> Result<()> {
+        self.db_manager
+            .delete_session(session_id)
+            .with_context(|| format!("Failed to delete session row for '{session_id}'"))
+    }
+
     async fn remove_worktree_async(
         repo_path: &Path,
         worktree_path: &Path,
@@ -508,6 +677,24 @@ impl<'a> CancellationCoordinator<'a> {
         .map_err(|e| anyhow!("Task join error: {e}"))?
     }
 
+    async fn force_remove_worktree_async(
+        repo_path: &Path,
+        worktree_path: &Path,
+        session_name: &str,
+    ) -> Result<()> {
+        let repo_path = repo_path.to_path_buf();
+        let worktree_path = worktree_path.to_path_buf();
+        let session_name = session_name.to_string();
+
+        tokio::task::spawn_blocking(move || {
+            git::force_remove_worktree(&repo_path, &worktree_path)?;
+            info!("Force cancel {session_name}: Removed or pruned worktree");
+            Ok::<(), anyhow::Error>(())
+        })
+        .await
+        .map_err(|e| anyhow!("Task join error: {e}"))?
+    }
+
     async fn delete_branch_async(repo_path: &Path, branch: &str, session_name: &str) -> Result<()> {
         use git2::{BranchType, Repository};
 
@@ -527,6 +714,30 @@ impl<'a> CancellationCoordinator<'a> {
                 .with_context(|| format!("Failed to find branch '{branch}' for deletion"))?;
             br.delete()?;
             info!("Deleted branch '{branch}'");
+            Ok::<(), anyhow::Error>(())
+        })
+        .await
+        .map_err(|e| anyhow!("Task join error: {e}"))?
+    }
+
+    async fn force_delete_branch_async(
+        repo_path: &Path,
+        branch: &str,
+        session_name: &str,
+    ) -> Result<()> {
+        let branch_exists = git::branch_exists(repo_path, branch)?;
+        if !branch_exists {
+            info!("Force cancel {session_name}: Branch doesn't exist, skipping deletion");
+            return Ok(());
+        }
+
+        let repo_path = repo_path.to_path_buf();
+        let branch = branch.to_string();
+        let session_name = session_name.to_string();
+
+        tokio::task::spawn_blocking(move || {
+            git::force_delete_branch(&repo_path, &branch)?;
+            info!("Force cancel {session_name}: Deleted branch '{branch}'");
             Ok::<(), anyhow::Error>(())
         })
         .await
@@ -664,12 +875,189 @@ mod tests {
         db_manager.create_session(&session).unwrap();
 
         let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
-        let result = coordinator
-            .cancel_session(&session, CancellationConfig::default())
+        let result = coordinator.cancel_session(&session, CancellationConfig::default());
+
+        assert!(result.is_err());
+        let blocked = result
+            .unwrap_err()
+            .downcast::<CancelBlockedError>()
+            .expect("missing worktree should return typed blocker");
+        assert!(matches!(
+            blocked.blocker,
+            CancelBlocker::OrphanedWorktree { expected_path } if expected_path == session.worktree_path
+        ));
+    }
+
+    #[test]
+    #[serial]
+    fn cancel_blocker_detects_uncommitted_changes() {
+        let (_temp_dir, repo_path) = setup_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
+        let db_manager = SessionDbManager::new(db, repo_path.clone());
+
+        let worktree_path = repo_path.join(".lucode/worktrees/test");
+        git::create_worktree_from_base(&repo_path, "lucode/test-session", &worktree_path, "master")
+            .unwrap();
+        std::fs::write(worktree_path.join("dirty.txt"), "dirty").unwrap();
+
+        let session = create_test_session(&repo_path, worktree_path);
+        let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
+        let blocker = coordinator
+            .detect_cancel_blocker(&session, &CancellationConfig::default())
+            .unwrap()
+            .expect("dirty worktree should block normal cancellation");
+
+        assert!(matches!(
+            blocker,
+            CancelBlocker::UncommittedChanges { ref files } if files == &vec!["dirty.txt".to_string()]
+        ));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn standalone_cancel_filesystem_only_blocks_uncommitted_changes() {
+        let (_temp_dir, repo_path) = setup_test_repo();
+
+        let worktree_path = repo_path.join(".lucode/worktrees/test");
+        git::create_worktree_from_base(&repo_path, "lucode/test-session", &worktree_path, "master")
+            .unwrap();
+        std::fs::write(worktree_path.join("dirty.txt"), "dirty").unwrap();
+
+        let session = create_test_session(&repo_path, worktree_path.clone());
+        let coordinator = StandaloneCancellationCoordinator::new(repo_path, session);
+        let error = coordinator
+            .cancel_filesystem_only(CancellationConfig::default())
+            .await
+            .expect_err("dirty standalone cancel should return typed blocker");
+
+        let blocked = error
+            .downcast::<CancelBlockedError>()
+            .expect("dirty standalone cancel should be typed");
+        assert!(matches!(
+            blocked.blocker,
+            CancelBlocker::UncommittedChanges { ref files } if files == &vec!["dirty.txt".to_string()]
+        ));
+        assert!(worktree_path.exists());
+    }
+
+    #[test]
+    #[serial]
+    fn cancel_blocker_detects_orphaned_worktree() {
+        let (_temp_dir, repo_path) = setup_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
+        let db_manager = SessionDbManager::new(db, repo_path.clone());
+
+        let expected_path = repo_path.join(".lucode/worktrees/missing");
+        let session = create_test_session(&repo_path, expected_path.clone());
+        let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
+        let blocker = coordinator
+            .detect_cancel_blocker(&session, &CancellationConfig::default())
+            .unwrap()
+            .expect("missing worktree should block normal cancellation");
+
+        assert!(matches!(
+            blocker,
+            CancelBlocker::OrphanedWorktree { expected_path: path } if path == expected_path
+        ));
+    }
+
+    #[test]
+    #[serial]
+    fn cancel_blocker_detects_locked_worktree() {
+        let (_temp_dir, repo_path) = setup_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
+        let db_manager = SessionDbManager::new(db, repo_path.clone());
+
+        let worktree_path = repo_path.join(".lucode/worktrees/test");
+        git::create_worktree_from_base(&repo_path, "lucode/test-session", &worktree_path, "master")
+            .unwrap();
+        std::fs::write(repo_path.join(".git/worktrees/test/locked"), "maintenance").unwrap();
+
+        let session = create_test_session(&repo_path, worktree_path);
+        let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
+        let blocker = coordinator
+            .detect_cancel_blocker(&session, &CancellationConfig::default())
+            .unwrap()
+            .expect("locked worktree should block normal cancellation");
+
+        assert!(matches!(
+            blocker,
+            CancelBlocker::WorktreeLocked { ref reason } if reason == "maintenance"
+        ));
+    }
+
+    #[test]
+    #[serial]
+    fn cancel_blocker_detects_git_error() {
+        let (_temp_dir, repo_path) = setup_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
+        let db_manager = SessionDbManager::new(db, repo_path.clone());
+
+        let worktree_path = repo_path.join(".lucode/worktrees/not-a-git-worktree");
+        std::fs::create_dir_all(&worktree_path).unwrap();
+
+        let session = create_test_session(&repo_path, worktree_path);
+        let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
+        let blocker = coordinator
+            .detect_cancel_blocker(&session, &CancellationConfig::default())
+            .unwrap()
+            .expect("invalid worktree should block normal cancellation");
+
+        assert!(matches!(
+            blocker,
+            CancelBlocker::GitError { ref operation, ref message }
+                if operation == "inspect_uncommitted_changes" && message.contains("could not find repository")
+        ));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn force_cancel_removes_dirty_worktree_and_session_row() {
+        let (_temp_dir, repo_path) = setup_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
+        let db_manager = SessionDbManager::new(db, repo_path.clone());
+
+        let worktree_path = repo_path.join(".lucode/worktrees/test");
+        git::create_worktree_from_base(&repo_path, "lucode/test-session", &worktree_path, "master")
+            .unwrap();
+        std::fs::write(worktree_path.join("dirty.txt"), "dirty").unwrap();
+
+        let session = create_test_session(&repo_path, worktree_path.clone());
+        db_manager.create_session(&session).unwrap();
+
+        let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
+        coordinator
+            .force_cancel_session_async(&session)
+            .await
             .unwrap();
 
-        assert!(!result.worktree_removed);
-        assert_eq!(result.terminated_processes.len(), 0);
+        assert!(!worktree_path.exists());
+        assert!(db_manager.get_session_by_id(&session.id).is_err());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn force_cancel_removes_orphaned_session_row_and_git_metadata() {
+        let (_temp_dir, repo_path) = setup_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
+        let db_manager = SessionDbManager::new(db, repo_path.clone());
+
+        let worktree_path = repo_path.join(".lucode/worktrees/test");
+        git::create_worktree_from_base(&repo_path, "lucode/test-session", &worktree_path, "master")
+            .unwrap();
+        std::fs::remove_dir_all(&worktree_path).unwrap();
+
+        let session = create_test_session(&repo_path, worktree_path.clone());
+        db_manager.create_session(&session).unwrap();
+
+        let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
+        coordinator
+            .force_cancel_session_async(&session)
+            .await
+            .unwrap();
+
+        assert!(db_manager.get_session_by_id(&session.id).is_err());
+        assert!(!git::is_worktree_registered(&repo_path, &worktree_path).unwrap());
     }
 
     // Regression: calling the SYNC helpers from inside a Tokio runtime must not panic

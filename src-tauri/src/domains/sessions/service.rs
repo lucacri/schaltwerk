@@ -635,6 +635,53 @@ mod service_unified_tests {
     }
 
     #[test]
+    fn blocked_cancel_does_not_auto_file_consolidation_stub_report() {
+        let (manager, temp_dir) = create_test_session_manager();
+        let repo = temp_dir.path().join("repo");
+        init_git_repo(&repo);
+
+        manager
+            .db_manager
+            .upsert_consolidation_round("round-1", "vg-1", &[], "confirm")
+            .unwrap();
+        let session = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "blocked-candidate",
+                prompt: Some("candidate work"),
+                base_branch: None,
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some("vg-1"),
+                version_number: Some(1),
+                epic_id: None,
+                agent_type: None,
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: None,
+                consolidation_round_id: Some("round-1"),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .unwrap();
+        std::fs::write(session.worktree_path.join("dirty.txt"), "dirty").unwrap();
+
+        let error = manager
+            .cancel_session(&session.name)
+            .expect_err("dirty candidate cancel should be blocked");
+        assert!(
+            error
+                .downcast_ref::<crate::domains::sessions::lifecycle::cancellation::CancelBlockedError>()
+                .is_some()
+        );
+
+        let loaded = manager.get_session(&session.name).unwrap();
+        assert!(loaded.consolidation_report.is_none());
+        assert!(loaded.consolidation_report_source.is_none());
+    }
+
+    #[test]
     fn restart_prompt_force_restart_prepends_context_for_commits_ahead_of_parent() {
         let (manager, temp_dir) = create_test_session_manager();
         let spec_content = "Implement restart handling";
@@ -2819,6 +2866,21 @@ impl SessionManager {
             return Ok(());
         }
 
+        let coordinator = CancellationCoordinator::new(&self.repo_path, &self.db_manager);
+        let config = CancellationConfig {
+            force: false,
+            skip_process_cleanup: false,
+            skip_branch_deletion: false,
+        };
+
+        if let Some(blocker) = coordinator.detect_cancel_blocker(&session, &config)? {
+            log::warn!("Cancel {name}: blocked before stub report write: {blocker:?}");
+            return Err(
+                crate::domains::sessions::lifecycle::cancellation::CancelBlockedError::new(blocker)
+                    .into(),
+            );
+        }
+
         if let Err(e) =
             crate::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
                 &self.db_manager,
@@ -2828,13 +2890,6 @@ impl SessionManager {
         {
             log::warn!("Cancel {name}: stub report write failed: {e}");
         }
-
-        let coordinator = CancellationCoordinator::new(&self.repo_path, &self.db_manager);
-        let config = CancellationConfig {
-            force: false,
-            skip_process_cleanup: false,
-            skip_branch_deletion: false,
-        };
 
         coordinator.cancel_session(&session, config)?;
         Ok(())
@@ -2848,6 +2903,21 @@ impl SessionManager {
 
         let session = self.db_manager.get_session_by_name(name)?;
 
+        let coordinator = CancellationCoordinator::new(&self.repo_path, &self.db_manager);
+        let config = CancellationConfig {
+            force: false,
+            skip_process_cleanup: false,
+            skip_branch_deletion: false,
+        };
+
+        if let Some(blocker) = coordinator.detect_cancel_blocker(&session, &config)? {
+            log::warn!("Fast cancel {name}: blocked before stub report write: {blocker:?}");
+            return Err(
+                crate::domains::sessions::lifecycle::cancellation::CancelBlockedError::new(blocker)
+                    .into(),
+            );
+        }
+
         if let Err(e) =
             crate::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
                 &self.db_manager,
@@ -2858,14 +2928,40 @@ impl SessionManager {
             log::warn!("Fast cancel {name}: stub report write failed: {e}");
         }
 
-        let coordinator = CancellationCoordinator::new(&self.repo_path, &self.db_manager);
-        let config = CancellationConfig {
-            force: false,
-            skip_process_cleanup: false,
-            skip_branch_deletion: false,
+        coordinator.cancel_session_async(&session, config).await?;
+        Ok(())
+    }
+
+    pub fn detect_cancel_blocker(
+        &self,
+        name: &str,
+    ) -> Result<Option<crate::domains::sessions::lifecycle::cancellation::CancelBlocker>> {
+        use crate::domains::sessions::lifecycle::cancellation::{
+            CancellationConfig, CancellationCoordinator,
         };
 
-        coordinator.cancel_session_async(&session, config).await?;
+        let session = self.db_manager.get_session_by_name(name)?;
+        let coordinator = CancellationCoordinator::new(&self.repo_path, &self.db_manager);
+        coordinator.detect_cancel_blocker(&session, &CancellationConfig::default())
+    }
+
+    pub async fn force_cancel_session(&self, name: &str) -> Result<()> {
+        use crate::domains::sessions::lifecycle::cancellation::CancellationCoordinator;
+
+        let session = self.db_manager.get_session_by_name(name)?;
+
+        if let Err(e) =
+            crate::domains::sessions::consolidation_stub::ensure_stub_report_for_candidate(
+                &self.db_manager,
+                &session,
+                "force_cancelled",
+            )
+        {
+            log::warn!("Force cancel {name}: stub report write failed: {e}");
+        }
+
+        let coordinator = CancellationCoordinator::new(&self.repo_path, &self.db_manager);
+        coordinator.force_cancel_session_async(&session).await?;
         Ok(())
     }
 

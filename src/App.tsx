@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, useEffectEvent } from 'react'
 import { SchaltEvent, listenEvent } from './common/eventSystem'
+import type { CancelBlocker } from './common/events'
 import { useMultipleShortcutDisplays } from './keyboardShortcuts/useShortcutDisplay'
 import { KeyboardShortcutAction } from './keyboardShortcuts/config'
 import { Sidebar } from './components/sidebar/Sidebar'
@@ -141,6 +142,7 @@ interface OpenTabsState {
 
 
 import { FocusSync } from './components/FocusSync'
+import { parseCancelBlocker } from './common/cancelBlocker'
 
 function AppContent() {
   const { selection, clearTerminalTracking } = useSelection()
@@ -514,6 +516,7 @@ function AppContent() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsCategory | undefined>(undefined)
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false)
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [cancelBlocker, setCancelBlocker] = useState<CancelBlocker | null>(null)
   const [deleteSpecModalOpen, setDeleteSpecModalOpen] = useState(false)
   const [closeModalOpen, setCloseModalOpen] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
@@ -1251,6 +1254,21 @@ function AppContent() {
     }
   }, [beginSessionMutation, endSessionMutation, projectPath])
 
+  const forceCancelSessionImmediate = useCallback(async (sessionName: string) => {
+    beginSessionMutation(sessionName, 'remove')
+    try {
+      await invoke(TauriCommands.SchaltwerkCoreForceCancelSession, {
+        name: sessionName,
+        ...(projectPath ? { projectPath } : {}),
+      })
+    } catch (error) {
+      logger.error(`[App] Failed to force cancel session ${sessionName}:`, error)
+      throw error
+    } finally {
+      endSessionMutation(sessionName, 'remove')
+    }
+  }, [beginSessionMutation, endSessionMutation, projectPath])
+
   const handleCancelSession = useCallback(async () => {
     if (!currentSession) return
 
@@ -1258,13 +1276,78 @@ function AppContent() {
       setIsCancelling(true)
       await cancelSessionImmediate(currentSession.name)
       setCancelModalOpen(false)
+      setCancelBlocker(null)
     } catch (error) {
       logger.error(`[App] Failed to cancel session ${currentSession.name}:`, error)
-      alert(`Failed to cancel session: ${error}`)
+      setCancelBlocker(parseCancelBlocker(error) ?? {
+        type: 'GitError',
+        data: {
+          operation: 'cancel_session',
+          message: getErrorMessage(error),
+        },
+      })
+      setCancelModalOpen(true)
     } finally {
       setIsCancelling(false)
     }
   }, [cancelSessionImmediate, currentSession])
+
+  const handleForceCancelSession = useCallback(async () => {
+    if (!currentSession) return
+
+    try {
+      setIsCancelling(true)
+      await forceCancelSessionImmediate(currentSession.name)
+      setCancelBlocker(null)
+      setCancelModalOpen(false)
+    } catch (error) {
+      logger.error(`[App] Failed to force remove session ${currentSession.name}:`, error)
+      setCancelBlocker({
+        type: 'GitError',
+        data: {
+          operation: 'force_cancel_session',
+          message: getErrorMessage(error),
+        },
+      })
+      setCancelModalOpen(true)
+    } finally {
+      setIsCancelling(false)
+    }
+  }, [currentSession, forceCancelSessionImmediate])
+
+  useEffect(() => {
+    let disposed = false
+    let unlisten: (() => void) | undefined
+
+    void listenEvent(SchaltEvent.SessionCancelBlocked, (payload) => {
+      if (disposed) return
+
+      const blockedSession = allSessions.find(session => session.info.session_id === payload.session_name)
+      setCurrentSession({
+        id: payload.session_name,
+        name: payload.session_name,
+        displayName: blockedSession?.info.display_name || payload.session_name,
+        branch: blockedSession?.info.branch || '',
+        hasUncommittedChanges: blockedSession?.info.has_uncommitted_changes || false,
+      })
+      setCancelBlocker(payload.blocker)
+      setCancelModalOpen(true)
+      setIsCancelling(false)
+    }).then(listener => {
+      if (disposed) {
+        listener()
+      } else {
+        unlisten = listener
+      }
+    }).catch(error => {
+      logger.warn('[App] Failed to register cancel-blocked listener:', error)
+    })
+
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [allSessions])
 
   const handleTerminateVersionGroup = useCallback(async () => {
     if (!terminateGroupModalState.open || terminateGroupModalState.sessions.length === 0) return
@@ -1431,8 +1514,10 @@ function AppContent() {
       })
 
       if (action === 'cancel') {
+        setCancelBlocker(null)
         setCancelModalOpen(true)
       } else if (action === 'cancel-immediate') {
+        setCancelBlocker(null)
         setCancelModalOpen(false)
         void handleCancelSession()
       } else if (action === 'delete-spec') {
@@ -2610,8 +2695,13 @@ function AppContent() {
                 displayName={currentSession.displayName}
                 branch={currentSession.branch}
                 hasUncommittedChanges={currentSession.hasUncommittedChanges}
+                cancelBlocker={cancelBlocker}
                 onConfirm={() => { void handleCancelSession() }}
-                onCancel={() => setCancelModalOpen(false)}
+                onForceRemove={() => { void handleForceCancelSession() }}
+                onCancel={() => {
+                  setCancelBlocker(null)
+                  setCancelModalOpen(false)
+                }}
                 loading={isCancelling}
               />
                <DeleteSpecConfirmation

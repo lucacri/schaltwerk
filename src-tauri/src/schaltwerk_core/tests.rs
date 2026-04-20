@@ -730,14 +730,11 @@ fn test_worktree_cleanup_on_reuse() {
     // Create a session
     let session1 = manager.create_session("reuse-test", None, None).unwrap();
 
-    // Add a file to the worktree
-    let test_file = session1.worktree_path.join("old-content.txt");
-    std::fs::write(&test_file, "This is old content").unwrap();
-
     // Cancel the session
     manager.cancel_session("reuse-test").unwrap();
 
     // Manually corrupt the cleanup (simulate incomplete cleanup)
+    let test_file = session1.worktree_path.join("old-content.txt");
     std::fs::create_dir_all(&session1.worktree_path).unwrap();
     std::fs::write(&test_file, "Leftover content").unwrap();
 

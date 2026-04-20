@@ -61,6 +61,29 @@ async fn evict_session_cache_entry_for_repo(repo_key: &str, session_id: &str) {
         .await;
 }
 
+fn emit_session_cancel_blocked(
+    app: &tauri::AppHandle,
+    session_name: &str,
+    blocker: &lucode::domains::sessions::lifecycle::cancellation::CancelBlocker,
+) {
+    #[derive(serde::Serialize, Clone)]
+    struct CancelBlockedPayload {
+        session_name: String,
+        blocker: lucode::domains::sessions::lifecycle::cancellation::CancelBlocker,
+    }
+
+    if let Err(error) = emit_event(
+        app,
+        SchaltEvent::SessionCancelBlocked,
+        &CancelBlockedPayload {
+            session_name: session_name.to_string(),
+            blocker: blocker.clone(),
+        },
+    ) {
+        log::warn!("Failed to emit cancel blocked event for {session_name}: {error}");
+    }
+}
+
 fn is_conflict_error(message: &str) -> bool {
     let lowercase = message.to_lowercase();
     lowercase.contains("conflict")
@@ -2416,7 +2439,17 @@ pub async fn schaltwerk_core_cancel_session(
             let count = manager.list_archived_specs().map(|v| v.len()).unwrap_or(0);
             (true, repo, Some(count))
         } else {
-            // For non-spec, archive prompt first, then continue with cancellation flow
+            if let Some(blocker) = manager.detect_cancel_blocker(&name).map_err(|e| {
+                SchaltError::GitOperationFailed {
+                    operation: "detect_cancel_blocker".to_string(),
+                    message: e.to_string(),
+                }
+            })? {
+                log::warn!("Cancel {name}: blocked by {blocker:?}");
+                emit_session_cancel_blocked(&app, &name, &blocker);
+                return Err(SchaltError::CancelBlocked { blocker });
+            }
+
             if let Err(e) = manager.archive_prompt_for_session(&name) {
                 log::warn!("Cancel {name}: Failed to archive prompt before cancel: {e}");
             }
@@ -2560,21 +2593,31 @@ pub async fn schaltwerk_core_cancel_session(
                 );
             }
             Err(e) => {
-                log::error!("CRITICAL: Background cancel failed for {name_for_bg}: {e}");
+                if let Some(blocked) = e.downcast_ref::<
+                    lucode::domains::sessions::lifecycle::cancellation::CancelBlockedError,
+                >() {
+                    log::warn!(
+                        "Cancel {name_for_bg}: background filesystem preflight blocked by {:?}",
+                        blocked.blocker
+                    );
+                    emit_session_cancel_blocked(&app_for_refresh, &name_for_bg, &blocked.blocker);
+                } else {
+                    log::error!("CRITICAL: Background cancel failed for {name_for_bg}: {e}");
 
-                #[derive(serde::Serialize, Clone)]
-                struct CancelErrorPayload {
-                    session_name: String,
-                    error: String,
+                    #[derive(serde::Serialize, Clone)]
+                    struct CancelErrorPayload {
+                        session_name: String,
+                        error: String,
+                    }
+                    let _ = emit_event(
+                        &app_for_refresh,
+                        SchaltEvent::CancelError,
+                        &CancelErrorPayload {
+                            session_name: name_for_bg.clone(),
+                            error: e.to_string(),
+                        },
+                    );
                 }
-                let _ = emit_event(
-                    &app_for_refresh,
-                    SchaltEvent::CancelError,
-                    &CancelErrorPayload {
-                        session_name: name_for_bg.clone(),
-                        error: e.to_string(),
-                    },
-                );
 
                 events::request_sessions_refreshed(
                     &app_for_refresh,
@@ -2587,6 +2630,67 @@ pub async fn schaltwerk_core_cancel_session(
 
         log::info!("Cancel {name_for_bg}: All background work completed");
     });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_force_cancel_session(
+    app: tauri::AppHandle,
+    name: String,
+    project_path: Option<String>,
+) -> Result<(), SchaltError> {
+    log::info!("Starting force cancel session: {name}");
+
+    let (manager, repo_path_str, round_id, db) = {
+        let core = get_core_write_for_project_path(project_path.as_deref())
+            .await
+            .map_err(|e| SchaltError::DatabaseError {
+                message: e.to_string(),
+            })?;
+        let manager = core.session_manager();
+        let round_id = manager
+            .get_session(&name)
+            .ok()
+            .and_then(|session| session.consolidation_round_id);
+        (
+            manager,
+            core.repo_path.to_string_lossy().to_string(),
+            round_id,
+            core.db.clone(),
+        )
+    };
+
+    terminals::close_session_terminals_if_any(&name).await;
+
+    manager
+        .force_cancel_session(&name)
+        .await
+        .map_err(|error| SchaltError::GitOperationFailed {
+            operation: "force_cancel_session".to_string(),
+            message: error.to_string(),
+        })?;
+
+    if let Some(round_id) = round_id {
+        let _ = maybe_auto_start_consolidation_judge(&app, &db, &manager, &round_id).await;
+    }
+
+    #[derive(serde::Serialize, Clone)]
+    struct SessionRemovedPayload {
+        session_name: String,
+    }
+    let _ = emit_event(
+        &app,
+        SchaltEvent::SessionRemoved,
+        &SessionRemovedPayload {
+            session_name: name.clone(),
+        },
+    );
+    evict_session_cache_entry_for_repo(&repo_path_str, &name).await;
+    clear_session_attention_state(name.clone());
+
+    events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SessionLifecycle);
+    log::info!("Force cancel {name}: completed");
 
     Ok(())
 }

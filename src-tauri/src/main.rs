@@ -8,6 +8,8 @@
 #![deny(clippy::match_wild_err_arm)] // Deny catch-all error patterns without proper handling
 #![deny(clippy::let_underscore_lock)] // Deny discarding locks which could be a silent error
 
+pub use lucode::domains;
+
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
@@ -1592,6 +1594,7 @@ fn main() {
             schaltwerk_core_get_spec,
             schaltwerk_core_get_session_agent_content,
             schaltwerk_core_cancel_session,
+            schaltwerk_core_force_cancel_session,
             schaltwerk_core_trigger_consolidation_judge,
             schaltwerk_core_start_improve_plan_round,
             schaltwerk_core_confirm_consolidation_winner,

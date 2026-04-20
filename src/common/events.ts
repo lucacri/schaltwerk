@@ -4,6 +4,7 @@ export enum SchaltEvent {
   SessionRemoved = 'schaltwerk:session-removed',
   ArchiveUpdated = 'schaltwerk:archive-updated',
   SessionCancelling = 'schaltwerk:session-cancelling',
+  SessionCancelBlocked = 'schaltwerk:session-cancel-blocked',
   CancelError = 'schaltwerk:cancel-error',
   TerminalCreated = 'schaltwerk:terminal-created',
 
@@ -72,6 +73,17 @@ export interface SessionGitStatsUpdated {
   merge_has_conflicts?: boolean
   merge_conflicting_paths?: string[]
   merge_is_up_to_date?: boolean
+}
+
+export type CancelBlocker =
+  | { type: 'UncommittedChanges', data: { files: string[] } }
+  | { type: 'OrphanedWorktree', data: { expected_path: string } }
+  | { type: 'WorktreeLocked', data: { reason: string } }
+  | { type: 'GitError', data: { operation: string, message: string } }
+
+export interface SessionCancelBlockedPayload {
+  session_name: string
+  blocker: CancelBlocker
 }
 
 export interface FollowUpMessagePayload {
@@ -278,6 +290,7 @@ export type EventPayloadMap = {
   [SchaltEvent.SessionRemoved]: { session_name: string }
   [SchaltEvent.ArchiveUpdated]: { repo: string, count: number }
   [SchaltEvent.SessionCancelling]: { session_name: string }
+  [SchaltEvent.SessionCancelBlocked]: SessionCancelBlockedPayload
   [SchaltEvent.CancelError]: { session_name: string, error: string }
   [SchaltEvent.TerminalCreated]: { terminal_id: string, cwd: string }
 

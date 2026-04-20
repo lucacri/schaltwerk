@@ -5,15 +5,15 @@ pub use super::repository::{
 };
 
 pub use super::branches::{
-    branch_exists, delete_branch, ensure_branch_at_head, list_branches, normalize_branch_to_local,
-    rename_branch, safe_sync_branch_with_origin,
+    branch_exists, delete_branch, ensure_branch_at_head, force_delete_branch, list_branches,
+    normalize_branch_to_local, rename_branch, safe_sync_branch_with_origin,
 };
 #[cfg(test)]
 pub use super::repository::{get_commit_hash, get_current_branch};
 pub use super::worktrees::{
     create_worktree_for_existing_branch, create_worktree_from_base, create_worktree_from_pr,
-    get_worktree_for_branch, list_worktrees, prune_worktrees, remove_worktree,
-    update_worktree_branch,
+    force_remove_worktree, get_worktree_for_branch, list_worktrees, prune_worktrees,
+    remove_worktree, update_worktree_branch, worktree_lock_reason,
 };
 
 pub use super::history::{
@@ -22,7 +22,7 @@ pub use super::history::{
 };
 pub use super::operations::{
     commit_all_changes, has_conflicts, has_uncommitted_changes, is_valid_branch_name,
-    is_valid_session_name,
+    is_valid_session_name, uncommitted_sample_paths,
 };
 pub use super::stats::{
     calculate_git_stats_fast, calculate_git_stats_fast_with_repo, get_changed_files,

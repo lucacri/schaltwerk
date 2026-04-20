@@ -152,6 +152,7 @@ export const TauriCommands = {
   ResizeTerminal: 'resize_terminal',
   SchaltwerkCoreArchiveSpecSession: 'schaltwerk_core_archive_spec_session',
   SchaltwerkCoreCancelSession: 'schaltwerk_core_cancel_session',
+  SchaltwerkCoreForceCancelSession: 'schaltwerk_core_force_cancel_session',
   SchaltwerkCoreConvertSessionToDraft: 'schaltwerk_core_convert_session_to_draft',
   SchaltwerkCoreConvertVersionGroupToSpec: 'schaltwerk_core_convert_version_group_to_spec',
   SchaltwerkCoreCreateSession: 'schaltwerk_core_create_session',

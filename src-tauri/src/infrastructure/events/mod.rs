@@ -8,6 +8,7 @@ pub enum SchaltEvent {
     SessionRemoved,
     ArchiveUpdated,
     SessionCancelling,
+    SessionCancelBlocked,
     CancelError,
     TerminalCreated,
 
@@ -54,6 +55,7 @@ impl SchaltEvent {
             SchaltEvent::SessionRemoved => "schaltwerk:session-removed",
             SchaltEvent::ArchiveUpdated => "schaltwerk:archive-updated",
             SchaltEvent::SessionCancelling => "schaltwerk:session-cancelling",
+            SchaltEvent::SessionCancelBlocked => "schaltwerk:session-cancel-blocked",
             SchaltEvent::CancelError => "schaltwerk:cancel-error",
             SchaltEvent::TerminalCreated => "schaltwerk:terminal-created",
 

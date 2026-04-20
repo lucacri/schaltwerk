@@ -4,6 +4,7 @@ use git2::build::CheckoutBuilder;
 use git2::{BranchType, Repository};
 use std::collections::HashSet;
 use std::path::Path;
+use std::process::Command;
 
 pub fn list_branches(repo_path: &Path) -> Result<Vec<String>> {
     log::info!("Listing branches for repo: {}", repo_path.display());
@@ -64,6 +65,26 @@ pub fn delete_branch(repo_path: &Path, branch_name: &str) -> Result<()> {
         .map_err(|e| anyhow!("Failed to delete branch {branch_name}: {e}"))?;
 
     Ok(())
+}
+
+pub fn force_delete_branch(repo_path: &Path, branch_name: &str) -> Result<()> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .args(["branch", "-D"])
+        .arg(branch_name)
+        .output()
+        .with_context(|| format!("Failed to run git branch -D {branch_name}"))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let message = if stderr.is_empty() { stdout } else { stderr };
+
+    Err(anyhow!("git branch -D {branch_name} failed: {message}"))
 }
 
 pub fn branch_exists(repo_path: &Path, branch_name: &str) -> Result<bool> {
