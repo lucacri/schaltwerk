@@ -13,4 +13,12 @@ describe('keyboard shortcut metadata', () => {
     expect(actions).toContain(KeyboardShortcutAction.ResetSessionOrOrchestrator)
     expect(actions).toContain(KeyboardShortcutAction.OpenSwitchModelModal)
   })
+
+  it('does not include duplicate previous/next project rows', () => {
+    const actions = collectActions()
+    const actionIds = actions as unknown as string[]
+
+    expect(actionIds).not.toContain('selectPrevProject')
+    expect(actionIds).not.toContain('selectNextProject')
+  })
 })

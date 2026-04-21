@@ -2333,14 +2333,6 @@ function AppContent() {
     }
   }, [projectTabs, projectPath, handleSelectTab])
 
-  const handleSelectPrevProject = useCallback(() => {
-    void switchProject('prev')
-  }, [switchProject])
-
-  const handleSelectNextProject = useCallback(() => {
-    void switchProject('next')
-  }, [switchProject])
-
   const switchToProject = useCallback(async (index: number) => {
     const tab = projectTabs[index]
     if (tab?.projectPath) {
@@ -2537,8 +2529,6 @@ function AppContent() {
                         <Sidebar 
                           isDiffViewerOpen={isDiffViewerOpen}
                           openTabs={projectTabs}
-                          onSelectPrevProject={handleSelectPrevProject}
-                          onSelectNextProject={handleSelectNextProject}
                           onSwitchToProject={handleSwitchToProject}
                           onCycleNextProject={handleCycleNextProject}
                           onCyclePrevProject={handleCyclePrevProject}
@@ -2559,8 +2549,8 @@ function AppContent() {
                         aria-hidden="true"
                       >
                         <span className="flex items-center gap-2">
-                          <span>Navigate sessions</span>
-                          <span style={{ color: 'var(--color-text-secondary)' }}>⌘↑ · ⌘↓</span>
+                          <span>Cycle sidebar items</span>
+                          <span style={{ color: 'var(--color-text-secondary)' }}>⌥⇧` · ⌥`</span>
                         </span>
                         <span className="flex items-center gap-2">
                           <span>Cycle filters</span>

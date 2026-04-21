@@ -72,4 +72,24 @@ describe('keyboard shortcut matcher', () => {
     const event = createEvent('=', { metaKey: true })
     expect(matchesShortcut(event, shortcut, { platform: 'mac' })).toBe(true)
   })
+
+  it('matches Alt+` when macOS emits a dead key for the backquote accent prefix', () => {
+    const shortcut = 'Alt+`'
+    const event = createEvent('Dead', {
+      code: 'Backquote',
+      altKey: true,
+    })
+
+    expect(matchesShortcut(event, shortcut, { platform: 'mac' })).toBe(true)
+  })
+
+  it('does not match Alt+` for unrelated dead-key events', () => {
+    const shortcut = 'Alt+`'
+    const event = createEvent('Dead', {
+      code: 'KeyE',
+      altKey: true,
+    })
+
+    expect(matchesShortcut(event, shortcut, { platform: 'mac' })).toBe(false)
+  })
 })

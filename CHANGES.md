@@ -20,6 +20,14 @@ Top agent terminals backed by tmux now repaint promptly after a session switch i
 - `src-tauri/src/domains/terminal/mod.rs`, `manager.rs`, `services/terminals.rs`, `commands/terminal.rs`, `main.rs`, and `src/common/tauriCommands.ts` plumb a new best-effort `refresh_terminal_view` command from the frontend to tmux-backed terminals, while local PTYs keep the default no-op.
 - `src/terminal/registry/terminalRegistry.ts` invokes `RefreshTerminalView` on reattach of top terminals, refreshes attached TUI surfaces after successful parsed writes (`writeSync`, callback-driven `write`, and chunked writes), allows attached TUI flushes to hand larger redraw batches to the existing fast paths, and advances chunked TUI writes immediately from the parser callback.
 - Covered by new Rust tests for tmux client refresh and service delegation plus Vitest regressions for reattach refresh, post-parse TUI presentation, and immediate large-TUI chunk progression.
+## Shortcuts: split project cycling from sidebar-item cycling
+
+Project tab cycling now lives only on `` Cmd+` `` / `` Cmd+Shift+` ``, while sidebar-item traversal keeps `Cmd+↑/↓` and gains `Option+\`` / `Option+Shift+\`` as alternate bindings. The duplicate `SelectPrevProject` and `SelectNextProject` actions are removed from the shortcut model, metadata, sidebar wiring, and docs so the navigation scheme is no longer ambiguous.
+
+- `SelectPrevSession` / `SelectNextSession` defaults now include `Alt+Shift+\`` / `Alt+\`` alongside `Mod+ArrowUp` / `Mod+ArrowDown`.
+- `SelectPrevProject` / `SelectNextProject` are deleted end-to-end, so stale persisted overrides for those removed actions are ignored on load.
+- Shortcut metadata and in-app docs now describe the new sidebar-item cycle explicitly and remove the stale project-arrow references.
+- The matcher treats macOS `Option+\`` dead-key events on `Backquote` as literal backticks so the alternate binding actually fires on macOS keyboards.
 
 ## Specs: persist inline review comments across all exits
 

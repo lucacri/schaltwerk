@@ -394,36 +394,70 @@ describe('useKeyboardShortcuts', () => {
       expect(prevented).toBe(false)
     })
 
-    it('switches to previous project with Cmd+Shift+ArrowLeft', () => {
-      const onSelectPrevProject = vi.fn()
+    it('navigates to previous sidebar item with Option+Shift+Backtick', () => {
+      const onSelectPrevSession = vi.fn()
       const onSelectOrchestrator = vi.fn()
       const onSelectSession = vi.fn()
 
       renderHook(() => useKeyboardShortcuts({ 
         onSelectOrchestrator, 
         onSelectSession, 
-        onSelectPrevProject,
+        onSelectPrevSession,
         sessionCount: 3
       }))
 
-      pressKey('ArrowLeft', { metaKey: true, shiftKey: true })
-      expect(onSelectPrevProject).toHaveBeenCalledTimes(1)
+      pressKey('`', { altKey: true, shiftKey: true })
+      expect(onSelectPrevSession).toHaveBeenCalledTimes(1)
     })
 
-    it('switches to next project with Cmd+Shift+ArrowRight', () => {
-      const onSelectNextProject = vi.fn()
+    it('navigates to next sidebar item with Option+Backtick', () => {
+      const onSelectNextSession = vi.fn()
       const onSelectOrchestrator = vi.fn()
       const onSelectSession = vi.fn()
 
       renderHook(() => useKeyboardShortcuts({ 
         onSelectOrchestrator, 
         onSelectSession, 
-        onSelectNextProject,
+        onSelectNextSession,
         sessionCount: 3
       }))
 
-      pressKey('ArrowRight', { metaKey: true, shiftKey: true })
-      expect(onSelectNextProject).toHaveBeenCalledTimes(1)
+      pressKey('`', { altKey: true })
+      expect(onSelectNextSession).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not bind Cmd+Shift+ArrowLeft to any project action', () => {
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+      const onCyclePrevProject = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onCyclePrevProject,
+        sessionCount: 3,
+      }))
+
+      const event = pressKey('ArrowLeft', { metaKey: true, shiftKey: true })
+      expect(onCyclePrevProject).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('does not bind Cmd+Shift+ArrowRight to any project action', () => {
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+      const onCycleNextProject = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onCycleNextProject,
+        sessionCount: 3,
+      }))
+
+      const event = pressKey('ArrowRight', { metaKey: true, shiftKey: true })
+      expect(onCycleNextProject).not.toHaveBeenCalled()
+      expect(event.defaultPrevented).toBe(false)
     })
 
     it('does not navigate when callbacks are undefined', () => {
@@ -441,6 +475,8 @@ describe('useKeyboardShortcuts', () => {
       pressKey('ArrowDown', { metaKey: true })
       pressKey('ArrowLeft', { metaKey: true })
       pressKey('ArrowRight', { metaKey: true })
+      pressKey('`', { altKey: true })
+      pressKey('`', { altKey: true, shiftKey: true })
     })
 
     it('does not prevent default when callbacks are undefined', () => {
@@ -460,10 +496,33 @@ describe('useKeyboardShortcuts', () => {
       pressKey('ArrowUp', { metaKey: true })
       expect(prevented).toBe(false)
       
-      pressKey('ArrowLeft', { metaKey: true })
+      pressKey('`', { altKey: true })
       expect(prevented).toBe(false)
-      
+
       window.removeEventListener('keydown', listener)
+    })
+
+    it('does not fire Option+backtick cycling when diff viewer is open', () => {
+      const onSelectPrevSession = vi.fn()
+      const onSelectNextSession = vi.fn()
+      const onSelectOrchestrator = vi.fn()
+      const onSelectSession = vi.fn()
+
+      renderHook(() => useKeyboardShortcuts({
+        onSelectOrchestrator,
+        onSelectSession,
+        onSelectPrevSession,
+        onSelectNextSession,
+        sessionCount: 3,
+        isDiffViewerOpen: true,
+      }))
+
+      const next = pressKey('`', { altKey: true })
+      const prev = pressKey('`', { altKey: true, shiftKey: true })
+      expect(onSelectPrevSession).not.toHaveBeenCalled()
+      expect(onSelectNextSession).not.toHaveBeenCalled()
+      expect(next.defaultPrevented).toBe(false)
+      expect(prev.defaultPrevented).toBe(false)
     })
   })
 
@@ -623,6 +682,8 @@ describe('useKeyboardShortcuts', () => {
       pressKey('ArrowDown')
       pressKey('ArrowLeft')
       pressKey('ArrowRight')
+      pressKey('`', { altKey: true })
+      pressKey('`', { altKey: true, shiftKey: true })
 
       expect(onSelectOrchestrator).not.toHaveBeenCalled()
       expect(onSelectSession).not.toHaveBeenCalled()
@@ -1108,8 +1169,6 @@ describe('useKeyboardShortcuts', () => {
         onFocusClaude: vi.fn(),
         onOpenDiffViewer: vi.fn(),
         onFocusTerminal: vi.fn(),
-        onSelectPrevProject: vi.fn(),
-        onSelectNextProject: vi.fn(),
       }
 
       renderHook(() => useKeyboardShortcuts({
@@ -1118,7 +1177,10 @@ describe('useKeyboardShortcuts', () => {
         isDiffViewerOpen: false
       }))
 
-      const testPreventDefault = (key: string, modifiers = { metaKey: true }) => {
+      const testPreventDefault = (
+        key: string,
+        modifiers: Parameters<typeof pressKey>[1] = { metaKey: true },
+      ) => {
         let prevented = false
         const listener = (e: Event) => { prevented = (e as KeyboardEvent).defaultPrevented }
         window.addEventListener('keydown', listener)
@@ -1140,6 +1202,8 @@ describe('useKeyboardShortcuts', () => {
       expect(testPreventDefault('/')).toBe(true)
       expect(testPreventDefault('ArrowUp')).toBe(true)
       expect(testPreventDefault('ArrowDown')).toBe(true)
+      expect(testPreventDefault('`', { altKey: true })).toBe(true)
+      expect(testPreventDefault('`', { altKey: true, shiftKey: true })).toBe(true)
     })
 
     it('all shortcuts work together without conflicts', () => {
@@ -1153,8 +1217,6 @@ describe('useKeyboardShortcuts', () => {
         onFocusClaude: vi.fn(),
         onOpenDiffViewer: vi.fn(),
         onFocusTerminal: vi.fn(),
-        onSelectPrevProject: vi.fn(),
-        onSelectNextProject: vi.fn(),
       }
 
       renderHook(() => useKeyboardShortcuts({
@@ -1179,11 +1241,11 @@ describe('useKeyboardShortcuts', () => {
       pressKey('ArrowDown', { metaKey: true })
       expect(callbacks.onSelectNextSession).toHaveBeenCalled()
 
-      pressKey('ArrowLeft', { metaKey: true, shiftKey: true })
-      expect(callbacks.onSelectPrevProject).toHaveBeenCalled()
+      pressKey('`', { altKey: true, shiftKey: true })
+      expect(callbacks.onSelectPrevSession).toHaveBeenCalledTimes(2)
 
-      pressKey('ArrowRight', { metaKey: true, shiftKey: true })
-      expect(callbacks.onSelectNextProject).toHaveBeenCalled()
+      pressKey('`', { altKey: true })
+      expect(callbacks.onSelectNextSession).toHaveBeenCalledTimes(2)
 
       pressKey('g', { metaKey: true })
       expect(callbacks.onOpenDiffViewer).toHaveBeenCalled()
@@ -1210,8 +1272,6 @@ describe('useKeyboardShortcuts', () => {
         onFocusClaude: vi.fn(),
         onOpenDiffViewer: vi.fn(),
         onFocusTerminal: vi.fn(),
-        onSelectPrevProject: vi.fn(),
-        onSelectNextProject: vi.fn(),
         onResetSelection: vi.fn(),
         onOpenSwitchModel: vi.fn(),
         onOpenMergeModal: vi.fn(),
@@ -1345,12 +1405,12 @@ describe('useKeyboardShortcuts', () => {
       expect(event.defaultPrevented).toBe(false)
     })
 
-    it('does not fire SelectPrevProject / SelectNextProject when modal is open', () => {
+    it('does not fire SelectPrevSession / SelectNextSession (Option+` / Option+Shift+`) when modal is open', () => {
       const callbacks = renderAllCallbacks()
-      const prev = pressKey('ArrowLeft', { metaKey: true, shiftKey: true })
-      const next = pressKey('ArrowRight', { metaKey: true, shiftKey: true })
-      expect(callbacks.onSelectPrevProject).not.toHaveBeenCalled()
-      expect(callbacks.onSelectNextProject).not.toHaveBeenCalled()
+      const next = pressKey('`', { altKey: true })
+      const prev = pressKey('`', { altKey: true, shiftKey: true })
+      expect(callbacks.onSelectPrevSession).not.toHaveBeenCalled()
+      expect(callbacks.onSelectNextSession).not.toHaveBeenCalled()
       expect(prev.defaultPrevented).toBe(false)
       expect(next.defaultPrevented).toBe(false)
     })

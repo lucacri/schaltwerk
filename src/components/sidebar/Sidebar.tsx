@@ -75,8 +75,6 @@ import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationConte
 interface SidebarProps {
     isDiffViewerOpen?: boolean
     openTabs?: Array<{projectPath: string, projectName: string}>
-    onSelectPrevProject?: () => void
-    onSelectNextProject?: () => void
     onSwitchToProject?: (index: number) => void
     onCycleNextProject?: () => void
     onCyclePrevProject?: () => void
@@ -227,7 +225,7 @@ const splitVersionGroupsBySection = (
     return sections
 }
 
-export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], onSelectPrevProject, onSelectNextProject, onSwitchToProject, onCycleNextProject, onCyclePrevProject, isCollapsed = false, onExpandRequest, onToggleSidebar }: SidebarProps) {
+export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], onSwitchToProject, onCycleNextProject, onCyclePrevProject, isCollapsed = false, onExpandRequest, onToggleSidebar }: SidebarProps) {
     const { t } = useTranslation()
     const { selection, setSelection, terminals, clearTerminalTracking } = useSelection()
     const projectPath = useAtomValue(projectPathAtom)
@@ -1271,19 +1269,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         handleSelectBestVersion(targetGroup.baseName, selection.payload)
     }
 
-    // Project switching functions
-    const handleSelectPrevProject = () => {
-        if (onSelectPrevProject && openTabs.length > 1) {
-            onSelectPrevProject()
-        }
-    }
-
-    const handleSelectNextProject = () => {
-        if (onSelectNextProject && openTabs.length > 1) {
-            onSelectNextProject()
-        }
-    }
-
     const findSessionById = useCallback((sessionId?: string | null) => {
         if (!sessionId) return null
         return sessions.find(s => s.info.session_id === sessionId)
@@ -1426,8 +1411,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             setCurrentFocus('terminal')
             emitUiEvent(UiEvent.FocusTerminal)
         },
-        onSelectPrevProject: handleSelectPrevProject,
-        onSelectNextProject: handleSelectNextProject,
         projectCount: openTabs.length,
         onSwitchToProject,
         onCycleNextProject,

@@ -204,7 +204,8 @@ export const matchesShortcut = (
 
   const platform = options.platform ?? detectPlatform()
   const key = parsed.key
-  const eventKey = normalizeEventKey(event.key)
+  const rawKey = event.key === 'Dead' && event.code === 'Backquote' ? '`' : event.key
+  const eventKey = normalizeEventKey(rawKey)
 
   if (eventKey !== key) {
     return false

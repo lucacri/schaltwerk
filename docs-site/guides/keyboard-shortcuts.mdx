@@ -37,9 +37,9 @@ description: 'Complete list of keyboard shortcuts for efficient session manageme
     |----------|--------|-------------|
     | `⌘1` | Orchestrator | Jump to orchestrator |
     | `⌘2–9` | Sessions 2-9 | Jump to specific session |
-    | `⌘↑/↓` | Cycle Sessions | Navigate sessions in current filter (cycles agent selection when the Start New Model modal is open) |
+    | `⌥⇧\`` / `⌥\`` | Cycle Sidebar Items | Move through the flattened sidebar list, including the orchestrator anchor, specs, agents, and version-group members |
+    | `⌘↑/↓` | Alternate Sidebar Cycle | Alternate binding for the same sidebar-item traversal |
     | `⌘←/→` | Switch Filters | Switch between All/Specs/Running/Reviewed |
-    | `⌘⇧←/→` | Switch Projects | Jump between project tabs |
     | `⌘⇧1–9` | Switch to Project | Jump to project tab by index |
     | `` ⌘` `` | Cycle Next Project | Cycle to next project tab |
     | `` ⌘⇧` `` | Cycle Prev Project | Cycle to previous project tab |
@@ -90,7 +90,7 @@ description: 'Complete list of keyboard shortcuts for efficient session manageme
 <AccordionGroup>
   <Accordion title="Review Running Sessions">
     1. Switch to Running filter with `⌘←/→`
-    2. Navigate sessions with `⌘↑/↓`
+    2. Navigate sessions with <code>⌥⇧`</code> / <code>⌥`</code> or `⌘↑/↓`
     3. For each session:
        - `⌘G` to open git diff viewer
        - Add comments if needed
@@ -99,7 +99,7 @@ description: 'Complete list of keyboard shortcuts for efficient session manageme
 
   <Accordion title="Review and Test Sessions">
     1. Switch to Reviewed filter with `⌘←/→`
-    2. Navigate sessions with `⌘↑/↓`
+    2. Navigate sessions with <code>⌥⇧`</code> / <code>⌥`</code> or `⌘↑/↓`
     3. For each session:
        - `⌘T` to focus agent terminal (prompt agent to run tests)
        - OR `⌘/` to focus your terminal (test manually)
@@ -107,7 +107,7 @@ description: 'Complete list of keyboard shortcuts for efficient session manageme
   </Accordion>
 
   <Accordion title="Switch Between Project Tabs">
-    Use `⌘⇧←/→` to jump between project tabs, `⌘⇧1–9` to jump by index, or `` ⌘` ``/`` ⌘⇧` `` to cycle through them
+    Use `⌘⇧1–9` to jump between project tabs by index, or `` ⌘` ``/`` ⌘⇧` `` to cycle through them
   </Accordion>
 
   <Accordion title="Quick Session Access">
