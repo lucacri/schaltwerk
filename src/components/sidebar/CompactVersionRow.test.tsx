@@ -428,6 +428,23 @@ describe('CompactVersionRow', () => {
     expect(screen.queryByText('v2 · claude')).toBeNull()
   })
 
+  it('renders judge consolidation sessions with a judge index label', () => {
+    renderRow({
+      session: {
+        ...baseSession,
+        info: {
+          ...baseSession.info,
+          is_consolidation: true,
+          consolidation_role: 'judge',
+        },
+      },
+    })
+
+    expect(screen.getByTestId('compact-row-version-index')).toHaveTextContent(/^judge$/i)
+    expect(screen.getByTestId('compact-row-version-index')).not.toHaveTextContent(/merge/i)
+    expect(screen.getByTestId('compact-row-agent-chip')).toHaveTextContent('claude')
+  })
+
   it('uses selected styling from the style guide', () => {
     renderRow({ isSelected: true })
 

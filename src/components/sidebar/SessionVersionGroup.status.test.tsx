@@ -11,32 +11,46 @@ vi.mock('./SessionCard', () => ({
   )
 }))
 
-vi.mock('./CompactVersionRow', () => ({
-  CompactVersionRow: ({
-    session,
-    hideTreeConnector,
-    siblings,
-    willBeDeleted,
-    isMuted,
-  }: {
-    session: EnrichedSession
-    hideTreeConnector?: boolean
-    siblings?: EnrichedSession['info'][]
-    willBeDeleted?: boolean
-    isMuted?: boolean
-  }) => (
-    <div
-      data-testid="compact-version-row"
-      data-session-id={session.info.session_id}
-      data-hide-tree-connector={hideTreeConnector ? 'true' : 'false'}
-      data-sibling-count={siblings?.length ?? 0}
-      data-will-be-deleted={willBeDeleted ? 'true' : 'false'}
-      data-muted={isMuted ? 'true' : 'false'}
-    >
-      {session.info.session_id}
-    </div>
-  )
-}))
+vi.mock('./CompactVersionRow', async () => {
+  const { useSessionCardActions } = await import('../../contexts/SessionCardActionsContext')
+
+  return {
+    CompactVersionRow: ({
+      session,
+      hideTreeConnector,
+      siblings,
+      willBeDeleted,
+      isMuted,
+      isSelected,
+    }: {
+      session: EnrichedSession
+      hideTreeConnector?: boolean
+      siblings?: EnrichedSession['info'][]
+      willBeDeleted?: boolean
+      isMuted?: boolean
+      isSelected?: boolean
+    }) => {
+      const { onSelect } = useSessionCardActions()
+
+      return (
+        <button
+          type="button"
+          data-testid="compact-version-row"
+          data-session-id={session.info.session_id}
+          data-consolidation-role={session.info.consolidation_role ?? 'none'}
+          data-hide-tree-connector={hideTreeConnector ? 'true' : 'false'}
+          data-sibling-count={siblings?.length ?? 0}
+          data-will-be-deleted={willBeDeleted ? 'true' : 'false'}
+          data-muted={isMuted ? 'true' : 'false'}
+          data-session-selected={isSelected ? 'true' : 'false'}
+          onClick={() => onSelect(session.info.session_id)}
+        >
+          {session.info.session_id}
+        </button>
+      )
+    },
+  }
+})
 
 function createVersion({
   id,
@@ -92,6 +106,45 @@ function createVersion({
       status: undefined,
       terminals: []
     }
+  }
+}
+
+function createConsolidationVersion({
+  id,
+  versionNumber = 1,
+  consolidationRole,
+  consolidationRoundId = 'round-123',
+  consolidationSources = ['feature-A_v1', 'feature-A_v2'],
+  consolidationRecommendedSessionId,
+  consolidationBaseSessionId,
+  consolidationReport,
+}: {
+  id: string
+  versionNumber?: number
+  consolidationRole?: 'judge'
+  consolidationRoundId?: string
+  consolidationSources?: string[]
+  consolidationRecommendedSessionId?: string
+  consolidationBaseSessionId?: string
+  consolidationReport?: string
+}): SessionVersionGroupType['versions'][number] {
+  const version = createVersion({ id, sessionState: 'running', versionNumber })
+
+  return {
+    ...version,
+    session: {
+      ...version.session,
+      info: {
+        ...version.session.info,
+        is_consolidation: true,
+        consolidation_role: consolidationRole,
+        consolidation_round_id: consolidationRoundId,
+        consolidation_sources: consolidationSources,
+        consolidation_recommended_session_id: consolidationRecommendedSessionId,
+        consolidation_base_session_id: consolidationBaseSessionId,
+        consolidation_report: consolidationReport,
+      },
+    },
   }
 }
 
@@ -339,7 +392,7 @@ describe('SessionVersionGroup status summary', () => {
 
     expect(screen.getByTestId('version-group-header-status')).toBeVisible()
 
-    const toggle = screen.getByRole('button', { name: /feature-A/i })
+    const toggle = screen.getByTestId('version-group-toggle')
     fireEvent.click(toggle)
 
     expect(screen.getByTestId('version-group-header-status')).toBeVisible()
@@ -915,6 +968,85 @@ describe('SessionVersionGroup status summary', () => {
     expect(banner).not.toHaveTextContent(/v\d/)
   })
 
+  it('renders the active judge as a clickable consolidation row while synthesis is running', () => {
+    const activeJudgeGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
+        createConsolidationVersion({ id: 'feature-A-merge' }),
+        createConsolidationVersion({
+          id: 'feature-A-judge',
+          consolidationRole: 'judge',
+        }),
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={activeJudgeGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const lane = screen.getByTestId('version-group-consolidation-lane')
+    const laneRows = within(lane).getAllByTestId('compact-version-row')
+
+    expect(laneRows).toHaveLength(2)
+    expect(laneRows.map(row => row.getAttribute('data-session-id'))).toEqual(['feature-A-merge', 'feature-A-judge'])
+    expect(within(lane).getByText('feature-A-judge').closest('[data-testid="compact-version-row"]')).toHaveAttribute(
+      'data-consolidation-role',
+      'judge',
+    )
+    expect(screen.getByTestId('version-group-header-status')).toHaveTextContent('Running')
+
+    fireEvent.click(within(lane).getByText('feature-A-judge'))
+    expect(mockActions.onSelect).toHaveBeenCalledWith('feature-A-judge')
+  })
+
+  it('hides the judge row after the judge files a recommendation', () => {
+    const completedJudgeGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
+        createConsolidationVersion({
+          id: 'feature-A-merge',
+          consolidationBaseSessionId: 'feature-A_v2',
+        }),
+        createConsolidationVersion({
+          id: 'feature-A-judge',
+          consolidationRole: 'judge',
+          consolidationRecommendedSessionId: 'feature-A-merge',
+        }),
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={completedJudgeGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onConfirmConsolidationWinner={vi.fn()}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const lane = screen.getByTestId('version-group-consolidation-lane')
+    const laneRows = within(lane).getAllByTestId('compact-version-row')
+
+    expect(laneRows).toHaveLength(1)
+    expect(laneRows[0]).toHaveAttribute('data-session-id', 'feature-A-merge')
+    expect(within(lane).queryByText('feature-A-judge')).toBeNull()
+    expect(screen.getByTestId('version-group-judge-recommendation')).toHaveTextContent('Judge recommends claude v2')
+  })
+
   it('places consolidation candidate rows inside the recommendation lane when a judge recommendation exists', () => {
     const recommendedGroup: SessionVersionGroupType = {
       ...baseGroup,
@@ -1106,6 +1238,54 @@ describe('SessionVersionGroup status summary', () => {
     const header = screen.getByTestId('version-group-header-status')
     expect(header).toHaveTextContent('Running')
     expect(header).not.toHaveTextContent('Idle')
+  })
+
+  it('keeps the header pill derived from a completed judge after the recommendation is filed', () => {
+    const completedJudgeGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({
+          id: 'feature-A_v1',
+          sessionState: 'running',
+          versionNumber: 1,
+          attentionRequired: true,
+          attentionKind: 'idle',
+        }),
+        createVersion({
+          id: 'feature-A_v2',
+          sessionState: 'running',
+          versionNumber: 2,
+          attentionRequired: true,
+          attentionKind: 'waiting_for_input',
+        }),
+        createConsolidationVersion({
+          id: 'feature-A-merge',
+          consolidationBaseSessionId: 'feature-A_v2',
+        }),
+        createConsolidationVersion({
+          id: 'feature-A-judge',
+          consolidationRole: 'judge',
+          consolidationRecommendedSessionId: 'feature-A-merge',
+          consolidationBaseSessionId: 'feature-A_v2',
+        }),
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={completedJudgeGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    const header = screen.getByTestId('version-group-header-status')
+    expect(header).toHaveTextContent('Running')
+    expect(header).not.toHaveTextContent('Idle')
+    expect(header).not.toHaveTextContent(/waiting for input/i)
   })
 
   it('keeps the header pill derived from sources when only candidates (no judge) exist', () => {

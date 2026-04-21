@@ -214,11 +214,18 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     .sort((a, b) => versionActivityTimestamp(b) - versionActivityTimestamp(a))
   const sortedReportedCandidates = [...consolidationCandidates]
     .sort((a, b) => versionActivityTimestamp(b) - versionActivityTimestamp(a))
-  const activeJudge = sortedJudgeSessions[0]
-  const latestJudge = sortedJudgeSessions
-    .find(v => v.session.info.consolidation_recommended_session_id)
-  const isSynthesisJudgeReady = Boolean(latestJudge && latestJudge.session.info.consolidation_recommended_session_id === latestJudge.session.info.session_id)
-  const isSynthesisJudgeActive = Boolean(activeJudge && !latestJudge)
+  const newestJudge = sortedJudgeSessions[0]
+  const activeJudge = newestJudge && !newestJudge.session.info.consolidation_recommended_session_id
+    ? newestJudge
+    : null
+  const latestCompletedJudge = activeJudge
+    ? null
+    : sortedJudgeSessions.find(v => v.session.info.consolidation_recommended_session_id)
+  const isSynthesisJudgeReady = Boolean(
+    latestCompletedJudge
+    && latestCompletedJudge.session.info.consolidation_recommended_session_id === latestCompletedJudge.session.info.session_id,
+  )
+  const isSynthesisJudgeActive = Boolean(activeJudge)
   
   const latestReportedCandidate = sortedReportedCandidates
     .find(v => {
@@ -228,8 +235,8 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     })
   
   // Implementation rounds only confirm through the judge
-  const recommendationSource = latestJudge ?? (!isSynthesisJudgeActive ? latestReportedCandidate : null)
-  const focusJudge = latestJudge ?? activeJudge ?? latestReportedCandidate
+  const recommendationSource = latestCompletedJudge ?? (!isSynthesisJudgeActive ? latestReportedCandidate : null)
+  const focusJudge = activeJudge ?? latestCompletedJudge ?? latestReportedCandidate
   const activeRoundId = focusJudge?.session.info.consolidation_round_id
     ?? consolidationCandidates[0]?.session.info.consolidation_round_id
   const selectedCandidate = selectedVersionInGroup?.session.info.is_consolidation
@@ -264,7 +271,9 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
       const agent = (v.session.info.original_agent_type || '').toLowerCase()
       const vNum = v.session.info.version_number
       const text = v.session.info.is_consolidation
-        ? `merge · ${agent}`
+        ? (v.session.info.consolidation_role === 'judge'
+          ? `judge · ${agent}`
+          : `merge · ${agent}`)
         : vNum
           ? `v${vNum} · ${agent}`
           : agent
@@ -275,8 +284,8 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   const groupDescription = group.versions
     .map(version => (version.session.info.current_task || version.session.info.spec_content || '').trim())
     .find(Boolean) || undefined
-  const headerVersion = isConsolidationMuteActive && activeJudge
-    ? activeJudge
+  const headerVersion = isConsolidationMuteActive && newestJudge
+    ? newestJudge
     : primaryVersion
   const primaryStatus = headerVersion
     ? getSidebarSessionStatus(
@@ -437,7 +446,9 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
   ]
   const showConsolidationLane = Boolean(recommendationLabel || isSynthesisJudgeActive)
   const sourceListRows = showConsolidationLane ? sourceVersions : visibleVersionRows
-  const consolidationLaneRows = showConsolidationLane ? consolidationCandidates : []
+  const consolidationLaneRows = showConsolidationLane
+    ? [...consolidationCandidates, ...(activeJudge ? [activeJudge] : [])]
+    : []
 
   return (
     <div className="mb-2 relative">
@@ -536,7 +547,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                 )}
                 {activeRoundId && onTriggerConsolidationJudge && renderHeaderAction(
                   'trigger-consolidation-judge-button',
-                  latestJudge ? 'Re-run synthesis judge' : 'Run synthesis judge',
+                  latestCompletedJudge ? 'Re-run synthesis judge' : 'Run synthesis judge',
                   <VscRefresh className="h-3.5 w-3.5" aria-hidden="true" />,
                   () => runConsolidationAction('trigger-judge', () => onTriggerConsolidationJudge(
                     activeRoundId,

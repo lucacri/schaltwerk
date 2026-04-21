@@ -156,8 +156,9 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
   const commitsAheadCount = s.commits_ahead_count ?? 0
   const agentType = s.original_agent_type as SessionInfo['original_agent_type']
   const agentKey = (agentType || '').toLowerCase()
+  const isJudgeSession = s.is_consolidation && s.consolidation_role === 'judge'
   const versionIndexLabel = s.is_consolidation
-    ? 'merge'
+    ? (isJudgeSession ? 'judge' : 'merge')
     : s.version_number
       ? `v${s.version_number}`
       : `v${index + 1}`
