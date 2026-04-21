@@ -33,6 +33,8 @@ export interface DefaultGenerationPrompts {
   judge_prompt_template?: string
 }
 
+const MERMAID_DIAGRAM_GUIDANCE = "Diagrams: fenced `mermaid` code blocks render as diagrams in Lucode's spec, plan, and report viewers. Reach for one when it makes sense — architecture overviews, data or control flow, state machines, sequence of events — whenever a diagram communicates structure more clearly than prose."
+
 const FALLBACK_DEFAULT_GENERATION_PROMPTS: DefaultGenerationPrompts = {
   name_prompt: `IMPORTANT: Do not use any tools. Answer this message directly without searching or reading files.
 
@@ -96,7 +98,9 @@ Instructions:
 6. Run the project's test suite to verify everything passes
 7. Create a single squashed commit with your candidate result
 8. File your candidate report with lucode_consolidation_report. Include your base_session_id and summarize what you kept from each version.
-9. Do not call lucode_promote directly. Lucode starts a synthesis judge after candidate reports are filed; the judge creates the final implementation that ships.`,
+9. Do not call lucode_promote directly. Lucode starts a synthesis judge after candidate reports are filed; the judge creates the final implementation that ships.
+
+${MERMAID_DIAGRAM_GUIDANCE}`,
   review_pr_prompt: 'Review the following pull request:\n\nTitle: {{pr.title}}\nAuthor: {{pr.author}}\nSource: {{pr.sourceBranch}} -> {{pr.targetBranch}}\nURL: {{pr.url}}\n\nDescription:\n{{pr.description}}\n\nLabels: {{pr.labels}}\n\nFetch and review the diff using the CLI (e.g., `gh pr diff {{pr.number}}` or `git diff {{pr.targetBranch}}...{{pr.sourceBranch}}`).',
   plan_issue_prompt: 'Create an implementation plan for the following issue:\n\nTitle: {{issue.title}}\n\nDescription:\n{{issue.description}}\n\nLabels: {{issue.labels}}',
   issue_prompt: [
@@ -120,9 +124,43 @@ Instructions:
   ].join('\n'),
   autonomy_prompt_template: DEFAULT_AUTONOMY_PROMPT_TEMPLATE,
   force_restart_prompt_template: '',
-  plan_candidate_prompt_template: '',
-  plan_judge_prompt_template: '',
-  judge_prompt_template: '',
+  plan_candidate_prompt_template: `You are preparing an implementation plan for this clarified Lucode spec.
+
+Inspect the repository as needed. Do not implement code. Write a concise, actionable Markdown implementation plan, then call lucode_consolidation_report with your plan as report and base_session_id set to '{SPEC_ID}'.
+
+${MERMAID_DIAGRAM_GUIDANCE}
+
+Spec content:
+
+{BASE_SPEC_CONTENT}`,
+  plan_judge_prompt_template: `Review every Improve Plan candidate for this Lucode plan round.
+
+Source sessions:
+{SOURCE_SESSIONS_BLOCK}
+Candidates:
+{CANDIDATES_BLOCK}
+Choose the strongest implementation plan. File your reasoning through lucode_consolidation_report with recommended_session_id set to the winning candidate session ID. Do not call lucode_promote directly.
+
+${MERMAID_DIAGRAM_GUIDANCE}`,
+  judge_prompt_template: `You are the synthesis judge for this Lucode consolidation round.
+
+{CANDIDATE_COUNT} parallel agents have each produced an independent implementation of the same task, checked in on their own branches/worktrees listed below. Your job is NOT to pick one — your job is to synthesize the best possible implementation by combining the strongest ideas and code from all candidates.
+
+You are working in your own isolated judge worktree. Read each candidate's branch (git diff against the parent branch) and their consolidation report for intent, then commit a coherent synthesized implementation on YOUR branch. Your branch is what will ship; your session will be promoted under the original spec name on acceptance.
+
+Source sessions:
+{SOURCE_SESSIONS_BLOCK}
+Candidates:
+{CANDIDATES_BLOCK}
+When the synthesized implementation is committed and verified on your branch:
+1. Run the project's required verification.
+2. File lucode_consolidation_report from this judge session with \`base_session_id\` set to the source session ID you used as the conceptual base.
+3. Do NOT set \`recommended_session_id\` for implementation rounds.
+4. Do NOT call \`lucode_promote\` directly.
+
+Lucode will promote this judge session after user confirmation, or immediately when the round is configured for auto-promotion.
+
+${MERMAID_DIAGRAM_GUIDANCE}`,
 }
 
 export function resolveGenerationPrompts(

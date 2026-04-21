@@ -412,8 +412,10 @@ Spec-writing rules:\n\
 - After the user responds and you are unblocked, call `lucode_spec_set_attention` with `attention_required: false`.\n\
 - When the spec is clear, call `lucode_spec_set_stage` with stage `clarified`. If it needs more clarification later, call `lucode_spec_set_stage` with stage `draft`.\n\
 - Do not produce implementation steps, file lists, function signatures, code stubs, or solution plans.\n\n\
+{guidance} In this clarification stage, diagrams are for framing existing structure or problem-space context only; do not draft solution-design diagrams.\n\n\
 Current spec draft:\n\n\
 {content}",
+        guidance = lucode::domains::settings::MERMAID_DIAGRAM_GUIDANCE,
         content = spec.content
     )
 }
@@ -741,6 +743,34 @@ mod spec_clarification_prompt_tests {
         let resolved = resolve_spec_clarification_agent_type(&db, None);
 
         assert_eq!(resolved, "gemini");
+    }
+
+    #[test]
+    fn prompt_mentions_mermaid_diagram_guidance() {
+        let prompt = default_prompt();
+        assert!(
+            prompt.contains("mermaid"),
+            "clarification prompt must mention mermaid"
+        );
+        assert!(
+            prompt.contains("when it makes sense"),
+            "clarification prompt must keep the \"when it makes sense\" trigger phrase"
+        );
+        for trigger in [
+            "architecture",
+            "data or control flow",
+            "state machines",
+            "sequence of events",
+        ] {
+            assert!(
+                prompt.contains(trigger),
+                "clarification prompt must list \"{trigger}\" as a diagram use case"
+            );
+        }
+        assert!(
+            prompt.contains("do not draft solution-design diagrams"),
+            "clarification prompt must scope diagrams away from solution design"
+        );
     }
 }
 

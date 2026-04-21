@@ -1585,4 +1585,29 @@ mod tests {
         assert!(prompts.judge_prompt_template.contains("{CANDIDATE_COUNT}"));
         assert!(prompts.judge_prompt_template.contains("synthesis judge"));
     }
+
+    #[test]
+    fn get_default_generation_prompts_includes_mermaid_guidance() {
+        let prompts = get_default_generation_prompts();
+        for (label, tmpl) in [
+            ("consolidation_prompt", &prompts.consolidation_prompt),
+            (
+                "plan_candidate_prompt_template",
+                &prompts.plan_candidate_prompt_template,
+            ),
+            (
+                "plan_judge_prompt_template",
+                &prompts.plan_judge_prompt_template,
+            ),
+            ("judge_prompt_template", &prompts.judge_prompt_template),
+        ] {
+            assert!(tmpl.contains("mermaid"), "{label} must mention mermaid");
+            assert!(
+                tmpl.contains("when it makes sense"),
+                "{label} must keep the \"when it makes sense\" trigger"
+            );
+        }
+        assert!(prompts.consolidation_prompt.contains("base_session_id"));
+        assert!(!prompts.consolidation_prompt.contains("winner_session_id"));
+    }
 }
