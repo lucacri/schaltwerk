@@ -12,6 +12,9 @@ const getOrchestratorAgentTypeMock = vi.hoisted(() => vi.fn())
 const getSpecClarificationAgentTypeMock = vi.hoisted(() => vi.fn())
 const getTerminalStartStateMock = vi.hoisted(() => vi.fn(() => 'started'))
 const getTerminalAgentTypeMock = vi.hoisted(() => vi.fn(() => 'claude'))
+const loadReviewCommentsMock = vi.hoisted(() => vi.fn())
+const saveReviewCommentsMock = vi.hoisted(() => vi.fn())
+const clearReviewCommentsMock = vi.hoisted(() => vi.fn())
 
 interface SpecContentMock {
   content: string
@@ -68,6 +71,14 @@ vi.mock('../../hooks/useClaudeSession', () => ({
 vi.mock('../../common/terminalStartState', () => ({
   getTerminalStartState: getTerminalStartStateMock,
   getTerminalAgentType: getTerminalAgentTypeMock,
+}))
+
+vi.mock('../../hooks/useSpecReviewCommentStore', () => ({
+  useSpecReviewCommentStore: () => ({
+    load: loadReviewCommentsMock,
+    save: saveReviewCommentsMock,
+    clear: clearReviewCommentsMock,
+  }),
 }))
 
 vi.mock('../../common/uiEvents', async (importOriginal) => {
@@ -208,6 +219,12 @@ describe('SpecEditor keyboard shortcuts', () => {
     getTerminalStartStateMock.mockReturnValue('started')
     getTerminalAgentTypeMock.mockReset()
     getTerminalAgentTypeMock.mockReturnValue('claude')
+    loadReviewCommentsMock.mockReset()
+    loadReviewCommentsMock.mockResolvedValue([])
+    saveReviewCommentsMock.mockReset()
+    saveReviewCommentsMock.mockResolvedValue(undefined)
+    clearReviewCommentsMock.mockReset()
+    clearReviewCommentsMock.mockResolvedValue(undefined)
 
     vi.mocked(invoke).mockImplementation(async (cmd) => {
       if (cmd === TauriCommands.SchaltwerkCoreGetSessionAgentContent) {
@@ -934,7 +951,7 @@ describe('SpecEditor keyboard shortcuts', () => {
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Select line' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Select line' }))
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Open comment form' })).toBeEnabled()
@@ -988,7 +1005,7 @@ describe('SpecEditor keyboard shortcuts', () => {
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Select line and open comment form' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Select line and open comment form' }))
 
     expect(await screen.findByPlaceholderText('Write your comment...')).toBeInTheDocument()
     expect(screen.getByText('Line 2')).toBeInTheDocument()
@@ -1008,7 +1025,7 @@ describe('SpecEditor keyboard shortcuts', () => {
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Drag select and open comment form' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Drag select and open comment form' }))
 
     expect(await screen.findByPlaceholderText('Write your comment...')).toBeInTheDocument()
     expect(screen.getByText('Lines 2-4')).toBeInTheDocument()
@@ -1028,7 +1045,7 @@ describe('SpecEditor keyboard shortcuts', () => {
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Drag existing selection and open comment form' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Drag existing selection and open comment form' }))
 
     expect(await screen.findByPlaceholderText('Write your comment...')).toBeInTheDocument()
     expect(screen.getByText('Lines 2-5')).toBeInTheDocument()
@@ -1121,5 +1138,231 @@ describe('SpecEditor implementation plan preview', () => {
     }
 
     expect(screen.queryByTestId('spec-implementation-plan')).toBeNull()
+  })
+})
+
+describe('SpecEditor review comment persistence', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    specContentMock = {
+      content: 'Line one\nLine two\nLine three',
+      displayName: 'Review Spec',
+      hasData: true,
+    }
+    sessionsMock = []
+    Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (Macintosh)', configurable: true })
+
+    loadReviewCommentsMock.mockReset(); loadReviewCommentsMock.mockResolvedValue([])
+    saveReviewCommentsMock.mockReset(); saveReviewCommentsMock.mockResolvedValue(undefined)
+    clearReviewCommentsMock.mockReset(); clearReviewCommentsMock.mockResolvedValue(undefined)
+    updateSessionSpecContentMock.mockReset()
+    setSelectionMock.mockReset()
+    setSelectionMock.mockResolvedValue(undefined)
+    getOrchestratorAgentTypeMock.mockReset()
+    getOrchestratorAgentTypeMock.mockResolvedValue('claude')
+
+    vi.mocked(invoke).mockImplementation(async (cmd) => {
+      if (cmd === TauriCommands.SchaltwerkCoreGetSessionAgentContent) {
+        return ['Line one\nLine two\nLine three', null]
+      }
+      return undefined
+    })
+    vi.mocked(listen).mockImplementation(async () => () => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const storedComment = (id: string, ts: number) => ({
+    id,
+    specId: 'review-spec',
+    lineRange: { start: 1, end: 1 },
+    selectedText: 'Line one',
+    comment: `note-${id}`,
+    timestamp: ts,
+  })
+
+  it('enters review mode with empty state when nothing is stored', async () => {
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+
+    await waitFor(() => {
+      expect(loadReviewCommentsMock).toHaveBeenCalled()
+    })
+    expect(screen.queryByText('Continue your pending review?')).toBeNull()
+    expect(screen.queryByRole('button', { name: /finish review/i })).toBeNull()
+  })
+
+  it('shows the resume prompt when stored comments exist and Continue hydrates them', async () => {
+    loadReviewCommentsMock.mockResolvedValue([storedComment('c1', 1), storedComment('c2', 2)])
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+
+    const continueButton = await screen.findByRole('button', { name: 'Continue' })
+    expect(screen.getByText('Continue your pending review?')).toBeInTheDocument()
+
+    fireEvent.click(continueButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /finish review \(2\)/i })).toBeInTheDocument()
+    })
+    expect(clearReviewCommentsMock).not.toHaveBeenCalled()
+  })
+
+  it('Clear discards storage and opens review mode empty', async () => {
+    loadReviewCommentsMock.mockResolvedValue([storedComment('c1', 1)])
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+
+    const clearButton = await screen.findByRole('button', { name: 'Clear & start fresh' })
+    fireEvent.click(clearButton)
+
+    await waitFor(() => {
+      expect(clearReviewCommentsMock).toHaveBeenCalled()
+    })
+    expect(screen.queryByText('Continue your pending review?')).toBeNull()
+    expect(screen.queryByRole('button', { name: /finish review/i })).toBeNull()
+  })
+
+  it('persists the comment list when a comment is submitted', async () => {
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+    await waitFor(() => expect(loadReviewCommentsMock).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select line and open comment form' }))
+    fireEvent.change(await screen.findByPlaceholderText('Write your comment...'), {
+      target: { value: 'Please tighten.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+
+    await waitFor(() => {
+      expect(saveReviewCommentsMock).toHaveBeenCalled()
+    })
+    const latestCall = saveReviewCommentsMock.mock.calls.at(-1)
+    expect(latestCall).toBeDefined()
+    expect(Array.isArray(latestCall?.[0])).toBe(true)
+    expect(latestCall?.[0]).toHaveLength(1)
+    expect(latestCall?.[0][0].comment).toBe('Please tighten.')
+  })
+
+  it('does not clear storage on Finish Review', async () => {
+    sessionsMock = [
+      {
+        info: {
+          session_id: 'review-spec',
+          stable_id: 'review-spec-id',
+          spec_stage: 'draft',
+          branch: 'main',
+          worktree_path: '',
+          base_branch: 'main',
+          status: 'spec',
+          is_current: false,
+          session_type: 'worktree',
+          session_state: 'spec',
+        },
+        terminals: [],
+      },
+    ]
+
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+    await waitFor(() => expect(loadReviewCommentsMock).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'Select line and open comment form' }))
+    fireEvent.change(await screen.findByPlaceholderText('Write your comment...'), {
+      target: { value: 'Fix X' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    await waitFor(() => expect(saveReviewCommentsMock).toHaveBeenCalled())
+
+    fireEvent.click(await screen.findByRole('button', { name: /finish review/i }))
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        TauriCommands.PasteAndSubmitTerminal,
+        expect.any(Object),
+      )
+    })
+    expect(clearReviewCommentsMock).not.toHaveBeenCalled()
+  })
+
+  it('does not clear storage when pressing Cancel Review', async () => {
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+    await waitFor(() => expect(loadReviewCommentsMock).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'Select line and open comment form' }))
+    fireEvent.change(await screen.findByPlaceholderText('Write your comment...'), {
+      target: { value: 'Fix X' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    await waitFor(() => expect(saveReviewCommentsMock).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel Review' }))
+
+    expect(clearReviewCommentsMock).not.toHaveBeenCalled()
+  })
+
+  it('does not clear storage when pressing Escape to exit review', async () => {
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+    await waitFor(() => expect(loadReviewCommentsMock).toHaveBeenCalled())
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+
+    expect(clearReviewCommentsMock).not.toHaveBeenCalled()
+  })
+
+  it('does not clear storage when pressing Exit Review toolbar button', async () => {
+    render(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /comment/i }))
+    await waitFor(() => expect(loadReviewCommentsMock).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByTitle('Exit review mode'))
+
+    expect(clearReviewCommentsMock).not.toHaveBeenCalled()
   })
 })

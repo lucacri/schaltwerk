@@ -1003,6 +1003,10 @@ export interface Translations {
     sendReviewComments: string
     finishReview: string
     implementationPlanHeading: string
+    resumeReviewTitle: string
+    resumeReviewMessage: string
+    resumeReviewContinue: string
+    resumeReviewClear: string
   }
   specPicker: {
     searchSpecs: string

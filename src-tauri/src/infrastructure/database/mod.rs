@@ -4,6 +4,7 @@ pub mod db_archived_specs;
 pub mod db_epics;
 pub mod db_project_config;
 pub mod db_schema;
+pub mod db_spec_review_comments;
 pub mod db_specs;
 pub mod timestamps;
 
@@ -16,4 +17,5 @@ pub use db_project_config::{
     RunScript,
 };
 pub use db_schema::initialize_schema;
+pub use db_spec_review_comments::{PersistedSpecReviewComment, SpecReviewCommentMethods};
 pub use db_specs::SpecMethods;

@@ -2397,6 +2397,95 @@ mod service_unified_tests {
             "Spec session should not be returned when listing running sessions after normalization"
         );
     }
+
+    fn sample_review_comment(id: &str, ts: i64) -> crate::infrastructure::database::PersistedSpecReviewComment {
+        crate::infrastructure::database::PersistedSpecReviewComment {
+            id: id.to_string(),
+            spec_id: String::new(),
+            line_start: 1,
+            line_end: 2,
+            selected_text: "hi".to_string(),
+            comment: format!("comment-{id}"),
+            created_at: ts,
+        }
+    }
+
+    fn init_review_repo(tmp: &TempDir) {
+        init_git_repo(&tmp.path().join("repo"));
+    }
+
+    #[test]
+    fn save_and_list_spec_review_comments_round_trips_by_name() {
+        let (manager, tmp) = create_test_session_manager();
+        init_review_repo(&tmp);
+        manager
+            .create_spec_session("review-me", "body")
+            .unwrap();
+
+        manager
+            .save_spec_review_comments(
+                "review-me",
+                &[sample_review_comment("c1", 100), sample_review_comment("c2", 200)],
+            )
+            .unwrap();
+
+        let rows = manager.list_spec_review_comments("review-me").unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].id, "c1");
+        assert_eq!(rows[1].id, "c2");
+        assert!(rows.iter().all(|r| !r.spec_id.is_empty()));
+    }
+
+    #[test]
+    fn save_spec_review_comments_replaces_prior_draft() {
+        let (manager, tmp) = create_test_session_manager();
+        init_review_repo(&tmp);
+        manager
+            .create_spec_session("replace-spec", "body")
+            .unwrap();
+
+        manager
+            .save_spec_review_comments("replace-spec", &[sample_review_comment("old", 1)])
+            .unwrap();
+        manager
+            .save_spec_review_comments(
+                "replace-spec",
+                &[sample_review_comment("new-a", 2), sample_review_comment("new-b", 3)],
+            )
+            .unwrap();
+
+        let rows = manager.list_spec_review_comments("replace-spec").unwrap();
+        let ids: Vec<_> = rows.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["new-a", "new-b"]);
+    }
+
+    #[test]
+    fn clear_spec_review_comments_empties_the_store() {
+        let (manager, tmp) = create_test_session_manager();
+        init_review_repo(&tmp);
+        manager
+            .create_spec_session("clear-spec", "body")
+            .unwrap();
+        manager
+            .save_spec_review_comments("clear-spec", &[sample_review_comment("c", 1)])
+            .unwrap();
+
+        manager.clear_spec_review_comments("clear-spec").unwrap();
+
+        assert!(
+            manager
+                .list_spec_review_comments("clear-spec")
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn list_spec_review_comments_errors_for_unknown_spec() {
+        let (manager, _tmp) = create_test_session_manager();
+        let result = manager.list_spec_review_comments("missing");
+        assert!(result.is_err());
+    }
 }
 
 pub struct SessionManager {
@@ -5010,5 +5099,57 @@ impl SessionManager {
             .update_session_initial_prompt(&session.id, prompt)?;
         crate::domains::sessions::cache::invalidate_spec_content(&self.repo_path, session_name);
         Ok(())
+    }
+
+    pub fn list_spec_review_comments(
+        &self,
+        spec_name: &str,
+    ) -> Result<Vec<crate::infrastructure::database::PersistedSpecReviewComment>> {
+        use crate::infrastructure::database::SpecReviewCommentMethods;
+        let spec = self
+            .db_manager
+            .get_spec_by_name(spec_name)
+            .map_err(|e| anyhow!("Cannot list review comments for '{spec_name}': {e}"))?;
+
+        SpecReviewCommentMethods::list_spec_review_comments(&self.db_manager.db, &spec.id)
+    }
+
+    pub fn save_spec_review_comments(
+        &self,
+        spec_name: &str,
+        comments: &[crate::infrastructure::database::PersistedSpecReviewComment],
+    ) -> Result<()> {
+        use crate::infrastructure::database::{
+            PersistedSpecReviewComment, SpecReviewCommentMethods,
+        };
+        let spec = self
+            .db_manager
+            .get_spec_by_name(spec_name)
+            .map_err(|e| anyhow!("Cannot save review comments for '{spec_name}': {e}"))?;
+
+        let mut owned: Vec<PersistedSpecReviewComment> = comments
+            .iter()
+            .map(|c| PersistedSpecReviewComment {
+                spec_id: spec.id.clone(),
+                ..c.clone()
+            })
+            .collect();
+        owned.sort_by_key(|c| c.created_at);
+
+        SpecReviewCommentMethods::replace_spec_review_comments(
+            &self.db_manager.db,
+            &spec.id,
+            &owned,
+        )
+    }
+
+    pub fn clear_spec_review_comments(&self, spec_name: &str) -> Result<()> {
+        use crate::infrastructure::database::SpecReviewCommentMethods;
+        let spec = self
+            .db_manager
+            .get_spec_by_name(spec_name)
+            .map_err(|e| anyhow!("Cannot clear review comments for '{spec_name}': {e}"))?;
+
+        SpecReviewCommentMethods::clear_spec_review_comments(&self.db_manager.db, &spec.id)
     }
 }

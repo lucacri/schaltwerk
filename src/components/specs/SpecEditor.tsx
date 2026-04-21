@@ -35,6 +35,7 @@ import { getPasteSubmissionOptions } from '../../common/terminalPaste'
 import { specOrchestratorTerminalId } from '../../common/terminalIdentity'
 import { UiEvent, emitUiEvent, listenUiEvent } from '../../common/uiEvents'
 import { useReviewComments } from '../../hooks/useReviewComments'
+import { useSpecReviewCommentStore } from '../../hooks/useSpecReviewCommentStore'
 import type { SpecReviewComment } from '../../types/specReview'
 import { getTerminalAgentType, getTerminalStartState } from '../../common/terminalStartState'
 import { projectPathAtom } from '../../store/atoms/project'
@@ -140,6 +141,8 @@ export function SpecEditor({
   const { getOrchestratorAgentType, getSpecClarificationAgentType } = useClaudeSession()
   const { getConfirmationMessage } = useReviewComments()
   const projectPath = useAtomValue(projectPathAtom)
+  const reviewCommentStore = useSpecReviewCommentStore(sessionName, projectPath)
+  const [resumeReviewPrompt, setResumeReviewPrompt] = useState<SpecReviewComment[] | null>(null)
 
   useEffect(() => {
     setError(null)
@@ -435,17 +438,52 @@ export function SpecEditor({
     }
   }, [sessionName])
 
-  const handleEnterReviewMode = useCallback(() => {
-    setReviewComments([])
+  const handleEnterReviewMode = useCallback(async () => {
     lineSelection.clearSelection()
     isDraggingSelectionRef.current = false
     dragSelectionStartRef.current = null
     dragStartedInsideSelectionRef.current = false
     setShowCommentForm(false)
+
+    let stored: SpecReviewComment[] = []
+    try {
+      stored = await reviewCommentStore.load()
+    } catch (e) {
+      logger.error('[SpecEditor] Failed to load stored review comments:', e)
+    }
+
+    if (stored.length > 0) {
+      setResumeReviewPrompt(stored)
+      return
+    }
+
+    setReviewComments([])
     setViewMode('review')
     onReviewModeChange?.(true)
-    logger.info('[SpecEditor] Entered review mode')
-  }, [lineSelection, setViewMode, onReviewModeChange])
+    logger.info('[SpecEditor] Entered review mode (no stored draft)')
+  }, [lineSelection, onReviewModeChange, reviewCommentStore, setViewMode])
+
+  const handleResumeReviewContinue = useCallback(() => {
+    const stored = resumeReviewPrompt ?? []
+    setReviewComments(stored)
+    setResumeReviewPrompt(null)
+    setViewMode('review')
+    onReviewModeChange?.(true)
+    logger.info('[SpecEditor] Entered review mode (continued draft)', { count: stored.length })
+  }, [onReviewModeChange, resumeReviewPrompt, setViewMode])
+
+  const handleResumeReviewClear = useCallback(async () => {
+    try {
+      await reviewCommentStore.clear()
+    } catch (e) {
+      logger.error('[SpecEditor] Failed to clear stored review comments:', e)
+    }
+    setReviewComments([])
+    setResumeReviewPrompt(null)
+    setViewMode('review')
+    onReviewModeChange?.(true)
+    logger.info('[SpecEditor] Entered review mode (cleared stored draft)')
+  }, [onReviewModeChange, reviewCommentStore, setViewMode])
 
   const handleExitReviewMode = useCallback(() => {
     setReviewComments([])
@@ -519,7 +557,11 @@ export function SpecEditor({
       timestamp: Date.now(),
     }
 
-    setReviewComments(prev => [...prev, newComment])
+    const nextComments = [...reviewComments, newComment]
+    setReviewComments(nextComments)
+    void reviewCommentStore.save(nextComments).catch(e =>
+      logger.error('[SpecEditor] Failed to persist review comments:', e),
+    )
     lineSelection.clearSelection()
     isDraggingSelectionRef.current = false
     dragSelectionStartRef.current = null
@@ -528,7 +570,7 @@ export function SpecEditor({
     setCommentFormPosition(null)
     setCommentText('')
     logger.info('[SpecEditor] Added review comment', { lineRange: newComment.lineRange })
-  }, [lineSelection, currentContent, sessionName, commentText])
+  }, [lineSelection, currentContent, sessionName, commentText, reviewCommentStore, reviewComments])
 
   
   const handleCancelComment = useCallback(() => {
@@ -722,7 +764,7 @@ export function SpecEditor({
                 {viewMode === 'edit' ? t.specEditor.preview : t.specEditor.edit}
               </button>
               <button
-                onClick={handleEnterReviewMode}
+                onClick={() => { void handleEnterReviewMode() }}
                 className="px-2 py-1 rounded flex items-center gap-1 hover:opacity-90"
                 style={{
                   ...specText.toolbarButton,
@@ -1007,6 +1049,46 @@ export function SpecEditor({
           )}
         </div>
       </div>
+      {resumeReviewPrompt && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40">
+          <div
+            className="bg-bg-secondary border border-border-default rounded-lg shadow-xl p-5 w-[420px]"
+            role="dialog"
+            aria-label={t.specEditor.resumeReviewTitle}
+          >
+            <div
+              className="font-medium mb-2"
+              style={{ fontSize: theme.fontSize.bodyLarge, color: 'var(--color-text-primary)' }}
+            >
+              {t.specEditor.resumeReviewTitle}
+            </div>
+            <div
+              className="mb-4"
+              style={{ fontSize: theme.fontSize.body, color: 'var(--color-text-secondary)' }}
+            >
+              {t.specEditor.resumeReviewMessage
+                .replace('{count}', String(resumeReviewPrompt.length))
+                .replace('{plural}', resumeReviewPrompt.length === 1 ? '' : 's')}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { void handleResumeReviewClear() }}
+                className="px-3 py-1.5 rounded border border-border-default text-text-secondary hover:bg-bg-hover"
+                style={{ fontSize: theme.fontSize.body }}
+              >
+                {t.specEditor.resumeReviewClear}
+              </button>
+              <button
+                onClick={handleResumeReviewContinue}
+                className="px-3 py-1.5 rounded bg-cyan-600 hover:bg-cyan-700 text-white font-medium"
+                style={{ fontSize: theme.fontSize.body }}
+              >
+                {t.specEditor.resumeReviewContinue}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -4307,6 +4307,42 @@ pub async fn schaltwerk_core_update_spec_content(
 }
 
 #[tauri::command]
+pub async fn schaltwerk_core_list_spec_review_comments(
+    name: String,
+    project_path: Option<String>,
+) -> Result<Vec<lucode::infrastructure::database::PersistedSpecReviewComment>, String> {
+    let manager = session_manager_read(project_path.as_deref()).await?;
+    manager
+        .list_spec_review_comments(&name)
+        .map_err(|e| format!("Failed to list spec review comments: {e}"))
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_save_spec_review_comments(
+    name: String,
+    comments: Vec<lucode::infrastructure::database::PersistedSpecReviewComment>,
+    project_path: Option<String>,
+) -> Result<(), String> {
+    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let manager = core.session_manager();
+    manager
+        .save_spec_review_comments(&name, &comments)
+        .map_err(|e| format!("Failed to save spec review comments: {e}"))
+}
+
+#[tauri::command]
+pub async fn schaltwerk_core_clear_spec_review_comments(
+    name: String,
+    project_path: Option<String>,
+) -> Result<(), String> {
+    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let manager = core.session_manager();
+    manager
+        .clear_spec_review_comments(&name)
+        .map_err(|e| format!("Failed to clear spec review comments: {e}"))
+}
+
+#[tauri::command]
 pub async fn schaltwerk_core_set_spec_stage(
     app: tauri::AppHandle,
     name: String,

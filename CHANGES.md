@@ -2,6 +2,18 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Specs: persist inline review comments across all exits
+
+Inline review comments were held only in `SpecEditor` React state and were wiped on every path that left review mode — Escape, Cancel Review, Exit Review, a successful Finish Review send, session switch, reload, or a crash. Users who backed out for any reason lost the entire draft. Comments are now persisted per spec in the project database on every submit and survive every exit path. The next time review mode is opened on that spec, a modal surfaces any stored draft and offers **Clear & start fresh** (the only way to discard stored comments) or **Continue** (hydrate the local list and keep editing). No exit path deletes the store — Finish Review is a send, not a clear — so a mid-send crash or accidental Escape still leaves the work recoverable.
+
+- `src-tauri/src/infrastructure/database/db_schema.rs` creates `spec_review_comments (id, spec_id, line_start, line_end, selected_text, comment, created_at, FK→specs.id ON DELETE CASCADE)` plus `idx_spec_review_comments_spec (spec_id, created_at)`. An idempotent migration drops any older `(comment_id, start_line, end_line, timestamp)` column layout from a prior attempt.
+- New repo module `db_spec_review_comments.rs` implements `SpecReviewCommentMethods` (`list`, `replace` transactional delete-then-insert, `clear`) and exposes a `PersistedSpecReviewComment` serde type for the IPC wire shape.
+- `SessionManager::{list,save,clear}_spec_review_comments(spec_name, …)` resolve spec-name → id and delegate to the repo, stamping each comment's `spec_id` so the client doesn't have to know it.
+- Tauri commands `schaltwerk_core_{list,save,clear}_spec_review_comments(name, project_path?)` wire through the project-scoped session manager. Registered in `commands/mod.rs`, `main.rs`, and `src/common/tauriCommands.ts`.
+- New `useSpecReviewCommentStore(specName, projectPath)` hook serialises `SpecReviewComment` ↔ snake-case wire shape. `SpecEditor` calls `load()` on review-mode entry, shows a `resumeReview*` modal when rows exist (Clear calls `clear()`, Continue hydrates), calls `save(next)` after every `handleSubmitComment`, and leaves the DB untouched on Finish Review, Cancel Review, Escape, Exit Review, and session switch.
+- i18n keys `specEditor.resumeReview{Title,Message,Continue,Clear}` in `en.json`, `zh.json`, and `types.ts`.
+- Covered by Rust tests (schema + idempotent migration drop, DB-level insert/replace/clear/cascade, service-level round-trip/replace/clear/missing-spec), hook tests for `useSpecReviewCommentStore` (load/save/clear wire shapes, optional project path), and new `SpecEditor` tests for no-prompt-when-empty, Continue hydrates, Clear wipes, submit persists, and Finish/Cancel/Escape/Exit each leave `clear` uncalled.
+
 ## Prompts: teach agents that fenced `mermaid` blocks render as diagrams
 
 Lucode's `MarkdownRenderer` already renders fenced ```mermaid blocks as diagrams across the spec editor, plan views, consolidation reports, and forge issue/PR panels, but none of the agent-facing prompt templates mentioned the capability — so Claude/Codex/Gemini/Droid never produced flow, sequence, or state diagrams even when one would explain a concept more clearly than prose. The five prompts that drive agent-written markdown rendered by the UI now carry a concise diagram hint with the user's "when it makes sense" trigger phrase and four concrete use cases (architecture overviews, data or control flow, state machines, sequence of events).

@@ -327,6 +327,46 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
         [],
     )?;
 
+    let spec_review_table_exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master
+                WHERE type='table' AND name='spec_review_comments'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if spec_review_table_exists > 0 {
+        let has_created_at: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('spec_review_comments')
+                    WHERE name = 'created_at'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if has_created_at == 0 {
+            let _ = conn.execute("DROP TABLE IF EXISTS spec_review_comments", []);
+        }
+    }
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS spec_review_comments (
+            id TEXT PRIMARY KEY,
+            spec_id TEXT NOT NULL,
+            line_start INTEGER NOT NULL,
+            line_end INTEGER NOT NULL,
+            selected_text TEXT NOT NULL,
+            comment TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(spec_id) REFERENCES specs(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_spec_review_comments_spec
+            ON spec_review_comments(spec_id, created_at)",
+        [],
+    )?;
+
     Ok(())
 }
 
@@ -1081,5 +1121,84 @@ mod tests {
                 .unwrap();
             assert!(exists, "Index '{idx}' should exist after schema init");
         }
+    }
+
+    #[test]
+    fn schema_drops_incompatible_spec_review_comments_table() {
+        use super::initialize_schema;
+        use crate::infrastructure::database::connection::Database;
+        let db = Database::new_in_memory().unwrap();
+        let conn = db.get_conn().unwrap();
+
+        conn.execute("DROP TABLE IF EXISTS spec_review_comments", [])
+            .unwrap();
+        conn.execute(
+            "CREATE TABLE spec_review_comments (
+                comment_id TEXT PRIMARY KEY,
+                spec_id TEXT NOT NULL,
+                start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL,
+                selected_text TEXT NOT NULL,
+                comment TEXT NOT NULL,
+                timestamp INTEGER NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        initialize_schema(&db).unwrap();
+
+        let conn = db.get_conn().unwrap();
+        let has_created_at: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('spec_review_comments')
+                    WHERE name = 'created_at'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(has_created_at, 1);
+
+        let has_old_column: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('spec_review_comments')
+                    WHERE name = 'timestamp'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(has_old_column, 0);
+    }
+
+    #[test]
+    fn schema_creates_spec_review_comments_table_and_index() {
+        use crate::infrastructure::database::connection::Database;
+        let db = Database::new_in_memory().unwrap();
+        let conn = db.get_conn().unwrap();
+
+        let table_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='spec_review_comments'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            table_exists,
+            "spec_review_comments table should exist after schema init"
+        );
+
+        let index_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='index' AND name='idx_spec_review_comments_spec'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            index_exists,
+            "idx_spec_review_comments_spec index should exist after schema init"
+        );
     }
 }

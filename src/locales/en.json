@@ -998,7 +998,11 @@
     "cancelReview": "Cancel Review",
     "sendReviewComments": "Send review comments",
     "finishReview": "Finish Review ({count})",
-    "implementationPlanHeading": "Implementation Plan"
+    "implementationPlanHeading": "Implementation Plan",
+    "resumeReviewTitle": "Continue your pending review?",
+    "resumeReviewMessage": "You have {count} stored comment{plural} for this spec. Continue editing them or clear to start fresh.",
+    "resumeReviewContinue": "Continue",
+    "resumeReviewClear": "Clear & start fresh"
   },
   "specPicker": {
     "searchSpecs": "Search specs...",

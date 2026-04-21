@@ -998,7 +998,11 @@
     "cancelReview": "取消审核",
     "sendReviewComments": "发送审核评论",
     "finishReview": "完成审核 ({count})",
-    "implementationPlanHeading": "实施计划"
+    "implementationPlanHeading": "实施计划",
+    "resumeReviewTitle": "继续您的待处理审核？",
+    "resumeReviewMessage": "此规格有 {count} 条已保存的评论。继续编辑或清除以重新开始。",
+    "resumeReviewContinue": "继续",
+    "resumeReviewClear": "清除并重新开始"
   },
   "specPicker": {
     "searchSpecs": "搜索规格...",
