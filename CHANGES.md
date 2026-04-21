@@ -2,6 +2,16 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## History: contrast-aware reference pill text
+
+History reference pills in the git graph used the pill background color for branches, tags, remotes, and bases, but always rendered the text as `var(--color-text-primary)`. That left bright palette colors such as the amber swimlane `#FFB000` and the default tag color `#e5c07b` with low-contrast near-white text, while darker colors had the inverse problem in lighter themes. The fix keeps the existing ref/swimlane palette intact and only changes the pill foreground selection.
+
+- Added `src/common/colorContrast.ts` so dynamic-color UI surfaces can share the same brightness-based foreground selection logic instead of duplicating it inline.
+- `src/components/forge/ForgeLabelChip.tsx` now uses the shared helper rather than its own local contrast function, and the architecture exception notes the shared helper usage.
+- `src/components/git-graph/HistoryItemRow.tsx` now computes colored-pill text from the ref background color while preserving the existing no-color fallback (`var(--color-overlay-light)` + `var(--color-text-secondary)`).
+- Added focused Vitest coverage for the shared helper and `HistoryItemRow`, including bright and dark palette entries, optional `#`, malformed colors, and the no-color fallback.
+- Swimlane lines, commit dots, and the IBM/Wong colorblind-safe graph palette are unchanged.
+
 ## Specs: persist inline review comments across all exits
 
 Inline review comments were held only in `SpecEditor` React state and were wiped on every path that left review mode — Escape, Cancel Review, Exit Review, a successful Finish Review send, session switch, reload, or a crash. Users who backed out for any reason lost the entire draft. Comments are now persisted per spec in the project database on every submit and survive every exit path. The next time review mode is opened on that spec, a modal surfaces any stored draft and offers **Clear & start fresh** (the only way to discard stored comments) or **Continue** (hydrate the local list and keep editing). No exit path deletes the store — Finish Review is a send, not a clear — so a mid-send crash or accidental Escape still leaves the work recoverable.

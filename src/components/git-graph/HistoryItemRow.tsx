@@ -5,6 +5,7 @@ import type { HistoryItemViewModel, HistoryItem, CommitDetailState } from './typ
 import { GitGraphRow, SWIMLANE_WIDTH } from './GitGraphRow'
 import { groupReferences } from './refGrouping'
 import { theme } from '../../common/theme'
+import { getContrastColor } from '../../common/colorContrast'
 import { getFileIcon } from '../../utils/fileIcons'
 
 interface HistoryItemRowProps {
@@ -39,9 +40,8 @@ function renderReferences(references: ReturnType<typeof groupReferences>) {
   return (
     <div className="flex gap-1 items-center ml-1 flex-shrink-0">
       {references.map((ref, index) => {
-        const hasColor = ref.color !== undefined
-        const backgroundColor = hasColor ? ref.color : 'var(--color-overlay-light)'
-        const textColor = hasColor ? 'var(--color-text-primary)' : 'var(--color-text-secondary)'
+        const backgroundColor = ref.color ?? 'var(--color-overlay-light)'
+        const textColor = ref.color ? getContrastColor(ref.color) : 'var(--color-text-secondary)'
         const showCount = ref.count !== undefined && ref.count > 1
         const showIcon = ref.showIconOnly || (ref.count !== undefined && ref.count >= 1) || ref.icon === 'tag'
 

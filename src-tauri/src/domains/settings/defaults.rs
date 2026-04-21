@@ -6,6 +6,7 @@ use super::types::{
 pub const MERMAID_DIAGRAM_GUIDANCE: &str = "Diagrams: fenced `mermaid` code blocks render as diagrams in Lucode's spec, plan, and report viewers. Reach for one when it makes sense — architecture overviews, data or control flow, state machines, sequence of events — whenever a diagram communicates structure more clearly than prose.";
 
 pub fn default_consolidation_prompt_template() -> String {
+    let guidance = MERMAID_DIAGRAM_GUIDANCE;
     format!(
         r#"You are consolidating the results of multiple parallel agent sessions.
 
@@ -28,7 +29,6 @@ Instructions:
 9. Do not call lucode_promote directly for a multi-agent consolidation round. Lucode will trigger the judge automatically when every candidate has filed a report, or the user can trigger or confirm it from the UI.
 
 {guidance}"#,
-        guidance = MERMAID_DIAGRAM_GUIDANCE,
     )
 }
 
@@ -108,20 +108,22 @@ pub fn default_force_restart_prompt_template() -> String {
 }
 
 pub fn default_plan_candidate_prompt_template() -> String {
+    let guidance = MERMAID_DIAGRAM_GUIDANCE;
     format!(
         concat!(
             "You are preparing an implementation plan for this clarified Lucode spec.\n\n",
             "Inspect the repository as needed. Do not implement code. Write a concise, ",
             "actionable Markdown implementation plan, then call lucode_consolidation_report ",
             "with your plan as report and base_session_id set to '{{SPEC_ID}}'.\n\n",
-            "{guidance}\n\n",
+            "{}\n\n",
             "Spec content:\n\n{{BASE_SPEC_CONTENT}}",
         ),
-        guidance = MERMAID_DIAGRAM_GUIDANCE,
+        guidance,
     )
 }
 
 pub fn default_plan_judge_prompt_template() -> String {
+    let guidance = MERMAID_DIAGRAM_GUIDANCE;
     format!(
         concat!(
             "Review every Improve Plan candidate for this Lucode plan round.\n\n",
@@ -130,13 +132,14 @@ pub fn default_plan_judge_prompt_template() -> String {
             "Choose the strongest implementation plan. File your reasoning through ",
             "lucode_consolidation_report with recommended_session_id set to the winning ",
             "candidate session ID. Do not call lucode_promote directly.\n\n",
-            "{guidance}",
+            "{}",
         ),
-        guidance = MERMAID_DIAGRAM_GUIDANCE,
+        guidance,
     )
 }
 
 pub fn default_judge_prompt_template() -> String {
+    let guidance = MERMAID_DIAGRAM_GUIDANCE;
     format!(
         concat!(
             "You are the synthesis judge for this Lucode consolidation round.\n\n",
@@ -160,9 +163,9 @@ pub fn default_judge_prompt_template() -> String {
             "4. Do NOT call `lucode_promote` directly.\n\n",
             "Lucode will promote this judge session after user confirmation, or immediately ",
             "when the round is configured for auto-promotion.\n\n",
-            "{guidance}",
+            "{}",
         ),
-        guidance = MERMAID_DIAGRAM_GUIDANCE,
+        guidance,
     )
 }
 
