@@ -30,6 +30,10 @@ vi.mock('./BranchIndicator', () => ({
   BranchIndicator: () => <div data-testid="branch-indicator" />
 }))
 
+vi.mock('./DevModeIndicator', () => ({
+  DevModeIndicator: () => <div data-testid="dev-mode-indicator" />
+}))
+
 vi.mock('./github/GithubMenuButton', () => ({
   GithubMenuButton: () => <div data-testid="github-menu" />
 }))
@@ -130,5 +134,17 @@ describe('TopBar', () => {
 
     expect(screen.getByTestId('github-menu')).toBeInTheDocument()
     expect(screen.getByTestId('gitlab-menu')).toBeInTheDocument()
+  })
+
+  it('mounts the dev-mode indicator before the tab bar so it sits in the traffic-light region', () => {
+    render(<TopBar {...baseProps} />)
+
+    const indicator = screen.getByTestId('dev-mode-indicator')
+    const tabBar = screen.getByTestId('tab-bar')
+
+    expect(indicator).toBeInTheDocument()
+    expect(
+      indicator.compareDocumentPosition(tabBar) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 })

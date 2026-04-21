@@ -338,7 +338,10 @@ run:
     
     # Export the port for Vite
     export VITE_PORT=$port
-    
+
+    # Signal to the app that it is running via `just run` so it can surface a dev-mode indicator.
+    export LUCODE_DEV_MODE=1
+
     # Create temporary config override for Tauri to use the dynamic port
     temp_config=$(mktemp)
     cat > "$temp_config" <<EOF

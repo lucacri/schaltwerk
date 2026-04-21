@@ -2,6 +2,15 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## TopBar: "RUNNING IN DEV MODE" indicator for `just run`
+
+Running a local `just run` next to the installed `/Applications/Lucode.app` gave no at-a-glance cue which window was which — `titleBarStyle: "Overlay"` with `hiddenTitle: true` suppresses the native title string. `just run` now exports `LUCODE_DEV_MODE=1`, the backend surfaces that signal through `get_development_info`, and the TopBar renders a red pill next to the macOS traffic lights only when the signal is true. Installed release builds and every `run-port*` / `run-release*` local launch stay pixel-identical.
+
+- `justfile` adds a single `export LUCODE_DEV_MODE=1` to the `run` recipe only.
+- `src-tauri/src/main.rs` adds `lucode_dev_mode_from_env` (case-insensitive, rejects `0|false|no|off|empty`, covered by unit tests) and extends `get_development_info` with a `devMode: bool` field alongside the existing `isDevelopment` / `branch` fields.
+- `src/components/DevModeIndicator.tsx` renders the red pill using existing theme tokens (`--color-accent-red-*`, `theme.fontSize.caption`, `theme.fontFamily.sans`), is `data-no-drag` so the pill doesn't hijack window dragging, and returns `null` when the backend reports `devMode === false` or the command rejects.
+- `src/components/TopBar.tsx` mounts `DevModeIndicator` immediately after the 70 px traffic-light gutter so the pill lives inside the overlay title-bar region; DOM-ordering is regression-tested in `TopBar.test.tsx`.
+
 ## History: contrast-aware reference pill text
 
 History reference pills in the git graph used the pill background color for branches, tags, remotes, and bases, but always rendered the text as `var(--color-text-primary)`. That left bright palette colors such as the amber swimlane `#FFB000` and the default tag color `#e5c07b` with low-contrast near-white text, while darker colors had the inverse problem in lighter themes. The fix keeps the existing ref/swimlane palette intact and only changes the pill foreground selection.

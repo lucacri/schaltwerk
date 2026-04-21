@@ -10,6 +10,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { OpenInSplitButton } from './OpenInSplitButton'
 import { BranchIndicator } from './BranchIndicator'
+import { DevModeIndicator } from './DevModeIndicator'
 import { logger } from '../utils/logger'
 import { GithubMenuButton } from './github/GithubMenuButton'
 import { GitlabMenuButton } from './gitlab/GitlabMenuButton'
@@ -141,7 +142,9 @@ export function TopBar({
       <div className="flex items-center h-full">
         {/* macOS traffic lights space - properly sized */}
         {isMac && <div className="w-[70px] shrink-0" data-tauri-drag-region />}
-        
+
+        {isMac && <DevModeIndicator />}
+
         {/* Home button */}
         <button
           onClick={onGoHome}

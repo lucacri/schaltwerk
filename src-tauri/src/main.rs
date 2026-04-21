@@ -238,30 +238,41 @@ async fn list_lucode_tmux_servers()
     list_lucode_tmux_servers(&projects).await
 }
 
+fn lucode_dev_mode_from_env(value: Option<&str>) -> bool {
+    match value.map(str::trim) {
+        Some(v) if !v.is_empty() => !matches!(
+            v.to_ascii_lowercase().as_str(),
+            "0" | "false" | "no" | "off"
+        ),
+        _ => false,
+    }
+}
+
 #[tauri::command]
 fn get_development_info() -> Result<serde_json::Value, String> {
-    // Only return development info in debug builds
+    let dev_mode = lucode_dev_mode_from_env(std::env::var("LUCODE_DEV_MODE").ok().as_deref());
+
     if cfg!(debug_assertions) {
-        // Get current git branch
-        let branch_result = std::fs::canonicalize(std::env::current_dir().unwrap_or_default())
+        let branch = std::fs::canonicalize(std::env::current_dir().unwrap_or_default())
             .ok()
             .and_then(|cwd| git2::Repository::discover(cwd).ok())
             .and_then(|repo| {
                 repo.head()
                     .ok()
                     .and_then(|h| h.shorthand().map(|s| s.to_string()))
-            });
-
-        let branch = branch_result.unwrap_or_default();
+            })
+            .unwrap_or_default();
 
         Ok(serde_json::json!({
             "isDevelopment": true,
-            "branch": branch
+            "branch": branch,
+            "devMode": dev_mode,
         }))
     } else {
         Ok(serde_json::json!({
             "isDevelopment": false,
-            "branch": null
+            "branch": null,
+            "devMode": dev_mode,
         }))
     }
 }
@@ -2089,5 +2100,30 @@ mod tests {
         assert_eq!(updated, "vscode");
 
         EnvAdapter::remove_var("LUCODE_APP_CONFIG_DB_PATH");
+    }
+
+    #[test]
+    fn lucode_dev_mode_from_env_returns_false_for_missing() {
+        assert!(!super::lucode_dev_mode_from_env(None));
+    }
+
+    #[test]
+    fn lucode_dev_mode_from_env_returns_false_for_empty_or_disabled() {
+        assert!(!super::lucode_dev_mode_from_env(Some("")));
+        assert!(!super::lucode_dev_mode_from_env(Some("   ")));
+        assert!(!super::lucode_dev_mode_from_env(Some("0")));
+        assert!(!super::lucode_dev_mode_from_env(Some("false")));
+        assert!(!super::lucode_dev_mode_from_env(Some("FALSE")));
+        assert!(!super::lucode_dev_mode_from_env(Some("no")));
+        assert!(!super::lucode_dev_mode_from_env(Some("off")));
+    }
+
+    #[test]
+    fn lucode_dev_mode_from_env_returns_true_for_enabled() {
+        assert!(super::lucode_dev_mode_from_env(Some("1")));
+        assert!(super::lucode_dev_mode_from_env(Some("true")));
+        assert!(super::lucode_dev_mode_from_env(Some("TRUE")));
+        assert!(super::lucode_dev_mode_from_env(Some("yes")));
+        assert!(super::lucode_dev_mode_from_env(Some("on")));
     }
 }
