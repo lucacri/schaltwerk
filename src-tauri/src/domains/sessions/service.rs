@@ -570,6 +570,70 @@ mod service_unified_tests {
             .unwrap()
     }
 
+    fn create_consolidation_candidate_session(
+        manager: &SessionManager,
+        temp_dir: &TempDir,
+        name: &str,
+        round_id: &str,
+        version_group_id: &str,
+    ) -> Session {
+        let repo = temp_dir.path().join("repo");
+        if !repo.join(".git").exists() {
+            init_git_repo(&repo);
+        }
+
+        manager
+            .db_manager
+            .upsert_consolidation_round(round_id, version_group_id, &[], "confirm")
+            .unwrap();
+
+        manager
+            .create_session_with_agent(SessionCreationParams {
+                name,
+                prompt: Some("candidate work"),
+                base_branch: None,
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(version_group_id),
+                version_number: Some(1),
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: None,
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .unwrap()
+    }
+
+    fn delete_session_branch_ref(repo_path: &Path, branch: &str) {
+        let repo = git2::Repository::open(repo_path).unwrap();
+        let mut reference = repo
+            .find_reference(&format!("refs/heads/{branch}"))
+            .unwrap();
+        reference.delete().unwrap();
+    }
+
+    fn assert_cancelled_with_stub(manager: &SessionManager, session_name: &str) {
+        let loaded = manager.get_session(session_name).unwrap();
+        assert_eq!(loaded.status, SessionStatus::Cancelled);
+        assert!(!loaded.resume_allowed);
+        assert!(
+            loaded
+                .consolidation_report
+                .as_deref()
+                .is_some_and(|report| report.contains("Auto-filed stub report"))
+        );
+        assert_eq!(
+            loaded.consolidation_report_source.as_deref(),
+            Some(crate::domains::sessions::consolidation_stub::STUB_SOURCE)
+        );
+    }
+
     fn build_force_restart_command(
         manager: &SessionManager,
         session_name: &str,
@@ -681,6 +745,133 @@ mod service_unified_tests {
         let loaded = manager.get_session(&session.name).unwrap();
         assert!(loaded.consolidation_report.is_none());
         assert!(loaded.consolidation_report_source.is_none());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn fast_cancel_session_idempotent_when_worktree_and_branch_missing() {
+        let (manager, temp_dir) = create_test_session_manager();
+        let repo = temp_dir.path().join("repo");
+        let session = create_consolidation_candidate_session(
+            &manager,
+            &temp_dir,
+            "missing-both",
+            "round-missing-both",
+            "vg-missing-both",
+        );
+
+        std::fs::remove_dir_all(&session.worktree_path).unwrap();
+        delete_session_branch_ref(&repo, &session.branch);
+
+        assert!(
+            manager
+                .detect_cancel_blocker(&session.name)
+                .unwrap()
+                .is_none()
+        );
+
+        manager.fast_cancel_session(&session.name).await.unwrap();
+
+        assert!(!git::branch_exists(&repo, &session.branch).unwrap());
+        assert_cancelled_with_stub(&manager, &session.name);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn fast_cancel_session_idempotent_when_worktree_missing_branch_present() {
+        let (manager, temp_dir) = create_test_session_manager();
+        let repo = temp_dir.path().join("repo");
+        let session = create_consolidation_candidate_session(
+            &manager,
+            &temp_dir,
+            "missing-worktree",
+            "round-missing-worktree",
+            "vg-missing-worktree",
+        );
+
+        std::fs::remove_dir_all(&session.worktree_path).unwrap();
+
+        assert!(git::branch_exists(&repo, &session.branch).unwrap());
+        assert!(
+            manager
+                .detect_cancel_blocker(&session.name)
+                .unwrap()
+                .is_none()
+        );
+
+        manager.fast_cancel_session(&session.name).await.unwrap();
+
+        assert!(!git::is_worktree_registered(&repo, &session.worktree_path).unwrap());
+        assert!(!git::branch_exists(&repo, &session.branch).unwrap());
+        assert_cancelled_with_stub(&manager, &session.name);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn fast_cancel_session_idempotent_when_branch_missing_worktree_present() {
+        let (manager, temp_dir) = create_test_session_manager();
+        let repo = temp_dir.path().join("repo");
+        let session = create_consolidation_candidate_session(
+            &manager,
+            &temp_dir,
+            "missing-branch",
+            "round-missing-branch",
+            "vg-missing-branch",
+        );
+
+        delete_session_branch_ref(&repo, &session.branch);
+
+        assert!(session.worktree_path.exists());
+        assert!(
+            manager
+                .detect_cancel_blocker(&session.name)
+                .unwrap()
+                .is_none()
+        );
+
+        manager.fast_cancel_session(&session.name).await.unwrap();
+
+        assert!(!session.worktree_path.exists());
+        assert!(!git::branch_exists(&repo, &session.branch).unwrap());
+        assert_cancelled_with_stub(&manager, &session.name);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn fast_cancel_session_still_blocks_live_session() {
+        let (manager, temp_dir) = create_test_session_manager();
+        let session = create_consolidation_candidate_session(
+            &manager,
+            &temp_dir,
+            "live-blocker",
+            "round-live-blocker",
+            "vg-live-blocker",
+        );
+
+        std::fs::write(session.worktree_path.join("dirty.txt"), "dirty").unwrap();
+
+        let blocker = manager
+            .detect_cancel_blocker(&session.name)
+            .unwrap()
+            .expect("dirty worktree should still block fast cancel");
+        assert!(matches!(
+            blocker,
+            crate::domains::sessions::lifecycle::cancellation::CancelBlocker::UncommittedChanges { .. }
+        ));
+
+        let error = manager
+            .fast_cancel_session(&session.name)
+            .await
+            .expect_err("dirty worktree should still be blocked");
+        assert!(
+            error
+                .downcast_ref::<crate::domains::sessions::lifecycle::cancellation::CancelBlockedError>()
+                .is_some()
+        );
+
+        let loaded = manager.get_session(&session.name).unwrap();
+        assert_eq!(loaded.status, SessionStatus::Active);
+        assert!(loaded.consolidation_report.is_none());
     }
 
     #[test]
@@ -2398,7 +2589,10 @@ mod service_unified_tests {
         );
     }
 
-    fn sample_review_comment(id: &str, ts: i64) -> crate::infrastructure::database::PersistedSpecReviewComment {
+    fn sample_review_comment(
+        id: &str,
+        ts: i64,
+    ) -> crate::infrastructure::database::PersistedSpecReviewComment {
         crate::infrastructure::database::PersistedSpecReviewComment {
             id: id.to_string(),
             spec_id: String::new(),
@@ -2418,14 +2612,15 @@ mod service_unified_tests {
     fn save_and_list_spec_review_comments_round_trips_by_name() {
         let (manager, tmp) = create_test_session_manager();
         init_review_repo(&tmp);
-        manager
-            .create_spec_session("review-me", "body")
-            .unwrap();
+        manager.create_spec_session("review-me", "body").unwrap();
 
         manager
             .save_spec_review_comments(
                 "review-me",
-                &[sample_review_comment("c1", 100), sample_review_comment("c2", 200)],
+                &[
+                    sample_review_comment("c1", 100),
+                    sample_review_comment("c2", 200),
+                ],
             )
             .unwrap();
 
@@ -2440,9 +2635,7 @@ mod service_unified_tests {
     fn save_spec_review_comments_replaces_prior_draft() {
         let (manager, tmp) = create_test_session_manager();
         init_review_repo(&tmp);
-        manager
-            .create_spec_session("replace-spec", "body")
-            .unwrap();
+        manager.create_spec_session("replace-spec", "body").unwrap();
 
         manager
             .save_spec_review_comments("replace-spec", &[sample_review_comment("old", 1)])
@@ -2450,7 +2643,10 @@ mod service_unified_tests {
         manager
             .save_spec_review_comments(
                 "replace-spec",
-                &[sample_review_comment("new-a", 2), sample_review_comment("new-b", 3)],
+                &[
+                    sample_review_comment("new-a", 2),
+                    sample_review_comment("new-b", 3),
+                ],
             )
             .unwrap();
 
@@ -2463,9 +2659,7 @@ mod service_unified_tests {
     fn clear_spec_review_comments_empties_the_store() {
         let (manager, tmp) = create_test_session_manager();
         init_review_repo(&tmp);
-        manager
-            .create_spec_session("clear-spec", "body")
-            .unwrap();
+        manager.create_spec_session("clear-spec", "body").unwrap();
         manager
             .save_spec_review_comments("clear-spec", &[sample_review_comment("c", 1)])
             .unwrap();
@@ -3726,7 +3920,11 @@ impl SessionManager {
             amp_mcp_servers: None,
             agent_type_override: None,
             skip_prompt: false,
-            force_restart_prompt_template: if force_restart { Some(template.as_str()) } else { None },
+            force_restart_prompt_template: if force_restart {
+                Some(template.as_str())
+            } else {
+                None
+            },
         })
     }
 

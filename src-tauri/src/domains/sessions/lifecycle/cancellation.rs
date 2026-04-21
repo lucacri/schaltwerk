@@ -35,6 +35,19 @@ pub struct CancellationResult {
     pub errors: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct CancellationArtifacts {
+    worktree_exists: bool,
+    worktree_registered: bool,
+    branch_exists: bool,
+}
+
+impl CancellationArtifacts {
+    fn fully_absent(self) -> bool {
+        !self.worktree_exists && !self.worktree_registered && !self.branch_exists
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum CancelBlocker {
@@ -72,10 +85,16 @@ fn detect_cancel_blocker_for(
         return Ok(None);
     }
 
-    if !session.worktree_path.exists() {
-        return Ok(Some(CancelBlocker::OrphanedWorktree {
-            expected_path: session.worktree_path.clone(),
-        }));
+    let artifacts = read_cancellation_artifacts(repo_path, session)?;
+    if !artifacts.worktree_exists || !artifacts.branch_exists {
+        warn!(
+            "Cancel {}: missing artifacts (worktree_exists={}, worktree_registered={}, branch_exists={}), treating cancel as idempotent",
+            session.name,
+            artifacts.worktree_exists,
+            artifacts.worktree_registered,
+            artifacts.branch_exists
+        );
+        return Ok(None);
     }
 
     match git::worktree_lock_reason(repo_path, &session.worktree_path) {
@@ -97,6 +116,39 @@ fn detect_cancel_blocker_for(
             message: error.to_string(),
         })),
     }
+}
+
+fn read_cancellation_artifacts(
+    repo_path: &Path,
+    session: &Session,
+) -> Result<CancellationArtifacts> {
+    Ok(CancellationArtifacts {
+        worktree_exists: session.worktree_path.exists(),
+        worktree_registered: is_worktree_registered(repo_path, &session.worktree_path)?,
+        branch_exists: git::branch_exists(repo_path, &session.branch)?,
+    })
+}
+
+fn is_worktree_registered(repo_path: &Path, worktree_path: &Path) -> Result<bool> {
+    let repo = git2::Repository::open(repo_path)?;
+    let worktrees = repo.worktrees()?;
+    let canonical_worktree_path = worktree_path
+        .canonicalize()
+        .unwrap_or_else(|_| worktree_path.to_path_buf());
+
+    for wt_name in worktrees.iter().flatten() {
+        if let Ok(wt) = repo.find_worktree(wt_name) {
+            let wt_path = wt.path();
+            let canonical_wt_path = wt_path
+                .canonicalize()
+                .unwrap_or_else(|_| wt_path.to_path_buf());
+            if canonical_wt_path == canonical_worktree_path {
+                return Ok(true);
+            }
+        }
+    }
+
+    Ok(false)
 }
 
 impl StandaloneCancellationCoordinator {
@@ -137,6 +189,14 @@ impl StandaloneCancellationCoordinator {
             errors: Vec::new(),
         };
 
+        let artifacts = read_cancellation_artifacts(&self.repo_path, &self.session)?;
+        if artifacts.fully_absent() {
+            warn!(
+                "Cancel {}: worktree and branch already gone; finalizing cancel",
+                self.session.name
+            );
+        }
+
         Self::check_uncommitted_changes(&self.session);
 
         if !config.skip_process_cleanup {
@@ -151,7 +211,7 @@ impl StandaloneCancellationCoordinator {
         )
         .await
         {
-            Ok(()) => result.worktree_removed = true,
+            Ok(removed) => result.worktree_removed = removed,
             Err(e) => result.errors.push(format!("Worktree removal failed: {e}")),
         }
 
@@ -163,7 +223,7 @@ impl StandaloneCancellationCoordinator {
             )
             .await
             {
-                Ok(()) => result.branch_deleted = true,
+                Ok(deleted) => result.branch_deleted = deleted,
                 Err(e) => result.errors.push(format!("Branch deletion failed: {e}")),
             }
         }
@@ -228,14 +288,16 @@ impl StandaloneCancellationCoordinator {
         repo_path: &Path,
         worktree_path: &Path,
         session_name: &str,
-    ) -> Result<()> {
-        if !worktree_path.exists() {
+    ) -> Result<bool> {
+        let worktree_exists = worktree_path.exists();
+        let worktree_registered = is_worktree_registered(repo_path, worktree_path)?;
+        if !worktree_exists && !worktree_registered {
             warn!(
                 "Cancel {}: Worktree path missing, skipping removal: {}",
                 session_name,
                 worktree_path.display()
             );
-            return Ok(());
+            return Ok(false);
         }
 
         let repo_path = repo_path.to_path_buf();
@@ -245,13 +307,17 @@ impl StandaloneCancellationCoordinator {
         tokio::task::spawn_blocking(move || {
             git::remove_worktree(&repo_path, &worktree_path)?;
             info!("Cancel {session_name}: Removed worktree");
-            Ok::<(), anyhow::Error>(())
+            Ok::<bool, anyhow::Error>(true)
         })
         .await
         .map_err(|e| anyhow!("Task join error: {e}"))?
     }
 
-    async fn delete_branch_async(repo_path: &Path, branch: &str, session_name: &str) -> Result<()> {
+    async fn delete_branch_async(
+        repo_path: &Path,
+        branch: &str,
+        session_name: &str,
+    ) -> Result<bool> {
         let repo_path = repo_path.to_path_buf();
         let branch = branch.to_string();
         let session_name = session_name.to_string();
@@ -259,12 +325,12 @@ impl StandaloneCancellationCoordinator {
         tokio::task::spawn_blocking(move || {
             if !git::branch_exists(&repo_path, &branch)? {
                 info!("Cancel {session_name}: Branch doesn't exist, skipping deletion");
-                return Ok(());
+                return Ok(false);
             }
 
             git::delete_branch(&repo_path, &branch)?;
             info!("Deleted branch '{branch}'");
-            Ok::<(), anyhow::Error>(())
+            Ok::<bool, anyhow::Error>(true)
         })
         .await
         .map_err(|e| anyhow!("Task join error: {e}"))?
@@ -315,6 +381,14 @@ impl<'a> CancellationCoordinator<'a> {
             branch_deleted: false,
             errors: Vec::new(),
         };
+
+        let artifacts = read_cancellation_artifacts(self.repo_path, session)?;
+        if artifacts.fully_absent() {
+            warn!(
+                "Cancel {}: worktree and branch already gone; finalizing cancel",
+                session.name
+            );
+        }
 
         self.check_uncommitted_changes(session);
 
@@ -373,6 +447,14 @@ impl<'a> CancellationCoordinator<'a> {
             errors: Vec::new(),
         };
 
+        let artifacts = read_cancellation_artifacts(self.repo_path, session)?;
+        if artifacts.fully_absent() {
+            warn!(
+                "Fast cancel {}: worktree and branch already gone; finalizing cancel",
+                session.name
+            );
+        }
+
         self.check_uncommitted_changes(session);
 
         if !config.skip_process_cleanup {
@@ -384,14 +466,14 @@ impl<'a> CancellationCoordinator<'a> {
         match Self::remove_worktree_async(self.repo_path, &session.worktree_path, &session.name)
             .await
         {
-            Ok(()) => result.worktree_removed = true,
+            Ok(removed) => result.worktree_removed = removed,
             Err(e) => result.errors.push(format!("Worktree removal failed: {e}")),
         }
 
         if !config.skip_branch_deletion {
             // The branch remains "checked out" while the worktree exists, so delete it only after pruning succeeds.
             match Self::delete_branch_async(self.repo_path, &session.branch, &session.name).await {
-                Ok(()) => result.branch_deleted = true,
+                Ok(deleted) => result.branch_deleted = deleted,
                 Err(e) => result.errors.push(format!("Branch deletion failed: {e}")),
             }
         }
@@ -450,7 +532,7 @@ impl<'a> CancellationCoordinator<'a> {
         )
         .await
         {
-            Ok(()) => result.worktree_removed = true,
+            Ok(removed) => result.worktree_removed = removed,
             Err(error) => {
                 let message = format!("Force worktree removal failed: {error}");
                 warn!("Force cancel {}: {}", session.name, message);
@@ -460,7 +542,7 @@ impl<'a> CancellationCoordinator<'a> {
 
         match Self::force_delete_branch_async(self.repo_path, &session.branch, &session.name).await
         {
-            Ok(()) => result.branch_deleted = true,
+            Ok(deleted) => result.branch_deleted = deleted,
             Err(error) => {
                 let message = format!("Force branch deletion failed: {error}");
                 warn!("Force cancel {}: {}", session.name, message);
@@ -572,7 +654,18 @@ impl<'a> CancellationCoordinator<'a> {
     }
 
     fn remove_session_worktree(&self, session: &Session, errors: &mut Vec<String>) -> bool {
-        if !session.worktree_path.exists() {
+        let worktree_registered =
+            match is_worktree_registered(self.repo_path, &session.worktree_path) {
+                Ok(registered) => registered,
+                Err(e) => {
+                    let msg = format!("Failed to check worktree registration: {e}");
+                    warn!("Cancel {}: {}", session.name, msg);
+                    errors.push(msg);
+                    return false;
+                }
+            };
+
+        if !session.worktree_path.exists() && !worktree_registered {
             warn!(
                 "Worktree path missing, skipping removal: {}",
                 session.worktree_path.display()
@@ -654,14 +747,16 @@ impl<'a> CancellationCoordinator<'a> {
         repo_path: &Path,
         worktree_path: &Path,
         session_name: &str,
-    ) -> Result<()> {
-        if !worktree_path.exists() {
+    ) -> Result<bool> {
+        let worktree_exists = worktree_path.exists();
+        let worktree_registered = is_worktree_registered(repo_path, worktree_path)?;
+        if !worktree_exists && !worktree_registered {
             warn!(
                 "Fast cancel {}: Worktree path missing, skipping removal: {}",
                 session_name,
                 worktree_path.display()
             );
-            return Ok(());
+            return Ok(false);
         }
 
         let repo_path = repo_path.to_path_buf();
@@ -671,7 +766,7 @@ impl<'a> CancellationCoordinator<'a> {
         tokio::task::spawn_blocking(move || {
             git::remove_worktree(&repo_path, &worktree_path)?;
             info!("Fast cancel {session_name}: Removed worktree");
-            Ok::<(), anyhow::Error>(())
+            Ok::<bool, anyhow::Error>(true)
         })
         .await
         .map_err(|e| anyhow!("Task join error: {e}"))?
@@ -681,7 +776,18 @@ impl<'a> CancellationCoordinator<'a> {
         repo_path: &Path,
         worktree_path: &Path,
         session_name: &str,
-    ) -> Result<()> {
+    ) -> Result<bool> {
+        let worktree_exists = worktree_path.exists();
+        let worktree_registered = is_worktree_registered(repo_path, worktree_path)?;
+        if !worktree_exists && !worktree_registered {
+            warn!(
+                "Force cancel {}: Worktree path missing, skipping removal: {}",
+                session_name,
+                worktree_path.display()
+            );
+            return Ok(false);
+        }
+
         let repo_path = repo_path.to_path_buf();
         let worktree_path = worktree_path.to_path_buf();
         let session_name = session_name.to_string();
@@ -689,19 +795,23 @@ impl<'a> CancellationCoordinator<'a> {
         tokio::task::spawn_blocking(move || {
             git::force_remove_worktree(&repo_path, &worktree_path)?;
             info!("Force cancel {session_name}: Removed or pruned worktree");
-            Ok::<(), anyhow::Error>(())
+            Ok::<bool, anyhow::Error>(true)
         })
         .await
         .map_err(|e| anyhow!("Task join error: {e}"))?
     }
 
-    async fn delete_branch_async(repo_path: &Path, branch: &str, session_name: &str) -> Result<()> {
+    async fn delete_branch_async(
+        repo_path: &Path,
+        branch: &str,
+        session_name: &str,
+    ) -> Result<bool> {
         use git2::{BranchType, Repository};
 
         let branch_exists = git::branch_exists(repo_path, branch)?;
         if !branch_exists {
             info!("Fast cancel {session_name}: Branch doesn't exist, skipping deletion");
-            return Ok(());
+            return Ok(false);
         }
 
         let repo_path = repo_path.to_path_buf();
@@ -714,7 +824,7 @@ impl<'a> CancellationCoordinator<'a> {
                 .with_context(|| format!("Failed to find branch '{branch}' for deletion"))?;
             br.delete()?;
             info!("Deleted branch '{branch}'");
-            Ok::<(), anyhow::Error>(())
+            Ok::<bool, anyhow::Error>(true)
         })
         .await
         .map_err(|e| anyhow!("Task join error: {e}"))?
@@ -724,11 +834,11 @@ impl<'a> CancellationCoordinator<'a> {
         repo_path: &Path,
         branch: &str,
         session_name: &str,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let branch_exists = git::branch_exists(repo_path, branch)?;
         if !branch_exists {
             info!("Force cancel {session_name}: Branch doesn't exist, skipping deletion");
-            return Ok(());
+            return Ok(false);
         }
 
         let repo_path = repo_path.to_path_buf();
@@ -738,7 +848,7 @@ impl<'a> CancellationCoordinator<'a> {
         tokio::task::spawn_blocking(move || {
             git::force_delete_branch(&repo_path, &branch)?;
             info!("Force cancel {session_name}: Deleted branch '{branch}'");
-            Ok::<(), anyhow::Error>(())
+            Ok::<bool, anyhow::Error>(true)
         })
         .await
         .map_err(|e| anyhow!("Task join error: {e}"))?
@@ -866,7 +976,7 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_cancel_session_with_missing_worktree() {
+    fn test_cancel_session_with_missing_worktree_is_idempotent() {
         let (_temp_dir, repo_path) = setup_test_repo();
         let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
         let db_manager = SessionDbManager::new(db, repo_path.clone());
@@ -876,17 +986,17 @@ mod tests {
         db_manager.create_session(&session).unwrap();
 
         let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
-        let result = coordinator.cancel_session(&session, CancellationConfig::default());
+        let result = coordinator
+            .cancel_session(&session, CancellationConfig::default())
+            .expect("missing worktree should be treated as idempotent cancel");
 
-        assert!(result.is_err());
-        let blocked = result
-            .unwrap_err()
-            .downcast::<CancelBlockedError>()
-            .expect("missing worktree should return typed blocker");
-        assert!(matches!(
-            blocked.blocker,
-            CancelBlocker::OrphanedWorktree { expected_path } if expected_path == session.worktree_path
-        ));
+        assert!(!result.worktree_removed);
+        assert!(!result.branch_deleted);
+        assert!(result.errors.is_empty());
+
+        let updated = db_manager.get_session_by_id(&session.id).unwrap();
+        assert_eq!(updated.status, SessionStatus::Cancelled);
+        assert!(!updated.resume_allowed);
     }
 
     #[test]
@@ -943,23 +1053,21 @@ mod tests {
 
     #[test]
     #[serial]
-    fn cancel_blocker_detects_orphaned_worktree() {
+    fn cancel_blocker_skips_missing_worktree() {
         let (_temp_dir, repo_path) = setup_test_repo();
         let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
         let db_manager = SessionDbManager::new(db, repo_path.clone());
 
-        let expected_path = repo_path.join(".lucode/worktrees/missing");
-        let session = create_test_session(&repo_path, expected_path.clone());
+        let session = create_test_session(&repo_path, repo_path.join(".lucode/worktrees/missing"));
         let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
         let blocker = coordinator
             .detect_cancel_blocker(&session, &CancellationConfig::default())
-            .unwrap()
-            .expect("missing worktree should block normal cancellation");
+            .unwrap();
 
-        assert!(matches!(
-            blocker,
-            CancelBlocker::OrphanedWorktree { expected_path: path } if path == expected_path
-        ));
+        assert!(
+            blocker.is_none(),
+            "missing worktree must no longer block cancel so ghosts self-heal"
+        );
     }
 
     #[test]
@@ -994,6 +1102,7 @@ mod tests {
         let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
         let db_manager = SessionDbManager::new(db, repo_path.clone());
 
+        git::ensure_branch_at_head(&repo_path, "lucode/test-session").unwrap();
         let worktree_path = repo_path.join(".lucode/worktrees/not-a-git-worktree");
         std::fs::create_dir_all(&worktree_path).unwrap();
 
