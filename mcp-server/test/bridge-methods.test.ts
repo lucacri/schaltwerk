@@ -364,7 +364,6 @@ describe('LucodeBridge untested methods', () => {
 
       const bridge = new LucodeBridge()
       const result = await bridge.startImprovePlanRound('alpha_spec', {
-        candidateCount: 1,
         agentType: 'codex',
         baseBranch: 'main',
       })
@@ -373,7 +372,6 @@ describe('LucodeBridge untested methods', () => {
       const [url, init] = fetchMock.mock.calls[0]
       expect(String(url)).toContain('/api/specs/alpha_spec/improve-plan')
       expect(JSON.parse(String(init?.body))).toEqual({
-        candidate_count: 1,
         agent_type: 'codex',
         base_branch: 'main',
       })

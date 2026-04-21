@@ -384,14 +384,12 @@ describe('MCP tool handler logic', () => {
     it('starts an improve-plan round and returns structured response', async () => {
       const result = await callTool('lucode_improve_plan', {
         session_name: 'alpha_spec',
-        candidate_count: 2,
         agent_type: 'codex',
       })
 
       expect(startImprovePlanRoundMock).toHaveBeenCalledWith(
         'alpha_spec',
         {
-          candidateCount: 2,
           agentType: 'codex',
           baseBranch: undefined,
         },

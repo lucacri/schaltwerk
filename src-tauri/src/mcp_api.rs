@@ -4850,10 +4850,7 @@ mod tests {
             &db,
             &manager,
             "lock-spec",
-            StartImprovePlanRoundParams {
-                candidate_count: Some(1),
-                ..Default::default()
-            },
+            StartImprovePlanRoundParams::default(),
             &plan_template,
             move |_params| {
                 let core_for_read = Arc::clone(&core_for_launcher);
@@ -4890,31 +4887,23 @@ mod tests {
             &db,
             &manager,
             "launch-fail-spec",
-            StartImprovePlanRoundParams {
-                candidate_count: Some(2),
-                ..StartImprovePlanRoundParams::default()
-            },
+            StartImprovePlanRoundParams::default(),
             &plan_template,
             |params| {
                 let name = params.session_name.clone();
-                launched.borrow_mut().push(name.clone());
-                async move {
-                    if name.ends_with("-v2") {
-                        Err("forced launch failure".to_string())
-                    } else {
-                        Ok("started".to_string())
-                    }
-                }
+                launched.borrow_mut().push(name);
+                async move { Err("forced launch failure".to_string()) }
             },
             |_| {},
         )
         .await;
 
-        let err = result.expect_err("second launch should fail");
+        let err = result.expect_err("launch failure should surface");
         assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
         assert!(err.1.contains("forced launch failure"));
         let launched_names = launched.into_inner();
-        assert_eq!(launched_names.len(), 2);
+        assert_eq!(launched_names.len(), 1);
+        assert!(launched_names[0].ends_with("-v1"));
 
         let refreshed_spec = db
             .get_spec_by_name(&repo_path, "launch-fail-spec")
@@ -4937,6 +4926,50 @@ mod tests {
             "rolled back candidates must be deleted: {:?}",
             sessions.iter().map(|s| &s.name).collect::<Vec<_>>()
         );
+    }
+
+    #[tokio::test]
+    async fn start_improve_plan_round_produces_single_candidate_by_default() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = SessionManager::new(db.clone(), repo_path.clone());
+        let spec = manager
+            .create_spec_session("single-plan-spec", "Clarified problem")
+            .expect("create spec");
+        db.update_spec_stage(&spec.id, SpecStage::Clarified)
+            .expect("clarify spec");
+
+        let launched: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
+        let plan_template =
+            lucode::domains::settings::default_plan_candidate_prompt_template();
+        let response = start_improve_plan_round_with_launcher(
+            &db,
+            &manager,
+            "single-plan-spec",
+            StartImprovePlanRoundParams::default(),
+            &plan_template,
+            |params| {
+                let name = params.session_name.clone();
+                launched.borrow_mut().push(name);
+                async move { Ok("started".to_string()) }
+            },
+            |_| {},
+        )
+        .await
+        .expect("default round should succeed");
+
+        assert_eq!(
+            response.candidate_sessions.len(),
+            1,
+            "default Improve Plan must produce exactly one candidate, got {:?}",
+            response.candidate_sessions
+        );
+        assert!(
+            response.candidate_sessions[0].ends_with("-v1"),
+            "single candidate must be version 1, got {}",
+            response.candidate_sessions[0]
+        );
+        assert_eq!(launched.into_inner().len(), 1);
     }
 
     #[test]
@@ -6637,8 +6670,6 @@ struct ImprovePlanRoundRequest {
     #[serde(default)]
     base_branch: Option<String>,
     #[serde(default)]
-    candidate_count: Option<usize>,
-    #[serde(default)]
     confirmation_mode: Option<String>,
 }
 
@@ -6646,7 +6677,6 @@ struct ImprovePlanRoundRequest {
 pub(crate) struct StartImprovePlanRoundParams {
     pub agent_type: Option<String>,
     pub base_branch: Option<String>,
-    pub candidate_count: Option<usize>,
     pub confirmation_mode: Option<String>,
 }
 
@@ -6655,7 +6685,6 @@ impl From<ImprovePlanRoundRequest> for StartImprovePlanRoundParams {
         Self {
             agent_type: value.agent_type,
             base_branch: value.base_branch,
-            candidate_count: value.candidate_count,
             confirmation_mode: value.confirmation_mode,
         }
     }
@@ -6773,7 +6802,6 @@ fn create_improve_plan_round_start_context(
         created_session_names: Vec::new(),
     })?;
 
-    let candidate_count = params.candidate_count.unwrap_or(2).clamp(1, 6);
     let round_id = Uuid::new_v4().to_string();
     let round_slug = round_id
         .split('-')
@@ -6817,44 +6845,42 @@ fn create_improve_plan_round_start_context(
         });
     }
 
-    for index in 0..candidate_count {
-        let session_name = format!("{}-plan-{}-v{}", spec.name, round_slug, index + 1);
-        match manager.create_session_with_agent(SessionCreationParams {
-            name: &session_name,
-            prompt: Some(&prompt),
-            base_branch: params.base_branch.as_deref(),
-            custom_branch: None,
-            use_existing_branch: false,
-            sync_with_origin: false,
-            was_auto_generated: false,
-            version_group_id: Some(&version_group_id),
-            version_number: Some((index + 1) as i32),
-            epic_id: spec.epic_id.as_deref(),
-            agent_type: params.agent_type.as_deref(),
-            pr_number: None,
-            is_consolidation: true,
-            consolidation_source_ids: Some(source_ids.clone()),
-            consolidation_round_id: Some(&round_id),
-            consolidation_role: Some("candidate"),
-            consolidation_confirmation_mode: Some(confirmation_mode),
-        }) {
-            Ok(session) => {
-                created_session_names.push(session.name.clone());
-                candidate_sessions.push(session.name.clone());
-                launches.push(PlanCandidateLaunch {
-                    session_name: session.name,
-                    agent_type: session.original_agent_type,
-                });
-            }
-            Err(err) => {
-                return Err(ImprovePlanRoundCreateFailure {
-                    status: StatusCode::INTERNAL_SERVER_ERROR,
-                    message: format!("Failed to create plan candidate: {err}"),
-                    spec_id: Some(spec.id.clone()),
-                    round_id: Some(round_id.clone()),
-                    created_session_names,
-                });
-            }
+    let session_name = format!("{}-plan-{}-v1", spec.name, round_slug);
+    match manager.create_session_with_agent(SessionCreationParams {
+        name: &session_name,
+        prompt: Some(&prompt),
+        base_branch: params.base_branch.as_deref(),
+        custom_branch: None,
+        use_existing_branch: false,
+        sync_with_origin: false,
+        was_auto_generated: false,
+        version_group_id: Some(&version_group_id),
+        version_number: Some(1),
+        epic_id: spec.epic_id.as_deref(),
+        agent_type: params.agent_type.as_deref(),
+        pr_number: None,
+        is_consolidation: true,
+        consolidation_source_ids: Some(source_ids.clone()),
+        consolidation_round_id: Some(&round_id),
+        consolidation_role: Some("candidate"),
+        consolidation_confirmation_mode: Some(confirmation_mode),
+    }) {
+        Ok(session) => {
+            created_session_names.push(session.name.clone());
+            candidate_sessions.push(session.name.clone());
+            launches.push(PlanCandidateLaunch {
+                session_name: session.name,
+                agent_type: session.original_agent_type,
+            });
+        }
+        Err(err) => {
+            return Err(ImprovePlanRoundCreateFailure {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: format!("Failed to create plan candidate: {err}"),
+                spec_id: Some(spec.id.clone()),
+                round_id: Some(round_id.clone()),
+                created_session_names,
+            });
         }
     }
 
@@ -6960,7 +6986,6 @@ async fn start_improve_plan_round(
         ImprovePlanRoundRequest {
             agent_type: None,
             base_branch: None,
-            candidate_count: None,
             confirmation_mode: None,
         }
     } else {

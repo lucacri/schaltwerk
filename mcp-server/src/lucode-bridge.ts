@@ -1478,7 +1478,7 @@ export class LucodeBridge {
 
   async startImprovePlanRound(
     sessionName: string,
-    options?: { candidateCount?: number; agentType?: string; baseBranch?: string },
+    options?: { agentType?: string; baseBranch?: string },
     projectPath?: string
   ): Promise<ImprovePlanRoundResult> {
     if (!sessionName || sessionName.trim().length === 0) {
@@ -1492,7 +1492,6 @@ export class LucodeBridge {
         ...this.getProjectHeaders(projectPath)
       },
       body: JSON.stringify({
-        candidate_count: options?.candidateCount,
         agent_type: options?.agentType,
         base_branch: options?.baseBranch,
       })

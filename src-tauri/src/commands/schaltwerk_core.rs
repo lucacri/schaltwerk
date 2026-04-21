@@ -2094,7 +2094,6 @@ pub async fn schaltwerk_core_start_improve_plan_round(
     name: String,
     agent_type: Option<String>,
     base_branch: Option<String>,
-    candidate_count: Option<usize>,
     confirmation_mode: Option<String>,
 ) -> Result<ImprovePlanRoundResponse, String> {
     start_improve_plan_round_inner(
@@ -2103,7 +2102,6 @@ pub async fn schaltwerk_core_start_improve_plan_round(
         StartImprovePlanRoundParams {
             agent_type,
             base_branch,
-            candidate_count,
             confirmation_mode,
         },
     )

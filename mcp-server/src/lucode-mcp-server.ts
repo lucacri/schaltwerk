@@ -72,7 +72,6 @@ interface LucodeDraftStartArgs {
 
 interface LucodeImprovePlanArgs {
   session_name: string
-  candidate_count?: number
   agent_type?: 'claude' | 'opencode' | 'gemini' | 'codex' | 'qwen' | 'droid' | 'amp' | 'kilocode'
   base_branch?: string
 }
@@ -682,10 +681,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "string",
               description: "Name of the clarified spec session to improve."
             },
-            candidate_count: {
-              type: "number",
-              description: "Number of plan candidates to start (default 2, maximum 6)."
-            },
             agent_type: {
               type: "string",
               enum: ["claude", "opencode", "gemini", "codex", "qwen", "droid", "amp", "kilocode"],
@@ -1242,7 +1237,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const result = await bridge.startImprovePlanRound(
           improveArgs.session_name,
           {
-            candidateCount: improveArgs.candidate_count,
             agentType: improveArgs.agent_type,
             baseBranch: improveArgs.base_branch,
           },
