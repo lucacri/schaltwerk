@@ -7,8 +7,7 @@ use std::path::{Path, PathBuf};
 use lucode::services::sh_quote_string;
 
 const LAUNCH_SCRIPT_PREFIX: &str = "lucode-launch-";
-const LARGE_ARG_HEREDOC_THRESHOLD_BYTES: usize = 1024;
-const PROMPT_SENTINEL_PREFIX: &str = "LUCODE_PROMPT_EOF_";
+const LARGE_ARG_SIDECAR_THRESHOLD_BYTES: usize = 1024;
 
 #[derive(Debug, Clone)]
 pub(crate) struct PreparedTerminalLaunch {
@@ -74,6 +73,7 @@ pub(crate) fn render_launch_script(
     command: &str,
     args: &[String],
     env: &[(String, String)],
+    sidecars: &[(usize, PathBuf)],
 ) -> Result<String, String> {
     let mut script = String::from("#!/bin/sh\n");
 
@@ -86,46 +86,43 @@ pub(crate) fn render_launch_script(
         script.push('\n');
     }
 
-    if args
-        .iter()
-        .any(|arg| arg.len() > LARGE_ARG_HEREDOC_THRESHOLD_BYTES)
-    {
+    if !sidecars.is_empty() {
         script.push_str("LUCODE_ARG_SENTINEL=$(printf '\\001')\n");
     }
 
+    let sidecar_for_idx: std::collections::HashMap<usize, &Path> = sidecars
+        .iter()
+        .map(|(idx, path)| (*idx, path.as_path()))
+        .collect();
+
     let mut rendered_args = Vec::with_capacity(args.len());
+    let mut quoted_sidecar_paths = Vec::with_capacity(sidecars.len());
     for (idx, arg) in args.iter().enumerate() {
-        if arg.len() > LARGE_ARG_HEREDOC_THRESHOLD_BYTES {
+        if let Some(sidecar_path) = sidecar_for_idx.get(&idx) {
             let var_name = format!("LUCODE_ARG_{idx}");
-            let sentinel = unique_sentinel_for(arg)?;
+            let quoted_path = sh_quote_string(&sidecar_path.to_string_lossy());
             script.push_str(&var_name);
-            script.push_str("=$(cat <<'");
-            script.push_str(&sentinel);
-            script.push_str("'\n");
-            script.push_str(arg);
-            let strips_artificial_newline = !arg.ends_with('\n');
-            if strips_artificial_newline {
-                script.push('\n');
-            }
-            script.push_str(&sentinel);
-            script.push_str("\nprintf '\\001'\n)\n");
+            script.push_str("=$(cat ");
+            script.push_str(&quoted_path);
+            script.push_str("; printf '\\001')\n");
             script.push_str(&var_name);
             script.push_str("=${");
             script.push_str(&var_name);
             script.push_str("%\"$LUCODE_ARG_SENTINEL\"}\n");
-            if strips_artificial_newline {
-                script.push_str(&var_name);
-                script.push_str("=${");
-                script.push_str(&var_name);
-                script.push_str("%?}\n");
-            }
+            quoted_sidecar_paths.push(quoted_path);
             rendered_args.push(format!("\"${var_name}\""));
         } else {
             rendered_args.push(sh_quote_string(arg));
         }
     }
 
-    script.push_str("rm -- \"$0\"\n");
+    script.push_str("rm --");
+    for path in &quoted_sidecar_paths {
+        script.push(' ');
+        script.push_str(path);
+    }
+    script.push_str(" \"$0\"\n");
+
     script.push_str("exec ");
     script.push_str(&sh_quote_string(command));
     for arg in rendered_args {
@@ -151,28 +148,78 @@ pub(crate) fn write_launch_script_in_dir(
     args: &[String],
     env: &[(String, String)],
 ) -> Result<PathBuf, String> {
-    let script = render_launch_script(command, args, env)?;
-
     for _ in 0..16 {
         let nonce = random_hex_16()?;
-        let path = dir.join(format!("{LAUNCH_SCRIPT_PREFIX}{nonce}.sh"));
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        options.mode(0o600);
+        let script_path = dir.join(format!("{LAUNCH_SCRIPT_PREFIX}{nonce}.sh"));
 
-        match options.open(&path) {
-            Ok(mut file) => {
-                file.write_all(script.as_bytes())
-                    .map_err(|err| format!("Failed to write launch script: {err}"))?;
-                return Ok(path);
-            }
+        let mut script_options = OpenOptions::new();
+        script_options.write(true).create_new(true);
+        #[cfg(unix)]
+        script_options.mode(0o600);
+
+        let mut script_file = match script_options.open(&script_path) {
+            Ok(file) => file,
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(err) => return Err(format!("Failed to create launch script: {err}")),
+        };
+
+        let mut sidecars: Vec<(usize, PathBuf)> = Vec::new();
+        for (idx, arg) in args.iter().enumerate() {
+            if arg.len() <= LARGE_ARG_SIDECAR_THRESHOLD_BYTES {
+                continue;
+            }
+            let sidecar_path =
+                dir.join(format!("{LAUNCH_SCRIPT_PREFIX}{nonce}-arg{idx}"));
+            let mut sidecar_options = OpenOptions::new();
+            sidecar_options.write(true).create_new(true);
+            #[cfg(unix)]
+            sidecar_options.mode(0o600);
+            match sidecar_options.open(&sidecar_path) {
+                Ok(mut file) => {
+                    if let Err(err) = file.write_all(arg.as_bytes()) {
+                        cleanup_partial_launch(&script_path, &sidecars, Some(&sidecar_path));
+                        return Err(format!("Failed to write launch sidecar: {err}"));
+                    }
+                }
+                Err(err) => {
+                    cleanup_partial_launch(&script_path, &sidecars, None);
+                    return Err(format!("Failed to create launch sidecar: {err}"));
+                }
+            }
+            sidecars.push((idx, sidecar_path));
         }
+
+        let script = match render_launch_script(command, args, env, &sidecars) {
+            Ok(script) => script,
+            Err(err) => {
+                cleanup_partial_launch(&script_path, &sidecars, None);
+                return Err(err);
+            }
+        };
+
+        if let Err(err) = script_file.write_all(script.as_bytes()) {
+            cleanup_partial_launch(&script_path, &sidecars, None);
+            return Err(format!("Failed to write launch script: {err}"));
+        }
+
+        return Ok(script_path);
     }
 
     Err("Failed to create unique launch script path".to_string())
+}
+
+fn cleanup_partial_launch(
+    script_path: &Path,
+    sidecars: &[(usize, PathBuf)],
+    extra: Option<&Path>,
+) {
+    let _ = std::fs::remove_file(script_path);
+    for (_, path) in sidecars {
+        let _ = std::fs::remove_file(path);
+    }
+    if let Some(path) = extra {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 fn validate_env_key(key: &str) -> Result<(), String> {
@@ -187,19 +234,6 @@ fn validate_env_key(key: &str) -> Result<(), String> {
         return Err(format!("Launch script env key is not shell-safe: {key}"));
     }
     Ok(())
-}
-
-fn unique_sentinel_for(arg: &str) -> Result<String, String> {
-    for attempt in 0..16 {
-        let sentinel = format!("{PROMPT_SENTINEL_PREFIX}{}", random_hex_16()?);
-        if !arg.lines().any(|line| line == sentinel) {
-            if attempt > 0 {
-                log::warn!("Regenerated launch script heredoc sentinel after collision");
-            }
-            return Ok(sentinel);
-        }
-    }
-    Err("Failed to generate non-conflicting heredoc sentinel".to_string())
 }
 
 fn random_hex_16() -> Result<String, String> {
@@ -228,27 +262,29 @@ mod tests {
     }
 
     #[test]
-    fn launch_script_quotes_heredoc_sentinel_uniquely() {
-        let prompt = format!("prompt with LUCODE_PROMPT_EOF_ prefix {}", "x".repeat(2048));
-        let script = render_launch_script("agent", &[prompt], &[]).expect("script should render");
+    fn launch_script_reads_oversize_args_from_sidecar_path() {
+        let sidecar = PathBuf::from("/tmp/lucode-launch-abc-arg0");
+        let prompt = "p".repeat(2048);
+        let script = render_launch_script(
+            "agent",
+            &[prompt],
+            &[],
+            &[(0, sidecar.clone())],
+        )
+        .expect("script should render");
 
-        let sentinel = script
-            .lines()
-            .find_map(|line| line.strip_prefix("LUCODE_ARG_0=$(cat <<'"))
-            .and_then(|tail| tail.strip_suffix("'"))
-            .expect("missing quoted heredoc sentinel");
-
-        assert!(sentinel.starts_with("LUCODE_PROMPT_EOF_"));
-        assert_eq!(sentinel.len(), "LUCODE_PROMPT_EOF_".len() + 16);
-        assert!(sentinel["LUCODE_PROMPT_EOF_".len()..]
-            .chars()
-            .all(|c| c.is_ascii_hexdigit()));
-        assert_eq!(script.matches(sentinel).count(), 2);
+        assert!(script.contains("LUCODE_ARG_SENTINEL=$(printf '\\001')"));
+        assert!(script.contains(
+            "LUCODE_ARG_0=$(cat '/tmp/lucode-launch-abc-arg0'; printf '\\001')"
+        ));
+        assert!(script
+            .contains("LUCODE_ARG_0=${LUCODE_ARG_0%\"$LUCODE_ARG_SENTINEL\"}"));
+        assert!(!script.contains("<<'"));
     }
 
     #[test]
     fn launch_script_self_deletes_before_exec() {
-        let script = render_launch_script("agent", &["prompt".to_string()], &[])
+        let script = render_launch_script("agent", &["prompt".to_string()], &[], &[])
             .expect("script should render");
 
         let rm_idx = script
@@ -260,12 +296,29 @@ mod tests {
     }
 
     #[test]
+    fn launch_script_rm_line_removes_sidecars_with_self() {
+        let sidecar = PathBuf::from("/tmp/lucode-launch-xyz-arg1");
+        let script = render_launch_script(
+            "agent",
+            &["short".to_string(), "x".repeat(2048)],
+            &[],
+            &[(1, sidecar)],
+        )
+        .expect("script should render");
+
+        assert!(script.contains(
+            "\nrm -- '/tmp/lucode-launch-xyz-arg1' \"$0\"\n"
+        ));
+    }
+
+    #[test]
     fn launch_script_env_vars_exported_before_exec() {
         let env = vec![
             ("LUCODE_SESSION".to_string(), "session 'one'".to_string()),
             ("WORKTREE_PATH".to_string(), "/tmp/work tree".to_string()),
         ];
-        let script = render_launch_script("agent", &["prompt".to_string()], &env).expect("script");
+        let script =
+            render_launch_script("agent", &["prompt".to_string()], &env, &[]).expect("script");
 
         assert!(env_before_exec(&script, "LUCODE_SESSION"));
         assert!(env_before_exec(&script, "WORKTREE_PATH"));
@@ -294,6 +347,35 @@ mod tests {
             .expect("script should execute");
 
         assert!(output.status.success());
+        assert_eq!(String::from_utf8(output.stdout).expect("utf8"), prompt);
+        assert!(!path.exists(), "script should self-delete");
+    }
+
+    #[test]
+    fn launch_script_prompt_with_unbalanced_apostrophe_survives_roundtrip() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let prompt = format!(
+            "multiple agents' plans can be compared {}",
+            "x".repeat(2048)
+        );
+        let path = write_launch_script_in_dir(
+            dir.path(),
+            "printf",
+            &["%s".to_string(), prompt.clone()],
+            &[],
+        )
+        .expect("script should write");
+
+        let output = std::process::Command::new("/bin/sh")
+            .arg(&path)
+            .output()
+            .expect("script should execute");
+
+        assert!(
+            output.status.success(),
+            "script failed under /bin/sh: stderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         assert_eq!(String::from_utf8(output.stdout).expect("utf8"), prompt);
         assert!(!path.exists(), "script should self-delete");
     }
@@ -361,10 +443,26 @@ mod tests {
         assert!(tmux_bytes < 1024, "tmux argv was {tmux_bytes} bytes");
 
         let script = std::fs::read_to_string(script_path).expect("script should be readable");
-        assert!(script.contains("LUCODE_ARG_1=$(cat <<'LUCODE_PROMPT_EOF_"));
-        assert!(script.contains("rm -- \"$0\"\nexec 'agent' '--prompt' \"$LUCODE_ARG_1\""));
+        assert!(script.contains("LUCODE_ARG_1=$(cat '"));
+        assert!(script.contains("-arg1'; printf '\\001')"));
+        assert!(script.contains("exec 'agent' '--prompt' \"$LUCODE_ARG_1\""));
+
+        let sidecar_name = script_path
+            .file_stem()
+            .expect("stem")
+            .to_string_lossy()
+            .to_string();
+        let sidecar_path = script_path
+            .parent()
+            .expect("parent")
+            .join(format!("{sidecar_name}-arg1"));
+        assert!(sidecar_path.exists(), "sidecar should exist before exec");
+        let sidecar_contents =
+            std::fs::read(&sidecar_path).expect("sidecar should be readable");
+        assert_eq!(sidecar_contents, vec![b'p'; 20 * 1024]);
 
         std::fs::remove_file(script_path).expect("cleanup launch script");
+        std::fs::remove_file(sidecar_path).expect("cleanup sidecar");
     }
 
     #[test]
@@ -397,7 +495,54 @@ mod tests {
         let script = std::fs::read_to_string(script_path).expect("script should be readable");
         assert!(script.contains("exec 'sh' '-lc' \"$LUCODE_ARG_1\""));
 
+        let sidecar_name = script_path
+            .file_stem()
+            .expect("stem")
+            .to_string_lossy()
+            .to_string();
+        let sidecar_path = script_path
+            .parent()
+            .expect("parent")
+            .join(format!("{sidecar_name}-arg1"));
         std::fs::remove_file(script_path).expect("cleanup launch script");
+        std::fs::remove_file(sidecar_path).expect("cleanup sidecar");
+    }
+
+    #[test]
+    fn launch_script_removes_sidecars_after_successful_exec() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = write_launch_script_in_dir(
+            dir.path(),
+            "true",
+            &["x".repeat(2048)],
+            &[],
+        )
+        .expect("script should write");
+
+        let output = Command::new("/bin/sh")
+            .arg(&path)
+            .output()
+            .expect("script should execute");
+        assert!(
+            output.status.success(),
+            "script failed: stderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let leftover: Vec<_> = std::fs::read_dir(dir.path())
+            .expect("read_dir")
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with(LAUNCH_SCRIPT_PREFIX)
+            })
+            .map(|e| e.file_name())
+            .collect();
+        assert!(
+            leftover.is_empty(),
+            "launch artifacts should be removed: {leftover:?}"
+        );
     }
 
     #[test]

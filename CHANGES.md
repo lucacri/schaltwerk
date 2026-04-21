@@ -19,10 +19,10 @@ Cancel used to fail silently with a raw backend string (`GitOperationFailed: …
 Agent prompts that push the tmux `new-session` argv above Lucode's conservative 14 KB tmux-IPC budget now route through a temporary `0600` shell script instead of being sent directly through tmux. The script exports the same environment, captures large argv entries through quoted heredocs, removes itself, and `exec`s the original agent command so the pane still ends up running the agent as the foreground process. Normal launches below the threshold keep the existing inline path.
 
 - `tmux_cmd.rs` now exposes `TMUX_IPC_SOFT_LIMIT_BYTES = 14_000` behavior through `argv_exceeds_tmux_ipc`, while keeping the existing 500 KB hard guard for exec-scale failures.
-- `agent_launcher::launch_script` renders and writes `lucode-launch-*.sh` scripts with random 16-hex heredoc sentinels, shell-safe env exports, owner-only permissions, and self-deletion before exec.
+- `agent_launcher::launch_script` writes oversize argv entries to per-arg sidecar files (`lucode-launch-<nonce>-arg<idx>`, 0600) next to the script, then reads them back in the script via `$(cat <path>; printf '\001')` with a one-byte sentinel strip. This avoids the bash-3.2 parser bug where heredocs nested inside `$(...)` command substitution misparse on any unbalanced apostrophe in the body — prompts containing English possessives (`agents' plans`) were previously rejected with `unexpected EOF while looking for matching ')'` when launched under macOS `/bin/sh`.
 - `schaltwerk_core_start_agent_in_terminal` prepares the final direct or shell-chain command first, then swaps only oversized launches to `sh <script>`, keeping setup-script and Amp shell-chain behavior intact.
-- Startup now removes stale `lucode-launch-*.sh` files older than one hour from the temp directory as a best-effort cleanup for crashes before self-deletion.
-- Covered by Rust tests for the tmux IPC threshold, heredoc sentinel shape, self-delete ordering, env export ordering, shell metacharacter roundtrip, 0600 permissions, oversized routing, and stale-script cleanup.
+- Startup removes stale `lucode-launch-*` artifacts (scripts and sidecars) older than one hour from the temp directory as a best-effort cleanup for crashes before self-deletion.
+- Covered by Rust tests for the tmux IPC threshold, sidecar-path rendering, combined sidecar + `$0` self-delete, env export ordering, 0600 permissions, shell metacharacter roundtrip, unbalanced-apostrophe roundtrip under `/bin/sh`, sidecar cleanup after exec, oversized routing, and stale-artifact cleanup.
 
 ## Improve Plan button for clarified specs
 

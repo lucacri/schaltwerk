@@ -24,25 +24,33 @@ mod launch_script_cleanup_tests {
     fn cleanup_stale_launch_scripts_removes_only_old_lucode_scripts() {
         let dir = tempfile::tempdir().expect("tempdir");
         let old_launch = dir.path().join("lucode-launch-old.sh");
+        let old_sidecar = dir.path().join("lucode-launch-old-arg1");
         let fresh_launch = dir.path().join("lucode-launch-fresh.sh");
+        let fresh_sidecar = dir.path().join("lucode-launch-fresh-arg0");
         let old_other = dir.path().join("other-launch-old.sh");
 
         std::fs::write(&old_launch, "old").expect("old launch");
+        std::fs::write(&old_sidecar, "old sidecar").expect("old sidecar");
         std::fs::write(&fresh_launch, "fresh").expect("fresh launch");
+        std::fs::write(&fresh_sidecar, "fresh sidecar").expect("fresh sidecar");
         std::fs::write(&old_other, "other").expect("other launch");
 
         let now = SystemTime::UNIX_EPOCH + Duration::from_secs(10_000);
         let old_time = FileTime::from_system_time(now - Duration::from_secs(7_200));
         let fresh_time = FileTime::from_system_time(now - Duration::from_secs(60));
         filetime::set_file_mtime(&old_launch, old_time).expect("old launch mtime");
+        filetime::set_file_mtime(&old_sidecar, old_time).expect("old sidecar mtime");
         filetime::set_file_mtime(&fresh_launch, fresh_time).expect("fresh launch mtime");
+        filetime::set_file_mtime(&fresh_sidecar, fresh_time).expect("fresh sidecar mtime");
         filetime::set_file_mtime(&old_other, old_time).expect("old other mtime");
 
         let removed = cleanup_stale_launch_scripts_in_dir(dir.path(), now).expect("cleanup");
 
-        assert_eq!(removed, 1);
+        assert_eq!(removed, 2);
         assert!(!old_launch.exists());
+        assert!(!old_sidecar.exists());
         assert!(fresh_launch.exists());
+        assert!(fresh_sidecar.exists());
         assert!(old_other.exists());
     }
 
@@ -71,7 +79,6 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 const LAUNCH_SCRIPT_PREFIX: &str = "lucode-launch-";
-const LAUNCH_SCRIPT_SUFFIX: &str = ".sh";
 const STALE_LAUNCH_SCRIPT_AGE: Duration = Duration::from_secs(60 * 60);
 
 pub fn cleanup_stale_launch_scripts() -> Result<usize> {
@@ -92,9 +99,7 @@ pub fn cleanup_stale_launch_scripts_in_dir(dir: &Path, now: SystemTime) -> Resul
         };
         let file_name = entry.file_name();
         let file_name = file_name.to_string_lossy();
-        if !file_name.starts_with(LAUNCH_SCRIPT_PREFIX)
-            || !file_name.ends_with(LAUNCH_SCRIPT_SUFFIX)
-        {
+        if !file_name.starts_with(LAUNCH_SCRIPT_PREFIX) {
             continue;
         }
 
