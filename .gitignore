@@ -28,6 +28,7 @@ coverage/
 *.sln
 *.sw?
 .mcp.json
+.gemini/settings.json
 # Schaltwerk directories and state files
 # Ignore everything in .schaltwerk except Dockerfile.custom and config.json
 .schaltwerk/*
