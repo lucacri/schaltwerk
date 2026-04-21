@@ -234,6 +234,39 @@ pub trait TmuxCli: Send + Sync {
             out.status, out.stderr
         ))
     }
+
+    async fn refresh_client(&self, session: &str) -> Result<(), String> {
+        let out = self
+            .run(&["list-clients", "-t", session, "-F", "#{client_tty}"])
+            .await?;
+        if !out.ok() {
+            if is_no_server_or_session(&out.stderr.to_ascii_lowercase()) {
+                return Ok(());
+            }
+            return Err(format!(
+                "tmux list-clients failed (status {}): {}",
+                out.status, out.stderr
+            ));
+        }
+        let ttys: Vec<String> = out
+            .stdout
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_owned)
+            .collect();
+        for tty in ttys {
+            let refresh_out = self.run(&["refresh-client", "-t", &tty]).await?;
+            if !refresh_out.ok() {
+                log::debug!(
+                    "tmux refresh-client -t {tty} failed (status {}): {}",
+                    refresh_out.status,
+                    refresh_out.stderr
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Concrete TmuxCli that spawns the system `tmux` binary.
@@ -729,5 +762,119 @@ mod tests {
             .await
             .expect("8 KiB prompt must pass the argv guard");
         assert_eq!(cli.recorded_calls().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn refresh_client_runs_list_clients_then_refresh_client_for_each_tty() {
+        let cli = MockTmuxCli::new(|args| match args.first().map(String::as_str) {
+            Some("list-clients") => TmuxCliOutput {
+                status: 0,
+                stdout: "/dev/ttys001\n/dev/ttys002\n".into(),
+                stderr: String::new(),
+            },
+            Some("refresh-client") => success(),
+            other => panic!("unexpected tmux call: {other:?}"),
+        });
+        cli.refresh_client("session-abc~deadbeef-top")
+            .await
+            .unwrap();
+        let calls = cli.recorded_calls();
+        assert_eq!(
+            calls[0],
+            vec![
+                "list-clients".to_string(),
+                "-t".into(),
+                "session-abc~deadbeef-top".into(),
+                "-F".into(),
+                "#{client_tty}".into(),
+            ]
+        );
+        assert_eq!(
+            calls[1],
+            vec![
+                "refresh-client".to_string(),
+                "-t".into(),
+                "/dev/ttys001".into(),
+            ]
+        );
+        assert_eq!(
+            calls[2],
+            vec![
+                "refresh-client".to_string(),
+                "-t".into(),
+                "/dev/ttys002".into(),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn refresh_client_is_noop_when_session_has_no_clients() {
+        let cli = MockTmuxCli::new(|args| match args.first().map(String::as_str) {
+            Some("list-clients") => success(),
+            _ => panic!("refresh-client must not run when no clients are attached"),
+        });
+        cli.refresh_client("session-idle~00000000-top")
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn refresh_client_is_noop_on_missing_server_or_session() {
+        for stderr in [
+            "can't find session: session-x",
+            "no server running on /tmp/sock",
+            "error connecting to /tmp/sock (No such file or directory)",
+        ] {
+            let cli = MockTmuxCli::new(move |args| match args.first().map(String::as_str) {
+                Some("list-clients") => failure(1, stderr),
+                _ => panic!(
+                    "refresh-client must not run when list-clients reported no server/session"
+                ),
+            });
+            cli.refresh_client("session-missing").await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn refresh_client_surfaces_unexpected_list_clients_failure() {
+        let cli = MockTmuxCli::new(|args| match args.first().map(String::as_str) {
+            Some("list-clients") => failure(1, "permission denied"),
+            _ => success(),
+        });
+        let err = cli
+            .refresh_client("session-boom")
+            .await
+            .expect_err("unexpected stderr must surface");
+        assert!(err.contains("list-clients"));
+    }
+
+    #[tokio::test]
+    async fn refresh_client_continues_after_individual_refresh_failure() {
+        let cli = MockTmuxCli::new(|args| match args.first().map(String::as_str) {
+            Some("list-clients") => TmuxCliOutput {
+                status: 0,
+                stdout: "/dev/ttys001\n/dev/ttys002\n".into(),
+                stderr: String::new(),
+            },
+            Some("refresh-client") if args.get(2).map(String::as_str) == Some("/dev/ttys001") => {
+                failure(1, "client not found")
+            }
+            Some("refresh-client") => success(),
+            _ => success(),
+        });
+        cli.refresh_client("session-half-gone")
+            .await
+            .expect("refresh-client loop must not abort on a single client error");
+        let refresh_ttys: Vec<String> = cli
+            .recorded_calls()
+            .into_iter()
+            .filter(|args| args.first().map(String::as_str) == Some("refresh-client"))
+            .filter_map(|args| args.get(2).cloned())
+            .collect();
+        assert_eq!(
+            refresh_ttys,
+            vec!["/dev/ttys001".to_string(), "/dev/ttys002".to_string()],
+            "second client must still be refreshed even if the first call errors"
+        );
     }
 }

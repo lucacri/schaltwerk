@@ -101,6 +101,12 @@ pub trait TerminalBackend: Send + Sync {
     async fn force_kill_all(&self) -> Result<(), String> {
         Ok(())
     }
+    /// Best-effort redraw hook for backends that own the authoritative view.
+    /// Tmux-backed terminals can explicitly refresh attached clients, while
+    /// local PTYs have no equivalent and cleanly no-op.
+    async fn refresh_view(&self, _id: &str) -> Result<(), String> {
+        Ok(())
+    }
     /// Kill backend-owned sessions whose name isn't prefixed by any of
     /// `live_bases`. Defaults to a no-op for backends that have no
     /// persistent sessions.

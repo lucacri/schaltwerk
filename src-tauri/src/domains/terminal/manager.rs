@@ -543,6 +543,10 @@ impl TerminalManager {
         self.backend.resize(&id, cols, rows).await
     }
 
+    pub async fn refresh_terminal_view(&self, id: String) -> Result<(), String> {
+        self.backend.refresh_view(&id).await
+    }
+
     pub async fn close_terminal(&self, id: String) -> Result<(), String> {
         info!("Closing terminal through manager: {id}");
         self.active_ids.write().await.remove(&id);

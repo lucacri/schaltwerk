@@ -149,6 +149,7 @@ export const TauriCommands = {
   OpenDocumentsPrivacySettings: 'open_documents_privacy_settings',
   ResetFolderPermissions: 'reset_folder_permissions',
   OpenExternalUrl: 'open_external_url',
+  RefreshTerminalView: 'refresh_terminal_view',
   ResizeTerminal: 'resize_terminal',
   SchaltwerkCoreArchiveSpecSession: 'schaltwerk_core_archive_spec_session',
   SchaltwerkCoreCancelSession: 'schaltwerk_core_cancel_session',

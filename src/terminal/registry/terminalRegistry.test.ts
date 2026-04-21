@@ -10,6 +10,7 @@ import {
   removeTerminalOutputCallback,
 } from './terminalRegistry'
 import { terminalOutputManager } from '../stream/terminalOutputManager'
+import { TauriCommands } from '../../common/tauriCommands'
 
 vi.mock('../stream/terminalOutputManager', () => ({
   terminalOutputManager: {
@@ -24,6 +25,11 @@ vi.mock('../stream/terminalOutputManager', () => ({
 
 vi.mock('../gpu/gpuRendererRegistry', () => ({
   disposeGpuRenderer: vi.fn(),
+}))
+
+const invokeMock = vi.fn(async () => undefined)
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => invokeMock(...(args as [])),
 }))
 
 vi.mock('./windowForegroundBus', () => {
@@ -372,6 +378,8 @@ describe('terminalRegistry stream flushing', () => {
   it('holds TUI clear-screen redraw until content arrives', async () => {
     const rawWrite = vi.fn()
     const rawWriteSync = vi.fn()
+    const refresh = vi.fn()
+    const forceScrollbarRefresh = vi.fn()
     const factory = () =>
       ({
         raw: {
@@ -391,6 +399,8 @@ describe('terminalRegistry stream flushing', () => {
         attach: vi.fn(),
         detach: vi.fn(),
         dispose: vi.fn(),
+        refresh,
+        forceScrollbarRefresh,
       } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
 
     acquireTerminalInstance('tui-deferral-test', factory)
@@ -408,6 +418,8 @@ describe('terminalRegistry stream flushing', () => {
     expect(rawWrite).not.toHaveBeenCalled()
     expect(rawWriteSync).toHaveBeenCalledTimes(1)
     expect(rawWriteSync).toHaveBeenCalledWith('\x1b[?2026h\x1b[2J\x1b[Hhello\x1b[?2026l')
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(forceScrollbarRefresh).toHaveBeenCalledTimes(1)
 
     removeTerminalInstance('tui-deferral-test')
   })
@@ -457,6 +469,53 @@ describe('terminalRegistry stream flushing', () => {
     expect(rawWrite).toHaveBeenCalledTimes(2)
 
     removeTerminalInstance('tui-parse-barrier-test')
+  })
+
+  it('refreshes attached TUI terminals after callback-driven writes finish parsing', async () => {
+    let pendingWriteCallback: (() => void) | undefined
+    const rawWrite = vi.fn((_data: string, cb?: unknown) => {
+      pendingWriteCallback = cb as (() => void) | undefined
+    })
+    const refresh = vi.fn()
+    const forceScrollbarRefresh = vi.fn()
+    const factory = () =>
+      ({
+        raw: {
+          write: rawWrite,
+          scrollToBottom: vi.fn(),
+          buffer: {
+            active: {
+              baseY: 0,
+              viewportY: 0,
+              type: 'normal',
+            },
+          },
+        },
+        shouldFollowOutput: () => false,
+        isTuiMode: () => true,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+        refresh,
+        forceScrollbarRefresh,
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('tui-refresh-after-write-test', factory)
+    attachTerminalInstance('tui-refresh-after-write-test', document.createElement('div'))
+
+    const listener = addListenerMock.mock.calls[addListenerMock.mock.calls.length - 1][1] as (chunk: string) => void
+
+    listener('plain output')
+    await vi.runOnlyPendingTimersAsync()
+    expect(rawWrite).toHaveBeenCalledTimes(1)
+    expect(refresh).not.toHaveBeenCalled()
+
+    pendingWriteCallback?.()
+
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(forceScrollbarRefresh).toHaveBeenCalledTimes(1)
+
+    removeTerminalInstance('tui-refresh-after-write-test')
   })
 
   it('fires output callbacks after write flush completes', async () => {
@@ -770,6 +829,48 @@ describe('terminalRegistry stream flushing', () => {
     expect(rawWrite.mock.calls[1][0]).toBe('second batch')
 
     removeTerminalInstance('backpressure-test')
+  })
+
+  it('continues large attached TUI writes as soon as the previous chunk finishes parsing', async () => {
+    const writeCallbacks: Array<() => void> = []
+    const rawWrite = vi.fn((_data: string, cb?: unknown) => {
+      if (typeof cb === 'function') {
+        writeCallbacks.push(cb as () => void)
+      }
+    })
+    const factory = () =>
+      ({
+        raw: {
+          write: rawWrite,
+          scrollToBottom: vi.fn(),
+          buffer: {
+            active: {
+              baseY: 0,
+              viewportY: 0,
+              type: 'normal',
+            },
+          },
+        },
+        shouldFollowOutput: () => false,
+        isTuiMode: () => true,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal)
+
+    acquireTerminalInstance('tui-large-payload-test', factory)
+    attachTerminalInstance('tui-large-payload-test', document.createElement('div'))
+
+    const listener = addListenerMock.mock.calls[addListenerMock.mock.calls.length - 1][1] as (chunk: string) => void
+
+    listener('x'.repeat(24 * 1024))
+    await vi.runAllTimersAsync()
+    expect(rawWrite).toHaveBeenCalledTimes(1)
+
+    writeCallbacks[0]?.()
+    expect(rawWrite).toHaveBeenCalledTimes(2)
+
+    removeTerminalInstance('tui-large-payload-test')
   })
 
   it('caps pending buffer for attached terminals under backpressure', async () => {
@@ -1140,5 +1241,80 @@ describe('terminalRegistry stream flushing', () => {
     expect(rehydrateMock).not.toHaveBeenCalled()
 
     removeTerminalInstance('fresh-terminal-test')
+  })
+
+  it('does not call RefreshTerminalView on the very first attach', () => {
+    const id = 'session-fresh~aaaaaaaa-top'
+    acquireTerminalInstance(id, () =>
+      ({
+        raw: {
+          write: vi.fn(),
+          scrollToBottom: vi.fn(),
+          buffer: { active: { baseY: 0, viewportY: 0 } },
+        },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal),
+    )
+
+    attachTerminalInstance(id, document.createElement('div'))
+
+    expect(invokeMock).not.toHaveBeenCalledWith(TauriCommands.RefreshTerminalView, expect.anything())
+    removeTerminalInstance(id)
+  })
+
+  it('calls RefreshTerminalView on reattach of a top terminal', () => {
+    const id = 'session-reattach~bbbbbbbb-top'
+    acquireTerminalInstance(id, () =>
+      ({
+        raw: {
+          write: vi.fn(),
+          scrollToBottom: vi.fn(),
+          buffer: { active: { baseY: 0, viewportY: 0 } },
+        },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal),
+    )
+
+    attachTerminalInstance(id, document.createElement('div'))
+    detachTerminalInstance(id)
+    invokeMock.mockClear()
+    attachTerminalInstance(id, document.createElement('div'))
+
+    expect(invokeMock).toHaveBeenCalledWith(TauriCommands.RefreshTerminalView, { id })
+    removeTerminalInstance(id)
+  })
+
+  it('does not call RefreshTerminalView for a non-top terminal on reattach', () => {
+    const id = 'session-bottom~cccccccc-bottom'
+    acquireTerminalInstance(id, () =>
+      ({
+        raw: {
+          write: vi.fn(),
+          scrollToBottom: vi.fn(),
+          buffer: { active: { baseY: 0, viewportY: 0 } },
+        },
+        shouldFollowOutput: () => true,
+        isTuiMode: () => false,
+        attach: vi.fn(),
+        detach: vi.fn(),
+        dispose: vi.fn(),
+      } as unknown as import('../xterm/XtermTerminal').XtermTerminal),
+    )
+
+    attachTerminalInstance(id, document.createElement('div'))
+    detachTerminalInstance(id)
+    invokeMock.mockClear()
+    attachTerminalInstance(id, document.createElement('div'))
+
+    expect(invokeMock).not.toHaveBeenCalledWith(TauriCommands.RefreshTerminalView, expect.anything())
+    removeTerminalInstance(id)
   })
 })

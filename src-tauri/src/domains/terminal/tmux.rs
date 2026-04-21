@@ -315,6 +315,10 @@ impl TerminalBackend for TmuxAdapter {
     async fn gc_orphans(&self, live_bases: &HashSet<String>) -> Result<Vec<String>, String> {
         TmuxAdapter::gc_orphans(self, live_bases).await
     }
+
+    async fn refresh_view(&self, id: &str) -> Result<(), String> {
+        self.cli.refresh_client(id).await
+    }
 }
 
 #[cfg(test)]
@@ -713,5 +717,38 @@ mod tests {
         assert!(spec.args.iter().any(|a| a == "attach-session"));
         assert!(spec.args.iter().any(|a| a == "my-term"));
         assert_eq!(spec.env, vec![("K".to_string(), "v".to_string())]);
+    }
+
+    #[tokio::test]
+    async fn refresh_view_invokes_list_clients_then_refresh_client_on_session_ttys() {
+        use crate::domains::terminal::tmux_cmd::TmuxCliOutput;
+
+        let cli = MockTmuxCli::new(|args| match args.first().map(String::as_str) {
+            Some("list-clients") => TmuxCliOutput {
+                status: 0,
+                stdout: "/dev/ttys004\n".into(),
+                stderr: String::new(),
+            },
+            _ => success(),
+        });
+        let adapter = TmuxAdapter::new(cli.clone());
+
+        adapter
+            .refresh_view("session-redraw~abcdef12-top")
+            .await
+            .expect("tmux-backed refresh_view must succeed");
+
+        let calls = cli.recorded_calls();
+        let list = calls
+            .iter()
+            .find(|c| c.first().map(String::as_str) == Some("list-clients"))
+            .expect("list-clients must run");
+        assert_eq!(list[2], "session-redraw~abcdef12-top");
+        assert!(calls.iter().any(|c| c
+            == &vec![
+                "refresh-client".to_string(),
+                "-t".into(),
+                "/dev/ttys004".into(),
+            ]));
     }
 }

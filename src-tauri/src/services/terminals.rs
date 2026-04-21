@@ -53,6 +53,7 @@ pub trait TerminalsBackend: Send + Sync {
         needs_delayed_submit: bool,
     ) -> Result<(), String>;
     async fn resize_terminal(&self, id: String, cols: u16, rows: u16) -> Result<(), String>;
+    async fn refresh_terminal_view(&self, id: String) -> Result<(), String>;
     async fn close_terminal(&self, id: String) -> Result<(), String>;
     async fn terminal_exists(&self, id: String) -> Result<bool, String>;
     async fn terminals_exist_bulk(&self, ids: Vec<String>) -> Result<Vec<(String, bool)>, String>;
@@ -101,6 +102,7 @@ pub trait TerminalsService: Send + Sync {
         needs_delayed_submit: bool,
     ) -> Result<(), String>;
     async fn resize_terminal(&self, id: String, cols: u16, rows: u16) -> Result<(), String>;
+    async fn refresh_terminal_view(&self, id: String) -> Result<(), String>;
     async fn close_terminal(&self, id: String) -> Result<(), String>;
     async fn terminal_exists(&self, id: String) -> Result<bool, String>;
     async fn terminals_exist_bulk(&self, ids: Vec<String>) -> Result<Vec<(String, bool)>, String>;
@@ -195,6 +197,13 @@ impl<B: TerminalsBackend> TerminalsServiceImpl<B> {
             .resize_terminal(id.clone(), cols, rows)
             .await
             .map_err(|err| Self::map_err(&format!("Failed to resize terminal {id}"), err))
+    }
+
+    pub async fn refresh_terminal_view(&self, id: String) -> Result<(), String> {
+        self.backend
+            .refresh_terminal_view(id.clone())
+            .await
+            .map_err(|err| Self::map_err(&format!("Failed to refresh terminal view {id}"), err))
     }
 
     pub async fn close_terminal(&self, id: String) -> Result<(), String> {
@@ -341,6 +350,10 @@ where
 
     async fn resize_terminal(&self, id: String, cols: u16, rows: u16) -> Result<(), String> {
         TerminalsServiceImpl::resize_terminal(self, id, cols, rows).await
+    }
+
+    async fn refresh_terminal_view(&self, id: String) -> Result<(), String> {
+        TerminalsServiceImpl::refresh_terminal_view(self, id).await
     }
 
     async fn close_terminal(&self, id: String) -> Result<(), String> {
@@ -579,6 +592,11 @@ impl TerminalsBackend for TerminalManagerBackend {
         manager.resize_terminal(id, cols, rows).await
     }
 
+    async fn refresh_terminal_view(&self, id: String) -> Result<(), String> {
+        let manager = self.terminal_manager().await?;
+        manager.refresh_terminal_view(id).await
+    }
+
     async fn close_terminal(&self, id: String) -> Result<(), String> {
         let manager = self.terminal_manager().await?;
         manager.close_terminal(id).await
@@ -708,6 +726,10 @@ mod tests {
             panic!("unused in test backend");
         }
 
+        async fn refresh_terminal_view(&self, _id: String) -> Result<(), String> {
+            panic!("unused in test backend");
+        }
+
         async fn close_terminal(&self, _id: String) -> Result<(), String> {
             panic!("unused in test backend");
         }
@@ -802,6 +824,10 @@ mod tests {
         }
 
         async fn resize_terminal(&self, _id: String, _cols: u16, _rows: u16) -> Result<(), String> {
+            panic!("unused in test backend");
+        }
+
+        async fn refresh_terminal_view(&self, _id: String) -> Result<(), String> {
             panic!("unused in test backend");
         }
 
@@ -905,6 +931,10 @@ mod tests {
             panic!("unused in test backend");
         }
 
+        async fn refresh_terminal_view(&self, _id: String) -> Result<(), String> {
+            panic!("unused in test backend");
+        }
+
         async fn close_terminal(&self, _id: String) -> Result<(), String> {
             panic!("unused in test backend");
         }
@@ -999,6 +1029,10 @@ mod tests {
         }
 
         async fn resize_terminal(&self, _id: String, _cols: u16, _rows: u16) -> Result<(), String> {
+            panic!("unused in test backend");
+        }
+
+        async fn refresh_terminal_view(&self, _id: String) -> Result<(), String> {
             panic!("unused in test backend");
         }
 

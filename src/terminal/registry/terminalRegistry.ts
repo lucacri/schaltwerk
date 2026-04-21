@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../../utils/logger';
 import { XtermTerminal } from '../xterm/XtermTerminal';
 import {
@@ -10,6 +11,7 @@ import {
   sessionTerminalBaseVariants,
   sanitizeSessionName,
 } from '../../common/terminalIdentity';
+import { TauriCommands } from '../../common/tauriCommands';
 import { terminalOutputManager } from '../stream/terminalOutputManager';
 import { slicePreservingSurrogates } from '../paste/bracketedPaste';
 import { windowForegroundBus } from './windowForegroundBus';
@@ -289,6 +291,11 @@ class TerminalInstanceRegistry {
       void terminalOutputManager.rehydrate(id, fromSeq).catch(error => {
         logger.debug(`[Registry] rehydrate failed for ${id}`, error);
       });
+      if (isTopTerminalId(record.id)) {
+        void invoke(TauriCommands.RefreshTerminalView, { id: record.id }).catch(error => {
+          logger.warn(`[Registry] RefreshTerminalView failed for ${record.id}`, error);
+        });
+      }
     }
 
     const bufAfter = record.xterm.raw.buffer?.active;
@@ -483,6 +490,24 @@ class TerminalInstanceRegistry {
     }
   }
 
+  private presentAttachedTuiSurface(record: TerminalInstanceRecord): void {
+    if (!record.attached || !record.xterm.isTuiMode()) {
+      return;
+    }
+
+    try {
+      record.xterm.forceScrollbarRefresh?.();
+    } catch (error) {
+      logger.debug(`[Registry] Failed to refresh scrollbar for ${record.id}`, error);
+    }
+
+    try {
+      record.xterm.refresh?.();
+    } catch (error) {
+      logger.debug(`[Registry] Failed to refresh xterm surface for ${record.id}`, error);
+    }
+  }
+
   private scheduleFlush(record: TerminalInstanceRecord, reason: string): void {
     if (!record.attached && record.xterm.isTuiMode()) {
       return;
@@ -522,12 +547,16 @@ class TerminalInstanceRegistry {
       return;
     }
 
+    const maxFlushPayloadChars = record.xterm.isTuiMode()
+      ? MAX_PENDING_CHARS_WHILE_ATTACHED
+      : MAX_FLUSH_PAYLOAD_CHARS;
+
     let combined = '';
-    while (record.pendingChunks.length > 0 && combined.length < MAX_FLUSH_PAYLOAD_CHARS) {
+    while (record.pendingChunks.length > 0 && combined.length < maxFlushPayloadChars) {
       combined += record.pendingChunks.shift();
     }
 
-    if (combined.length > FLUSH_CHUNK_SIZE) {
+    if (!record.xterm.isTuiMode() && combined.length > FLUSH_CHUNK_SIZE) {
       const overflow = slicePreservingSurrogates(combined, FLUSH_CHUNK_SIZE, combined.length);
       combined = slicePreservingSurrogates(combined, 0, FLUSH_CHUNK_SIZE);
       record.pendingChunks.unshift(overflow);
@@ -598,6 +627,7 @@ class TerminalInstanceRegistry {
         if (hadClear) {
           this.notifyClearCallbacks(record);
         }
+        this.presentAttachedTuiSurface(record);
         this.notifyOutputCallbacks(record);
 
         if (record.flushAfterParse && record.pendingChunks && record.pendingChunks.length > 0 && !record.tuiHoldRedraw) {
@@ -622,6 +652,7 @@ class TerminalInstanceRegistry {
             if (hadClear) {
               this.notifyClearCallbacks(record);
             }
+            this.presentAttachedTuiSurface(record);
             this.notifyOutputCallbacks(record);
 
             if (record.flushAfterParse && record.pendingChunks && record.pendingChunks.length > 0 && !record.tuiHoldRedraw) {
@@ -668,6 +699,7 @@ class TerminalInstanceRegistry {
         if (hadClear) {
           this.notifyClearCallbacks(record);
         }
+        this.presentAttachedTuiSurface(record);
         this.notifyOutputCallbacks(record);
 
         if (record.flushAfterParse && record.pendingChunks && record.pendingChunks.length > 0 && !record.tuiHoldRedraw) {
@@ -680,6 +712,10 @@ class TerminalInstanceRegistry {
       const chunk = slicePreservingSurrogates(payload, offset, offset + FLUSH_CHUNK_SIZE);
       offset += chunk.length;
       record.xterm.raw.write(chunk, () => {
+        if (record.xterm.isTuiMode()) {
+          writeNextChunk();
+          return;
+        }
         setTimeout(writeNextChunk, 0);
       });
     };

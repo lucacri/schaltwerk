@@ -107,6 +107,14 @@ pub async fn resize_terminal(
 }
 
 #[tauri::command]
+pub async fn refresh_terminal_view(
+    services: State<'_, ServiceHandles>,
+    id: String,
+) -> Result<(), String> {
+    services.terminals.refresh_terminal_view(id).await
+}
+
+#[tauri::command]
 pub async fn close_terminal(services: State<'_, ServiceHandles>, id: String) -> Result<(), String> {
     services.terminals.close_terminal(id).await
 }
@@ -217,6 +225,7 @@ mod tests {
         write_calls: Arc<Mutex<Vec<(String, Vec<u8>)>>>,
         paste_calls: Arc<Mutex<Vec<(String, Vec<u8>, bool, bool)>>>,
         resize_calls: Arc<Mutex<Vec<(String, u16, u16)>>>,
+        refresh_view_calls: Arc<Mutex<Vec<String>>>,
         close_calls: Arc<Mutex<Vec<String>>>,
         exists_calls: Arc<Mutex<Vec<String>>>,
         exists_bulk_calls: Arc<Mutex<Vec<Vec<String>>>>,
@@ -238,6 +247,7 @@ mod tests {
                 write_calls: Arc::new(Mutex::new(Vec::new())),
                 paste_calls: Arc::new(Mutex::new(Vec::new())),
                 resize_calls: Arc::new(Mutex::new(Vec::new())),
+                refresh_view_calls: Arc::new(Mutex::new(Vec::new())),
                 close_calls: Arc::new(Mutex::new(Vec::new())),
                 exists_calls: Arc::new(Mutex::new(Vec::new())),
                 exists_bulk_calls: Arc::new(Mutex::new(Vec::new())),
@@ -326,6 +336,15 @@ mod tests {
             self.resize_calls.lock().unwrap().push((id, cols, rows));
             if self.should_error {
                 Err("resize failed".to_string())
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn refresh_terminal_view(&self, id: String) -> Result<(), String> {
+            self.refresh_view_calls.lock().unwrap().push(id);
+            if self.should_error {
+                Err("refresh failed".to_string())
             } else {
                 Ok(())
             }
@@ -694,6 +713,35 @@ mod tests {
         let calls = backend_calls.lock().unwrap();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0], "term-close");
+    }
+
+    #[tokio::test]
+    async fn refresh_terminal_view_delegates_to_service() {
+        let backend = MockTerminalsBackend::new();
+        let backend_calls = Arc::clone(&backend.refresh_view_calls);
+        let service = TerminalsServiceImpl::new(backend);
+
+        let result = service
+            .refresh_terminal_view("session-xyz~11112222-top".to_string())
+            .await;
+
+        assert!(result.is_ok());
+        let calls = backend_calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0], "session-xyz~11112222-top");
+    }
+
+    #[tokio::test]
+    async fn refresh_terminal_view_error_is_mapped() {
+        let backend = MockTerminalsBackend::new().with_error();
+        let service = TerminalsServiceImpl::new(backend);
+
+        let err = service
+            .refresh_terminal_view("session-err~00000000-top".to_string())
+            .await
+            .expect_err("error must propagate");
+        assert!(err.contains("Failed to refresh terminal view"));
+        assert!(err.contains("session-err~00000000-top"));
     }
 
     #[tokio::test]

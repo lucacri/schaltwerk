@@ -12,6 +12,15 @@ History reference pills in the git graph used the pill background color for bran
 - Added focused Vitest coverage for the shared helper and `HistoryItemRow`, including bright and dark palette entries, optional `#`, malformed colors, and the no-color fallback.
 - Swimlane lines, commit dots, and the IBM/Wong colorblind-safe graph palette are unchanged.
 
+## Terminal: repaint tmux session switches without manual resize
+
+Top agent terminals backed by tmux now repaint promptly after a session switch instead of staying blank or stale until the next real window resize. Lucode now asks tmux to resend the current pane view when a previously attached top terminal is rebound, and the shared terminal registry immediately re-presents attached TUI redraw batches after xterm finishes parsing them. Large attached TUI redraws also continue chunk-to-chunk from the parser callback instead of waiting on timer yielding, so switch output presents as a live stream rather than a delayed burst.
+
+- `src-tauri/src/domains/terminal/tmux_cmd.rs` adds `TmuxCli::refresh_client(session)`, which runs `list-clients -t <session> -F '#{client_tty}'` and `refresh-client -t <tty>` for each attached client, tolerating missing server/session states and logging per-client failures without aborting the redraw.
+- `src-tauri/src/domains/terminal/mod.rs`, `manager.rs`, `services/terminals.rs`, `commands/terminal.rs`, `main.rs`, and `src/common/tauriCommands.ts` plumb a new best-effort `refresh_terminal_view` command from the frontend to tmux-backed terminals, while local PTYs keep the default no-op.
+- `src/terminal/registry/terminalRegistry.ts` invokes `RefreshTerminalView` on reattach of top terminals, refreshes attached TUI surfaces after successful parsed writes (`writeSync`, callback-driven `write`, and chunked writes), allows attached TUI flushes to hand larger redraw batches to the existing fast paths, and advances chunked TUI writes immediately from the parser callback.
+- Covered by new Rust tests for tmux client refresh and service delegation plus Vitest regressions for reattach refresh, post-parse TUI presentation, and immediate large-TUI chunk progression.
+
 ## Specs: persist inline review comments across all exits
 
 Inline review comments were held only in `SpecEditor` React state and were wiped on every path that left review mode — Escape, Cancel Review, Exit Review, a successful Finish Review send, session switch, reload, or a crash. Users who backed out for any reason lost the entire draft. Comments are now persisted per spec in the project database on every submit and survive every exit path. The next time review mode is opened on that spec, a modal surfaces any stored draft and offers **Clear & start fresh** (the only way to discard stored comments) or **Continue** (hydrate the local list and keep editing). No exit path deletes the store — Finish Review is a send, not a clear — so a mid-send crash or accidental Escape still leaves the work recoverable.

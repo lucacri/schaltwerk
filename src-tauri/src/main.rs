@@ -1543,6 +1543,7 @@ fn main() {
             write_terminal,
             paste_and_submit_terminal,
             resize_terminal,
+            refresh_terminal_view,
             close_terminal,
             terminal_exists,
             terminals_exist_bulk,
