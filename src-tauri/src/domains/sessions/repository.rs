@@ -1154,6 +1154,30 @@ impl SessionDbManager {
         Ok(())
     }
 
+    pub fn clear_session_consolidation_metadata(&self, session_id: &str) -> Result<()> {
+        let conn = self.db.get_conn()?;
+        conn.execute(
+            "UPDATE sessions
+             SET is_consolidation = 0,
+                 consolidation_sources = NULL,
+                 consolidation_round_id = NULL,
+                 consolidation_role = NULL,
+                 consolidation_report = NULL,
+                 consolidation_report_source = NULL,
+                 consolidation_base_session_id = NULL,
+                 consolidation_recommended_session_id = NULL,
+                 consolidation_confirmation_mode = NULL,
+                 updated_at = ?1
+             WHERE repository_path = ?2 AND id = ?3",
+            params![
+                Utc::now().timestamp(),
+                self.repo_path.to_string_lossy().to_string(),
+                session_id,
+            ],
+        )?;
+        Ok(())
+    }
+
     pub fn clear_auto_stub_consolidation_report_by_name(
         &self,
         session_name: &str,
@@ -1206,5 +1230,91 @@ impl SessionDbManager {
 impl SessionDbManager {
     pub fn db_ref(&self) -> &Database {
         &self.db
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domains::sessions::db_sessions::SessionMethods;
+    use crate::domains::sessions::entity::{Session, SessionState, SessionStatus};
+    use chrono::Utc;
+    use std::path::Path;
+    use tempfile::TempDir;
+
+    fn make_test_session(repo_path: &Path) -> Session {
+        Session {
+            id: "session-1".to_string(),
+            name: "session-1".to_string(),
+            display_name: Some("Session 1".to_string()),
+            version_group_id: Some("group-1".to_string()),
+            version_number: Some(1),
+            epic_id: None,
+            repository_path: repo_path.to_path_buf(),
+            repository_name: "repo".to_string(),
+            branch: "lucode/session-1".to_string(),
+            parent_branch: "main".to_string(),
+            original_parent_branch: None,
+            worktree_path: repo_path.join(".lucode/worktrees/session-1"),
+            status: SessionStatus::Active,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_activity: Some(Utc::now()),
+            initial_prompt: Some("prompt".to_string()),
+            ready_to_merge: false,
+            original_agent_type: Some("claude".to_string()),
+            original_agent_model: Some("gpt".to_string()),
+            pending_name_generation: false,
+            was_auto_generated: false,
+            spec_content: None,
+            session_state: SessionState::Running,
+            resume_allowed: true,
+            amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
+            pr_number: None,
+            pr_url: None,
+            pr_state: None,
+            is_consolidation: true,
+            consolidation_sources: Some(vec!["source-a".to_string(), "source-b".to_string()]),
+            consolidation_round_id: Some("round-1".to_string()),
+            consolidation_role: Some("candidate".to_string()),
+            consolidation_report: Some("report".to_string()),
+            consolidation_report_source: Some("agent".to_string()),
+            consolidation_base_session_id: Some("base-1".to_string()),
+            consolidation_recommended_session_id: Some("winner-1".to_string()),
+            consolidation_confirmation_mode: Some("confirm".to_string()),
+            promotion_reason: None,
+            ci_autofix_enabled: false,
+            merged_at: None,
+        }
+    }
+
+    #[test]
+    fn clear_session_consolidation_metadata_resets_all_flags() {
+        let tmp = TempDir::new().expect("temp dir");
+        let repo_path = tmp.path().to_path_buf();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let repo = SessionDbManager::new(db.clone(), repo_path.clone());
+        let session = make_test_session(&repo_path);
+
+        db.create_session(&session).expect("create session");
+
+        repo.clear_session_consolidation_metadata(&session.id)
+            .expect("clear metadata");
+
+        let reloaded = db
+            .get_session_by_name(&repo_path, &session.name)
+            .expect("reload session");
+        assert!(!reloaded.is_consolidation);
+        assert!(reloaded.consolidation_role.is_none());
+        assert!(reloaded.consolidation_round_id.is_none());
+        assert!(reloaded.consolidation_base_session_id.is_none());
+        assert!(reloaded.consolidation_recommended_session_id.is_none());
+        assert!(reloaded.consolidation_report.is_none());
+        assert!(reloaded.consolidation_report_source.is_none());
+        assert!(reloaded.consolidation_sources.is_none());
+        assert!(reloaded.consolidation_confirmation_mode.is_none());
+        assert_eq!(reloaded.version_group_id.as_deref(), Some("group-1"));
     }
 }

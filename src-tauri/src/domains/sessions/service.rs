@@ -3480,6 +3480,11 @@ impl SessionManager {
         self.db_manager.get_session_by_id(id)
     }
 
+    pub fn clear_session_consolidation_metadata(&self, session_id: &str) -> Result<()> {
+        self.db_manager
+            .clear_session_consolidation_metadata(session_id)
+    }
+
     pub fn link_session_to_pr(&self, name: &str, pr_number: i64, pr_url: &str) -> Result<()> {
         self.db_manager
             .update_session_pr_info_by_name(name, Some(pr_number), Some(pr_url))

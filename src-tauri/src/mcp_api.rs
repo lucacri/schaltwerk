@@ -240,6 +240,15 @@ where
     )
     .map_err(internal)?;
 
+    manager
+        .clear_session_consolidation_metadata(&promoted_session.id)
+        .map_err(|err| {
+            internal(format!(
+                "Failed to clear consolidation metadata for promoted session '{}': {err}",
+                promoted_session.name
+            ))
+        })?;
+
     let mut candidate_sessions_cancelled = Vec::new();
     let mut source_sessions_cancelled = Vec::new();
     let mut judge_sessions_cancelled = Vec::new();
@@ -3591,6 +3600,40 @@ mod tests {
         names
     }
 
+    fn assert_consolidation_metadata_cleared(session: &Session) {
+        assert!(!session.is_consolidation);
+        assert!(session.consolidation_sources.is_none());
+        assert!(session.consolidation_round_id.is_none());
+        assert!(session.consolidation_role.is_none());
+        assert!(session.consolidation_report.is_none());
+        assert!(session.consolidation_report_source.is_none());
+        assert!(session.consolidation_base_session_id.is_none());
+        assert!(session.consolidation_recommended_session_id.is_none());
+        assert!(session.consolidation_confirmation_mode.is_none());
+    }
+
+    fn load_outcome_candidate_outcome(db: &Database, round_id: &str, session_id: &str) -> String {
+        let conn = db.get_conn().expect("db conn");
+        conn.query_row(
+            "SELECT outcome
+             FROM consolidation_outcome_candidates
+             WHERE round_id = ?1 AND session_id = ?2",
+            rusqlite::params![round_id, session_id],
+            |row| row.get(0),
+        )
+        .expect("load outcome candidate")
+    }
+
+    fn count_consolidation_outcomes(db: &Database, round_id: &str) -> i64 {
+        let conn = db.get_conn().expect("db conn");
+        conn.query_row(
+            "SELECT COUNT(*) FROM consolidation_outcomes WHERE round_id = ?1",
+            rusqlite::params![round_id],
+            |row| row.get(0),
+        )
+        .expect("count outcomes")
+    }
+
     struct PlanRoundFixture {
         _tmp: TempDir,
         repo_path: PathBuf,
@@ -5721,6 +5764,12 @@ mod tests {
         let updated_judge = manager.get_session(judge_raw_name).expect("get judge");
         assert_eq!(updated_judge.display_name.as_deref(), Some("feat"));
         assert_eq!(updated_judge.branch, "lucode/feat");
+        assert_consolidation_metadata_cleared(&updated_judge);
+        assert_eq!(count_consolidation_outcomes(&db, round_id), 1);
+        assert_eq!(
+            load_outcome_candidate_outcome(&db, round_id, &updated_judge.id),
+            "winner"
+        );
         assert!(cancelled_sessions.contains(&c1.name));
     }
 
@@ -5927,6 +5976,333 @@ mod tests {
             .get_session(&candidate.name)
             .expect("get preserved candidate");
         assert_eq!(updated_candidate.branch, "lucode/feat-consolidation");
+        assert_consolidation_metadata_cleared(&updated_candidate);
+        assert_eq!(count_consolidation_outcomes(&db, round_id), 1);
+        assert_eq!(
+            load_outcome_candidate_outcome(&db, round_id, &updated_candidate.id),
+            "winner"
+        );
+    }
+
+    #[tokio::test]
+    async fn promoted_session_no_longer_surfaces_confirm_actions() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = create_manager(&repo_path);
+
+        let group_id = "group-1";
+        let round_id = "round-1";
+
+        db.set_project_branch_prefix(&repo_path, "lucode")
+            .expect("set prefix");
+
+        let source_one = manager
+            .create_session_with_auto_flag("feat_v1", None, None, false, Some(group_id), Some(1))
+            .expect("create first source");
+        let source_two = manager
+            .create_session_with_auto_flag("feat_v2", None, None, false, Some(group_id), Some(2))
+            .expect("create second source");
+        let source_ids = vec![source_one.id.clone(), source_two.id.clone()];
+
+        let candidate = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat-consolidation",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: None,
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(source_ids.clone()),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create candidate");
+
+        let judge = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat-consolidation-judge-12345",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: None,
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(source_ids.clone()),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("judge"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create judge");
+
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            round_id,
+            group_id,
+            &source_ids,
+            "confirm",
+            "implementation",
+        )
+        .expect("create round");
+
+        update_session_consolidation_report(
+            &db,
+            &repo_path,
+            &candidate.name,
+            "Winner keeps feat_v1 as the base.",
+            Some(source_one.id.as_str()),
+            None,
+            "agent",
+        )
+        .expect("persist candidate report");
+        update_consolidation_round_recommendation(
+            &db,
+            round_id,
+            Some(candidate.id.as_str()),
+            Some(judge.id.as_str()),
+            "awaiting_confirmation",
+        )
+        .expect("persist recommendation");
+
+        confirm_consolidation_winner_with_callbacks(
+            &db,
+            &manager,
+            ConfirmConsolidationWinnerParams {
+                round_id,
+                winner_session_id: &candidate.id,
+                override_reason: None,
+                confirmed_by: "user",
+            },
+            &mut |_| Ok(()),
+            &mut |_: &str| Box::pin(async { Ok(()) }),
+        )
+        .await
+        .expect("confirm success");
+
+        let (enriched, _) = manager
+            .list_enriched_sessions_base()
+            .expect("list enriched sessions");
+        let promoted = enriched
+            .into_iter()
+            .find(|session| session.info.stable_id.as_deref() == Some(candidate.id.as_str()))
+            .expect("find promoted session");
+        assert!(!promoted.info.is_consolidation);
+        assert!(promoted.info.consolidation_role.is_none());
+    }
+
+    #[tokio::test]
+    async fn confirm_preserved_candidate_returns_clear_error_when_metadata_strip_fails() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = create_manager(&repo_path);
+
+        let group_id = "group-1";
+        let round_id = "round-1";
+
+        db.set_project_branch_prefix(&repo_path, "lucode")
+            .expect("set prefix");
+
+        let source_one = manager
+            .create_session_with_auto_flag("feat_v1", None, None, false, Some(group_id), Some(1))
+            .expect("create first source");
+        let source_two = manager
+            .create_session_with_auto_flag("feat_v2", None, None, false, Some(group_id), Some(2))
+            .expect("create second source");
+        let source_ids = vec![source_one.id.clone(), source_two.id.clone()];
+
+        let candidate = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat-consolidation",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: None,
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(source_ids.clone()),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create candidate");
+
+        let judge = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat-consolidation-judge-12345",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: None,
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(source_ids.clone()),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("judge"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create judge");
+
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            round_id,
+            group_id,
+            &source_ids,
+            "confirm",
+            "implementation",
+        )
+        .expect("create round");
+
+        update_consolidation_round_recommendation(
+            &db,
+            round_id,
+            Some(candidate.id.as_str()),
+            Some(judge.id.as_str()),
+            "awaiting_confirmation",
+        )
+        .expect("persist recommendation");
+
+        let conn = db.get_conn().expect("db conn");
+        let trigger_sql = format!(
+            "CREATE TRIGGER fail_clear_promoted_candidate
+             BEFORE UPDATE ON sessions
+             FOR EACH ROW
+             WHEN OLD.id = '{}' AND NEW.is_consolidation = 0
+             BEGIN
+                 SELECT RAISE(FAIL, 'forced clear failure');
+             END",
+            candidate.id
+        );
+        conn.execute_batch(&trigger_sql)
+            .expect("create failure trigger");
+        drop(conn);
+
+        let err = confirm_consolidation_winner_with_callbacks(
+            &db,
+            &manager,
+            ConfirmConsolidationWinnerParams {
+                round_id,
+                winner_session_id: &candidate.id,
+                override_reason: None,
+                confirmed_by: "user",
+            },
+            &mut |_| Ok(()),
+            &mut |_: &str| Box::pin(async { Ok(()) }),
+        )
+        .await
+        .expect_err("metadata clear should fail");
+
+        assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(
+            err.1
+                .contains("Failed to clear consolidation metadata for promoted session"),
+            "unexpected error: {}",
+            err.1
+        );
+        assert!(err.1.contains("forced clear failure"));
+
+        let round = get_consolidation_round(&db, &repo_path, round_id).expect("load round");
+        assert_eq!(round.status, "promoted");
+        assert_eq!(count_consolidation_outcomes(&db, round_id), 1);
+
+        let reloaded_candidate = manager
+            .get_session(&candidate.name)
+            .expect("reload preserved candidate");
+        assert!(reloaded_candidate.is_consolidation);
+        assert_eq!(
+            reloaded_candidate.consolidation_role.as_deref(),
+            Some("candidate")
+        );
+    }
+
+    #[tokio::test]
+    async fn plan_round_confirmation_does_not_leave_active_candidate_with_consolidation_metadata() {
+        let fixture = make_plan_round_fixture();
+        let db = fixture.db.clone();
+        let repo_path = fixture.repo_path.clone();
+
+        confirm_consolidation_winner_with_callbacks(
+            &fixture.db,
+            &fixture.manager,
+            ConfirmConsolidationWinnerParams {
+                round_id: &fixture.round_id,
+                winner_session_id: &fixture.winning_candidate.id,
+                override_reason: None,
+                confirmed_by: "user",
+            },
+            |_| Ok(()),
+            |session_name: &str| {
+                let session_name = session_name.to_string();
+                let db = db.clone();
+                let repo_path = repo_path.clone();
+                async move {
+                    SessionManager::new(db, repo_path)
+                        .fast_cancel_session(&session_name)
+                        .await
+                }
+            },
+        )
+        .await
+        .expect("confirm plan winner");
+
+        let winning_candidate = fixture
+            .db
+            .get_session_by_name(&fixture.repo_path, &fixture.winning_candidate.name)
+            .expect("load winning candidate");
+        assert_eq!(winning_candidate.status, SessionStatus::Cancelled);
+        assert!(winning_candidate.is_consolidation);
+
+        let losing_candidate = fixture
+            .db
+            .get_session_by_name(&fixture.repo_path, &fixture.losing_candidate.name)
+            .expect("load losing candidate");
+        assert_eq!(losing_candidate.status, SessionStatus::Cancelled);
+        assert!(losing_candidate.is_consolidation);
+
+        let judge = fixture
+            .db
+            .get_session_by_name(&fixture.repo_path, &fixture.judge.name)
+            .expect("load judge");
+        assert_eq!(judge.status, SessionStatus::Cancelled);
+        assert!(judge.is_consolidation);
+
+        let (enriched, _) = fixture
+            .manager
+            .list_enriched_sessions_base()
+            .expect("list enriched sessions");
+        assert!(
+            enriched
+                .into_iter()
+                .all(|session| session.info.stable_id.as_deref()
+                    != Some(fixture.winning_candidate.id.as_str())),
+            "cancelled plan winner should not remain in the active session list"
+        );
     }
 
     #[tokio::test]
