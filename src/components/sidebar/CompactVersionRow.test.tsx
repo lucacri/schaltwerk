@@ -187,7 +187,7 @@ describe('CompactVersionRow', () => {
     expect(screen.getByTestId('compact-row-status-running')).toBeInTheDocument()
   })
 
-  it('renders clarified state for clarified specs', () => {
+  it('renders ready state for ready specs', () => {
     renderRow({
       session: {
         ...baseSession,
@@ -195,7 +195,7 @@ describe('CompactVersionRow', () => {
           ...baseSession.info,
           session_state: 'spec',
           status: 'spec',
-          spec_stage: 'clarified',
+          spec_stage: 'ready',
           worktree_path: '',
           attention_required: false,
           clarification_started: true,
@@ -203,8 +203,8 @@ describe('CompactVersionRow', () => {
       },
     })
 
-    expect(screen.getByTestId('compact-row-status-clarified')).toBeInTheDocument()
-    expect(screen.getByText(/^Clarified$/)).toBeInTheDocument()
+    expect(screen.getByTestId('compact-row-status-ready')).toBeInTheDocument()
+    expect(screen.getByTestId('compact-row-status-ready')).toHaveTextContent(/Ready/)
   })
 
   it('renders clarification waiting state for started specs', () => {
@@ -236,7 +236,7 @@ describe('CompactVersionRow', () => {
             ...baseSession.info,
             session_state: 'spec',
             status: 'spec',
-            spec_stage: 'clarified',
+            spec_stage: 'ready',
             worktree_path: '',
             attention_required: true,
             attention_kind: 'waiting_for_input',
@@ -276,7 +276,7 @@ describe('CompactVersionRow', () => {
           ...baseSession.info,
           session_state: 'spec',
           status: 'spec',
-          spec_stage: 'clarified',
+          spec_stage: 'ready',
           worktree_path: '',
           attention_required: undefined,
           attention_kind: undefined,

@@ -47,7 +47,7 @@ export function SpecMetadataPanel({ sessionName }: Props) {
     [sessions, sessionName]
   )
   const canImprovePlan =
-    selectedSession?.info.spec_stage === 'clarified' &&
+    selectedSession?.info.spec_stage === 'ready' &&
     !selectedSession?.info.improve_plan_round_id
   const improvePlanActive = Boolean(selectedSession?.info.improve_plan_round_id)
   const improvePlanStarting = improvePlanAction.startingSessionId === sessionName

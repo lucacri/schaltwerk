@@ -69,7 +69,15 @@ export enum SessionState {
     Running = 'running'
 }
 
-export type SpecStage = 'draft' | 'clarified'
+export type SpecStage =
+    | 'draft'
+    | 'ready'
+    | 'brainstormed'
+    | 'planned'
+    | 'implemented'
+    | 'pushed'
+    | 'done'
+    | 'cancelled'
 export type PrState = 'open' | 'succeeding' | 'mred'
 
 export interface Epic {

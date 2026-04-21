@@ -124,7 +124,7 @@ ${MERMAID_DIAGRAM_GUIDANCE}`,
   ].join('\n'),
   autonomy_prompt_template: DEFAULT_AUTONOMY_PROMPT_TEMPLATE,
   force_restart_prompt_template: '',
-  plan_candidate_prompt_template: `You are preparing an implementation plan for this clarified Lucode spec.
+  plan_candidate_prompt_template: `You are preparing an implementation plan for this ready Lucode task.
 
 Inspect the repository as needed. Do not implement code. Write a concise, actionable Markdown implementation plan, then call lucode_consolidation_report with your plan as report and base_session_id set to '{SPEC_ID}'.
 

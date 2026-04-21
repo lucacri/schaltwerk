@@ -950,6 +950,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         }
     }
 
@@ -1230,6 +1233,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         };
 
         let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);

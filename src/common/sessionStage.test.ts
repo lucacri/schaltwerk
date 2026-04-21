@@ -18,17 +18,17 @@ function makeSessionInfo(overrides: Partial<SessionInfo> = {}): SessionInfo {
 }
 
 describe('deriveStage', () => {
-    it('maps spec status without spec_stage to Idea', () => {
+    it('maps spec status without spec_stage to Draft', () => {
         expect(
             deriveStage({
                 status: 'spec',
                 sessionState: 'spec',
                 readyToMerge: false,
             }),
-        ).toBe('idea')
+        ).toBe('draft')
     })
 
-    it('maps spec stage draft to Idea', () => {
+    it('maps spec stage draft to Draft', () => {
         expect(
             deriveStage({
                 status: 'spec',
@@ -36,51 +36,51 @@ describe('deriveStage', () => {
                 readyToMerge: false,
                 specStage: 'draft',
             }),
-        ).toBe('idea')
+        ).toBe('draft')
     })
 
-    it('maps spec stage clarified to Clarified', () => {
+    it('maps explicit stage to the authoritative task stage', () => {
         expect(
             deriveStage({
                 status: 'spec',
                 sessionState: 'spec',
                 readyToMerge: false,
-                specStage: 'clarified',
+                stage: 'planned',
             }),
-        ).toBe('clarified')
+        ).toBe('planned')
     })
 
-    it('maps running session to WorkingOn', () => {
+    it('maps running session to Implemented when no explicit stage exists', () => {
         expect(
             deriveStage({
                 status: 'active',
                 sessionState: 'running',
                 readyToMerge: false,
             }),
-        ).toBe('working_on')
+        ).toBe('implemented')
     })
 
-    it('maps processing session to WorkingOn', () => {
+    it('maps processing session to Implemented when no explicit stage exists', () => {
         expect(
             deriveStage({
                 status: 'active',
                 sessionState: 'processing',
                 readyToMerge: false,
             }),
-        ).toBe('working_on')
+        ).toBe('implemented')
     })
 
-    it('maps ready_to_merge to ReadyToMerge', () => {
+    it('maps ready_to_merge compatibility sessions to Implemented', () => {
         expect(
             deriveStage({
                 status: 'active',
                 sessionState: 'running',
                 readyToMerge: true,
             }),
-        ).toBe('ready_to_merge')
+        ).toBe('implemented')
     })
 
-    it('maps consolidation candidate to JudgeReview', () => {
+    it('maps consolidation candidate compatibility sessions to Implemented', () => {
         expect(
             deriveStage({
                 status: 'active',
@@ -88,10 +88,10 @@ describe('deriveStage', () => {
                 readyToMerge: false,
                 consolidationRole: 'candidate',
             }),
-        ).toBe('judge_review')
+        ).toBe('implemented')
     })
 
-    it('maps consolidation judge to JudgeReview', () => {
+    it('maps consolidation judge compatibility sessions to Implemented', () => {
         expect(
             deriveStage({
                 status: 'active',
@@ -99,10 +99,10 @@ describe('deriveStage', () => {
                 readyToMerge: false,
                 consolidationRole: 'judge',
             }),
-        ).toBe('judge_review')
+        ).toBe('implemented')
     })
 
-    it('maps pending consolidation round to JudgeReview', () => {
+    it('maps pending consolidation round compatibility sessions to Implemented', () => {
         expect(
             deriveStage({
                 status: 'active',
@@ -110,18 +110,19 @@ describe('deriveStage', () => {
                 readyToMerge: false,
                 consolidationRoundPending: true,
             }),
-        ).toBe('judge_review')
+        ).toBe('implemented')
     })
 
-    it('judge_review beats ready_to_merge when both conditions hold', () => {
+    it('explicit stage beats compatibility hints', () => {
         expect(
             deriveStage({
                 status: 'active',
                 sessionState: 'running',
                 readyToMerge: true,
+                stage: 'brainstormed',
                 consolidationRole: 'candidate',
             }),
-        ).toBe('judge_review')
+        ).toBe('brainstormed')
     })
 
     it('maps archived status to Cancelled', () => {
@@ -134,7 +135,7 @@ describe('deriveStage', () => {
         ).toBe('cancelled')
     })
 
-    it('mergedAtIsSet trumps everything', () => {
+    it('archived status stays cancelled without an explicit stage', () => {
         expect(
             deriveStage({
                 status: 'archived',
@@ -143,74 +144,80 @@ describe('deriveStage', () => {
                 consolidationRole: 'judge',
                 mergedAtIsSet: true,
             }),
-        ).toBe('merged')
+        ).toBe('cancelled')
     })
 
-    it('spec session_state without spec status still treated as Idea', () => {
+    it('spec session_state without spec status still treated as Draft', () => {
         expect(
             deriveStage({
                 status: 'active',
                 sessionState: 'spec',
                 readyToMerge: false,
             }),
-        ).toBe('idea')
+        ).toBe('draft')
     })
 })
 
 describe('stageForSession', () => {
-    it('derives Idea for a freshly created spec', () => {
+    it('derives Draft for a freshly created spec', () => {
         const session = makeSessionInfo({
             status: 'spec',
             session_state: 'spec',
         })
-        expect(stageForSession(session)).toBe('idea')
+        expect(stageForSession(session)).toBe('draft')
     })
 
-    it('derives Clarified for a spec with spec_stage = clarified', () => {
+    it('derives Ready for a spec with spec_stage = ready', () => {
         const session = makeSessionInfo({
             status: 'spec',
             session_state: 'spec',
-            spec_stage: 'clarified',
+            spec_stage: 'ready',
         })
-        expect(stageForSession(session)).toBe('clarified')
+        expect(stageForSession(session)).toBe('ready')
     })
 
-    it('derives ReadyToMerge when ready_to_merge is true on a running session', () => {
+    it('uses the authoritative stage field when present', () => {
+        const session = makeSessionInfo({ stage: 'planned' })
+        expect(stageForSession(session)).toBe('planned')
+    })
+
+    it('derives Implemented when ready_to_merge is true on a running compatibility session', () => {
         const session = makeSessionInfo({ ready_to_merge: true })
-        expect(stageForSession(session)).toBe('ready_to_merge')
+        expect(stageForSession(session)).toBe('implemented')
     })
 
-    it('derives JudgeReview when consolidation_round_id is set', () => {
+    it('derives Implemented when consolidation_round_id is set on a compatibility session', () => {
         const session = makeSessionInfo({ consolidation_round_id: 'round-1' })
-        expect(stageForSession(session)).toBe('judge_review')
+        expect(stageForSession(session)).toBe('implemented')
     })
 
-    it('derives WorkingOn for an active running session with no special flags', () => {
+    it('derives Implemented for an active running session with no special flags', () => {
         const session = makeSessionInfo()
-        expect(stageForSession(session)).toBe('working_on')
+        expect(stageForSession(session)).toBe('implemented')
     })
 })
 
 describe('stage constants', () => {
-    it('STAGES contains exactly seven ordered entries', () => {
+    it('STAGES contains the ordered task stages', () => {
         expect(STAGES).toEqual([
-            'idea',
-            'clarified',
-            'working_on',
-            'judge_review',
-            'ready_to_merge',
-            'merged',
+            'draft',
+            'ready',
+            'brainstormed',
+            'planned',
+            'implemented',
+            'pushed',
+            'done',
             'cancelled',
         ])
     })
 
-    it('NON_TERMINAL_STAGES excludes merged and cancelled', () => {
-        expect(NON_TERMINAL_STAGES).not.toContain('merged')
+    it('NON_TERMINAL_STAGES excludes done and cancelled', () => {
+        expect(NON_TERMINAL_STAGES).not.toContain('done')
         expect(NON_TERMINAL_STAGES).not.toContain('cancelled')
-        expect(NON_TERMINAL_STAGES.length).toBe(5)
+        expect(NON_TERMINAL_STAGES.length).toBe(6)
     })
 
-    it('TERMINAL_STAGES covers only merged and cancelled', () => {
-        expect(TERMINAL_STAGES).toEqual(['merged', 'cancelled'])
+    it('TERMINAL_STAGES covers only done and cancelled', () => {
+        expect(TERMINAL_STAGES).toEqual(['done', 'cancelled'])
     })
 })

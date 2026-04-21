@@ -19,12 +19,13 @@ export function bucketSessionsByStage(
     sessions: EnrichedSession[],
 ): Record<ColumnKey, EnrichedSession[]> {
     const buckets: Record<ColumnKey, EnrichedSession[]> = {
-        idea: [],
-        clarified: [],
-        working_on: [],
-        judge_review: [],
-        ready_to_merge: [],
-        merged: [],
+        draft: [],
+        ready: [],
+        brainstormed: [],
+        planned: [],
+        implemented: [],
+        pushed: [],
+        done: [],
         cancelled: [],
         [TERMINAL_COLUMN_KEY]: [],
     }
@@ -32,7 +33,7 @@ export function bucketSessionsByStage(
     for (const session of sessions) {
         const stage = stageForSession(session.info)
         buckets[stage].push(session)
-        if (stage === 'merged' || stage === 'cancelled') {
+        if (stage === 'done' || stage === 'cancelled') {
             buckets[TERMINAL_COLUMN_KEY].push(session)
         }
     }
@@ -44,12 +45,13 @@ export function KanbanView({ sessions, renderSession, initialCollapsed }: Kanban
     const buckets = useMemo(() => bucketSessionsByStage(sessions), [sessions])
 
     const [collapsed, setCollapsed] = useState<Record<ColumnKey, boolean>>(() => ({
-        idea: initialCollapsed?.idea ?? false,
-        clarified: initialCollapsed?.clarified ?? false,
-        working_on: initialCollapsed?.working_on ?? false,
-        judge_review: initialCollapsed?.judge_review ?? false,
-        ready_to_merge: initialCollapsed?.ready_to_merge ?? false,
-        merged: initialCollapsed?.merged ?? true,
+        draft: initialCollapsed?.draft ?? false,
+        ready: initialCollapsed?.ready ?? false,
+        brainstormed: initialCollapsed?.brainstormed ?? false,
+        planned: initialCollapsed?.planned ?? false,
+        implemented: initialCollapsed?.implemented ?? false,
+        pushed: initialCollapsed?.pushed ?? false,
+        done: initialCollapsed?.done ?? true,
         cancelled: initialCollapsed?.cancelled ?? true,
         [TERMINAL_COLUMN_KEY]: initialCollapsed?.[TERMINAL_COLUMN_KEY] ?? true,
     }))
@@ -76,13 +78,7 @@ export function KanbanView({ sessions, renderSession, initialCollapsed }: Kanban
                         />
                         {!collapsed[stage] && (
                             <div className="mt-1 space-y-1" data-testid={`kanban-column-body-${stage}`}>
-                                {stage === 'judge_review'
-                                    ? renderJudgeReview(items, renderSession)
-                                    : items.map(session => (
-                                          <div key={session.info.session_id}>
-                                              {renderSession(session)}
-                                          </div>
-                                      ))}
+                                {renderStageItems(items, renderSession)}
                             </div>
                         )}
                     </section>
@@ -114,7 +110,7 @@ export function KanbanView({ sessions, renderSession, initialCollapsed }: Kanban
     )
 }
 
-function renderJudgeReview(
+function renderStageItems(
     sessions: EnrichedSession[],
     renderSession: (session: EnrichedSession) => ReactNode,
 ): ReactNode {

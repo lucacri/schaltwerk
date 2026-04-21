@@ -12,7 +12,7 @@ export type SidebarPrimaryStatus =
   | 'waiting'
   | 'idle'
   | 'not_started'
-  | 'clarified'
+  | 'ready'
   | 'running'
   | 'ready'
   | null
@@ -37,6 +37,8 @@ export function getSidebarSessionStatus(
   const sessionState = getSessionLifecycleState(info)
   const isSpecClarificationStarted =
     sessionState === SessionState.Spec && info.clarification_started === true
+  const isDraftClarificationActive =
+    isSpecClarificationStarted && info.spec_stage !== 'ready'
   const specNotStarted = sessionState === SessionState.Spec && !isSpecClarificationStarted
   const specWaitingForInput = isSpecClarificationStarted
     && info.attention_required === true
@@ -50,18 +52,19 @@ export function getSidebarSessionStatus(
       ? info.attention_required === true && !specWaitingForInput
       : info.attention_required === true && !runningWaitingForInput
   const isWaitingForInput = rawWaiting && !isRunning
-  const clarifiedSpecCanComplete =
+  const readySpecCanComplete =
     sessionState === SessionState.Spec
-    && info.spec_stage === 'clarified'
+    && info.spec_stage === 'ready'
     && !isRunning
     && !isBlocked
-  const isIdle = rawIdle && !isRunning && !(clarifiedSpecCanComplete && !isWaitingForInput)
-  const isClarifiedSpecComplete =
-    clarifiedSpecCanComplete
+  const isIdle = rawIdle && !isRunning && !(readySpecCanComplete && !isWaitingForInput)
+  const isReadySpecComplete =
+    readySpecCanComplete
     && !isWaitingForInput
   const isActivelyRunning =
-    !isClarifiedSpecComplete && !isIdle && !isWaitingForInput && (
-      isSpecClarificationStarted
+    !isReadySpecComplete && !isIdle && !isWaitingForInput && (
+      isRunning
+      || isDraftClarificationActive
       || (sessionState === SessionState.Running && (info.ready_to_merge !== true || isRunning))
     )
 
@@ -71,8 +74,8 @@ export function getSidebarSessionStatus(
       ? 'waiting'
       : isIdle
         ? 'idle'
-        : isClarifiedSpecComplete
-          ? 'clarified'
+        : isReadySpecComplete
+          ? 'ready'
           : specNotStarted
             ? 'not_started'
             : isActivelyRunning

@@ -285,10 +285,10 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
       )
     }
 
-    if (statusState.primaryStatus === 'clarified') {
+    if (statusState.primaryStatus === 'ready' && sessionState === 'spec') {
       return (
         <span
-          data-testid="compact-row-status-clarified"
+          data-testid="compact-row-status-ready"
           className="inline-flex items-center px-1.5 py-[1px] rounded border"
           style={{
             ...sessionText.badge,
@@ -297,7 +297,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
             borderColor: 'var(--color-accent-green-border)',
           }}
         >
-          {t.session.clarified}
+          {t.session.ready}
         </span>
       )
     }
@@ -543,7 +543,7 @@ export const CompactVersionRow = memo<CompactVersionRowProps>(({
                 onRefineSpec={onRefineSpec}
                 onDeleteSpec={onDeleteSpec}
                 onImprovePlanSpec={onImprovePlanSpec}
-                canImprovePlanSpec={s.spec_stage === 'clarified' && !s.improve_plan_round_id}
+                canImprovePlanSpec={s.spec_stage === 'ready' && !s.improve_plan_round_id}
                 improvePlanActive={Boolean(s.improve_plan_round_id)}
                 improvePlanStarting={improvePlanStartingSessionId === s.session_id}
                 onCancel={onCancel}

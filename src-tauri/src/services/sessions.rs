@@ -369,6 +369,7 @@ mod tests {
                 consolidation_confirmation_mode: None,
                 promotion_reason: None,
                 attention_kind: None,
+                stage: None,
             },
             status: None,
             terminals: vec![],

@@ -143,6 +143,9 @@ struct SessionSummaryRow {
     promotion_reason: Option<String>,
     ci_autofix_enabled: bool,
     merged_at: Option<i64>,
+    task_id: Option<String>,
+    task_stage: Option<String>,
+    task_role: Option<String>,
 }
 
 impl Database {
@@ -213,6 +216,9 @@ impl Database {
                     promotion_reason: summary.promotion_reason,
                     ci_autofix_enabled: summary.ci_autofix_enabled,
                     merged_at: summary.merged_at.map(utc_from_epoch_seconds_lossy),
+                    task_id: summary.task_id,
+                    task_stage: summary.task_stage.and_then(|stage| stage.parse().ok()),
+                    task_role: summary.task_role,
                 }
             })
             .collect())
@@ -262,8 +268,8 @@ impl SessionMethods for Database {
                 branch, parent_branch, original_parent_branch, worktree_path,
                 status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                 original_agent_type, pending_name_generation, was_auto_generated,
-                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43)",
+                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44, ?45, ?46)",
             params![
                 session.id,
                 session.name,
@@ -311,6 +317,9 @@ impl SessionMethods for Database {
                 session.merged_at.map(|dt| dt.timestamp()),
                 session.pr_state.as_ref().map(|state| state.as_str()),
                 session.original_agent_model,
+                session.task_id,
+                session.task_stage.as_ref().map(|stage| stage.as_str()),
+                session.task_role,
             ],
         )?;
 
@@ -325,7 +334,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
              FROM sessions
              WHERE repository_path = ?1 AND name = ?2"
         )?;
@@ -390,6 +399,13 @@ impl SessionMethods for Database {
                     .ok()
                     .flatten()
                     .and_then(|state| state.parse().ok()),
+                task_id: row.get(43).ok(),
+                task_stage: row
+                    .get::<_, Option<String>>(44)
+                    .ok()
+                    .flatten()
+                    .and_then(|stage| stage.parse().ok()),
+                task_role: row.get(45).ok(),
             })
         })?;
 
@@ -404,7 +420,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
              FROM sessions
              WHERE id = ?1"
         )?;
@@ -469,6 +485,13 @@ impl SessionMethods for Database {
                     .ok()
                     .flatten()
                     .and_then(|state| state.parse().ok()),
+                task_id: row.get(43).ok(),
+                task_stage: row
+                    .get::<_, Option<String>>(44)
+                    .ok()
+                    .flatten()
+                    .and_then(|stage| stage.parse().ok()),
+                task_role: row.get(45).ok(),
             })
         })?;
 
@@ -510,7 +533,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
                  FROM sessions
                  WHERE repository_path = ?1
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -566,6 +589,9 @@ impl SessionMethods for Database {
                     ci_autofix_enabled: row.get(37).unwrap_or(false),
                     merged_at: row.get(38).ok(),
                     pr_state: row.get(39).ok(),
+                    task_id: row.get(41).ok(),
+                    task_stage: row.get(42).ok(),
+                    task_role: row.get(43).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -595,7 +621,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
                  FROM sessions
                  WHERE status = 'active'
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -651,6 +677,9 @@ impl SessionMethods for Database {
                     ci_autofix_enabled: row.get(37).unwrap_or(false),
                     merged_at: row.get(38).ok(),
                     pr_state: row.get(39).ok(),
+                    task_id: row.get(41).ok(),
+                    task_stage: row.get(42).ok(),
+                    task_role: row.get(43).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -777,7 +806,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
                  FROM sessions
                  WHERE repository_path = ?1 AND session_state = ?2
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -837,6 +866,9 @@ impl SessionMethods for Database {
                         ci_autofix_enabled: row.get(37).unwrap_or(false),
                         merged_at: row.get(38).ok(),
                         pr_state: row.get(39).ok(),
+                        task_id: row.get(41).ok(),
+                        task_stage: row.get(42).ok(),
+                        task_role: row.get(43).ok(),
                     })
                 },
             )?;
@@ -1197,6 +1229,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         };
 
         db.create_session(&session)
@@ -1266,6 +1301,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         };
 
         db.create_session(&session)
@@ -1331,6 +1369,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         };
 
         db.create_session(&session)
@@ -1499,6 +1540,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         };
 
         db.create_session(&session)
@@ -1573,6 +1617,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         };
 
         db.create_session(&session)
@@ -1663,6 +1710,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         };
 
         db.create_session(&session)
@@ -1741,6 +1791,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         };
 
         db.create_session(&session)

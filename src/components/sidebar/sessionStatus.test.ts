@@ -29,27 +29,27 @@ function statusFor(overrides: Partial<SessionInfo>, isRunning = false) {
 }
 
 describe('getSidebarSessionStatus', () => {
-  it('returns clarified for clarified specs that are not running and do not need attention', () => {
+  it('returns ready for ready specs that are not running and do not need attention', () => {
     const status = statusFor({
       session_state: SessionState.Spec,
       status: 'spec',
       worktree_path: '',
-      spec_stage: 'clarified',
+      spec_stage: 'ready',
       clarification_started: true,
       attention_required: false,
     })
 
-    expect(status.primaryStatus).toBe('clarified')
+    expect(status.primaryStatus).toBe('ready')
     expect(status.isWaitingForInput).toBe(false)
     expect(status.isIdle).toBe(false)
   })
 
-  it('returns waiting for clarified specs with waiting attention when they are not running', () => {
+  it('returns waiting for ready specs with waiting attention when they are not running', () => {
     const status = statusFor({
       session_state: SessionState.Spec,
       status: 'spec',
       worktree_path: '',
-      spec_stage: 'clarified',
+      spec_stage: 'ready',
       clarification_started: true,
       attention_required: true,
       attention_kind: 'waiting_for_input',
@@ -59,27 +59,27 @@ describe('getSidebarSessionStatus', () => {
     expect(status.isWaitingForInput).toBe(true)
   })
 
-  it('returns clarified for clarified specs with idle attention when they are not running', () => {
+  it('returns ready for ready specs with idle attention when they are not running', () => {
     const status = statusFor({
       session_state: SessionState.Spec,
       status: 'spec',
       worktree_path: '',
-      spec_stage: 'clarified',
+      spec_stage: 'ready',
       clarification_started: true,
       attention_required: true,
       attention_kind: 'idle',
     })
 
-    expect(status.primaryStatus).toBe('clarified')
+    expect(status.primaryStatus).toBe('ready')
     expect(status.isIdle).toBe(false)
   })
 
-  it('lets live running override stale waiting attention for clarified specs', () => {
+  it('lets live running override stale waiting attention for ready specs', () => {
     const status = statusFor({
       session_state: SessionState.Spec,
       status: 'spec',
       worktree_path: '',
-      spec_stage: 'clarified',
+      spec_stage: 'ready',
       clarification_started: true,
       attention_required: true,
       attention_kind: 'waiting_for_input',
@@ -126,12 +126,12 @@ describe('getSidebarSessionStatus', () => {
     expect(status.isIdle).toBe(false)
   })
 
-  it('treats blocked clarified specs as blocked regardless of spec_stage', () => {
+  it('treats blocked ready specs as blocked regardless of spec_stage', () => {
     const status = statusFor({
       session_state: SessionState.Spec,
       status: 'spec',
       worktree_path: '',
-      spec_stage: 'clarified',
+      spec_stage: 'ready',
       clarification_started: true,
       attention_required: false,
       is_blocked: true,

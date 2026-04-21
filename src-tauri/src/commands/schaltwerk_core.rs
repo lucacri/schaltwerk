@@ -353,7 +353,7 @@ fn build_spec_clarification_prompt(spec: &lucode::domains::sessions::entity::Spe
     let title = spec.display_name.as_deref().unwrap_or(&spec.name);
     format!(
         "You are the clarification agent for the Lucode spec \"{title}\".\n\n\
-Job: turn the draft into a clarified problem definition ready for implementation handoff. Investigate deeply before asking anything. Record what you find. Only surface questions that require genuine human judgment.\n\n\
+Job: turn the draft into a ready problem definition for the next task stage. Investigate deeply before asking anything. Record what you find. Only surface questions that require genuine human judgment.\n\n\
 INVESTIGATION:\n\
 On turn 1, before any question, do all of the following and record each as a `verified:` Context entry (match with snippet OR explicit null result):\n\
 1. Read the draft end-to-end; restate intent in your own words.\n\
@@ -410,7 +410,7 @@ Spec-writing rules:\n\
 - Structure the rewritten spec with `## Problem` and `## Goal`. Add `## Context`, `## Constraints`, `## Out of Scope`, or `## Decisions` only when they help clarify the request.\n\
 - When blocked on missing user input, call `lucode_spec_set_attention` with `attention_required: true` and leave the concrete questions in the spec.\n\
 - After the user responds and you are unblocked, call `lucode_spec_set_attention` with `attention_required: false`.\n\
-- When the spec is clear, call `lucode_spec_set_stage` with stage `clarified`. If it needs more clarification later, call `lucode_spec_set_stage` with stage `draft`.\n\
+- When the spec is clear, call `lucode_spec_set_stage` with stage `ready`. If it needs more clarification later, call `lucode_spec_set_stage` with stage `draft`.\n\
 - Do not produce implementation steps, file lists, function signatures, code stubs, or solution plans.\n\n\
 {guidance} In this clarification stage, diagrams are for framing existing structure or problem-space context only; do not draft solution-design diagrams.\n\n\
 Current spec draft:\n\n\
@@ -458,6 +458,10 @@ mod spec_clarification_prompt_tests {
             created_at: now,
             updated_at: now,
             stage: lucode::domains::sessions::entity::SpecStage::Draft,
+            variant: lucode::domains::sessions::entity::TaskVariant::Regular,
+            ready_session_id: None,
+            ready_branch: None,
+            base_branch: None,
             attention_required: false,
             clarification_started: false,
         }
@@ -4350,7 +4354,7 @@ pub async fn schaltwerk_core_set_spec_stage(
 
     let parsed_stage = match stage.as_str() {
         "draft" => lucode::domains::sessions::entity::SpecStage::Draft,
-        "clarified" => lucode::domains::sessions::entity::SpecStage::Clarified,
+        "ready" => lucode::domains::sessions::entity::SpecStage::Ready,
         _ => return Err(format!("Invalid spec stage: {stage}")),
     };
 
@@ -4847,7 +4851,11 @@ mod tests {
             repository_name: "repo".to_string(),
             content: "".to_string(),
             implementation_plan: None,
-            stage: lucode::domains::sessions::entity::SpecStage::Clarified,
+            stage: lucode::domains::sessions::entity::SpecStage::Ready,
+            variant: lucode::domains::sessions::entity::TaskVariant::Regular,
+            ready_session_id: None,
+            ready_branch: None,
+            base_branch: None,
             attention_required: true,
             clarification_started: true,
             created_at: now,
@@ -5037,6 +5045,9 @@ mod tests {
                 promotion_reason: None,
                 ci_autofix_enabled: false,
                 merged_at: None,
+                task_id: None,
+                task_stage: None,
+                task_role: None,
             },
             None,
         );

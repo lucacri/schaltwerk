@@ -66,7 +66,7 @@ describe('Sidebar status indicators and actions', () => {
     unlistenFns = []
   })
 
-  it('shows a Ready status pill for ready sessions in the running list', async () => {
+  it('does not show a Ready status pill for merge-ready sessions in the running list', async () => {
     render(<TestProviders><Sidebar /></TestProviders>)
 
     await waitFor(() => {
@@ -74,7 +74,7 @@ describe('Sidebar status indicators and actions', () => {
     })
 
     const readyItem = getSessionRow('s2')!
-    expect(within(readyItem).getByTestId('session-card-status-pill')).toHaveTextContent(/ready/i)
+    expect(within(readyItem).queryByTestId('session-card-status-pill')).toBeNull()
     expect(within(readyItem).queryByRole('button', { name: /review/i })).toBeNull()
   })
 

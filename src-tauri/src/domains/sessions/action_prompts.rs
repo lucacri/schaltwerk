@@ -172,6 +172,10 @@ mod tests {
             content: content.to_string(),
             implementation_plan: None,
             stage: SpecStage::Draft,
+            variant: crate::domains::sessions::entity::TaskVariant::Regular,
+            ready_session_id: None,
+            ready_branch: None,
+            base_branch: None,
             attention_required: false,
             clarification_started: false,
             created_at: now,
@@ -231,6 +235,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         }
     }
 

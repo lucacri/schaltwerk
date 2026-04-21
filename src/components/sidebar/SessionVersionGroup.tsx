@@ -319,9 +319,9 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
             label: t.session.clarifying,
             tone: 'blue' as HeaderStatusTone,
           }
-        case 'clarified':
+        case 'ready':
           return {
-            label: t.session.clarified,
+            label: t.session.ready,
             tone: 'green' as HeaderStatusTone,
           }
         default:

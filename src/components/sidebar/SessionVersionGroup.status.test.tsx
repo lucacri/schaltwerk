@@ -74,7 +74,7 @@ function createVersion({
   versionNumber?: number
   readyToMerge?: boolean
   isBlocked?: boolean
-  specStage?: 'draft' | 'clarified'
+  specStage?: 'draft' | 'ready'
   clarificationStarted?: boolean
 }): SessionVersionGroupType['versions'][number] {
   const info: EnrichedSession['info'] = {
@@ -260,14 +260,14 @@ describe('SessionVersionGroup status summary', () => {
     expect(screen.getByTestId('version-group-header-status')).not.toHaveTextContent('Ready')
   })
 
-  it('shows clarifying in the group header for a clarified spec while its terminal is running', () => {
-    const clarifiedGroup: SessionVersionGroupType = {
+  it('shows clarifying in the group header for a ready spec while its terminal is running', () => {
+    const readyGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
         createVersion({
           id: 'feature-A_spec',
           sessionState: 'spec',
-          specStage: 'clarified',
+          specStage: 'ready',
           clarificationStarted: true,
           attentionRequired: true,
           attentionKind: 'waiting_for_input',
@@ -278,7 +278,7 @@ describe('SessionVersionGroup status summary', () => {
     render(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionVersionGroup
-          group={clarifiedGroup}
+          group={readyGroup}
           selection={{ kind: 'session', payload: 'feature-A_spec' }}
           startIndex={0}
           isSessionRunning={(sessionId) => sessionId === 'feature-A_spec'}
@@ -288,17 +288,17 @@ describe('SessionVersionGroup status summary', () => {
     )
 
     expect(screen.getByTestId('version-group-header-status')).toHaveTextContent('Clarifying')
-    expect(screen.getByTestId('version-group-header-status')).not.toHaveTextContent('Clarified')
+    expect(screen.getByTestId('version-group-header-status')).not.toHaveTextContent('Ready')
   })
 
-  it('transitions from clarified to clarifying in the group header when attention clears and isSessionRunning returns true', () => {
+  it('transitions from ready to clarifying in the group header when attention clears and isSessionRunning returns true', () => {
     const waitingGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
         createVersion({
           id: 'feature-A_spec',
           sessionState: 'spec',
-          specStage: 'clarified',
+          specStage: 'ready',
           clarificationStarted: true,
           attentionRequired: true,
           attentionKind: 'waiting_for_input',
@@ -326,7 +326,7 @@ describe('SessionVersionGroup status summary', () => {
         createVersion({
           id: 'feature-A_spec',
           sessionState: 'spec',
-          specStage: 'clarified',
+          specStage: 'ready',
           clarificationStarted: true,
           attentionRequired: false,
         }),
@@ -349,14 +349,14 @@ describe('SessionVersionGroup status summary', () => {
     expect(screen.getByTestId('version-group-header-status')).not.toHaveTextContent(/waiting for input/i)
   })
 
-  it('shows clarified in the group header for a clarified spec with idle attention', () => {
-    const clarifiedGroup: SessionVersionGroupType = {
+  it('shows ready in the group header for a ready spec with idle attention', () => {
+    const readyGroup: SessionVersionGroupType = {
       ...baseGroup,
       versions: [
         createVersion({
           id: 'feature-A_spec',
           sessionState: 'spec',
-          specStage: 'clarified',
+          specStage: 'ready',
           clarificationStarted: true,
           attentionRequired: true,
           attentionKind: 'idle',
@@ -367,7 +367,7 @@ describe('SessionVersionGroup status summary', () => {
     render(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionVersionGroup
-          group={clarifiedGroup}
+          group={readyGroup}
           selection={{ kind: 'session', payload: 'feature-A_spec' }}
           startIndex={0}
           {...requiredCallbacks}
@@ -375,7 +375,7 @@ describe('SessionVersionGroup status summary', () => {
       </SessionCardActionsProvider>
     )
 
-    expect(screen.getByTestId('version-group-header-status')).toHaveTextContent('Clarified')
+    expect(screen.getByTestId('version-group-header-status')).toHaveTextContent('Ready')
   })
 
   it('keeps the header status area visible when collapsed', () => {

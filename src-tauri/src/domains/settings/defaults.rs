@@ -111,7 +111,7 @@ pub fn default_plan_candidate_prompt_template() -> String {
     let guidance = MERMAID_DIAGRAM_GUIDANCE;
     format!(
         concat!(
-            "You are preparing an implementation plan for this clarified Lucode spec.\n\n",
+            "You are preparing an implementation plan for this ready Lucode task.\n\n",
             "Inspect the repository as needed. Do not implement code. Write a concise, ",
             "actionable Markdown implementation plan, then call lucode_consolidation_report ",
             "with your plan as report and base_session_id set to '{{SPEC_ID}}'.\n\n",

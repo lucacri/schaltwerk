@@ -484,6 +484,9 @@ mod service_unified_tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         }
     }
 
@@ -1414,6 +1417,10 @@ mod service_unified_tests {
             content: "Clarify this spec".to_string(),
             implementation_plan: None,
             stage: SpecStage::Draft,
+            variant: crate::domains::sessions::entity::TaskVariant::Regular,
+            ready_session_id: None,
+            ready_branch: None,
+            base_branch: None,
             attention_required: true,
             clarification_started: true,
             created_at: now,
@@ -1463,6 +1470,10 @@ mod service_unified_tests {
                 content: "Clarify this spec".to_string(),
                 implementation_plan: None,
                 stage: SpecStage::Draft,
+                variant: crate::domains::sessions::entity::TaskVariant::Regular,
+                ready_session_id: None,
+                ready_branch: None,
+                base_branch: None,
                 attention_required: false,
                 clarification_started: false,
                 created_at: now,
@@ -3107,6 +3118,9 @@ impl SessionManager {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         };
 
         let finalizer = SessionFinalizer::new(&self.db_manager, &self.cache_manager);
@@ -3645,6 +3659,7 @@ impl SessionManager {
                 consolidation_confirmation_mode: None,
                 promotion_reason: None,
                 attention_kind: None,
+                stage: Some(spec.stage.clone()),
             };
 
             enriched.push(EnrichedSession {
@@ -3722,6 +3737,7 @@ impl SessionManager {
                         .clone(),
                     promotion_reason: session.promotion_reason.clone(),
                     attention_kind: None,
+                    stage: session.task_stage.clone().or(Some(SpecStage::Draft)),
                 };
 
                 enriched.push(EnrichedSession {
@@ -3827,6 +3843,11 @@ impl SessionManager {
                 consolidation_confirmation_mode: session.consolidation_confirmation_mode.clone(),
                 promotion_reason: session.promotion_reason.clone(),
                 attention_kind: None,
+                stage: session.task_stage.clone().or(if session.ready_to_merge {
+                    Some(SpecStage::Implemented)
+                } else {
+                    None
+                }),
             };
 
             let terminals = vec![
@@ -4771,6 +4792,10 @@ impl SessionManager {
             content: spec_content.to_string(),
             implementation_plan: None,
             stage: SpecStage::Draft,
+            variant: crate::domains::sessions::entity::TaskVariant::Regular,
+            ready_session_id: None,
+            ready_branch: None,
+            base_branch: None,
             attention_required: false,
             clarification_started: false,
             created_at: now,
@@ -4792,6 +4817,8 @@ impl SessionManager {
 
     fn spec_to_virtual_session(&self, spec: Spec) -> Session {
         let spec_name = spec.name.clone();
+        let spec_id = spec.id.clone();
+        let spec_stage = spec.stage.clone();
         let worktree_path = self
             .repo_path
             .join(".lucode")
@@ -4800,7 +4827,7 @@ impl SessionManager {
         let branch = format!("specs/{spec_name}");
 
         Session {
-            id: spec.id,
+            id: spec_id.clone(),
             name: spec_name.clone(),
             display_name: spec.display_name,
             version_group_id: None,
@@ -4845,6 +4872,9 @@ impl SessionManager {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: Some(spec_id),
+            task_stage: Some(spec_stage),
+            task_role: Some("task_virtual".to_string()),
         }
     }
 

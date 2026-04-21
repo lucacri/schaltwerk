@@ -34,7 +34,7 @@ function renderBoard(sessions: EnrichedSession[]) {
                     {session.info.session_id}
                 </div>
             )}
-            initialCollapsed={{ merged: false, cancelled: false, archive: false }}
+            initialCollapsed={{ done: false, cancelled: false, archive: false }}
         />,
     )
 }
@@ -42,23 +42,23 @@ function renderBoard(sessions: EnrichedSession[]) {
 describe('bucketSessionsByStage', () => {
     it('places sessions into the derived stage column', () => {
         const spec = makeSession({ session_id: 'spec-1', status: 'spec', session_state: 'spec' })
-        const clarified = makeSession({
+        const ready = makeSession({
             session_id: 'spec-2',
             status: 'spec',
             session_state: 'spec',
-            spec_stage: 'clarified',
+            spec_stage: 'ready',
         })
-        const running = makeSession({ session_id: 'run-1' })
-        const ready = makeSession({ session_id: 'rtm-1', ready_to_merge: true })
-        const judge = makeSession({ session_id: 'round-1', consolidation_role: 'candidate' })
+        const implemented = makeSession({ session_id: 'run-1' })
+        const pushed = makeSession({ session_id: 'pr-1', stage: 'pushed' })
+        const brainstormed = makeSession({ session_id: 'brain-1', stage: 'brainstormed' })
 
-        const buckets = bucketSessionsByStage([spec, clarified, running, ready, judge])
+        const buckets = bucketSessionsByStage([spec, ready, implemented, pushed, brainstormed])
 
-        expect(buckets.idea.map(s => s.info.session_id)).toEqual(['spec-1'])
-        expect(buckets.clarified.map(s => s.info.session_id)).toEqual(['spec-2'])
-        expect(buckets.working_on.map(s => s.info.session_id)).toEqual(['run-1'])
-        expect(buckets.ready_to_merge.map(s => s.info.session_id)).toEqual(['rtm-1'])
-        expect(buckets.judge_review.map(s => s.info.session_id)).toEqual(['round-1'])
+        expect(buckets.draft.map(s => s.info.session_id)).toEqual(['spec-1'])
+        expect(buckets.ready.map(s => s.info.session_id)).toEqual(['spec-2'])
+        expect(buckets.implemented.map(s => s.info.session_id)).toEqual(['run-1'])
+        expect(buckets.pushed.map(s => s.info.session_id)).toEqual(['pr-1'])
+        expect(buckets.brainstormed.map(s => s.info.session_id)).toEqual(['brain-1'])
     })
 
     it('routes archived sessions into the archive bucket too', () => {
@@ -75,11 +75,12 @@ describe('KanbanView', () => {
     it('renders one column per non-terminal stage plus an archive column', () => {
         renderBoard([])
 
-        expect(screen.getByTestId('kanban-column-idea')).toBeInTheDocument()
-        expect(screen.getByTestId('kanban-column-clarified')).toBeInTheDocument()
-        expect(screen.getByTestId('kanban-column-working_on')).toBeInTheDocument()
-        expect(screen.getByTestId('kanban-column-judge_review')).toBeInTheDocument()
-        expect(screen.getByTestId('kanban-column-ready_to_merge')).toBeInTheDocument()
+        expect(screen.getByTestId('kanban-column-draft')).toBeInTheDocument()
+        expect(screen.getByTestId('kanban-column-ready')).toBeInTheDocument()
+        expect(screen.getByTestId('kanban-column-brainstormed')).toBeInTheDocument()
+        expect(screen.getByTestId('kanban-column-planned')).toBeInTheDocument()
+        expect(screen.getByTestId('kanban-column-implemented')).toBeInTheDocument()
+        expect(screen.getByTestId('kanban-column-pushed')).toBeInTheDocument()
         expect(screen.getByTestId('kanban-column-archive')).toBeInTheDocument()
     })
 
@@ -87,37 +88,39 @@ describe('KanbanView', () => {
         const sessions = [
             makeSession({ session_id: 'spec-1', status: 'spec', session_state: 'spec' }),
             makeSession({ session_id: 'run-1' }),
-            makeSession({ session_id: 'rtm-1', ready_to_merge: true }),
+            makeSession({ session_id: 'push-1', stage: 'pushed' }),
         ]
 
         renderBoard(sessions)
 
         expect(
-            within(screen.getByTestId('kanban-column-body-idea')).getByTestId('session-row-spec-1'),
+            within(screen.getByTestId('kanban-column-body-draft')).getByTestId('session-row-spec-1'),
         ).toBeInTheDocument()
         expect(
-            within(screen.getByTestId('kanban-column-body-working_on')).getByTestId('session-row-run-1'),
+            within(screen.getByTestId('kanban-column-body-implemented')).getByTestId('session-row-run-1'),
         ).toBeInTheDocument()
         expect(
-            within(screen.getByTestId('kanban-column-body-ready_to_merge')).getByTestId('session-row-rtm-1'),
+            within(screen.getByTestId('kanban-column-body-pushed')).getByTestId('session-row-push-1'),
         ).toBeInTheDocument()
     })
 
-    it('groups consolidation candidates under their round within the judge review column', () => {
+    it('groups staged round variants under their round inside the stage column', () => {
         const sessions = [
             makeSession({
                 session_id: 'cand-1',
+                stage: 'implemented',
                 consolidation_role: 'candidate',
                 consolidation_round_id: 'round-A',
             }),
             makeSession({
                 session_id: 'cand-2',
+                stage: 'implemented',
                 consolidation_role: 'candidate',
                 consolidation_round_id: 'round-A',
             }),
             makeSession({
                 session_id: 'solo',
-                consolidation_role: 'judge',
+                stage: 'implemented',
             }),
         ]
 
@@ -127,7 +130,7 @@ describe('KanbanView', () => {
         expect(within(roundGroup).getByTestId('session-row-cand-1')).toBeInTheDocument()
         expect(within(roundGroup).getByTestId('session-row-cand-2')).toBeInTheDocument()
         expect(
-            within(screen.getByTestId('kanban-column-body-judge_review')).getByTestId('session-row-solo'),
+            within(screen.getByTestId('kanban-column-body-implemented')).getByTestId('session-row-solo'),
         ).toBeInTheDocument()
     })
 
@@ -135,23 +138,23 @@ describe('KanbanView', () => {
         const sessions = [makeSession({ session_id: 'run-1' })]
         renderBoard(sessions)
 
-        const column = screen.getByTestId('kanban-column-working_on')
+        const column = screen.getByTestId('kanban-column-implemented')
         const toggle = within(column).getByRole('button')
 
-        expect(screen.queryByTestId('kanban-column-body-working_on')).toBeInTheDocument()
+        expect(screen.queryByTestId('kanban-column-body-implemented')).toBeInTheDocument()
 
         fireEvent.click(toggle)
 
-        expect(screen.queryByTestId('kanban-column-body-working_on')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('kanban-column-body-implemented')).not.toBeInTheDocument()
     })
 
-    it('collapses merged and cancelled by default into the archive column', () => {
-        const merged = makeSession({ session_id: 'merged-1' })
+    it('collapses done and cancelled by default into the archive column', () => {
+        const done = makeSession({ session_id: 'done-1', stage: 'done' })
         const cancelled = makeSession({ session_id: 'cnc-1', status: 'archived' })
 
         render(
             <KanbanView
-                sessions={[merged, cancelled]}
+                sessions={[done, cancelled]}
                 renderSession={session => (
                     <div data-testid={`session-row-${session.info.session_id}`}>
                         {session.info.session_id}
@@ -179,10 +182,10 @@ describe('KanbanView', () => {
 
         renderBoard(sessions)
 
-        const ideaColumn = screen.getByTestId('kanban-column-idea')
-        const runningColumn = screen.getByTestId('kanban-column-working_on')
+        const draftColumn = screen.getByTestId('kanban-column-draft')
+        const implementedColumn = screen.getByTestId('kanban-column-implemented')
 
-        expect(within(ideaColumn).getByTestId('sidebar-section-count')).toHaveTextContent('2')
-        expect(within(runningColumn).getByTestId('sidebar-section-count')).toHaveTextContent('1')
+        expect(within(draftColumn).getByTestId('sidebar-section-count')).toHaveTextContent('2')
+        expect(within(implementedColumn).getByTestId('sidebar-section-count')).toHaveTextContent('1')
     })
 })

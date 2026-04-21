@@ -513,7 +513,7 @@ export const SessionCard = memo<SessionCardProps>(
                 {t.session.notStarted}
               </span>
             )}
-            {statusState.primaryStatus === "clarified" && (
+            {statusState.primaryStatus === "ready" && sessionState === "spec" && (
               <span
                 data-testid="session-card-status-pill"
                 className="inline-flex items-center rounded border px-2 py-[1px]"
@@ -524,7 +524,7 @@ export const SessionCard = memo<SessionCardProps>(
                   borderColor: "var(--color-accent-green-border)",
                 }}
               >
-                {t.session.clarified}
+                {t.session.ready}
               </span>
             )}
             {statusState.primaryStatus === "waiting" && (
@@ -567,20 +567,6 @@ export const SessionCard = memo<SessionCardProps>(
                 }}
               >
                 {t.session.idle}
-              </span>
-            )}
-            {statusState.primaryStatus === "ready" && (
-              <span
-                data-testid="session-card-status-pill"
-                className="inline-flex items-center rounded border px-2 py-[1px]"
-                style={{
-                  ...sessionText.badge,
-                  backgroundColor: "var(--color-accent-green-bg)",
-                  color: "var(--color-accent-green-light)",
-                  borderColor: "var(--color-accent-green-border)",
-                }}
-              >
-                {t.session.ready}
               </span>
             )}
             {statusState.primaryStatus === "blocked" && (
@@ -848,7 +834,7 @@ export const SessionCard = memo<SessionCardProps>(
             onRefineSpec={onRefineSpec}
             onDeleteSpec={onDeleteSpec}
             onImprovePlanSpec={onImprovePlanSpec}
-            canImprovePlanSpec={s.spec_stage === 'clarified' && !s.improve_plan_round_id}
+            canImprovePlanSpec={s.spec_stage === 'ready' && !s.improve_plan_round_id}
             improvePlanActive={Boolean(s.improve_plan_round_id)}
             improvePlanStarting={improvePlanStartingSessionId === s.session_id}
             onCancel={onCancel}

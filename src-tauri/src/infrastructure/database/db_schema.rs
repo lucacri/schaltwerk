@@ -37,6 +37,9 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             consolidation_recommended_session_id TEXT DEFAULT NULL,
             consolidation_confirmation_mode TEXT DEFAULT NULL,
             promotion_reason TEXT DEFAULT NULL,
+            task_id TEXT DEFAULT NULL,
+            task_stage TEXT DEFAULT NULL,
+            task_role TEXT DEFAULT NULL,
             UNIQUE(repository_path, name)
         )",
         [],
@@ -250,12 +253,34 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             content TEXT NOT NULL,
             implementation_plan TEXT,
             stage TEXT NOT NULL DEFAULT 'draft',
+            variant TEXT NOT NULL DEFAULT 'regular',
+            ready_session_id TEXT,
+            ready_branch TEXT,
+            base_branch TEXT,
             attention_required BOOLEAN NOT NULL DEFAULT FALSE,
             clarification_started BOOLEAN NOT NULL DEFAULT FALSE,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
             UNIQUE(repository_path, name)
         )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS task_stage_workflows (
+            task_id TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            preset_id TEXT,
+            judge_preset_id TEXT,
+            auto_chain BOOLEAN NOT NULL DEFAULT FALSE,
+            PRIMARY KEY (task_id, stage),
+            FOREIGN KEY(task_id) REFERENCES specs(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_task_stage_workflows_task
+            ON task_stage_workflows(task_id, stage)",
         [],
     )?;
 
@@ -532,6 +557,9 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
         "ALTER TABLE sessions ADD COLUMN promotion_reason TEXT DEFAULT NULL",
         [],
     );
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN task_id TEXT", []);
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN task_stage TEXT", []);
+    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN task_role TEXT", []);
     let _ = conn.execute(
         "ALTER TABLE sessions ADD COLUMN ci_autofix_enabled BOOLEAN DEFAULT FALSE",
         [],
@@ -567,6 +595,13 @@ fn apply_specs_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
         [],
     );
     let _ = conn.execute(
+        "ALTER TABLE specs ADD COLUMN variant TEXT NOT NULL DEFAULT 'regular'",
+        [],
+    );
+    let _ = conn.execute("ALTER TABLE specs ADD COLUMN ready_session_id TEXT", []);
+    let _ = conn.execute("ALTER TABLE specs ADD COLUMN ready_branch TEXT", []);
+    let _ = conn.execute("ALTER TABLE specs ADD COLUMN base_branch TEXT", []);
+    let _ = conn.execute(
         "ALTER TABLE specs ADD COLUMN attention_required BOOLEAN NOT NULL DEFAULT FALSE",
         [],
     );
@@ -580,6 +615,10 @@ fn apply_specs_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     );
     let _ = conn.execute(
         "UPDATE specs SET stage = 'draft' WHERE stage IS NULL OR stage = ''",
+        [],
+    );
+    let _ = conn.execute(
+        "UPDATE specs SET variant = 'regular' WHERE variant IS NULL OR variant = ''",
         [],
     );
     let _ = conn.execute(
@@ -611,6 +650,18 @@ fn apply_specs_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     tx.execute("DELETE FROM sessions WHERE session_state = 'spec'", [])?;
 
     tx.commit()?;
+    let _ = conn.execute(
+        "CREATE TABLE IF NOT EXISTS task_stage_workflows (
+            task_id TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            preset_id TEXT,
+            judge_preset_id TEXT,
+            auto_chain BOOLEAN NOT NULL DEFAULT FALSE,
+            PRIMARY KEY (task_id, stage),
+            FOREIGN KEY(task_id) REFERENCES specs(id) ON DELETE CASCADE
+        )",
+        [],
+    );
     Ok(())
 }
 

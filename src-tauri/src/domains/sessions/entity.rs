@@ -126,6 +126,37 @@ pub struct Session {
     pub promotion_reason: Option<String>,
     pub ci_autofix_enabled: bool,
     pub merged_at: Option<DateTime<Utc>>,
+    pub task_id: Option<String>,
+    pub task_stage: Option<SpecStage>,
+    pub task_role: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskVariant {
+    Regular,
+    Main,
+}
+
+impl TaskVariant {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TaskVariant::Regular => "regular",
+            TaskVariant::Main => "main",
+        }
+    }
+}
+
+impl FromStr for TaskVariant {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "regular" => Ok(TaskVariant::Regular),
+            "main" => Ok(TaskVariant::Main),
+            _ => Err(format!("Invalid task variant: {s}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,10 +176,65 @@ pub struct Spec {
     #[serde(default)]
     pub implementation_plan: Option<String>,
     pub stage: SpecStage,
+    #[serde(default = "default_task_variant")]
+    pub variant: TaskVariant,
+    #[serde(default)]
+    pub ready_session_id: Option<String>,
+    #[serde(default)]
+    pub ready_branch: Option<String>,
+    #[serde(default)]
+    pub base_branch: Option<String>,
     pub attention_required: bool,
     pub clarification_started: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+fn default_task_variant() -> TaskVariant {
+    TaskVariant::Regular
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskWorkflowStage {
+    Brainstormed,
+    Planned,
+    Implemented,
+    Pushed,
+}
+
+impl TaskWorkflowStage {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TaskWorkflowStage::Brainstormed => "brainstormed",
+            TaskWorkflowStage::Planned => "planned",
+            TaskWorkflowStage::Implemented => "implemented",
+            TaskWorkflowStage::Pushed => "pushed",
+        }
+    }
+}
+
+impl FromStr for TaskWorkflowStage {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "brainstormed" => Ok(TaskWorkflowStage::Brainstormed),
+            "planned" => Ok(TaskWorkflowStage::Planned),
+            "implemented" => Ok(TaskWorkflowStage::Implemented),
+            "pushed" => Ok(TaskWorkflowStage::Pushed),
+            _ => Err(format!("Invalid task workflow stage: {s}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TaskStageWorkflow {
+    pub task_id: String,
+    pub stage: TaskWorkflowStage,
+    pub preset_id: Option<String>,
+    pub judge_preset_id: Option<String>,
+    pub auto_chain: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -186,15 +272,31 @@ impl FromStr for PrState {
 #[serde(rename_all = "lowercase")]
 pub enum SpecStage {
     Draft,
-    Clarified,
+    Ready,
+    Brainstormed,
+    Planned,
+    Implemented,
+    Pushed,
+    Done,
+    Cancelled,
 }
 
 impl SpecStage {
     pub fn as_str(&self) -> &str {
         match self {
             SpecStage::Draft => "draft",
-            SpecStage::Clarified => "clarified",
+            SpecStage::Ready => "ready",
+            SpecStage::Brainstormed => "brainstormed",
+            SpecStage::Planned => "planned",
+            SpecStage::Implemented => "implemented",
+            SpecStage::Pushed => "pushed",
+            SpecStage::Done => "done",
+            SpecStage::Cancelled => "cancelled",
         }
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, SpecStage::Done | SpecStage::Cancelled)
     }
 }
 
@@ -204,7 +306,13 @@ impl FromStr for SpecStage {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "draft" => Ok(SpecStage::Draft),
-            "clarified" => Ok(SpecStage::Clarified),
+            "ready" => Ok(SpecStage::Ready),
+            "brainstormed" => Ok(SpecStage::Brainstormed),
+            "planned" => Ok(SpecStage::Planned),
+            "implemented" => Ok(SpecStage::Implemented),
+            "pushed" => Ok(SpecStage::Pushed),
+            "done" => Ok(SpecStage::Done),
+            "cancelled" => Ok(SpecStage::Cancelled),
             _ => Err(format!("Invalid spec stage: {s}")),
         }
     }
@@ -443,6 +551,8 @@ pub struct SessionInfo {
     pub promotion_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attention_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stage: Option<SpecStage>,
 }
 
 #[derive(Debug, Clone, Serialize)]

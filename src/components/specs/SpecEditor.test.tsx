@@ -412,13 +412,13 @@ describe('SpecEditor keyboard shortcuts', () => {
     expect(runButton.className).toContain('bg-accent-green')
   })
 
-  it('starts an Improve Plan round when the button is clicked on a clarified spec', async () => {
+  it('starts an Improve Plan round when the button is clicked on a ready spec', async () => {
     sessionsMock = [
       {
         info: {
           session_id: 'improve-plan-spec',
           stable_id: 'improve-plan-spec-stable-id',
-          spec_stage: 'clarified',
+          spec_stage: 'ready',
           branch: 'main',
           worktree_path: '',
           base_branch: 'main',
@@ -485,7 +485,7 @@ describe('SpecEditor keyboard shortcuts', () => {
         info: {
           session_id: 'active-plan-spec',
           stable_id: 'active-plan-spec-stable-id',
-          spec_stage: 'clarified',
+          spec_stage: 'ready',
           improve_plan_round_id: 'round-abc',
           branch: 'main',
           worktree_path: '',
@@ -789,30 +789,30 @@ describe('SpecEditor keyboard shortcuts', () => {
     expect(getSpecClarificationAgentTypeMock).toHaveBeenCalled()
   })
 
-  it('marks a draft spec clarified from the editor', async () => {
+  it('moves a draft spec to ready from the editor', async () => {
     render(
       <TestProviders>
         <SpecEditor sessionName="draft-spec" />
       </TestProviders>
     )
 
-    const button = await screen.findByRole('button', { name: /mark clarified/i })
+    const button = await screen.findByRole('button', { name: /move to ready/i })
     fireEvent.click(button)
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetSpecStage, {
         name: 'draft-spec',
-        stage: 'clarified',
+        stage: 'ready',
       })
     })
   })
 
-  it('moves a clarified spec back to draft from the editor', async () => {
+  it('moves a ready spec back to draft from the editor', async () => {
     sessionsMock = [
       {
         info: {
-          session_id: 'clarified-spec',
-          spec_stage: 'clarified',
+          session_id: 'ready-spec',
+          spec_stage: 'ready',
           branch: 'main',
           worktree_path: '',
           base_branch: 'main',
@@ -827,7 +827,7 @@ describe('SpecEditor keyboard shortcuts', () => {
 
     render(
       <TestProviders>
-        <SpecEditor sessionName="clarified-spec" />
+        <SpecEditor sessionName="ready-spec" />
       </TestProviders>
     )
 
@@ -836,7 +836,7 @@ describe('SpecEditor keyboard shortcuts', () => {
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith(TauriCommands.SchaltwerkCoreSetSpecStage, {
-        name: 'clarified-spec',
+        name: 'ready-spec',
         stage: 'draft',
       })
     })

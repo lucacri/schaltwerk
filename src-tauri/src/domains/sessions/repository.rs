@@ -1287,6 +1287,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         }
     }
 

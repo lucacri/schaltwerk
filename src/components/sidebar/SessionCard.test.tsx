@@ -396,7 +396,7 @@ describe('SessionCard running tag', () => {
 })
 
 describe('SessionCard spec status pill', () => {
-  it('shows the clarified status pill for clarified spec sessions', () => {
+  it('shows the ready status pill for ready spec sessions', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionCard
@@ -406,7 +406,7 @@ describe('SessionCard spec status pill', () => {
               ...baseSession.info,
               session_state: 'spec',
               status: 'spec',
-              spec_stage: 'clarified',
+              spec_stage: 'ready',
               worktree_path: '',
               attention_required: false,
               clarification_started: true,
@@ -420,10 +420,10 @@ describe('SessionCard spec status pill', () => {
       </SessionCardActionsProvider>
     )
 
-    const pill = screen.getByTestId('session-card-status-pill')
-    expect(pill).toHaveTextContent(/^Clarified$/)
+    const [pill] = screen.getAllByTestId('session-card-status-pill')
+    expect(pill).toHaveTextContent(/Ready/)
     expect(pill.getAttribute('style')).toContain('background-color: var(--color-accent-green-bg)')
-    expect(screen.getAllByText(/^Clarified$/)).toHaveLength(1)
+    expect(screen.getAllByText(/Ready/)).toHaveLength(1)
   })
 
   it('shows not started for specs whose clarification has not been started', () => {
@@ -509,7 +509,7 @@ describe('SessionCard spec status pill', () => {
     expect(screen.getByText(/^Clarifying$/i)).toBeInTheDocument()
   })
 
-  it('shows clarified for clarified specs without attention when not running', () => {
+  it('shows ready for ready specs without attention when not running', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionCard
@@ -519,7 +519,7 @@ describe('SessionCard spec status pill', () => {
               ...baseSession.info,
               session_state: 'spec',
               status: 'spec',
-              spec_stage: 'clarified',
+              spec_stage: 'ready',
               worktree_path: '',
               attention_required: false,
               clarification_started: true,
@@ -533,11 +533,12 @@ describe('SessionCard spec status pill', () => {
       </SessionCardActionsProvider>
     )
 
-    expect(screen.getByTestId('session-card-status-pill')).toHaveTextContent(/^Clarified$/)
-    expect(screen.getAllByText(/^Clarified$/)).toHaveLength(1)
+    const [pill] = screen.getAllByTestId('session-card-status-pill')
+    expect(pill).toHaveTextContent(/Ready/)
+    expect(screen.getAllByText(/Ready/)).toHaveLength(1)
   })
 
-  it('shows waiting for input for clarified specs with waiting attention when not running', () => {
+  it('shows waiting for input for ready specs with waiting attention when not running', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionCard
@@ -547,7 +548,7 @@ describe('SessionCard spec status pill', () => {
               ...baseSession.info,
               session_state: 'spec',
               status: 'spec',
-              spec_stage: 'clarified',
+              spec_stage: 'ready',
               worktree_path: '',
               attention_required: true,
               attention_kind: 'waiting_for_input',
@@ -563,10 +564,10 @@ describe('SessionCard spec status pill', () => {
     )
 
     expect(screen.getByTestId('session-card-status-pill')).toHaveTextContent(/waiting for input/i)
-    expect(screen.queryByText(/^Clarified$/)).toBeNull()
+    expect(screen.queryByText(/^Ready$/)).toBeNull()
   })
 
-  it('shows clarifying for clarified specs with stale waiting attention while running', () => {
+  it('shows clarifying for ready specs with stale waiting attention while running', () => {
     renderWithProviders(
       <SessionCardActionsProvider actions={mockActions}>
         <SessionCard
@@ -576,7 +577,7 @@ describe('SessionCard spec status pill', () => {
               ...baseSession.info,
               session_state: 'spec',
               status: 'spec',
-              spec_stage: 'clarified',
+              spec_stage: 'ready',
               worktree_path: '',
               attention_required: true,
               attention_kind: 'waiting_for_input',
@@ -602,7 +603,7 @@ describe('SessionCard spec status pill', () => {
         ...baseSession.info,
         session_state: 'spec',
         status: 'spec',
-        spec_stage: 'clarified',
+        spec_stage: 'ready',
         worktree_path: '',
         attention_required: true,
         attention_kind: 'waiting_for_input',
@@ -647,7 +648,7 @@ describe('SessionCard spec status pill', () => {
         ...baseSession.info,
         session_state: 'spec',
         status: 'spec',
-        spec_stage: 'clarified',
+        spec_stage: 'ready',
         worktree_path: '',
         attention_required: true,
         attention_kind: 'waiting_for_input',

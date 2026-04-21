@@ -1,5 +1,5 @@
 use super::connection::Database;
-use crate::domains::sessions::entity::{Spec, SpecStage};
+use crate::domains::sessions::entity::{Spec, SpecStage, TaskStageWorkflow, TaskVariant};
 use crate::infrastructure::database::timestamps::utc_from_epoch_seconds_lossy;
 use anyhow::Result;
 use chrono::Utc;
@@ -36,6 +36,16 @@ pub trait SpecMethods {
     ) -> Result<()>;
     fn update_spec_improve_plan_round_id(&self, id: &str, round_id: Option<&str>) -> Result<()>;
     fn get_spec_by_improve_plan_round_id(&self, repo_path: &Path, round_id: &str) -> Result<Spec>;
+    fn update_spec_variant(&self, id: &str, variant: TaskVariant) -> Result<()>;
+    fn update_spec_ready_session(
+        &self,
+        id: &str,
+        ready_session_id: Option<&str>,
+        ready_branch: Option<&str>,
+        base_branch: Option<&str>,
+    ) -> Result<()>;
+    fn list_task_stage_workflows(&self, task_id: &str) -> Result<Vec<TaskStageWorkflow>>;
+    fn upsert_task_stage_workflow(&self, workflow: &TaskStageWorkflow) -> Result<()>;
     fn delete_spec(&self, id: &str) -> Result<()>;
 }
 
@@ -47,9 +57,9 @@ impl SpecMethods for Database {
                 id, name, display_name,
                 epic_id, issue_number, issue_url, pr_number, pr_url,
                 improve_plan_round_id, repository_path, repository_name, content,
-                implementation_plan, stage, attention_required, clarification_started,
-                created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                implementation_plan, stage, variant, ready_session_id, ready_branch, base_branch,
+                attention_required, clarification_started, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
             params![
                 spec.id,
                 spec.name,
@@ -65,6 +75,10 @@ impl SpecMethods for Database {
                 spec.content,
                 spec.implementation_plan,
                 spec.stage.as_str(),
+                spec.variant.as_str(),
+                spec.ready_session_id,
+                spec.ready_branch,
+                spec.base_branch,
                 spec.attention_required,
                 spec.clarification_started,
                 spec.created_at.timestamp(),
@@ -81,8 +95,8 @@ impl SpecMethods for Database {
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
                     improve_plan_round_id, repository_path, repository_name, content,
-                    implementation_plan, stage, attention_required, clarification_started,
-                    created_at, updated_at
+                    implementation_plan, stage, variant, ready_session_id, ready_branch, base_branch,
+                    attention_required, clarification_started, created_at, updated_at
              FROM specs
              WHERE repository_path = ?1 AND name = ?2",
         )?;
@@ -97,8 +111,8 @@ impl SpecMethods for Database {
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
                     improve_plan_round_id, repository_path, repository_name, content,
-                    implementation_plan, stage, attention_required, clarification_started,
-                    created_at, updated_at
+                    implementation_plan, stage, variant, ready_session_id, ready_branch, base_branch,
+                    attention_required, clarification_started, created_at, updated_at
              FROM specs
              WHERE id = ?1",
         )?;
@@ -112,8 +126,8 @@ impl SpecMethods for Database {
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
                     improve_plan_round_id, repository_path, repository_name, content,
-                    implementation_plan, stage, attention_required, clarification_started,
-                    created_at, updated_at
+                    implementation_plan, stage, variant, ready_session_id, ready_branch, base_branch,
+                    attention_required, clarification_started, created_at, updated_at
              FROM specs
              WHERE repository_path = ?1
              ORDER BY updated_at DESC, created_at DESC, rowid DESC",
@@ -256,13 +270,102 @@ impl SpecMethods for Database {
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
                     improve_plan_round_id, repository_path, repository_name, content,
-                    implementation_plan, stage, attention_required, clarification_started,
-                    created_at, updated_at
+                    implementation_plan, stage, variant, ready_session_id, ready_branch, base_branch,
+                    attention_required, clarification_started, created_at, updated_at
              FROM specs
              WHERE repository_path = ?1 AND improve_plan_round_id = ?2",
         )?;
         let spec = stmt.query_row(params![repo_path.to_string_lossy(), round_id], row_to_spec)?;
         Ok(spec)
+    }
+
+    fn update_spec_variant(&self, id: &str, variant: TaskVariant) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE specs
+             SET variant = ?1, updated_at = ?2
+             WHERE id = ?3",
+            params![variant.as_str(), Utc::now().timestamp(), id],
+        )?;
+        Ok(())
+    }
+
+    fn update_spec_ready_session(
+        &self,
+        id: &str,
+        ready_session_id: Option<&str>,
+        ready_branch: Option<&str>,
+        base_branch: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "UPDATE specs
+             SET ready_session_id = ?1,
+                 ready_branch = ?2,
+                 base_branch = ?3,
+                 updated_at = ?4
+             WHERE id = ?5",
+            params![
+                ready_session_id,
+                ready_branch,
+                base_branch,
+                Utc::now().timestamp(),
+                id,
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn list_task_stage_workflows(&self, task_id: &str) -> Result<Vec<TaskStageWorkflow>> {
+        let conn = self.get_conn()?;
+        let mut stmt = conn.prepare(
+            "SELECT task_id, stage, preset_id, judge_preset_id, auto_chain
+             FROM task_stage_workflows
+             WHERE task_id = ?1
+             ORDER BY stage ASC",
+        )?;
+        let rows = stmt.query_map(params![task_id], |row| {
+            let stage_text: String = row.get(1)?;
+            let stage = stage_text.parse().map_err(|err: String| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Text,
+                    Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, err)),
+                )
+            })?;
+            Ok(TaskStageWorkflow {
+                task_id: row.get(0)?,
+                stage,
+                preset_id: row.get(2)?,
+                judge_preset_id: row.get(3)?,
+                auto_chain: row.get::<_, bool>(4).unwrap_or(false),
+            })
+        })?;
+        let mut workflows = Vec::new();
+        for row in rows {
+            workflows.push(row?);
+        }
+        Ok(workflows)
+    }
+
+    fn upsert_task_stage_workflow(&self, workflow: &TaskStageWorkflow) -> Result<()> {
+        let conn = self.get_conn()?;
+        conn.execute(
+            "INSERT INTO task_stage_workflows (task_id, stage, preset_id, judge_preset_id, auto_chain)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(task_id, stage) DO UPDATE SET
+                 preset_id = excluded.preset_id,
+                 judge_preset_id = excluded.judge_preset_id,
+                 auto_chain = excluded.auto_chain",
+            params![
+                workflow.task_id,
+                workflow.stage.as_str(),
+                workflow.preset_id,
+                workflow.judge_preset_id,
+                workflow.auto_chain,
+            ],
+        )?;
+        Ok(())
     }
 
     fn delete_spec(&self, id: &str) -> Result<()> {
@@ -294,14 +397,21 @@ fn row_to_spec(row: &Row<'_>) -> rusqlite::Result<Spec> {
                 Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, err)),
             )
         })?,
-        attention_required: row.get(14)?,
-        clarification_started: row.get(15)?,
+        variant: row
+            .get::<_, String>(14)?
+            .parse()
+            .unwrap_or(TaskVariant::Regular),
+        ready_session_id: row.get(15)?,
+        ready_branch: row.get(16)?,
+        base_branch: row.get(17)?,
+        attention_required: row.get(18)?,
+        clarification_started: row.get(19)?,
         created_at: {
-            let ts: i64 = row.get(16)?;
+            let ts: i64 = row.get(20)?;
             utc_from_epoch_seconds_lossy(ts)
         },
         updated_at: {
-            let ts: i64 = row.get(17)?;
+            let ts: i64 = row.get(21)?;
             utc_from_epoch_seconds_lossy(ts)
         },
     })
@@ -335,6 +445,10 @@ mod tests {
             content: "spec content".to_string(),
             implementation_plan: None,
             stage: SpecStage::Draft,
+            variant: TaskVariant::Regular,
+            ready_session_id: None,
+            ready_branch: None,
+            base_branch: None,
             attention_required: false,
             clarification_started: false,
             created_at: now,
@@ -373,12 +487,12 @@ mod tests {
         let spec = make_spec("s3", "clarify-me", "/repo");
         db.create_spec(&spec).unwrap();
 
-        db.update_spec_stage("s3", SpecStage::Clarified).unwrap();
+        db.update_spec_stage("s3", SpecStage::Ready).unwrap();
         db.update_spec_attention_required("s3", true).unwrap();
         db.update_spec_clarification_started("s3", true).unwrap();
 
         let fetched = db.get_spec_by_id("s3").unwrap();
-        assert_eq!(fetched.stage, SpecStage::Clarified);
+        assert_eq!(fetched.stage, SpecStage::Ready);
         assert!(fetched.attention_required);
         assert!(fetched.clarification_started);
     }
@@ -549,6 +663,10 @@ mod tests {
             content: "content".to_string(),
             implementation_plan: None,
             stage: SpecStage::Draft,
+            variant: TaskVariant::Regular,
+            ready_session_id: None,
+            ready_branch: None,
+            base_branch: None,
             attention_required: false,
             clarification_started: false,
             created_at: now,

@@ -2044,6 +2044,10 @@ mod tests {
             content: content.unwrap_or_default().to_string(),
             implementation_plan: None,
             stage: SpecStage::Draft,
+            variant: crate::domains::sessions::entity::TaskVariant::Regular,
+            ready_session_id: None,
+            ready_branch: None,
+            base_branch: None,
             attention_required: false,
             clarification_started: false,
             created_at: Utc::now(),
@@ -3069,6 +3073,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         };
         db.create_session(&session).expect("create session");
 
@@ -3653,7 +3660,7 @@ mod tests {
         let spec = manager
             .create_spec_session("plan-spec", "Clarified problem statement")
             .expect("create spec");
-        db.update_spec_stage(&spec.id, SpecStage::Clarified)
+        db.update_spec_stage(&spec.id, SpecStage::Ready)
             .expect("clarify spec");
 
         let round_id = "plan-round-confirm".to_string();
@@ -4874,24 +4881,24 @@ mod tests {
         let err = validate_start_improve_plan_round_preconditions(&db, &manager, "draft-spec")
             .expect_err("draft spec should be rejected");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
-        assert!(err.1.contains("clarified"));
+        assert!(err.1.contains("ready"));
     }
 
     #[test]
-    fn validate_start_improve_plan_round_accepts_clarified_spec_without_active_round() {
+    fn validate_start_improve_plan_round_accepts_ready_spec_without_active_round() {
         let (_tmp, repo_path) = init_test_repo();
         let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
         let manager = SessionManager::new(db.clone(), repo_path.clone());
         let spec = manager
-            .create_spec_session("clarified-spec", "Ready for plan")
+            .create_spec_session("ready-spec", "Ready for plan")
             .expect("create spec");
-        db.update_spec_stage(&spec.id, SpecStage::Clarified)
-            .expect("clarify spec");
+        db.update_spec_stage(&spec.id, SpecStage::Ready)
+            .expect("mark spec ready");
 
         let (resolved, version_group_id) =
-            validate_start_improve_plan_round_preconditions(&db, &manager, "clarified-spec")
-                .expect("clarified spec should pass validation");
-        assert_eq!(resolved.name, "clarified-spec");
+            validate_start_improve_plan_round_preconditions(&db, &manager, "ready-spec")
+                .expect("ready spec should pass validation");
+        assert_eq!(resolved.name, "ready-spec");
         assert_eq!(version_group_id, format!("plan-{}", spec.id));
     }
 
@@ -4903,7 +4910,7 @@ mod tests {
         let spec = manager
             .create_spec_session("busy-spec", "Clarified")
             .expect("create spec");
-        db.update_spec_stage(&spec.id, SpecStage::Clarified)
+        db.update_spec_stage(&spec.id, SpecStage::Ready)
             .expect("clarify spec");
 
         let round_id = "active-plan-round".to_string();
@@ -4947,7 +4954,7 @@ mod tests {
                 .expect("create spec");
             guard
                 .db
-                .update_spec_stage(&spec.id, SpecStage::Clarified)
+                .update_spec_stage(&spec.id, SpecStage::Ready)
                 .expect("clarify");
         }
 
@@ -4990,7 +4997,7 @@ mod tests {
         let spec = manager
             .create_spec_session("launch-fail-spec", "Clarified problem")
             .expect("create spec");
-        db.update_spec_stage(&spec.id, SpecStage::Clarified)
+        db.update_spec_stage(&spec.id, SpecStage::Ready)
             .expect("clarify spec");
 
         let launched: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
@@ -5048,7 +5055,7 @@ mod tests {
         let spec = manager
             .create_spec_session("single-plan-spec", "Clarified problem")
             .expect("create spec");
-        db.update_spec_stage(&spec.id, SpecStage::Clarified)
+        db.update_spec_stage(&spec.id, SpecStage::Ready)
             .expect("clarify spec");
 
         let launched: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
@@ -5091,7 +5098,7 @@ mod tests {
         let spec = manager
             .create_spec_session("recovered-spec", "Clarified")
             .expect("create spec");
-        db.update_spec_stage(&spec.id, SpecStage::Clarified)
+        db.update_spec_stage(&spec.id, SpecStage::Ready)
             .expect("clarify spec");
 
         let round_id = "stale-plan-round".to_string();
@@ -5301,6 +5308,9 @@ mod tests {
             promotion_reason: None,
             ci_autofix_enabled: false,
             merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
         }
     }
 
@@ -7623,10 +7633,10 @@ pub(crate) fn validate_start_improve_plan_round_preconditions(
         )
     })?;
 
-    if spec.stage != SpecStage::Clarified {
+    if spec.stage != SpecStage::Ready {
         return Err((
             StatusCode::BAD_REQUEST,
-            "Improve Plan can only start from a clarified spec".to_string(),
+            "Improve Plan can only start from a ready task".to_string(),
         ));
     }
 

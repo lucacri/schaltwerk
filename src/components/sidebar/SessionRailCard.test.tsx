@@ -120,7 +120,7 @@ describe('SessionRailCard', () => {
     waitingSession.info.clarification_started = true
     waitingSession.info.attention_required = true
     waitingSession.info.attention_kind = 'waiting_for_input'
-    waitingSession.info.spec_stage = 'clarified'
+    waitingSession.info.spec_stage = 'ready'
 
     const { rerender } = render(
       <TestProviders>
@@ -141,7 +141,7 @@ describe('SessionRailCard', () => {
     clearedSession.info.clarification_started = true
     clearedSession.info.attention_required = undefined
     clearedSession.info.attention_kind = undefined
-    clearedSession.info.spec_stage = 'clarified'
+    clearedSession.info.spec_stage = 'ready'
 
     rerender(
       <TestProviders>

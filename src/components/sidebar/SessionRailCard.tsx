@@ -51,8 +51,8 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
       ? 'waiting for input'
       : isIdle
         ? 'idle'
-        : statusState.primaryStatus === 'clarified'
-          ? 'clarified'
+        : statusState.primaryStatus === 'ready' && lifecycleState === SessionState.Spec
+          ? 'ready'
           : lifecycleState
   const shortcuts = useMultipleShortcutDisplays([
     KeyboardShortcutAction.SwitchToSession1,
@@ -166,14 +166,14 @@ export const SessionRailCard = memo<SessionRailCardProps>(function SessionRailCa
             ⏸ {t.sidebar.states.idle}
           </span>
           )}
-          {!isRunningState && !isIdle && statusState.primaryStatus === 'clarified' && (
+          {!isRunningState && !isIdle && statusState.primaryStatus === 'ready' && lifecycleState === SessionState.Spec && (
             <span
               className="block w-1.5 h-1.5 rounded-full"
               style={{ backgroundColor: 'var(--color-accent-green)' }}
-              title={t.session.clarified}
+              title={t.session.ready}
             />
           )}
-          {!isRunningState && !isIdle && statusState.primaryStatus !== 'clarified' && lifecycleState === SessionState.Spec && (
+          {!isRunningState && !isIdle && statusState.primaryStatus !== 'ready' && lifecycleState === SessionState.Spec && (
             <span
               className="block w-1.5 h-1.5 rounded-full"
               style={{ backgroundColor: 'var(--color-accent-yellow)' }}

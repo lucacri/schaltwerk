@@ -119,6 +119,7 @@ export function SpecEditor({
   const selectedSession = useMemo(() => sessions.find(session => session.info.session_id === sessionName) ?? null, [sessions, sessionName])
   const selectedEpic = selectedSession?.info.epic ?? null
   const specStage = selectedSession?.info.spec_stage ?? 'draft'
+  const isReadyStage = specStage === 'ready'
   const implementationPlan = selectedSession?.info.spec_implementation_plan?.trim() || null
   const improvePlanRoundId = selectedSession?.info.improve_plan_round_id ?? null
   const improvePlanActive = Boolean(improvePlanRoundId)
@@ -127,7 +128,7 @@ export function SpecEditor({
     onError: (message) => setError(message),
   })
   const improvingPlan = improvePlanAction.startingSessionId === sessionName
-  const canImprovePlan = specStage === 'clarified' && !improvePlanActive && !improvingPlan
+  const canImprovePlan = isReadyStage && !improvePlanActive && !improvingPlan
 
   const [reviewComments, setReviewComments] = useState<SpecReviewComment[]>([])
   const [showCommentForm, setShowCommentForm] = useState(false)
@@ -428,7 +429,7 @@ export function SpecEditor({
     specTerminalId,
   ])
 
-  const handleSetStage = useCallback(async (stage: 'draft' | 'clarified') => {
+  const handleSetStage = useCallback(async (stage: 'draft' | 'ready') => {
     try {
       setError(null)
       await invoke(TauriCommands.SchaltwerkCoreSetSpecStage, { name: sessionName, stage })
@@ -743,9 +744,9 @@ export function SpecEditor({
             className="px-1.5 py-0.5 rounded border"
             style={{
               ...specText.stageBadge,
-              color: specStage === 'clarified' ? 'var(--color-accent-green-light)' : 'var(--color-accent-yellow-light)',
-              backgroundColor: specStage === 'clarified' ? 'var(--color-accent-green-bg)' : 'var(--color-accent-yellow-bg)',
-              borderColor: specStage === 'clarified' ? 'var(--color-accent-green-border)' : 'var(--color-accent-yellow-border)',
+              color: isReadyStage ? 'var(--color-accent-green-light)' : 'var(--color-accent-yellow-light)',
+              backgroundColor: isReadyStage ? 'var(--color-accent-green-bg)' : 'var(--color-accent-yellow-bg)',
+              borderColor: isReadyStage ? 'var(--color-accent-green-border)' : 'var(--color-accent-yellow-border)',
             }}
           >
             {specStage}
@@ -779,7 +780,7 @@ export function SpecEditor({
                 <VscComment />
                 {t.specEditor.comment}
               </button>
-              {specStage === 'clarified' ? (
+              {isReadyStage ? (
                 <button
                   onClick={() => { void handleSetStage('draft') }}
                   className="px-2 py-1 rounded bg-bg-hover hover:bg-bg-hover text-text-primary flex items-center gap-1"
@@ -790,7 +791,7 @@ export function SpecEditor({
                 </button>
               ) : (
                 <button
-                  onClick={() => { void handleSetStage('clarified') }}
+                  onClick={() => { void handleSetStage('ready') }}
                   className="px-2 py-1 rounded bg-bg-hover hover:bg-bg-hover text-text-primary flex items-center gap-1"
                   style={specText.toolbarButton}
                   title={t.specEditor.markClarified}
@@ -838,7 +839,7 @@ export function SpecEditor({
                   t.specEditor.refine
                 )}
               </button>
-              {(specStage === 'clarified' || improvePlanActive) && (
+              {(isReadyStage || improvePlanActive) && (
                 <button
                   onClick={() => { void handleImprovePlan() }}
                   disabled={!canImprovePlan}
