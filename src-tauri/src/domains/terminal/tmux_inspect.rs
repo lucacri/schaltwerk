@@ -50,7 +50,7 @@ pub struct ServerInfo {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct SocketEntry {
+pub struct SocketEntry {
     pub file_name: String,
     pub project_hash: String,
     pub path: PathBuf,
@@ -132,11 +132,11 @@ pub(crate) fn join_metrics(panes: &mut [PaneInfo], metrics: &HashMap<i32, PaneMe
     }
 }
 
-pub(crate) trait EnvLookup {
+pub trait EnvLookup {
     fn get(&self, key: &str) -> Option<String>;
 }
 
-pub(crate) struct SystemEnv;
+pub struct SystemEnv;
 
 impl EnvLookup for SystemEnv {
     fn get(&self, key: &str) -> Option<String> {
@@ -149,7 +149,7 @@ impl EnvLookup for SystemEnv {
 /// the ENVIRONMENT section of `man tmux`), so neither do we — on macOS
 /// `TMPDIR` is always set to a per-user `/var/folders/...` dir that tmux
 /// never writes into.
-pub(crate) fn resolve_socket_dir<E: EnvLookup>(env: &E, uid: u32) -> PathBuf {
+pub fn resolve_socket_dir<E: EnvLookup>(env: &E, uid: u32) -> PathBuf {
     let base = env
         .get("TMUX_TMPDIR")
         .unwrap_or_else(|| "/tmp".to_string());
@@ -157,7 +157,23 @@ pub(crate) fn resolve_socket_dir<E: EnvLookup>(env: &E, uid: u32) -> PathBuf {
     PathBuf::from(format!("{trimmed}/tmux-{uid}"))
 }
 
-pub(crate) fn scan_lucode_sockets(dir: &Path) -> std::io::Result<Vec<SocketEntry>> {
+pub fn discover_lucode_socket_paths() -> Vec<PathBuf> {
+    // SAFETY: geteuid has no preconditions.
+    let uid: u32 = unsafe { libc::geteuid() };
+    let dir = resolve_socket_dir(&SystemEnv, uid);
+    match scan_lucode_sockets(&dir) {
+        Ok(entries) => entries.into_iter().map(|entry| entry.path).collect(),
+        Err(err) => {
+            log::warn!(
+                "failed to scan tmux socket dir {}: {err}",
+                dir.display()
+            );
+            Vec::new()
+        }
+    }
+}
+
+pub fn scan_lucode_sockets(dir: &Path) -> std::io::Result<Vec<SocketEntry>> {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),

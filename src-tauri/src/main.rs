@@ -1434,9 +1434,14 @@ fn main() {
         }
     }
 
-    // Provision Lucode's tmux.conf; if the version stamp changed, upstream
-    // per-project servers will be rebuilt on next project open.
-    match lucode::domains::terminal::tmux_bootstrap::ensure_tmux_conf_on_disk() {
+    // Provision Lucode's tmux.conf and, when the version stamp changes, push
+    // the fresh config into every running Lucode-owned tmux server so
+    // existing sessions pick up the latest wheel bindings immediately.
+    let tmux_sockets = lucode::domains::terminal::tmux_inspect::discover_lucode_socket_paths();
+    match lucode::domains::terminal::tmux_bootstrap::ensure_and_reload_if_rewrote(
+        &tmux_sockets,
+        &lucode::domains::terminal::tmux_bootstrap::SystemTmuxReloadRunner,
+    ) {
         Ok(state) => {
             if state.wrote {
                 log::info!(

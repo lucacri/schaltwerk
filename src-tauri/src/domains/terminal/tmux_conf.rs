@@ -2,11 +2,11 @@
 //! provisioned on disk at startup. Never sources the user's `~/.tmux.conf`.
 
 /// Stamp written as the first line of the generated tmux.conf. The
-/// `mouse-v1` suffix is bumped independently of the crate version whenever
+/// `mouse-v2` suffix is bumped independently of the crate version whenever
 /// the bundled tmux mouse behavior changes so existing on-disk configs are
-/// rewritten and per-project tmux servers restart at next launch.
+/// rewritten and live Lucode tmux servers can be reloaded at startup.
 pub const TMUX_CONF_VERSION_STAMP: &str =
-    concat!("# lucode-tmux-conf v", env!("CARGO_PKG_VERSION"), " mouse-v1");
+    concat!("# lucode-tmux-conf v", env!("CARGO_PKG_VERSION"), " mouse-v2");
 
 /// Full body of the Lucode tmux configuration file. The first line is the
 /// version stamp; callers compare the on-disk first line against this stamp
@@ -14,7 +14,7 @@ pub const TMUX_CONF_VERSION_STAMP: &str =
 pub const TMUX_CONF_BODY: &str = concat!(
     "# lucode-tmux-conf v",
     env!("CARGO_PKG_VERSION"),
-    " mouse-v1",
+    " mouse-v2",
     "\n",
     "\n",
     "# --- UI suppression\n",
@@ -31,10 +31,10 @@ pub const TMUX_CONF_BODY: &str = concat!(
     "# --- Mouse (tmux owns wheel + selection; xterm.js forwards SGR reports)\n",
     "set -g mouse on\n",
     "\n",
-    "# Wheel outside copy-mode: enter copy-mode and scroll three lines up on\n",
-    "# the first tick. When the inner TUI has enabled its own mouse tracking\n",
-    "# (mouse_any_flag), forward the event instead.\n",
-    "bind-key -T root WheelUpPane   if-shell -F -t = \"#{mouse_any_flag}\" \"send-keys -M\" \"copy-mode -e; send-keys -X -N 3 scroll-up\"\n",
+    "# Wheel outside copy-mode: always enter copy-mode and scroll three lines\n",
+    "# up on the first tick. Lucode keeps wheel-up reserved for tmux-owned\n",
+    "# agent scrollback even when the inner app has enabled mouse tracking.\n",
+    "bind-key -T root WheelUpPane   copy-mode -e\\; send-keys -X -N 3 scroll-up\n",
     "bind-key -T root WheelDownPane if-shell -F -t = \"#{mouse_any_flag}\" \"send-keys -M\"\n",
     "\n",
     "# Wheel inside copy-mode scrolls tmux's 50k history buffer.\n",
@@ -108,7 +108,7 @@ mod tests {
         assert_eq!(first_line, TMUX_CONF_VERSION_STAMP);
         assert!(first_line.starts_with("# lucode-tmux-conf v"));
         assert!(
-            first_line.ends_with(" mouse-v1"),
+            first_line.ends_with(" mouse-v2"),
             "tmux.conf stamp must change when bundled tmux mouse behavior changes"
         );
     }
@@ -152,16 +152,16 @@ mod tests {
             "missing root WheelUpPane binding"
         );
         assert!(
-            TMUX_CONF_BODY.contains("copy-mode -e; send-keys -X -N 3 scroll-up"),
+            TMUX_CONF_BODY.contains("copy-mode -e\\; send-keys -X -N 3 scroll-up"),
             "root WheelUpPane must enter copy-mode and scroll on the first tick"
+        );
+        assert!(
+            !TMUX_CONF_BODY.contains("bind-key -T root WheelUpPane   if-shell -F -t = \"#{mouse_any_flag}\""),
+            "root WheelUpPane must not defer to inner-app mouse tracking"
         );
         assert!(
             TMUX_CONF_BODY.contains("bind-key -T root WheelDownPane"),
             "missing root WheelDownPane binding"
-        );
-        assert!(
-            TMUX_CONF_BODY.contains("#{mouse_any_flag}"),
-            "wheel bindings must forward to TUIs that set mouse_any_flag"
         );
     }
 
