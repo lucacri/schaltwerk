@@ -51,6 +51,7 @@ export enum UiEvent {
   SelectionChanged = 'schaltwerk:selection-changed',
   SessionStateChanged = 'schaltwerk:session-state-changed',
   AgentBinariesUpdated = 'schaltwerk:agent-binaries-updated',
+  OpenAppsUpdated = 'schaltwerk:open-apps-updated',
   CloseRequested = 'schaltwerk:close-requested',
   ConsolidateVersionGroup = 'schaltwerk:consolidate-version-group',
   TerminateVersionGroup = 'schaltwerk:terminate-version-group',
@@ -331,6 +332,7 @@ export type UiEventPayloads = {
   [UiEvent.InsertTerminalText]: InsertTerminalTextDetail
   [UiEvent.OpenSettings]: OpenSettingsDetail | undefined
   [UiEvent.AgentBinariesUpdated]: undefined
+  [UiEvent.OpenAppsUpdated]: undefined
   [UiEvent.CloseRequested]: undefined
   [UiEvent.ConsolidateVersionGroup]: ConsolidateVersionGroupDetail
   [UiEvent.TerminateVersionGroup]: TerminateVersionGroupDetail

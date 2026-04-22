@@ -82,6 +82,7 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             orchestrator_agent_type TEXT DEFAULT 'claude',
             spec_clarification_agent_type TEXT DEFAULT 'claude',
             default_open_app TEXT DEFAULT NULL,
+            enabled_open_apps TEXT DEFAULT NULL,
             default_base_branch TEXT,
             terminal_font_size INTEGER DEFAULT 13,
             ui_font_size INTEGER DEFAULT 12,
@@ -404,6 +405,10 @@ fn apply_app_config_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()
     );
     let _ = conn.execute(
         "ALTER TABLE app_config ADD COLUMN default_open_app TEXT DEFAULT 'finder'",
+        [],
+    );
+    let _ = conn.execute(
+        "ALTER TABLE app_config ADD COLUMN enabled_open_apps TEXT DEFAULT NULL",
         [],
     );
     let _ = conn.execute(

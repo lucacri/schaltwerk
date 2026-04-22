@@ -4,12 +4,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { VscFolder, VscChevronDown, VscCheck, VscChevronRight, VscCode, VscTerminal } from 'react-icons/vsc'
 import { logger } from '../utils/logger'
 import { useTranslation } from '../common/i18n'
-
-export type OpenApp = {
-  id: 'finder' | 'cursor' | 'vscode' | 'code' | 'ghostty' | 'warp' | 'terminal' | 'intellij' | 'zed'
-  name: string
-  kind: 'editor' | 'terminal' | 'system'
-}
+import type { OpenApp } from '../types/openApps'
+import { listenUiEvent, UiEvent, emitUiEvent } from '../common/uiEvents'
 
 export type OpenInAppRequest = {
   worktreeRoot: string
@@ -27,34 +23,45 @@ interface OpenInSplitButtonProps {
 export function OpenInSplitButton({ resolvePath, onOpenReady, filter }: OpenInSplitButtonProps) {
   const { t } = useTranslation()
   const [apps, setApps] = useState<OpenApp[]>([])
-  const [defaultApp, setDefaultApp] = useState<OpenApp['id']>('finder')
+  const [defaultApp, setDefaultApp] = useState('finder')
   const [open, setOpen] = useState(false)
   const [isOpening, setIsOpening] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
 
-  useEffect(() => {
-    let mounted = true
-    const load = async () => {
-      try {
-        const [available, def] = await Promise.all([
-          invoke<OpenApp[] | undefined>(TauriCommands.ListAvailableOpenApps),
-          invoke<string>(TauriCommands.GetDefaultOpenApp),
-        ])
-        if (!mounted) return
-        setApps(Array.isArray(available) ? available : [])
-        if (def && ['finder','cursor','vscode','code','ghostty','warp','terminal','intellij','zed'].includes(def)) {
-          setDefaultApp(def as OpenApp['id'])
-        }
-      } catch (e) {
-        logger.error('Failed to get available apps', e)
-        if (!mounted) return
-        setApps([{ id: 'finder', name: 'Finder', kind: 'system' }])
-        setDefaultApp('finder')
+  const loadOpenApps = useCallback(async () => {
+    try {
+      const [available, def] = await Promise.all([
+        invoke<OpenApp[] | undefined>(TauriCommands.ListAvailableOpenApps),
+        invoke<string>(TauriCommands.GetDefaultOpenApp),
+      ])
+      setApps(Array.isArray(available) ? available : [])
+      if (typeof def === 'string' && def.trim()) {
+        setDefaultApp(def)
       }
+    } catch (e) {
+      logger.error('Failed to get available apps', e)
+      setApps([{ id: 'finder', name: 'Finder', kind: 'system' }])
+      setDefaultApp('finder')
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      if (!active) return
+      await loadOpenApps()
     }
     void load()
-    return () => { mounted = false }
-  }, [])
+    const cleanup = listenUiEvent(UiEvent.OpenAppsUpdated, () => {
+      if (active) {
+        void loadOpenApps()
+      }
+    })
+    return () => {
+      active = false
+      cleanup()
+    }
+  }, [loadOpenApps])
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -70,7 +77,7 @@ export function OpenInSplitButton({ resolvePath, onOpenReady, filter }: OpenInSp
     return apps.filter(app => filter(app))
   }, [apps, filter])
 
-  const effectiveDefaultApp = useMemo<OpenApp['id']>(() => {
+  const effectiveDefaultApp = useMemo(() => {
     if (filteredApps.length === 0) return defaultApp
     return filteredApps.some(app => app.id === defaultApp) ? defaultApp : filteredApps[0].id
   }, [filteredApps, defaultApp])
@@ -83,7 +90,7 @@ export function OpenInSplitButton({ resolvePath, onOpenReady, filter }: OpenInSp
     return a?.name ?? 'Open'
   }, [apps, filteredApps, effectiveDefaultApp, defaultApp])
 
-  const openWithApp = useCallback(async (appId: OpenApp['id'], showError = true) => {
+  const openWithApp = useCallback(async (appId: string, showError = true) => {
     const payload = await resolvePath()
     if (!payload) return
 
@@ -143,7 +150,8 @@ export function OpenInSplitButton({ resolvePath, onOpenReady, filter }: OpenInSp
       // Only set as default if opening succeeded
       try {
         await invoke(TauriCommands.SetDefaultOpenApp, { appId: app.id })
-        setDefaultApp(app.id)
+        await loadOpenApps()
+        emitUiEvent(UiEvent.OpenAppsUpdated)
       } catch (e) {
         logger.warn('Failed to persist default app, continuing', e)
       }
@@ -156,11 +164,10 @@ export function OpenInSplitButton({ resolvePath, onOpenReady, filter }: OpenInSp
     }
   }
 
-  const iconFor = (id: OpenApp['id']) => {
-    if (id === 'vscode' || id === 'code') return <VscCode className="text-[14px]" />
-    if (id === 'cursor') return <VscCode className="text-[14px]" />
-    if (id === 'intellij') return <VscCode className="text-[14px]" />
-    if (id === 'zed') return <VscCode className="text-[14px]" />
+  const iconFor = (id: string) => {
+    if (['vscode', 'code', 'cursor', 'intellij', 'phpstorm', 'zed'].includes(id)) {
+      return <VscCode className="text-[14px]" />
+    }
     if (id === 'finder') return <VscFolder className="text-[14px]" />
     return <VscTerminal className="text-[14px]" />
   }

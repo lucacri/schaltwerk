@@ -47,6 +47,7 @@ import { AgentPresetsSettings } from '../settings/AgentPresetsSettings'
 import { AgentOrderSettings } from '../settings/AgentOrderSettings'
 import { ContextualActionsSettings } from '../settings/ContextualActionsSettings'
 import { EditorOverridesSettings } from '../settings/EditorOverridesSettings'
+import { OpenAppCatalogSettings } from '../settings/OpenAppCatalogSettings'
 import { Button, Checkbox, FormGroup, Label, SectionHeader, Select, TextInput, Textarea, Toggle } from '../ui'
 import {
     type DefaultGenerationPrompts,
@@ -3403,7 +3404,8 @@ fi`}
             case 'fileEditors':
                 return (
                     <div className="flex flex-col h-full">
-                        <div className="flex-1 overflow-y-auto p-6">
+                        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                            <OpenAppCatalogSettings onNotification={showNotification} />
                             <EditorOverridesSettings onNotification={showNotification} />
                         </div>
                     </div>

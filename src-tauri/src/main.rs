@@ -323,6 +323,44 @@ async fn set_default_open_app(app_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn get_enabled_open_app_ids() -> Result<Vec<String>, String> {
+    match open_global_app_config_db() {
+        Ok(db) => lucode::open_apps::get_enabled_open_apps_from_db(&db)
+            .map_err(|e| format!("Failed to load enabled open apps: {e}")),
+        Err(e) => {
+            log::warn!("Failed to access app config database: {e}. Returning empty enabled open-app list");
+            Ok(Vec::new())
+        }
+    }
+}
+
+#[tauri::command]
+async fn set_enabled_open_app_ids(app_ids: Vec<String>) -> Result<(), String> {
+    let db = open_global_app_config_db()?;
+    lucode::open_apps::set_enabled_open_apps_in_db(&db, &app_ids)
+        .map_err(|e| format!("Failed to store enabled open apps: {e}"))
+}
+
+#[tauri::command]
+async fn list_available_open_apps() -> Result<Vec<lucode::open_apps::OpenApp>, String> {
+    match open_global_app_config_db() {
+        Ok(db) => lucode::open_apps::list_available_open_apps_from_db(&db)
+            .map_err(|e| format!("Failed to load available open apps: {e}")),
+        Err(e) => {
+            log::warn!("Failed to access app config database: {e}. Falling back to detected apps");
+            lucode::open_apps::list_available_open_apps().await
+        }
+    }
+}
+
+#[tauri::command]
+async fn list_open_app_catalog() -> Result<Vec<lucode::open_apps::OpenAppCatalogEntry>, String> {
+    let db = open_global_app_config_db()?;
+    lucode::open_apps::list_open_app_catalog_from_db(&db)
+        .map_err(|e| format!("Failed to load open app catalog: {e}"))
+}
+
+#[tauri::command]
 async fn get_editor_overrides() -> Result<std::collections::HashMap<String, String>, String> {
     match open_global_app_config_db() {
         Ok(db) => lucode::open_apps::get_editor_overrides_from_db(&db)
@@ -1691,10 +1729,13 @@ fn main() {
             session_try_autofix,
             // Open apps commands
             get_default_open_app,
+            get_enabled_open_app_ids,
             set_default_open_app,
+            set_enabled_open_app_ids,
+            list_available_open_apps,
+            list_open_app_catalog,
             get_editor_overrides,
             set_editor_overrides,
-            lucode::open_apps::list_available_open_apps,
             lucode::open_apps::open_in_app,
             // Diff commands (from module)
             diff_commands::get_changed_files_from_main,

@@ -33,7 +33,7 @@ describe('extractExtension', () => {
 
 describe('resolveEditorForFile', () => {
   it('returns configured editor for matching extension', () => {
-    const overrides = { '.rs': 'cursor', '.ts': 'code' }
+    const overrides = { '.rs': 'cursor', '.ts': 'vscode' }
     expect(resolveEditorForFile('src/main.rs', overrides)).toBe('cursor')
   })
 
@@ -52,7 +52,7 @@ describe('resolveEditorForFile', () => {
   })
 
   it('matches by last extension segment', () => {
-    const overrides = { '.tsx': 'code' }
-    expect(resolveEditorForFile('Component.test.tsx', overrides)).toBe('code')
+    const overrides = { '.tsx': 'vscode' }
+    expect(resolveEditorForFile('Component.test.tsx', overrides)).toBe('vscode')
   })
 })

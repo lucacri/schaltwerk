@@ -1,9 +1,203 @@
 use crate::schaltwerk_core::db_app_config::AppConfigMethods;
 use std::path::{Path, PathBuf};
 
+const APP_KIND_SYSTEM: &str = "system";
+const APP_KIND_TERMINAL: &str = "terminal";
+const APP_KIND_EDITOR: &str = "editor";
+
+fn platform_default_open_app_id() -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        "finder"
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        "nautilus"
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        "explorer"
+    }
+}
+
+fn normalize_open_app_id(id: &str) -> Option<String> {
+    let normalized = match id {
+        "code" => "vscode",
+        "idea" => "intellij",
+        "iterm" => "iterm2",
+        value => value,
+    };
+
+    supported_open_app_catalog()
+        .into_iter()
+        .find(|app| app.id == normalized)
+        .map(|app| app.id)
+}
+
+fn default_enabled_open_app_ids() -> Vec<String> {
+    let detected_ids = detect_available_apps()
+        .into_iter()
+        .map(|app| app.id)
+        .collect::<std::collections::HashSet<_>>();
+
+    let supported = supported_open_app_catalog();
+    let detected_supported = supported
+        .iter()
+        .filter(|app| detected_ids.contains(&app.id))
+        .map(|app| app.id.clone())
+        .collect::<Vec<_>>();
+
+    if detected_supported.is_empty() {
+        return vec![platform_default_open_app_id().to_string()];
+    }
+
+    detected_supported
+}
+
+fn normalize_enabled_open_app_ids<I>(raw_ids: I) -> Vec<String>
+where
+    I: IntoIterator<Item = String>,
+{
+    let normalized_ids = raw_ids
+        .into_iter()
+        .filter_map(|id| normalize_open_app_id(&id))
+        .collect::<std::collections::HashSet<_>>();
+    let mut seen = std::collections::HashSet::new();
+    let normalized = supported_open_app_catalog()
+        .into_iter()
+        .filter(|app| normalized_ids.contains(&app.id))
+        .filter_map(|app| {
+            if seen.insert(app.id.clone()) {
+                Some(app.id)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    if normalized.is_empty() {
+        return default_enabled_open_app_ids();
+    }
+
+    normalized
+}
+
+fn resolve_default_open_app_id(stored_default: &str, enabled_ids: &[String]) -> String {
+    if let Some(normalized_default) = normalize_open_app_id(stored_default)
+        && enabled_ids
+            .iter()
+            .any(|enabled| enabled == &normalized_default)
+    {
+        return normalized_default;
+    }
+
+    enabled_ids
+        .first()
+        .cloned()
+        .unwrap_or_else(|| platform_default_open_app_id().to_string())
+}
+
+fn normalize_editor_override_id(id: &str) -> String {
+    normalize_open_app_id(id).unwrap_or_else(|| id.to_string())
+}
+
+fn normalize_editor_overrides(
+    overrides: &std::collections::HashMap<String, String>,
+) -> std::collections::HashMap<String, String> {
+    overrides
+        .iter()
+        .map(|(ext, app_id)| (ext.clone(), normalize_editor_override_id(app_id)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_legacy_open_app_ids_normalize_to_canonical_ids() {
+        assert_eq!(normalize_open_app_id("code"), Some("vscode".to_string()));
+        assert_eq!(normalize_open_app_id("vscode"), Some("vscode".to_string()));
+        assert_eq!(normalize_open_app_id("idea"), Some("intellij".to_string()));
+        assert_eq!(
+            normalize_open_app_id("intellij"),
+            Some("intellij".to_string())
+        );
+        assert_eq!(normalize_open_app_id("unknown-app"), None);
+    }
+
+    #[test]
+    fn test_invalid_enabled_ids_recover_to_platform_defaults() {
+        assert_eq!(
+            normalize_enabled_open_app_ids(["unknown-app".to_string()]),
+            default_enabled_open_app_ids()
+        );
+    }
+
+    #[test]
+    fn test_default_open_app_falls_back_to_first_enabled_app() {
+        let enabled = vec!["finder".to_string(), "vscode".to_string()];
+        assert_eq!(
+            resolve_default_open_app_id("ghostty", &enabled),
+            "finder".to_string()
+        );
+    }
+
+    #[test]
+    fn test_set_enabled_open_apps_reassigns_default_when_current_default_is_disabled() {
+        let db = crate::schaltwerk_core::Database::new_in_memory().unwrap();
+        set_default_open_app_in_db(&db, "vscode").expect("seed default");
+        set_enabled_open_apps_in_db(&db, &["finder".to_string()]).expect("set enabled apps");
+
+        assert_eq!(
+            get_default_open_app_from_db(&db).expect("read resolved default"),
+            "finder".to_string()
+        );
+    }
+
+    #[test]
+    fn test_setting_default_auto_enables_selected_app() {
+        let db = crate::schaltwerk_core::Database::new_in_memory().unwrap();
+        set_enabled_open_apps_in_db(&db, &["finder".to_string()]).expect("seed enabled apps");
+
+        set_default_open_app_in_db(&db, "vscode").expect("set default");
+
+        assert_eq!(
+            get_default_open_app_from_db(&db).expect("read default"),
+            "vscode".to_string()
+        );
+        assert_eq!(
+            get_enabled_open_apps_from_db(&db).expect("read enabled apps"),
+            vec!["finder".to_string(), "vscode".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_editor_override_ids_normalize_to_canonical_ids() {
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(".ts".to_string(), "code".to_string());
+        overrides.insert(".java".to_string(), "idea".to_string());
+
+        let normalized = normalize_editor_overrides(&overrides);
+        assert_eq!(normalized.get(".ts"), Some(&"vscode".to_string()));
+        assert_eq!(normalized.get(".java"), Some(&"intellij".to_string()));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_macos_catalog_includes_required_builtin_entries() {
+        let ids = supported_open_app_catalog()
+            .into_iter()
+            .map(|app| app.id)
+            .collect::<Vec<_>>();
+
+        assert!(ids.contains(&"finder".to_string()));
+        assert!(ids.contains(&"iterm2".to_string()));
+        assert!(ids.contains(&"vscode".to_string()));
+        assert!(ids.contains(&"phpstorm".to_string()));
+    }
 
     #[test]
     fn test_app_kinds_are_valid() {
@@ -146,6 +340,16 @@ pub struct OpenApp {
     pub kind: String, // "editor" | "terminal" | "system"
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct OpenAppCatalogEntry {
+    pub id: String,
+    pub name: String,
+    pub kind: String,
+    pub is_detected: bool,
+    pub is_enabled: bool,
+    pub is_default: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResolvedTarget {
     pub absolute_path: PathBuf,
@@ -168,167 +372,332 @@ pub struct CommandSpec {
     pub working_dir: Option<PathBuf>,
 }
 
-fn detect_available_apps() -> Vec<OpenApp> {
+struct ResolvedOpenAppState {
+    catalog: Vec<OpenApp>,
+    detected_ids: std::collections::HashSet<String>,
+    enabled_ids: Vec<String>,
+    default_id: String,
+}
+
+fn supported_open_app_catalog() -> Vec<OpenApp> {
     let mut apps = Vec::new();
 
     #[cfg(target_os = "macos")]
     {
-        apps.push(OpenApp {
-            id: "finder".into(),
-            name: "Finder".into(),
-            kind: "system".into(),
-        });
-        apps.extend(detect_macos_terminals());
+        apps.extend([
+            OpenApp {
+                id: "finder".into(),
+                name: "Finder".into(),
+                kind: APP_KIND_SYSTEM.into(),
+            },
+            OpenApp {
+                id: "iterm2".into(),
+                name: "iTerm2".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "ghostty".into(),
+                name: "Ghostty".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "warp".into(),
+                name: "Warp".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "terminal".into(),
+                name: "Terminal".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+        ]);
     }
 
     #[cfg(target_os = "linux")]
     {
-        apps.extend(detect_linux_file_managers());
-        apps.extend(detect_linux_terminals());
+        apps.extend([
+            OpenApp {
+                id: "nautilus".into(),
+                name: "Nautilus".into(),
+                kind: APP_KIND_SYSTEM.into(),
+            },
+            OpenApp {
+                id: "dolphin".into(),
+                name: "Dolphin".into(),
+                kind: APP_KIND_SYSTEM.into(),
+            },
+            OpenApp {
+                id: "nemo".into(),
+                name: "Nemo".into(),
+                kind: APP_KIND_SYSTEM.into(),
+            },
+            OpenApp {
+                id: "pcmanfm".into(),
+                name: "PCManFM".into(),
+                kind: APP_KIND_SYSTEM.into(),
+            },
+            OpenApp {
+                id: "thunar".into(),
+                name: "Thunar".into(),
+                kind: APP_KIND_SYSTEM.into(),
+            },
+            OpenApp {
+                id: "alacritty".into(),
+                name: "Alacritty".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "ghostty".into(),
+                name: "Ghostty".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "gnome-terminal".into(),
+                name: "GNOME Terminal".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "kgx".into(),
+                name: "Console".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "kitty".into(),
+                name: "Kitty".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "konsole".into(),
+                name: "Konsole".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "ptyxis".into(),
+                name: "Ptyxis".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "tilix".into(),
+                name: "Tilix".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "tmux".into(),
+                name: "Tmux".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "warp".into(),
+                name: "Warp".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "wezterm".into(),
+                name: "WezTerm".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "xfce4-terminal".into(),
+                name: "Xfce Terminal".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "zellij".into(),
+                name: "Zellij".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+        ]);
     }
 
     #[cfg(target_os = "windows")]
     {
-        apps.push(OpenApp {
-            id: "explorer".into(),
-            name: "Explorer".into(),
-            kind: "system".into(),
-        });
-        apps.extend(detect_windows_terminals());
+        apps.extend([
+            OpenApp {
+                id: "explorer".into(),
+                name: "Explorer".into(),
+                kind: APP_KIND_SYSTEM.into(),
+            },
+            OpenApp {
+                id: "wt".into(),
+                name: "Windows Terminal".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "pwsh".into(),
+                name: "PowerShell".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "powershell".into(),
+                name: "Windows PowerShell".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+            OpenApp {
+                id: "cmd".into(),
+                name: "Command Prompt".into(),
+                kind: APP_KIND_TERMINAL.into(),
+            },
+        ]);
     }
 
-    // Cross-platform editors
-    apps.extend(detect_editors());
+    apps.extend([
+        OpenApp {
+            id: "cursor".into(),
+            name: "Cursor".into(),
+            kind: APP_KIND_EDITOR.into(),
+        },
+        OpenApp {
+            id: "vscode".into(),
+            name: "VS Code".into(),
+            kind: APP_KIND_EDITOR.into(),
+        },
+        OpenApp {
+            id: "intellij".into(),
+            name: "IntelliJ IDEA".into(),
+            kind: APP_KIND_EDITOR.into(),
+        },
+        OpenApp {
+            id: "phpstorm".into(),
+            name: "PhpStorm".into(),
+            kind: APP_KIND_EDITOR.into(),
+        },
+        OpenApp {
+            id: "zed".into(),
+            name: "Zed".into(),
+            kind: APP_KIND_EDITOR.into(),
+        },
+    ]);
 
     apps
 }
 
+fn detect_available_apps() -> Vec<OpenApp> {
+    let detected_ids = detect_available_app_ids();
+    supported_open_app_catalog()
+        .into_iter()
+        .filter(|app| detected_ids.contains(&app.id))
+        .collect()
+}
+
+fn detect_available_app_ids() -> std::collections::HashSet<String> {
+    let mut ids = std::collections::HashSet::new();
+
+    #[cfg(target_os = "macos")]
+    {
+        ids.insert("finder".into());
+        ids.extend(detect_macos_terminal_ids());
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        ids.extend(detect_linux_file_manager_ids());
+        ids.extend(detect_linux_terminal_ids());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        ids.insert("explorer".into());
+        ids.extend(detect_windows_terminal_ids());
+    }
+
+    ids.extend(detect_editor_ids());
+
+    ids
+}
+
 #[cfg(target_os = "linux")]
-fn detect_linux_file_managers() -> Vec<OpenApp> {
-    let candidates = [
-        ("dolphin", "Dolphin"),
-        ("nautilus", "Nautilus"),
-        ("nemo", "Nemo"),
-        ("pcmanfm", "PCManFM"),
-        ("thunar", "Thunar"),
-    ];
+fn detect_linux_file_manager_ids() -> Vec<String> {
+    let candidates = ["dolphin", "nautilus", "nemo", "pcmanfm", "thunar"];
 
     candidates
         .iter()
-        .filter(|(id, _)| which::which(id).is_ok())
-        .map(|(id, name)| OpenApp {
-            id: (*id).to_string(),
-            name: (*name).to_string(),
-            kind: "system".to_string(),
-        })
+        .filter(|id| which::which(id).is_ok())
+        .map(|id| (*id).to_string())
         .collect()
 }
 
 #[cfg(target_os = "linux")]
-fn detect_linux_terminals() -> Vec<OpenApp> {
+fn detect_linux_terminal_ids() -> Vec<String> {
     let candidates = [
-        ("alacritty", "Alacritty"),
-        ("ghostty", "Ghostty"),
-        ("gnome-terminal", "GNOME Terminal"),
-        ("kgx", "Console"),
-        ("kitty", "Kitty"),
-        ("konsole", "Konsole"),
-        ("ptyxis", "Ptyxis"),
-        ("tilix", "Tilix"),
-        ("tmux", "Tmux"),
-        ("warp", "Warp"),
-        ("wezterm", "WezTerm"),
-        ("xfce4-terminal", "Xfce Terminal"),
-        ("zellij", "Zellij"),
+        "alacritty",
+        "ghostty",
+        "gnome-terminal",
+        "kgx",
+        "kitty",
+        "konsole",
+        "ptyxis",
+        "tilix",
+        "tmux",
+        "warp",
+        "wezterm",
+        "xfce4-terminal",
+        "zellij",
     ];
 
     candidates
         .iter()
-        .filter(|(id, _)| which::which(id).is_ok())
-        .map(|(id, name)| OpenApp {
-            id: (*id).to_string(),
-            name: (*name).to_string(),
-            kind: "terminal".to_string(),
-        })
+        .filter(|id| which::which(id).is_ok())
+        .map(|id| (*id).to_string())
         .collect()
 }
 
 #[cfg(target_os = "macos")]
-fn detect_macos_terminals() -> Vec<OpenApp> {
-    vec![
-        OpenApp {
-            id: "ghostty".into(),
-            name: "Ghostty".into(),
-            kind: "terminal".into(),
-        },
-        OpenApp {
-            id: "warp".into(),
-            name: "Warp".into(),
-            kind: "terminal".into(),
-        },
-        OpenApp {
-            id: "terminal".into(),
-            name: "Terminal".into(),
-            kind: "terminal".into(),
-        },
-    ]
+fn detect_macos_terminal_ids() -> Vec<String> {
+    let candidates = [
+        (
+            "ghostty",
+            which::which("ghostty").is_ok() || macos_bundle_exists("Ghostty.app"),
+        ),
+        ("iterm2", macos_bundle_exists("iTerm.app")),
+        (
+            "warp",
+            which::which("warp").is_ok() || macos_bundle_exists("Warp.app"),
+        ),
+        ("terminal", true),
+    ];
+
+    candidates
+        .into_iter()
+        .filter(|(_, detected)| *detected)
+        .map(|(id, _)| id.to_string())
+        .collect()
 }
 
 #[cfg(target_os = "windows")]
-fn detect_windows_terminals() -> Vec<OpenApp> {
+fn detect_windows_terminal_ids() -> Vec<String> {
     let mut terminals = Vec::new();
 
     if which::which("wt").is_ok() {
-        terminals.push(OpenApp {
-            id: "wt".into(),
-            name: "Windows Terminal".into(),
-            kind: "terminal".into(),
-        });
+        terminals.push("wt".to_string());
     }
 
     if which::which("pwsh").is_ok() {
-        terminals.push(OpenApp {
-            id: "pwsh".into(),
-            name: "PowerShell".into(),
-            kind: "terminal".into(),
-        });
+        terminals.push("pwsh".to_string());
     } else if which::which("powershell").is_ok() {
-        terminals.push(OpenApp {
-            id: "powershell".into(),
-            name: "Windows PowerShell".into(),
-            kind: "terminal".into(),
-        });
+        terminals.push("powershell".to_string());
     }
 
-    terminals.push(OpenApp {
-        id: "cmd".into(),
-        name: "Command Prompt".into(),
-        kind: "terminal".into(),
-    });
+    terminals.push("cmd".to_string());
 
     terminals
 }
 
-fn detect_editors() -> Vec<OpenApp> {
-    let candidates = [
-        ("cursor", "Cursor"),
-        ("code", "VS Code"),
-        ("idea", "IntelliJ IDEA"),
-        ("zed", "Zed"),
-    ];
+fn detect_editor_ids() -> Vec<String> {
+    let candidates = ["cursor", "vscode", "intellij", "phpstorm", "zed"];
 
     candidates
         .iter()
-        .filter(|(id, _)| {
-            which::which(id).is_ok() || {
+        .filter(|id| {
+            is_editor_cli_available(id) || {
                 #[cfg(target_os = "macos")]
                 {
-                    match *id {
+                    match **id {
                         "cursor" => std::path::Path::new("/Applications/Cursor.app").exists(),
-                        "code" => {
+                        "vscode" => {
                             std::path::Path::new("/Applications/Visual Studio Code.app").exists()
                         }
-                        "idea" => find_existing_intellij_bundle().is_some(),
+                        "intellij" => find_existing_intellij_bundle().is_some(),
+                        "phpstorm" => find_existing_phpstorm_bundle().is_some(),
                         "zed" => find_existing_macos_zed_bundle().is_some(),
                         _ => false,
                     }
@@ -341,12 +710,16 @@ fn detect_editors() -> Vec<OpenApp> {
                 false
             }
         })
-        .map(|(id, name)| OpenApp {
-            id: (*id).to_string(),
-            name: (*name).to_string(),
-            kind: "editor".to_string(),
-        })
+        .map(|id| (*id).to_string())
         .collect()
+}
+
+fn is_editor_cli_available(id: &str) -> bool {
+    match id {
+        "vscode" => which::which("code").is_ok(),
+        "intellij" => which::which("idea").is_ok(),
+        other => which::which(other).is_ok(),
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -358,21 +731,20 @@ fn check_windows_editor_installed(id: &str) -> bool {
         "cursor" => {
             std::path::Path::new(&format!("{localappdata}\\Programs\\Cursor\\Cursor.exe")).exists()
         }
-        "code" => {
-            std::path::Path::new(&format!(
-                "{localappdata}\\Programs\\Microsoft VS Code\\Code.exe"
-            ))
-            .exists()
+        "vscode" => {
+            which::which("code").is_ok()
+                || std::path::Path::new(&format!(
+                    "{localappdata}\\Programs\\Microsoft VS Code\\Code.exe"
+                ))
+                .exists()
                 || std::path::Path::new(&format!("{programfiles}\\Microsoft VS Code\\Code.exe"))
                     .exists()
         }
-        "idea" => {
+        "intellij" => {
             let toolbox = std::env::var("LOCALAPPDATA")
                 .map(|la| {
-                    std::path::Path::new(&format!(
-                        "{la}\\JetBrains\\Toolbox\\apps\\IDEA-U\\ch-0"
-                    ))
-                    .exists()
+                    std::path::Path::new(&format!("{la}\\JetBrains\\Toolbox\\apps\\IDEA-U\\ch-0"))
+                        .exists()
                 })
                 .unwrap_or(false);
             toolbox
@@ -381,11 +753,33 @@ fn check_windows_editor_installed(id: &str) -> bool {
                 ))
                 .exists()
         }
-        "zed" => {
-            std::path::Path::new(&format!("{localappdata}\\Programs\\Zed\\zed.exe")).exists()
+        "phpstorm" => {
+            let toolbox = std::env::var("LOCALAPPDATA")
+                .map(|la| {
+                    std::path::Path::new(&format!("{la}\\JetBrains\\Toolbox\\apps\\PhpStorm\\ch-0"))
+                        .exists()
+                })
+                .unwrap_or(false);
+            toolbox
+                || std::path::Path::new(&format!(
+                    "{programfiles}\\JetBrains\\PhpStorm\\bin\\phpstorm64.exe"
+                ))
+                .exists()
         }
+        "zed" => std::path::Path::new(&format!("{localappdata}\\Programs\\Zed\\zed.exe")).exists(),
         _ => false,
     }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_bundle_exists(bundle_name: &str) -> bool {
+    let mut candidates = vec![std::path::PathBuf::from("/Applications").join(bundle_name)];
+
+    if let Some(home) = dirs::home_dir() {
+        candidates.push(home.join("Applications").join(bundle_name));
+    }
+
+    candidates.into_iter().any(|candidate| candidate.exists())
 }
 
 fn guess_is_file(path: &Path) -> bool {
@@ -478,6 +872,11 @@ fn build_command_macos(app_id: &str, req: &ResolvedRequest) -> Result<CommandSpe
             args: vec!["-a".into(), "Terminal".into(), terminal_dir],
             working_dir: None,
         }),
+        "iterm2" => Ok(CommandSpec {
+            program: "/usr/bin/open".into(),
+            args: vec!["-a".into(), "iTerm".into(), terminal_dir],
+            working_dir: None,
+        }),
         "warp" => Ok(CommandSpec {
             program: "warp".into(),
             args: vec!["--cwd".into(), terminal_dir],
@@ -503,7 +902,7 @@ fn build_command_macos(app_id: &str, req: &ResolvedRequest) -> Result<CommandSpe
                 working_dir: Some(req.worktree_root.clone()),
             })
         }
-        "intellij" | "idea" => {
+        "intellij" | "idea" | "phpstorm" => {
             let mut args: Vec<String> = Vec::new();
             if let Some(target) = req.target.as_ref() {
                 if let Some(line) = target.line {
@@ -515,7 +914,12 @@ fn build_command_macos(app_id: &str, req: &ResolvedRequest) -> Result<CommandSpe
                 args.push(root);
             }
             Ok(CommandSpec {
-                program: "idea".into(),
+                program: if app_id == "phpstorm" {
+                    "phpstorm"
+                } else {
+                    "idea"
+                }
+                .into(),
                 args,
                 working_dir: Some(req.worktree_root.clone()),
             })
@@ -647,7 +1051,7 @@ fn build_command_linux(app_id: &str, req: &ResolvedRequest) -> Result<CommandSpe
                 working_dir: Some(req.worktree_root.clone()),
             })
         }
-        "idea" => {
+        "intellij" | "idea" | "phpstorm" => {
             let mut args: Vec<String> = Vec::new();
             if let Some(target) = req.target.as_ref() {
                 if let Some(line) = target.line {
@@ -659,7 +1063,12 @@ fn build_command_linux(app_id: &str, req: &ResolvedRequest) -> Result<CommandSpe
                 args.push(root);
             }
             Ok(CommandSpec {
-                program: "idea".into(),
+                program: if app_id == "phpstorm" {
+                    "phpstorm"
+                } else {
+                    "idea"
+                }
+                .into(),
                 args,
                 working_dir: Some(req.worktree_root.clone()),
             })
@@ -701,7 +1110,12 @@ fn build_command_windows(app_id: &str, req: &ResolvedRequest) -> Result<CommandS
     match app_id {
         "system-open" => Ok(CommandSpec {
             program: "cmd".into(),
-            args: vec!["/C".into(), "start".into(), String::new(), target_or_root.clone()],
+            args: vec![
+                "/C".into(),
+                "start".into(),
+                String::new(),
+                target_or_root.clone(),
+            ],
             working_dir: None,
         }),
 
@@ -719,7 +1133,11 @@ fn build_command_windows(app_id: &str, req: &ResolvedRequest) -> Result<CommandS
 
         "pwsh" | "powershell" => Ok(CommandSpec {
             program: app_id.into(),
-            args: vec!["-NoExit".into(), "-Command".into(), format!("Set-Location '{terminal_dir}'")],
+            args: vec![
+                "-NoExit".into(),
+                "-Command".into(),
+                format!("Set-Location '{terminal_dir}'"),
+            ],
             working_dir: None,
         }),
 
@@ -742,7 +1160,7 @@ fn build_command_windows(app_id: &str, req: &ResolvedRequest) -> Result<CommandS
             })
         }
 
-        "idea" => {
+        "intellij" | "idea" | "phpstorm" => {
             let mut args: Vec<String> = Vec::new();
             if let Some(target) = req.target.as_ref() {
                 if let Some(line) = target.line {
@@ -754,7 +1172,12 @@ fn build_command_windows(app_id: &str, req: &ResolvedRequest) -> Result<CommandS
                 args.push(root);
             }
             Ok(CommandSpec {
-                program: "idea64".into(),
+                program: if app_id == "phpstorm" {
+                    "phpstorm64"
+                } else {
+                    "idea64"
+                }
+                .into(),
                 args,
                 working_dir: Some(req.worktree_root.clone()),
             })
@@ -861,6 +1284,13 @@ fn find_existing_intellij_bundle() -> Option<std::path::PathBuf> {
         .find(|candidate| candidate.exists())
 }
 
+#[cfg(target_os = "macos")]
+fn find_existing_phpstorm_bundle() -> Option<std::path::PathBuf> {
+    phpstorm_app_candidates()
+        .into_iter()
+        .find(|candidate| candidate.exists())
+}
+
 #[cfg(all(test, target_os = "linux"))]
 mod linux_tests {
     use super::{build_command_linux, resolve_request};
@@ -917,6 +1347,21 @@ fn intellij_app_candidates() -> Vec<std::path::PathBuf> {
         .into_iter()
         .filter(|p| !p.as_os_str().is_empty())
         .filter(|p| seen.insert(p.clone()))
+        .collect()
+}
+
+#[cfg(target_os = "macos")]
+fn phpstorm_app_candidates() -> Vec<std::path::PathBuf> {
+    let mut candidates = vec![std::path::PathBuf::from("/Applications/PhpStorm.app")];
+
+    if let Some(home) = dirs::home_dir() {
+        candidates.push(home.join("Applications/PhpStorm.app"));
+        candidates.push(home.join("Applications/JetBrains Toolbox/PhpStorm.app"));
+    }
+
+    candidates
+        .into_iter()
+        .filter(|candidate| !candidate.as_os_str().is_empty())
         .collect()
 }
 
@@ -984,30 +1429,136 @@ pub async fn list_available_open_apps() -> Result<Vec<OpenApp>, String> {
     Ok(detect_available_apps())
 }
 
+fn resolve_open_app_state(
+    db: &crate::schaltwerk_core::Database,
+) -> anyhow::Result<ResolvedOpenAppState> {
+    let stored_enabled = db.get_enabled_open_apps()?;
+    let enabled_ids = if stored_enabled.is_empty() {
+        default_enabled_open_app_ids()
+    } else {
+        normalize_enabled_open_app_ids(stored_enabled.clone())
+    };
+
+    if stored_enabled != enabled_ids {
+        db.set_enabled_open_apps(&enabled_ids)?;
+    }
+
+    let stored_default = db.get_default_open_app()?;
+    let resolved_default = resolve_default_open_app_id(&stored_default, &enabled_ids);
+    if stored_default != resolved_default {
+        db.set_default_open_app(&resolved_default)?;
+    }
+
+    Ok(ResolvedOpenAppState {
+        catalog: supported_open_app_catalog(),
+        detected_ids: detect_available_app_ids(),
+        enabled_ids,
+        default_id: resolved_default,
+    })
+}
+
+pub fn list_available_open_apps_from_db(
+    db: &crate::schaltwerk_core::Database,
+) -> anyhow::Result<Vec<OpenApp>> {
+    let state = resolve_open_app_state(db)?;
+    let enabled_set = state
+        .enabled_ids
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+    Ok(state
+        .catalog
+        .into_iter()
+        .filter(|app| enabled_set.contains(&app.id))
+        .collect())
+}
+
+pub fn list_open_app_catalog_from_db(
+    db: &crate::schaltwerk_core::Database,
+) -> anyhow::Result<Vec<OpenAppCatalogEntry>> {
+    let state = resolve_open_app_state(db)?;
+    let enabled_set = state
+        .enabled_ids
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+
+    Ok(state
+        .catalog
+        .into_iter()
+        .map(|app| OpenAppCatalogEntry {
+            is_detected: state.detected_ids.contains(&app.id),
+            is_enabled: enabled_set.contains(&app.id),
+            is_default: app.id == state.default_id,
+            id: app.id,
+            name: app.name,
+            kind: app.kind,
+        })
+        .collect())
+}
+
 pub fn get_default_open_app_from_db(
     db: &crate::schaltwerk_core::Database,
 ) -> anyhow::Result<String> {
-    db.get_default_open_app()
+    Ok(resolve_open_app_state(db)?.default_id)
+}
+
+pub fn get_enabled_open_apps_from_db(
+    db: &crate::schaltwerk_core::Database,
+) -> anyhow::Result<Vec<String>> {
+    Ok(resolve_open_app_state(db)?.enabled_ids)
 }
 
 pub fn get_editor_overrides_from_db(
     db: &crate::schaltwerk_core::Database,
 ) -> anyhow::Result<std::collections::HashMap<String, String>> {
-    db.get_editor_overrides()
+    let overrides = db.get_editor_overrides()?;
+    let normalized = normalize_editor_overrides(&overrides);
+    if normalized != overrides {
+        db.set_editor_overrides(&normalized)?;
+    }
+    Ok(normalized)
 }
 
 pub fn set_editor_overrides_in_db(
     db: &crate::schaltwerk_core::Database,
     overrides: &std::collections::HashMap<String, String>,
 ) -> anyhow::Result<()> {
-    db.set_editor_overrides(overrides)
+    db.set_editor_overrides(&normalize_editor_overrides(overrides))
+}
+
+pub fn set_enabled_open_apps_in_db(
+    db: &crate::schaltwerk_core::Database,
+    app_ids: &[String],
+) -> anyhow::Result<()> {
+    let normalized_ids = normalize_enabled_open_app_ids(app_ids.iter().cloned());
+    db.set_enabled_open_apps(&normalized_ids)?;
+
+    let stored_default = db.get_default_open_app()?;
+    let resolved_default = resolve_default_open_app_id(&stored_default, &normalized_ids);
+    db.set_default_open_app(&resolved_default)
 }
 
 pub fn set_default_open_app_in_db(
     db: &crate::schaltwerk_core::Database,
     app_id: &str,
 ) -> anyhow::Result<()> {
-    db.set_default_open_app(app_id)
+    if let Some(normalized_app_id) = normalize_open_app_id(app_id) {
+        let mut enabled_ids = get_enabled_open_apps_from_db(db)?;
+        if !enabled_ids
+            .iter()
+            .any(|enabled_id| enabled_id == &normalized_app_id)
+        {
+            enabled_ids.push(normalized_app_id.clone());
+            let normalized_enabled_ids = normalize_enabled_open_app_ids(enabled_ids);
+            db.set_enabled_open_apps(&normalized_enabled_ids)?;
+        }
+
+        db.set_default_open_app(&normalized_app_id)?;
+        return Ok(());
+    }
+
+    let enabled_ids = get_enabled_open_apps_from_db(db)?;
+    let resolved_default = resolve_default_open_app_id(app_id, &enabled_ids);
+    db.set_default_open_app(&resolved_default)
 }
 
 #[tauri::command]

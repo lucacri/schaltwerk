@@ -26,6 +26,8 @@ pub trait AppConfigMethods {
     fn set_default_base_branch(&self, branch: Option<&str>) -> Result<()>;
     fn get_default_open_app(&self) -> Result<String>;
     fn set_default_open_app(&self, app_id: &str) -> Result<()>;
+    fn get_enabled_open_apps(&self) -> Result<Vec<String>>;
+    fn set_enabled_open_apps(&self, app_ids: &[String]) -> Result<()>;
     fn get_editor_overrides(&self) -> Result<std::collections::HashMap<String, String>>;
     fn set_editor_overrides(
         &self,
@@ -259,6 +261,32 @@ impl AppConfigMethods for Database {
         Ok(())
     }
 
+    fn get_enabled_open_apps(&self) -> Result<Vec<String>> {
+        let conn = self.get_conn()?;
+        let result: rusqlite::Result<Option<String>> = conn.query_row(
+            "SELECT enabled_open_apps FROM app_config WHERE id = 1",
+            [],
+            |row| row.get(0),
+        );
+
+        match result {
+            Ok(Some(json)) => {
+                serde_json::from_str(&json).map_err(|e| anyhow::anyhow!("Invalid JSON: {e}"))
+            }
+            _ => Ok(Vec::new()),
+        }
+    }
+
+    fn set_enabled_open_apps(&self, app_ids: &[String]) -> Result<()> {
+        let conn = self.get_conn()?;
+        let json = serde_json::to_string(app_ids)?;
+        conn.execute(
+            "UPDATE app_config SET enabled_open_apps = ?1 WHERE id = 1",
+            params![json],
+        )?;
+        Ok(())
+    }
+
     fn get_editor_overrides(&self) -> Result<std::collections::HashMap<String, String>> {
         let conn = self.get_conn()?;
         let result: rusqlite::Result<Option<String>> = conn.query_row(
@@ -350,6 +378,27 @@ mod tests {
             .get_editor_overrides()
             .expect("Failed to get editor overrides");
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_enabled_open_apps_returns_empty_by_default() {
+        let db = create_test_database();
+        let result = db
+            .get_enabled_open_apps()
+            .expect("Failed to get enabled open apps");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_set_and_get_enabled_open_apps() {
+        let db = create_test_database();
+        let enabled = vec!["finder".to_string(), "vscode".to_string()];
+        db.set_enabled_open_apps(&enabled)
+            .expect("Failed to set enabled open apps");
+        let result = db
+            .get_enabled_open_apps()
+            .expect("Failed to get enabled open apps");
+        assert_eq!(result, enabled);
     }
 
     #[test]
