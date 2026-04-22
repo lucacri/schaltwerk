@@ -1487,6 +1487,13 @@ fn main() {
         .plugin(tauri_plugin_os::init());
 
     #[cfg(target_os = "macos")]
+    let builder = builder.on_page_load(|webview, payload| {
+        if payload.event() == tauri::webview::PageLoadEvent::Finished {
+            macos_accessibility::prime_webview_accessibility(webview);
+        }
+    });
+
+    #[cfg(target_os = "macos")]
     let builder = builder.menu(build_app_menu).on_menu_event(|app, event| {
         let id = event.id().as_ref();
         if id == MACOS_SELECT_ALL_MENU_ID
@@ -1819,9 +1826,9 @@ fn main() {
             reset_contextual_actions_to_defaults
         ])
         .setup(move |app| {
-            // Third-party AX voice tools (Mac Whisper) need the WKWebView AX tree
-            // eagerly populated. Must run after tao has installed `TaoApp`, so we
-            // wire it into the Tauri setup hook rather than early startup.
+            // Third-party AX voice tools (Mac Whisper) need the app-level AX
+            // activation flags installed after tao binds `TaoApp`, so this stays
+            // in the Tauri setup hook while WKWebView priming happens on page load.
             macos_accessibility::enable_manual_accessibility();
 
             if ATTENTION_REGISTRY.get().is_none() {

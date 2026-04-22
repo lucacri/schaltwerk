@@ -27,24 +27,40 @@ pub fn enable_manual_accessibility() {
     imp::ax_self_activate();
 }
 
+#[cfg(target_os = "macos")]
+pub fn prime_webview_accessibility<R: tauri::Runtime>(webview: &tauri::Webview<R>) {
+    imp::prime_webview(webview);
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn enable_manual_accessibility() {}
 
+#[cfg(not(target_os = "macos"))]
+pub fn prime_webview_accessibility<R: tauri::Runtime>(_webview: &tauri::Webview<R>) {}
+
 #[cfg(target_os = "macos")]
 mod imp {
+    use std::ffi::c_void;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use objc2::ffi;
     use objc2::rc::Retained;
     use objc2::runtime::{AnyClass, AnyObject, Bool, NSObject};
-    use objc2::{define_class, msg_send, sel, ClassType};
-    use objc2_app_kit::NSApplication;
+    use objc2::{ClassType, define_class, msg_send, sel};
+    use objc2_app_kit::{NSApplication, NSObjectNSAccessibility};
     use objc2_foundation::{MainThreadMarker, NSArray, NSString};
+    use objc2_web_kit::WKWebView;
 
     pub(super) const MANUAL: &str = "AXManualAccessibility";
     pub(super) const ENHANCED: &str = "AXEnhancedUserInterface";
 
     static INJECTED: AtomicBool = AtomicBool::new(false);
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(super) enum WebViewAccessibilityPrimeResult {
+        SkippedNullHandle,
+        QueriedFocusedElement { had_focused_element: bool },
+    }
 
     pub(super) fn is_ax_activation_attribute(name: &str) -> bool {
         name == MANUAL || name == ENHANCED
@@ -194,8 +210,7 @@ mod imp {
                 .instance_method(sel)
                 .ok_or_else(|| format!("LucodeAccessibleApplication missing IMP for `{sel}`"))?;
             let imp = method.implementation();
-            let types =
-                unsafe { ffi::method_getTypeEncoding(std::ptr::from_ref(method).cast()) };
+            let types = unsafe { ffi::method_getTypeEncoding(std::ptr::from_ref(method).cast()) };
             if types.is_null() {
                 return Err(format!("method `{sel}` has null type encoding"));
             }
@@ -217,9 +232,7 @@ mod imp {
                         types,
                     );
                 }
-                log::info!(
-                    "[macOS a11y] replaced existing `{sel}` on {target_cls_name}"
-                );
+                log::info!("[macOS a11y] replaced existing `{sel}` on {target_cls_name}");
             } else {
                 log::info!("[macOS a11y] injected `{sel}` onto {target_cls_name}");
             }
@@ -249,29 +262,77 @@ mod imp {
         }
 
         let pid = std::process::id() as c_int;
-        let attr = CFString::new(MANUAL);
         let value = CFBoolean::true_value();
         unsafe {
             let app_ref = AXUIElementCreateApplication(pid);
             if app_ref.is_null() {
-                log::warn!(
-                    "[macOS a11y] AXUIElementCreateApplication returned null for pid={pid}"
-                );
+                log::warn!("[macOS a11y] AXUIElementCreateApplication returned null for pid={pid}");
                 return;
             }
-            let err = AXUIElementSetAttributeValue(
-                app_ref,
-                attr.as_concrete_TypeRef(),
-                value.as_CFTypeRef(),
-            );
+            activate_attributes_with(|attribute| {
+                let attr = CFString::new(attribute);
+                AXUIElementSetAttributeValue(
+                    app_ref,
+                    attr.as_concrete_TypeRef(),
+                    value.as_CFTypeRef(),
+                )
+            });
             CFRelease(app_ref as *const c_void);
+        }
+    }
+
+    pub(super) fn activate_attributes_with<F>(mut set_attribute: F)
+    where
+        F: FnMut(&str) -> i32,
+    {
+        for attribute in [MANUAL, ENHANCED] {
+            let err = set_attribute(attribute);
             if err == 0 {
-                log::info!(
-                    "[macOS a11y] AXManualAccessibility set; WKWebView AX tree should be live"
-                );
+                log::info!("[macOS a11y] set {attribute}; WKWebView AX activation advanced");
             } else {
-                log::warn!("[macOS a11y] AXUIElementSetAttributeValue returned {err}");
+                log::warn!(
+                    "[macOS a11y] AXUIElementSetAttributeValue returned {err} for {attribute}"
+                );
             }
+        }
+    }
+
+    pub(super) fn prime_webview<R: tauri::Runtime>(webview: &tauri::Webview<R>) {
+        let label = webview.label().to_string();
+        let label_for_log = label.clone();
+        if let Err(err) = webview.with_webview(move |native_webview| {
+            match prime_webview_accessibility(native_webview.inner()) {
+                WebViewAccessibilityPrimeResult::SkippedNullHandle => {
+                    log::warn!(
+                        "[macOS a11y] skipped WKWebView accessibility warm-up for {label_for_log}: null handle"
+                    );
+                }
+                WebViewAccessibilityPrimeResult::QueriedFocusedElement {
+                    had_focused_element,
+                } => {
+                    log::info!(
+                        "[macOS a11y] queried WKWebView accessibilityFocusedUIElement \
+                         to initialize WebKit AX for {label_for_log} \
+                         (had_focused_element={had_focused_element})"
+                    );
+                }
+            }
+        }) {
+            log::warn!("[macOS a11y] failed to prime WKWebView accessibility for {label}: {err}");
+        }
+    }
+
+    pub(super) fn prime_webview_accessibility(
+        webview_handle: *mut c_void,
+    ) -> WebViewAccessibilityPrimeResult {
+        if webview_handle.is_null() {
+            return WebViewAccessibilityPrimeResult::SkippedNullHandle;
+        }
+
+        let webview: &WKWebView = unsafe { &*webview_handle.cast::<WKWebView>() };
+        let had_focused_element = webview.accessibilityFocusedUIElement().is_some();
+        WebViewAccessibilityPrimeResult::QueriedFocusedElement {
+            had_focused_element,
         }
     }
 }
@@ -298,7 +359,9 @@ mod tests {
         assert!(imp::is_ax_activation_attribute("AXManualAccessibility"));
         assert!(imp::is_ax_activation_attribute("AXEnhancedUserInterface"));
         assert!(!imp::is_ax_activation_attribute("axmanualaccessibility"));
-        assert!(!imp::is_ax_activation_attribute("AXManualAccessibilityExtra"));
+        assert!(!imp::is_ax_activation_attribute(
+            "AXManualAccessibilityExtra"
+        ));
         assert!(!imp::is_ax_activation_attribute("AXRole"));
         assert!(!imp::is_ax_activation_attribute(""));
     }
@@ -340,9 +403,9 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn method_source_subclass_has_the_three_overrides() {
+        use objc2::ClassType;
         use objc2::runtime::AnyClass;
         use objc2::sel;
-        use objc2::ClassType;
         use objc2_app_kit::NSApplication;
 
         enable_manual_accessibility();
@@ -380,5 +443,32 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn self_activation_attempts_manual_then_enhanced() {
+        let mut seen = Vec::new();
+        imp::activate_attributes_with(|attribute| {
+            seen.push(attribute.to_string());
+            0
+        });
+
+        assert_eq!(
+            seen,
+            vec![
+                "AXManualAccessibility".to_string(),
+                "AXEnhancedUserInterface".to_string(),
+            ]
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn prime_webview_accessibility_skips_null_handle() {
+        assert_eq!(
+            imp::prime_webview_accessibility(std::ptr::null_mut()),
+            imp::WebViewAccessibilityPrimeResult::SkippedNullHandle
+        );
     }
 }
