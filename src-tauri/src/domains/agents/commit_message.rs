@@ -68,13 +68,14 @@ fn resolve_commit_prompt(
 }
 
 fn build_env(env_vars: &[(String, String)]) -> Vec<(String, String)> {
-    let mut combined = vec![
+    let mut combined = crate::shared::login_shell_env::base_subprocess_env();
+    combined.extend([
         ("NO_COLOR".to_string(), "1".to_string()),
         ("CLICOLOR".to_string(), "0".to_string()),
         ("TERM".to_string(), "dumb".to_string()),
         ("CI".to_string(), "1".to_string()),
         ("NONINTERACTIVE".to_string(), "1".to_string()),
-    ];
+    ]);
     combined.extend(env_vars.iter().cloned());
     combined
 }
@@ -379,6 +380,55 @@ mod tests {
         assert!(template.contains("{commits}"));
         assert!(template.contains("{files}"));
         assert!(template.contains("conventional commit"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn commit_env_inherits_login_shell_path_and_lang() {
+        use crate::shared::login_shell_env::testing as env_testing;
+        use std::collections::HashMap;
+
+        let _guard = env_testing::env_lock();
+        let mut env = HashMap::new();
+        env.insert(
+            "PATH".to_string(),
+            "/opt/commit-test/bin:/usr/bin".to_string(),
+        );
+        env.insert("LANG".to_string(), "de_DE.UTF-8".to_string());
+        let prior = env_testing::install_env(Some(env));
+
+        let envs = build_env(&[]);
+        env_testing::restore_env(prior);
+
+        let path_entry = envs.iter().find(|(k, _)| k == "PATH");
+        assert_eq!(
+            path_entry.map(|(_, v)| v.as_str()),
+            Some("/opt/commit-test/bin:/usr/bin")
+        );
+        let lang_entry = envs.iter().find(|(k, _)| k == "LANG");
+        assert_eq!(lang_entry.map(|(_, v)| v.as_str()), Some("de_DE.UTF-8"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn commit_env_caller_path_wins_over_login_shell() {
+        use crate::shared::login_shell_env::testing as env_testing;
+        use std::collections::HashMap;
+
+        let _guard = env_testing::env_lock();
+        let mut env = HashMap::new();
+        env.insert("PATH".to_string(), "/opt/login/bin".to_string());
+        let prior = env_testing::install_env(Some(env));
+
+        let envs = build_env(&[("PATH".to_string(), "/opt/caller/bin".to_string())]);
+        env_testing::restore_env(prior);
+
+        let last_path = envs
+            .iter()
+            .rev()
+            .find(|(k, _)| k == "PATH")
+            .map(|(_, v)| v.as_str());
+        assert_eq!(last_path, Some("/opt/caller/bin"));
     }
 
     #[test]

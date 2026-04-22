@@ -43,6 +43,25 @@ pub(crate) fn resolve_agent_binary(command: &str) -> String {
     resolve_agent_binary_with_extra_paths(command, &[])
 }
 
+fn login_shell_path_components() -> Vec<String> {
+    let Some(path_value) = crate::shared::login_shell_env::current_login_shell_path()
+    else {
+        return Vec::new();
+    };
+
+    #[cfg(windows)]
+    let separator = ';';
+    #[cfg(not(windows))]
+    let separator = ':';
+
+    path_value
+        .split(separator)
+        .map(str::trim)
+        .filter(|component| !component.is_empty())
+        .map(|component| component.to_string())
+        .collect()
+}
+
 pub(crate) fn resolve_agent_binary_with_extra_paths(command: &str, extra_paths: &[String]) -> String {
     if let Some(home) = get_home_dir() {
         #[cfg(unix)]
@@ -63,6 +82,7 @@ pub(crate) fn resolve_agent_binary_with_extra_paths(command: &str, extra_paths: 
         let mut user_paths: Vec<String> = vec![];
 
         user_paths.extend(extra_paths.iter().cloned());
+        user_paths.extend(login_shell_path_components());
 
         for path in user_paths {
             #[cfg(windows)]
@@ -81,6 +101,30 @@ pub(crate) fn resolve_agent_binary_with_extra_paths(command: &str, extra_paths: 
                 if full_path.exists() {
                     log::info!("Found {} at {}", command, full_path.display());
                     return full_path.to_string_lossy().to_string();
+                }
+            }
+        }
+    } else {
+        let login_paths = login_shell_path_components();
+        if !login_paths.is_empty() {
+            for path in login_paths {
+                #[cfg(windows)]
+                {
+                    for ext in &[".cmd", ".exe", ".bat", ""] {
+                        let full_path = PathBuf::from(&path).join(format!("{command}{ext}"));
+                        if full_path.exists() {
+                            log::info!("Found {} at {}", command, full_path.display());
+                            return full_path.to_string_lossy().to_string();
+                        }
+                    }
+                }
+                #[cfg(not(windows))]
+                {
+                    let full_path = PathBuf::from(&path).join(command);
+                    if full_path.exists() {
+                        log::info!("Found {} at {}", command, full_path.display());
+                        return full_path.to_string_lossy().to_string();
+                    }
                 }
             }
         }

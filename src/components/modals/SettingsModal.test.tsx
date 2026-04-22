@@ -1171,7 +1171,7 @@ describe('SettingsModal AI Generation custom prompts', () => {
     expect(overrideComboboxes[1]).toHaveTextContent('Codex')
     expect(overrideComboboxes[2]).toHaveTextContent('OpenCode')
     expect(overrideComboboxes[3]).toHaveTextContent('Claude')
-    expect(overrideComboboxes[4]).toHaveTextContent('Kilocode')
+    expect(overrideComboboxes[4]).toHaveTextContent('Kilo Code')
   })
 
   it('saves the selected per-action override', async () => {
@@ -1244,6 +1244,140 @@ describe('SettingsModal AI Generation custom prompts', () => {
       )
       expect(saveCall).toBeTruthy()
     })
+  })
+
+  it('lists only enabled non-terminal agents in the global generation selector', async () => {
+    const settingsValue = createDefaultUseSettingsValue()
+    settingsValue.loadEnabledAgents.mockResolvedValue({
+      claude: false,
+      copilot: false,
+      opencode: false,
+      gemini: true,
+      codex: true,
+      droid: false,
+      qwen: false,
+      amp: false,
+      kilocode: false,
+      terminal: true,
+    })
+    useSettingsMock.mockReturnValue(settingsValue)
+
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    await waitFor(() => {
+      expect(
+        invokeMock.mock.calls.some(([command]) => command === TauriCommands.GetGenerationSettings)
+      ).toBe(true)
+    })
+
+    const [globalAgentCombo] = screen.getAllByRole('combobox')
+    await user.click(globalAgentCombo)
+    const listbox = await screen.findByRole('listbox')
+
+    expect(within(listbox).getByRole('option', { name: 'Gemini' })).toBeInTheDocument()
+    expect(within(listbox).getByRole('option', { name: 'Codex' })).toBeInTheDocument()
+    expect(within(listbox).queryByRole('option', { name: 'Claude' })).toBeNull()
+    expect(within(listbox).queryByRole('option', { name: 'OpenCode' })).toBeNull()
+    expect(within(listbox).queryByRole('option', { name: 'Kilo Code' })).toBeNull()
+    expect(within(listbox).queryByRole('option', { name: 'Terminal' })).toBeNull()
+  })
+
+  it('lists only enabled non-terminal agents in per-action overrides', async () => {
+    const settingsValue = createDefaultUseSettingsValue()
+    settingsValue.loadEnabledAgents.mockResolvedValue({
+      claude: false,
+      copilot: false,
+      opencode: false,
+      gemini: true,
+      codex: true,
+      droid: false,
+      qwen: false,
+      amp: false,
+      kilocode: false,
+      terminal: true,
+    })
+    useSettingsMock.mockReturnValue(settingsValue)
+
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    await ensureGenerationOverridesOpen(user)
+    const [firstOverride] = generationOverrideComboboxes()
+
+    await user.click(firstOverride)
+    const listbox = await screen.findByRole('listbox')
+
+    expect(within(listbox).getByRole('option', { name: 'Gemini' })).toBeInTheDocument()
+    expect(within(listbox).getByRole('option', { name: 'Codex' })).toBeInTheDocument()
+    expect(within(listbox).queryByRole('option', { name: 'Claude' })).toBeNull()
+    expect(within(listbox).queryByRole('option', { name: 'Kilo Code' })).toBeNull()
+  })
+
+  it('keeps a saved generation agent visible even when the provider is disabled', async () => {
+    const settingsValue = createDefaultUseSettingsValue()
+    settingsValue.loadEnabledAgents.mockResolvedValue({
+      claude: false,
+      copilot: false,
+      opencode: false,
+      gemini: true,
+      codex: true,
+      droid: false,
+      qwen: false,
+      amp: false,
+      kilocode: false,
+      terminal: true,
+    })
+    useSettingsMock.mockReturnValue(settingsValue)
+
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === TauriCommands.GetDefaultGenerationPrompts) {
+        return defaultPrompts
+      }
+      if (command === TauriCommands.GetGenerationSettings) {
+        return {
+          agent: 'claude',
+          cli_args: null,
+          name_agent: null,
+          commit_agent: null,
+          pr_writeback_agent: null,
+          consolidation_judge_agent: null,
+          version_group_rename_agent: null,
+          name_prompt: null,
+          commit_prompt: null,
+          consolidation_prompt: null,
+          review_pr_prompt: null,
+          plan_issue_prompt: null,
+          issue_prompt: null,
+          pr_prompt: null,
+          autonomy_prompt_template: null,
+        }
+      }
+      return baseInvokeImplementation(command, args)
+    })
+
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    await waitFor(() => {
+      expect(
+        invokeMock.mock.calls.some(([command]) => command === TauriCommands.GetGenerationSettings)
+      ).toBe(true)
+    })
+
+    const [globalAgentCombo] = screen.getAllByRole('combobox')
+    await user.click(globalAgentCombo)
+    const listbox = await screen.findByRole('listbox')
+
+    expect(within(listbox).getByRole('option', { name: 'Claude' })).toBeInTheDocument()
+    expect(within(listbox).getByRole('option', { name: 'Gemini' })).toBeInTheDocument()
+    expect(within(listbox).getByRole('option', { name: 'Codex' })).toBeInTheDocument()
   })
 })
 

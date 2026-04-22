@@ -90,7 +90,7 @@ pub async fn build_command_spec(
 }
 
 fn build_environment(cols: u16, rows: u16, #[cfg_attr(windows, allow(unused))] cwd: &str) -> Vec<(String, String)> {
-    let login_env = super::login_shell_env::get_login_shell_env();
+    let login_env = crate::shared::login_shell_env::get_login_shell_env();
 
     let mut envs = vec![
         ("TERM".to_string(), "xterm-256color".to_string()),

@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 
 static CACHED_ENV: OnceLock<HashMap<String, String>> = OnceLock::new();
+static TEST_ENV_OVERRIDE: RwLock<Option<HashMap<String, String>>> = RwLock::new(None);
 
 const DEFAULT_TIMEOUT_SECS: u64 = 10;
 
@@ -23,8 +24,33 @@ pub fn get_login_shell_env() -> &'static HashMap<String, String> {
     })
 }
 
+pub(crate) fn current_login_shell_env() -> HashMap<String, String> {
+    let override_env = {
+        let guard = TEST_ENV_OVERRIDE
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.clone()
+    };
+    if let Some(env) = override_env {
+        return env;
+    }
+    get_login_shell_env().clone()
+}
+
+pub(crate) fn current_login_shell_path() -> Option<String> {
+    current_login_shell_env().get("PATH").cloned()
+}
+
+pub(crate) fn base_subprocess_env() -> Vec<(String, String)> {
+    let env = current_login_shell_env();
+    const KEYS: &[&str] = &["PATH", "HOME", "USERPROFILE", "LANG", "LC_ALL"];
+    KEYS.iter()
+        .filter_map(|key| env.get(*key).map(|value| ((*key).to_string(), value.clone())))
+        .collect()
+}
+
 pub async fn capture_login_shell_env() -> Result<HashMap<String, String>, String> {
-    let (shell, _) = super::get_effective_shell();
+    let (shell, _) = crate::domains::terminal::get_effective_shell();
     let shell_name = get_shell_name(&shell);
 
     log::info!("Capturing login shell environment using shell: {shell} ({shell_name})");
@@ -287,8 +313,99 @@ pub fn get_login_shell_path() -> Option<String> {
 }
 
 #[cfg(test)]
+pub(crate) mod testing {
+    use super::{HashMap, TEST_ENV_OVERRIDE};
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    pub fn env_lock() -> MutexGuard<'static, ()> {
+        let mutex = ENV_LOCK.get_or_init(|| Mutex::new(()));
+        mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub fn install_env(
+        env: Option<HashMap<String, String>>,
+    ) -> Option<HashMap<String, String>> {
+        let mut guard = TEST_ENV_OVERRIDE
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let prior = guard.clone();
+        *guard = env;
+        prior
+    }
+
+    pub fn restore_env(prior: Option<HashMap<String, String>>) {
+        let mut guard = TEST_ENV_OVERRIDE
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *guard = prior;
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn current_login_shell_path_returns_test_override() {
+        let _guard = testing::env_lock();
+        let mut env = HashMap::new();
+        env.insert("PATH".to_string(), "/opt/test/bin:/usr/local/bin".to_string());
+        let prior = testing::install_env(Some(env));
+
+        assert_eq!(
+            current_login_shell_path(),
+            Some("/opt/test/bin:/usr/local/bin".to_string())
+        );
+
+        testing::restore_env(prior);
+    }
+
+    #[test]
+    #[serial]
+    fn base_subprocess_env_projects_login_shell_env() {
+        let _guard = testing::env_lock();
+        let mut env = HashMap::new();
+        env.insert("PATH".to_string(), "/opt/test/bin:/usr/local/bin".to_string());
+        env.insert("HOME".to_string(), "/Users/override".to_string());
+        env.insert("LANG".to_string(), "en_GB.UTF-8".to_string());
+        env.insert("LC_ALL".to_string(), "en_GB.UTF-8".to_string());
+        let prior = testing::install_env(Some(env));
+
+        let mut projected: HashMap<String, String> = base_subprocess_env().into_iter().collect();
+
+        assert_eq!(
+            projected.remove("PATH"),
+            Some("/opt/test/bin:/usr/local/bin".to_string())
+        );
+        assert_eq!(projected.remove("HOME"), Some("/Users/override".to_string()));
+        assert_eq!(projected.remove("LANG"), Some("en_GB.UTF-8".to_string()));
+        assert_eq!(projected.remove("LC_ALL"), Some("en_GB.UTF-8".to_string()));
+        assert!(
+            projected.is_empty(),
+            "base_subprocess_env should only expose PATH/HOME/LANG/LC_ALL, got extras: {projected:?}"
+        );
+
+        testing::restore_env(prior);
+    }
+
+    #[test]
+    #[serial]
+    fn base_subprocess_env_is_empty_when_no_keys_available() {
+        let _guard = testing::env_lock();
+        let prior = testing::install_env(Some(HashMap::new()));
+
+        let projected = base_subprocess_env();
+        assert!(
+            projected.is_empty(),
+            "expected no keys, got {projected:?}"
+        );
+
+        testing::restore_env(prior);
+    }
 
     #[test]
     fn parse_env_output_extracts_key_value_pairs() {

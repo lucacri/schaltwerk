@@ -2755,18 +2755,41 @@ fi`}
             const isPromptCustom = (key: GenerationPromptKey) => (
                 (generationPrompts[key] ?? '').trim() !== (defaultGenerationPrompts[key] ?? '').trim()
             )
+            const enabledNonTerminalAgents = AGENT_TYPES.filter(
+                agent => agent !== 'terminal' && enabledAgents[agent]
+            )
+            const enabledAgentOptions = enabledNonTerminalAgents.map(agent => ({
+                value: agent as string,
+                label: agentDisplayName(agent),
+            }))
+            const withPreserved = (
+                baseOptions: Array<{ value: string; label: string }>,
+                preserved: string,
+            ) => {
+                const trimmed = preserved.trim()
+                if (!trimmed) return baseOptions
+                if (baseOptions.some(option => option.value === trimmed)) return baseOptions
+                const preservedAgent = (AGENT_TYPES as readonly string[]).includes(trimmed)
+                    ? (trimmed as AgentType)
+                    : null
+                return [
+                    ...baseOptions,
+                    {
+                        value: trimmed,
+                        label: preservedAgent ? agentDisplayName(preservedAgent) : trimmed,
+                    },
+                ]
+            }
             const generationAgentOptions = [
                 { value: '', label: t.settings.generation.agentDefault },
-                { value: 'claude', label: 'Claude' },
-                { value: 'gemini', label: 'Gemini' },
-                { value: 'codex', label: 'Codex' },
-                { value: 'opencode', label: 'OpenCode' },
-                { value: 'kilocode', label: 'Kilocode' },
+                ...withPreserved(enabledAgentOptions, generationAgent),
             ]
-            const generationOverrideOptions = [
+            const overrideBaseOptions = [
                 { value: '', label: t.settings.generation.actionAgentDefault },
-                ...generationAgentOptions.slice(1),
+                ...enabledAgentOptions,
             ]
+            const optionsForOverride = (fieldKey: GenerationAgentOverrideKey) =>
+                withPreserved(overrideBaseOptions, generationAgentOverrides[fieldKey] ?? '')
             const generationOverrideFields: Array<{
                 key: GenerationAgentOverrideKey
                 label: string
@@ -2963,7 +2986,7 @@ fi`}
                                                                 actionPromptTemplates,
                                                             )
                                                         }}
-                                                        options={generationOverrideOptions}
+                                                        options={optionsForOverride(field.key)}
                                                     />
                                                 </FormGroup>
                                             )

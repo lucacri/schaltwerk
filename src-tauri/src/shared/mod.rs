@@ -1,6 +1,7 @@
 pub mod app_paths;
 pub mod branch;
 pub mod cli;
+pub mod login_shell_env;
 pub mod merge_snapshot_gateway;
 pub mod network;
 pub mod permissions;

@@ -2,6 +2,16 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## AI Generation selectors and agent launches follow the same enabled-provider and shell-environment rules
+
+The AI Generation global agent selector and the per-action override selectors maintained their own hardcoded subset of providers, which drifted away from the enabled non-terminal providers used elsewhere. Agent launches also resolved and executed binaries from a curated path list plus the app process PATH, so a binary exposed only via the user's shell (`~/.bun/bin`, `~/.volta/bin`, etc.) would fail to resolve even when the equivalent Lucode shell terminal would find it.
+
+- `src/components/modals/SettingsModal.tsx` now derives the generation agent options from `AGENT_TYPES.filter(a => a !== 'terminal' && enabledAgents[a])` via `agentDisplayName`, preserving any saved value whose provider is currently disabled so it stays visible — mirroring the existing spec-clarification pattern. Per-action overrides go through the same filter through a new `optionsForOverride(fieldKey)` helper.
+- `src-tauri/src/shared/login_shell_env.rs` (moved from `domains/terminal/` to `shared/` so both `terminal` and `agents` can consume it without breaking domain isolation) exposes a new `current_login_shell_env` / `current_login_shell_path` / `base_subprocess_env` surface plus a `#[cfg(test)]` override seam for deterministic testing.
+- `src-tauri/src/domains/agents/mod.rs::resolve_agent_binary_with_extra_paths` now appends login-shell PATH entries to its candidate list before the `which::which` fallback, so agent binaries resolve the same way they do in a normal Lucode shell terminal.
+- `src-tauri/src/domains/agents/naming.rs::build_namegen_env` and `src-tauri/src/domains/agents/commit_message.rs::build_env` now prepend `base_subprocess_env()` so generation-agent subprocesses inherit the user's login-shell PATH/HOME/LANG/LC_ALL while keeping caller-supplied env overrides as the final word.
+- New Vitest cases in `src/components/modals/SettingsModal.test.tsx` cover enabled-only filtering, override filtering, and saved-but-disabled preservation; new Rust tests in `src-tauri/src/shared/login_shell_env.rs`, `src-tauri/src/domains/agents/tests/resolve_binary_tests.rs`, and additions to the naming/commit-message tests verify the seam, binary resolution, and env-inheritance behavior.
+
 ## TopBar: "RUNNING IN DEV MODE" indicator for `just run`
 
 Running a local `just run` next to the installed `/Applications/Lucode.app` gave no at-a-glance cue which window was which — `titleBarStyle: "Overlay"` with `hiddenTitle: true` suppresses the native title string. `just run` now exports `LUCODE_DEV_MODE=1`, the backend surfaces that signal through `get_development_info`, and the TopBar renders a red pill next to the macOS traffic lights only when the signal is true. Installed release builds and every `run-port*` / `run-release*` local launch stay pixel-identical.
