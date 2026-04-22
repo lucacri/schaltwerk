@@ -269,7 +269,10 @@ where
         }
     }
     for source_id in &round.source_session_ids {
-        let Ok(source) = manager.get_session_by_id(source_id) else {
+        let Ok(source) = manager
+            .get_session_by_id(source_id)
+            .or_else(|_| manager.get_session(source_id))
+        else {
             continue;
         };
         if source.status == SessionStatus::Active
@@ -5991,6 +5994,128 @@ mod tests {
         assert_eq!(
             load_outcome_candidate_outcome(&db, round_id, &updated_candidate.id),
             "winner"
+        );
+    }
+
+    #[tokio::test]
+    async fn confirm_consolidation_implementation_cancels_named_source_sessions() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = create_manager(&repo_path);
+
+        let group_id = "group-1";
+        let round_id = "round-1";
+
+        db.set_project_branch_prefix(&repo_path, "lucode")
+            .expect("set prefix");
+
+        let source_one = manager
+            .create_session_with_auto_flag("feat_v1", None, None, false, Some(group_id), Some(1))
+            .expect("create first source");
+        let source_two = manager
+            .create_session_with_auto_flag("feat_v2", None, None, false, Some(group_id), Some(2))
+            .expect("create second source");
+        let source_names = vec![source_one.name.clone(), source_two.name.clone()];
+
+        let candidate = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat-consolidation",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: None,
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(source_names.clone()),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create candidate");
+
+        let judge = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "feat-consolidation-judge-12345",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: None,
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(source_names.clone()),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("judge"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create judge");
+
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            round_id,
+            group_id,
+            &source_names,
+            "confirm",
+            "implementation",
+        )
+        .expect("create round");
+
+        update_consolidation_round_recommendation(
+            &db,
+            round_id,
+            Some(candidate.id.as_str()),
+            Some(judge.id.as_str()),
+            "awaiting_confirmation",
+        )
+        .expect("persist recommendation");
+
+        let response = confirm_consolidation_winner_with_callbacks(
+            &db,
+            &manager,
+            ConfirmConsolidationWinnerParams {
+                round_id,
+                winner_session_id: &candidate.id,
+                override_reason: None,
+                confirmed_by: "user",
+            },
+            &mut |_| Ok(()),
+            &mut |session_name: &str| {
+                let session_name = session_name.to_string();
+                let db = db.clone();
+                let repo_path = repo_path.clone();
+                Box::pin(async move {
+                    SessionManager::new(db, repo_path)
+                        .fast_cancel_session(&session_name)
+                        .await
+                })
+            },
+        )
+        .await
+        .expect("confirm success");
+
+        assert_eq!(response.winner_session_name, candidate.name);
+        assert!(response.candidate_sessions_cancelled.is_empty());
+        assert_eq!(response.judge_sessions_cancelled, vec![judge.name.clone()]);
+        assert_eq!(
+            response.source_sessions_cancelled,
+            vec![source_one.name.clone(), source_two.name.clone()]
+        );
+
+        assert_eq!(
+            active_version_group_sessions(&manager, group_id),
+            vec![candidate.name.clone()]
         );
     }
 
