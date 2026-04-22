@@ -11,7 +11,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DiffCompareMode {
     #[default]
@@ -30,6 +30,16 @@ static GIT_STATS_THREAD_FILTER: OnceLock<Mutex<Option<std::thread::ThreadId>>> =
 
 #[cfg(test)]
 static GIT_STATS_CACHE_HITS: OnceLock<AtomicUsize> = OnceLock::new();
+
+#[cfg(test)]
+static CHANGED_FILES_COMPUTE_COUNT: OnceLock<AtomicUsize> = OnceLock::new();
+
+#[cfg(test)]
+static CHANGED_FILES_THREAD_FILTER: OnceLock<Mutex<Option<std::thread::ThreadId>>> =
+    OnceLock::new();
+
+#[cfg(test)]
+static CHANGED_FILES_CACHE_HITS: OnceLock<AtomicUsize> = OnceLock::new();
 
 #[cfg(test)]
 fn increment_git_stats_call_count() {
@@ -60,6 +70,34 @@ fn increment_git_stats_cache_hits() {
 }
 
 #[cfg(test)]
+fn increment_changed_files_compute_count() {
+    let filter = CHANGED_FILES_THREAD_FILTER.get_or_init(|| Mutex::new(None));
+    if let Some(target_thread) = *filter.lock().unwrap() {
+        if std::thread::current().id() != target_thread {
+            return;
+        }
+    }
+
+    CHANGED_FILES_COMPUTE_COUNT
+        .get_or_init(|| AtomicUsize::new(0))
+        .fetch_add(1, Ordering::Relaxed);
+}
+
+#[cfg(test)]
+fn increment_changed_files_cache_hits() {
+    let filter = CHANGED_FILES_THREAD_FILTER.get_or_init(|| Mutex::new(None));
+    if let Some(target_thread) = *filter.lock().unwrap() {
+        if std::thread::current().id() != target_thread {
+            return;
+        }
+    }
+
+    CHANGED_FILES_CACHE_HITS
+        .get_or_init(|| AtomicUsize::new(0))
+        .fetch_add(1, Ordering::Relaxed);
+}
+
+#[cfg(test)]
 pub fn reset_git_stats_call_count() {
     if let Some(counter) = GIT_STATS_CALL_COUNT.get() {
         counter.store(0, Ordering::Relaxed);
@@ -69,6 +107,20 @@ pub fn reset_git_stats_call_count() {
 #[cfg(test)]
 pub fn reset_git_stats_cache_hits() {
     if let Some(counter) = GIT_STATS_CACHE_HITS.get() {
+        counter.store(0, Ordering::Relaxed);
+    }
+}
+
+#[cfg(test)]
+pub fn reset_changed_files_compute_count() {
+    if let Some(counter) = CHANGED_FILES_COMPUTE_COUNT.get() {
+        counter.store(0, Ordering::Relaxed);
+    }
+}
+
+#[cfg(test)]
+pub fn reset_changed_files_cache_hits() {
+    if let Some(counter) = CHANGED_FILES_CACHE_HITS.get() {
         counter.store(0, Ordering::Relaxed);
     }
 }
@@ -198,6 +250,20 @@ pub fn get_git_stats_cache_hits() -> usize {
 }
 
 #[cfg(test)]
+pub fn get_changed_files_compute_count() -> usize {
+    CHANGED_FILES_COMPUTE_COUNT
+        .get_or_init(|| AtomicUsize::new(0))
+        .load(Ordering::Relaxed)
+}
+
+#[cfg(test)]
+pub fn get_changed_files_cache_hits() -> usize {
+    CHANGED_FILES_CACHE_HITS
+        .get_or_init(|| AtomicUsize::new(0))
+        .load(Ordering::Relaxed)
+}
+
+#[cfg(test)]
 pub struct GitStatsThreadScope;
 
 #[cfg(test)]
@@ -214,6 +280,25 @@ pub fn track_git_stats_on_current_thread() -> GitStatsThreadScope {
     let filter = GIT_STATS_THREAD_FILTER.get_or_init(|| Mutex::new(None));
     *filter.lock().unwrap() = Some(std::thread::current().id());
     GitStatsThreadScope
+}
+
+#[cfg(test)]
+pub struct ChangedFilesThreadScope;
+
+#[cfg(test)]
+impl Drop for ChangedFilesThreadScope {
+    fn drop(&mut self) {
+        if let Some(filter) = CHANGED_FILES_THREAD_FILTER.get() {
+            *filter.lock().unwrap() = None;
+        }
+    }
+}
+
+#[cfg(test)]
+pub fn track_changed_files_on_current_thread() -> ChangedFilesThreadScope {
+    let filter = CHANGED_FILES_THREAD_FILTER.get_or_init(|| Mutex::new(None));
+    *filter.lock().unwrap() = Some(std::thread::current().id());
+    ChangedFilesThreadScope
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -253,9 +338,38 @@ type StatsCacheMap = HashMap<(std::path::PathBuf, String), (StatsCacheKey, GitSt
 /// This keeps the cache safe even when multiple projects are active.
 static STATS_CACHE: OnceLock<Mutex<StatsCacheMap>> = OnceLock::new();
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct ChangedFilesStateKey {
+    head: Option<Oid>,
+    index_signature: Option<u64>,
+    status_signature: u64,
+    dirty_content_signature: u64,
+    mode: DiffCompareMode,
+    baseline_target: Option<Oid>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ChangedFilesSnapshot {
+    pub(crate) changed_files: Vec<ChangedFile>,
+    pub(crate) state_key: ChangedFilesStateKey,
+}
+
+type ChangedFilesCacheMap = HashMap<
+    (std::path::PathBuf, String, DiffCompareMode),
+    (ChangedFilesStateKey, Vec<ChangedFile>),
+>;
+static CHANGED_FILES_CACHE: OnceLock<Mutex<ChangedFilesCacheMap>> = OnceLock::new();
+
 #[cfg(test)]
 pub fn clear_stats_cache() {
     if let Some(cache) = STATS_CACHE.get() {
+        cache.lock().unwrap().clear();
+    }
+}
+
+#[cfg(test)]
+pub fn clear_changed_files_cache() {
+    if let Some(cache) = CHANGED_FILES_CACHE.get() {
         cache.lock().unwrap().clear();
     }
 }
@@ -302,7 +416,10 @@ fn dirty_content_signature(worktree_path: &Path, dirty_paths: &HashSet<String>) 
     signature
 }
 
-fn resolve_baseline_commit<'repo>(repo: &'repo Repository, parent_branch: &str) -> Option<git2::Commit<'repo>> {
+fn resolve_baseline_commit<'repo>(
+    repo: &'repo Repository,
+    parent_branch: &str,
+) -> Option<git2::Commit<'repo>> {
     let trimmed = parent_branch.trim();
     if trimmed.is_empty() {
         return None;
@@ -359,46 +476,47 @@ pub fn calculate_git_stats_fast_with_repo(
     let head_oid = repo.head().ok().and_then(|h| h.target());
     let head_commit = head_oid.and_then(|oid| repo.find_commit(oid).ok());
     let base_commit = resolve_baseline_commit(repo, parent_branch);
-    let (base_tree, baseline_mode, baseline_target) = match (base_commit.as_ref(), head_commit.as_ref()) {
-        (Some(base_c), Some(head_c)) => {
-            if let Ok(merge_base_oid) = repo.merge_base(base_c.id(), head_c.id()) {
-                (
-                    repo.find_commit(merge_base_oid)
-                        .ok()
-                        .and_then(|c| c.tree().ok()),
-                    StatsBaselineMode::MergeBase,
-                    Some(merge_base_oid),
-                )
-            } else {
-                (
-                    base_c.tree().ok(),
-                    StatsBaselineMode::ParentBranch,
-                    Some(base_c.id()),
-                )
+    let (base_tree, baseline_mode, baseline_target) =
+        match (base_commit.as_ref(), head_commit.as_ref()) {
+            (Some(base_c), Some(head_c)) => {
+                if let Ok(merge_base_oid) = repo.merge_base(base_c.id(), head_c.id()) {
+                    (
+                        repo.find_commit(merge_base_oid)
+                            .ok()
+                            .and_then(|c| c.tree().ok()),
+                        StatsBaselineMode::MergeBase,
+                        Some(merge_base_oid),
+                    )
+                } else {
+                    (
+                        base_c.tree().ok(),
+                        StatsBaselineMode::ParentBranch,
+                        Some(base_c.id()),
+                    )
+                }
             }
-        }
-        (Some(base_c), None) => (
-            base_c.tree().ok(),
-            StatsBaselineMode::ParentBranch,
-            Some(base_c.id()),
-        ),
-        (None, Some(head_c)) => {
-            if let Ok(parent_commit) = head_c.parent(0) {
-                (
-                    parent_commit.tree().ok(),
-                    StatsBaselineMode::HeadParent,
-                    Some(parent_commit.id()),
-                )
-            } else {
-                (
-                    head_commit.as_ref().and_then(|c| c.tree().ok()),
-                    StatsBaselineMode::Head,
-                    head_oid,
-                )
+            (Some(base_c), None) => (
+                base_c.tree().ok(),
+                StatsBaselineMode::ParentBranch,
+                Some(base_c.id()),
+            ),
+            (None, Some(head_c)) => {
+                if let Ok(parent_commit) = head_c.parent(0) {
+                    (
+                        parent_commit.tree().ok(),
+                        StatsBaselineMode::HeadParent,
+                        Some(parent_commit.id()),
+                    )
+                } else {
+                    (
+                        head_commit.as_ref().and_then(|c| c.tree().ok()),
+                        StatsBaselineMode::Head,
+                        head_oid,
+                    )
+                }
             }
-        }
-        (None, None) => (None, StatsBaselineMode::Head, None),
-    };
+            (None, None) => (None, StatsBaselineMode::Head, None),
+        };
 
     let mut status_opts = StatusOptions::new();
     status_opts
@@ -605,7 +723,8 @@ pub fn calculate_git_stats_fast_with_repo(
             }
         }
     }
-    if last_diff_change_ts.is_none() && files_changed > 0
+    if last_diff_change_ts.is_none()
+        && files_changed > 0
         && let Some(head_commit) = head_commit.as_ref()
     {
         last_diff_change_ts = Some(head_commit.time().seconds());
@@ -680,49 +799,43 @@ pub fn calculate_git_stats_fast_with_repo(
 }
 
 pub fn get_changed_files(worktree_path: &Path, parent_branch: &str) -> Result<Vec<ChangedFile>> {
-    get_changed_files_with_mode(worktree_path, parent_branch, DiffCompareMode::MergeBase, None)
+    Ok(get_changed_files_snapshot(
+        worktree_path,
+        parent_branch,
+        DiffCompareMode::MergeBase,
+        None,
+    )?
+    .changed_files)
 }
 
-pub fn get_changed_files_with_mode(
+pub(crate) fn get_changed_files_snapshot(
     worktree_path: &Path,
     parent_branch: &str,
     mode: DiffCompareMode,
     session_branch: Option<&str>,
-) -> Result<Vec<ChangedFile>> {
+) -> Result<ChangedFilesSnapshot> {
     let repo = Repository::open(worktree_path)?;
-    let head_oid = repo.head().ok().and_then(|h| h.target());
+    let (state_key, baseline_tree) =
+        build_changed_files_state_key(&repo, worktree_path, parent_branch, mode, session_branch)?;
+    let cache_key = (worktree_path.to_path_buf(), parent_branch.to_string(), mode);
 
-    let baseline_tree = match mode {
-        DiffCompareMode::MergeBase => {
-            let base_ref = repo.revparse_single(parent_branch).ok();
-            let base_commit = base_ref.and_then(|obj| obj.peel_to_commit().ok());
-            match (head_oid, base_commit.as_ref()) {
-                (Some(h), Some(parent)) => {
-                    if let Ok(mb) = repo.merge_base(h, parent.id()) {
-                        repo.find_commit(mb).ok().and_then(|c| c.tree().ok())
-                    } else {
-                        parent.tree().ok()
-                    }
-                }
-                _ => None,
-            }
-        }
-        DiffCompareMode::UnpushedOnly => {
-            let branch_name: Option<String> = session_branch.map(String::from).or_else(|| {
-                repo.head().ok().and_then(|h| h.shorthand().map(String::from))
-            });
+    if let Some(cache) = CHANGED_FILES_CACHE.get()
+        && let Some((cached_key, cached_files)) = cache.lock().unwrap().get(&cache_key)
+        && *cached_key == state_key
+    {
+        #[cfg(test)]
+        increment_changed_files_cache_hits();
 
-            branch_name.and_then(|branch| {
-                let remote_ref = format!("refs/remotes/origin/{branch}");
-                repo.find_reference(&remote_ref)
-                    .ok()
-                    .and_then(|r| r.peel_to_commit().ok())
-                    .and_then(|c| c.tree().ok())
-            })
-        }
-    };
+        return Ok(ChangedFilesSnapshot {
+            changed_files: cached_files.clone(),
+            state_key,
+        });
+    }
 
-    if let Some(base_tree) = baseline_tree {
+    #[cfg(test)]
+    increment_changed_files_compute_count();
+
+    let changed_files = if let Some(base_tree) = baseline_tree {
         let mut opts = DiffOptions::new();
         opts.include_untracked(true)
             .recurse_untracked_dirs(true)
@@ -733,9 +846,147 @@ pub fn get_changed_files_with_mode(
         let mut diff = repo.diff_tree_to_workdir_with_index(Some(&base_tree), Some(&mut opts))?;
         let mut find_opts = DiffFindOptions::new();
         diff.find_similar(Some(&mut find_opts))?;
-        build_changed_files_from_diff(&diff)
+        build_changed_files_from_diff(&diff)?
     } else {
-        Ok(Vec::new())
+        Vec::new()
+    };
+
+    CHANGED_FILES_CACHE
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .unwrap()
+        .insert(cache_key, (state_key.clone(), changed_files.clone()));
+
+    Ok(ChangedFilesSnapshot {
+        changed_files,
+        state_key,
+    })
+}
+
+pub fn get_changed_files_with_mode(
+    worktree_path: &Path,
+    parent_branch: &str,
+    mode: DiffCompareMode,
+    session_branch: Option<&str>,
+) -> Result<Vec<ChangedFile>> {
+    Ok(
+        get_changed_files_snapshot(worktree_path, parent_branch, mode, session_branch)?
+            .changed_files,
+    )
+}
+
+fn build_changed_files_state_key<'repo>(
+    repo: &'repo Repository,
+    worktree_path: &Path,
+    parent_branch: &str,
+    mode: DiffCompareMode,
+    session_branch: Option<&str>,
+) -> Result<(ChangedFilesStateKey, Option<git2::Tree<'repo>>)> {
+    let head_oid = repo.head().ok().and_then(|h| h.target());
+    let statuses = repo.statuses(None)?;
+    let mut dirty_paths = HashSet::new();
+    let mut status_signature: u64 = 1469598103934665603;
+
+    for entry in statuses.iter() {
+        let Some(path) = entry.path() else {
+            continue;
+        };
+        if is_internal_tooling_path(path) {
+            continue;
+        }
+
+        let status_bits = entry.status().bits() as u64;
+        status_signature ^= status_bits.wrapping_mul(1099511628211);
+        for byte in path.as_bytes() {
+            status_signature ^= (*byte as u64).wrapping_mul(1099511628211);
+        }
+        dirty_paths.insert(path.to_string());
+    }
+
+    let index_signature = repo.index().ok().map(|idx| {
+        let mut signature: u64 = 1469598103934665603;
+        for entry in idx.iter() {
+            if let Ok(path_str) = std::str::from_utf8(&entry.path)
+                && is_internal_tooling_path(path_str)
+            {
+                continue;
+            }
+
+            for byte in entry.path.iter() {
+                signature ^= (*byte as u64).wrapping_mul(1099511628211);
+            }
+            for byte in entry.id.as_bytes() {
+                signature ^= (*byte as u64).wrapping_mul(1099511628211);
+            }
+        }
+        signature
+    });
+
+    let dirty_content_signature = dirty_content_signature(worktree_path, &dirty_paths);
+    let (baseline_target, baseline_tree) =
+        resolve_changed_files_baseline(repo, parent_branch, mode, session_branch, head_oid);
+
+    Ok((
+        ChangedFilesStateKey {
+            head: head_oid,
+            index_signature,
+            status_signature,
+            dirty_content_signature,
+            mode,
+            baseline_target,
+        },
+        baseline_tree,
+    ))
+}
+
+fn resolve_changed_files_baseline<'repo>(
+    repo: &'repo Repository,
+    parent_branch: &str,
+    mode: DiffCompareMode,
+    session_branch: Option<&str>,
+    head_oid: Option<Oid>,
+) -> (Option<Oid>, Option<git2::Tree<'repo>>) {
+    match mode {
+        DiffCompareMode::MergeBase => {
+            let base_commit = resolve_baseline_commit(repo, parent_branch);
+            match (head_oid, base_commit.as_ref()) {
+                (Some(head), Some(parent)) => {
+                    if let Ok(merge_base_oid) = repo.merge_base(head, parent.id()) {
+                        (
+                            Some(merge_base_oid),
+                            repo.find_commit(merge_base_oid)
+                                .ok()
+                                .and_then(|commit| commit.tree().ok()),
+                        )
+                    } else {
+                        (Some(parent.id()), parent.tree().ok())
+                    }
+                }
+                _ => (None, None),
+            }
+        }
+        DiffCompareMode::UnpushedOnly => {
+            let branch_name: Option<String> = session_branch.map(String::from).or_else(|| {
+                repo.head()
+                    .ok()
+                    .and_then(|head| head.shorthand().map(String::from))
+            });
+
+            let Some(branch) = branch_name else {
+                return (None, None);
+            };
+            let remote_ref = format!("refs/remotes/origin/{branch}");
+
+            let remote_commit = repo
+                .find_reference(&remote_ref)
+                .ok()
+                .and_then(|reference| reference.peel_to_commit().ok());
+
+            match remote_commit {
+                Some(commit) => (Some(commit.id()), commit.tree().ok()),
+                None => (None, None),
+            }
+        }
     }
 }
 
@@ -1069,7 +1320,9 @@ mod tests {
             .current_dir(p)
             .output()
             .unwrap();
-        let head_sha = String::from_utf8_lossy(&head_output.stdout).trim().to_string();
+        let head_sha = String::from_utf8_lossy(&head_output.stdout)
+            .trim()
+            .to_string();
 
         // Create the remote tracking ref manually
         let refs_dir = p.join(".git/refs/remotes/origin/lucode");
@@ -1165,7 +1418,9 @@ mod tests {
             .current_dir(p)
             .output()
             .unwrap();
-        let head_sha = String::from_utf8_lossy(&head_output.stdout).trim().to_string();
+        let head_sha = String::from_utf8_lossy(&head_output.stdout)
+            .trim()
+            .to_string();
 
         let refs_dir = p.join(".git/refs/remotes/origin/lucode");
         fs::create_dir_all(&refs_dir).unwrap();
@@ -1287,5 +1542,163 @@ mod tests {
         assert!(second.lines_added > first.lines_added);
         assert_eq!(get_git_stats_call_count(), 2);
         assert_eq!(get_git_stats_cache_hits(), 0);
+    }
+
+    #[test]
+    fn changed_files_cache_reuses_snapshot_for_unchanged_workspace() {
+        let repo = init_repo();
+        let p = repo.path();
+
+        StdCommand::new("git")
+            .args(["checkout", "-b", "feature"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+
+        fs::write(p.join("tracked.txt"), "line1\n").unwrap();
+        StdCommand::new("git")
+            .args(["add", "tracked.txt"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+        StdCommand::new("git")
+            .args(["commit", "-m", "add tracked file"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+
+        clear_changed_files_cache();
+        reset_changed_files_cache_hits();
+        reset_changed_files_compute_count();
+        let _scope = track_changed_files_on_current_thread();
+
+        let first = get_changed_files(p, "main").unwrap();
+        let second = get_changed_files(p, "main").unwrap();
+
+        assert_eq!(first.len(), second.len());
+        let first_file = first
+            .iter()
+            .find(|file| file.path == "tracked.txt")
+            .unwrap();
+        let second_file = second
+            .iter()
+            .find(|file| file.path == "tracked.txt")
+            .unwrap();
+        assert_eq!(first_file.path, second_file.path);
+        assert_eq!(first_file.change_type, second_file.change_type);
+        assert_eq!(first_file.additions, second_file.additions);
+        assert_eq!(get_changed_files_compute_count(), 1);
+        assert_eq!(get_changed_files_cache_hits(), 1);
+    }
+
+    #[test]
+    fn changed_files_cache_invalidates_when_dirty_file_content_changes() {
+        let repo = init_repo();
+        let p = repo.path();
+
+        fs::write(p.join("tracked.txt"), "line1\n").unwrap();
+        StdCommand::new("git")
+            .args(["add", "tracked.txt"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+        StdCommand::new("git")
+            .args(["commit", "-m", "add tracked file"])
+            .current_dir(p)
+            .output()
+            .unwrap();
+
+        clear_changed_files_cache();
+        reset_changed_files_cache_hits();
+        reset_changed_files_compute_count();
+        let _scope = track_changed_files_on_current_thread();
+
+        fs::write(p.join("tracked.txt"), "line1\nline2\n").unwrap();
+        let first = get_changed_files(p, "main").unwrap();
+
+        fs::write(p.join("tracked.txt"), "line1\nline2\nline3\n").unwrap();
+        let second = get_changed_files(p, "main").unwrap();
+
+        let first_file = first
+            .iter()
+            .find(|file| file.path == "tracked.txt")
+            .unwrap();
+        let second_file = second
+            .iter()
+            .find(|file| file.path == "tracked.txt")
+            .unwrap();
+
+        assert!(second_file.additions > first_file.additions);
+        assert_eq!(get_changed_files_compute_count(), 2);
+        assert_eq!(get_changed_files_cache_hits(), 0);
+    }
+
+    #[test]
+    fn changed_files_cache_invalidates_when_untracked_files_change() {
+        let repo = init_repo();
+        let p = repo.path();
+
+        clear_changed_files_cache();
+        reset_changed_files_cache_hits();
+        reset_changed_files_compute_count();
+        let _scope = track_changed_files_on_current_thread();
+
+        fs::write(p.join("first-untracked.txt"), "one\n").unwrap();
+        let first = get_changed_files(p, "main").unwrap();
+
+        fs::write(p.join("second-untracked.txt"), "two\n").unwrap();
+        let second = get_changed_files(p, "main").unwrap();
+
+        assert!(first.iter().any(|file| file.path == "first-untracked.txt"));
+        assert!(!first.iter().any(|file| file.path == "second-untracked.txt"));
+        assert!(second.iter().any(|file| file.path == "first-untracked.txt"));
+        assert!(
+            second
+                .iter()
+                .any(|file| file.path == "second-untracked.txt")
+        );
+        assert_eq!(get_changed_files_compute_count(), 2);
+        assert_eq!(get_changed_files_cache_hits(), 0);
+    }
+
+    #[test]
+    fn changed_files_cache_invalidates_when_nested_untracked_files_change() {
+        let repo = init_repo();
+        let p = repo.path();
+
+        clear_changed_files_cache();
+        reset_changed_files_cache_hits();
+        reset_changed_files_compute_count();
+        let _scope = track_changed_files_on_current_thread();
+
+        fs::create_dir_all(p.join("nested/untracked")).unwrap();
+        fs::write(p.join("nested/untracked/first.txt"), "one\n").unwrap();
+        let first = get_changed_files(p, "main").unwrap();
+
+        fs::write(p.join("nested/untracked/second.txt"), "two\n").unwrap();
+        let second = get_changed_files(p, "main").unwrap();
+
+        assert!(
+            first
+                .iter()
+                .any(|file| file.path == "nested/untracked/first.txt")
+        );
+        assert!(
+            !first
+                .iter()
+                .any(|file| file.path == "nested/untracked/second.txt")
+        );
+        assert!(
+            second
+                .iter()
+                .any(|file| file.path == "nested/untracked/first.txt")
+        );
+        assert!(
+            second
+                .iter()
+                .any(|file| file.path == "nested/untracked/second.txt")
+        );
+        assert_eq!(get_changed_files_compute_count(), 2);
+        assert_eq!(get_changed_files_cache_hits(), 0);
     }
 }

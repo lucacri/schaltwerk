@@ -16,6 +16,7 @@ use tokio::time::sleep;
 use super::file_index::refresh_project_files;
 
 use crate::domains::git::service as git;
+use crate::domains::git::stats::{self as git_stats, ChangedFilesStateKey, DiffCompareMode};
 use crate::shared::merge_snapshot_gateway::MergeSnapshotGateway;
 use crate::shared::session_metadata_gateway::{ChangedFile, SessionGitStatsUpdated};
 use git2::{Oid, Repository};
@@ -23,9 +24,17 @@ use git2::{Oid, Repository};
 const WATCHER_GIT_STATS_INTERVAL: Duration = Duration::from_secs(3);
 
 static WATCHER_THROTTLE: OnceLock<StdMutex<HashMap<PathBuf, Instant>>> = OnceLock::new();
+static EMITTED_CHANGED_FILES_STATE: OnceLock<
+    StdMutex<HashMap<(PathBuf, String), ChangedFilesStateKey>>,
+> = OnceLock::new();
 
 fn watcher_throttle() -> &'static StdMutex<HashMap<PathBuf, Instant>> {
     WATCHER_THROTTLE.get_or_init(|| StdMutex::new(HashMap::new()))
+}
+
+fn emitted_changed_files_state()
+-> &'static StdMutex<HashMap<(PathBuf, String), ChangedFilesStateKey>> {
+    EMITTED_CHANGED_FILES_STATE.get_or_init(|| StdMutex::new(HashMap::new()))
 }
 
 fn should_compute_stats(worktree_path: &Path) -> bool {
@@ -66,6 +75,47 @@ fn is_session_visible(session_name: &str) -> bool {
 pub fn force_stats_recompute(worktree_path: &Path) {
     let mut map = watcher_throttle().lock().expect("throttle lock poisoned");
     map.remove(worktree_path);
+}
+
+fn is_duplicate_changed_files_event(
+    worktree_path: &Path,
+    base_branch: &str,
+    state_key: &ChangedFilesStateKey,
+) -> bool {
+    let map = emitted_changed_files_state()
+        .lock()
+        .expect("changed files emission lock poisoned");
+    let cache_key = (worktree_path.to_path_buf(), base_branch.to_string());
+
+    map.get(&cache_key)
+        .is_some_and(|previous| previous == state_key)
+}
+
+fn mark_changed_files_event_emitted(
+    worktree_path: &Path,
+    base_branch: &str,
+    state_key: &ChangedFilesStateKey,
+) {
+    let mut map = emitted_changed_files_state()
+        .lock()
+        .expect("changed files emission lock poisoned");
+    let cache_key = (worktree_path.to_path_buf(), base_branch.to_string());
+    map.insert(cache_key, state_key.clone());
+}
+
+fn clear_emitted_changed_files_state_for(worktree_path: &Path) {
+    let mut map = emitted_changed_files_state()
+        .lock()
+        .expect("changed files emission lock poisoned");
+    map.retain(|(path, _), _| path != worktree_path);
+}
+
+#[cfg(test)]
+fn clear_emitted_changed_files_state() {
+    emitted_changed_files_state()
+        .lock()
+        .expect("changed files emission lock poisoned")
+        .clear();
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -347,8 +397,28 @@ impl FileWatcher {
             saw_refs
         );
 
-        let changed_files = git::get_changed_files(worktree_path, base_branch)
-            .map_err(|e| format!("Failed to get changed files: {e}"))?;
+        let changed_files_snapshot = git_stats::get_changed_files_snapshot(
+            worktree_path,
+            base_branch,
+            DiffCompareMode::MergeBase,
+            None,
+        )
+        .map_err(|e| format!("Failed to get changed files: {e}"))?;
+
+        if is_duplicate_changed_files_event(
+            worktree_path,
+            base_branch,
+            &changed_files_snapshot.state_key,
+        ) {
+            trace!(
+                "Skipping duplicate file change event for session {} at {}",
+                session_name,
+                worktree_path.display()
+            );
+            return Ok(());
+        }
+
+        let changed_files = changed_files_snapshot.changed_files;
 
         info!(
             "Session {} has {} changed files detected",
@@ -468,6 +538,11 @@ impl FileWatcher {
 
         emit_event(app_handle, SchaltEvent::FileChanges, &file_change_event)
             .map_err(|e| format!("Failed to emit file change event: {e}"))?;
+        mark_changed_files_event_emitted(
+            worktree_path,
+            base_branch,
+            &changed_files_snapshot.state_key,
+        );
 
         if let Some(payload) = stats_payload {
             let _ = emit_event(app_handle, SchaltEvent::SessionGitStats, &payload);
@@ -761,6 +836,7 @@ impl FileWatcherManager {
             self.app_handle.clone(),
         )?;
 
+        clear_emitted_changed_files_state_for(&watcher._worktree_path);
         watchers.insert(watcher_key, watcher);
         info!("Started file watching for session {session_name}");
         Ok(())
@@ -774,7 +850,8 @@ impl FileWatcherManager {
         let mut watchers = self.watchers.lock().await;
         let watcher_key = session_watcher_key(repo_path, session_name);
 
-        if let Some(_watcher) = watchers.remove(&watcher_key) {
+        if let Some(watcher) = watchers.remove(&watcher_key) {
+            clear_emitted_changed_files_state_for(&watcher._worktree_path);
             info!("Stopped file watching for session {session_name}");
         } else {
             debug!("Session {session_name} was not being watched");
@@ -826,6 +903,7 @@ impl FileWatcherManager {
             self.app_handle.clone(),
         )?;
 
+        clear_emitted_changed_files_state_for(&repo_path);
         watchers.insert(watcher_key, watcher);
         info!("Started orchestrator file watcher");
 
@@ -839,6 +917,7 @@ impl FileWatcherManager {
         let watcher_key = orchestrator_watcher_key(repo_path);
 
         if watchers.remove(&watcher_key).is_some() {
+            clear_emitted_changed_files_state_for(repo_path);
             info!("Stopped orchestrator file watcher");
         } else {
             debug!("No orchestrator file watcher to stop");
@@ -868,6 +947,8 @@ pub(crate) async fn perform_orchestrator_index_refresh_for_tests(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domains::git::stats::DiffCompareMode;
+    use serial_test::serial;
     use std::fs;
     use std::process::Command;
     use std::sync::Arc;
@@ -1429,6 +1510,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn orchestrator_refresh_triggers_on_commit_signals() {
         let collector = Arc::new(TestRefreshCollector::default());
         let provider: Arc<dyn OrchestratorIndexRefresh> = collector.clone();
@@ -1453,6 +1535,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn orchestrator_refresh_ignores_worktree_only_changes() {
         let collector = Arc::new(TestRefreshCollector::default());
         let provider: Arc<dyn OrchestratorIndexRefresh> = collector.clone();
@@ -1893,5 +1976,60 @@ mod tests {
         assert_eq!(branch_info.base_branch, "main");
         assert!(branch_info.base_commit.len() == 40); // SHA-1 hash length
         assert!(branch_info.head_commit.len() == 40);
+    }
+
+    #[test]
+    fn duplicate_file_change_emission_is_suppressed_until_workspace_changes() {
+        let temp_dir = TempDir::new().unwrap();
+        let repo_path = create_test_git_repo(&temp_dir);
+
+        fs::write(repo_path.join("tracked.txt"), "line1\n").unwrap();
+        Command::new("git")
+            .args(["add", "tracked.txt"])
+            .current_dir(&repo_path)
+            .output()
+            .expect("Failed to stage tracked file");
+        Command::new("git")
+            .args(["commit", "-m", "add tracked file"])
+            .current_dir(&repo_path)
+            .output()
+            .expect("Failed to commit tracked file");
+
+        fs::write(repo_path.join("tracked.txt"), "line1\nline2\n").unwrap();
+        clear_emitted_changed_files_state();
+        let first_snapshot = git_stats::get_changed_files_snapshot(
+            &repo_path,
+            "main",
+            DiffCompareMode::MergeBase,
+            None,
+        )
+        .expect("first snapshot");
+
+        assert!(!is_duplicate_changed_files_event(
+            &repo_path,
+            "main",
+            &first_snapshot.state_key
+        ));
+        mark_changed_files_event_emitted(&repo_path, "main", &first_snapshot.state_key);
+        assert!(is_duplicate_changed_files_event(
+            &repo_path,
+            "main",
+            &first_snapshot.state_key
+        ));
+
+        fs::write(repo_path.join("tracked.txt"), "line1\nline2\nline3\n").unwrap();
+        let second_snapshot = git_stats::get_changed_files_snapshot(
+            &repo_path,
+            "main",
+            DiffCompareMode::MergeBase,
+            None,
+        )
+        .expect("second snapshot");
+
+        assert!(!is_duplicate_changed_files_event(
+            &repo_path,
+            "main",
+            &second_snapshot.state_key
+        ));
     }
 }
