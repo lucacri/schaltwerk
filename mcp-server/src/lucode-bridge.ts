@@ -50,7 +50,8 @@ export interface Epic {
   color?: string | null
 }
 
-export type SpecStage = 'draft' | 'clarified'
+export type CanonicalSpecStage = 'draft' | 'ready'
+export type SpecStage = CanonicalSpecStage | 'clarified'
 
 export interface SpecSummary {
   session_id: string
@@ -111,6 +112,10 @@ export interface PresetDraftStartResult extends PresetLaunchResult {
 
 interface SpecSummaryResponse {
   specs: SpecSummary[]
+}
+
+function normalizeSpecStage(stage: SpecStage): CanonicalSpecStage {
+  return stage === 'clarified' ? 'ready' : stage
 }
 
 const isPresetLaunchResult = (value: unknown): value is PresetLaunchResult => {
@@ -1409,7 +1414,10 @@ export class LucodeBridge {
       })
 
       const payload = await this.parseJsonResponse<SpecSummaryResponse>(response, 'spec summaries')
-      return payload?.specs ?? []
+      return (payload?.specs ?? []).map(spec => ({
+        ...spec,
+        stage: normalizeSpecStage(spec.stage),
+      }))
     } catch (error) {
       console.error('Failed to list spec summaries via API:', error)
       return []
@@ -1429,7 +1437,15 @@ export class LucodeBridge {
       }
     })
 
-    return this.parseJsonResponse<SpecContent>(response, 'spec content')
+    const payload = await this.parseJsonResponse<SpecContent>(response, 'spec content')
+    if (!payload) {
+      return null
+    }
+
+    return {
+      ...payload,
+      stage: normalizeSpecStage(payload.stage),
+    }
   }
 
   async setSpecStage(sessionName: string, stage: SpecStage, projectPath?: string): Promise<SpecStageUpdateResult> {
@@ -1443,7 +1459,7 @@ export class LucodeBridge {
         'Content-Type': 'application/json',
         ...this.getProjectHeaders(projectPath)
       },
-      body: JSON.stringify({ stage })
+      body: JSON.stringify({ stage: normalizeSpecStage(stage) })
     })
 
     const payload = await this.parseJsonResponse<SpecStageUpdateResult>(response, 'spec stage update')
@@ -1451,7 +1467,10 @@ export class LucodeBridge {
       throw new Error('Spec stage update payload missing')
     }
 
-    return payload
+    return {
+      ...payload,
+      stage: normalizeSpecStage(payload.stage),
+    }
   }
 
   async setSpecAttention(sessionName: string, attentionRequired: boolean, projectPath?: string): Promise<SpecAttentionUpdateResult> {

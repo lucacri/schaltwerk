@@ -996,4 +996,23 @@ describe('LucodeBridge untested methods', () => {
       expect(result).toEqual([])
     })
   })
+
+  describe('setSpecStage', () => {
+    it('normalizes legacy clarified input to ready', async () => {
+      fetchMock.mockResolvedValue(createResponse({
+        session_id: 'alpha_spec',
+        stage: 'ready',
+        updated_at: '2024-05-01T12:00:00Z',
+      }))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.setSpecStage('alpha_spec', 'clarified')
+
+      expect(result.stage).toBe('ready')
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/specs/alpha_spec/stage')
+      expect(init?.method).toBe('PATCH')
+      expect(JSON.parse(String(init?.body))).toEqual({ stage: 'ready' })
+    })
+  })
 })

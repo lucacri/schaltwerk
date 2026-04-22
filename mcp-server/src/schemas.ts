@@ -5,7 +5,7 @@ const nullableIsoDateTime = { anyOf: [isoDateTime, { type: 'null' }] } as const
 const nullableString = { type: ['string', 'null'] } as const
 const nullableBoolean = { type: ['boolean', 'null'] } as const
 const nullableNumber = { type: ['number', 'null'] } as const
-const specStageEnum = ['draft', 'clarified'] as const
+const specStageEnum = ['draft', 'ready'] as const
 const prStateEnum = ['open', 'succeeding', 'mred'] as const
 
 const epicSchema = {

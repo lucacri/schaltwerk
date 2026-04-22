@@ -632,7 +632,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "lucode_spec_set_stage",
-        description: `Set a spec's clarification stage to either draft or clarified. Use this to mark a problem statement as ready for implementation handoff or move it back into clarification.`,
+        description: `Set a spec's clarification stage to either draft or ready. Use this to mark a problem statement as ready for implementation handoff or move it back into clarification. Legacy callers may still send clarified, which is normalized to ready.`,
         inputSchema: {
           type: "object",
           properties: {
@@ -642,8 +642,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             stage: {
               type: "string",
-              enum: ["draft", "clarified"],
-              description: "Target clarification stage"
+              enum: ["draft", "ready", "clarified"],
+              description: "Target clarification stage. ready is canonical; clarified is a legacy alias."
             }
           },
           required: ["session_name", "stage"],
@@ -673,13 +673,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "lucode_improve_plan",
-        description: `Start an optional multi-agent plan improvement round for a clarified spec. Candidate sessions inspect the codebase and file markdown plans as consolidation reports; the judge winner is later confirmed with lucode_confirm_consolidation_winner, which writes the accepted plan back to the spec.`,
+        description: `Start an optional multi-agent plan improvement round for a ready spec. Candidate sessions inspect the codebase and file markdown plans as consolidation reports; the judge winner is later confirmed with lucode_confirm_consolidation_winner, which writes the accepted plan back to the spec.`,
         inputSchema: {
           type: "object",
           properties: {
             session_name: {
               type: "string",
-              description: "Name of the clarified spec session to improve."
+              description: "Name of the ready spec session to improve."
             },
             agent_type: {
               type: "string",
@@ -1200,7 +1200,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const updated = await bridge.setSpecStage(specArgs.session_name, specArgs.stage, projectPath)
         const payload = sanitizeSpecStage(updated)
         response = buildStructuredResponse(payload, {
-          summaryText: `Spec '${specArgs.session_name}' moved to ${specArgs.stage}`,
+          summaryText: `Spec '${specArgs.session_name}' moved to ${payload.stage}`,
           jsonFirst: true
         })
         break

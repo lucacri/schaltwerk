@@ -4352,9 +4352,12 @@ pub async fn schaltwerk_core_set_spec_stage(
 ) -> Result<(), String> {
     log::info!("Updating spec stage: {name} -> {stage}");
 
-    let parsed_stage = match stage.as_str() {
-        "draft" => lucode::domains::sessions::entity::SpecStage::Draft,
-        "ready" => lucode::domains::sessions::entity::SpecStage::Ready,
+    let parsed_stage = match stage
+        .parse::<lucode::domains::sessions::entity::SpecStage>()
+        .map_err(|_| format!("Invalid spec stage: {stage}"))?
+    {
+        stage @ (lucode::domains::sessions::entity::SpecStage::Draft
+        | lucode::domains::sessions::entity::SpecStage::Ready) => stage,
         _ => return Err(format!("Invalid spec stage: {stage}")),
     };
 

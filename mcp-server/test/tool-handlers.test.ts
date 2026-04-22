@@ -158,6 +158,13 @@ const startImprovePlanRoundMock = mock(() =>
     candidate_sessions: ['alpha_spec-plan-a1b2c3d4-v1', 'alpha_spec-plan-a1b2c3d4-v2'],
   })
 )
+const setSpecStageMock = mock(() =>
+  Promise.resolve({
+    session_id: 'alpha_spec',
+    stage: 'ready',
+    updated_at: '2024-05-01T12:00:00Z',
+  })
+)
 const getPrFeedbackMock = mock(() =>
   Promise.resolve({
     state: 'OPEN',
@@ -222,6 +229,7 @@ describe('MCP tool handler logic', () => {
       listSessionsByState: listSessionsByStateMock,
       promoteSession: promoteSessionMock,
       sendFollowUpMessage: sendFollowUpMessageMock,
+      setSpecStage: setSpecStageMock,
       startDraftSession: startDraftSessionMock,
       startImprovePlanRound: startImprovePlanRoundMock,
       setWorktreeBaseDirectory: setWorktreeBaseDirectoryMock,
@@ -254,6 +262,7 @@ describe('MCP tool handler logic', () => {
     listSessionsByStateMock.mockClear()
     promoteSessionMock.mockClear()
     sendFollowUpMessageMock.mockClear()
+    setSpecStageMock.mockClear()
     startDraftSessionMock.mockClear()
     startImprovePlanRoundMock.mockClear()
     setWorktreeBaseDirectoryMock.mockClear()
@@ -404,6 +413,24 @@ describe('MCP tool handler logic', () => {
 
     it('rejects missing session_name', async () => {
       await expect(callTool('lucode_improve_plan', {})).rejects.toMatchObject({ code: 'INVALID_PARAMS' })
+    })
+  })
+
+  describe('lucode_spec_set_stage', () => {
+    it('returns the canonical ready stage when clarified is passed as a legacy alias', async () => {
+      const result = await callTool('lucode_spec_set_stage', {
+        session_name: 'alpha_spec',
+        stage: 'clarified',
+      })
+
+      expect(setSpecStageMock).toHaveBeenCalledWith('alpha_spec', 'clarified', undefined)
+      expect(result.structuredContent).toEqual({
+        session_id: 'alpha_spec',
+        stage: 'ready',
+        updated_at: '2024-05-01T12:00:00Z',
+      })
+      const text = result.content.find((c: any) => c.type === 'text' && !c.mimeType)
+      expect(text?.text).toContain("Spec 'alpha_spec' moved to ready")
     })
   })
 

@@ -109,14 +109,14 @@ const sampleStructuredOutputs: Record<string, any> = {
   lucode_spec_read: {
     session_id: 'alpha_spec',
     display_name: 'Alpha Spec',
-    stage: 'clarified',
+    stage: 'ready',
     content: '# Alpha',
     content_length: 7,
     updated_at: '2024-05-01T12:00:00Z',
   },
   lucode_spec_set_stage: {
     session_id: 'alpha_spec',
-    stage: 'clarified',
+    stage: 'ready',
     updated_at: '2024-05-01T12:00:00Z',
   },
   lucode_spec_set_attention: {

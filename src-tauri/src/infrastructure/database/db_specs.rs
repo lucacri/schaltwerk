@@ -498,6 +498,36 @@ mod tests {
     }
 
     #[test]
+    fn clarified_spec_stage_rows_reload_as_ready() {
+        let db = create_test_database();
+        let now = Utc::now().timestamp();
+        let conn = db.get_conn().expect("db conn");
+        conn.execute(
+            "INSERT INTO specs (
+                id, name, display_name, epic_id, issue_number, issue_url, pr_number, pr_url,
+                improve_plan_round_id, repository_path, repository_name, content,
+                implementation_plan, stage, variant, ready_session_id, ready_branch, base_branch,
+                attention_required, clarification_started, created_at, updated_at
+            ) VALUES (?1, ?2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?3, ?4, ?5, NULL, 'clarified', 'regular', NULL, NULL, NULL, FALSE, FALSE, ?6, ?6)",
+            params![
+                "legacy-clarified",
+                "legacy-clarified",
+                "/repo",
+                "test-repo",
+                "legacy content",
+                now,
+            ],
+        )
+        .expect("insert legacy clarified spec");
+
+        let fetched = db
+            .get_spec_by_id("legacy-clarified")
+            .expect("legacy clarified spec should load");
+
+        assert_eq!(fetched.stage, SpecStage::Ready);
+    }
+
+    #[test]
     fn get_spec_by_name_not_found() {
         let db = create_test_database();
         let result = db.get_spec_by_name(Path::new("/repo"), "nonexistent");

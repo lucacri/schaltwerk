@@ -307,6 +307,7 @@ impl FromStr for SpecStage {
         match s {
             "draft" => Ok(SpecStage::Draft),
             "ready" => Ok(SpecStage::Ready),
+            "clarified" => Ok(SpecStage::Ready),
             "brainstormed" => Ok(SpecStage::Brainstormed),
             "planned" => Ok(SpecStage::Planned),
             "implemented" => Ok(SpecStage::Implemented),
@@ -591,4 +592,18 @@ pub struct ArchivedSpec {
     pub repository_name: String,
     pub content: String,
     pub archived_at: DateTime<Utc>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SpecStage;
+    use std::str::FromStr;
+
+    #[test]
+    fn clarified_spec_stage_alias_maps_to_ready() {
+        assert_eq!(
+            SpecStage::from_str("clarified").expect("legacy alias should parse"),
+            SpecStage::Ready
+        );
+    }
 }

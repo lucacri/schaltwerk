@@ -618,6 +618,10 @@ fn apply_specs_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
         [],
     );
     let _ = conn.execute(
+        "UPDATE specs SET stage = 'ready' WHERE stage = 'clarified'",
+        [],
+    );
+    let _ = conn.execute(
         "UPDATE specs SET variant = 'regular' WHERE variant IS NULL OR variant = ''",
         [],
     );
@@ -1250,6 +1254,45 @@ mod tests {
         assert!(
             index_exists,
             "idx_spec_review_comments_spec index should exist after schema init"
+        );
+    }
+
+    #[test]
+    fn specs_migration_remaps_legacy_clarified_stage_to_ready() {
+        use super::initialize_schema;
+        use crate::infrastructure::database::connection::Database;
+
+        let db = Database::new_in_memory().unwrap();
+        initialize_schema(&db).unwrap();
+
+        let conn = db.get_conn().unwrap();
+        conn.execute(
+            "INSERT INTO specs (
+                id, name, repository_path, repository_name, content, stage,
+                variant, attention_required, clarification_started, created_at, updated_at
+             )
+             VALUES (
+                'spec-legacy-clarified', 'old-spec', '/repo', 'repo', 'body',
+                'clarified', 'regular', 0, 0, 0, 0
+             )",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        initialize_schema(&db).unwrap();
+
+        let conn = db.get_conn().unwrap();
+        let stage: String = conn
+            .query_row(
+                "SELECT stage FROM specs WHERE id = 'spec-legacy-clarified'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            stage, "ready",
+            "Legacy 'clarified' stage must be remapped to 'ready' by migration"
         );
     }
 }
