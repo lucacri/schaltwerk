@@ -7,6 +7,8 @@ import { groupReferences } from './refGrouping'
 import { theme } from '../../common/theme'
 import { getContrastColor } from '../../common/colorContrast'
 import { getFileIcon } from '../../utils/fileIcons'
+import { getAgentColorScheme } from '../../common/theme'
+import { getAgentColorKey } from '../../utils/agentColors'
 
 interface HistoryItemRowProps {
   viewModel: HistoryItemViewModel
@@ -44,41 +46,70 @@ function renderReferences(references: ReturnType<typeof groupReferences>) {
         const textColor = ref.color ? getContrastColor(ref.color) : 'var(--color-text-secondary)'
         const showCount = ref.count !== undefined && ref.count > 1
         const showIcon = ref.showIconOnly || (ref.count !== undefined && ref.count >= 1) || ref.icon === 'tag'
+        const showAgentBadge = Boolean(ref.sessionAgentType && ref.sessionAgentLabel)
+        const agentColorScheme = showAgentBadge
+          ? getAgentColorScheme(getAgentColorKey(ref.sessionAgentType ?? 'claude'))
+          : null
 
         return (
-          <span
+          <div
             key={`${ref.id}-${index}`}
-            className="inline-flex items-center flex-shrink-0"
-            style={{
-              backgroundColor,
-              color: textColor,
-              borderRadius: '0.5em',
-              fontSize: theme.fontSize.body,
-              lineHeight: '1.3em',
-              fontWeight: 600,
-              textShadow: '0 1px 3px rgba(var(--color-text-inverse-rgb), 0.5), 0 0 1px rgba(var(--color-text-inverse-rgb), 0.3)',
-              paddingLeft: showIcon || !ref.showDescription ? '0.3em' : '0.45em',
-              paddingRight: ref.showDescription || showIcon ? '0.3em' : '0.45em'
-            }}
-            title={ref.name}
+            className="inline-flex items-center gap-1 flex-shrink-0"
           >
-            {showCount && (
-              <span style={{ paddingRight: '0.15em' }}>{ref.count}</span>
-            )}
-            {showIcon && (
-              <span className="flex items-center justify-center" style={{ padding: '0.08em' }}>
-                {getReferenceIcon(ref.icon)}
-              </span>
-            )}
-            {ref.showDescription && (
+            <span
+              className="inline-flex items-center flex-shrink-0"
+              style={{
+                backgroundColor,
+                color: textColor,
+                borderRadius: '0.5em',
+                fontSize: theme.fontSize.body,
+                lineHeight: '1.3em',
+                fontWeight: 600,
+                textShadow: '0 1px 3px rgba(var(--color-text-inverse-rgb), 0.5), 0 0 1px rgba(var(--color-text-inverse-rgb), 0.3)',
+                paddingLeft: showIcon || !ref.showDescription ? '0.3em' : '0.45em',
+                paddingRight: ref.showDescription || showIcon ? '0.3em' : '0.45em'
+              }}
+              title={ref.name}
+            >
+              {showCount && (
+                <span style={{ paddingRight: '0.15em' }}>{ref.count}</span>
+              )}
+              {showIcon && (
+                <span className="flex items-center justify-center" style={{ padding: '0.08em' }}>
+                  {getReferenceIcon(ref.icon)}
+                </span>
+              )}
+              {ref.showDescription && (
+                <span
+                  style={{ paddingLeft: showIcon ? '0.15em' : '0' }}
+                  className="overflow-hidden text-ellipsis whitespace-nowrap"
+                >
+                  {ref.name}
+                </span>
+              )}
+            </span>
+            {showAgentBadge && agentColorScheme && (
               <span
-                style={{ paddingLeft: showIcon ? '0.15em' : '0' }}
-                className="overflow-hidden text-ellipsis whitespace-nowrap max-w-[90px]"
+                className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded border flex-shrink-0"
+                style={{
+                  backgroundColor: agentColorScheme.bg,
+                  color: agentColorScheme.light,
+                  borderColor: agentColorScheme.border,
+                  fontFamily: theme.fontFamily.sans,
+                  fontSize: theme.fontSize.caption,
+                  fontWeight: 600,
+                  lineHeight: '1.2',
+                }}
+                title={`Lucode session agent: ${ref.sessionAgentLabel}`}
               >
-                {ref.name}
+                <span
+                  className="w-1 h-1 rounded-full"
+                  style={{ backgroundColor: agentColorScheme.DEFAULT }}
+                />
+                {ref.sessionAgentLabel}
               </span>
             )}
-          </span>
+          </div>
         )
       })}
     </div>

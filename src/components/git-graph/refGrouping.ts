@@ -18,21 +18,24 @@ export function groupReferences(refs: HistoryItemRef[]): GroupedRef[] {
   const hasBranch = branches.length > 0
 
   if (hasBranch) {
+    const primaryBranch = branches.find(ref => ref.sessionAgentType) ?? branches[0]
+    const remainingBranches = branches.filter(ref => ref.id !== primaryBranch.id)
+
     result.push({
-      ...branches[0],
+      ...primaryBranch,
       showDescription: true
     })
 
-    if (branches.length === 2) {
+    if (remainingBranches.length === 1) {
       result.push({
-        ...branches[1],
+        ...remainingBranches[0],
         showDescription: false,
         showIconOnly: true
       })
-    } else if (branches.length > 2) {
+    } else if (remainingBranches.length > 1) {
       result.push({
-        ...branches[1],
-        count: branches.length - 1,
+        ...remainingBranches[0],
+        count: remainingBranches.length,
         showDescription: false
       })
     }

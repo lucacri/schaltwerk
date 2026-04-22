@@ -21,6 +21,9 @@ import { ORCHESTRATOR_SESSION_NAME } from '../../constants/sessions'
 import { useAtomValue } from 'jotai'
 import { projectPathAtom } from '../../store/atoms/project'
 import { HistorySearchInput, type HistorySearchInputHandle } from './HistorySearchInput'
+import { allSessionsAtom } from '../../store/atoms/sessions'
+import { displayNameForAgent } from '../shared/agentDefaults'
+import type { AgentType } from '../../types/session'
 
 interface GitGraphPanelProps {
   onOpenCommitDiff?: (payload: {
@@ -49,6 +52,7 @@ type PendingHeadBucket = Map<string, PendingHeadInfo>
 export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverride, sessionName }: GitGraphPanelProps = {}) => {
   const { t } = useTranslation()
   const projectPath = useAtomValue(projectPathAtom)
+  const sessions = useAtomValue(allSessionsAtom)
   const repoPath = repoPathOverride ?? projectPath
   const { pushToast } = useToast()
   const {
@@ -86,11 +90,49 @@ export const GitGraphPanel = memo(({ onOpenCommitDiff, repoPath: repoPathOverrid
   const snapshotRef = useRef<HistoryProviderSnapshot | null>(null)
   const lastLoadMoreErrorRef = useRef<string | null>(null)
 
+  const sessionBranchAgents = useMemo(() => {
+    const lookup = new Map<string, { sessionAgentType: AgentType; sessionAgentLabel: string }>()
+
+    for (const session of sessions) {
+      const branch = session.info.branch?.trim()
+      const agentType = session.info.original_agent_type
+      if (!branch || !agentType || lookup.has(branch)) {
+        continue
+      }
+
+      lookup.set(branch, {
+        sessionAgentType: agentType,
+        sessionAgentLabel: displayNameForAgent(agentType),
+      })
+    }
+
+    return lookup
+  }, [sessions])
+
   const historyItems = useMemo(() => {
     if (!snapshot) return []
     const itemsToRender = filter.searchText ? filteredItems : snapshot.items
-    return toViewModel({ ...snapshot, items: itemsToRender })
-  }, [snapshot, filteredItems, filter.searchText])
+    const enrichedItems = itemsToRender.map(item => ({
+      ...item,
+      references: item.references?.map(ref => {
+        if (ref.icon === 'tag' || ref.icon === 'remote' || ref.icon === 'base') {
+          return ref
+        }
+
+        const sessionAgent = sessionBranchAgents.get(ref.name)
+        if (!sessionAgent) {
+          return ref
+        }
+
+        return {
+          ...ref,
+          ...sessionAgent,
+        }
+      }),
+    }))
+
+    return toViewModel({ ...snapshot, items: enrichedItems })
+  }, [snapshot, filteredItems, filter.searchText, sessionBranchAgents])
 
   const hasSnapshot = Boolean(snapshot)
   const hasMore = snapshot?.hasMore ?? false

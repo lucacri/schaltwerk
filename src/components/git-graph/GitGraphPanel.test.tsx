@@ -10,6 +10,8 @@ import { logger } from '../../utils/logger'
 import { Provider, createStore } from 'jotai'
 import { projectPathAtom } from '../../store/atoms/project'
 import type { ReactElement } from 'react'
+import { allSessionsAtom } from '../../store/atoms/sessions'
+import type { EnrichedSession } from '../../types/session'
 
 const useGitHistoryMock = vi.fn()
 
@@ -130,6 +132,25 @@ function renderWithProject(ui: ReactElement, projectPath: string | null = '/repo
   }
 }
 
+function makeSession(overrides: Partial<EnrichedSession['info']> = {}): EnrichedSession {
+  return {
+    info: {
+      session_id: 'session-1',
+      branch: 'lucode/history-panel',
+      worktree_path: '/worktrees/session-1',
+      base_branch: 'main',
+      status: 'active',
+      is_current: false,
+      session_type: 'worktree',
+      session_state: 'running',
+      ready_to_merge: false,
+      original_agent_type: 'claude',
+      ...overrides,
+    },
+    terminals: [],
+  }
+}
+
 describe('GitGraphPanel', () => {
   it('renders commits and toggles file details on demand', async () => {
     const ensureLoadedMock = vi.fn()
@@ -216,6 +237,77 @@ describe('GitGraphPanel', () => {
     expect(payload.repoPath).toBe('/repo/path')
     expect(payload.files).toEqual(filesResponse)
     expect(payload.initialFilePath).toBe('src/main.rs')
+  })
+
+  it('shows the Lucode agent badge and visible branch name when a matching session branch is not first', async () => {
+    const snapshot: HistoryProviderSnapshot = {
+      ...baseSnapshot,
+      items: [
+        {
+          ...baseSnapshot.items[0],
+          references: [
+            {
+              id: 'ref-0',
+              name: 'main',
+              icon: 'branch',
+            },
+            {
+              id: 'ref-1',
+              name: 'lucode/history-panel',
+              icon: 'branch',
+            }
+          ]
+        }
+      ]
+    }
+
+    useGitHistoryMock.mockReturnValue(createMockGitHistory({ snapshot }))
+
+    const store = createStore()
+    store.set(projectPathAtom, '/repo/path')
+    store.set(allSessionsAtom, [makeSession({ original_agent_type: 'codex' })])
+
+    render(
+      <Provider store={store}>
+        <GitGraphPanel />
+      </Provider>
+    )
+
+    expect(await screen.findByText('lucode/history-panel')).toBeInTheDocument()
+    expect(await screen.findByText('Codex')).toBeInTheDocument()
+    expect(screen.queryByText('main')).not.toBeInTheDocument()
+  })
+
+  it('does not show an agent badge for refs without a matching Lucode session', () => {
+    const snapshot: HistoryProviderSnapshot = {
+      ...baseSnapshot,
+      items: [
+        {
+          ...baseSnapshot.items[0],
+          references: [
+            {
+              id: 'ref-2',
+              name: 'feature/not-a-session',
+              icon: 'branch',
+            }
+          ]
+        }
+      ]
+    }
+
+    useGitHistoryMock.mockReturnValue(createMockGitHistory({ snapshot }))
+
+    const store = createStore()
+    store.set(projectPathAtom, '/repo/path')
+    store.set(allSessionsAtom, [makeSession({ branch: 'lucode/other-session', original_agent_type: 'codex' })])
+
+    render(
+      <Provider store={store}>
+        <GitGraphPanel />
+      </Provider>
+    )
+
+    expect(screen.queryByText('Codex')).not.toBeInTheDocument()
   })
 
   it('refreshes history when file change events report a new head', async () => {

@@ -1,9 +1,13 @@
+import type { AgentType } from '../../types/session'
+
 export interface HistoryItemRef {
   id: string
   name: string
   revision?: string
   color?: string
   icon?: 'branch' | 'remote' | 'tag' | 'base'
+  sessionAgentType?: AgentType
+  sessionAgentLabel?: string
 }
 
 export interface HistoryItem {

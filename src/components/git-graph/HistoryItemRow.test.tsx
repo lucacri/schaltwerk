@@ -77,4 +77,50 @@ describe('HistoryItemRow reference pills', () => {
     expect(pill.style.color).toBe('var(--color-text-secondary)')
     expect(pill.style.backgroundColor).toBe('var(--color-overlay-light)')
   })
+
+  it('does not cap the primary branch label width for long Lucode branch names', () => {
+    const branchName = 'lucode/history-panel-branch-name-with-distinguishing-tail'
+    const { container } = renderRow([
+      { id: 'r5', name: branchName, icon: 'branch' }
+    ])
+
+    const pill = findPill(container, branchName)
+    const label = pill.querySelector('.whitespace-nowrap') as HTMLElement | null
+
+    expect(label).not.toBeNull()
+    expect(label?.className).not.toContain('max-w-[90px]')
+    expect(label?.textContent).toBe(branchName)
+  })
+
+  it('renders an inline agent badge for Lucode-managed branch refs', () => {
+    const { getByText } = renderRow([
+      {
+        id: 'r6',
+        name: 'lucode/owned-by-codex',
+        icon: 'branch',
+        sessionAgentType: 'codex',
+        sessionAgentLabel: 'Codex'
+      }
+    ])
+
+    expect(getByText('Codex')).toBeInTheDocument()
+  })
+
+  it('promotes a Lucode-managed branch to the visible primary pill when it is not first', () => {
+    const { getByText, queryByText } = renderRow([
+      { id: 'r7', name: 'main', icon: 'branch' },
+      {
+        id: 'r8',
+        name: 'lucode/owned-by-codex',
+        icon: 'branch',
+        sessionAgentType: 'codex',
+        sessionAgentLabel: 'Codex'
+      },
+      { id: 'r9', name: 'feature/other', icon: 'branch' }
+    ])
+
+    expect(getByText('lucode/owned-by-codex')).toBeInTheDocument()
+    expect(getByText('Codex')).toBeInTheDocument()
+    expect(queryByText('main')).not.toBeInTheDocument()
+  })
 })
