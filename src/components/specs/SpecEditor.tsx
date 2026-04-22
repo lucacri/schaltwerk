@@ -98,6 +98,8 @@ export function SpecEditor({
   const [clarificationAgentReady, setClarificationAgentReady] = useState(false)
   const [clarificationAgentType, setClarificationAgentType] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState<string | null>(null)
+  const [pendingExternalContent, setPendingExternalContent] = useState<string | null>(null)
+  const [ignoredExternalContent, setIgnoredExternalContent] = useState<string | null>(null)
   const markdownEditorRef = useRef<MarkdownEditorRef>(null)
   const saveCountRef = useRef(0)
   const latestSavePromiseRef = useRef<Promise<void> | null>(null)
@@ -147,6 +149,8 @@ export function SpecEditor({
 
   useEffect(() => {
     setError(null)
+    setPendingExternalContent(null)
+    setIgnoredExternalContent(null)
 
     return () => {
       if (saveTimeoutRef.current) {
@@ -154,6 +158,13 @@ export function SpecEditor({
       }
     }
   }, [sessionName])
+
+  const applyServerContent = useCallback((serverContent: string) => {
+    setCurrentContent(serverContent)
+    setSavedContent(serverContent)
+    setPendingExternalContent(null)
+    setIgnoredExternalContent(null)
+  }, [setCurrentContent, setSavedContent])
 
   useEffect(() => {
     if (!sessionName || hasCachedData) return
@@ -172,8 +183,7 @@ export function SpecEditor({
         if (cancelled) return
 
         const text = draftContent ?? initialPrompt ?? ''
-        setCurrentContent(text)
-        setSavedContent(text)
+        applyServerContent(text)
         setDisplayName(sessionName)
         setLoading(false)
       } catch (e) {
@@ -187,17 +197,14 @@ export function SpecEditor({
     return () => {
       cancelled = true
     }
-  }, [hasCachedData, projectPath, sessionName, setCurrentContent, setSavedContent])
+  }, [applyServerContent, hasCachedData, projectPath, sessionName])
 
   useEffect(() => {
     if (hasCachedData) {
       setLoading(false)
-      const serverContent = cachedContent ?? ''
       setDisplayName(cachedDisplayName ?? sessionName)
-      setSavedContent(serverContent)
-      setCurrentContent(serverContent)
     }
-  }, [cachedContent, cachedDisplayName, hasCachedData, sessionName, setCurrentContent, setSavedContent])
+  }, [cachedDisplayName, hasCachedData, sessionName])
 
   useEffect(() => {
     if (!hasCachedData) return
@@ -208,10 +215,40 @@ export function SpecEditor({
     }
 
     const serverContent = cachedContent ?? ''
+    const hasLocalEdits = currentContent !== savedContent
+    const serverChanged = serverContent !== savedContent
+
+    if (!serverChanged) {
+      if (!hasLocalEdits && ignoredExternalContent !== null) {
+        setIgnoredExternalContent(null)
+      }
+      if (pendingExternalContent === serverContent) {
+        setPendingExternalContent(null)
+      }
+      return
+    }
+
+    if (hasLocalEdits) {
+      if (ignoredExternalContent === serverContent) {
+        return
+      }
+
+      logger.info('[SpecEditor] Deferring external update while local edits are dirty')
+      setPendingExternalContent(previous => previous === serverContent ? previous : serverContent)
+      return
+    }
+
     logger.info('[SpecEditor] Updating content from server')
-    setCurrentContent(serverContent)
-    setSavedContent(serverContent)
-  }, [cachedContent, hasCachedData, setCurrentContent, setSavedContent])
+    applyServerContent(serverContent)
+  }, [
+    applyServerContent,
+    cachedContent,
+    currentContent,
+    hasCachedData,
+    ignoredExternalContent,
+    pendingExternalContent,
+    savedContent,
+  ])
 
   const ensureProjectFiles = projectFileIndex.ensureIndex
 
@@ -310,6 +347,22 @@ export function SpecEditor({
       window.setTimeout(() => setCopying(false), 1000)
     }
   }, [currentContent])
+
+  const handleReloadExternalContent = useCallback(() => {
+    if (pendingExternalContent === null) return
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = null
+      setSaving(false)
+    }
+    applyServerContent(pendingExternalContent)
+  }, [applyServerContent, pendingExternalContent])
+
+  const handleKeepLocalEdits = useCallback(() => {
+    if (pendingExternalContent === null) return
+    setIgnoredExternalContent(pendingExternalContent)
+    setPendingExternalContent(null)
+  }, [pendingExternalContent])
 
   const specTerminalId = useMemo(() => {
     const stableSpecId = selectedSession?.info.stable_id ?? sessionName
@@ -898,6 +951,61 @@ export function SpecEditor({
           )}
         </div>
       </div>
+
+      {pendingExternalContent !== null && (
+        <div
+          data-testid="spec-external-update-banner"
+          className="px-4 py-3 border-b border-border-subtle flex items-center justify-between gap-3"
+          style={{
+            backgroundColor: 'var(--color-accent-yellow-bg)',
+            borderColor: 'var(--color-accent-yellow-border)',
+          }}
+        >
+          <div className="min-w-0">
+            <div
+              style={{
+                ...typography.body,
+                color: 'var(--color-text-primary)',
+                fontWeight: 600,
+              }}
+            >
+              {t.specEditor.externalUpdateTitle}
+            </div>
+            <div
+              style={{
+                ...typography.caption,
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              {t.specEditor.externalUpdateMessage}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              data-testid="spec-external-update-keep"
+              onClick={handleKeepLocalEdits}
+              className="px-3 py-1.5 rounded border border-border-default text-text-secondary hover:bg-bg-hover"
+              style={{ fontSize: theme.fontSize.body }}
+            >
+              {t.specEditor.keepLocalEdits}
+            </button>
+            <button
+              type="button"
+              data-testid="spec-external-update-reload"
+              onClick={handleReloadExternalContent}
+              className="px-3 py-1.5 rounded font-medium hover:opacity-90"
+              style={{
+                fontSize: theme.fontSize.body,
+                backgroundColor: 'var(--color-accent-yellow)',
+                color: 'var(--color-accent-amber-text)',
+              }}
+            >
+              {t.specEditor.reloadBackendVersion}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-hidden relative">
         <div style={{ display: viewMode === 'edit' ? 'block' : 'none' }} className="h-full">

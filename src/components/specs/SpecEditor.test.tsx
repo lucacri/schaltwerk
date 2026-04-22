@@ -1365,4 +1365,122 @@ describe('SpecEditor review comment persistence', () => {
 
     expect(clearReviewCommentsMock).not.toHaveBeenCalled()
   })
+
+  it('applies backend updates immediately when the editor is clean', async () => {
+    specContentMock = {
+      content: 'Initial visible content',
+      displayName: 'Review Spec',
+      hasData: true,
+    }
+
+    const { rerender } = render(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('Initial visible content')
+    })
+
+    specContentMock = {
+      ...specContentMock,
+      content: 'Backend refreshed content',
+    }
+
+    rerender(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('Backend refreshed content')
+    })
+
+    expect(screen.queryByTestId('spec-external-update-banner')).toBeNull()
+  })
+
+  it('keeps dirty edits and reloads backend content only after explicit confirmation', async () => {
+    specContentMock = {
+      content: 'Initial visible content',
+      displayName: 'Review Spec',
+      hasData: true,
+    }
+
+    const { rerender } = render(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByTitle('Edit markdown'))
+    const editor = await screen.findByTestId('markdown-editor-input')
+    fireEvent.change(editor, { target: { value: 'Local unsaved draft' } })
+
+    specContentMock = {
+      ...specContentMock,
+      content: 'Backend refreshed content',
+    }
+
+    await act(async () => {
+      rerender(
+        <TestProviders>
+          <SpecEditor sessionName="review-spec" />
+        </TestProviders>
+      )
+    })
+
+    expect(screen.getByTestId('spec-external-update-banner')).toBeInTheDocument()
+
+    expect((screen.getByTestId('markdown-editor-input') as HTMLTextAreaElement).value).toBe('Local unsaved draft')
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('spec-external-update-reload'))
+    })
+
+    expect(screen.getByDisplayValue('Backend refreshed content')).toBeInTheDocument()
+
+    expect(screen.queryByTestId('spec-external-update-banner')).toBeNull()
+  })
+
+  it('lets the user keep dirty edits when dismissing an external update conflict', async () => {
+    specContentMock = {
+      content: 'Initial visible content',
+      displayName: 'Review Spec',
+      hasData: true,
+    }
+
+    const { rerender } = render(
+      <TestProviders>
+        <SpecEditor sessionName="review-spec" />
+      </TestProviders>
+    )
+
+    fireEvent.click(await screen.findByTitle('Edit markdown'))
+    const editor = await screen.findByTestId('markdown-editor-input')
+    fireEvent.change(editor, { target: { value: 'Local unsaved draft' } })
+
+    specContentMock = {
+      ...specContentMock,
+      content: 'Backend refreshed content',
+    }
+
+    await act(async () => {
+      rerender(
+        <TestProviders>
+          <SpecEditor sessionName="review-spec" />
+        </TestProviders>
+      )
+    })
+
+    expect(screen.getByTestId('spec-external-update-banner')).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('spec-external-update-keep'))
+    })
+
+    expect(screen.queryByTestId('spec-external-update-banner')).toBeNull()
+    expect((screen.getByTestId('markdown-editor-input') as HTMLTextAreaElement).value).toBe('Local unsaved draft')
+  })
 })

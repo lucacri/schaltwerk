@@ -1002,6 +1002,10 @@ export interface Translations {
     cancelReview: string
     sendReviewComments: string
     finishReview: string
+    externalUpdateTitle: string
+    externalUpdateMessage: string
+    reloadBackendVersion: string
+    keepLocalEdits: string
     implementationPlanHeading: string
     resumeReviewTitle: string
     resumeReviewMessage: string

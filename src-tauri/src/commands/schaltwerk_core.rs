@@ -4293,6 +4293,7 @@ pub async fn schaltwerk_core_update_session_state(
 
 #[tauri::command]
 pub async fn schaltwerk_core_update_spec_content(
+    app: tauri::AppHandle,
     name: String,
     content: String,
 ) -> Result<(), String> {
@@ -4301,10 +4302,34 @@ pub async fn schaltwerk_core_update_spec_content(
     let core = get_core_write().await?;
     let manager = core.session_manager();
 
-    manager
-        .update_spec_content(&name, &content)
-        .map_err(|e| format!("Failed to update spec content: {e}"))?;
+    persist_spec_content_with_refresh(
+        &name,
+        &content,
+        |session_id, next_content| {
+            manager
+                .update_spec_content(session_id, next_content)
+                .map_err(|e| format!("Failed to update spec content: {e}"))
+        },
+        || {
+            request_spec_sessions_refresh(Some(&app));
+        },
+    )?;
 
+    Ok(())
+}
+
+fn persist_spec_content_with_refresh<P, F>(
+    name: &str,
+    content: &str,
+    persist: P,
+    after_save: F,
+) -> Result<(), String>
+where
+    P: FnOnce(&str, &str) -> Result<(), String>,
+    F: FnOnce(),
+{
+    persist(name, content)?;
+    after_save();
     Ok(())
 }
 
@@ -5061,6 +5086,62 @@ mod tests {
             Some(&Value::String("group-1".to_string()))
         );
         assert_eq!(serialized.get("version_number"), Some(&Value::from(2)));
+    }
+
+    #[test]
+    fn persist_spec_content_with_refresh_requests_refresh_after_save() {
+        let refresh_count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let refresh_count_for_closure = refresh_count.clone();
+        let persisted = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let persisted_for_closure = persisted.clone();
+
+        persist_spec_content_with_refresh(
+            "spec-refresh",
+            "after",
+            move |session_id, next_content| {
+                persisted_for_closure
+                    .lock()
+                    .expect("persist log")
+                    .push(format!("{session_id}:{next_content}"));
+                Ok(())
+            },
+            move || {
+                refresh_count_for_closure.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            },
+        )
+        .expect("spec content should update");
+
+        assert_eq!(
+            persisted.lock().expect("persisted entries").as_slice(),
+            ["spec-refresh:after"],
+        );
+        assert_eq!(
+            refresh_count.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "refresh callback should run exactly once"
+        );
+    }
+
+    #[test]
+    fn persist_spec_content_with_refresh_skips_refresh_after_failure() {
+        let refresh_count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let refresh_count_for_closure = refresh_count.clone();
+
+        let result = persist_spec_content_with_refresh(
+            "spec-refresh",
+            "after",
+            |_session_id, _next_content| Err("write failed".to_string()),
+            move || {
+                refresh_count_for_closure.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            },
+        );
+
+        assert_eq!(result, Err("write failed".to_string()));
+        assert_eq!(
+            refresh_count.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "refresh callback should not run after a failed save"
+        );
     }
 }
 
