@@ -2175,6 +2175,121 @@ mod service_unified_tests {
     }
 
     #[test]
+    fn start_spec_session_accepts_display_name_identifier() {
+        let (manager, temp_dir) = create_test_session_manager();
+        init_git_repo(&temp_dir.path().join("repo"));
+
+        let spec = manager
+            .create_spec_session("canonical-start-name", "Content")
+            .unwrap();
+        manager
+            .db_manager
+            .update_spec_display_name(&spec.id, "friendly-start-name")
+            .unwrap();
+
+        let session = manager
+            .start_spec_session("friendly-start-name", None, None, None)
+            .unwrap();
+
+        assert!(session.name.starts_with("canonical-start-name"));
+        assert!(manager.get_spec("canonical-start-name").is_err());
+    }
+
+    #[test]
+    fn get_spec_accepts_display_name_identifier() {
+        let (manager, temp_dir) = create_test_session_manager();
+        init_git_repo(&temp_dir.path().join("repo"));
+
+        let spec = manager
+            .create_spec_session("canonical-spec-name", "Spec body")
+            .unwrap();
+        manager
+            .db_manager
+            .update_spec_display_name(&spec.id, "friendly-name")
+            .unwrap();
+
+        let fetched = manager.get_spec("friendly-name").unwrap();
+        assert_eq!(fetched.id, spec.id);
+        assert_eq!(fetched.name, "canonical-spec-name");
+    }
+
+    #[test]
+    #[serial]
+    fn update_spec_content_by_display_name_invalidates_canonical_cache_key() {
+        crate::domains::sessions::cache::SessionCacheManager::clear_all_caches();
+
+        let (manager, temp_dir) = create_test_session_manager();
+        init_git_repo(&temp_dir.path().join("repo"));
+        let spec = manager
+            .create_spec_session("canonical-cache-name", "Original content")
+            .unwrap();
+        manager
+            .db_manager
+            .update_spec_display_name(&spec.id, "friendly-cache-name")
+            .unwrap();
+        crate::domains::sessions::cache::cache_spec_content(
+            &manager.repo_path,
+            &spec.name,
+            (Some("stale cached content".to_string()), None),
+        );
+
+        manager
+            .update_spec_content("friendly-cache-name", "Updated content")
+            .unwrap();
+
+        assert!(
+            crate::domains::sessions::cache::get_cached_spec_content(
+                &manager.repo_path,
+                &spec.name
+            )
+            .is_none()
+        );
+        let updated = manager.get_spec(&spec.name).unwrap();
+        assert_eq!(updated.content, "Updated content");
+
+        crate::domains::sessions::cache::SessionCacheManager::clear_all_caches();
+    }
+
+    #[test]
+    #[serial]
+    fn archive_spec_session_by_display_name_invalidates_canonical_cache_key() {
+        crate::domains::sessions::cache::SessionCacheManager::clear_all_caches();
+
+        let (manager, temp_dir) = create_test_session_manager();
+        init_git_repo(&temp_dir.path().join("repo"));
+        let spec = manager
+            .create_spec_session("canonical-archive-name", "Archive me")
+            .unwrap();
+        manager
+            .db_manager
+            .update_spec_display_name(&spec.id, "friendly-archive-name")
+            .unwrap();
+        crate::domains::sessions::cache::cache_spec_content(
+            &manager.repo_path,
+            &spec.name,
+            (Some("stale cached content".to_string()), None),
+        );
+
+        manager
+            .archive_spec_session("friendly-archive-name")
+            .unwrap();
+
+        assert!(
+            crate::domains::sessions::cache::get_cached_spec_content(
+                &manager.repo_path,
+                &spec.name
+            )
+            .is_none()
+        );
+        assert!(manager.get_spec(&spec.name).is_err());
+        let archived = manager.list_archived_specs().unwrap();
+        assert_eq!(archived.len(), 1);
+        assert_eq!(archived[0].session_name, spec.name);
+
+        crate::domains::sessions::cache::SessionCacheManager::clear_all_caches();
+    }
+
+    #[test]
     fn test_unsupported_agent_error_handling() {
         let (manager, temp_dir) = create_test_session_manager();
         let session = create_test_session(&temp_dir, "unsupported-agent", "0");
@@ -5004,9 +5119,16 @@ impl SessionManager {
 
         // spec fulfilled -> delete
         self.db_manager.delete_spec(&spec.id)?;
-        crate::domains::sessions::cache::invalidate_spec_content(&self.repo_path, &spec.name);
+        self.invalidate_spec_content_aliases(spec_name, &spec.name);
 
         Ok(session)
+    }
+
+    fn invalidate_spec_content_aliases(&self, lookup_name: &str, canonical_name: &str) {
+        crate::domains::sessions::cache::invalidate_spec_content(&self.repo_path, canonical_name);
+        if lookup_name != canonical_name {
+            crate::domains::sessions::cache::invalidate_spec_content(&self.repo_path, lookup_name);
+        }
     }
 
     pub fn update_session_state(&self, session_name: &str, state: SessionState) -> Result<()> {
@@ -5081,6 +5203,7 @@ impl SessionManager {
 
         self.db_manager
             .update_spec_content_by_id(&spec.id, content)?;
+        self.invalidate_spec_content_aliases(session_name, &spec.name);
         info!(
             "SessionCore: Successfully updated spec content in database for session '{session_name}'"
         );
@@ -5106,6 +5229,7 @@ impl SessionManager {
 
         self.db_manager
             .update_spec_content_by_id(&spec.id, &combined)?;
+        self.invalidate_spec_content_aliases(session_name, &spec.name);
         info!(
             "SessionCore: Successfully appended spec content in database for session '{session_name}'"
         );
@@ -5159,7 +5283,7 @@ impl SessionManager {
 
         // Physically remove spec from DB to declutter
         self.db_manager.delete_spec(&spec.id)?;
-        crate::domains::sessions::cache::invalidate_spec_content(&self.repo_path, &spec.name);
+        self.invalidate_spec_content_aliases(name, &spec.name);
 
         // Enforce archive limit for this repository
         self.db_manager.db.enforce_archive_limit(&self.repo_path)?;

@@ -1,7 +1,7 @@
 use super::connection::Database;
 use crate::domains::sessions::entity::{Spec, SpecStage, TaskStageWorkflow, TaskVariant};
 use crate::infrastructure::database::timestamps::utc_from_epoch_seconds_lossy;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 use rusqlite::{Row, params};
 use std::path::{Path, PathBuf};
@@ -90,7 +90,7 @@ impl SpecMethods for Database {
 
     fn get_spec_by_name(&self, repo_path: &Path, name: &str) -> Result<Spec> {
         let conn = self.get_conn()?;
-        let repo_str = repo_path.to_string_lossy();
+        let repo_str = repo_path.to_string_lossy().into_owned();
         let mut stmt = conn.prepare(
             "SELECT id, name, display_name,
                     epic_id, issue_number, issue_url, pr_number, pr_url,
@@ -101,7 +101,7 @@ impl SpecMethods for Database {
              WHERE repository_path = ?1 AND name = ?2",
         )?;
 
-        match stmt.query_row(params![repo_str, name], row_to_spec) {
+        match stmt.query_row(params![repo_str.as_str(), name], row_to_spec) {
             Ok(spec) => Ok(spec),
             Err(rusqlite::Error::QueryReturnedNoRows) => {
                 // External callers (MCP bridge, clarifier wrapper, agent prompts) often
@@ -119,13 +119,21 @@ impl SpecMethods for Database {
                      WHERE repository_path = ?1 AND display_name = ?2
                      LIMIT 2",
                 )?;
-                let mut rows =
-                    fallback_stmt.query_map(params![repo_str, name], row_to_spec)?;
-                match (rows.next(), rows.next()) {
-                    (Some(Ok(spec)), None) => Ok(spec),
-                    (Some(Ok(_)), Some(_)) => Err(rusqlite::Error::QueryReturnedNoRows.into()),
-                    (Some(Err(e)), _) => Err(e.into()),
-                    _ => Err(rusqlite::Error::QueryReturnedNoRows.into()),
+                let mut rows = fallback_stmt.query_map(params![repo_str.as_str(), name], row_to_spec)?;
+                let mut matches = Vec::new();
+                for row in &mut rows {
+                    matches.push(row?);
+                    if matches.len() > 1 {
+                        break;
+                    }
+                }
+
+                match matches.len() {
+                    0 => Err(rusqlite::Error::QueryReturnedNoRows.into()),
+                    1 => Ok(matches.pop().expect("single match must exist")),
+                    _ => Err(anyhow!(
+                        "Ambiguous spec identifier '{name}' matched multiple display names"
+                    )),
                 }
             }
             Err(e) => Err(e.into()),
@@ -756,7 +764,7 @@ mod tests {
     }
 
     #[test]
-    fn get_spec_by_name_returns_error_when_display_name_is_ambiguous() {
+    fn get_spec_by_name_returns_clear_error_when_display_name_is_ambiguous() {
         let db = create_test_database();
         db.create_spec(&make_spec_with_display(
             "s1",
@@ -773,11 +781,12 @@ mod tests {
         ))
         .unwrap();
 
-        let result = db.get_spec_by_name(Path::new("/repo"), "duplicate-display");
-        assert!(
-            result.is_err(),
-            "ambiguous display_name must not silently pick a winner"
-        );
+        let error = db
+            .get_spec_by_name(Path::new("/repo"), "duplicate-display")
+            .expect_err("ambiguous display_name must not silently pick a winner")
+            .to_string();
+        assert!(error.contains("Ambiguous spec identifier"));
+        assert!(error.contains("duplicate-display"));
     }
 
     #[test]
