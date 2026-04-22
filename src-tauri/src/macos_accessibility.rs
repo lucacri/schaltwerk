@@ -48,13 +48,15 @@ mod imp {
     use objc2::runtime::{AnyClass, AnyObject, Bool, NSObject};
     use objc2::{ClassType, define_class, msg_send, sel};
     use objc2_app_kit::{NSApplication, NSObjectNSAccessibility};
-    use objc2_foundation::{MainThreadMarker, NSArray, NSString};
+    use objc2_foundation::{MainThreadMarker, NSArray, NSNumber, NSString};
     use objc2_web_kit::WKWebView;
 
     pub(super) const MANUAL: &str = "AXManualAccessibility";
     pub(super) const ENHANCED: &str = "AXEnhancedUserInterface";
 
     static INJECTED: AtomicBool = AtomicBool::new(false);
+    static MANUAL_ENABLED: AtomicBool = AtomicBool::new(false);
+    static ENHANCED_ENABLED: AtomicBool = AtomicBool::new(false);
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub(super) enum WebViewAccessibilityPrimeResult {
@@ -74,6 +76,45 @@ mod imp {
             }
         }
         out
+    }
+
+    fn activation_attribute_state(name: &str) -> Option<&'static AtomicBool> {
+        match name {
+            MANUAL => Some(&MANUAL_ENABLED),
+            ENHANCED => Some(&ENHANCED_ENABLED),
+            _ => None,
+        }
+    }
+
+    pub(super) fn activation_attribute_value(name: &str) -> Option<bool> {
+        activation_attribute_state(name).map(|state| state.load(Ordering::Acquire))
+    }
+
+    pub(super) fn record_activation_attribute_state(name: &str, enabled: bool) {
+        if let Some(state) = activation_attribute_state(name) {
+            state.store(enabled, Ordering::Release);
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn reset_activation_attribute_state_for_tests() {
+        MANUAL_ENABLED.store(false, Ordering::Release);
+        ENHANCED_ENABLED.store(false, Ordering::Release);
+    }
+
+    fn bool_from_activation_attribute_value(value: Option<&AnyObject>) -> bool {
+        if let Some(number) = value.and_then(|value| value.downcast_ref::<NSNumber>()) {
+            return number.as_bool();
+        }
+
+        if value.is_some() {
+            log::warn!(
+                "[macOS a11y] activation attribute set with non-NSNumber value; assuming enabled"
+            );
+            return true;
+        }
+
+        false
     }
 
     define_class!(
@@ -100,6 +141,21 @@ mod imp {
                 NSArray::from_slice(&refs)
             }
 
+            #[unsafe(method(accessibilityAttributeValue:))]
+            fn lucode_accessibility_attribute_value(
+                &self,
+                attribute: *const NSString,
+            ) -> *mut AnyObject {
+                if let Some(name) = nsstring_to_str(attribute)
+                    && let Some(enabled) = activation_attribute_value(&name)
+                {
+                    return Retained::into_raw(NSNumber::new_bool(enabled).into());
+                }
+                let value: Option<Retained<AnyObject>> =
+                    unsafe { msg_send![super(self), accessibilityAttributeValue: attribute] };
+                value.map(Retained::into_raw).unwrap_or(std::ptr::null_mut())
+            }
+
             #[unsafe(method(accessibilityIsAttributeSettable:))]
             fn lucode_accessibility_is_attribute_settable(
                 &self,
@@ -121,13 +177,15 @@ mod imp {
             #[unsafe(method(accessibilitySetValue:forAttribute:))]
             fn lucode_accessibility_set_value_for_attribute(
                 &self,
-                value: *mut AnyObject,
+                value: Option<&AnyObject>,
                 attribute: *const NSString,
             ) {
                 if let Some(name) = nsstring_to_str(attribute)
                     && is_ax_activation_attribute(&name)
                 {
-                    log::info!("[macOS a11y] accepted {name} set from AX client");
+                    let enabled = bool_from_activation_attribute_value(value);
+                    record_activation_attribute_state(&name, enabled);
+                    log::info!("[macOS a11y] accepted {name}={enabled} set from AX client");
                     return;
                 }
                 unsafe {
@@ -200,6 +258,7 @@ mod imp {
         }
 
         let selectors = [
+            sel!(accessibilityAttributeValue:),
             sel!(accessibilityAttributeNames),
             sel!(accessibilityIsAttributeSettable:),
             sel!(accessibilitySetValue:forAttribute:),
@@ -402,7 +461,7 @@ mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn method_source_subclass_has_the_three_overrides() {
+    fn method_source_subclass_has_the_four_overrides() {
         use objc2::ClassType;
         use objc2::runtime::AnyClass;
         use objc2::sel;
@@ -421,6 +480,7 @@ mod tests {
         );
 
         let selectors = [
+            sel!(accessibilityAttributeValue:),
             sel!(accessibilityAttributeNames),
             sel!(accessibilityIsAttributeSettable:),
             sel!(accessibilitySetValue:forAttribute:),
@@ -443,6 +503,34 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn activation_attribute_values_reflect_recorded_state() {
+        imp::reset_activation_attribute_state_for_tests();
+
+        assert_eq!(
+            imp::activation_attribute_value("AXEnhancedUserInterface"),
+            Some(false)
+        );
+        assert_eq!(
+            imp::activation_attribute_value("AXManualAccessibility"),
+            Some(false)
+        );
+        assert_eq!(imp::activation_attribute_value("AXRole"), None);
+
+        imp::record_activation_attribute_state("AXEnhancedUserInterface", true);
+        imp::record_activation_attribute_state("AXManualAccessibility", true);
+
+        assert_eq!(
+            imp::activation_attribute_value("AXEnhancedUserInterface"),
+            Some(true)
+        );
+        assert_eq!(
+            imp::activation_attribute_value("AXManualAccessibility"),
+            Some(true)
+        );
     }
 
     #[cfg(target_os = "macos")]
