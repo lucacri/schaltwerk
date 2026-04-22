@@ -101,8 +101,35 @@ impl SpecMethods for Database {
              WHERE repository_path = ?1 AND name = ?2",
         )?;
 
-        let spec = stmt.query_row(params![repo_str, name], row_to_spec)?;
-        Ok(spec)
+        match stmt.query_row(params![repo_str, name], row_to_spec) {
+            Ok(spec) => Ok(spec),
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                // External callers (MCP bridge, clarifier wrapper, agent prompts) often
+                // hand us a display_name where the canonical key is `name`. Fall back to
+                // display_name but only when unambiguous; display_name has no UNIQUE
+                // constraint so multiple matches must surface as not-found rather than
+                // silently binding to an arbitrary row.
+                let mut fallback_stmt = conn.prepare(
+                    "SELECT id, name, display_name,
+                            epic_id, issue_number, issue_url, pr_number, pr_url,
+                            improve_plan_round_id, repository_path, repository_name, content,
+                            implementation_plan, stage, variant, ready_session_id, ready_branch, base_branch,
+                            attention_required, clarification_started, created_at, updated_at
+                     FROM specs
+                     WHERE repository_path = ?1 AND display_name = ?2
+                     LIMIT 2",
+                )?;
+                let mut rows =
+                    fallback_stmt.query_map(params![repo_str, name], row_to_spec)?;
+                match (rows.next(), rows.next()) {
+                    (Some(Ok(spec)), None) => Ok(spec),
+                    (Some(Ok(_)), Some(_)) => Err(rusqlite::Error::QueryReturnedNoRows.into()),
+                    (Some(Err(e)), _) => Err(e.into()),
+                    _ => Err(rusqlite::Error::QueryReturnedNoRows.into()),
+                }
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     fn get_spec_by_id(&self, id: &str) -> Result<Spec> {
@@ -672,6 +699,103 @@ mod tests {
             .unwrap();
         assert_eq!(a.id, "s1");
         assert_eq!(b.id, "s2");
+    }
+
+    fn make_spec_with_display(
+        id: &str,
+        name: &str,
+        display_name: Option<&str>,
+        repo_path: &str,
+    ) -> Spec {
+        let mut spec = make_spec(id, name, repo_path);
+        spec.display_name = display_name.map(|s| s.to_string());
+        spec
+    }
+
+    #[test]
+    fn get_spec_by_name_falls_back_to_display_name() {
+        let db = create_test_database();
+        db.create_spec(&make_spec_with_display(
+            "s1",
+            "the_agent_terminal_now",
+            Some("fix-tmux-scrollback"),
+            "/repo",
+        ))
+        .unwrap();
+
+        let fetched = db
+            .get_spec_by_name(Path::new("/repo"), "fix-tmux-scrollback")
+            .expect("display_name lookup should fall back");
+        assert_eq!(fetched.id, "s1");
+        assert_eq!(fetched.name, "the_agent_terminal_now");
+        assert_eq!(fetched.display_name.as_deref(), Some("fix-tmux-scrollback"));
+    }
+
+    #[test]
+    fn get_spec_by_name_prefers_name_over_display_name() {
+        let db = create_test_database();
+        db.create_spec(&make_spec_with_display(
+            "owner",
+            "shared-slug",
+            Some("shared-slug-display"),
+            "/repo",
+        ))
+        .unwrap();
+        db.create_spec(&make_spec_with_display(
+            "aliased",
+            "other-slug",
+            Some("shared-slug"),
+            "/repo",
+        ))
+        .unwrap();
+
+        let fetched = db
+            .get_spec_by_name(Path::new("/repo"), "shared-slug")
+            .expect("name lookup should win");
+        assert_eq!(fetched.id, "owner");
+    }
+
+    #[test]
+    fn get_spec_by_name_returns_error_when_display_name_is_ambiguous() {
+        let db = create_test_database();
+        db.create_spec(&make_spec_with_display(
+            "s1",
+            "slug-one",
+            Some("duplicate-display"),
+            "/repo",
+        ))
+        .unwrap();
+        db.create_spec(&make_spec_with_display(
+            "s2",
+            "slug-two",
+            Some("duplicate-display"),
+            "/repo",
+        ))
+        .unwrap();
+
+        let result = db.get_spec_by_name(Path::new("/repo"), "duplicate-display");
+        assert!(
+            result.is_err(),
+            "ambiguous display_name must not silently pick a winner"
+        );
+    }
+
+    #[test]
+    fn get_spec_by_name_ignores_display_name_in_other_repo() {
+        let db = create_test_database();
+        db.create_spec(&make_spec_with_display(
+            "s1",
+            "real-name",
+            Some("shared-display"),
+            "/repo-a",
+        ))
+        .unwrap();
+
+        let result = db.get_spec_by_name(Path::new("/repo-b"), "shared-display");
+        assert!(
+            result.is_err(),
+            "display_name fallback must stay scoped to repository_path"
+        );
     }
 
     #[test]

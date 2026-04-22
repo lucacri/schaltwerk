@@ -5159,7 +5159,7 @@ impl SessionManager {
 
         // Physically remove spec from DB to declutter
         self.db_manager.delete_spec(&spec.id)?;
-        crate::domains::sessions::cache::invalidate_spec_content(&self.repo_path, name);
+        crate::domains::sessions::cache::invalidate_spec_content(&self.repo_path, &spec.name);
 
         // Enforce archive limit for this repository
         self.db_manager.db.enforce_archive_limit(&self.repo_path)?;

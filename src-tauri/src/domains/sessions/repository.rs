@@ -509,13 +509,13 @@ impl SessionDbManager {
                 {
                     // Try the specs table as a fallback
                     if let Ok(spec) = self.db.get_spec_by_name(&self.repo_path, name) {
-                        let result = (Some(spec.content.clone()), None, SessionState::Spec);
+                        let spec_content = spec.content.clone();
                         crate::domains::sessions::cache::cache_spec_content(
                             &self.repo_path,
-                            name,
+                            &spec.name,
                             (Some(spec.content), None),
                         );
-                        return Ok((result.0.clone(), result.1.clone()));
+                        return Ok((Some(spec_content), None));
                     }
 
                     warn!(

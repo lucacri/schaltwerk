@@ -2161,3 +2161,77 @@ fn test_session_name_conflict_with_empty_branch_prefix() {
         "Branch should match session name when prefix is empty"
     );
 }
+
+#[test]
+fn test_spec_lookup_accepts_display_name_via_service() {
+    use crate::infrastructure::database::SpecMethods;
+
+    let env = TestEnvironment::new().unwrap();
+    let manager = env.get_session_manager().unwrap();
+    let db = env.get_database().unwrap();
+
+    let spec = manager
+        .create_spec_session("the-agent-terminal-now", "initial body")
+        .unwrap();
+    db.update_spec_display_name(&spec.id, "fix-tmux-scrollback")
+        .unwrap();
+
+    let via_display = manager
+        .get_spec("fix-tmux-scrollback")
+        .expect("service lookup must accept display_name");
+    assert_eq!(via_display.id, spec.id);
+    assert_eq!(via_display.name, "the-agent-terminal-now");
+
+    manager
+        .update_spec_content("fix-tmux-scrollback", "revised body")
+        .expect("update via display_name should succeed");
+    manager
+        .append_spec_content("fix-tmux-scrollback", "appended line")
+        .expect("append via display_name should succeed");
+
+    let after = manager.get_spec("fix-tmux-scrollback").unwrap();
+    assert_eq!(after.content, "revised body\nappended line");
+}
+
+#[test]
+fn test_archive_spec_via_display_name_invalidates_canonical_cache() {
+    use crate::infrastructure::database::SpecMethods;
+
+    let env = TestEnvironment::new().unwrap();
+    let manager = env.get_session_manager().unwrap();
+    let db = env.get_database().unwrap();
+
+    let spec = manager
+        .create_spec_session("canonical-slug", "hello")
+        .unwrap();
+    db.update_spec_display_name(&spec.id, "friendly-alias")
+        .unwrap();
+
+    // `create_spec_session` primes the content cache under the canonical name; confirm
+    // the entry exists before archiving by display_name.
+    assert!(
+        crate::domains::sessions::cache::get_cached_spec_content(
+            &env.repo_path,
+            "canonical-slug"
+        )
+        .is_some(),
+        "canonical cache entry should be primed after create_spec_session"
+    );
+
+    manager
+        .archive_spec_session("friendly-alias")
+        .expect("archive by display_name should succeed");
+
+    assert!(
+        crate::domains::sessions::cache::get_cached_spec_content(
+            &env.repo_path,
+            "canonical-slug"
+        )
+        .is_none(),
+        "canonical cache entry must be invalidated when archiving via display_name"
+    );
+
+    let archived = manager.list_archived_specs().unwrap();
+    assert_eq!(archived.len(), 1);
+    assert_eq!(archived[0].session_name, "canonical-slug");
+}
