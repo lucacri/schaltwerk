@@ -256,6 +256,16 @@ pub struct GenerationSettings {
     #[serde(default)]
     pub cli_args: Option<String>,
     #[serde(default)]
+    pub name_agent: Option<String>,
+    #[serde(default)]
+    pub commit_agent: Option<String>,
+    #[serde(default)]
+    pub pr_writeback_agent: Option<String>,
+    #[serde(default)]
+    pub consolidation_judge_agent: Option<String>,
+    #[serde(default)]
+    pub version_group_rename_agent: Option<String>,
+    #[serde(default)]
     pub name_prompt: Option<String>,
     #[serde(default)]
     pub commit_prompt: Option<String>,

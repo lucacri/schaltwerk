@@ -1134,6 +1134,11 @@ mod tests {
             agent: Some("gemini".to_string()),
             model: None,
             cli_args: Some("--model gemini-2.0-flash".to_string()),
+            name_agent: None,
+            commit_agent: None,
+            pr_writeback_agent: None,
+            consolidation_judge_agent: None,
+            version_group_rename_agent: None,
             name_prompt: None,
             commit_prompt: None,
             consolidation_prompt: None,
@@ -1170,6 +1175,11 @@ mod tests {
             agent: None,
             model: None,
             cli_args: None,
+            name_agent: Some("gemini".to_string()),
+            commit_agent: Some("codex".to_string()),
+            pr_writeback_agent: Some("claude".to_string()),
+            consolidation_judge_agent: Some("opencode".to_string()),
+            version_group_rename_agent: Some("kilocode".to_string()),
             name_prompt: Some("Custom: {task}".to_string()),
             commit_prompt: Some("Custom: {commits}\n{files}".to_string()),
             consolidation_prompt: Some("Review these sessions:\n{sessionList}".to_string()),
@@ -1187,6 +1197,17 @@ mod tests {
             .set_generation_settings(settings)
             .expect("should save");
         let loaded = service.get_generation_settings();
+        assert_eq!(loaded.name_agent, Some("gemini".to_string()));
+        assert_eq!(loaded.commit_agent, Some("codex".to_string()));
+        assert_eq!(loaded.pr_writeback_agent, Some("claude".to_string()));
+        assert_eq!(
+            loaded.consolidation_judge_agent,
+            Some("opencode".to_string())
+        );
+        assert_eq!(
+            loaded.version_group_rename_agent,
+            Some("kilocode".to_string())
+        );
         assert_eq!(loaded.name_prompt, Some("Custom: {task}".to_string()));
         assert_eq!(
             loaded.commit_prompt,

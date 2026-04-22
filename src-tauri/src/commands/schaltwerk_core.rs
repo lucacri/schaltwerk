@@ -868,8 +868,93 @@ mod consolidation_default_favorite_tests {
     }
 }
 
+#[cfg(test)]
+mod generation_agent_resolution_tests {
+    use super::{
+        GenerationAction, resolve_generation_agent_for_action, resolve_generation_cli_args,
+    };
+
+    fn settings() -> lucode::domains::settings::GenerationSettings {
+        lucode::domains::settings::GenerationSettings {
+            agent: None,
+            model: None,
+            cli_args: None,
+            name_agent: None,
+            commit_agent: None,
+            pr_writeback_agent: None,
+            consolidation_judge_agent: None,
+            version_group_rename_agent: None,
+            name_prompt: None,
+            commit_prompt: None,
+            consolidation_prompt: None,
+            review_pr_prompt: None,
+            plan_issue_prompt: None,
+            issue_prompt: None,
+            pr_prompt: None,
+            autonomy_prompt_template: None,
+            force_restart_prompt_template: None,
+            plan_candidate_prompt_template: None,
+            plan_judge_prompt_template: None,
+            judge_prompt_template: None,
+        }
+    }
+
+    #[test]
+    fn generation_agent_defaults_to_gemini_when_unset() {
+        assert_eq!(
+            resolve_generation_agent_for_action(&settings(), GenerationAction::SessionName),
+            "gemini"
+        );
+    }
+
+    #[test]
+    fn generation_agent_uses_global_setting_when_action_override_is_unset() {
+        let mut generation = settings();
+        generation.agent = Some("codex".to_string());
+
+        assert_eq!(
+            resolve_generation_agent_for_action(&generation, GenerationAction::CommitMessage),
+            "codex"
+        );
+    }
+
+    #[test]
+    fn generation_agent_prefers_action_override_over_global_setting() {
+        let mut generation = settings();
+        generation.agent = Some("gemini".to_string());
+        generation.version_group_rename_agent = Some("claude".to_string());
+
+        assert_eq!(
+            resolve_generation_agent_for_action(&generation, GenerationAction::VersionGroupRename),
+            "claude"
+        );
+    }
+
+    #[test]
+    fn generation_cli_args_apply_when_resolved_agent_matches_global_agent() {
+        let mut generation = settings();
+        generation.agent = Some("claude".to_string());
+        generation.cli_args = Some("--model haiku".to_string());
+
+        assert_eq!(
+            resolve_generation_cli_args(&generation, "claude", ""),
+            "--model haiku"
+        );
+    }
+
+    #[test]
+    fn generation_cli_args_do_not_apply_when_action_override_changes_agent() {
+        let mut generation = settings();
+        generation.agent = Some("gemini".to_string());
+        generation.commit_agent = Some("claude".to_string());
+        generation.cli_args = Some("--model gemini-2.0-flash".to_string());
+
+        assert_eq!(resolve_generation_cli_args(&generation, "claude", ""), "");
+    }
+}
+
 async fn resolve_generation_agent_and_args(
-    fallback_agent: &str,
+    action: GenerationAction,
 ) -> (
     String,
     Vec<(String, String)>,
@@ -885,25 +970,12 @@ async fn resolve_generation_agent_and_args(
         lucode::domains::settings::GenerationSettings::default()
     };
 
-    let agent = generation_settings
-        .agent
-        .filter(|a| !a.is_empty())
-        .unwrap_or_else(|| fallback_agent.to_string());
+    let agent = resolve_generation_agent_for_action(&generation_settings, action);
 
     let (env_vars, mut cli_args, binary_path, preferences) =
         get_agent_env_and_cli_args_async(&agent).await;
 
-    if let Some(gen_cli_args) = generation_settings
-        .cli_args
-        .as_deref()
-        .filter(|a| !a.is_empty())
-    {
-        if cli_args.is_empty() {
-            cli_args = gen_cli_args.to_string();
-        } else {
-            cli_args = format!("{gen_cli_args} {cli_args}");
-        }
-    }
+    cli_args = resolve_generation_cli_args(&generation_settings, &agent, &cli_args);
 
     (
         agent,
@@ -916,13 +988,70 @@ async fn resolve_generation_agent_and_args(
     )
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GenerationAction {
+    SessionName,
+    CommitMessage,
+    PrWriteback,
+    ConsolidationJudge,
+    VersionGroupRename,
+}
+
+pub(crate) fn resolve_generation_agent_for_action(
+    settings: &lucode::domains::settings::GenerationSettings,
+    action: GenerationAction,
+) -> String {
+    let action_agent = match action {
+        GenerationAction::SessionName => settings.name_agent.as_deref(),
+        GenerationAction::CommitMessage => settings.commit_agent.as_deref(),
+        GenerationAction::PrWriteback => settings.pr_writeback_agent.as_deref(),
+        GenerationAction::ConsolidationJudge => settings.consolidation_judge_agent.as_deref(),
+        GenerationAction::VersionGroupRename => settings.version_group_rename_agent.as_deref(),
+    };
+
+    action_agent
+        .map(str::trim)
+        .filter(|agent| !agent.is_empty())
+        .unwrap_or(resolve_generation_global_agent(settings))
+        .to_string()
+}
+
+fn resolve_generation_global_agent(
+    settings: &lucode::domains::settings::GenerationSettings,
+) -> &str {
+    settings
+        .agent
+        .as_deref()
+        .map(str::trim)
+        .filter(|agent| !agent.is_empty())
+        .unwrap_or("gemini")
+}
+
+fn resolve_generation_cli_args(
+    settings: &lucode::domains::settings::GenerationSettings,
+    resolved_agent: &str,
+    base_cli_args: &str,
+) -> String {
+    if resolved_agent != resolve_generation_global_agent(settings) {
+        return base_cli_args.to_string();
+    }
+
+    let Some(generation_cli_args) = settings.cli_args.as_deref().filter(|value| !value.is_empty())
+    else {
+        return base_cli_args.to_string();
+    };
+
+    if base_cli_args.is_empty() {
+        generation_cli_args.to_string()
+    } else {
+        format!("{generation_cli_args} {base_cli_args}")
+    }
+}
+
 fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: String) {
     tokio::spawn(async move {
         let session_name_clone = session_name.clone();
-        let (
-            (session_id, worktree_path, repo_path, current_branch, agent, initial_prompt),
-            db_clone,
-        ) = {
+        let ((session_id, worktree_path, repo_path, current_branch, initial_prompt), db_clone) = {
             let core = match get_core_read().await {
                 Ok(c) => c,
                 Err(e) => {
@@ -948,19 +1077,12 @@ fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: Str
                 return;
             }
 
-            let agent = session.original_agent_type.clone().unwrap_or_else(|| {
-                core.db
-                    .get_agent_type()
-                    .unwrap_or_else(|_| "claude".to_string())
-            });
-
             (
                 (
                     session.id.clone(),
                     session.worktree_path.clone(),
                     session.repository_path.clone(),
                     session.branch.clone(),
-                    agent,
                     session.initial_prompt.clone(),
                 ),
                 core.db.clone(),
@@ -985,7 +1107,7 @@ fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: Str
         );
 
         let (agent, mut env_vars, cli_args, binary_path, _, custom_name_prompt, _) =
-            resolve_generation_agent_and_args(&agent).await;
+            resolve_generation_agent_and_args(GenerationAction::SessionName).await;
 
         if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
             for (key, value) in project_env_vars {
@@ -1050,7 +1172,6 @@ fn spawn_spec_name_generation(
     spec_id: String,
     spec_name: String,
     spec_content: String,
-    agent: String,
 ) {
     tokio::spawn(async move {
         let (db_clone, repo_path) = match get_core_read().await {
@@ -1062,7 +1183,7 @@ fn spawn_spec_name_generation(
         };
 
         let (agent, mut env_vars, cli_args, binary_path, _, custom_name_prompt, _) =
-            resolve_generation_agent_and_args(&agent).await;
+            resolve_generation_agent_and_args(GenerationAction::SessionName).await;
 
         if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
             env_vars.extend(project_env_vars);
@@ -1113,7 +1234,7 @@ fn should_spawn_spec_name_generation(user_edited_name: Option<bool>) -> bool {
 #[tauri::command]
 pub async fn schaltwerk_core_generate_session_name(
     content: String,
-    agent_type: Option<String>,
+    _agent_type: Option<String>,
 ) -> Result<Option<String>, String> {
     let (db_clone, repo_path) = match get_core_read().await {
         Ok(core) => (core.db.clone(), core.repo_path.clone()),
@@ -1122,14 +1243,8 @@ pub async fn schaltwerk_core_generate_session_name(
         }
     };
 
-    let fallback_agent = agent_type.unwrap_or_else(|| {
-        db_clone
-            .get_agent_type()
-            .unwrap_or_else(|_| "claude".to_string())
-    });
-
     let (agent, mut env_vars, cli_args, binary_path, _, custom_name_prompt, _) =
-        resolve_generation_agent_and_args(&fallback_agent).await;
+        resolve_generation_agent_and_args(GenerationAction::SessionName).await;
 
     if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
         env_vars.extend(project_env_vars);
@@ -1176,12 +1291,6 @@ pub async fn schaltwerk_core_generate_commit_message(
 
     let worktree_path = session.worktree_path.clone();
     let parent_branch = session.parent_branch.clone();
-    let fallback_agent_type = session.original_agent_type.clone().unwrap_or_else(|| {
-        db_clone
-            .get_agent_type()
-            .unwrap_or_else(|_| "claude".to_string())
-    });
-
     let commit_subjects = tokio::task::spawn_blocking({
         let wt = worktree_path.clone();
         let parent = parent_branch.clone();
@@ -1261,7 +1370,7 @@ pub async fn schaltwerk_core_generate_commit_message(
     }
 
     let (agent_type_str, mut env_vars, cli_args, binary_path, _, _, custom_commit_prompt) =
-        resolve_generation_agent_and_args(&fallback_agent_type).await;
+        resolve_generation_agent_and_args(GenerationAction::CommitMessage).await;
 
     if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
         env_vars.extend(project_env_vars);
@@ -1306,12 +1415,6 @@ pub async fn forge_generate_writeback(
 
     let worktree_path = session.worktree_path.clone();
     let parent_branch = session.parent_branch.clone();
-    let fallback_agent_type = session.original_agent_type.clone().unwrap_or_else(|| {
-        db_clone
-            .get_agent_type()
-            .unwrap_or_else(|_| "claude".to_string())
-    });
-
     let commit_subjects = tokio::task::spawn_blocking({
         let wt = worktree_path.clone();
         let parent = parent_branch.clone();
@@ -1388,7 +1491,7 @@ pub async fn forge_generate_writeback(
     .map_err(|e| format!("Failed to read diff stats: {e}"))?;
 
     let (agent_type_str, mut env_vars, cli_args, binary_path, _, _, _) =
-        resolve_generation_agent_and_args(&fallback_agent_type).await;
+        resolve_generation_agent_and_args(GenerationAction::PrWriteback).await;
 
     if let Ok(project_env_vars) = db_clone.get_project_environment_variables(&repo_path) {
         env_vars.extend(project_env_vars);
@@ -2223,13 +2326,8 @@ pub async fn schaltwerk_core_rename_version_group(
     let first_session = &version_sessions[0];
     let worktree_path = first_session.worktree_path.clone();
     let repo_path = first_session.repository_path.clone();
-    let fallback_agent = first_session
-        .original_agent_type
-        .clone()
-        .unwrap_or_else(|| db.get_agent_type().unwrap_or_else(|_| "claude".to_string()));
-
     let (agent_type, mut env_vars, cli_args, binary_path, _preferences, custom_name_prompt, _) =
-        resolve_generation_agent_and_args(&fallback_agent).await;
+        resolve_generation_agent_and_args(GenerationAction::VersionGroupRename).await;
 
     if let Ok(project_env_vars) = db.get_project_environment_variables(&repo_path) {
         for (key, value) in project_env_vars {
@@ -4242,17 +4340,11 @@ pub async fn schaltwerk_core_create_spec_session(
     }
 
     if should_spawn_spec_name_generation(user_edited_name) {
-        let naming_agent = agent_type.clone().unwrap_or_else(|| {
-            core.db
-                .get_agent_type()
-                .unwrap_or_else(|_| "claude".to_string())
-        });
         spawn_spec_name_generation(
             app.clone(),
             spec.id.clone(),
             spec.name.clone(),
             spec_content.clone(),
-            naming_agent,
         );
     }
 

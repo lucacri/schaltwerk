@@ -19,7 +19,8 @@ use crate::commands::github::{
 use crate::commands::gitlab::{CreateGitlabSessionMrArgs, gitlab_create_session_mr};
 use crate::commands::schaltwerk_core::agent_launcher;
 use crate::commands::schaltwerk_core::{
-    MergeCommandError, StartAgentParams, merge_session_with_events, schaltwerk_core_cancel_session,
+    GenerationAction, MergeCommandError, StartAgentParams, merge_session_with_events,
+    resolve_generation_agent_for_action, schaltwerk_core_cancel_session,
     schaltwerk_core_start_claude_orchestrator, schaltwerk_core_start_session_agent_with_restart,
 };
 use crate::commands::sessions_refresh::{SessionsRefreshReason, request_sessions_refresh};
@@ -43,7 +44,7 @@ use lucode::infrastructure::database::db_project_config::{
 };
 use lucode::infrastructure::database::{Database, SpecMethods};
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
-use lucode::schaltwerk_core::db_app_config::{AppConfigMethods, ConsolidationDefaultFavorite};
+use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
 use lucode::schaltwerk_core::{SessionManager, SessionState};
 use lucode::services::SessionMethods;
 use lucode::services::sessions::compute_git_enrichment_parallel;
@@ -52,41 +53,20 @@ use lucode::shared::terminal_id::terminal_id_for_orchestrator_top;
 
 mod diff_api;
 
-async fn resolve_consolidation_judge_agent_type(db: &Database) -> String {
-    let favorite = db.get_consolidation_default_favorite().unwrap_or_default();
-    let presets = if let Some(settings_manager) = SETTINGS_MANAGER.get() {
-        let settings = settings_manager.lock().await;
-        settings.get_agent_presets()
+async fn resolve_consolidation_judge_agent_type(_db: &Database) -> String {
+    let generation_settings = if let Some(settings_manager) = SETTINGS_MANAGER.get() {
+        settings_manager.lock().await.get_generation_settings()
     } else {
-        Vec::new()
+        lucode::domains::settings::GenerationSettings::default()
     };
-    resolve_consolidation_judge_agent_type_inner(&favorite, &presets)
+
+    resolve_consolidation_judge_generation_agent(&generation_settings)
 }
 
-fn resolve_consolidation_judge_agent_type_inner(
-    favorite: &ConsolidationDefaultFavorite,
-    presets: &[AgentPreset],
+fn resolve_consolidation_judge_generation_agent(
+    generation_settings: &lucode::domains::settings::GenerationSettings,
 ) -> String {
-    if let Some(preset_id) = favorite.preset_id.as_deref() {
-        if let Some(preset) = presets.iter().find(|p| p.id == preset_id) {
-            if let Some(slot) = preset.slots.first() {
-                return slot.agent_type.clone();
-            }
-            log::warn!(
-                "Consolidation favorite preset '{preset_id}' has no slots; falling back to 'claude'"
-            );
-        } else {
-            log::warn!(
-                "Consolidation favorite preset '{preset_id}' not found; falling back to 'claude'"
-            );
-        }
-    }
-    favorite
-        .agent_type
-        .as_deref()
-        .filter(|s: &&str| !s.trim().is_empty())
-        .unwrap_or("claude")
-        .to_string()
+    resolve_generation_agent_for_action(generation_settings, GenerationAction::ConsolidationJudge)
 }
 
 fn resolve_implementation_judge_root_name(candidates: &[Session]) -> Result<String, String> {
@@ -5318,48 +5298,34 @@ mod tests {
     }
 
     #[test]
-    fn judge_agent_type_defaults_to_app_config_favorite_agent() {
-        let favorite = ConsolidationDefaultFavorite {
-            agent_type: Some("codex".to_string()),
-            preset_id: None,
+    fn judge_agent_type_defaults_to_gemini_when_generation_settings_are_unset() {
+        let generation = lucode::domains::settings::GenerationSettings::default();
+
+        let agent = resolve_consolidation_judge_generation_agent(&generation);
+        assert_eq!(agent, "gemini");
+    }
+
+    #[test]
+    fn judge_agent_type_uses_global_generation_agent_when_override_is_unset() {
+        let generation = lucode::domains::settings::GenerationSettings {
+            agent: Some("codex".to_string()),
+            ..Default::default()
         };
-        let agent = resolve_consolidation_judge_agent_type_inner(&favorite, &[]);
+
+        let agent = resolve_consolidation_judge_generation_agent(&generation);
         assert_eq!(agent, "codex");
     }
 
     #[test]
-    fn judge_agent_type_resolves_preset_to_first_slot_agent() {
-        let favorite = ConsolidationDefaultFavorite {
-            agent_type: None,
-            preset_id: Some("preset-1".to_string()),
+    fn judge_agent_type_prefers_action_override_over_global_generation_agent() {
+        let generation = lucode::domains::settings::GenerationSettings {
+            agent: Some("gemini".to_string()),
+            consolidation_judge_agent: Some("claude".to_string()),
+            ..Default::default()
         };
-        let preset = make_preset(
-            "preset-1",
-            "Preset 1",
-            vec![
-                make_preset_slot("opencode", None),
-                make_preset_slot("claude", None),
-            ],
-        );
-        let agent = resolve_consolidation_judge_agent_type_inner(&favorite, &[preset]);
-        assert_eq!(agent, "opencode");
-    }
 
-    #[test]
-    fn judge_agent_type_falls_back_to_claude_when_favorite_unset_or_preset_missing() {
-        let favorite = ConsolidationDefaultFavorite {
-            agent_type: None,
-            preset_id: Some("missing-id".to_string()),
-        };
-        let agent = resolve_consolidation_judge_agent_type_inner(&favorite, &[]);
+        let agent = resolve_consolidation_judge_generation_agent(&generation);
         assert_eq!(agent, "claude");
-
-        let favorite_empty = ConsolidationDefaultFavorite {
-            agent_type: None,
-            preset_id: None,
-        };
-        let agent_empty = resolve_consolidation_judge_agent_type_inner(&favorite_empty, &[]);
-        assert_eq!(agent_empty, "claude");
     }
 
     #[test]

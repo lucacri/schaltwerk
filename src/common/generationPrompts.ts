@@ -4,6 +4,13 @@ import { logger } from '../utils/logger'
 import { DEFAULT_AUTONOMY_PROMPT_TEMPLATE } from './autonomyPrompt'
 
 export interface GenerationSettingsPrompts {
+  agent?: string | null
+  cli_args?: string | null
+  name_agent?: string | null
+  commit_agent?: string | null
+  pr_writeback_agent?: string | null
+  consolidation_judge_agent?: string | null
+  version_group_rename_agent?: string | null
   name_prompt?: string | null
   commit_prompt?: string | null
   consolidation_prompt?: string | null

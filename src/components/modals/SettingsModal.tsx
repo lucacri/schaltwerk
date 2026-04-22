@@ -326,6 +326,23 @@ type ActionPromptTemplateKey =
     | 'plan_judge_prompt_template'
     | 'judge_prompt_template'
 
+type GenerationAgentOverrideKey =
+    | 'name_agent'
+    | 'commit_agent'
+    | 'pr_writeback_agent'
+    | 'consolidation_judge_agent'
+    | 'version_group_rename_agent'
+
+type GenerationAgentOverrides = Record<GenerationAgentOverrideKey, string>
+
+const EMPTY_GENERATION_AGENT_OVERRIDES: GenerationAgentOverrides = {
+    name_agent: '',
+    commit_agent: '',
+    pr_writeback_agent: '',
+    consolidation_judge_agent: '',
+    version_group_rename_agent: '',
+}
+
 const AGENT_PREFERENCE_METADATA: Record<AgentType, AgentPreferenceMetadata> = {
     claude: {},
     copilot: {},
@@ -417,6 +434,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
     const [agentCommandPrefix, setAgentCommandPrefix] = useState<string>('')
     const [initialAgentCommandPrefix, setInitialAgentCommandPrefix] = useState<string>('')
     const [generationAgent, setGenerationAgent] = useState<string>('')
+    const [generationAgentOverrides, setGenerationAgentOverrides] = useState<GenerationAgentOverrides>(EMPTY_GENERATION_AGENT_OVERRIDES)
     const [specClarificationAgentType, setSpecClarificationAgentType] = useState<AgentType>(DEFAULT_AGENT)
     const [consolidationDefault, setConsolidationDefault] = useState<ConsolidationDefaultFavorite>({ agentType: DEFAULT_AGENT, presetId: null })
     const initialConsolidationDefaultRef = useRef<ConsolidationDefaultFavorite>({ agentType: DEFAULT_AGENT, presetId: null })
@@ -437,6 +455,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         plan_judge_prompt_template: '',
         judge_prompt_template: '',
     })
+    const [showGenerationAgentOverrides, setShowGenerationAgentOverrides] = useState<boolean>(false)
     const [showCustomPrompts, setShowCustomPrompts] = useState<boolean>(false)
     const reloadContextualActions = useSetAtom(loadContextualActionsAtom)
     const platform = useMemo(() => detectPlatformSafe(), [])
@@ -877,6 +896,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         }
 
         let loadedGenerationAgent = ''
+        let loadedGenerationAgentOverrides = EMPTY_GENERATION_AGENT_OVERRIDES
         let loadedGenerationCliArgs = ''
         let loadedGenerationPrompts = EMPTY_DEFAULT_GENERATION_PROMPTS
         let loadedDefaultPrompts = EMPTY_DEFAULT_GENERATION_PROMPTS
@@ -896,7 +916,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         }
         try {
             const [genSettings, defaults] = await Promise.all([
-                invoke<GenerationSettingsPrompts & { agent: string | null; cli_args: string | null }>(TauriCommands.GetGenerationSettings),
+                invoke<GenerationSettingsPrompts>(TauriCommands.GetGenerationSettings),
                 invoke<DefaultGenerationPrompts>(TauriCommands.GetDefaultGenerationPrompts),
             ])
             loadedDefaultPrompts = {
@@ -904,6 +924,13 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                 ...(defaults ?? {}),
             }
             loadedGenerationAgent = genSettings.agent ?? ''
+            loadedGenerationAgentOverrides = {
+                name_agent: genSettings.name_agent ?? '',
+                commit_agent: genSettings.commit_agent ?? '',
+                pr_writeback_agent: genSettings.pr_writeback_agent ?? '',
+                consolidation_judge_agent: genSettings.consolidation_judge_agent ?? '',
+                version_group_rename_agent: genSettings.version_group_rename_agent ?? '',
+            }
             loadedGenerationCliArgs = genSettings.cli_args ?? ''
             loadedDefaultAutonomyPromptTemplate = defaults?.autonomy_prompt_template ?? DEFAULT_AUTONOMY_PROMPT_TEMPLATE
             loadedAutonomyPromptTemplate = genSettings.autonomy_prompt_template ?? loadedDefaultAutonomyPromptTemplate
@@ -953,6 +980,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         setAgentCommandPrefix(loadedCommandPrefix)
         setInitialAgentCommandPrefix(loadedCommandPrefix)
         setGenerationAgent(loadedGenerationAgent)
+        setGenerationAgentOverrides(loadedGenerationAgentOverrides)
         setSpecClarificationAgentType(loadedSpecClarificationAgentType)
         initialSpecClarificationAgentTypeRef.current = loadedSpecClarificationAgentType
         setConsolidationDefault(loadedConsolidationDefault)
@@ -965,6 +993,9 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
         setActionPromptTemplates(loadedActionPromptTemplates)
         setDefaultActionPromptTemplates(loadedDefaultActionPromptTemplates)
         setEnabledAgents(loadedEnabledAgents)
+        setShowGenerationAgentOverrides(
+            Object.values(loadedGenerationAgentOverrides).some(value => value.trim() !== '')
+        )
         setShowCustomPrompts((Object.keys(loadedGenerationPrompts) as GenerationPromptKey[]).some(key => {
             return (loadedGenerationPrompts[key] ?? '').trim() !== (loadedDefaultPrompts[key] ?? '').trim()
         }))
@@ -1133,6 +1164,7 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
 
     const saveGenerationSettings = useCallback(async (
         agent: string,
+        agentOverrides: GenerationAgentOverrides,
         cliArgs: string,
         prompts: DefaultGenerationPrompts,
         autonomyTemplate: string,
@@ -1148,6 +1180,11 @@ export function SettingsModal({ open, onClose, onOpenTutorial, initialTab }: Pro
                 settings: {
                     agent: agent || null,
                     cli_args: cliArgs || null,
+                    name_agent: agentOverrides.name_agent || null,
+                    commit_agent: agentOverrides.commit_agent || null,
+                    pr_writeback_agent: agentOverrides.pr_writeback_agent || null,
+                    consolidation_judge_agent: agentOverrides.consolidation_judge_agent || null,
+                    version_group_rename_agent: agentOverrides.version_group_rename_agent || null,
                     name_prompt: prompts.name_prompt.trim() !== defaultGenerationPrompts.name_prompt.trim() ? prompts.name_prompt : null,
                     commit_prompt: prompts.commit_prompt.trim() !== defaultGenerationPrompts.commit_prompt.trim() ? prompts.commit_prompt : null,
                     consolidation_prompt: prompts.consolidation_prompt.trim() !== defaultGenerationPrompts.consolidation_prompt.trim() ? prompts.consolidation_prompt : null,
@@ -2718,6 +2755,49 @@ fi`}
             const isPromptCustom = (key: GenerationPromptKey) => (
                 (generationPrompts[key] ?? '').trim() !== (defaultGenerationPrompts[key] ?? '').trim()
             )
+            const generationAgentOptions = [
+                { value: '', label: t.settings.generation.agentDefault },
+                { value: 'claude', label: 'Claude' },
+                { value: 'gemini', label: 'Gemini' },
+                { value: 'codex', label: 'Codex' },
+                { value: 'opencode', label: 'OpenCode' },
+                { value: 'kilocode', label: 'Kilocode' },
+            ]
+            const generationOverrideOptions = [
+                { value: '', label: t.settings.generation.actionAgentDefault },
+                ...generationAgentOptions.slice(1),
+            ]
+            const generationOverrideFields: Array<{
+                key: GenerationAgentOverrideKey
+                label: string
+                description: string
+            }> = [
+                {
+                    key: 'name_agent',
+                    label: t.settings.generation.nameAgent,
+                    description: t.settings.generation.nameAgentDesc,
+                },
+                {
+                    key: 'commit_agent',
+                    label: t.settings.generation.commitAgent,
+                    description: t.settings.generation.commitAgentDesc,
+                },
+                {
+                    key: 'pr_writeback_agent',
+                    label: t.settings.generation.prWritebackAgent,
+                    description: t.settings.generation.prWritebackAgentDesc,
+                },
+                {
+                    key: 'consolidation_judge_agent',
+                    label: t.settings.generation.consolidationJudgeAgent,
+                    description: t.settings.generation.consolidationJudgeAgentDesc,
+                },
+                {
+                    key: 'version_group_rename_agent',
+                    label: t.settings.generation.versionGroupRenameAgent,
+                    description: t.settings.generation.versionGroupRenameAgentDesc,
+                },
+            ]
 
             const promptSections: Array<{
                 title: string
@@ -2824,16 +2904,9 @@ fi`}
                                     value={generationAgent}
                                     onChange={(value) => {
                                         setGenerationAgent(value)
-                                        void saveGenerationSettings(value, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)
+                                        void saveGenerationSettings(value, generationAgentOverrides, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)
                                     }}
-                                    options={[
-                                        { value: '', label: t.settings.generation.agentDefault },
-                                        { value: 'claude', label: 'Claude' },
-                                        { value: 'gemini', label: 'Gemini' },
-                                        { value: 'codex', label: 'Codex' },
-                                        { value: 'opencode', label: 'OpenCode' },
-                                        { value: 'kilocode', label: 'Kilocode' },
-                                    ]}
+                                    options={generationAgentOptions}
                                 />
                             </FormGroup>
 
@@ -2845,10 +2918,59 @@ fi`}
                                     aria-label={t.settings.generation.cliArgs}
                                     value={generationCliArgs}
                                     onChange={(e) => setGenerationCliArgs(e.target.value)}
-                                    onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)}
+                                    onBlur={() => void saveGenerationSettings(generationAgent, generationAgentOverrides, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)}
                                     placeholder={t.settings.generation.cliArgsPlaceholder}
                                 />
                             </FormGroup>
+
+                            <div className="border-t border-border-subtle pt-6">
+                                <button
+                                    onClick={() => setShowGenerationAgentOverrides(!showGenerationAgentOverrides)}
+                                    className="flex items-center gap-2 text-body font-medium text-text-primary cursor-pointer"
+                                >
+                                    <svg
+                                        className={`w-4 h-4 transition-transform ${showGenerationAgentOverrides ? 'rotate-90' : ''}`}
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                                    >
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                    {t.settings.generation.perActionOverrides}
+                                </button>
+                                <p className="text-caption text-text-tertiary mt-1 ml-6">
+                                    {t.settings.generation.perActionOverridesDesc}
+                                </p>
+
+                                {showGenerationAgentOverrides && (
+                                    <div className="mt-4 ml-6 space-y-4">
+                                        {generationOverrideFields.map(field => {
+                                            return (
+                                                <FormGroup key={field.key} label={field.label} help={field.description}>
+                                                    <Select
+                                                        aria-label={field.label}
+                                                        value={generationAgentOverrides[field.key]}
+                                                        onChange={(value) => {
+                                                            const nextOverrides = {
+                                                                ...generationAgentOverrides,
+                                                                [field.key]: value,
+                                                            }
+                                                            setGenerationAgentOverrides(nextOverrides)
+                                                            void saveGenerationSettings(
+                                                                generationAgent,
+                                                                nextOverrides,
+                                                                generationCliArgs,
+                                                                generationPrompts,
+                                                                autonomyPromptTemplate,
+                                                                actionPromptTemplates,
+                                                            )
+                                                        }}
+                                                        options={generationOverrideOptions}
+                                                    />
+                                                </FormGroup>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </div>
 
                             <div className="border-t border-border-subtle pt-6">
                                 <button
@@ -2898,7 +3020,7 @@ fi`}
                                                                                     [prompt.key]: defaultGenerationPrompts[prompt.key],
                                                                                 }
                                                                                 setGenerationPrompts(nextPrompts)
-                                                                                void saveGenerationSettings(generationAgent, generationCliArgs, nextPrompts, autonomyPromptTemplate, actionPromptTemplates)
+                                                                                void saveGenerationSettings(generationAgent, generationAgentOverrides, generationCliArgs, nextPrompts, autonomyPromptTemplate, actionPromptTemplates)
                                                                             }}
                                                                         >
                                                                             {t.settings.generation.resetToDefault}
@@ -2916,7 +3038,7 @@ fi`}
                                                                     ...prev,
                                                                     [prompt.key]: e.target.value,
                                                                 }))}
-                                                                onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)}
+                                                                onBlur={() => void saveGenerationSettings(generationAgent, generationAgentOverrides, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)}
                                                                 placeholder={prompt.placeholder}
                                                                 className="min-h-[100px]"
                                                                 rows={6}
@@ -2978,6 +3100,7 @@ fi`}
                                         setActionPromptTemplates(nextTemplates)
                                         void saveGenerationSettings(
                                             generationAgent,
+                                            generationAgentOverrides,
                                             generationCliArgs,
                                             generationPrompts,
                                             autonomyPromptTemplate,
@@ -2998,6 +3121,7 @@ fi`}
                         }}
                         onBlur={() => void saveGenerationSettings(
                             generationAgent,
+                            generationAgentOverrides,
                             generationCliArgs,
                             generationPrompts,
                             autonomyPromptTemplate,
@@ -3034,7 +3158,7 @@ fi`}
                                     size="sm"
                                     onClick={() => {
                                         setAutonomyPromptTemplate(defaultAutonomyPromptTemplate)
-                                        void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, defaultAutonomyPromptTemplate, actionPromptTemplates)
+                                        void saveGenerationSettings(generationAgent, generationAgentOverrides, generationCliArgs, generationPrompts, defaultAutonomyPromptTemplate, actionPromptTemplates)
                                     }}
                                 >
                                     {t.settings.generation.resetToDefault}
@@ -3047,7 +3171,7 @@ fi`}
                         aria-label={t.settings.agentConfiguration.autonomyTemplate}
                         value={autonomyPromptTemplate}
                         onChange={(e) => setAutonomyPromptTemplate(e.target.value)}
-                        onBlur={() => void saveGenerationSettings(generationAgent, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)}
+                        onBlur={() => void saveGenerationSettings(generationAgent, generationAgentOverrides, generationCliArgs, generationPrompts, autonomyPromptTemplate, actionPromptTemplates)}
                         monospace
                         rows={10}
                         resize="vertical"

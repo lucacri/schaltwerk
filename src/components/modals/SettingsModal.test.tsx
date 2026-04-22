@@ -866,6 +866,25 @@ describe('SettingsModal project settings navigation', () => {
 })
 
 describe('SettingsModal AI Generation custom prompts', () => {
+  const ensureGenerationOverridesOpen = async (user: ReturnType<typeof userEvent.setup>) => {
+    await waitFor(() => {
+      expect(
+        invokeMock.mock.calls.some(([command]) => command === TauriCommands.GetGenerationSettings)
+      ).toBe(true)
+    })
+    if (screen.queryAllByRole('combobox').length < 6) {
+      await user.click(await screen.findByRole('button', { name: 'Per-action overrides' }))
+    }
+    await waitFor(() => {
+      expect(screen.getAllByRole('combobox')).toHaveLength(6)
+    })
+  }
+
+  const generationOverrideComboboxes = () => {
+    const [, ...overrideComboboxes] = screen.getAllByRole('combobox')
+    return overrideComboboxes
+  }
+
   const defaultPrompts = {
     name_prompt: 'Default name prompt with {task} placeholder',
     commit_prompt: 'Default commit prompt with {commits} and {files}',
@@ -1111,6 +1130,120 @@ describe('SettingsModal AI Generation custom prompts', () => {
     expect(await screen.findByLabelText('Name Generation Prompt')).toBeInTheDocument()
     expect(screen.getByLabelText('Session Consolidation Prompt')).toBeInTheDocument()
     expect(screen.getByLabelText('Commit Message Prompt')).toBeInTheDocument()
+  })
+
+  it('loads saved per-action generation agent overrides', async () => {
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === TauriCommands.GetDefaultGenerationPrompts) {
+        return defaultPrompts
+      }
+      if (command === TauriCommands.GetGenerationSettings) {
+        return {
+          agent: 'gemini',
+          cli_args: null,
+          name_agent: 'claude',
+          commit_agent: 'codex',
+          pr_writeback_agent: 'opencode',
+          consolidation_judge_agent: 'claude',
+          version_group_rename_agent: 'kilocode',
+          name_prompt: null,
+          commit_prompt: null,
+          consolidation_prompt: null,
+          review_pr_prompt: null,
+          plan_issue_prompt: null,
+          issue_prompt: null,
+          pr_prompt: null,
+          autonomy_prompt_template: null,
+        }
+      }
+      return baseInvokeImplementation(command, args)
+    })
+
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    await ensureGenerationOverridesOpen(user)
+    const overrideComboboxes = generationOverrideComboboxes()
+
+    expect(overrideComboboxes[0]).toHaveTextContent('Claude')
+    expect(overrideComboboxes[1]).toHaveTextContent('Codex')
+    expect(overrideComboboxes[2]).toHaveTextContent('OpenCode')
+    expect(overrideComboboxes[3]).toHaveTextContent('Claude')
+    expect(overrideComboboxes[4]).toHaveTextContent('Kilocode')
+  })
+
+  it('saves the selected per-action override', async () => {
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    await ensureGenerationOverridesOpen(user)
+    const [, commitAgentOverride] = generationOverrideComboboxes()
+
+    await user.click(commitAgentOverride)
+    const listbox = await screen.findByRole('listbox')
+    await user.click(within(listbox).getByRole('option', { name: 'Codex' }))
+
+    await waitFor(() => {
+      const saveCall = invokeMock.mock.calls.find(
+        ([cmd, args]) =>
+          cmd === TauriCommands.SetGenerationSettings
+          && (args as { settings?: { commit_agent?: string | null } })?.settings?.commit_agent === 'codex'
+      )
+      expect(saveCall).toBeTruthy()
+    })
+  })
+
+  it('saves null when a per-action override is reset to default', async () => {
+    invokeMock.mockImplementation(async (command: string, args?: unknown) => {
+      if (command === TauriCommands.GetDefaultGenerationPrompts) {
+        return defaultPrompts
+      }
+      if (command === TauriCommands.GetGenerationSettings) {
+        return {
+          agent: 'gemini',
+          cli_args: null,
+          name_agent: null,
+          commit_agent: 'codex',
+          pr_writeback_agent: null,
+          consolidation_judge_agent: null,
+          version_group_rename_agent: null,
+          name_prompt: null,
+          commit_prompt: null,
+          consolidation_prompt: null,
+          review_pr_prompt: null,
+          plan_issue_prompt: null,
+          issue_prompt: null,
+          pr_prompt: null,
+          autonomy_prompt_template: null,
+        }
+      }
+      return baseInvokeImplementation(command, args)
+    })
+
+    renderWithProviders(
+      <SettingsModal open={true} initialTab="generation" onClose={() => {}} />
+    )
+    const user = userEvent.setup()
+
+    await ensureGenerationOverridesOpen(user)
+    const [, commitAgentOverride] = generationOverrideComboboxes()
+
+    await user.click(commitAgentOverride)
+    const listbox = await screen.findByRole('listbox')
+    await user.click(within(listbox).getByRole('option', { name: /default \(global agent\)/i }))
+
+    await waitFor(() => {
+      const saveCall = invokeMock.mock.calls.find(
+        ([cmd, args]) =>
+          cmd === TauriCommands.SetGenerationSettings
+          && (args as { settings?: { commit_agent?: string | null } })?.settings?.commit_agent === null
+      )
+      expect(saveCall).toBeTruthy()
+    })
   })
 })
 

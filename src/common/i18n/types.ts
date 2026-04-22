@@ -329,9 +329,22 @@ export interface Translations {
       agent: string
       agentDesc: string
       agentDefault: string
+      actionAgentDefault: string
       cliArgs: string
       cliArgsDesc: string
       cliArgsPlaceholder: string
+      perActionOverrides: string
+      perActionOverridesDesc: string
+      nameAgent: string
+      nameAgentDesc: string
+      commitAgent: string
+      commitAgentDesc: string
+      prWritebackAgent: string
+      prWritebackAgentDesc: string
+      consolidationJudgeAgent: string
+      consolidationJudgeAgentDesc: string
+      versionGroupRenameAgent: string
+      versionGroupRenameAgentDesc: string
       customPrompts: string
       customPromptsDesc: string
       sessionPrompts: string
