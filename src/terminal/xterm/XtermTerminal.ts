@@ -48,6 +48,47 @@ interface ITerminalWithCore extends XTerm {
 
 const DEFAULT_SMOOTH_SCROLL_DURATION_MS = 125
 
+const OSC52_CLIPBOARD_CODE = 52
+const OSC52_SYSTEM_CLIPBOARD_TARGET = 'c'
+const OSC52_MAX_ENCODED_PAYLOAD_BYTES = 1_400_000
+
+function shouldWriteOsc52Clipboard(targets: string): boolean {
+  return targets.length === 0 || targets.includes(OSC52_SYSTEM_CLIPBOARD_TARGET)
+}
+
+function decodeOsc52Text(encodedText: string): string | null {
+  try {
+    const binary = globalThis.atob(encodedText.replace(/\s+/g, ''))
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return null
+  }
+}
+
+function parseOsc52ClipboardPayload(payload: string): string | null {
+  const separatorIndex = payload.indexOf(';')
+  if (separatorIndex < 0) {
+    return null
+  }
+
+  const clipboardTargets = payload.slice(0, separatorIndex)
+  if (!shouldWriteOsc52Clipboard(clipboardTargets)) {
+    return null
+  }
+
+  const encodedText = payload.slice(separatorIndex + 1)
+  if (encodedText === '' || encodedText === '?') {
+    return null
+  }
+
+  if (encodedText.length > OSC52_MAX_ENCODED_PAYLOAD_BYTES) {
+    return null
+  }
+
+  return decodeOsc52Text(encodedText)
+}
+
 function buildTerminalOptions(config: XtermTerminalConfig, theme: TerminalTheme): ITerminalOptions {
   return {
     theme,
@@ -439,6 +480,29 @@ export class XtermTerminal {
       } catch (error) {
         logger.debug(`[XtermTerminal ${this.terminalId}] OSC handler registration failed for code ${code}`, error)
       }
+    }
+
+    try {
+      this.raw.parser.registerOscHandler(OSC52_CLIPBOARD_CODE, async payload => {
+        const text = parseOsc52ClipboardPayload(payload)
+        if (text === null) {
+          logger.debug(`[XtermTerminal ${this.terminalId}] Ignored OSC 52 clipboard payload`)
+          return true
+        }
+
+        try {
+          await invoke(TauriCommands.ClipboardWriteText, { text })
+        } catch (error) {
+          logger.error(`[XtermTerminal ${this.terminalId}] Failed to write OSC 52 clipboard payload`, error)
+        }
+
+        return true
+      })
+    } catch (error) {
+      logger.debug(
+        `[XtermTerminal ${this.terminalId}] OSC handler registration failed for code ${OSC52_CLIPBOARD_CODE}`,
+        error,
+      )
     }
   }
 

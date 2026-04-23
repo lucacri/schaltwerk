@@ -86,6 +86,22 @@ beforeEach(() => {
   webLinksAddonInstances.length = 0
 })
 
+async function getLatestTerminalInstance() {
+  const { Terminal: MockTerminal } = await import('@xterm/xterm') as unknown as {
+    Terminal: { __instances: Array<{ parser: { registerOscHandler: ReturnType<typeof vi.fn> } }> }
+  }
+  return MockTerminal.__instances.at(-1)!
+}
+
+function getOscHandler(
+  registerOscHandler: ReturnType<typeof vi.fn>,
+  code: number,
+): (data: string) => boolean | Promise<boolean> {
+  const call = registerOscHandler.mock.calls.find(([registeredCode]) => registeredCode === code)
+  expect(call).toBeDefined()
+  return call![1] as (data: string) => boolean | Promise<boolean>
+}
+
 describe('XtermTerminal wrapper', () => {
   it('creates a terminal instance, loads addons, and attaches to a container', async () => {
     const { XtermTerminal } = await import('./XtermTerminal')
@@ -123,8 +139,8 @@ describe('XtermTerminal wrapper', () => {
     expect(registerMock).toHaveBeenCalledWith('fit', expect.any(Function))
     expect(registerMock).toHaveBeenCalledWith('search', expect.any(Function))
     expect(registerMock).toHaveBeenCalledWith('webLinks', expect.any(Function))
-    expect(instance.parser.registerOscHandler).toHaveBeenCalledTimes(9)
-    for (const code of [10, 11, 12, 13, 14, 15, 16, 17, 19]) {
+    expect(instance.parser.registerOscHandler).toHaveBeenCalledTimes(10)
+    for (const code of [10, 11, 12, 13, 14, 15, 16, 17, 19, 52]) {
       expect(instance.parser.registerOscHandler).toHaveBeenCalledWith(code, expect.any(Function))
     }
 
@@ -489,5 +505,105 @@ describe('XtermTerminal wrapper', () => {
 
     Object.defineProperty(window, 'confirm', { configurable: true, value: originalConfirm })
     Object.defineProperty(window, 'open', { configurable: true, value: originalOpen })
+  })
+
+  describe('OSC 52 clipboard handler', () => {
+    async function setupHandler(terminalId: string) {
+      const { XtermTerminal } = await import('./XtermTerminal')
+      const { invoke } = await import('@tauri-apps/api/core') as unknown as {
+        invoke: ReturnType<typeof vi.fn>
+      }
+
+      new XtermTerminal({
+        terminalId,
+        config: {
+          scrollback: 4000,
+          fontSize: 12,
+          fontFamily: 'Menlo',
+          readOnly: false,
+          minimumContrastRatio: 1.0,
+          smoothScrolling: false,
+        },
+      })
+
+      const instance = await getLatestTerminalInstance()
+      return { handler: getOscHandler(instance.parser.registerOscHandler, 52), invoke }
+    }
+
+    it('routes valid base64 payloads through ClipboardWriteText', async () => {
+      const { handler, invoke } = await setupHandler('osc52-valid')
+
+      const result = await handler(`c;${btoa('Hello world')}`)
+
+      expect(result).toBe(true)
+      expect(invoke).toHaveBeenCalledWith(TauriCommands.ClipboardWriteText, { text: 'Hello world' })
+    })
+
+    it('handles payloads with empty selection list (Pc empty)', async () => {
+      const { handler, invoke } = await setupHandler('osc52-empty-pc')
+
+      const result = await handler(`;${btoa('tmux')}`)
+
+      expect(result).toBe(true)
+      expect(invoke).toHaveBeenCalledWith(TauriCommands.ClipboardWriteText, { text: 'tmux' })
+    })
+
+    it('decodes multi-byte UTF-8 payloads correctly', async () => {
+      const { handler, invoke } = await setupHandler('osc52-utf8')
+
+      const sample = 'café — 🐼'
+      const utf8Bytes = new TextEncoder().encode(sample)
+      const encoded = btoa(String.fromCharCode(...utf8Bytes))
+      const result = await handler(`c;${encoded}`)
+
+      expect(result).toBe(true)
+      expect(invoke).toHaveBeenCalledWith(TauriCommands.ClipboardWriteText, { text: sample })
+    })
+
+    it('silently consumes clipboard query (Pd = "?") without invoking clipboard write', async () => {
+      const { handler, invoke } = await setupHandler('osc52-query')
+
+      const result = await handler('c;?')
+
+      expect(result).toBe(true)
+      expect(invoke).not.toHaveBeenCalled()
+    })
+
+    it('does not write when payload is malformed base64', async () => {
+      const { handler, invoke } = await setupHandler('osc52-malformed')
+
+      const result = await handler('c;***not-base64***')
+
+      expect(result).toBe(true)
+      expect(invoke).not.toHaveBeenCalled()
+    })
+
+    it('does not write when the payload contains no semicolon at all', async () => {
+      const { handler, invoke } = await setupHandler('osc52-no-separator')
+
+      const result = await handler('garbage-no-semicolon')
+
+      expect(result).toBe(true)
+      expect(invoke).not.toHaveBeenCalled()
+    })
+
+    it('rejects oversized payloads so PTY output cannot flood the OS clipboard', async () => {
+      const { handler, invoke } = await setupHandler('osc52-oversized')
+
+      const oversized = 'A'.repeat(1_400_001)
+      const result = await handler(`c;${oversized}`)
+
+      expect(result).toBe(true)
+      expect(invoke).not.toHaveBeenCalled()
+    })
+
+    it('ignores writes targeting non-system clipboard buffers (Pc = p)', async () => {
+      const { handler, invoke } = await setupHandler('osc52-primary-only')
+
+      const result = await handler(`p;${btoa('primary only')}`)
+
+      expect(result).toBe(true)
+      expect(invoke).not.toHaveBeenCalled()
+    })
   })
 })

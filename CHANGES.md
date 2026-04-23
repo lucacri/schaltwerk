@@ -2,6 +2,13 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Tmux-backed agent terminals copy selections to the OS clipboard
+
+Selecting text in a tmux-backed agent terminal (drag, double-click, right-click word, or copy-mode `Enter`) entered tmux copy-mode and highlighted the selection but left the OS clipboard empty. The Lucode tmux config emits OSC 52 via `set-clipboard on` plus `copy-pipe-and-cancel`, but xterm.js v6 ships no built-in OSC 52 handler, so those sequences were silently dropped at the renderer.
+
+- `src/terminal/xterm/XtermTerminal.ts` now registers an OSC 52 handler that parses the `Pc;Pd` payload, only writes when `Pc` targets the system clipboard (`c`) or is empty, silently consumes clipboard queries (`Pd = ?`) so terminal-side processes cannot read the user's clipboard, decodes the base64 data as UTF-8, caps the encoded payload at 1.4 MB so PTY output cannot flood the OS clipboard, and forwards the decoded text through the existing `clipboard_write_text` Tauri command.
+- `src/terminal/xterm/XtermTerminal.test.ts` covers handler registration, valid base64 routing through `ClipboardWriteText`, empty-`Pc` payloads, multi-byte UTF-8 payloads, query consumption, malformed base64, missing-separator payloads, the size cap, and non-system-clipboard target rejection.
+
 ## Spec preview splits content and implementation plan into tabs
 
 The spec/task preview previously stacked the main markdown body and any persisted implementation plan inside one scroll surface, which made generated plans easy to miss. Preview mode now separates those views into a small tab strip whenever `spec_implementation_plan` contains non-whitespace content, while leaving the existing single-preview behavior unchanged for empty plans.
