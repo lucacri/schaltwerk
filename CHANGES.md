@@ -2,6 +2,13 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Islands Dark: colorblind-safer teal/orange diff palette
+
+The `islands-dark` theme painted diff additions in green (`#6aab73`) and removals in red (`#f75464`) at very heavy opacities (`0.35` line / `0.5` text / `0.6` gutter), which made added and removed regions hard to distinguish for users with red-green colorblindness and was also an outlier against every other theme's layered `0.08 / 0.13 / 0.2` stack. The diff tokens now use an IBM-style teal/orange hue pair with luminance and warmth both carrying signal, and the layered opacities match the rest of the theme family so the Pierre adapter renders consistent emphasis across themes.
+
+- `src/styles/themes/islands-dark.css` replaces the add/remove hues with `#2dd4bf` (teal) and `#fb923c` (orange) across `--color-diff-added-*` and `--color-diff-removed-*`, aligns line/text/gutter backgrounds to the shared `0.08 / 0.13 / 0.2` layered ramp, and keeps modified-line blue (`#548af7`) unchanged since blue is already outside the red-green confusion axis.
+- `--color-accent-green` / `--color-accent-red` and other non-diff semantic tokens (success states, tab badges, terminal ANSI) remain on the original islands palette so the change is scoped strictly to diff-view distinguishability.
+
 ## AI Generation selectors and agent launches follow the same enabled-provider and shell-environment rules
 
 The AI Generation global agent selector and the per-action override selectors maintained their own hardcoded subset of providers, which drifted away from the enabled non-terminal providers used elsewhere. Agent launches also resolved and executed binaries from a curated path list plus the app process PATH, so a binary exposed only via the user's shell (`~/.bun/bin`, `~/.volta/bin`, etc.) would fail to resolve even when the equivalent Lucode shell terminal would find it.
