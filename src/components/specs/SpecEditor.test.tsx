@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, waitFor, act, screen, fireEvent } from '@testing-library/react'
+import { render, waitFor, act, screen, fireEvent, within } from '@testing-library/react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { specOrchestratorTerminalId } from '../../common/terminalIdentity'
 import type { EnrichedSession } from '../../types/session'
@@ -1055,24 +1055,49 @@ describe('SpecEditor keyboard shortcuts', () => {
 describe('SpecEditor implementation plan preview', () => {
   beforeEach(() => {
     specContentMock = {
-      content: 'Spec body',
+      content: 'Spec body content',
       displayName: 'Plan Spec',
       hasData: true,
     }
     sessionsMock = []
     vi.clearAllMocks()
+    vi.mocked(invoke).mockImplementation(async (cmd) => {
+      if (cmd === TauriCommands.SchaltwerkCoreGetSessionAgentContent) {
+        return ['Spec body', null]
+      }
+      if (cmd === TauriCommands.SchaltwerkCoreUpdateSpecContent) {
+        return undefined
+      }
+      if (cmd === TauriCommands.SchaltwerkCoreListEnrichedSessions) {
+        return []
+      }
+      if (cmd === TauriCommands.GetProjectSessionsSettings) {
+        return { filter_mode: 'all', sort_mode: 'name' }
+      }
+      if (cmd === TauriCommands.SetProjectSessionsSettings) {
+        return undefined
+      }
+      if (cmd === TauriCommands.GetProjectMergePreferences) {
+        return { auto_cancel_after_merge: false }
+      }
+      return undefined
+    })
+    vi.mocked(listen).mockImplementation(async () => () => {})
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('renders the implementation plan block in preview mode when the field is populated', async () => {
+  const renderPlanSession = async (
+    sessionId: string,
+    implementationPlan: string | null,
+  ) => {
     sessionsMock = [
       {
         info: {
-          session_id: 'plan-present',
-          stable_id: 'plan-present-id',
+          session_id: sessionId,
+          stable_id: `${sessionId}-id`,
           spec_stage: 'draft',
           branch: 'main',
           worktree_path: '',
@@ -1081,7 +1106,7 @@ describe('SpecEditor implementation plan preview', () => {
           is_current: false,
           session_type: 'worktree',
           session_state: 'spec',
-          spec_implementation_plan: '1. Step one.\n2. Step two.',
+          spec_implementation_plan: implementationPlan,
         },
         terminals: [],
       },
@@ -1089,7 +1114,7 @@ describe('SpecEditor implementation plan preview', () => {
 
     render(
       <TestProviders>
-        <SpecEditor sessionName="plan-present" />
+        <SpecEditor sessionName={sessionId} />
       </TestProviders>
     )
 
@@ -1098,46 +1123,52 @@ describe('SpecEditor implementation plan preview', () => {
     if (previewButton) {
       fireEvent.click(previewButton)
     }
+  }
 
-    const planBlock = await screen.findByTestId('spec-implementation-plan')
-    expect(planBlock).toBeInTheDocument()
-    expect(planBlock).toHaveTextContent('Step one')
-    expect(planBlock).toHaveTextContent('Implementation Plan')
+  it('renders separate preview tabs when an implementation plan exists', async () => {
+    await renderPlanSession('plan-present', '1. Step one.\n2. Step two.')
+
+    const previewTablist = await screen.findByRole('tablist')
+    expect(previewTablist).toBeInTheDocument()
+    expect(previewTablist).toHaveAttribute('data-testid', 'spec-preview-tabs')
+
+    const previewTab = screen.getByRole('tab', { name: 'Content' })
+    const implementationPlanTab = screen.getByRole('tab', { name: 'Implementation Plan' })
+    const previewPanel = screen.getByRole('tabpanel')
+
+    expect(previewTab).toHaveAttribute('aria-selected', 'true')
+    expect(implementationPlanTab).toHaveAttribute('aria-selected', 'false')
+    expect(previewTab).toHaveAttribute('title', 'Show task content')
+    expect(implementationPlanTab).toHaveAttribute('title', 'Show implementation plan')
+    expect(previewPanel).toHaveAttribute('aria-labelledby', 'plan-present-content-tab')
+    expect(within(previewPanel).getByTestId('markdown-renderer')).toHaveTextContent('Spec body content')
+    expect(within(previewPanel).getByTestId('markdown-renderer')).not.toHaveTextContent('Step one')
+    expect(screen.queryByTestId('spec-implementation-plan')).toBeNull()
+
+    fireEvent.click(implementationPlanTab)
+
+    const implementationPlanPanel = screen.getByRole('tabpanel')
+    expect(previewTab).toHaveAttribute('aria-selected', 'false')
+    expect(implementationPlanTab).toHaveAttribute('aria-selected', 'true')
+    expect(implementationPlanPanel).toHaveAttribute('aria-labelledby', 'plan-present-implementation-plan-tab')
+    expect(within(implementationPlanPanel).getByTestId('markdown-renderer')).toHaveTextContent('Step one')
+    expect(within(implementationPlanPanel).getByTestId('markdown-renderer')).not.toHaveTextContent('Spec body content')
   })
 
-  it('does not render the plan block when the field is empty', async () => {
-    sessionsMock = [
-      {
-        info: {
-          session_id: 'plan-missing',
-          stable_id: 'plan-missing-id',
-          spec_stage: 'draft',
-          branch: 'main',
-          worktree_path: '',
-          base_branch: 'main',
-          status: 'spec',
-          is_current: false,
-          session_type: 'worktree',
-          session_state: 'spec',
-          spec_implementation_plan: '   ',
-        },
-        terminals: [],
-      },
-    ]
+  it('keeps the single preview surface when the implementation plan is blank', async () => {
+    await renderPlanSession('plan-missing', '   ')
 
-    render(
-      <TestProviders>
-        <SpecEditor sessionName="plan-missing" />
-      </TestProviders>
-    )
-
-    await screen.findByText('draft')
-    const previewButton = screen.queryByTitle('Preview markdown')
-    if (previewButton) {
-      fireEvent.click(previewButton)
-    }
-
+    expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.queryByTestId('spec-implementation-plan')).toBeNull()
+    expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('Spec body content')
+  })
+
+  it('keeps the single preview surface when the implementation plan is null', async () => {
+    await renderPlanSession('plan-null', null)
+
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByTestId('spec-implementation-plan')).toBeNull()
+    expect(screen.getByTestId('markdown-renderer')).toHaveTextContent('Spec body content')
   })
 })
 

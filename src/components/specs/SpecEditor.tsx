@@ -23,6 +23,7 @@ import { useTranslation } from '../../common/i18n'
 import {
   markSpecEditorSessionSavedAtom,
   specEditorContentAtomFamily,
+  specEditorPreviewTabAtomFamily,
   specEditorSavedContentAtomFamily,
   specEditorViewModeAtomFamily,
 } from '../../store/atoms/specEditor'
@@ -117,12 +118,18 @@ export function SpecEditor({
   const [currentContent, setCurrentContent] = useAtom(specEditorContentAtomFamily(sessionName))
   const [savedContent, setSavedContent] = useAtom(specEditorSavedContentAtomFamily(sessionName))
   const [viewMode, setViewMode] = useAtom(specEditorViewModeAtomFamily(sessionName))
+  const [previewTab, setPreviewTab] = useAtom(specEditorPreviewTabAtomFamily(sessionName))
   const markSessionSaved = useSetAtom(markSpecEditorSessionSavedAtom)
   const selectedSession = useMemo(() => sessions.find(session => session.info.session_id === sessionName) ?? null, [sessions, sessionName])
   const selectedEpic = selectedSession?.info.epic ?? null
   const specStage = selectedSession?.info.spec_stage ?? 'draft'
   const isReadyStage = specStage === 'ready'
   const implementationPlan = selectedSession?.info.spec_implementation_plan?.trim() || null
+  const hasImplementationPlan = implementationPlan !== null
+  const contentTabId = `${sessionName}-content-tab`
+  const previewContentPanelId = `${sessionName}-content-panel`
+  const implementationPlanTabId = `${sessionName}-implementation-plan-tab`
+  const implementationPlanPanelId = `${sessionName}-implementation-plan-panel`
   const improvePlanRoundId = selectedSession?.info.improve_plan_round_id ?? null
   const improvePlanActive = Boolean(improvePlanRoundId)
   const improvePlanAction = useImprovePlanAction({
@@ -158,6 +165,12 @@ export function SpecEditor({
       }
     }
   }, [sessionName])
+
+  useEffect(() => {
+    if (!hasImplementationPlan && previewTab !== 'content') {
+      setPreviewTab('content')
+    }
+  }, [hasImplementationPlan, previewTab, setPreviewTab])
 
   const applyServerContent = useCallback((serverContent: string) => {
     setCurrentContent(serverContent)
@@ -1020,18 +1033,81 @@ export function SpecEditor({
           />
         </div>
         <div style={{ display: viewMode === 'preview' ? 'block' : 'none' }} className="h-full">
-          {implementationPlan ? (
-            <div className="h-full overflow-auto">
-              <MarkdownRenderer content={currentContent} fillHeight={false} />
+          {hasImplementationPlan ? (
+            <div className="h-full flex flex-col">
               <div
-                data-testid="spec-implementation-plan"
-                className="border-t border-border-subtle"
+                role="tablist"
+                aria-label={t.specEditor.previewMode}
+                data-testid="spec-preview-tabs"
+                className="px-4 pt-3 border-b border-border-subtle flex items-center gap-2"
               >
-                <div
-                  style={{ ...typography.caption, color: 'var(--color-text-tertiary)', padding: '16px 16px 0' }}
+                <button
+                  type="button"
+                  role="tab"
+                  id={contentTabId}
+                  aria-selected={previewTab === 'content'}
+                  aria-controls={previewContentPanelId}
+                  onClick={() => setPreviewTab('content')}
+                  title={t.specEditor.previewSpecTabTooltip}
+                  data-testid="spec-preview-tab-content"
+                  className="px-3 py-1.5 rounded border transition-colors"
+                  style={{
+                    ...typography.button,
+                    borderColor: previewTab === 'content'
+                      ? 'var(--color-border-default)'
+                      : 'var(--color-border-subtle)',
+                    backgroundColor: previewTab === 'content'
+                      ? 'var(--color-bg-elevated)'
+                      : 'transparent',
+                    color: previewTab === 'content'
+                      ? 'var(--color-text-primary)'
+                      : 'var(--color-text-secondary)',
+                  }}
+                >
+                  {t.specEditor.previewSpecTabLabel}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  id={implementationPlanTabId}
+                  aria-selected={previewTab === 'implementationPlan'}
+                  aria-controls={implementationPlanPanelId}
+                  onClick={() => setPreviewTab('implementationPlan')}
+                  title={t.specEditor.previewPlanTabTooltip}
+                  data-testid="spec-preview-tab-plan"
+                  className="px-3 py-1.5 rounded border transition-colors"
+                  style={{
+                    ...typography.button,
+                    borderColor: previewTab === 'implementationPlan'
+                      ? 'var(--color-border-default)'
+                      : 'var(--color-border-subtle)',
+                    backgroundColor: previewTab === 'implementationPlan'
+                      ? 'var(--color-bg-elevated)'
+                      : 'transparent',
+                    color: previewTab === 'implementationPlan'
+                      ? 'var(--color-text-primary)'
+                      : 'var(--color-text-secondary)',
+                  }}
                 >
                   {t.specEditor.implementationPlanHeading}
-                </div>
+                </button>
+              </div>
+              <div
+                id={previewContentPanelId}
+                role="tabpanel"
+                aria-labelledby={contentTabId}
+                hidden={previewTab !== 'content'}
+                className="flex-1 min-h-0 overflow-auto"
+              >
+                <MarkdownRenderer content={currentContent} fillHeight={false} />
+              </div>
+              <div
+                id={implementationPlanPanelId}
+                role="tabpanel"
+                aria-labelledby={implementationPlanTabId}
+                hidden={previewTab !== 'implementationPlan'}
+                className="flex-1 min-h-0 overflow-auto"
+              >
                 <MarkdownRenderer content={implementationPlan} fillHeight={false} />
               </div>
             </div>

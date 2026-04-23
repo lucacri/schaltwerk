@@ -1020,6 +1020,9 @@ export interface Translations {
     reloadBackendVersion: string
     keepLocalEdits: string
     implementationPlanHeading: string
+    previewSpecTabLabel: string
+    previewSpecTabTooltip: string
+    previewPlanTabTooltip: string
     resumeReviewTitle: string
     resumeReviewMessage: string
     resumeReviewContinue: string

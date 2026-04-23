@@ -2,6 +2,15 @@
 
 Features and enhancements added on top of the original schaltwerk codebase.
 
+## Spec preview splits content and implementation plan into tabs
+
+The spec/task preview previously stacked the main markdown body and any persisted implementation plan inside one scroll surface, which made generated plans easy to miss. Preview mode now separates those views into a small tab strip whenever `spec_implementation_plan` contains non-whitespace content, while leaving the existing single-preview behavior unchanged for empty plans.
+
+- `src/components/specs/SpecEditor.tsx` now renders `Content` and `Implementation Plan` tabs inside preview mode, with per-session preview-tab state stored through the spec editor atoms and a fallback back to the content tab whenever the plan disappears.
+- `src/store/atoms/specEditor.ts` adds a persisted `specEditorPreviewTabAtomFamily`, stored alongside the existing per-session view mode so switching sessions or leaving and returning to the task keeps the same preview sub-view.
+- `src/common/i18n/types.ts`, `src/locales/en.json`, and `src/locales/zh.json` add localized copy for the content tab and tab tooltips.
+- `src/components/specs/SpecEditor.test.tsx` adds coverage for the tabbed preview path plus blank and `null` implementation-plan fallbacks.
+
 ## Islands Dark: colorblind-safer teal/orange diff palette
 
 The `islands-dark` theme painted diff additions in green (`#6aab73`) and removals in red (`#f75464`) at very heavy opacities (`0.35` line / `0.5` text / `0.6` gutter), which made added and removed regions hard to distinguish for users with red-green colorblindness and was also an outlier against every other theme's layered `0.08 / 0.13 / 0.2` stack. The diff tokens now use an IBM-style teal/orange hue pair with luminance and warmth both carrying signal, and the layered opacities match the rest of the theme family so the Pierre adapter renders consistent emphasis across themes.
