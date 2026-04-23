@@ -195,7 +195,9 @@ fn build_shell_command(shell_name: &str, mark: &str) -> (Vec<String>, String) {
             )
         }
         _ => {
-            let command = format!("echo -n '{mark}'; env; echo -n '{mark}'");
+            let command = format!(
+                "{{ [ -n \"$NVM_DIR\" ] && [ -s \"$NVM_DIR/nvm.sh\" ] && \\. \"$NVM_DIR/nvm.sh\"; }} >/dev/null 2>&1; true; echo -n '{mark}'; env; echo -n '{mark}'"
+            );
             (
                 vec!["-i".to_string(), "-l".to_string(), "-c".to_string()],
                 command,
@@ -494,6 +496,54 @@ mod tests {
         assert_eq!(args, vec!["-i", "-l", "-c"]);
         assert!(cmd.contains("MARK"));
         assert!(cmd.contains("env"));
+    }
+
+    #[test]
+    fn build_shell_command_bash_zsh_activates_lazy_nvm_before_env() {
+        let (_, cmd) = build_shell_command("zsh", "MARK");
+
+        let nvm_idx = cmd
+            .find("nvm.sh")
+            .expect("expected nvm.sh activation snippet to be present");
+        let env_idx = cmd
+            .rfind("env")
+            .expect("expected env command to be present");
+
+        assert!(
+            nvm_idx < env_idx,
+            "nvm activation must run before env so the captured PATH includes nvm-managed bins; cmd={cmd}"
+        );
+        assert!(cmd.contains("NVM_DIR"), "must guard on $NVM_DIR; cmd={cmd}");
+        assert!(
+            cmd.contains("[ -s \"$NVM_DIR/nvm.sh\" ]"),
+            "must skip activation when nvm.sh is missing; cmd={cmd}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn build_shell_command_bash_snippet_exits_cleanly_without_nvm_dir() {
+        let (_, cmd) = build_shell_command("bash", "TESTMARK");
+
+        let output = std::process::Command::new("bash")
+            .arg("-c")
+            .arg(&cmd)
+            .env_remove("NVM_DIR")
+            .output()
+            .expect("bash must be available to run this test");
+
+        assert!(
+            output.status.success(),
+            "nvm activation snippet must be a no-op when NVM_DIR is unset; status={:?}; stderr={}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.matches("TESTMARK").count() >= 2,
+            "expected both markers in stdout when snippet is a no-op; stdout={stdout}"
+        );
     }
 
     #[test]
