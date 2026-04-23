@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useMemo, useState } from 'react'
+import { memo, useEffect, useId, useMemo, useState, useRef } from 'react'
 import { theme } from '../../common/theme'
 import { logger } from '../../utils/logger'
 
@@ -11,23 +11,43 @@ type RenderState =
   | { status: 'rendered'; svg: string }
   | { status: 'error'; message: string }
 
-function cssColor(variableName: string, fallback: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim() || fallback
+function readThemeVariable(
+  styles: CSSStyleDeclaration,
+  element: HTMLDivElement | null,
+  name: string,
+  fallback: string
+) {
+  const computedValue = styles.getPropertyValue(name).trim()
+  if (computedValue) return computedValue
+
+  let current: HTMLElement | null = element
+  while (current) {
+    const inlineValue = current.style.getPropertyValue(name).trim()
+    if (inlineValue) return inlineValue
+    current = current.parentElement
+  }
+
+  return document.documentElement.style.getPropertyValue(name).trim() || fallback
 }
 
-function buildMermaidThemeVariables() {
-  const background = cssColor('--color-bg-primary', theme.colors.background.primary)
-  const elevated = cssColor('--color-bg-elevated', theme.colors.background.elevated)
-  const secondary = cssColor('--color-bg-secondary', theme.colors.background.secondary)
-  const text = cssColor('--color-text-primary', theme.colors.text.primary)
-  const secondaryText = cssColor('--color-text-secondary', theme.colors.text.secondary)
-  const border = cssColor('--color-border-subtle', theme.colors.border.subtle)
-  const accent = cssColor('--color-accent-blue', theme.colors.accent.blue.DEFAULT)
+function buildMermaidThemeVariables(element: HTMLDivElement | null) {
+  const styles = window.getComputedStyle(element || document.documentElement)
+  const getVar = (name: string, fallback: string) => readThemeVariable(styles, element, name, fallback)
+
+  const isLight = getVar('--color-scheme', 'dark') === 'light'
+  const background = getVar('--color-bg-primary', theme.colors.background.primary)
+  const elevated = getVar('--color-bg-elevated', theme.colors.background.elevated)
+  const secondary = getVar('--color-bg-secondary', theme.colors.background.secondary)
+  const text = getVar('--color-text-primary', theme.colors.text.primary)
+  const secondaryText = getVar('--color-text-secondary', theme.colors.text.secondary)
+  const border = getVar('--color-border-subtle', theme.colors.border.subtle)
+  const accent = getVar('--color-accent-blue', theme.colors.accent.blue.DEFAULT)
+  const nodeFill = isLight ? secondary : elevated
 
   return {
     background,
-    mainBkg: elevated,
-    primaryColor: elevated,
+    mainBkg: nodeFill,
+    primaryColor: nodeFill,
     primaryTextColor: text,
     primaryBorderColor: border,
     secondaryColor: secondary,
@@ -38,16 +58,20 @@ function buildMermaidThemeVariables() {
     tertiaryBorderColor: border,
     lineColor: accent,
     textColor: text,
-    edgeLabelBackground: secondary,
-    noteBkgColor: secondary,
-    noteTextColor: secondaryText,
-    noteBorderColor: border,
+    edgeLabelBackground: isLight ? background : secondary,
+    noteBkgColor: isLight ? theme.colors.palette.yellow[100] : secondary,
+    noteTextColor: isLight ? theme.colors.palette.blue[950] : secondaryText,
+    noteBorderColor: isLight ? theme.colors.palette.yellow[600] : border,
     clusterBkg: secondary,
     clusterBorder: border,
+    titleColor: text,
+    sectionBkgColor: secondary,
+    sectionBkgColor2: background,
   }
 }
 
 export const MermaidDiagram = memo(function MermaidDiagram({ source }: MermaidDiagramProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const reactId = useId()
   const diagramId = useMemo(
     () => `mermaid-${reactId.replace(/[^a-zA-Z0-9_-]/g, '')}`,
@@ -61,16 +85,20 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: MermaidDi
 
     import('mermaid')
       .then(({ default: mermaid }) => {
+        if (cancelled) return
+
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: 'strict',
           theme: 'base',
-          themeVariables: buildMermaidThemeVariables(),
+          themeVariables: buildMermaidThemeVariables(containerRef.current),
         })
         return mermaid.render(diagramId, source)
       })
-      .then(({ svg }) => {
-        if (!cancelled) setState({ status: 'rendered', svg })
+      .then(result => {
+        if (result && !cancelled) {
+          setState({ status: 'rendered', svg: result.svg })
+        }
       })
       .catch(err => {
         const message = err instanceof Error ? err.message : String(err)
@@ -84,6 +112,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: MermaidDi
   if (state.status === 'error') {
     return (
       <div
+        ref={containerRef}
         data-testid="mermaid-diagram-error"
         role="note"
         style={{
@@ -121,6 +150,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: MermaidDi
   if (state.status === 'pending') {
     return (
       <div
+        ref={containerRef}
         data-testid="mermaid-diagram"
         data-state="pending"
         role="status"
@@ -139,6 +169,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source }: MermaidDi
 
   return (
     <div
+      ref={containerRef}
       data-testid="mermaid-diagram"
       data-state="rendered"
       className="mermaid-diagram"

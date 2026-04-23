@@ -67,12 +67,14 @@ describe('MermaidDiagram', () => {
     expect(new Set(ids).size).toBe(2)
   })
 
-  it('initializes mermaid with theme CSS variables read from document root', async () => {
-    document.documentElement.style.setProperty('--color-bg-elevated', '#222233')
-    document.documentElement.style.setProperty('--color-accent-blue', '#44aaff')
+  it('initializes mermaid with theme CSS variables read from container', async () => {
     mermaidMock.render.mockResolvedValue({ svg: '<svg></svg>', diagramType: 'flowchart' })
 
-    render(<MermaidDiagram source="graph TD; A-->B" />)
+    render(
+      <div style={{ '--color-bg-elevated': '#222233', '--color-accent-blue': '#44aaff' } as any}>
+        <MermaidDiagram source="graph TD; A-->B" />
+      </div>
+    )
 
     await waitFor(() => {
       expect(mermaidMock.initialize).toHaveBeenCalled()
@@ -81,6 +83,71 @@ describe('MermaidDiagram', () => {
       startOnLoad: false,
       securityLevel: 'strict',
       theme: 'base',
+      themeVariables: expect.objectContaining({
+        primaryColor: '#222233',
+        lineColor: '#44aaff',
+      }),
+    }))
+  })
+
+  it('uses light theme mappings when --color-scheme is light', async () => {
+    mermaidMock.render.mockResolvedValue({ svg: '<svg></svg>', diagramType: 'flowchart' })
+
+    render(
+      <div style={{
+        '--color-scheme': 'light',
+        '--color-bg-primary': '#ffffff',
+        '--color-bg-secondary': '#f6f8fa',
+        '--color-bg-elevated': '#ffffff',
+        '--color-text-primary': '#1f2328',
+      } as any}>
+        <MermaidDiagram source="graph TD; A-->B" />
+      </div>
+    )
+
+    await waitFor(() => {
+      expect(mermaidMock.initialize).toHaveBeenCalled()
+    })
+    
+    expect(mermaidMock.initialize).toHaveBeenCalledWith(expect.objectContaining({
+      themeVariables: expect.objectContaining({
+        background: '#ffffff',
+        // In light theme, elevated is white, so we should have picked up secondary (#f6f8fa) for contrast
+        primaryColor: '#f6f8fa',
+        primaryTextColor: '#1f2328',
+        noteBkgColor: '#fef9c3', // theme.colors.palette.yellow[100]
+      }),
+    }))
+  })
+
+  it('keeps reading container theme variables after recovering from a render error', async () => {
+    mermaidMock.render
+      .mockRejectedValueOnce(new Error('Parse error on line 1'))
+      .mockResolvedValueOnce({ svg: '<svg></svg>', diagramType: 'flowchart' })
+
+    const { rerender } = render(
+      <div style={{ '--color-bg-elevated': '#222233', '--color-accent-blue': '#44aaff' } as any}>
+        <MermaidDiagram source="graph TD; invalid" />
+      </div>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mermaid-diagram-error')).toBeInTheDocument()
+    })
+
+    mermaidMock.initialize.mockClear()
+
+    rerender(
+      <div style={{ '--color-bg-elevated': '#222233', '--color-accent-blue': '#44aaff' } as any}>
+        <MermaidDiagram source="graph TD; A-->B" />
+      </div>
+    )
+
+    await waitFor(() => {
+      expect(mermaidMock.initialize).toHaveBeenCalled()
+    })
+
+    expect(mermaidMock.initialize).toHaveBeenCalledWith(expect.objectContaining({
       themeVariables: expect.objectContaining({
         primaryColor: '#222233',
         lineColor: '#44aaff',
