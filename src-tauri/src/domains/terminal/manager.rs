@@ -568,6 +568,8 @@ impl TerminalManager {
         command: String,
         ready_marker: Option<String>,
         dispatch_delay: Option<Duration>,
+        use_bracketed_paste: bool,
+        needs_delayed_submit: bool,
     ) -> Result<(), String> {
         let preview = command
             .chars()
@@ -581,7 +583,14 @@ impl TerminalManager {
             dispatch_delay.map(|d| d.as_millis()).unwrap_or(0)
         );
         self.backend
-            .queue_initial_command(&id, command, ready_marker, dispatch_delay)
+            .queue_initial_command(
+                &id,
+                command,
+                ready_marker,
+                dispatch_delay,
+                use_bracketed_paste,
+                needs_delayed_submit,
+            )
             .await
     }
 

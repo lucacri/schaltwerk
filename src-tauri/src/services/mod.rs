@@ -57,6 +57,7 @@ pub use crate::domains::terminal::TerminalSnapshot;
 pub use crate::domains::terminal::{
     build_login_shell_invocation_with_shell, get_effective_shell,
     manager::CreateTerminalWithAppAndSizeParams, sh_quote_string, shell_invocation_to_posix,
+    submission::submission_options_for_agent,
 };
 pub use crate::domains::workspace::get_project_files_with_status;
 pub use crate::shared::format_branch_name;

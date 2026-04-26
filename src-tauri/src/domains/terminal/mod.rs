@@ -59,6 +59,8 @@ pub trait TerminalBackend: Send + Sync {
         _command: String,
         _ready_marker: Option<String>,
         _dispatch_delay: Option<Duration>,
+        _use_bracketed_paste: bool,
+        _needs_delayed_submit: bool,
     ) -> Result<(), String> {
         Ok(())
     }

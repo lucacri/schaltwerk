@@ -196,12 +196,39 @@ struct InitialCommandState {
     command: String,
     ready_marker: Option<Vec<u8>>,
     buffer: Vec<u8>,
+    dispatch_delay: Option<Duration>,
     dispatch_after: Option<Instant>,
+    use_bracketed_paste: bool,
+    needs_delayed_submit: bool,
+    dispatch_in_progress: bool,
 }
 
 const PROMPT_PATTERNS: &[&[u8]] = &[b"$ ", b"% ", b"\xe2\x9d\xaf "];
 const ENTER_REPLAY_TIMEOUT_MS: u64 = 2000;
 const PROMPT_SCAN_TAIL_BYTES: usize = 256;
+
+fn schedule_delayed_submit(
+    pty_writers: &Arc<Mutex<HashMap<String, Box<dyn Write + Send>>>>,
+    terminal_id: &str,
+) {
+    let id = terminal_id.to_string();
+    let writers = Arc::clone(pty_writers);
+
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        let mut guard = writers.lock().await;
+        if let Some(writer) = guard.get_mut(&id) {
+            if let Err(e) = writer.write_all(b"\r") {
+                warn!("Failed to send delayed submit for terminal {id}: {e}");
+                return;
+            }
+            if let Err(e) = writer.flush() {
+                warn!("Failed to flush delayed submit for terminal {id}: {e}");
+            }
+        }
+    });
+}
 
 fn buffer_tail_contains_prompt(buffer: &[u8]) -> bool {
     let start = buffer.len().saturating_sub(PROMPT_SCAN_TAIL_BYTES);
@@ -234,17 +261,27 @@ async fn maybe_dispatch_initial_command(
     terminal_id: &str,
     chunk: &[u8],
 ) {
-    let mut command_to_send: Option<String> = None;
+    let mut command_to_send: Option<(String, bool, bool)> = None;
 
     {
         let mut commands_guard = initial_commands.lock().await;
         if let Some(state) = commands_guard.get_mut(terminal_id) {
+            if state.dispatch_in_progress {
+                return;
+            }
             match &state.ready_marker {
                 Some(marker) if !marker.is_empty() => {
                     state.buffer.extend_from_slice(chunk);
-                    if contains_subsequence(&state.buffer, marker) {
-                        command_to_send = Some(state.command.clone());
-                        commands_guard.remove(terminal_id);
+                    let deadline_reached = state
+                        .dispatch_after
+                        .is_some_and(|deadline| Instant::now() >= deadline);
+                    if contains_subsequence(&state.buffer, marker) || deadline_reached {
+                        state.dispatch_in_progress = true;
+                        command_to_send = Some((
+                            state.command.clone(),
+                            state.use_bracketed_paste,
+                            state.needs_delayed_submit,
+                        ));
                     } else if state.buffer.len() > marker.len() {
                         let keep = marker.len();
                         let start = state.buffer.len() - keep;
@@ -258,29 +295,53 @@ async fn maybe_dispatch_initial_command(
                     {
                         return;
                     }
-                    command_to_send = Some(state.command.clone());
-                    commands_guard.remove(terminal_id);
+                    state.dispatch_in_progress = true;
+                    command_to_send = Some((
+                        state.command.clone(),
+                        state.use_bracketed_paste,
+                        state.needs_delayed_submit,
+                    ));
                 }
             }
         }
     }
 
-    if let Some(command) = command_to_send {
+    if let Some((command, use_bracketed_paste, needs_delayed_submit)) = command_to_send {
         info!("Dispatching queued initial command for terminal {terminal_id}");
 
         let mut writers_guard = pty_writers.lock().await;
-        if let Some(writer) = writers_guard.get_mut(terminal_id) {
-            let payload = build_submission_payload(command.as_bytes(), true, false);
+        let dispatched = if let Some(writer) = writers_guard.get_mut(terminal_id) {
+            let payload = build_submission_payload(
+                command.as_bytes(),
+                use_bracketed_paste,
+                needs_delayed_submit,
+            );
 
             if let Err(e) = writer.write_all(&payload) {
                 warn!("Failed to write initial command for terminal {terminal_id}: {e}");
+                false
             } else if let Err(e) = writer.flush() {
                 warn!("Failed to flush initial command for terminal {terminal_id}: {e}");
+                false
+            } else {
+                true
             }
         } else {
             warn!("No writer found to dispatch initial command for terminal {terminal_id}");
-        }
+            false
+        };
         drop(writers_guard);
+
+        if !dispatched {
+            reset_initial_command_dispatch_claim(initial_commands, terminal_id).await;
+            return;
+        }
+
+        self::remove_queued_initial_command(initial_commands, terminal_id).await;
+
+        if needs_delayed_submit {
+            schedule_delayed_submit(pty_writers, terminal_id);
+        }
 
         schedule_enter_replay(pty_writers, terminals, output_event_sender, terminal_id);
 
@@ -291,6 +352,23 @@ async fn maybe_dispatch_initial_command(
                 warn!("Failed to emit terminal force scroll event for {terminal_id}: {e}");
             }
         }
+    }
+}
+
+async fn remove_queued_initial_command(
+    initial_commands: &Arc<Mutex<HashMap<String, InitialCommandState>>>,
+    terminal_id: &str,
+) {
+    initial_commands.lock().await.remove(terminal_id);
+}
+
+async fn reset_initial_command_dispatch_claim(
+    initial_commands: &Arc<Mutex<HashMap<String, InitialCommandState>>>,
+    terminal_id: &str,
+) {
+    let mut commands_guard = initial_commands.lock().await;
+    if let Some(state) = commands_guard.get_mut(terminal_id) {
+        state.dispatch_in_progress = false;
     }
 }
 
@@ -309,6 +387,12 @@ pub struct LocalPtyAdapter {
     initial_commands: Arc<Mutex<HashMap<String, InitialCommandState>>>,
     // Event broadcasting for deterministic testing
     output_event_sender: Arc<broadcast::Sender<(String, u64)>>, // (terminal_id, new_seq)
+    // Tracked PIDs of every successfully spawned child, so `Drop` can SIGKILL
+    // any orphans even if a test panics before calling `close()`. Kept in a
+    // sync mutex so Drop can lock it without an async runtime. Entries are
+    // removed as soon as a child is reaped (close/force_kill_all) so we never
+    // signal a PID the kernel has already recycled.
+    spawned_pids: Arc<std::sync::Mutex<HashSet<u32>>>,
 }
 
 #[derive(Clone)]
@@ -336,6 +420,52 @@ impl Default for LocalPtyAdapter {
 }
 
 impl LocalPtyAdapter {
+    fn schedule_initial_command_dispatch(&self, terminal_id: String, deadline: Instant) {
+        let initial_commands = Arc::clone(&self.initial_commands);
+        let pty_writers = Arc::clone(&self.pty_writers);
+        let terminals = Arc::clone(&self.terminals);
+        let output_event_sender = Arc::clone(&self.output_event_sender);
+        let coalescing_state = self.coalescing_state.clone();
+
+        tokio::spawn(async move {
+            if deadline > Instant::now() {
+                let tokio_deadline = TokioInstant::from_std(deadline);
+                tokio::time::sleep_until(tokio_deadline).await;
+            }
+
+            maybe_dispatch_initial_command(
+                &initial_commands,
+                &pty_writers,
+                &terminals,
+                &output_event_sender,
+                &coalescing_state,
+                &terminal_id,
+                &[],
+            )
+            .await;
+        });
+    }
+
+    async fn activate_initial_command_dispatch(&self, id: &str) {
+        let deadline = {
+            let mut commands_guard = self.initial_commands.lock().await;
+            let Some(state) = commands_guard.get_mut(id) else {
+                return;
+            };
+            if state.dispatch_after.is_some() {
+                return;
+            }
+            let Some(delay) = state.dispatch_delay else {
+                return;
+            };
+            let deadline = Instant::now() + delay;
+            state.dispatch_after = Some(deadline);
+            deadline
+        };
+
+        self.schedule_initial_command_dispatch(id.to_string(), deadline);
+    }
+
     fn reader_state(&self) -> ReaderState {
         ReaderState {
             terminals: Arc::clone(&self.terminals),
@@ -379,6 +509,7 @@ impl LocalPtyAdapter {
             pending_control_sequences: Arc::new(Mutex::new(HashMap::new())),
             initial_commands: Arc::new(Mutex::new(HashMap::new())),
             output_event_sender: Arc::new(output_event_sender),
+            spawned_pids: Arc::new(std::sync::Mutex::new(HashSet::new())),
         }
     }
 
@@ -930,32 +1061,6 @@ impl LocalPtyAdapter {
             .insert(id.to_string(), reader_handle);
         Ok(())
     }
-
-    fn schedule_initial_command_dispatch(&self, terminal_id: String, deadline: Instant) {
-        let initial_commands = Arc::clone(&self.initial_commands);
-        let pty_writers = Arc::clone(&self.pty_writers);
-        let terminals = Arc::clone(&self.terminals);
-        let output_event_sender = Arc::clone(&self.output_event_sender);
-        let coalescing_state = self.coalescing_state.clone();
-
-        tokio::spawn(async move {
-            if deadline > Instant::now() {
-                let tokio_deadline = TokioInstant::from_std(deadline);
-                tokio::time::sleep_until(tokio_deadline).await;
-            }
-
-            maybe_dispatch_initial_command(
-                &initial_commands,
-                &pty_writers,
-                &terminals,
-                &output_event_sender,
-                &coalescing_state,
-                &terminal_id,
-                &[],
-            )
-            .await;
-        });
-    }
 }
 
 fn schedule_enter_replay(
@@ -1139,6 +1244,15 @@ impl TerminalBackend for LocalPtyAdapter {
             start_time.elapsed().as_millis()
         );
 
+        // Record the spawned pid in the sync pid tracker so Drop can SIGKILL
+        // orphans on panic-triggered unwinds (tests that `.unwrap()` before
+        // reaching `close()` would otherwise leak the shell + slave PTY end).
+        if let Some(pid) = child.process_id()
+            && let Ok(mut guard) = self.spawned_pids.lock()
+        {
+            guard.insert(pid);
+        }
+
         let writer = pair
             .master
             .take_writer()
@@ -1197,6 +1311,7 @@ impl TerminalBackend for LocalPtyAdapter {
 
         self.terminals.write().await.insert(id.clone(), state);
         clear_attention_for_top_terminal(session_id.as_deref(), &id);
+        self.activate_initial_command_dispatch(&id).await;
 
         // Start reader agent and record the handle so we can abort on close
         self.spawn_reader_for(&id).await?;
@@ -1320,6 +1435,8 @@ impl TerminalBackend for LocalPtyAdapter {
         command: String,
         ready_marker: Option<String>,
         dispatch_delay: Option<Duration>,
+        use_bracketed_paste: bool,
+        needs_delayed_submit: bool,
     ) -> Result<(), String> {
         let preview = command
             .chars()
@@ -1339,13 +1456,21 @@ impl TerminalBackend for LocalPtyAdapter {
                 Some(marker.into_bytes())
             }
         });
-        let dispatch_after = dispatch_delay.map(|delay| Instant::now() + delay);
+        let dispatch_after = if self.pty_writers.lock().await.contains_key(id) {
+            dispatch_delay.map(|delay| Instant::now() + delay)
+        } else {
+            None
+        };
 
         let state = InitialCommandState {
             command,
             ready_marker: marker_bytes,
             buffer: Vec::new(),
+            dispatch_delay,
             dispatch_after,
+            use_bracketed_paste,
+            needs_delayed_submit,
+            dispatch_in_progress: false,
         };
 
         self.initial_commands
@@ -1393,6 +1518,14 @@ impl TerminalBackend for LocalPtyAdapter {
         if let Some(mut child) = self.pty_children.lock().await.remove(id) {
             #[cfg(unix)]
             let maybe_pid = child.process_id();
+            // Remove the pid from the Drop-time tracker before attempting to
+            // reap. After a successful wait() the PID can be recycled by the
+            // kernel, so Drop must not signal it again.
+            if let Some(pid) = child.process_id()
+                && let Ok(mut guard) = self.spawned_pids.lock()
+            {
+                guard.remove(&pid);
+            }
 
             #[cfg(unix)]
             if let Some(pid) = maybe_pid {
@@ -1552,9 +1685,52 @@ impl TerminalBackend for LocalPtyAdapter {
         self.pending_control_sequences.lock().await.clear();
         self.initial_commands.lock().await.clear();
         self.coalescing_state.clear_all().await;
+        if let Ok(mut guard) = self.spawned_pids.lock() {
+            guard.clear();
+        }
 
         info!("All terminals force killed");
         Ok(())
+    }
+}
+
+impl Drop for LocalPtyAdapter {
+    /// Guarantee that every shell we spawned gets SIGKILL'd even if a test
+    /// panicked before reaching `close()`. Without this, orphaned interactive
+    /// shells keep the slave-end of the PTY open, the kernel never frees the
+    /// ptmx slot, and after ~511 runs macOS refuses to allocate new PTYs
+    /// (`kern.tty.ptmx_max`). Drop is sync, so we use a plain `std::sync::Mutex`
+    /// for the pid tracker and send signals directly via libc — no tokio
+    /// runtime work here.
+    fn drop(&mut self) {
+        let pids: Vec<u32> = match self.spawned_pids.lock() {
+            Ok(mut guard) => guard.drain().collect(),
+            Err(poisoned) => poisoned.into_inner().drain().collect(),
+        };
+        if pids.is_empty() {
+            return;
+        }
+        #[cfg(unix)]
+        for pid in pids {
+            // SIGKILL the entire process group so shell children die too.
+            // The shell forks its children into its own pgid at spawn; we set
+            // pgid=pid implicitly via portable_pty's setsid. Negative pid
+            // addresses the process group. `kill -9` ignores handlers; no
+            // zombies accumulate because init/launchd reaps orphaned zombies.
+            unsafe {
+                libc::kill(-(pid as libc::pid_t), libc::SIGKILL);
+            }
+            log::debug!("LocalPtyAdapter::drop SIGKILL'd pgid {pid}");
+        }
+        #[cfg(not(unix))]
+        {
+            // Windows: portable_pty's Child::kill() is the only path, but we
+            // don't have the Child here. Dropping the pty_children HashMap
+            // drops each Box<dyn Child>, and portable_pty's Windows impl does
+            // kill on drop. This branch is a no-op placeholder to silence
+            // unused-variable lints when compiling for Windows.
+            let _ = pids;
+        }
     }
 }
 
@@ -1790,6 +1966,155 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
+    fn process_alive(pid: u32) -> bool {
+        // SIGNAL 0 is the POSIX "no-op" probe: returns 0 if the process
+        // exists (even as zombie), -1 + ESRCH if gone. That's enough to
+        // distinguish "running" vs "killed-and-reaped". Zombies still
+        // return alive here but have already released their PTY slave, so
+        // they do not contribute to the ptmx leak this test is checking.
+        unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
+    }
+
+    #[cfg(unix)]
+    fn wait_for_reap(pid: u32, timeout: Duration) -> bool {
+        // Poll waitpid(pid, WNOHANG) so the zombie left behind by our SIGKILL
+        // gets reaped before the test returns. Without reaping, kill(pid, 0)
+        // would still return 0 (zombie == "alive" to the signal layer) even
+        // though the process is dead and the PTY slot is freed.
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            let mut status: libc::c_int = 0;
+            let res = unsafe { libc::waitpid(pid as libc::pid_t, &mut status, libc::WNOHANG) };
+            if res > 0 {
+                return true; // Reaped
+            }
+            if res < 0 {
+                // ECHILD: not our child or already reaped by init.
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn adapter_drop_sigkills_spawned_shell_when_close_never_runs() {
+        let id = unique_id("drop-leak");
+        let pid;
+        {
+            let adapter = LocalPtyAdapter::new();
+            let params = CreateParams {
+                id: id.clone(),
+                cwd: test_temp_dir(),
+                app: None,
+                disable_hydration_buffer: false,
+            };
+            adapter.create(params).await.expect("create");
+
+            pid = {
+                let guard = adapter.spawned_pids.lock().unwrap();
+                *guard.iter().next().expect("pid recorded")
+            };
+            assert!(
+                process_alive(pid),
+                "spawned shell pid {pid} should be alive while adapter lives",
+            );
+            // Adapter drops HERE without a corresponding `close()` — mimics
+            // the panic-before-cleanup pattern the PTY leak test discovered.
+        }
+
+        assert!(
+            wait_for_reap(pid, Duration::from_secs(2)),
+            "pid {pid} should be reaped after LocalPtyAdapter::drop SIGKILL",
+        );
+        assert!(!process_alive(pid), "pid {pid} should not exist after reap",);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn adapter_drop_during_panic_unwind_still_kills_shell() {
+        // Reproduces the original bug: a test .unwrap()s deep inside, the
+        // stack unwinds, and the adapter is dropped mid-panic. The fix must
+        // still fire regardless of how the adapter went out of scope.
+        let pid = std::sync::Arc::new(std::sync::Mutex::new(0u32));
+        let pid_capture = std::sync::Arc::clone(&pid);
+        let id = unique_id("panic-unwind");
+
+        let id_for_panic = id.clone();
+        let handle = tokio::spawn(async move {
+            let adapter = LocalPtyAdapter::new();
+            adapter
+                .create(CreateParams {
+                    id: id_for_panic,
+                    cwd: test_temp_dir(),
+                    app: None,
+                    disable_hydration_buffer: false,
+                })
+                .await
+                .expect("create");
+            {
+                let recorded = *adapter.spawned_pids.lock().unwrap().iter().next().unwrap();
+                *pid_capture.lock().unwrap() = recorded;
+            }
+            // Deliberately panic after create() succeeds, without calling
+            // close(). The adapter must be dropped by the unwind machinery
+            // and its Drop impl must SIGKILL the shell.
+            panic!("intentional panic to exercise Drop-on-unwind");
+        });
+
+        let join_result = handle.await;
+        assert!(
+            join_result.is_err(),
+            "task should have panicked; got {:?}",
+            join_result
+        );
+
+        let captured_pid = *pid.lock().unwrap();
+        assert!(captured_pid > 0, "pid must have been recorded before panic");
+
+        assert!(
+            wait_for_reap(captured_pid, Duration::from_secs(2)),
+            "shell pid {captured_pid} must be reaped after panic-triggered Drop",
+        );
+        assert!(
+            !process_alive(captured_pid),
+            "pid {captured_pid} must not exist after panic-triggered Drop",
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn adapter_close_removes_pid_from_drop_tracker() {
+        let id = unique_id("close-tracker");
+        let adapter = LocalPtyAdapter::new();
+        adapter
+            .create(CreateParams {
+                id: id.clone(),
+                cwd: test_temp_dir(),
+                app: None,
+                disable_hydration_buffer: false,
+            })
+            .await
+            .expect("create");
+
+        assert_eq!(
+            adapter.spawned_pids.lock().unwrap().len(),
+            1,
+            "tracker should contain exactly one pid after create",
+        );
+
+        adapter.close(&id).await.expect("close");
+
+        assert!(
+            adapter.spawned_pids.lock().unwrap().is_empty(),
+            "tracker must be empty after close reaps the child",
+        );
+    }
+
     #[tokio::test]
     async fn test_create_exists_close() {
         let adapter = LocalPtyAdapter::new();
@@ -1854,6 +2179,82 @@ mod tests {
         assert!(!snapshot.data.is_empty());
 
         safe_close(&adapter, &id).await;
+    }
+
+    #[tokio::test]
+    async fn maybe_dispatch_initial_command_skips_when_dispatch_is_already_claimed() {
+        let adapter = LocalPtyAdapter::new();
+        let id = unique_id("initial-command-claimed");
+
+        adapter.initial_commands.lock().await.insert(
+            id.clone(),
+            InitialCommandState {
+                command: "echo SHOULD_NOT_RUN".to_string(),
+                ready_marker: Some(b"READY".to_vec()),
+                buffer: Vec::new(),
+                dispatch_delay: None,
+                dispatch_after: None,
+                use_bracketed_paste: true,
+                needs_delayed_submit: false,
+                dispatch_in_progress: true,
+            },
+        );
+
+        maybe_dispatch_initial_command(
+            &adapter.initial_commands,
+            &adapter.pty_writers,
+            &adapter.terminals,
+            &adapter.output_event_sender,
+            &adapter.coalescing_state,
+            &id,
+            b"READY",
+        )
+        .await;
+
+        let commands_guard = adapter.initial_commands.lock().await;
+        let state = commands_guard
+            .get(&id)
+            .expect("claimed initial command should remain queued");
+        assert!(state.dispatch_in_progress);
+        assert!(state.buffer.is_empty());
+    }
+
+    #[tokio::test]
+    async fn maybe_dispatch_initial_command_releases_claim_after_failed_write() {
+        let adapter = LocalPtyAdapter::new();
+        let id = unique_id("initial-command-failed-write");
+
+        adapter.initial_commands.lock().await.insert(
+            id.clone(),
+            InitialCommandState {
+                command: "echo RETRY_ME".to_string(),
+                ready_marker: Some(b"READY".to_vec()),
+                buffer: Vec::new(),
+                dispatch_delay: None,
+                dispatch_after: None,
+                use_bracketed_paste: true,
+                needs_delayed_submit: false,
+                dispatch_in_progress: false,
+            },
+        );
+
+        maybe_dispatch_initial_command(
+            &adapter.initial_commands,
+            &adapter.pty_writers,
+            &adapter.terminals,
+            &adapter.output_event_sender,
+            &adapter.coalescing_state,
+            &id,
+            b"READY",
+        )
+        .await;
+
+        let commands_guard = adapter.initial_commands.lock().await;
+        let state = commands_guard
+            .get(&id)
+            .expect("failed dispatch should remain queued for retry");
+        assert!(!state.dispatch_in_progress);
+        assert!(contains_subsequence(&state.buffer, b"READY"));
     }
 
     #[tokio::test]

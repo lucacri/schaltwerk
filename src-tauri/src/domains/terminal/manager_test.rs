@@ -227,6 +227,8 @@ mod tests {
                 "echo AUTO_COMMAND".to_string(),
                 Some("READY_MARKER".to_string()),
                 None,
+                true,
+                false,
             )
             .await
             .unwrap();
@@ -267,6 +269,8 @@ mod tests {
                 "echo DELAY_DISPATCHED".to_string(),
                 None,
                 Some(Duration::from_millis(200)),
+                true,
+                false,
             )
             .await
             .unwrap();
@@ -279,6 +283,114 @@ mod tests {
         assert!(
             buffer.contains("DELAY_DISPATCHED"),
             "Expected delayed initial command to execute even without terminal output"
+        );
+
+        safe_close(&manager, &id).await;
+    }
+
+    #[tokio::test]
+    async fn queue_initial_command_dispatches_after_delay_even_when_ready_marker_is_missing() {
+        let manager = local_manager();
+        let id = unique_id("initial-cmd-marker-fallback");
+
+        manager
+            .create_terminal(id.clone(), "/tmp".to_string())
+            .await
+            .unwrap();
+
+        manager
+            .queue_initial_command(
+                id.clone(),
+                "echo MARKER_FALLBACK".to_string(),
+                Some("NEVER_APPEARS".to_string()),
+                Some(Duration::from_millis(200)),
+                true,
+                false,
+            )
+            .await
+            .unwrap();
+
+        sleep(Duration::from_millis(500)).await;
+
+        let buffer = read_buffer(&manager, id.clone()).await;
+        assert!(
+            buffer.contains("MARKER_FALLBACK"),
+            "Expected delayed initial command to execute even when the ready marker never appears"
+        );
+
+        safe_close(&manager, &id).await;
+    }
+
+    #[tokio::test]
+    async fn queue_initial_command_waits_for_terminal_creation_before_starting_delay() {
+        let manager = local_manager();
+        let id = unique_id("initial-cmd-precreate");
+
+        manager
+            .queue_initial_command(
+                id.clone(),
+                "echo CREATED_LATE".to_string(),
+                None,
+                Some(Duration::from_millis(200)),
+                true,
+                false,
+            )
+            .await
+            .unwrap();
+
+        sleep(Duration::from_millis(300)).await;
+
+        manager
+            .create_terminal(id.clone(), "/tmp".to_string())
+            .await
+            .unwrap();
+
+        sleep(Duration::from_millis(500)).await;
+
+        let buffer = read_buffer(&manager, id.clone()).await;
+        assert!(
+            buffer.contains("CREATED_LATE"),
+            "Expected queued command to survive until the terminal exists"
+        );
+
+        safe_close(&manager, &id).await;
+    }
+
+    #[tokio::test]
+    async fn queue_initial_command_waits_for_terminal_creation_and_ready_marker_without_delay() {
+        let manager = local_manager();
+        let id = unique_id("initial-cmd-precreate-marker");
+
+        manager
+            .queue_initial_command(
+                id.clone(),
+                "echo MARKER_AFTER_CREATE".to_string(),
+                Some("READY_MARKER".to_string()),
+                None,
+                true,
+                false,
+            )
+            .await
+            .unwrap();
+
+        sleep(Duration::from_millis(300)).await;
+
+        manager
+            .create_terminal(id.clone(), "/tmp".to_string())
+            .await
+            .unwrap();
+
+        manager
+            .write_terminal(id.clone(), b"echo READY_MARKER\n".to_vec())
+            .await
+            .unwrap();
+
+        sleep(Duration::from_millis(400)).await;
+
+        let buffer = read_buffer(&manager, id.clone()).await;
+        assert!(
+            buffer.contains("MARKER_AFTER_CREATE"),
+            "Expected queued command to execute after terminal creation once the ready marker appears"
         );
 
         safe_close(&manager, &id).await;

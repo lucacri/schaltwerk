@@ -260,9 +260,18 @@ impl TerminalBackend for TmuxAdapter {
         command: String,
         ready_marker: Option<String>,
         dispatch_delay: Option<Duration>,
+        use_bracketed_paste: bool,
+        needs_delayed_submit: bool,
     ) -> Result<(), String> {
         self.inner
-            .queue_initial_command(id, command, ready_marker, dispatch_delay)
+            .queue_initial_command(
+                id,
+                command,
+                ready_marker,
+                dispatch_delay,
+                use_bracketed_paste,
+                needs_delayed_submit,
+            )
             .await
     }
 

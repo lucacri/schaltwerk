@@ -24,7 +24,7 @@ use lucode::services::SessionMethods;
 use lucode::services::format_branch_name;
 use lucode::services::get_project_files_with_status;
 use lucode::services::repository;
-use lucode::services::{AgentManifest, parse_agent_command};
+use lucode::services::{AgentManifest, parse_agent_command, submission_options_for_agent};
 use lucode::services::{
     ConsolidationStats, ConsolidationStatsFilter, EnrichedSessionEntity as EnrichedSession,
     FilterMode, Session, SessionState, SortMode,
@@ -3356,9 +3356,7 @@ async fn schaltwerk_core_start_agent_in_terminal(
 
     let (cwd, agent_name, agent_args) = parse_agent_command(&command)?;
     let agent_kind = agent_ctx::infer_agent_kind(&agent_name);
-    let (auto_send_initial_command, ready_marker) = AgentManifest::get(agent_kind.manifest_key())
-        .map(|m| (m.auto_send_initial_command, m.ready_marker.clone()))
-        .unwrap_or((false, None));
+    let queue_policy = initial_command_queue_policy(agent_type.as_str(), agent_kind.manifest_key());
 
     // Check if we have permission to access the working directory
     log::info!("Checking permissions for working directory: {cwd}");
@@ -3378,15 +3376,9 @@ async fn schaltwerk_core_start_agent_in_terminal(
     log::info!("Working directory access confirmed: {cwd}");
 
     if should_queue_initial_command
-        && auto_send_initial_command
+        && queue_policy.auto_send_initial_command
         && let Some(initial) = initial_command.clone().filter(|v| !v.trim().is_empty())
     {
-        let dispatch_delay =
-            if agent_type == "copilot" || agent_type == "kilocode" || agent_type == "opencode" {
-                Some(Duration::from_millis(1500))
-            } else {
-                None
-            };
         let preview = initial
             .chars()
             .filter(|c| *c != '\r' && *c != '\n')
@@ -3395,15 +3387,20 @@ async fn schaltwerk_core_start_agent_in_terminal(
         log::info!(
             "Queueing initial command for session '{session_name}' (agent={agent_type}, len={}, ready_marker={:?}, delay_ms={}) preview=\"{preview}\"",
             initial.len(),
-            ready_marker.as_deref(),
-            dispatch_delay.map(|d| d.as_millis()).unwrap_or(0),
+            queue_policy.ready_marker.as_deref(),
+            queue_policy
+                .dispatch_delay
+                .map(|d| d.as_millis())
+                .unwrap_or(0),
         );
         terminal_manager
             .queue_initial_command(
                 terminal_id.clone(),
                 initial,
-                ready_marker.clone(),
-                dispatch_delay,
+                queue_policy.ready_marker.clone(),
+                queue_policy.dispatch_delay,
+                queue_policy.use_bracketed_paste,
+                queue_policy.needs_delayed_submit,
             )
             .await?;
     }
@@ -4768,6 +4765,44 @@ fn build_fresh_orchestrator_command_spec<DB: AppConfigMethods>(
     Ok((orchestrator_agent, command_spec))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InitialCommandQueuePolicy {
+    auto_send_initial_command: bool,
+    ready_marker: Option<String>,
+    dispatch_delay: Option<Duration>,
+    use_bracketed_paste: bool,
+    needs_delayed_submit: bool,
+}
+
+fn initial_command_queue_policy(agent_type: &str, manifest_key: &str) -> InitialCommandQueuePolicy {
+    let (auto_send_initial_command, ready_marker) = AgentManifest::get(manifest_key)
+        .map(|manifest| {
+            (
+                manifest.auto_send_initial_command,
+                manifest.ready_marker.clone(),
+            )
+        })
+        .unwrap_or((false, None));
+    let (use_bracketed_paste, needs_delayed_submit) =
+        submission_options_for_agent(Some(agent_type));
+    let dispatch_delay = match agent_type {
+        "copilot" | "kilocode" => Some(Duration::from_millis(1500)),
+        // OpenCode dispatches when the manifest ready_marker matches; the
+        // longer fallback deadline guards against marker text drift across
+        // upstream OpenCode releases so the prompt cannot hang forever.
+        "opencode" => Some(Duration::from_millis(5000)),
+        _ => None,
+    };
+
+    InitialCommandQueuePolicy {
+        auto_send_initial_command,
+        ready_marker,
+        dispatch_delay,
+        use_bracketed_paste,
+        needs_delayed_submit,
+    }
+}
+
 #[tauri::command]
 pub async fn schaltwerk_core_start_fresh_orchestrator(
     terminal_id: String,
@@ -5062,6 +5097,17 @@ mod tests {
             "fresh orchestrator command must not resume: {}",
             command_spec.shell_command
         );
+    }
+
+    #[test]
+    fn opencode_initial_command_queue_policy_uses_manifest_marker_with_fallback_deadline() {
+        let policy = initial_command_queue_policy("opencode", "opencode");
+
+        assert!(policy.auto_send_initial_command);
+        assert_eq!(policy.ready_marker.as_deref(), Some("? for shortcuts"));
+        assert_eq!(policy.dispatch_delay, Some(Duration::from_millis(5000)));
+        assert!(policy.use_bracketed_paste);
+        assert!(!policy.needs_delayed_submit);
     }
 
     #[test]

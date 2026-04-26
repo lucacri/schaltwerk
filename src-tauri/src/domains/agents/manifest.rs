@@ -145,6 +145,18 @@ mod tests {
     }
 
     #[test]
+    fn test_opencode_definition() {
+        let opencode = AgentManifest::get("opencode").expect("OpenCode manifest entry missing");
+        assert_eq!(opencode.id, "opencode");
+        assert_eq!(opencode.display_name, "OpenCode");
+        assert_eq!(opencode.binary_name, "opencode");
+        assert_eq!(opencode.default_binary_path, "opencode");
+        assert!(opencode.auto_send_initial_command);
+        assert!(opencode.supports_resume);
+        assert_eq!(opencode.ready_marker.as_deref(), Some("? for shortcuts"));
+    }
+
+    #[test]
     fn test_nonexistent_agent() {
         assert!(AgentManifest::get("nonexistent").is_none());
     }

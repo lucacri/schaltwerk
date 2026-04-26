@@ -46,6 +46,7 @@ default_binary_path = "opencode"
 auto_send_initial_command = true
 supports_resume = true
 supports_skip_permissions = false
+ready_marker = "? for shortcuts"
 
 [agents.droid]
 id = "droid"
