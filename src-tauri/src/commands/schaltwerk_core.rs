@@ -5107,7 +5107,7 @@ mod tests {
         assert_eq!(policy.ready_marker.as_deref(), Some("? for shortcuts"));
         assert_eq!(policy.dispatch_delay, Some(Duration::from_millis(5000)));
         assert!(policy.use_bracketed_paste);
-        assert!(!policy.needs_delayed_submit);
+        assert!(policy.needs_delayed_submit);
     }
 
     #[test]
