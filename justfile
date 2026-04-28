@@ -28,7 +28,7 @@ _stamp-calver:
     cp package.json package.json.bak
     YEAR=$(date +%Y)
     MONTH_DAY=$(date +%-m%d)
-    HOUR_MIN=$(date +%-H%M)
+    HOUR_MIN=$((10#$(date +%H%M)))
     VERSION="${YEAR}.${MONTH_DAY}.${HOUR_MIN}"
     echo "Stamping calver: $VERSION"
     sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.json
