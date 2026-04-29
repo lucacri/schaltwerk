@@ -26,7 +26,7 @@ use crate::commands::schaltwerk_core::{
 use crate::commands::sessions_refresh::{SessionsRefreshReason, request_sessions_refresh};
 use crate::mcp_api::diff_api::{DiffApiError, DiffChunkRequest, DiffScope, SummaryQuery};
 use crate::{
-    REQUEST_PROJECT_OVERRIDE, SETTINGS_MANAGER, get_core_read, get_core_write, get_project_manager,
+    REQUEST_PROJECT_OVERRIDE, SETTINGS_MANAGER, get_core_handle, get_project_manager,
 };
 use lucode::domains::attention::get_session_attention_state;
 use lucode::domains::git::service::{ForgeType, detect_forge};
@@ -1770,7 +1770,7 @@ async fn diff_chunk(req: Request<Incoming>) -> Result<Response<String>, hyper::E
 }
 
 async fn get_session_spec(name: &str) -> Result<Response<String>, hyper::Error> {
-    let core = match get_core_read().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             return Ok(json_error_response(
@@ -1785,7 +1785,6 @@ async fn get_session_spec(name: &str) -> Result<Response<String>, hyper::Error> 
         Ok(session) => session,
         Err(err) => return Ok(diff_error_response(err)),
     };
-    drop(core);
 
     let spec = match diff_api::fetch_session_spec(&session) {
         Ok(spec) => spec,
@@ -1806,7 +1805,7 @@ async fn get_session_spec(name: &str) -> Result<Response<String>, hyper::Error> 
 }
 
 async fn resolve_diff_scope(session_param: Option<&str>) -> Result<DiffScope, DiffApiError> {
-    let core = get_core_read()
+    let core = get_core_handle()
         .await
         .map_err(|e| internal_diff_error(format!("Internal error: {e}")))?;
 
@@ -6795,7 +6794,7 @@ async fn create_draft(
         .as_str()
         .or_else(|| payload["pr_url"].as_str());
 
-    let core = match get_core_write().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             error!("Failed to get para core: {e}");
@@ -6929,7 +6928,7 @@ impl SpecAttentionResponse {
 }
 
 async fn list_drafts() -> Result<Response<String>, hyper::Error> {
-    let manager = match get_core_read().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
             error!("Failed to get para core: {e}");
@@ -6959,7 +6958,7 @@ async fn list_drafts() -> Result<Response<String>, hyper::Error> {
 }
 
 async fn list_spec_summaries() -> Result<Response<String>, hyper::Error> {
-    let manager = match get_core_read().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
             error!("Failed to get core for spec summaries: {e}");
@@ -6997,7 +6996,7 @@ async fn list_spec_summaries() -> Result<Response<String>, hyper::Error> {
 }
 
 async fn get_spec_content(name: &str) -> Result<Response<String>, hyper::Error> {
-    let manager = match get_core_read().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
             error!("Failed to get core for spec content: {e}");
@@ -7061,7 +7060,7 @@ async fn update_spec_content(
 
     let append = payload["append"].as_bool().unwrap_or(false);
 
-    let manager = match get_core_write().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
             error!("Failed to get para core: {e}");
@@ -7128,7 +7127,7 @@ async fn update_spec_stage(
         }
     };
 
-    let core = match get_core_write().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(err) => {
             error!("Failed to get lucode core for spec stage update: {err}");
@@ -7203,7 +7202,7 @@ async fn update_spec_attention(
         }
     };
 
-    let core = match get_core_write().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(err) => {
             error!("Failed to get lucode core for spec attention update: {err}");
@@ -7290,7 +7289,7 @@ async fn start_spec_session(
         return Ok(json_error_response(StatusCode::BAD_REQUEST, message));
     }
 
-    let core = match get_core_write().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             error!("Failed to get lucode core: {e}");
@@ -7806,7 +7805,7 @@ pub(crate) async fn start_improve_plan_round_inner(
     params: StartImprovePlanRoundParams,
 ) -> Result<ImprovePlanRoundResponse, (StatusCode, String)> {
     let (db, manager) = {
-        let core = get_core_write().await.map_err(|err| {
+        let core = get_core_handle().await.map_err(|err| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Internal error: {err}"),
@@ -7830,7 +7829,7 @@ pub(crate) async fn start_improve_plan_round_inner(
 }
 
 async fn delete_draft(name: &str, app: tauri::AppHandle) -> Result<Response<String>, hyper::Error> {
-    let manager = match get_core_write().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
             error!("Failed to get para core: {e}");
@@ -7958,7 +7957,7 @@ async fn create_session(
         return Ok(json_error_response(StatusCode::BAD_REQUEST, message));
     }
 
-    let core = match get_core_write().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             error!("Failed to get para core: {e}");
@@ -8130,7 +8129,7 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
         filter_state = Some(SessionState::Spec);
     }
 
-    let (base_sessions, git_tasks, db) = match get_core_read().await {
+    let (base_sessions, git_tasks, db) = match get_core_handle().await {
         Ok(core) => match core.session_manager().list_enriched_sessions_base() {
             Ok((sessions, git_tasks)) => (sessions, git_tasks, core.db.clone()),
             Err(e) => {
@@ -8231,7 +8230,7 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
 }
 
 async fn get_session(name: &str) -> Result<Response<String>, hyper::Error> {
-    let manager = match get_core_read().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
             error!("Failed to get para core: {e}");
@@ -8290,7 +8289,7 @@ fn pr_feedback_result_to_response(
 }
 
 async fn get_session_pr_feedback(name: &str) -> Result<Response<String>, hyper::Error> {
-    let core = match get_core_read().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             error!("Failed to get core for PR feedback: {e}");
@@ -8323,7 +8322,6 @@ async fn get_session_pr_feedback(name: &str) -> Result<Response<String>, hyper::
             ));
         }
     };
-    drop(core);
 
     let project_manager = get_project_manager().await;
     let cli = lucode::services::GitHubCli::new();
@@ -8361,7 +8359,7 @@ async fn merge_session(
     app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
     // Validate session state up front to produce actionable errors
-    match get_core_read().await {
+    match get_core_handle().await {
         Ok(core) => {
             let manager = core.session_manager();
             match manager.get_session(name) {
@@ -8526,7 +8524,7 @@ async fn create_pull_request(
     if forge == ForgeType::GitLab {
         let gitlab_source = {
             let core = project.schaltwerk_core.read().await;
-            let db = core.database();
+            let db = &core.db;
             db.get_project_gitlab_config(&project.path)
                 .ok()
                 .flatten()
@@ -8666,7 +8664,7 @@ async fn prepare_pull_request(
     name: &str,
     app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
-    match get_core_read().await {
+    match get_core_handle().await {
         Ok(core) => {
             let manager = core.session_manager();
             match manager.get_session(name) {
@@ -8750,7 +8748,7 @@ async fn prepare_gitlab_merge_request(
     name: &str,
     app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
-    match get_core_read().await {
+    match get_core_handle().await {
         Ok(core) => {
             let manager = core.session_manager();
             match manager.get_session(name) {
@@ -8849,7 +8847,7 @@ async fn prepare_merge(
     name: &str,
     app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
-    match get_core_read().await {
+    match get_core_handle().await {
         Ok(core) => {
             let manager = core.session_manager();
             match manager.get_session(name) {
@@ -8927,7 +8925,7 @@ async fn delete_session(
     name: &str,
     app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
-    let (manager, db, round_id) = match get_core_write().await {
+    let (manager, db, round_id) = match get_core_handle().await {
         Ok(core) => {
             let round_id = core
                 .session_manager()
@@ -8992,7 +8990,7 @@ async fn promote_session(
         }
     };
 
-    let manager = match get_core_write().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(error) => {
             error!("Failed to get lucode core for promotion: {error}");
@@ -9440,7 +9438,7 @@ pub(crate) async fn confirm_consolidation_winner_inner(
     override_reason: Option<&str>,
     confirmed_by: &str,
 ) -> Result<ConfirmConsolidationWinnerResponse, (StatusCode, String)> {
-    let core = get_core_write().await.map_err(|err| {
+    let core = get_core_handle().await.map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Internal error: {err}"),
@@ -9777,7 +9775,7 @@ pub(crate) async fn trigger_consolidation_judge_inner(
     early: bool,
 ) -> Result<TriggerConsolidationJudgeResponse, (StatusCode, String)> {
     let (db, manager, round, candidate_sessions) = {
-        let core = get_core_write().await.map_err(|error| {
+        let core = get_core_handle().await.map_err(|error| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Internal error: {error}"),
@@ -9871,7 +9869,7 @@ async fn update_consolidation_report(
     }
 
     let prepared: Result<PreparedReport, (StatusCode, String)> = async {
-        let core = get_core_write().await.map_err(|error| {
+        let core = get_core_handle().await.map_err(|error| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Internal error: {error}"),
@@ -10143,7 +10141,7 @@ async fn link_session_pr(
         }
     };
 
-    let manager = match get_core_write().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
             error!("Failed to get core for PR link: {e}");
@@ -10179,7 +10177,7 @@ async fn unlink_session_pr(
     name: &str,
     app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
-    let manager = match get_core_write().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
             error!("Failed to get core for PR unlink: {e}");
@@ -10210,7 +10208,7 @@ async fn convert_session_to_spec(
     name: &str,
     app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
-    let manager = match get_core_write().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
             error!("Failed to get lucode core: {e}");
@@ -10242,7 +10240,7 @@ async fn convert_session_to_spec(
 async fn get_project_setup_script(
     _app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
-    let core = match get_core_read().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             error!("Failed to get core for setup script: {e}");
@@ -10253,7 +10251,7 @@ async fn get_project_setup_script(
         }
     };
 
-    let db = core.database().clone();
+    let db = core.db.clone();
     let repo_path = core.repo_path.clone();
     let setup_scripts = SetupScriptService::new(db, repo_path);
 
@@ -10284,7 +10282,7 @@ async fn set_project_setup_script(
         Err((status, message)) => return Ok(json_error_response(status, message)),
     };
 
-    let core = match get_core_read().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             error!("Failed to get core for setup script update: {e}");
@@ -10321,7 +10319,7 @@ async fn set_project_setup_script(
 async fn get_project_worktree_base_directory(
     _app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
-    let core = match get_core_read().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             error!("Failed to get core for worktree base directory: {e}");
@@ -10332,7 +10330,7 @@ async fn get_project_worktree_base_directory(
         }
     };
 
-    let db = core.database().clone();
+    let db = core.db.clone();
     let repo_path = core.repo_path.clone();
 
     match db.get_project_worktree_base_directory(&repo_path) {
@@ -10362,7 +10360,7 @@ async fn set_project_worktree_base_directory(
         Err((status, message)) => return Ok(json_error_response(status, message)),
     };
 
-    let core = match get_core_write().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             error!("Failed to get core for worktree base directory update: {e}");
@@ -10373,7 +10371,7 @@ async fn set_project_worktree_base_directory(
         }
     };
 
-    let db = core.database().clone();
+    let db = core.db.clone();
     let repo_path = core.repo_path.clone();
 
     match db.set_project_worktree_base_directory(&repo_path, base_directory.as_deref()) {
@@ -10392,7 +10390,7 @@ async fn set_project_worktree_base_directory(
 }
 
 async fn get_project_run_script_api() -> Result<Response<String>, hyper::Error> {
-    let core = match get_core_read().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             error!("Failed to get core for run script: {e}");
@@ -10403,7 +10401,7 @@ async fn get_project_run_script_api() -> Result<Response<String>, hyper::Error> 
         }
     };
 
-    let db = core.database().clone();
+    let db = core.db.clone();
     let repo_path = core.repo_path.clone();
 
     match db.get_project_run_script(&repo_path) {
@@ -10430,7 +10428,7 @@ async fn get_project_run_script_api() -> Result<Response<String>, hyper::Error> 
 }
 
 async fn execute_project_run_script() -> Result<Response<String>, hyper::Error> {
-    let core = match get_core_read().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             error!("Failed to get core for run script execution: {e}");
@@ -10441,7 +10439,7 @@ async fn execute_project_run_script() -> Result<Response<String>, hyper::Error> 
         }
     };
 
-    let db = core.database().clone();
+    let db = core.db.clone();
     let repo_path = core.repo_path.clone();
 
     let run_script = match db.get_project_run_script(&repo_path) {
@@ -10516,7 +10514,7 @@ async fn execute_project_run_script() -> Result<Response<String>, hyper::Error> 
 }
 
 async fn list_epics() -> Result<Response<String>, hyper::Error> {
-    let manager = match get_core_read().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
             error!("Failed to get core for listing epics: {e}");
@@ -10573,7 +10571,7 @@ async fn create_epic(
     };
     let color = payload["color"].as_str();
 
-    let manager = match get_core_write().await {
+    let manager = match get_core_handle().await {
         Ok(core) => core.session_manager(),
         Err(e) => {
             error!("Failed to get core for creating epic: {e}");
@@ -10699,7 +10697,7 @@ async fn reset_orchestrator(
     payload: ResetSelectionRequest,
     app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
-    let core = match get_core_write().await {
+    let core = match get_core_handle().await {
         Ok(core) => core,
         Err(e) => {
             return Ok(error_response(
@@ -10722,7 +10720,6 @@ async fn reset_orchestrator(
     });
 
     let terminal_id = terminal_id_for_orchestrator_top(core.repo_path.as_path());
-    drop(core);
 
     let start_result = start_orchestrator_with_prompt(
         app.clone(),
@@ -10769,7 +10766,7 @@ async fn start_orchestrator_with_prompt(
         .await;
     }
 
-    let core = get_core_read().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
     let db = core.db.clone();
     let repo_path = core.repo_path.clone();
@@ -10791,7 +10788,6 @@ async fn start_orchestrator_with_prompt(
     let command_spec = manager
         .start_agent_in_orchestrator(&binary_paths, agent_type.as_deref(), Some(prompt))
         .map_err(|e| e.to_string())?;
-    drop(core);
 
     let launch_result = agent_launcher::launch_in_terminal(
         terminal_id,
@@ -10812,7 +10808,7 @@ async fn reset_session_with_payload(
     payload: ResetSessionRequest,
     app: tauri::AppHandle,
 ) -> Result<Response<String>, hyper::Error> {
-    if let Ok(core) = get_core_write().await {
+    if let Ok(core) = get_core_handle().await {
         let manager = core.session_manager();
         if let Some(agent_type) = payload.agent_type.as_deref() {
             if let Err(e) = manager.set_session_original_settings(name, agent_type) {
