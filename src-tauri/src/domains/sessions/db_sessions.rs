@@ -96,6 +96,38 @@ pub trait SessionMethods {
         name: &str,
         ready: bool,
     ) -> Result<()>;
+
+    /// Record a PTY exit fact on the session row. Sets both `exited_at` and
+    /// `exit_code` in one statement. Always overwrites prior values — the
+    /// terminal layer is responsible for not re-writing an exit when one
+    /// already happened (in practice the recorder only fires from
+    /// `handle_agent_crash` once per PTY child).
+    fn set_session_exited_at(
+        &self,
+        id: &str,
+        exited_at: chrono::DateTime<chrono::Utc>,
+        exit_code: Option<i32>,
+    ) -> Result<()>;
+
+    /// Record the **first** time this session entered idle / `WaitingForInput`.
+    /// Write-once at the SQL level (`WHERE first_idle_at IS NULL`): a second
+    /// call commits zero rows and returns `Ok(())`. This is the load-bearing
+    /// invariant for sticky `AwaitingSelection` in
+    /// [`crate::domains::tasks::run_status::compute_run_status`] — see Phase 1
+    /// plan §1 and the Wave G3 regression test.
+    fn set_session_first_idle_at(
+        &self,
+        id: &str,
+        first_idle_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()>;
+
+    /// Return every session bound to the given `task_run_id`. The Sessions
+    /// returned by this query include the v2 fact columns
+    /// (`exited_at`, `exit_code`, `first_idle_at`) — unlike the legacy
+    /// `list_sessions` / `get_session_by_id` queries which still source from a
+    /// SELECT that predates these columns. Callers wiring
+    /// `compute_run_status` should use this method.
+    fn get_sessions_by_task_run_id(&self, task_run_id: &str) -> Result<Vec<Session>>;
 }
 
 const SQLITE_MAX_VARIABLE_NUMBER: usize = 999;
@@ -1186,6 +1218,151 @@ impl SessionMethods for Database {
         )?;
         Ok(())
     }
+
+    fn set_session_exited_at(
+        &self,
+        id: &str,
+        exited_at: chrono::DateTime<chrono::Utc>,
+        exit_code: Option<i32>,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        let now = Utc::now().timestamp();
+        conn.execute(
+            "UPDATE sessions
+                SET exited_at = ?1, exit_code = ?2, updated_at = ?3
+                WHERE id = ?4",
+            params![exited_at.timestamp(), exit_code, now, id],
+        )?;
+        Ok(())
+    }
+
+    fn set_session_first_idle_at(
+        &self,
+        id: &str,
+        first_idle_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        let now = Utc::now().timestamp();
+        // Write-once: the IS NULL guard makes a second call a 0-row UPDATE.
+        conn.execute(
+            "UPDATE sessions
+                SET first_idle_at = ?1, updated_at = ?2
+                WHERE id = ?3 AND first_idle_at IS NULL",
+            params![first_idle_at.timestamp(), now, id],
+        )?;
+        Ok(())
+    }
+
+    fn get_sessions_by_task_run_id(&self, task_run_id: &str) -> Result<Vec<Session>> {
+        let conn = self.get_conn()?;
+        let mut stmt = conn.prepare(
+            "SELECT
+                id, name, display_name, version_group_id, version_number, epic_id,
+                repository_path, repository_name, branch, parent_branch,
+                original_parent_branch, worktree_path,
+                status, created_at, updated_at, last_activity, initial_prompt,
+                ready_to_merge, original_agent_type, original_agent_model,
+                pending_name_generation, was_auto_generated, spec_content,
+                session_state, resume_allowed, amp_thread_id,
+                issue_number, issue_url, pr_number, pr_url, pr_state,
+                is_consolidation, consolidation_sources,
+                consolidation_round_id, consolidation_role,
+                consolidation_report, consolidation_report_source,
+                consolidation_base_session_id,
+                consolidation_recommended_session_id,
+                consolidation_confirmation_mode, promotion_reason,
+                ci_autofix_enabled, merged_at,
+                task_id, task_stage, task_role,
+                task_run_id, run_role, slot_key,
+                exited_at, exit_code, first_idle_at
+             FROM sessions
+             WHERE task_run_id = ?1
+             ORDER BY created_at ASC",
+        )?;
+
+        let rows = stmt.query_map(params![task_run_id], row_to_session_with_facts)?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+}
+
+fn row_to_session_with_facts(row: &rusqlite::Row<'_>) -> rusqlite::Result<Session> {
+    Ok(Session {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        display_name: row.get(2).ok(),
+        version_group_id: row.get(3).ok(),
+        version_number: row.get(4).ok(),
+        epic_id: row.get(5).ok(),
+        repository_path: PathBuf::from(row.get::<_, String>(6)?),
+        repository_name: row.get(7)?,
+        branch: row.get(8)?,
+        parent_branch: row.get(9)?,
+        original_parent_branch: row.get(10).ok(),
+        worktree_path: PathBuf::from(row.get::<_, String>(11)?),
+        status: row
+            .get::<_, String>(12)?
+            .parse()
+            .unwrap_or(SessionStatus::Active),
+        created_at: utc_from_epoch_seconds_lossy(row.get(13)?),
+        updated_at: utc_from_epoch_seconds_lossy(row.get(14)?),
+        last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(15)?),
+        initial_prompt: row.get(16)?,
+        ready_to_merge: row.get(17).unwrap_or(false),
+        original_agent_type: row.get(18).ok(),
+        original_agent_model: row.get(19).ok(),
+        pending_name_generation: row.get(20).unwrap_or(false),
+        was_auto_generated: row.get(21).unwrap_or(false),
+        spec_content: row.get(22).ok(),
+        session_state: row
+            .get::<_, String>(23)
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(SessionState::Running),
+        resume_allowed: row.get(24).unwrap_or(true),
+        amp_thread_id: row.get(25).ok(),
+        issue_number: row.get(26).ok(),
+        issue_url: row.get(27).ok(),
+        pr_number: row.get(28).ok(),
+        pr_url: row.get(29).ok(),
+        pr_state: row
+            .get::<_, Option<String>>(30)
+            .ok()
+            .flatten()
+            .and_then(|s| s.parse().ok()),
+        is_consolidation: row.get(31).unwrap_or(false),
+        consolidation_sources: row
+            .get::<_, Option<String>>(32)
+            .ok()
+            .flatten()
+            .and_then(|s| serde_json::from_str(&s).ok()),
+        consolidation_round_id: row.get(33).ok(),
+        consolidation_role: row.get(34).ok(),
+        consolidation_report: row.get(35).ok(),
+        consolidation_report_source: row.get(36).ok(),
+        consolidation_base_session_id: row.get(37).ok(),
+        consolidation_recommended_session_id: row.get(38).ok(),
+        consolidation_confirmation_mode: row.get(39).ok(),
+        promotion_reason: row.get(40).ok(),
+        ci_autofix_enabled: row.get(41).unwrap_or(false),
+        merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(42)?),
+        task_id: row.get(43).ok(),
+        task_stage: row
+            .get::<_, Option<String>>(44)
+            .ok()
+            .flatten()
+            .and_then(|s| s.parse().ok()),
+        task_role: row.get(45).ok(),
+        task_run_id: row.get(46).ok(),
+        run_role: row.get(47).ok(),
+        slot_key: row.get(48).ok(),
+        exited_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(49)?),
+        exit_code: row.get(50).ok(),
+        first_idle_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(51)?),
+    })
 }
 
 #[cfg(test)]
@@ -1881,5 +2058,215 @@ mod tests {
             loaded.consolidation_confirmation_mode.as_deref(),
             Some("confirm")
         );
+    }
+
+    fn make_session_for_run(id: &str, repo: &Path, task_run_id: Option<&str>) -> Session {
+        Session {
+            id: id.to_string(),
+            name: id.to_string(),
+            display_name: None,
+            version_group_id: None,
+            version_number: None,
+            epic_id: None,
+            repository_path: repo.to_path_buf(),
+            repository_name: "repo".to_string(),
+            branch: format!("lucode/{id}"),
+            parent_branch: "main".to_string(),
+            original_parent_branch: Some("main".to_string()),
+            worktree_path: repo.join(format!(".lucode/worktrees/{id}")),
+            status: SessionStatus::Active,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_activity: None,
+            initial_prompt: None,
+            ready_to_merge: false,
+            original_agent_type: None,
+            original_agent_model: None,
+            pending_name_generation: false,
+            was_auto_generated: false,
+            spec_content: None,
+            session_state: SessionState::Running,
+            resume_allowed: true,
+            amp_thread_id: None,
+            issue_number: None,
+            issue_url: None,
+            pr_number: None,
+            pr_url: None,
+            pr_state: None,
+            is_consolidation: false,
+            consolidation_sources: None,
+            consolidation_round_id: None,
+            consolidation_role: None,
+            consolidation_report: None,
+            consolidation_report_source: None,
+            consolidation_base_session_id: None,
+            consolidation_recommended_session_id: None,
+            consolidation_confirmation_mode: None,
+            promotion_reason: None,
+            ci_autofix_enabled: false,
+            merged_at: None,
+            task_id: None,
+            task_stage: None,
+            task_role: None,
+            task_run_id: task_run_id.map(String::from),
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
+        }
+    }
+
+    /// `create_session` predates Wave B, so it uses the legacy INSERT that does not
+    /// include `task_run_id`. Tests that need the linkage poke it into the row
+    /// after creation via raw UPDATE — this matches what `SessionFactsRecorder`
+    /// will do indirectly once Wave G wires the recorder into session lifecycle.
+    fn link_session_to_run(db: &Database, session_id: &str, task_run_id: &str) {
+        let conn = db.get_conn().expect("conn");
+        conn.execute(
+            "UPDATE sessions SET task_run_id = ?1 WHERE id = ?2",
+            params![task_run_id, session_id],
+        )
+        .expect("link");
+    }
+
+    #[test]
+    fn set_session_exited_at_writes_both_columns() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        let session = make_session_for_run("s1", &repo, None);
+        db.create_session(&session).expect("create");
+
+        let exit_ts = Utc.timestamp_opt(2_000, 0).single().unwrap();
+        db.set_session_exited_at("s1", exit_ts, Some(7))
+            .expect("set exit");
+        link_session_to_run(&db, "s1", "run-1");
+
+        let bound = db.get_sessions_by_task_run_id("run-1").expect("by run");
+        assert_eq!(bound.len(), 1);
+        let s = &bound[0];
+        assert_eq!(
+            s.exited_at.map(|t| t.timestamp()),
+            Some(exit_ts.timestamp())
+        );
+        assert_eq!(s.exit_code, Some(7));
+    }
+
+    #[test]
+    fn set_session_exited_at_with_none_exit_code_leaves_column_null() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        db.create_session(&make_session_for_run("s1", &repo, None))
+            .expect("create");
+        link_session_to_run(&db, "s1", "run-1");
+
+        let exit_ts = Utc.timestamp_opt(2_000, 0).single().unwrap();
+        db.set_session_exited_at("s1", exit_ts, None).expect("set");
+
+        let bound = db.get_sessions_by_task_run_id("run-1").expect("by run");
+        let s = &bound[0];
+        assert!(s.exited_at.is_some());
+        assert!(s.exit_code.is_none());
+    }
+
+    #[test]
+    fn set_session_first_idle_at_writes_when_null() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        db.create_session(&make_session_for_run("s1", &repo, None))
+            .expect("create");
+        link_session_to_run(&db, "s1", "run-1");
+
+        let idle_ts = Utc.timestamp_opt(3_000, 0).single().unwrap();
+        db.set_session_first_idle_at("s1", idle_ts).expect("set");
+
+        let bound = db.get_sessions_by_task_run_id("run-1").expect("by run");
+        let s = &bound[0];
+        assert_eq!(
+            s.first_idle_at.map(|t| t.timestamp()),
+            Some(idle_ts.timestamp())
+        );
+    }
+
+    /// **Load-bearing regression test** for sticky AwaitingSelection. If a future
+    /// change replaces the `WHERE first_idle_at IS NULL` guard, or bumps it to a
+    /// `LATEST` semantic, AwaitingSelection will start flapping. See Phase 1 plan
+    /// §1, "first_idle_at is write-once".
+    #[test]
+    fn set_session_first_idle_at_is_write_once_second_call_is_a_noop() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        db.create_session(&make_session_for_run("s1", &repo, None))
+            .expect("create");
+        link_session_to_run(&db, "s1", "run-1");
+
+        let first = Utc.timestamp_opt(3_000, 0).single().unwrap();
+        let later = Utc.timestamp_opt(4_500, 0).single().unwrap();
+        db.set_session_first_idle_at("s1", first).expect("first");
+        db.set_session_first_idle_at("s1", later)
+            .expect("second call must succeed without error");
+
+        let bound = db.get_sessions_by_task_run_id("run-1").expect("by run");
+        let s = &bound[0];
+        assert_eq!(
+            s.first_idle_at.map(|t| t.timestamp()),
+            Some(first.timestamp()),
+            "second call must NOT overwrite the original first_idle_at"
+        );
+    }
+
+    #[test]
+    fn first_idle_at_per_session_is_independent() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        db.create_session(&make_session_for_run("a", &repo, None))
+            .expect("create a");
+        db.create_session(&make_session_for_run("b", &repo, None))
+            .expect("create b");
+        link_session_to_run(&db, "a", "run-1");
+        link_session_to_run(&db, "b", "run-1");
+
+        let ta = Utc.timestamp_opt(3_000, 0).single().unwrap();
+        let tb = Utc.timestamp_opt(4_000, 0).single().unwrap();
+        db.set_session_first_idle_at("a", ta).expect("a");
+        db.set_session_first_idle_at("b", tb).expect("b");
+
+        let bound = db.get_sessions_by_task_run_id("run-1").expect("by run");
+        let by_id: std::collections::HashMap<_, _> =
+            bound.iter().map(|s| (s.id.as_str(), s)).collect();
+        assert_eq!(
+            by_id["a"].first_idle_at.map(|t| t.timestamp()),
+            Some(ta.timestamp())
+        );
+        assert_eq!(
+            by_id["b"].first_idle_at.map(|t| t.timestamp()),
+            Some(tb.timestamp())
+        );
+    }
+
+    #[test]
+    fn get_sessions_by_task_run_id_filters_to_bound_only() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        db.create_session(&make_session_for_run("bound", &repo, None))
+            .expect("bound");
+        db.create_session(&make_session_for_run("foreign", &repo, None))
+            .expect("foreign");
+        db.create_session(&make_session_for_run("orphan", &repo, None))
+            .expect("orphan");
+        link_session_to_run(&db, "bound", "target-run");
+        link_session_to_run(&db, "foreign", "other-run");
+        // orphan stays unlinked (task_run_id IS NULL)
+
+        let bound = db.get_sessions_by_task_run_id("target-run").expect("query");
+        assert_eq!(bound.len(), 1);
+        assert_eq!(bound[0].id, "bound");
+    }
+
+    #[test]
+    fn get_sessions_by_task_run_id_returns_empty_for_unknown_run() {
+        let db = Database::new_in_memory().expect("db");
+        let bound = db.get_sessions_by_task_run_id("does-not-exist").expect("query");
+        assert!(bound.is_empty());
     }
 }
