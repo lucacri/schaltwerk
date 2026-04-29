@@ -2,10 +2,11 @@
 
 **Branch:** `task-flow-v2`
 **Design:** [2026-04-29-task-flow-v2-design.md](./2026-04-29-task-flow-v2-design.md)
+**Baseline:** [2026-04-29-task-flow-v2-baseline.md](./2026-04-29-task-flow-v2-baseline.md)
 
 | Phase | Title | Status | PR / Commit |
 |---|---|---|---|
-| 0 | Backup + branch + reference snapshot | `[ ]` | — |
+| 0 | Backup + branch + reference snapshot | `[x]` | `44fd5370` |
 | 1 | Collapse `TaskRunStatus` to derived state | `[ ]` | — |
 | 2 | Per-task mutex; remove global RwLock | `[ ]` | — |
 | 3 | Drop `RunRole`, `SessionState`, `SessionStatus` | `[ ]` | — |
