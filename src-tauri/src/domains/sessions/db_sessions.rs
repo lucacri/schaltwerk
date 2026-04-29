@@ -128,6 +128,62 @@ pub trait SessionMethods {
     /// SELECT that predates these columns. Callers wiring
     /// `compute_run_status` should use this method.
     fn get_sessions_by_task_run_id(&self, task_run_id: &str) -> Result<Vec<Session>>;
+
+    /// Stamp the task-lineage columns on a session row. v2 ports v1's
+    /// behavior: the same `run_role` value is mirrored into the legacy
+    /// `task_role` column so older readers keep working until Phase 3 retires
+    /// `task_role`.
+    fn set_session_task_lineage(
+        &self,
+        session_id: &str,
+        task_id: Option<&str>,
+        task_run_id: Option<&str>,
+        task_stage: Option<&str>,
+        run_role: Option<&str>,
+        slot_key: Option<&str>,
+    ) -> Result<()>;
+
+    /// Lookup a session's task-lineage projection (the small subset of fields
+    /// the orchestration layer reads). Returns the lineage even when the
+    /// session has no task association — the callers handle the all-NULL
+    /// case.
+    fn get_session_task_lineage(&self, session_id: &str) -> Result<SessionTaskLineage>;
+
+    /// Find the (id, branch) of the session bound to `task_run_id` with
+    /// `run_role`. Used by clarify-run idempotency to detect an existing
+    /// agent session before spawning a duplicate.
+    fn find_session_for_task_run(
+        &self,
+        task_run_id: &str,
+        run_role: &str,
+    ) -> Result<Option<TaskRunSessionRef>>;
+
+    /// List every session bound to a given `task_run_id`, regardless of
+    /// `run_role`. Used by orchestration to inspect the full sibling set
+    /// of a run.
+    fn list_sessions_for_task_run(&self, task_run_id: &str) -> Result<Vec<SessionForRun>>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionTaskLineage {
+    pub task_id: Option<String>,
+    pub task_run_id: Option<String>,
+    pub task_stage: Option<String>,
+    pub run_role: Option<String>,
+    pub slot_key: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskRunSessionRef {
+    pub session_id: String,
+    pub branch: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionForRun {
+    pub session_id: String,
+    pub session_name: String,
+    pub run_role: Option<String>,
 }
 
 const SQLITE_MAX_VARIABLE_NUMBER: usize = 999;
@@ -1251,6 +1307,111 @@ impl SessionMethods for Database {
             params![first_idle_at.timestamp(), now, id],
         )?;
         Ok(())
+    }
+
+    fn set_session_task_lineage(
+        &self,
+        session_id: &str,
+        task_id: Option<&str>,
+        task_run_id: Option<&str>,
+        task_stage: Option<&str>,
+        run_role: Option<&str>,
+        slot_key: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        let rows = conn.execute(
+            "UPDATE sessions SET
+                task_id = ?1,
+                task_run_id = ?2,
+                task_stage = ?3,
+                run_role = ?4,
+                task_role = ?4,
+                slot_key = ?5,
+                updated_at = ?6
+             WHERE id = ?7",
+            params![
+                task_id,
+                task_run_id,
+                task_stage,
+                run_role,
+                slot_key,
+                Utc::now().timestamp(),
+                session_id,
+            ],
+        )?;
+        if rows == 0 {
+            return Err(anyhow::anyhow!(
+                "session '{session_id}' not found while stamping task lineage"
+            ));
+        }
+        Ok(())
+    }
+
+    fn get_session_task_lineage(&self, session_id: &str) -> Result<SessionTaskLineage> {
+        let conn = self.get_conn()?;
+        let lineage = conn.query_row(
+            "SELECT task_id, task_run_id, task_stage, run_role, slot_key
+             FROM sessions WHERE id = ?1",
+            params![session_id],
+            |row| {
+                Ok(SessionTaskLineage {
+                    task_id: row.get::<_, Option<String>>(0).ok().flatten(),
+                    task_run_id: row.get::<_, Option<String>>(1).ok().flatten(),
+                    task_stage: row.get::<_, Option<String>>(2).ok().flatten(),
+                    run_role: row.get::<_, Option<String>>(3).ok().flatten(),
+                    slot_key: row.get::<_, Option<String>>(4).ok().flatten(),
+                })
+            },
+        )?;
+        Ok(lineage)
+    }
+
+    fn find_session_for_task_run(
+        &self,
+        task_run_id: &str,
+        run_role: &str,
+    ) -> Result<Option<TaskRunSessionRef>> {
+        let conn = self.get_conn()?;
+        let result: rusqlite::Result<TaskRunSessionRef> = conn.query_row(
+            "SELECT id, branch
+             FROM sessions
+             WHERE task_run_id = ?1 AND run_role = ?2
+             LIMIT 1",
+            params![task_run_id, run_role],
+            |row| {
+                Ok(TaskRunSessionRef {
+                    session_id: row.get(0)?,
+                    branch: row.get(1)?,
+                })
+            },
+        );
+        match result {
+            Ok(r) => Ok(Some(r)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn list_sessions_for_task_run(&self, task_run_id: &str) -> Result<Vec<SessionForRun>> {
+        let conn = self.get_conn()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, name, run_role
+             FROM sessions
+             WHERE task_run_id = ?1
+             ORDER BY created_at ASC, id ASC",
+        )?;
+        let rows = stmt.query_map(params![task_run_id], |row| {
+            Ok(SessionForRun {
+                session_id: row.get(0)?,
+                session_name: row.get(1)?,
+                run_role: row.get::<_, Option<String>>(2).ok().flatten(),
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
     }
 
     fn get_sessions_by_task_run_id(&self, task_run_id: &str) -> Result<Vec<Session>> {
