@@ -487,6 +487,12 @@ mod service_unified_tests {
             task_id: None,
             task_stage: None,
             task_role: None,
+            task_run_id: None,
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
         }
     }
 
@@ -3236,6 +3242,12 @@ impl SessionManager {
             task_id: None,
             task_stage: None,
             task_role: None,
+            task_run_id: None,
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
         };
 
         let finalizer = SessionFinalizer::new(&self.db_manager, &self.cache_manager);
@@ -4990,6 +5002,12 @@ impl SessionManager {
             task_id: Some(spec_id),
             task_stage: Some(spec_stage),
             task_role: Some("task_virtual".to_string()),
+            task_run_id: None,
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
         }
     }
 

@@ -129,6 +129,21 @@ pub struct Session {
     pub task_id: Option<String>,
     pub task_stage: Option<SpecStage>,
     pub task_role: Option<String>,
+    pub task_run_id: Option<String>,
+    pub run_role: Option<String>,
+    pub slot_key: Option<String>,
+    /// Unix-second timestamp of the most recent PTY exit for this session, if any.
+    /// `None` means the session is still alive (or never produced an exit). Set by
+    /// `SessionFactsRecorder::record_exit` (Phase 1 Wave G).
+    pub exited_at: Option<DateTime<Utc>>,
+    /// Exit code captured at PTY exit. `None` when the child terminated without a
+    /// numeric code (signal, tmux dead-pane reattach with no record, etc).
+    pub exit_code: Option<i32>,
+    /// Unix-second timestamp of the **first** time this session entered
+    /// `WaitingForInput` (idle). Write-once: subsequent idle transitions do not
+    /// overwrite. Read by [`crate::domains::tasks::run_status::compute_run_status`]
+    /// to derive sticky `AwaitingSelection`.
+    pub first_idle_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

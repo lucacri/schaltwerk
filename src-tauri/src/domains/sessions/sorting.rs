@@ -72,6 +72,12 @@ mod session_sorting_tests {
             task_id: None,
             task_stage: None,
             task_role: None,
+            task_run_id: None,
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
         }
     }
 

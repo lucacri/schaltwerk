@@ -7,5 +7,6 @@ pub mod network;
 pub mod power;
 pub mod sessions;
 pub mod settings;
+pub mod tasks;
 pub mod terminal;
 pub mod workspace;

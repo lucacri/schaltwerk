@@ -219,6 +219,12 @@ impl Database {
                     task_id: summary.task_id,
                     task_stage: summary.task_stage.and_then(|stage| stage.parse().ok()),
                     task_role: summary.task_role,
+                    task_run_id: None,
+                    run_role: None,
+                    slot_key: None,
+                    exited_at: None,
+                    exit_code: None,
+                    first_idle_at: None,
                 }
             })
             .collect())
@@ -406,6 +412,12 @@ impl SessionMethods for Database {
                     .flatten()
                     .and_then(|stage| stage.parse().ok()),
                 task_role: row.get(45).ok(),
+                task_run_id: None,
+                run_role: None,
+                slot_key: None,
+                exited_at: None,
+                exit_code: None,
+                first_idle_at: None,
             })
         })?;
 
@@ -492,6 +504,12 @@ impl SessionMethods for Database {
                     .flatten()
                     .and_then(|stage| stage.parse().ok()),
                 task_role: row.get(45).ok(),
+                task_run_id: None,
+                run_role: None,
+                slot_key: None,
+                exited_at: None,
+                exit_code: None,
+                first_idle_at: None,
             })
         })?;
 
@@ -1232,6 +1250,12 @@ mod tests {
             task_id: None,
             task_stage: None,
             task_role: None,
+            task_run_id: None,
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
         };
 
         db.create_session(&session)
@@ -1304,6 +1328,12 @@ mod tests {
             task_id: None,
             task_stage: None,
             task_role: None,
+            task_run_id: None,
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
         };
 
         db.create_session(&session)
@@ -1372,6 +1402,12 @@ mod tests {
             task_id: None,
             task_stage: None,
             task_role: None,
+            task_run_id: None,
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
         };
 
         db.create_session(&session)
@@ -1543,6 +1579,12 @@ mod tests {
             task_id: None,
             task_stage: None,
             task_role: None,
+            task_run_id: None,
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
         };
 
         db.create_session(&session)
@@ -1620,6 +1662,12 @@ mod tests {
             task_id: None,
             task_stage: None,
             task_role: None,
+            task_run_id: None,
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
         };
 
         db.create_session(&session)
@@ -1713,6 +1761,12 @@ mod tests {
             task_id: None,
             task_stage: None,
             task_role: None,
+            task_run_id: None,
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
         };
 
         db.create_session(&session)
@@ -1794,6 +1848,12 @@ mod tests {
             task_id: None,
             task_stage: None,
             task_role: None,
+            task_run_id: None,
+            run_role: None,
+            slot_key: None,
+            exited_at: None,
+            exit_code: None,
+            first_idle_at: None,
         };
 
         db.create_session(&session)
