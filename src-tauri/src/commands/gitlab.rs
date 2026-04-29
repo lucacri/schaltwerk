@@ -391,7 +391,7 @@ pub async fn gitlab_get_sources(
         .await
         .map_err(|e| format!("Failed to load project: {e}"))?;
 
-    let core = project.schaltwerk_core.read().await;
+    let core = project.core_handle().await;
     let db = core.database();
     let config = db
         .get_project_gitlab_config(&project.path)
@@ -417,7 +417,7 @@ pub async fn gitlab_set_sources(_app: AppHandle, sources: Vec<GitlabSource>) -> 
         .await
         .map_err(|e| format!("No active project: {e}"))?;
 
-    let core = project.schaltwerk_core.read().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     if sources.is_empty() {
@@ -634,7 +634,7 @@ pub async fn gitlab_create_session_mr(
     let project_path = project.path.clone();
 
     let (session_worktree, session_branch, parent_branch, session_state) = {
-        let core = project.schaltwerk_core.read().await;
+        let core = project.core_handle().await;
         let session = core
             .session_manager()
             .get_session(&args.session_name)
@@ -734,7 +734,7 @@ pub async fn gitlab_create_session_mr(
         }
 
         {
-            let core = project.schaltwerk_core.read().await;
+            let core = project.core_handle().await;
             let session = core
                 .session_manager()
                 .get_session(&args.session_name)
@@ -755,7 +755,7 @@ pub async fn gitlab_create_session_mr(
     }
 
     if let Some(mr_number) = parse_created_mr_number(&mr_result.url) {
-        let core = project.schaltwerk_core.read().await;
+        let core = project.core_handle().await;
         let session = core
             .session_manager()
             .get_session(&args.session_name)

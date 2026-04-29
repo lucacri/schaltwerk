@@ -333,7 +333,7 @@ pub async fn forge_get_pr_details(
             if let Some(pr_number) = pr_number_from_details(&id, &details) {
                 let pr_state = pr_state_from_details(&details);
                 {
-                    let core = project.schaltwerk_core.read().await;
+                    let core = project.core_handle().await;
                     if let Err(err) = core.db.update_session_pr_state_by_pr_number(
                         &project.path,
                         pr_number,
@@ -405,7 +405,7 @@ pub async fn forge_create_session_pr(
     let project_path = project.path.clone();
 
     let (session_worktree, session_branch, parent_branch, session_state) = {
-        let core = project.schaltwerk_core.read().await;
+        let core = project.core_handle().await;
         let session = core
             .session_manager()
             .get_session(&args.session_name)
@@ -500,7 +500,7 @@ pub async fn forge_create_session_pr(
         }
 
         {
-            let core = project.schaltwerk_core.read().await;
+            let core = project.core_handle().await;
             let session = core
                 .session_manager()
                 .get_session(&args.session_name)
@@ -521,7 +521,7 @@ pub async fn forge_create_session_pr(
     }
 
     if let Some(pr_number) = parse_forge_pr_number(&pr_result.url) {
-        let core = project.schaltwerk_core.read().await;
+        let core = project.core_handle().await;
         let session = core
             .session_manager()
             .get_session(&args.session_name)
