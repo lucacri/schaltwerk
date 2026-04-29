@@ -6,6 +6,11 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::{OnceCell, RwLock};
+// `RwLock` retained: `ProjectManager` itself still wraps the
+// `HashMap<PathBuf, Arc<Project>>` and `Option<PathBuf>` registries in
+// async RwLocks. The `RwLock<SchaltwerkCore>` per-project wrapper is gone
+// (Phase 2 Wave G); the registry locks survive because they coordinate
+// project lifecycle (load/unload), not data access.
 
 /// Process-wide handle for the active project graph. main.rs initializes this
 /// via `get_or_init`. Library-side helpers (e.g.
@@ -50,11 +55,18 @@ fn strip_extended_path_prefix(path: PathBuf) -> PathBuf {
     path
 }
 
-/// Represents a single project with its own terminals and sessions
+/// Represents a single project with its own terminals and sessions.
+///
+/// `schaltwerk_core` is `Arc<SchaltwerkCore>` (not wrapped in any lock)
+/// — Phase 2 Wave G removes the `RwLock` because the inner core is
+/// `{ db: Database, repo_path: PathBuf }` where `Database: Clone` is
+/// internally synchronized via WAL+pool and `repo_path` is immutable.
+/// Per-task ordering is provided by `task_locks` at the granularity
+/// where it actually matters.
 pub struct Project {
     pub path: PathBuf,
     pub terminal_manager: Arc<TerminalManager>,
-    pub schaltwerk_core: Arc<RwLock<SchaltwerkCore>>,
+    pub schaltwerk_core: Arc<SchaltwerkCore>,
     pub task_locks: Arc<TaskLockManager>,
 }
 
@@ -81,10 +93,10 @@ impl Project {
 
         info!("Using database at: {}", db_path.display());
 
-        let schaltwerk_core = Arc::new(RwLock::new(SchaltwerkCore::new_with_repo_path(
+        let schaltwerk_core = Arc::new(SchaltwerkCore::new_with_repo_path(
             Some(db_path),
             path.clone(),
-        )?));
+        )?);
 
         Ok(Self {
             path,
@@ -205,10 +217,10 @@ impl Project {
         let temp_dir = std::env::temp_dir();
         let temp_db_path = temp_dir.join(format!("test-{}.db", uuid::Uuid::new_v4()));
 
-        let schaltwerk_core = Arc::new(RwLock::new(SchaltwerkCore::new_with_repo_path(
+        let schaltwerk_core = Arc::new(SchaltwerkCore::new_with_repo_path(
             Some(temp_db_path),
             path.clone(),
-        )?));
+        )?);
 
         Ok(Self {
             path,
@@ -255,18 +267,16 @@ impl CoreHandle {
 impl Project {
     /// Cheap clone of the immutable resources every caller needs. Returns
     /// owned values so the caller can hold them across awaits without any
-    /// guard.
+    /// guard. Just two `Arc` clones — `Database` is `Arc`-backed and
+    /// `PathBuf` is shallow-cloned.
     ///
-    /// During Phase 2 Waves C–F this still briefly takes a read lock on
-    /// the legacy `Arc<RwLock<SchaltwerkCore>>` to clone the inner
-    /// `(db, repo_path)`. Wave G replaces the field type with
-    /// `Arc<SchaltwerkCore>`, at which point this becomes a true
-    /// lock-free clone.
+    /// `async` is retained for source-compat with the Wave C signature
+    /// (callers already write `.core_handle().await`); the body is now
+    /// pure synchronous work.
     pub async fn core_handle(&self) -> CoreHandle {
-        let core = self.schaltwerk_core.read().await;
         CoreHandle {
-            db: core.db.clone(),
-            repo_path: core.repo_path.clone(),
+            db: self.schaltwerk_core.db.clone(),
+            repo_path: self.schaltwerk_core.repo_path.clone(),
         }
     }
 }
@@ -685,7 +695,7 @@ impl ProjectManager {
     }
 
     /// Get SchaltwerkCore for current project
-    pub async fn current_schaltwerk_core(&self) -> Result<Arc<RwLock<SchaltwerkCore>>> {
+    pub async fn current_schaltwerk_core(&self) -> Result<Arc<SchaltwerkCore>> {
         let project = self.current_project().await?;
         Ok(project.schaltwerk_core.clone())
     }
@@ -713,7 +723,6 @@ impl ProjectManager {
     /// only needed `(db, repo_path)`.
     pub async fn core_handle_for_path(&self, path: &PathBuf) -> Result<CoreHandle> {
         let core = self.get_schaltwerk_core_for_path(path).await?;
-        let core = core.read().await;
         Ok(CoreHandle {
             db: core.db.clone(),
             repo_path: core.repo_path.clone(),
@@ -774,7 +783,7 @@ impl ProjectManager {
     pub async fn get_schaltwerk_core_for_path(
         &self,
         path: &PathBuf,
-    ) -> Result<Arc<RwLock<SchaltwerkCore>>> {
+    ) -> Result<Arc<SchaltwerkCore>> {
         // Canonicalize the input path for consistent comparison
         let canonical_path = match std::fs::canonicalize(path) {
             Ok(p) => p,
@@ -962,6 +971,16 @@ mod tests {
         let _ = p2.terminal_manager.cleanup_all().await;
     }
 
+    /// Wave G structural pin: `Project::schaltwerk_core` is
+    /// `Arc<SchaltwerkCore>` (NOT `Arc<RwLock<SchaltwerkCore>>`). The
+    /// type assertion is the test — if the field regresses to a lock
+    /// wrapper, the function-pointer coercion below fails to compile.
+    #[test]
+    fn project_schaltwerk_core_field_is_lock_free() {
+        fn assert_arc_of_core(_: fn(&Project) -> &Arc<SchaltwerkCore>) {}
+        assert_arc_of_core(|p: &Project| &p.schaltwerk_core);
+    }
+
     #[tokio::test]
     async fn core_handle_returns_owned_clone_independent_of_caller_count() {
         let mgr = ProjectManager::new();
@@ -1015,6 +1034,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_core_reads() {
+        // Wave G regression: the inner core is now `Arc<SchaltwerkCore>`
+        // (no RwLock), so "concurrent reads" is the trivial case — every
+        // caller gets a cheap clone of `(db, repo_path)` with no
+        // synchronization. The test still pins that two parallel
+        // `core_handle()` calls observe the same repo_path; if a future
+        // change re-introduces a guard, the .read()/.write() method
+        // resolution would shift the type signature and break this test.
         let mgr = ProjectManager::new();
         let tmp = TempDir::new().unwrap();
         let project = mgr
@@ -1022,17 +1048,9 @@ mod tests {
             .await
             .unwrap();
 
-        let core = project.schaltwerk_core.clone();
-
         let (path_a, path_b) = tokio::join!(
-            async {
-                let guard = core.read().await;
-                guard.repo_path.clone()
-            },
-            async {
-                let guard = core.read().await;
-                guard.repo_path.clone()
-            },
+            async { project.core_handle().await.repo_path },
+            async { project.core_handle().await.repo_path },
         );
 
         assert_eq!(path_a, path_b);

@@ -218,6 +218,16 @@ Runtime-only Rust enum (no serde, no FromStr). `Session(String)` or `Artifact(St
 
 ## 3. Locking model
 
+> **Phase 2 update (Wave G, 2026-04-29):** This entire section describes the v1 lock model that has been removed.
+> - `Project::schaltwerk_core` is now `Arc<SchaltwerkCore>` (no `RwLock` wrapper).
+> - `get_core_read`, `get_core_read_for_project_path`, `get_core_write`, `get_core_write_for_project_path`, and `LAST_CORE_WRITE` are deleted from `main.rs`.
+> - The `ProductionOrchestratorBundle::acquire` / `ConfirmStageResources::acquire` / `snapshot_from_core` machinery in `commands/tasks.rs` is deleted.
+> - The 5s timeout on the four entry points is gone.
+> - Per-task ordering is provided by `infrastructure::task_lock_manager::TaskLockManager` on each `Project`. The six lifecycle commands acquire `project.task_locks.lock_for(&task_id).lock().await` immediately after resolving the project; non-task callers go through the lock-free `Project::core_handle()` accessor (returns `CoreHandle { db, repo_path }`).
+> - The DB pool's WAL + `synchronous=NORMAL` is the only synchronization for non-task work.
+>
+> The text below is preserved as a frozen v1 reference; the v2 successor is `infrastructure::task_lock_manager::TaskLockManager` plus `project_manager::CoreHandle`.
+
 ### The "global" lock (per-project, not process-wide)
 
 `Project` owns `pub schaltwerk_core: Arc<RwLock<SchaltwerkCore>>` (`project_manager.rs:47`). There is no process-wide `OnceCell<RwLock<SchaltwerkCore>>`; `PROJECT_MANAGER` (`main.rs:386`) is the singleton, and dispenses one `Arc<RwLock<SchaltwerkCore>>` per loaded project via `current_schaltwerk_core()` (`project_manager.rs:623`) and `get_schaltwerk_core_for_path()` (line 632). When this codebase says "the global core lock", it means "the active project's lock".

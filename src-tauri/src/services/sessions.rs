@@ -164,7 +164,7 @@ impl ProjectSessionsBackend {
         Self { project_manager }
     }
 
-    async fn get_core(&self) -> Result<Arc<tokio::sync::RwLock<SchaltwerkCore>>, String> {
+    async fn get_core(&self) -> Result<Arc<SchaltwerkCore>, String> {
         self.project_manager
             .current_schaltwerk_core()
             .await
@@ -184,19 +184,6 @@ impl SessionsBackend for ProjectSessionsBackend {
 
         let (mut sessions, git_tasks, db) = {
             let core = self.get_core().await?;
-            let core_wait = std::time::Instant::now();
-            let core = core.read().await;
-            let core_ready = core_wait.elapsed().as_millis();
-            if core_ready > 200 {
-                log::warn!(
-                    "ProjectSessionsBackend call_id={call_id} core read lock wait={core_ready}ms"
-                );
-            } else {
-                log::debug!(
-                    "ProjectSessionsBackend call_id={call_id} core read lock wait={core_ready}ms"
-                );
-            }
-
             let manager = core.session_manager();
             let (sessions, git_tasks) = manager
                 .list_enriched_sessions_base()

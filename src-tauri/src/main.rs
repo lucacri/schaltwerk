@@ -46,13 +46,10 @@ use lucode::shared::terminal_id::{
     previous_tilde_hashed_terminal_id_for_session_top, terminal_id_for_session_top,
 };
 use lucode::utils::env_adapter::EnvAdapter;
-use once_cell::sync::Lazy;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex as StdMutex};
-use tokio::sync::{Mutex, OnceCell, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
+use std::sync::Arc;
+use tokio::sync::{Mutex, OnceCell};
 use tokio::task_local;
-use tokio::time::timeout;
-use uuid::Uuid;
 
 #[cfg(debug_assertions)]
 #[derive(Debug, Clone, Serialize)]
@@ -390,9 +387,6 @@ pub static SETTINGS_MANAGER: OnceCell<Arc<Mutex<SettingsManager>>> = OnceCell::c
 pub static ATTENTION_REGISTRY: OnceCell<Arc<Mutex<AttentionStateRegistry>>> = OnceCell::const_new();
 pub static FILE_WATCHER_MANAGER: OnceCell<Arc<lucode::domains::workspace::FileWatcherManager>> =
     OnceCell::const_new();
-static LAST_CORE_WRITE: Lazy<StdMutex<Option<(Uuid, std::time::Instant)>>> =
-    Lazy::new(|| StdMutex::new(None));
-
 // Task-local project override used to route MCP HTTP requests to the correct
 // project core when multiple projects are open. Set for the lifetime of a
 // single MCP request; falls back to the current project when unset.
@@ -429,7 +423,7 @@ pub async fn get_terminal_manager()
 }
 
 pub async fn get_schaltwerk_core()
--> Result<Arc<RwLock<lucode::schaltwerk_core::SchaltwerkCore>>, String> {
+-> Result<Arc<lucode::schaltwerk_core::SchaltwerkCore>, String> {
     // Respect MCP request context if one is set for this task
     if let Ok(Some(project_path)) = REQUEST_PROJECT_OVERRIDE.try_with(|cell| cell.borrow().clone())
     {
@@ -461,7 +455,7 @@ pub async fn get_schaltwerk_core()
 
 pub async fn get_schaltwerk_core_for_project_path(
     project_path: Option<&str>,
-) -> Result<Arc<RwLock<lucode::schaltwerk_core::SchaltwerkCore>>, String> {
+) -> Result<Arc<lucode::schaltwerk_core::SchaltwerkCore>, String> {
     let Some(path) = project_path.map(str::trim).filter(|path| !path.is_empty()) else {
         return get_schaltwerk_core().await;
     };
@@ -581,192 +575,6 @@ pub async fn get_project_with_handle(
     })
 }
 
-pub async fn get_core_read()
--> Result<OwnedRwLockReadGuard<lucode::schaltwerk_core::SchaltwerkCore>, String> {
-    let call_id = uuid::Uuid::new_v4();
-    let start = std::time::Instant::now();
-    log::debug!("get_core_read start call_id={call_id}");
-
-    let core = get_schaltwerk_core().await?;
-    let guard_wait = std::time::Instant::now();
-    match timeout(
-        std::time::Duration::from_secs(5),
-        Arc::clone(&core).read_owned(),
-    )
-    .await
-    {
-        Ok(guard) => {
-            let waited = guard_wait.elapsed().as_millis();
-
-            if waited > 200 {
-                log::warn!("get_core_read acquired call_id={call_id} wait={waited}ms");
-            } else {
-                log::debug!("get_core_read acquired call_id={call_id} wait={waited}ms");
-            }
-            log::debug!(
-                "get_core_read done call_id={call_id} total={}ms",
-                start.elapsed().as_millis()
-            );
-            Ok(guard)
-        }
-        Err(_) => {
-            if let Ok(guard) = LAST_CORE_WRITE.lock() {
-                if let Some((writer_id, since)) = *guard {
-                    log::error!(
-                        "get_core_read timed out (5s) call_id={call_id}; last write call_id={writer_id} alive_for={}ms",
-                        since.elapsed().as_millis()
-                    );
-                } else {
-                    log::error!(
-                        "get_core_read timed out (5s) call_id={call_id}; no recorded writer"
-                    );
-                }
-            } else {
-                log::error!(
-                    "get_core_read timed out (5s) call_id={call_id}; failed to inspect last writer"
-                );
-            }
-            Err("Timed out waiting for core read lock".to_string())
-        }
-    }
-}
-
-pub async fn get_core_read_for_project_path(
-    project_path: Option<&str>,
-) -> Result<OwnedRwLockReadGuard<lucode::schaltwerk_core::SchaltwerkCore>, String> {
-    let call_id = uuid::Uuid::new_v4();
-    let start = std::time::Instant::now();
-    log::debug!("get_core_read_for_project_path start call_id={call_id}");
-
-    let core = get_schaltwerk_core_for_project_path(project_path).await?;
-    let guard_wait = std::time::Instant::now();
-    match timeout(
-        std::time::Duration::from_secs(5),
-        Arc::clone(&core).read_owned(),
-    )
-    .await
-    {
-        Ok(guard) => {
-            let waited = guard_wait.elapsed().as_millis();
-
-            if waited > 200 {
-                log::warn!(
-                    "get_core_read_for_project_path acquired call_id={call_id} wait={waited}ms"
-                );
-            } else {
-                log::debug!(
-                    "get_core_read_for_project_path acquired call_id={call_id} wait={waited}ms"
-                );
-            }
-            log::debug!(
-                "get_core_read_for_project_path done call_id={call_id} total={}ms",
-                start.elapsed().as_millis()
-            );
-            Ok(guard)
-        }
-        Err(_) => {
-            if let Ok(guard) = LAST_CORE_WRITE.lock() {
-                if let Some((writer_id, since)) = *guard {
-                    log::error!(
-                        "get_core_read_for_project_path timed out (5s) call_id={call_id}; last write call_id={writer_id} alive_for={}ms",
-                        since.elapsed().as_millis()
-                    );
-                } else {
-                    log::error!(
-                        "get_core_read_for_project_path timed out (5s) call_id={call_id}; no recorded writer"
-                    );
-                }
-            } else {
-                log::error!(
-                    "get_core_read_for_project_path timed out (5s) call_id={call_id}; failed to inspect last writer"
-                );
-            }
-            Err("Timed out waiting for core read lock".to_string())
-        }
-    }
-}
-
-pub async fn get_core_write()
--> Result<OwnedRwLockWriteGuard<lucode::schaltwerk_core::SchaltwerkCore>, String> {
-    let call_id = uuid::Uuid::new_v4();
-    let start = std::time::Instant::now();
-    log::debug!("get_core_write start call_id={call_id}");
-
-    let core = get_schaltwerk_core().await?;
-    let guard_wait = std::time::Instant::now();
-    match timeout(
-        std::time::Duration::from_secs(5),
-        Arc::clone(&core).write_owned(),
-    )
-    .await
-    {
-        Ok(guard) => {
-            let waited = guard_wait.elapsed().as_millis();
-            if let Ok(mut last) = LAST_CORE_WRITE.lock() {
-                *last = Some((call_id, std::time::Instant::now()));
-            }
-
-            if waited > 200 {
-                log::warn!("get_core_write acquired call_id={call_id} wait={waited}ms");
-            } else {
-                log::debug!("get_core_write acquired call_id={call_id} wait={waited}ms");
-            }
-            log::debug!(
-                "get_core_write done call_id={call_id} total={}ms",
-                start.elapsed().as_millis()
-            );
-            Ok(guard)
-        }
-        Err(_) => {
-            log::error!("get_core_write timed out (5s) call_id={call_id}");
-            Err("Timed out waiting for core write lock".to_string())
-        }
-    }
-}
-
-pub async fn get_core_write_for_project_path(
-    project_path: Option<&str>,
-) -> Result<OwnedRwLockWriteGuard<lucode::schaltwerk_core::SchaltwerkCore>, String> {
-    let call_id = uuid::Uuid::new_v4();
-    let start = std::time::Instant::now();
-    log::debug!("get_core_write_for_project_path start call_id={call_id}");
-
-    let core = get_schaltwerk_core_for_project_path(project_path).await?;
-    let guard_wait = std::time::Instant::now();
-    match timeout(
-        std::time::Duration::from_secs(5),
-        Arc::clone(&core).write_owned(),
-    )
-    .await
-    {
-        Ok(guard) => {
-            let waited = guard_wait.elapsed().as_millis();
-            if let Ok(mut last) = LAST_CORE_WRITE.lock() {
-                *last = Some((call_id, std::time::Instant::now()));
-            }
-
-            if waited > 200 {
-                log::warn!(
-                    "get_core_write_for_project_path acquired call_id={call_id} wait={waited}ms"
-                );
-            } else {
-                log::debug!(
-                    "get_core_write_for_project_path acquired call_id={call_id} wait={waited}ms"
-                );
-            }
-            log::debug!(
-                "get_core_write_for_project_path done call_id={call_id} total={}ms",
-                start.elapsed().as_millis()
-            );
-            Ok(guard)
-        }
-        Err(_) => {
-            log::error!("get_core_write_for_project_path timed out (5s) call_id={call_id}");
-            Err("Timed out waiting for core write lock".to_string())
-        }
-    }
-}
-
 pub async fn get_file_watcher_manager()
 -> Result<Arc<lucode::domains::workspace::FileWatcherManager>, String> {
     FILE_WATCHER_MANAGER
@@ -779,7 +587,7 @@ pub async fn get_file_watcher_manager()
 async fn start_file_watcher(session_name: String) -> Result<(), SchaltError> {
     if session_name == "orchestrator" {
         let (repo_path, configured_branch) = {
-            let core = get_core_read()
+            let core = get_core_handle()
                 .await
                 .map_err(|e| SchaltError::DatabaseError {
                     message: e.to_string(),
@@ -821,7 +629,7 @@ async fn start_file_watcher(session_name: String) -> Result<(), SchaltError> {
     }
 
     let (session_manager, project_path) = {
-        let core = get_core_read()
+        let core = get_core_handle()
             .await
             .map_err(|e| SchaltError::DatabaseError {
                 message: e.to_string(),
@@ -873,7 +681,7 @@ async fn stop_file_watcher(session_name: String) -> Result<(), SchaltError> {
                 message: e,
             })?;
     let repo_path = {
-        let core = get_core_read()
+        let core = get_core_handle()
             .await
             .map_err(|e| SchaltError::DatabaseError {
                 message: e.to_string(),
@@ -904,7 +712,7 @@ async fn is_file_watcher_active(session_name: String) -> Result<bool, SchaltErro
                 message: e,
             })?;
     let repo_path = {
-        let core = get_core_read()
+        let core = get_core_handle()
             .await
             .map_err(|e| SchaltError::DatabaseError {
                 message: e.to_string(),
@@ -1220,7 +1028,7 @@ async fn start_webhook_server(app: tauri::AppHandle) -> bool {
                             });
 
                         let mut agent_type: Option<String> = None;
-                        if let Ok(core) = get_core_write().await {
+                        if let Ok(core) = get_core_handle().await {
                             let manager = core.session_manager();
 
                             match manager.get_session(session_name) {
@@ -2190,7 +1998,7 @@ fn main() {
                 tokio::spawn(async move {
                     // Retry until a project is initialized, then start tracking once
                     loop {
-                        match get_core_read().await {
+                        match get_core_handle().await {
                             Ok(core) => {
                                 let db = Arc::new(core.db.clone());
                                 lucode::domains::sessions::activity::start_activity_tracking_with_app(db, activity_handle.clone());
