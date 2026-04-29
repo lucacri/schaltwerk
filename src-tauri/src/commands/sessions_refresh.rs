@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     commands::session_lookup_cache::{current_repo_cache_key, global_session_lookup_cache},
-    get_core_read,
+    get_core_handle,
 };
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::services::power::sync_running_sessions;
@@ -192,7 +192,7 @@ impl RefreshHub {
 
         let (mut sessions, git_tasks) = {
             let manager = {
-                let core = get_core_read().await.map_err(|e| anyhow!(e))?;
+                let core = get_core_handle().await.map_err(|e| anyhow!(e))?;
                 core.session_manager()
             };
             manager.list_enriched_sessions_base()?

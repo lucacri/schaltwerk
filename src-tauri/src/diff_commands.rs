@@ -1,6 +1,6 @@
 use crate::commands::session_lookup_cache::{current_repo_cache_key, global_session_lookup_cache};
 use crate::errors::SchaltError;
-use crate::get_core_read_for_project_path;
+use crate::get_core_handle_for_project_path;
 use crate::get_project_manager;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use git2::{
@@ -150,7 +150,7 @@ async fn resolve_session_branch(
     };
 
     let manager = {
-        let core = get_core_read_for_project_path(project_path)
+        let core = get_core_handle_for_project_path(project_path)
             .await
             .map_err(|e| SchaltError::DatabaseError {
                 message: e.to_string(),
@@ -351,7 +351,7 @@ pub async fn get_uncommitted_file_diff(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{get_core_write, get_project_manager};
+    use crate::{get_core_handle, get_project_manager};
     use std::collections::HashMap;
     use std::fs;
     use std::process::Command as StdCommand;
@@ -631,7 +631,7 @@ mod tests {
 
             let (session_name, session_parent, worktree_path) = {
                 let session_manager = {
-                    let core = get_core_write().await.unwrap();
+                    let core = get_core_handle().await.unwrap();
                     core.session_manager()
                 };
                 let params = lucode::domains::sessions::service::SessionCreationParams {
@@ -1357,7 +1357,7 @@ async fn resolve_session_info(
 
     let (worktree_path, base_branch) = {
         let manager = {
-            let core = get_core_read_for_project_path(project_path).await?;
+            let core = get_core_handle_for_project_path(project_path).await?;
             core.session_manager()
         };
         let session = match manager.get_session_by_id(session_name) {

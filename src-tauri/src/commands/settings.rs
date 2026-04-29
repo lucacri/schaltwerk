@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{PROJECT_MANAGER, get_core_read, get_core_write, get_settings_manager};
+use crate::{PROJECT_MANAGER, get_core_handle, get_settings_manager};
 use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
 use lucode::schaltwerk_core::db_project_config::{
     AgentPluginConfig, HeaderActionConfig, ProjectConfigMethods, ProjectMergePreferences,
@@ -265,7 +265,7 @@ pub async fn schaltwerk_core_set_language(app: AppHandle, language: String) -> R
 
 #[tauri::command]
 pub async fn get_project_default_base_branch() -> Result<Option<String>, String> {
-    let core = get_core_read().await?;
+    let core = get_core_handle().await?;
     core.db
         .get_default_base_branch()
         .map_err(|e| format!("Failed to get default base branch: {e}"))
@@ -273,7 +273,7 @@ pub async fn get_project_default_base_branch() -> Result<Option<String>, String>
 
 #[tauri::command]
 pub async fn set_project_default_base_branch(branch: Option<String>) -> Result<(), String> {
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     core.db
         .set_default_base_branch(branch.as_deref())
         .map_err(|e| format!("Failed to set default base branch: {e}"))
