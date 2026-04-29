@@ -9,6 +9,16 @@ const CROSS_DOMAIN_ALLOWLIST: &[(&str, &str)] = &[
     ("agents", "git"),        // Agent naming uses git stats for formatting
     ("sessions", "terminal"), // Session utils generate terminal launch commands
     ("git", "sessions"),      // Git projections enrich session stats
+    // Tasks domain (Phase 1 v2 port) — orchestrates sessions, drives merges,
+    // resolves agent presets, launches terminals. compute_run_status itself
+    // takes a SessionFacts projection to keep its boundary thin (the foreign
+    // import there is forbidden by design); but auto_advance, orchestration,
+    // and the rest of the task surface legitimately read PrState/Session/etc.
+    ("tasks", "sessions"),
+    ("tasks", "merge"),
+    ("tasks", "git"),
+    ("tasks", "agents"),
+    ("tasks", "terminal"),
 ];
 
 const LEGACY_EXCEPTION_LIST: &[(&str, &str)] = &[

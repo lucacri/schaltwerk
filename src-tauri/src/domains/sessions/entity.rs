@@ -257,6 +257,14 @@ pub struct TaskStageWorkflow {
 pub enum PrState {
     Open,
     Succeeding,
+    /// CI is red (or PR closed without merge). v2 wires this through
+    /// `auto_advance::on_pr_state_refreshed` to flip `task.failure_flag`,
+    /// which the design doc preserves as the post-merge regression channel.
+    /// (v2 main was branched without this variant; restored when porting v1
+    /// auto_advance. See Phase 1 plan §7 — "post-merge CI red flips
+    /// task.failure_flag, not run status".)
+    Failed,
+    /// Intentional misspelling of "Merged" — load-bearing on the wire.
     Mred,
 }
 
@@ -265,6 +273,7 @@ impl PrState {
         match self {
             PrState::Open => "open",
             PrState::Succeeding => "succeeding",
+            PrState::Failed => "failed",
             PrState::Mred => "mred",
         }
     }
@@ -277,6 +286,7 @@ impl FromStr for PrState {
         match s {
             "open" => Ok(PrState::Open),
             "succeeding" => Ok(PrState::Succeeding),
+            "failed" => Ok(PrState::Failed),
             "mred" => Ok(PrState::Mred),
             _ => Err(format!("Invalid PR state: {s}")),
         }
