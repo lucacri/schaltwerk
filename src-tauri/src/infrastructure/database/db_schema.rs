@@ -1,5 +1,17 @@
 use super::connection::Database;
 
+fn is_duplicate_column_error(err: &rusqlite::Error) -> bool {
+    matches!(err, rusqlite::Error::SqliteFailure(_, Some(msg)) if msg.contains("duplicate column name"))
+}
+
+fn alter_add_column_idempotent(conn: &rusqlite::Connection, sql: &str) -> anyhow::Result<()> {
+    match conn.execute(sql, []) {
+        Ok(_) => Ok(()),
+        Err(err) if is_duplicate_column_error(&err) => Ok(()),
+        Err(err) => Err(err.into()),
+    }
+}
+
 pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
     let conn = db.get_conn()?;
 
@@ -115,6 +127,9 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
 
     // Apply migrations for sessions table
     apply_sessions_migrations(&conn)?;
+
+    // Apply migrations for the task aggregate (tasks/task_runs/task_artifacts + session linkage).
+    apply_tasks_migrations(&conn)?;
 
     // Optional columns added by migrations need their indexes created after the migration runs.
     let _ = conn.execute(
@@ -741,10 +756,409 @@ fn apply_project_config_migrations(conn: &rusqlite::Connection) -> anyhow::Resul
     Ok(())
 }
 
+/// Apply migrations for the task aggregate.
+///
+/// v2 shape: `task_runs` is born without a persisted `status` column. The derived
+/// `compute_run_status` getter (`domains/tasks/run_status.rs`) reads
+/// `cancelled_at` / `confirmed_at` / `failed_at` plus the bound sessions' fact
+/// columns. The `failed_at` column is the legacy carrier for v1→v2 migrated rows;
+/// v2-native code never writes it.
+///
+/// Sessions get the v1 task-linkage columns (`task_run_id`, `run_role`, `slot_key`)
+/// plus the new v2 fact columns (`exited_at`, `exit_code`, `first_idle_at`).
+/// `first_idle_at` is write-once at the application layer — see
+/// `SessionFactsRecorder` (Wave G of the Phase 1 plan) and the design rationale in
+/// `plans/2026-04-29-task-flow-v2-phase-1-plan.md` §1.
+pub(crate) fn apply_tasks_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tasks (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            display_name TEXT,
+            repository_path TEXT NOT NULL,
+            repository_name TEXT NOT NULL,
+            variant TEXT NOT NULL DEFAULT 'regular',
+            stage TEXT NOT NULL DEFAULT 'draft',
+            request_body TEXT NOT NULL DEFAULT '',
+            current_spec TEXT,
+            current_plan TEXT,
+            current_summary TEXT,
+            source_kind TEXT,
+            source_url TEXT,
+            task_host_session_id TEXT,
+            task_branch TEXT,
+            base_branch TEXT,
+            issue_number INTEGER,
+            issue_url TEXT,
+            pr_number INTEGER,
+            pr_url TEXT,
+            pr_state TEXT,
+            failure_flag BOOLEAN NOT NULL DEFAULT FALSE,
+            epic_id TEXT,
+            attention_required BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            UNIQUE(repository_path, name)
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_repo ON tasks(repository_path)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_repo_name ON tasks(repository_path, name)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_stage ON tasks(repository_path, stage)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_updated_at ON tasks(updated_at)",
+        [],
+    )?;
+    alter_add_column_idempotent(
+        conn,
+        "ALTER TABLE tasks ADD COLUMN failure_flag BOOLEAN NOT NULL DEFAULT FALSE",
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS task_stage_configs (
+            task_id TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            preset_id TEXT,
+            auto_chain BOOLEAN NOT NULL DEFAULT FALSE,
+            PRIMARY KEY (task_id, stage),
+            FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS project_workflow_defaults (
+            repository_path TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            preset_id TEXT,
+            auto_chain INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            PRIMARY KEY (repository_path, stage)
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_task_stage_configs_task
+            ON task_stage_configs(task_id, stage)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS task_runs (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            preset_id TEXT,
+            base_branch TEXT,
+            target_branch TEXT,
+            selected_session_id TEXT,
+            selected_artifact_id TEXT,
+            selection_mode TEXT,
+            started_at INTEGER,
+            completed_at INTEGER,
+            cancelled_at INTEGER,
+            confirmed_at INTEGER,
+            failed_at INTEGER,
+            failure_reason TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    alter_add_column_idempotent(
+        conn,
+        "ALTER TABLE task_runs ADD COLUMN cancelled_at INTEGER",
+    )?;
+    alter_add_column_idempotent(
+        conn,
+        "ALTER TABLE task_runs ADD COLUMN confirmed_at INTEGER",
+    )?;
+    alter_add_column_idempotent(conn, "ALTER TABLE task_runs ADD COLUMN failed_at INTEGER")?;
+    alter_add_column_idempotent(
+        conn,
+        "ALTER TABLE task_runs ADD COLUMN failure_reason TEXT",
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_task_runs_task ON task_runs(task_id, stage)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS task_artifacts (
+            id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL,
+            artifact_kind TEXT NOT NULL,
+            title TEXT,
+            content TEXT,
+            url TEXT,
+            metadata_json TEXT,
+            is_current BOOLEAN NOT NULL DEFAULT FALSE,
+            produced_by_run_id TEXT,
+            produced_by_session_id TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_task_artifacts_task
+            ON task_artifacts(task_id, artifact_kind, is_current DESC, created_at DESC)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS task_artifact_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL,
+            artifact_kind TEXT NOT NULL,
+            content TEXT NOT NULL,
+            produced_by_run_id TEXT,
+            produced_by_session_id TEXT,
+            superseded_at INTEGER NOT NULL,
+            FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_task_artifact_versions_task_kind
+            ON task_artifact_versions(task_id, artifact_kind, superseded_at DESC)",
+        [],
+    )?;
+
+    alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN task_run_id TEXT")?;
+    alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN run_role TEXT")?;
+    alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN slot_key TEXT")?;
+    alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN exited_at INTEGER")?;
+    alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN exit_code INTEGER")?;
+    alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN first_idle_at INTEGER")?;
+    let _ = conn.execute(
+        "UPDATE sessions SET run_role = task_role
+            WHERE run_role IS NULL AND task_role IS NOT NULL",
+        [],
+    );
+    let _ = conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_task ON sessions(task_id)",
+        [],
+    );
+    let _ = conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_task_run ON sessions(task_run_id)",
+        [],
+    );
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::apply_specs_migrations;
+    use super::{apply_specs_migrations, apply_tasks_migrations};
     use rusqlite::Connection;
+
+    fn create_minimal_sessions_table(conn: &Connection) {
+        conn.execute(
+            "CREATE TABLE sessions (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                repository_path TEXT NOT NULL,
+                task_id TEXT,
+                task_stage TEXT,
+                task_role TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+    }
+
+    fn column_names(conn: &Connection, table: &str) -> Vec<String> {
+        let pragma = format!("PRAGMA table_info('{table}')");
+        let mut stmt = conn.prepare(&pragma).unwrap();
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap();
+        rows.map(|r| r.unwrap()).collect()
+    }
+
+    fn index_exists(conn: &Connection, name: &str) -> bool {
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name = ?1",
+                [name],
+                |row| row.get(0),
+            )
+            .unwrap();
+        count == 1
+    }
+
+    #[test]
+    fn apply_tasks_migrations_creates_v2_task_runs_without_status() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_sessions_table(&conn);
+
+        apply_tasks_migrations(&conn).unwrap();
+
+        let cols = column_names(&conn, "task_runs");
+        assert!(
+            !cols.contains(&"status".to_string()),
+            "task_runs.status must not exist on a v2-native DB; cols = {cols:?}"
+        );
+        for required in [
+            "id",
+            "task_id",
+            "stage",
+            "preset_id",
+            "base_branch",
+            "target_branch",
+            "selected_session_id",
+            "selected_artifact_id",
+            "selection_mode",
+            "started_at",
+            "completed_at",
+            "cancelled_at",
+            "confirmed_at",
+            "failed_at",
+            "failure_reason",
+            "created_at",
+            "updated_at",
+        ] {
+            assert!(
+                cols.contains(&required.to_string()),
+                "task_runs missing column {required}; got {cols:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tasks_migrations_creates_tasks_and_artifacts_tables() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_sessions_table(&conn);
+
+        apply_tasks_migrations(&conn).unwrap();
+
+        for table in [
+            "tasks",
+            "task_stage_configs",
+            "project_workflow_defaults",
+            "task_runs",
+            "task_artifacts",
+            "task_artifact_versions",
+        ] {
+            let exists: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?1",
+                    [table],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(exists, 1, "table {table} should exist after migration");
+        }
+    }
+
+    #[test]
+    fn apply_tasks_migrations_adds_session_linkage_and_fact_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_sessions_table(&conn);
+
+        apply_tasks_migrations(&conn).unwrap();
+
+        let cols = column_names(&conn, "sessions");
+        for required in [
+            "task_run_id",
+            "run_role",
+            "slot_key",
+            "exited_at",
+            "exit_code",
+            "first_idle_at",
+        ] {
+            assert!(
+                cols.contains(&required.to_string()),
+                "sessions missing column {required}; got {cols:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn apply_tasks_migrations_backfills_run_role_from_task_role() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_sessions_table(&conn);
+        conn.execute(
+            "INSERT INTO sessions (id, name, repository_path, task_role, created_at, updated_at)
+             VALUES ('s1', 'sess', '/repo', 'consolidator', 1, 1)",
+            [],
+        )
+        .unwrap();
+
+        apply_tasks_migrations(&conn).unwrap();
+
+        let role: Option<String> = conn
+            .query_row(
+                "SELECT run_role FROM sessions WHERE id = 's1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(role.as_deref(), Some("consolidator"));
+    }
+
+    #[test]
+    fn apply_tasks_migrations_creates_expected_indexes() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_sessions_table(&conn);
+
+        apply_tasks_migrations(&conn).unwrap();
+
+        for idx in [
+            "idx_tasks_repo",
+            "idx_tasks_repo_name",
+            "idx_tasks_stage",
+            "idx_tasks_updated_at",
+            "idx_task_stage_configs_task",
+            "idx_task_runs_task",
+            "idx_task_artifacts_task",
+            "idx_task_artifact_versions_task_kind",
+            "idx_sessions_task",
+            "idx_sessions_task_run",
+        ] {
+            assert!(index_exists(&conn, idx), "missing index {idx}");
+        }
+    }
+
+    #[test]
+    fn apply_tasks_migrations_does_not_create_status_index() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_sessions_table(&conn);
+
+        apply_tasks_migrations(&conn).unwrap();
+
+        assert!(
+            !index_exists(&conn, "idx_task_runs_status"),
+            "v2 must not carry the v1 idx_task_runs_status index because there is no status column"
+        );
+    }
+
+    #[test]
+    fn apply_tasks_migrations_is_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_minimal_sessions_table(&conn);
+
+        apply_tasks_migrations(&conn).unwrap();
+        apply_tasks_migrations(&conn).expect("second call must not error");
+
+        let cols = column_names(&conn, "task_runs");
+        assert!(cols.contains(&"cancelled_at".to_string()));
+        assert!(cols.contains(&"confirmed_at".to_string()));
+        assert!(cols.contains(&"failed_at".to_string()));
+    }
 
     #[test]
     fn specs_migration_does_not_delete_on_insert_failure() {
