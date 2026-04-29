@@ -145,7 +145,7 @@ impl Project {
             session_terminal_base_legacy_hashed, session_terminal_base_v1,
         };
 
-        let core = self.schaltwerk_core.read().await;
+        let core = self.core_handle().await;
         let manager = core.session_manager();
         let sessions = manager
             .list_sessions()

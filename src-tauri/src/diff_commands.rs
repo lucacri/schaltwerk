@@ -1942,7 +1942,7 @@ pub async fn set_session_diff_base_branch(
         .map_err(|e| format!("Failed to get project context: {e}"))?;
 
     let session_id = {
-        let core = project.schaltwerk_core.read().await;
+        let core = project.core_handle().await;
         let session = core
             .db
             .get_session_by_name(&core.repo_path, &session_name)
@@ -1966,7 +1966,7 @@ pub async fn set_session_diff_base_branch(
     }
 
     {
-        let core = project.schaltwerk_core.read().await;
+        let core = project.core_handle().await;
         core.db
             .update_session_parent_branch(&session_id, &new_base_branch)
             .map_err(|e| format!("Failed to update diff base branch: {e}"))?;

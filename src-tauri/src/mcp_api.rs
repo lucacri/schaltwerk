@@ -8523,7 +8523,7 @@ async fn create_pull_request(
 
     if forge == ForgeType::GitLab {
         let gitlab_source = {
-            let core = project.schaltwerk_core.read().await;
+            let core = project.core_handle().await;
             let db = &core.db;
             db.get_project_gitlab_config(&project.path)
                 .ok()

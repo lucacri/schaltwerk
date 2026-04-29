@@ -437,7 +437,7 @@ impl TerminalManagerBackend {
 
     async fn project_environment(&self) -> Vec<(String, String)> {
         if let Ok(project) = self.project_manager.current_project().await {
-            let core = project.schaltwerk_core.read().await;
+            let core = project.core_handle().await;
             let db = core.database();
             if let Ok(vars) = db.get_project_environment_variables(&project.path) {
                 return vars.into_iter().collect();
