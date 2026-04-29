@@ -1,9 +1,21 @@
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
 
+/// Payload for `SchaltEvent::TasksRefreshed`. UI subscribes to this event
+/// and re-renders task list state with embedded `task_runs`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TasksRefreshedPayload {
+    pub project_path: String,
+    pub tasks: Vec<crate::domains::tasks::entity::Task>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SchaltEvent {
     SessionsRefreshed,
+    /// Task list (with embedded task_runs) changed. Phase 1 introduces this
+    /// when porting the v1 task command surface; UI consumers fetch the
+    /// payload directly off the event.
+    TasksRefreshed,
     SessionAdded,
     SessionRemoved,
     ArchiveUpdated,
@@ -51,6 +63,7 @@ impl SchaltEvent {
     pub fn as_str(&self) -> &'static str {
         match self {
             SchaltEvent::SessionsRefreshed => "schaltwerk:sessions-refreshed",
+            SchaltEvent::TasksRefreshed => "schaltwerk:tasks-refreshed",
             SchaltEvent::SessionAdded => "schaltwerk:session-added",
             SchaltEvent::SessionRemoved => "schaltwerk:session-removed",
             SchaltEvent::ArchiveUpdated => "schaltwerk:archive-updated",

@@ -15,6 +15,7 @@ pub mod schaltwerk_core;
 pub mod session_lookup_cache;
 pub mod sessions_refresh;
 pub mod settings;
+pub mod tasks;
 pub mod terminal;
 pub mod utility;
 

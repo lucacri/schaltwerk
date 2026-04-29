@@ -1864,7 +1864,34 @@ fn main() {
             set_raw_agent_order,
             get_contextual_actions,
             set_contextual_actions,
-            reset_contextual_actions_to_defaults
+            reset_contextual_actions_to_defaults,
+            // Phase 1 Wave I.6 — task command surface ported from
+            // task-flow@b1f38f63 minus the v1 legacy_sessions import path.
+            commands::tasks::lucode_task_create,
+            commands::tasks::lucode_task_list,
+            commands::tasks::lucode_task_get,
+            commands::tasks::lucode_task_update_content,
+            commands::tasks::lucode_task_advance_stage,
+            commands::tasks::lucode_task_attach_issue,
+            commands::tasks::lucode_task_attach_pr,
+            commands::tasks::lucode_task_delete,
+            commands::tasks::lucode_task_cancel,
+            commands::tasks::lucode_task_reopen,
+            commands::tasks::lucode_task_capture_session,
+            commands::tasks::lucode_task_capture_version_group,
+            commands::tasks::lucode_task_set_stage_config,
+            commands::tasks::lucode_task_list_stage_configs,
+            commands::tasks::lucode_task_run_list,
+            commands::tasks::lucode_task_run_get,
+            commands::tasks::lucode_task_run_cancel,
+            commands::tasks::lucode_task_artifact_history,
+            commands::tasks::lucode_task_promote_to_ready,
+            commands::tasks::lucode_task_start_stage_run,
+            commands::tasks::lucode_task_start_clarify_run,
+            commands::tasks::lucode_task_confirm_stage,
+            commands::tasks::lucode_project_workflow_defaults_get,
+            commands::tasks::lucode_project_workflow_defaults_set,
+            commands::tasks::lucode_project_workflow_defaults_delete,
         ])
         .setup(move |app| {
             // Third-party AX voice tools (Mac Whisper) need the app-level AX

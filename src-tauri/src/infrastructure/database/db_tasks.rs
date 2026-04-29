@@ -3,6 +3,7 @@ use crate::domains::tasks::entity::{
     ProjectWorkflowDefault, Task, TaskArtifact, TaskArtifactKind, TaskArtifactVersion, TaskRun,
     TaskStage, TaskStageConfig, TaskVariant,
 };
+use crate::domains::tasks::service::TaskNotFoundError;
 use crate::infrastructure::database::timestamps::utc_from_epoch_seconds_lossy;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -202,8 +203,14 @@ impl TaskMethods for Database {
     fn get_task_by_id(&self, id: &str) -> Result<Task> {
         let conn = self.get_conn()?;
         let mut stmt = conn.prepare(TASK_SELECT_WHERE_ID)?;
-        stmt.query_row(params![id], row_to_task)
-            .map_err(|e| anyhow!("task not found ({id}): {e}"))
+        match stmt.query_row(params![id], row_to_task) {
+            Ok(task) => Ok(task),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Err(TaskNotFoundError {
+                task_id: id.to_string(),
+            }
+            .into()),
+            Err(err) => Err(anyhow!("failed to load task ({id}): {err}")),
+        }
     }
 
     fn list_tasks(&self, repo_path: &Path) -> Result<Vec<Task>> {
