@@ -21,4 +21,4 @@ pub use db_project_config::{
 pub use db_schema::initialize_schema;
 pub use db_spec_review_comments::{PersistedSpecReviewComment, SpecReviewCommentMethods};
 pub use db_specs::SpecMethods;
-pub use db_tasks::{TaskMethods, TaskRunMethods};
+pub use db_tasks::{TaskArtifactMethods, TaskMethods, TaskRunMethods};
