@@ -1,12 +1,14 @@
 use crate::errors::SchaltError;
-use crate::{get_core_read_for_project_path, get_core_write_for_project_path};
+use crate::{
+    get_core_handle_for_project_path, get_core_read_for_project_path,
+    get_core_write_for_project_path, get_project_with_handle,
+};
 // v1's domains/legacy_import (importing legacy archived sessions into tasks) is
 // not ported to v2. Phase 1 ships only the v1→v2 task_runs schema migration in
 // infrastructure/database/migrations/v1_to_v2_task_runs.rs. The three
 // `lucode_legacy_sessions_*` Tauri commands are dropped accordingly; the v2
 // frontend can re-introduce them in a later phase if/when the import pathway
 // is needed.
-use lucode::domains::merge::service::MergeService;
 use lucode::domains::sessions::service::SessionManager;
 use lucode::domains::tasks::service::{
     ClarifyRunStarted, CreateTaskInput, MergeConflictDuringConfirm, PresetShape, PresetSlot,
@@ -572,14 +574,21 @@ pub async fn lucode_task_cancel(
     id: String,
     project_path: Option<String>,
 ) -> Result<Task, SchaltError> {
-    let core = get_core_write_for_project_path(project_path.as_deref())
+    let (project, handle) = get_project_with_handle(project_path.as_deref())
         .await
         .map_err(|message| SchaltError::DatabaseError { message })?;
-    let db = core.db.clone();
-    let repo_path = core.repo_path.clone();
-    drop(core);
 
-    cancel_task_with_context(&app, &db, &repo_path, &id, project_path.as_deref()).await
+    let task_lock = project.task_locks.lock_for(&id);
+    let _guard = task_lock.lock().await;
+
+    cancel_task_with_context(
+        &app,
+        &handle.db,
+        &handle.repo_path,
+        &id,
+        project_path.as_deref(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -588,8 +597,8 @@ pub async fn lucode_task_capture_session(
     session_name: String,
     project_path: Option<String>,
 ) -> Result<Task, String> {
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
-    let manager = core.session_manager();
+    let handle = get_core_handle_for_project_path(project_path.as_deref()).await?;
+    let manager = handle.session_manager();
     let session = manager
         .get_session(&session_name)
         .map_err(|e| format!("failed to load session '{session_name}': {e}"))?;
@@ -598,7 +607,7 @@ pub async fn lucode_task_capture_session(
         return Err(format!("session '{session_name}' is not running"));
     }
 
-    let task = draft_task_from_session(&core.db, &core.repo_path, &manager, &session, None)
+    let task = draft_task_from_session(&handle.db, &handle.repo_path, &manager, &session, None)
         .map_err(|e| e.to_string())?;
 
     terminals::close_session_terminals_if_any(&session_name).await;
@@ -625,8 +634,8 @@ pub async fn lucode_task_capture_version_group(
     session_names: Vec<String>,
     project_path: Option<String>,
 ) -> Result<Task, String> {
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
-    let manager = core.session_manager();
+    let handle = get_core_handle_for_project_path(project_path.as_deref()).await?;
+    let manager = handle.session_manager();
 
     let mut running_sessions = Vec::new();
     for session_name in &session_names {
@@ -649,8 +658,8 @@ pub async fn lucode_task_capture_version_group(
         .ok_or_else(|| format!("no running sessions found for version group '{base_name}'"))?;
 
     let task = draft_task_from_session(
-        &core.db,
-        &core.repo_path,
+        &handle.db,
+        &handle.repo_path,
         &manager,
         &anchor,
         Some(&base_name),
@@ -765,13 +774,19 @@ pub async fn lucode_task_run_cancel(
     run_id: String,
     project_path: Option<String>,
 ) -> Result<TaskRun, String> {
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
-    let db = core.db.clone();
-    let repo_path = core.repo_path.clone();
-    drop(core);
+    let (project, handle) = get_project_with_handle(project_path.as_deref()).await?;
 
-    let run = TaskService::new(&db)
-        .cancel_task_run_cascading(&repo_path, &run_id)
+    let task_id = TaskRunService::new(&handle.db)
+        .get_run(&run_id)
+        .map_err(|err| format!("task run '{run_id}' not found: {err}"))?
+        .task_id
+        .clone();
+
+    let task_lock = project.task_locks.lock_for(&task_id);
+    let _guard = task_lock.lock().await;
+
+    let run = TaskService::new(&handle.db)
+        .cancel_task_run_cascading(&handle.repo_path, &run_id)
         .await
         .map_err(|e| e.to_string())?;
     notify_task_mutation(&app, project_path.as_deref()).await;
@@ -838,73 +853,46 @@ impl From<PresetShapePayload> for PresetShape {
 
 pub const TASK_BRANCH_PREFIX: &str = "lucode";
 
-/// Owned snapshot of the resources a production `TaskOrchestrator` needs.
-///
-/// `Database` is internally synchronized by its connection pool (WAL +
-/// `synchronous=NORMAL` per CLAUDE.md), `repo_path` is immutable, and the
-/// `SessionManager` / `MergeService` services are cheap value-typed wrappers
-/// that already clone those handles. Acquiring the global write guard just to
-/// read `SchaltwerkCore` for a moment and then dropping it lets the long
-/// session-creation / merge work that follows run lock-free, so unrelated
-/// readers project-wide are not stalled behind it.
-pub struct ProductionOrchestratorBundle {
-    pub db: Database,
-    pub repo_path: std::path::PathBuf,
-    pub manager: SessionManager,
-    pub merge_service: MergeService,
-}
-
-impl ProductionOrchestratorBundle {
-    /// Acquire the global write lock just long enough to clone owned copies
-    /// of the database handle, repo path, and the derived service objects,
-    /// then drop the guard before returning. Callers run the orchestrator
-    /// against the snapshot so the (potentially long) session/worktree work
-    /// does NOT hold the global lock.
-    pub async fn acquire(project_path: Option<&str>) -> Result<Self, String> {
-        let core = get_core_write_for_project_path(project_path).await?;
-        let snapshot = Self::snapshot_from_core(&core);
-        drop(core);
-        Ok(snapshot)
-    }
-
-    /// Build the owned snapshot from a borrowed `SchaltwerkCore`. Splitting
-    /// this out from `acquire` lets the regression test exercise the exact
-    /// same cloning logic without depending on Tauri global state, while
-    /// keeping the production guard-drop ordering visible at the call site.
-    fn snapshot_from_core(core: &lucode::schaltwerk_core::SchaltwerkCore) -> Self {
-        let db = core.db.clone();
-        let repo_path = core.repo_path.clone();
-        let manager = core.session_manager();
-        let merge_service = MergeService::new(db.clone(), repo_path.clone());
-        Self {
-            db,
-            repo_path,
-            manager,
-            merge_service,
-        }
-    }
-
-    pub fn orchestrator<'a>(
-        &'a self,
-        provisioner: &'a ProductionProvisioner<'a>,
-        merger: &'a ProductionMerger<'a>,
-    ) -> TaskOrchestrator<'a, ProductionProvisioner<'a>, ProductionMerger<'a>> {
-        TaskOrchestrator::new(&self.db, provisioner, merger, TASK_BRANCH_PREFIX)
-    }
-}
-
-/// Run a synchronous closure with a fully wired production orchestrator. Keeps
-/// the three non-async task Tauri commands DRY.
-fn with_production_orchestrator<R>(
-    bundle: &ProductionOrchestratorBundle,
+/// Build the production wiring directly from a `CoreHandle`. The
+/// per-task lock acquired by the caller (Wave D of Phase 2) is what
+/// guards same-task ordering; the v1 bundle/snapshot dance that used to
+/// be needed to escape the global write lock is gone.
+fn with_production_orchestrator_handle<R>(
+    handle: &lucode::project_manager::CoreHandle,
     op: impl FnOnce(
         &TaskOrchestrator<'_, ProductionProvisioner<'_>, ProductionMerger<'_>>,
     ) -> anyhow::Result<R>,
 ) -> Result<R, String> {
-    let provisioner = ProductionProvisioner::new(&bundle.manager, &bundle.db);
-    let merger = ProductionMerger::new(&bundle.merge_service, &bundle.manager);
-    let orch = bundle.orchestrator(&provisioner, &merger);
+    let manager = handle.session_manager();
+    let merge_service = handle.merge_service();
+    let provisioner = ProductionProvisioner::new(&manager, &handle.db);
+    let merger = ProductionMerger::new(&merge_service, &manager);
+    let orch = TaskOrchestrator::new(&handle.db, &provisioner, &merger, TASK_BRANCH_PREFIX);
     op(&orch).map_err(|e| e.to_string())
+}
+
+/// Wave D successor to `confirm_stage_against_snapshot`. Drives the async
+/// confirm-stage path against the lock-free `CoreHandle` directly.
+async fn confirm_stage_against_handle(
+    handle: &lucode::project_manager::CoreHandle,
+    run_id: &str,
+    winning_session_id: &str,
+    winning_branch: &str,
+    selection_mode: &str,
+) -> Result<Task, SchaltError> {
+    let manager = handle.session_manager();
+    let merge_service = handle.merge_service();
+    let provisioner = ProductionProvisioner::new(&manager, &handle.db);
+    let merger = ProductionMerger::new(&merge_service, &manager);
+    let orch = TaskOrchestrator::new(&handle.db, &provisioner, &merger, TASK_BRANCH_PREFIX);
+
+    match orch
+        .confirm_stage(run_id, winning_session_id, winning_branch, selection_mode)
+        .await
+    {
+        Ok(task) => Ok(task),
+        Err(error) => Err(map_confirm_stage_error(error)),
+    }
 }
 
 #[tauri::command]
@@ -913,10 +901,11 @@ pub async fn lucode_task_promote_to_ready(
     id: String,
     project_path: Option<String>,
 ) -> Result<Task, String> {
-    let bundle = ProductionOrchestratorBundle::acquire(project_path.as_deref()).await?;
-    let task = with_production_orchestrator(&bundle, |orch| orch.promote_to_ready(&id))?;
-    notify_task_mutation_with_db(&app, &bundle.db, &bundle.repo_path);
-    drop(bundle);
+    let (project, handle) = get_project_with_handle(project_path.as_deref()).await?;
+    let task_lock = project.task_locks.lock_for(&id);
+    let _guard = task_lock.lock().await;
+    let task = with_production_orchestrator_handle(&handle, |orch| orch.promote_to_ready(&id))?;
+    notify_task_mutation_with_db(&app, &handle.db, &handle.repo_path);
     Ok(task)
 }
 
@@ -932,13 +921,15 @@ pub async fn lucode_task_start_stage_run(
     let stage = parse_enum::<TaskStage>("stage", &stage)?;
     let shape: PresetShape = shape.into();
 
-    let bundle = ProductionOrchestratorBundle::acquire(project_path.as_deref()).await?;
-    let started = with_production_orchestrator(&bundle, |orch| {
+    let (project, handle) = get_project_with_handle(project_path.as_deref()).await?;
+    let task_lock = project.task_locks.lock_for(&task_id);
+    let _guard = task_lock.lock().await;
+
+    let started = with_production_orchestrator_handle(&handle, |orch| {
         orch.start_stage_run(&task_id, stage, preset_id.as_deref(), &shape)
     })?;
 
-    notify_task_mutation_with_db(&app, &bundle.db, &bundle.repo_path);
-    drop(bundle);
+    notify_task_mutation_with_db(&app, &handle.db, &handle.repo_path);
     Ok(started)
 }
 
@@ -960,83 +951,21 @@ pub async fn lucode_task_start_clarify_run(
     task_id: String,
     project_path: Option<String>,
 ) -> Result<ClarifyRunStarted, String> {
-    let bundle = ProductionOrchestratorBundle::acquire(project_path.as_deref()).await?;
-    let agent_type = bundle
+    let (project, handle) = get_project_with_handle(project_path.as_deref()).await?;
+    let task_lock = project.task_locks.lock_for(&task_id);
+    let _guard = task_lock.lock().await;
+
+    let agent_type = handle
         .db
         .get_consolidation_default_favorite()
         .map(|f| f.agent_type)
         .map_err(|e| e.to_string())?;
-    let started = with_production_orchestrator(&bundle, |orch| {
+    let started = with_production_orchestrator_handle(&handle, |orch| {
         orch.start_clarify_run(&task_id, agent_type.as_deref())
     })?;
 
-    notify_task_mutation_with_db(&app, &bundle.db, &bundle.repo_path);
-    drop(bundle);
+    notify_task_mutation_with_db(&app, &handle.db, &handle.repo_path);
     Ok(started)
-}
-
-/// Owned snapshot of the `SchaltwerkCore` resources `confirm_stage` needs.
-///
-/// `Database` is internally synchronized by its connection pool (WAL +
-/// `synchronous=NORMAL` per CLAUDE.md), and `repo_path` is just a `PathBuf`,
-/// so once we clone these out from under the global write guard there is no
-/// need to keep the guard alive — and keeping it alive would be actively
-/// harmful, because `confirm_stage` runs `MergeService::merge_from_modal`
-/// which spawns git subprocesses and blocks every reader project-wide for as
-/// long as the merge takes.
-pub struct ConfirmStageResources {
-    pub db: Database,
-    pub repo_path: std::path::PathBuf,
-}
-
-impl ConfirmStageResources {
-    /// Acquire the global write lock just long enough to capture an owned
-    /// snapshot of the database handle and repo path, then drop the guard
-    /// before returning. Callers run `confirm_stage` against the snapshot
-    /// so the long-running git merge does NOT hold the global lock.
-    pub async fn acquire(project_path: Option<&str>) -> Result<Self, String> {
-        let core = get_core_write_for_project_path(project_path).await?;
-        let snapshot = Self {
-            db: core.db.clone(),
-            repo_path: core.repo_path.clone(),
-        };
-        drop(core);
-        Ok(snapshot)
-    }
-
-    pub fn session_manager(&self) -> SessionManager {
-        SessionManager::new(self.db.clone(), self.repo_path.clone())
-    }
-
-    pub fn merge_service(&self) -> MergeService {
-        MergeService::new(self.db.clone(), self.repo_path.clone())
-    }
-}
-
-/// Run the confirm-stage orchestration against an already-captured snapshot.
-/// Split out so tests can drive the lock-free path directly without going
-/// through `get_core_write_for_project_path` (which depends on Tauri global
-/// state).
-async fn confirm_stage_against_snapshot(
-    resources: &ConfirmStageResources,
-    run_id: &str,
-    winning_session_id: &str,
-    winning_branch: &str,
-    selection_mode: &str,
-) -> Result<Task, SchaltError> {
-    let manager = resources.session_manager();
-    let merge_service = resources.merge_service();
-    let provisioner = ProductionProvisioner::new(&manager, &resources.db);
-    let merger = ProductionMerger::new(&merge_service, &manager);
-    let orch = TaskOrchestrator::new(&resources.db, &provisioner, &merger, TASK_BRANCH_PREFIX);
-
-    match orch
-        .confirm_stage(run_id, winning_session_id, winning_branch, selection_mode)
-        .await
-    {
-        Ok(task) => Ok(task),
-        Err(error) => Err(map_confirm_stage_error(error)),
-    }
 }
 
 /// Translate the `anyhow::Error` returned by `TaskOrchestrator::confirm_stage`
@@ -1079,12 +1008,27 @@ pub async fn lucode_task_confirm_stage(
 ) -> Result<Task, SchaltError> {
     let mode = selection_mode.unwrap_or_else(|| "manual".to_string());
 
-    let resources = ConfirmStageResources::acquire(project_path.as_deref())
+    let (project, handle) = get_project_with_handle(project_path.as_deref())
         .await
         .map_err(|message| SchaltError::DatabaseError { message })?;
 
-    let task = confirm_stage_against_snapshot(
-        &resources,
+    // Resolve run → task_id so the per-task lock guards confirm-stage
+    // against any concurrent same-task command (start_stage_run,
+    // run_cancel, cancel). The lookup is one indexed read; if it fails
+    // the run does not exist and we surface the v2 NotFound error.
+    let task_id = TaskRunService::new(&handle.db)
+        .get_run(&run_id)
+        .map_err(|err| SchaltError::DatabaseError {
+            message: format!("task run '{run_id}' not found: {err}"),
+        })?
+        .task_id
+        .clone();
+
+    let task_lock = project.task_locks.lock_for(&task_id);
+    let _guard = task_lock.lock().await;
+
+    let task = confirm_stage_against_handle(
+        &handle,
         &run_id,
         &winning_session_id,
         &winning_branch,
@@ -1092,7 +1036,7 @@ pub async fn lucode_task_confirm_stage(
     )
     .await?;
 
-    notify_task_mutation_with_db(&app, &resources.db, &resources.repo_path);
+    notify_task_mutation_with_db(&app, &handle.db, &handle.repo_path);
     Ok(task)
 }
 
@@ -1168,67 +1112,46 @@ mod tests {
         TestDb { db, _tmp: tmp }
     }
 
-    /// Regression: `ProductionOrchestratorBundle::acquire` used to return
-    /// while still holding the global `RwLock<SchaltwerkCore>` write guard
-    /// (via `OwnedRwLockWriteGuard<SchaltwerkCore>` baked into the struct),
-    /// which serialized every project-wide reader behind the long
-    /// session/worktree work that `lucode_task_promote_to_ready`,
-    /// `lucode_task_start_stage_run`, and `lucode_task_start_clarify_run`
-    /// drive. The fix snapshots the (cheap) `Database` + `PathBuf` + service
-    /// objects under a brief write guard and drops the guard before
-    /// returning. This test pins that contract by going through the same
-    /// `snapshot_from_core` path that `acquire` uses (minus the Tauri-state
-    /// lookup) and proving an unrelated `try_write_owned` succeeds against
-    /// the same `Arc<RwLock<SchaltwerkCore>>` while the bundle is still in
-    /// scope and being used.
+    // The v1 regression test
+    // `production_orchestrator_bundle_releases_global_write_guard_before_returning`
+    // pinned a contract that no longer exists: the
+    // `ProductionOrchestratorBundle::acquire → snapshot_from_core → drop guard`
+    // dance is gone. Same-task ordering is now provided by `TaskLockManager`
+    // (per-task `Arc<Mutex<()>>`); cross-task concurrency is the new contract,
+    // pinned by `tests/e2e_per_task_concurrency.rs` in Wave H.
+    //
+    // Per `feedback_regression_test_per_fix.md`: a test that pins a removed
+    // invariant decays into noise, so we delete it here rather than rewrite
+    // it against an invariant the test wasn't designed to express.
+
+    /// Two-way binding for the per-task lock contract introduced in Wave D:
+    /// concurrent operations on the same task id wait, while concurrent
+    /// operations on different task ids do not. Drives `Project::task_locks`
+    /// directly (the same `TaskLockManager` the lifecycle commands use)
+    /// so that an accidental regression to a global mutex would surface
+    /// here without needing a Tauri-driven integration harness.
     #[tokio::test]
-    async fn production_orchestrator_bundle_releases_global_write_guard_before_returning() {
-        use lucode::schaltwerk_core::SchaltwerkCore;
-        use tokio::sync::RwLock;
+    async fn project_task_locks_serialize_same_id_only() {
+        use lucode::infrastructure::task_lock_manager::TaskLockManager;
 
-        let tmp = TempDir::new().expect("tempdir");
-        let repo_path = tmp.path().to_path_buf();
-        let db_path = tmp.path().join("sessions.db");
-        let core = SchaltwerkCore::new_with_repo_path(Some(db_path), repo_path.clone())
-            .expect("schaltwerk core under tempdir");
-        let core_lock = Arc::new(RwLock::new(core));
+        let mgr = TaskLockManager::new();
+        let lock_a = mgr.lock_for("task-a");
+        let _guard_a = lock_a.lock().await;
 
-        let bundle = {
-            let guard = Arc::clone(&core_lock).write_owned().await;
-            let snapshot = ProductionOrchestratorBundle::snapshot_from_core(&guard);
-            drop(guard);
-            snapshot
-        };
+        let same = mgr.lock_for("task-a");
+        assert!(
+            same.try_lock().is_err(),
+            "second acquire on task-a must fail try_lock while the first \
+             guard is held; if try_lock succeeds, same-task ordering for \
+             promote_to_ready/start_stage_run/start_clarify_run/confirm_stage/\
+             run_cancel/cancel is broken"
+        );
 
-        let parallel_writer = Arc::clone(&core_lock)
-            .try_write_owned()
-            .expect(
-                "global write guard must be released before bundle is returned; \
-                 if this fails the long session-creation path is once again \
-                 stalling every reader project-wide",
-            );
-        drop(parallel_writer);
-
-        TaskService::new(&bundle.db)
-            .create_task(CreateTaskInput {
-                name: "post-release-write",
-                display_name: None,
-                repository_path: &bundle.repo_path,
-                repository_name: "repo",
-                request_body: "body",
-                variant: TaskVariant::Regular,
-                epic_id: None,
-                base_branch: Some("main"),
-                source_kind: None,
-                source_url: None,
-                issue_number: None,
-                issue_url: None,
-                pr_number: None,
-                pr_url: None,
-            })
-            .expect("bundle's snapshotted db must remain usable after guard drop");
-
-        assert_eq!(bundle.repo_path, repo_path);
+        let other = mgr.lock_for("task-b");
+        let guard_other = other
+            .try_lock()
+            .expect("unrelated task lock must be free while task-a is held");
+        drop(guard_other);
     }
 
     struct CancelCommandFixture {
