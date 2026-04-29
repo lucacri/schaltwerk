@@ -40,17 +40,16 @@ pub async fn record_session_exit_by_name(session_name: &str, exit_code: Option<i
         );
         return;
     };
-    let Ok(core_lock) = pm.current_schaltwerk_core().await else {
+    let Ok(handle) = pm.current_core_handle().await else {
         debug!(
             "session_facts_bridge: no active project, skipping record_exit for {session_name}"
         );
         return;
     };
 
-    let core = core_lock.read().await;
     let session = match crate::domains::sessions::db_sessions::SessionMethods::get_session_by_name(
-        &core.db,
-        &core.repo_path,
+        &handle.db,
+        &handle.repo_path,
         session_name,
     ) {
         Ok(s) => s,
@@ -62,7 +61,7 @@ pub async fn record_session_exit_by_name(session_name: &str, exit_code: Option<i
         }
     };
 
-    let recorder = SessionFactsRecorder::new(&core.db);
+    let recorder = SessionFactsRecorder::new(&handle.db);
     if let Err(err) = recorder.record_exit(&session.id, Utc::now(), exit_code) {
         warn!(
             "session_facts_bridge: record_exit failed for session '{session_name}': {err}"
@@ -80,15 +79,14 @@ pub async fn record_session_first_idle_by_id(session_id: &str) {
         );
         return;
     };
-    let Ok(core_lock) = pm.current_schaltwerk_core().await else {
+    let Ok(handle) = pm.current_core_handle().await else {
         debug!(
             "session_facts_bridge: no active project, skipping record_first_idle for {session_id}"
         );
         return;
     };
 
-    let core = core_lock.read().await;
-    let recorder = SessionFactsRecorder::new(&core.db);
+    let recorder = SessionFactsRecorder::new(&handle.db);
     if let Err(err) = recorder.record_first_idle(session_id, Utc::now()) {
         warn!(
             "session_facts_bridge: record_first_idle failed for session '{session_id}': {err}"
