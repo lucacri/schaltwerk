@@ -941,6 +941,12 @@ pub(crate) fn apply_tasks_migrations(conn: &rusqlite::Connection) -> anyhow::Res
     alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN exited_at INTEGER")?;
     alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN exit_code INTEGER")?;
     alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN first_idle_at INTEGER")?;
+
+    // One-shot v1→v2 migration. Runs after the new columns are present so
+    // backfill UPDATEs find their target columns. Idempotent — a v2-native DB
+    // (no `task_runs.status` column) skips immediately. See
+    // `infrastructure/database/migrations/v1_to_v2_task_runs.rs` for details.
+    super::migrations::v1_to_v2_task_runs::run(conn)?;
     let _ = conn.execute(
         "UPDATE sessions SET run_role = task_role
             WHERE run_role IS NULL AND task_role IS NOT NULL",

@@ -7,6 +7,7 @@ pub mod db_schema;
 pub mod db_spec_review_comments;
 pub mod db_specs;
 pub mod db_tasks;
+pub mod migrations;
 pub mod timestamps;
 
 pub use connection::Database;
