@@ -499,7 +499,7 @@ pub async fn get_core_handle() -> Result<lucode::project_manager::CoreHandle, St
     let manager = get_project_manager().await;
     manager.current_core_handle().await.map_err(|e| {
         let detail = e.to_string();
-        let message = format!("Failed to get core handle: {detail}");
+        let message = format!("Failed to get Lucode core: {detail}");
         if detail.contains("No active project") {
             log::warn!("{message}");
         } else {
@@ -523,7 +523,7 @@ pub async fn get_core_handle_for_project_path(
         .await
         .map_err(|e| {
             let message = format!(
-                "Failed to get core handle for project path {}: {e}",
+                "Failed to get Lucode core for project path {}: {e}",
                 project_path.display()
             );
             log::error!("{message}");
