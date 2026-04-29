@@ -234,6 +234,19 @@ fn emit_agent_crashed_for_dead_pane(
             "Failed to emit agent-crashed event for reattached dead pane {terminal_id}: {err}"
         );
     }
+
+    // v2 Wave G4: also record the dead-pane exit on the session row so the
+    // derived getter sees a Failed signal even when the PTY child was reaped
+    // by tmux before our process monitor caught it. exit_code is unknown for
+    // dead-pane reattaches (None).
+    let session_name_owned = session_name.to_string();
+    tauri::async_runtime::spawn(async move {
+        lucode::infrastructure::session_facts_bridge::record_session_exit_by_name(
+            &session_name_owned,
+            None,
+        )
+        .await;
+    });
 }
 
 #[derive(serde::Serialize, Clone)]

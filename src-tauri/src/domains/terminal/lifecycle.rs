@@ -1,6 +1,7 @@
 use super::local::TerminalState;
 use crate::infrastructure::attention_bridge::update_session_attention_state;
 use crate::infrastructure::events::{SchaltEvent, emit_event};
+use crate::infrastructure::session_facts_bridge::record_session_exit_by_name;
 use crate::infrastructure::keep_awake_bridge::handle_terminal_attention;
 use crate::shared::terminal_id::is_session_top_terminal_id;
 use log::{debug, error, info, warn};
@@ -155,6 +156,14 @@ async fn handle_agent_crash(terminal_id: String, status: ExitStatus, deps: Lifec
     );
 
     cleanup_dead_terminal(terminal_id.clone(), &deps).await;
+
+    // v2 Wave G2: record the PTY exit on the session row so
+    // compute_run_status sees the failure signal. No-op for orchestrator
+    // terminals (no session row to update). exit_code is the raw u32 from
+    // ExitStatus, treat as i32 for SQLite storage.
+    if let Some(name) = session_name.as_deref() {
+        record_session_exit_by_name(name, Some(status.exit_code() as i32)).await;
+    }
 
     let handle_guard = deps.app_handle.lock().await;
     if let Some(handle) = handle_guard.as_ref() {

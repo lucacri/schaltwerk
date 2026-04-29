@@ -5,7 +5,13 @@ use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{OnceCell, RwLock};
+
+/// Process-wide handle for the active project graph. main.rs initializes this
+/// via `get_or_init`. Library-side helpers (e.g.
+/// `infrastructure::session_facts_bridge`) read through this static; before
+/// init the `.get()` call returns None and callers no-op gracefully.
+pub static PROJECT_MANAGER: OnceCell<Arc<ProjectManager>> = OnceCell::const_new();
 
 use crate::domains::sessions::lifecycle::bootstrapper::migrate_legacy_hooks_in_dir;
 use crate::domains::terminal::TerminalManager;

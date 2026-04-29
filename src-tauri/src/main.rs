@@ -381,7 +381,11 @@ async fn set_editor_overrides(
         .map_err(|e| format!("Failed to store editor overrides: {e}"))
 }
 
-pub static PROJECT_MANAGER: OnceCell<Arc<ProjectManager>> = OnceCell::const_new();
+// PROJECT_MANAGER moved to lib (project_manager.rs) so library-side helpers
+// (e.g. infrastructure::session_facts_bridge) can read through it. Re-export
+// here so the existing `crate::PROJECT_MANAGER` references in main.rs keep
+// resolving without churn.
+pub use lucode::project_manager::PROJECT_MANAGER;
 pub static SETTINGS_MANAGER: OnceCell<Arc<Mutex<SettingsManager>>> = OnceCell::const_new();
 pub static ATTENTION_REGISTRY: OnceCell<Arc<Mutex<AttentionStateRegistry>>> = OnceCell::const_new();
 pub static FILE_WATCHER_MANAGER: OnceCell<Arc<lucode::domains::workspace::FileWatcherManager>> =

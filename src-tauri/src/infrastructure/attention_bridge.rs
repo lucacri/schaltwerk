@@ -25,6 +25,16 @@ pub async fn update_session_attention_state_immediate(
     } else {
         warn!("SESSION_ATTENTION_STATE not initialized, cannot update attention for {session_id}");
     }
+
+    // v2 Wave G3: when a session enters WaitingForInput, persist the first-idle
+    // fact on the session row. compute_run_status reads first_idle_at to derive
+    // sticky AwaitingSelection. The recorder is write-once at the SQL layer so
+    // calling on every WaitingForInput event is safe — duplicates commit zero
+    // rows.
+    if needs_attention && attention_kind == Some("waiting_for_input") {
+        crate::infrastructure::session_facts_bridge::record_session_first_idle_by_id(session_id)
+            .await;
+    }
 }
 
 /// Forward terminal attention events to the session attention state registry

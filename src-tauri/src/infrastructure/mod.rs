@@ -5,3 +5,4 @@ pub mod events;
 pub mod keep_awake_bridge;
 pub mod logging;
 pub mod pty;
+pub mod session_facts_bridge;
