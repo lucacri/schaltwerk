@@ -481,6 +481,106 @@ pub async fn get_schaltwerk_core_for_project_path(
         })
 }
 
+pub async fn get_core_handle() -> Result<lucode::project_manager::CoreHandle, String> {
+    if let Ok(Some(project_path)) = REQUEST_PROJECT_OVERRIDE.try_with(|cell| cell.borrow().clone())
+    {
+        let manager = get_project_manager().await;
+        match manager.core_handle_for_path(&project_path).await {
+            Ok(handle) => return Ok(handle),
+            Err(e) => {
+                log::error!(
+                    "Failed to get core handle for override path {}: {e}",
+                    project_path.display()
+                );
+            }
+        }
+    }
+
+    let manager = get_project_manager().await;
+    manager.current_core_handle().await.map_err(|e| {
+        let detail = e.to_string();
+        let message = format!("Failed to get core handle: {detail}");
+        if detail.contains("No active project") {
+            log::warn!("{message}");
+        } else {
+            log::error!("{message}");
+        }
+        message
+    })
+}
+
+pub async fn get_core_handle_for_project_path(
+    project_path: Option<&str>,
+) -> Result<lucode::project_manager::CoreHandle, String> {
+    let Some(path) = project_path.map(str::trim).filter(|p| !p.is_empty()) else {
+        return get_core_handle().await;
+    };
+
+    let manager = get_project_manager().await;
+    let project_path = PathBuf::from(path);
+    manager
+        .core_handle_for_path(&project_path)
+        .await
+        .map_err(|e| {
+            let message = format!(
+                "Failed to get core handle for project path {}: {e}",
+                project_path.display()
+            );
+            log::error!("{message}");
+            message
+        })
+}
+
+/// `(Arc<Project>, CoreHandle)` for the orchestration commands that need
+/// `project.task_locks`. Honors `REQUEST_PROJECT_OVERRIDE` like the other
+/// accessors. Used in `commands/tasks.rs` Wave D.
+pub async fn get_project_with_handle(
+    project_path: Option<&str>,
+) -> Result<
+    (
+        Arc<lucode::project_manager::Project>,
+        lucode::project_manager::CoreHandle,
+    ),
+    String,
+> {
+    let manager = get_project_manager().await;
+
+    if let Ok(Some(override_path)) =
+        REQUEST_PROJECT_OVERRIDE.try_with(|cell| cell.borrow().clone())
+    {
+        return manager
+            .project_with_handle_for_path(&override_path)
+            .await
+            .map_err(|e| {
+                format!(
+                    "Failed to get project handle for override path {}: {e}",
+                    override_path.display()
+                )
+            });
+    }
+
+    if let Some(path) = project_path.map(str::trim).filter(|p| !p.is_empty()) {
+        let path = PathBuf::from(path);
+        return manager.project_with_handle_for_path(&path).await.map_err(|e| {
+            format!(
+                "Failed to get project handle for path {}: {e}",
+                path.display()
+            )
+        });
+    }
+
+    manager.current_project_with_handle().await.map_err(|e| {
+        let detail = e.to_string();
+        let message = format!("Failed to get current project handle: {detail}");
+        if detail.contains("No active project") {
+            log::warn!("{message}");
+        } else {
+            log::error!("{message}");
+        }
+        message
+    })
+}
+
 pub async fn get_core_read()
 -> Result<OwnedRwLockReadGuard<lucode::schaltwerk_core::SchaltwerkCore>, String> {
     let call_id = uuid::Uuid::new_v4();

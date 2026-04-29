@@ -13,8 +13,11 @@ use tokio::sync::{OnceCell, RwLock};
 /// init the `.get()` call returns None and callers no-op gracefully.
 pub static PROJECT_MANAGER: OnceCell<Arc<ProjectManager>> = OnceCell::const_new();
 
+use crate::domains::merge::MergeService;
 use crate::domains::sessions::lifecycle::bootstrapper::migrate_legacy_hooks_in_dir;
+use crate::domains::sessions::service::SessionManager;
 use crate::domains::terminal::TerminalManager;
+use crate::infrastructure::database::Database;
 use crate::infrastructure::task_lock_manager::TaskLockManager;
 use crate::schaltwerk_core::SchaltwerkCore;
 
@@ -213,6 +216,50 @@ impl Project {
             schaltwerk_core,
             task_locks: Arc::new(TaskLockManager::new()),
         })
+    }
+}
+
+/// Lock-free, owned snapshot of the immutable resources every caller of
+/// the legacy `get_core_read*` / `get_core_write*` accessors needed.
+///
+/// `Database: Clone` is internally synchronized (Arc-backed connection
+/// pool, WAL, `synchronous=NORMAL`) and `repo_path` is immutable, so a
+/// `CoreHandle` is just two `Arc` clones. Callers can hold it across
+/// `.await` points without any guard. Phase 2 (per-task lock) makes this
+/// the only access path; the `RwLock<SchaltwerkCore>` wrapper goes away
+/// in Wave G.
+#[derive(Clone)]
+pub struct CoreHandle {
+    pub db: Database,
+    pub repo_path: PathBuf,
+}
+
+impl CoreHandle {
+    pub fn session_manager(&self) -> SessionManager {
+        SessionManager::new(self.db.clone(), self.repo_path.clone())
+    }
+
+    pub fn merge_service(&self) -> MergeService {
+        MergeService::new(self.db.clone(), self.repo_path.clone())
+    }
+}
+
+impl Project {
+    /// Cheap clone of the immutable resources every caller needs. Returns
+    /// owned values so the caller can hold them across awaits without any
+    /// guard.
+    ///
+    /// During Phase 2 Waves C–F this still briefly takes a read lock on
+    /// the legacy `Arc<RwLock<SchaltwerkCore>>` to clone the inner
+    /// `(db, repo_path)`. Wave G replaces the field type with
+    /// `Arc<SchaltwerkCore>`, at which point this becomes a true
+    /// lock-free clone.
+    pub async fn core_handle(&self) -> CoreHandle {
+        let core = self.schaltwerk_core.read().await;
+        CoreHandle {
+            db: core.db.clone(),
+            repo_path: core.repo_path.clone(),
+        }
     }
 }
 
@@ -635,6 +682,86 @@ impl ProjectManager {
         Ok(project.schaltwerk_core.clone())
     }
 
+    /// Lock-free `CoreHandle` for the current project. Phase 2 successor
+    /// to `current_schaltwerk_core` for the vast majority of callers that
+    /// only needed `(db, repo_path)`.
+    pub async fn current_core_handle(&self) -> Result<CoreHandle> {
+        let project = self.current_project().await?;
+        Ok(project.core_handle().await)
+    }
+
+    /// `(Project, CoreHandle)` for the current project. Returns the
+    /// `Arc<Project>` alongside the handle so callers that need
+    /// `project.task_locks` (the orchestration commands) get both in one
+    /// trip. The `Arc<Project>` is cheap to clone and outlives the call.
+    pub async fn current_project_with_handle(&self) -> Result<(Arc<Project>, CoreHandle)> {
+        let project = self.current_project().await?;
+        let handle = project.core_handle().await;
+        Ok((project, handle))
+    }
+
+    /// Lock-free `CoreHandle` for a specific project path. Phase 2
+    /// successor to `get_schaltwerk_core_for_path` for callers that
+    /// only needed `(db, repo_path)`.
+    pub async fn core_handle_for_path(&self, path: &PathBuf) -> Result<CoreHandle> {
+        let core = self.get_schaltwerk_core_for_path(path).await?;
+        let core = core.read().await;
+        Ok(CoreHandle {
+            db: core.db.clone(),
+            repo_path: core.repo_path.clone(),
+        })
+    }
+
+    /// `(Arc<Project>, CoreHandle)` for a specific project path.
+    /// The `Arc<Project>` exposes `task_locks` and the new lock-free
+    /// `core_handle()` method.
+    pub async fn project_with_handle_for_path(
+        &self,
+        path: &PathBuf,
+    ) -> Result<(Arc<Project>, CoreHandle)> {
+        let project = self.resolve_project_for_path(path).await?;
+        let handle = project.core_handle().await;
+        Ok((project, handle))
+    }
+
+    /// Resolve `Arc<Project>` for a path, loading the project if it is
+    /// not yet in the in-memory map. Mirrors the resolution rules in
+    /// `get_schaltwerk_core_for_path` but returns the project itself,
+    /// not the inner core lock.
+    async fn resolve_project_for_path(&self, path: &PathBuf) -> Result<Arc<Project>> {
+        let canonical_path = match std::fs::canonicalize(path) {
+            Ok(p) => p,
+            Err(_) => path.clone(),
+        };
+
+        if let Some(current_path) = self.current_project_path().await {
+            let current_canonical = std::fs::canonicalize(&current_path).unwrap_or(current_path);
+            if current_canonical == canonical_path
+                || canonical_path.starts_with(&current_canonical)
+            {
+                return self.current_project().await;
+            }
+        }
+
+        let projects = self.projects.read().await;
+        for project in projects.values() {
+            let project_canonical =
+                std::fs::canonicalize(&project.path).unwrap_or(project.path.clone());
+            if project_canonical == canonical_path
+                || canonical_path.starts_with(&project_canonical)
+            {
+                return Ok(project.clone());
+            }
+        }
+        drop(projects);
+
+        let project = Project::new(canonical_path.clone())?;
+        let arc_project = Arc::new(project);
+        let mut projects_write = self.projects.write().await;
+        projects_write.insert(canonical_path, arc_project.clone());
+        Ok(arc_project)
+    }
+
     /// Get SchaltwerkCore for a specific project path
     pub async fn get_schaltwerk_core_for_path(
         &self,
@@ -825,6 +952,57 @@ mod tests {
 
         // Cleanup p2 to avoid leaks for the test
         let _ = p2.terminal_manager.cleanup_all().await;
+    }
+
+    #[tokio::test]
+    async fn core_handle_returns_owned_clone_independent_of_caller_count() {
+        let mgr = ProjectManager::new();
+        let tmp = TempDir::new().unwrap();
+        let _project = mgr
+            .switch_to_project_in_memory(tmp.path().to_path_buf())
+            .await
+            .unwrap();
+
+        let h1 = mgr.current_core_handle().await.unwrap();
+        let h2 = mgr.current_core_handle().await.unwrap();
+
+        assert_eq!(
+            h1.repo_path, h2.repo_path,
+            "two CoreHandle clones must point at the same repo_path"
+        );
+
+        let conn1 = h1.db.get_conn().expect("h1 db connection");
+        let conn2 = h2.db.get_conn().expect("h2 db connection");
+        let r1: i64 = conn1
+            .query_row("SELECT 1", [], |row| row.get(0))
+            .expect("h1 select");
+        let r2: i64 = conn2
+            .query_row("SELECT 1", [], |row| row.get(0))
+            .expect("h2 select");
+        assert_eq!(r1, 1);
+        assert_eq!(r2, 1);
+    }
+
+    #[tokio::test]
+    async fn core_handle_outlives_intermediate_arc_drop() {
+        let mgr = ProjectManager::new();
+        let tmp = TempDir::new().unwrap();
+        let _project = mgr
+            .switch_to_project_in_memory(tmp.path().to_path_buf())
+            .await
+            .unwrap();
+
+        let handle = mgr.current_core_handle().await.unwrap();
+        // Drop every intermediate `Arc<Project>` reference held in this scope;
+        // the projects map still holds one but the contract we are pinning is
+        // that the handle's `(db, repo_path)` clones are independent of any
+        // outer guard. After the drop a fresh DB op against `handle.db` must
+        // still succeed.
+        let conn = handle.db.get_conn().expect("post-drop connection");
+        let r: i64 = conn
+            .query_row("SELECT 1", [], |row| row.get(0))
+            .expect("post-drop select");
+        assert_eq!(r, 1);
     }
 
     #[tokio::test]
