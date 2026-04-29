@@ -5,6 +5,7 @@ pub mod cache;
 pub mod consolidation_stub;
 pub mod db_sessions;
 pub mod entity;
+pub mod facts_recorder;
 pub mod lifecycle;
 pub mod process_cleanup;
 pub mod repository;
