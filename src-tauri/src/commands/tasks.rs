@@ -1,8 +1,5 @@
 use crate::errors::SchaltError;
-use crate::{
-    get_core_handle_for_project_path, get_core_read_for_project_path,
-    get_core_write_for_project_path, get_project_with_handle,
-};
+use crate::{get_core_handle_for_project_path, get_project_with_handle};
 // v1's domains/legacy_import (importing legacy archived sessions into tasks) is
 // not ported to v2. Phase 1 ships only the v1→v2 task_runs schema migration in
 // infrastructure/database/migrations/v1_to_v2_task_runs.rs. The three
@@ -116,7 +113,7 @@ async fn notify_task_mutation<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     project_path: Option<&str>,
 ) {
-    let payload = match with_read_db(project_path, |db, repo_path| {
+    let payload = match with_core_handle(project_path, |db, repo_path| {
         Ok(TasksRefreshedPayload {
             project_path: repo_path.to_string_lossy().to_string(),
             tasks: TaskService::new(db).list_tasks(repo_path)?,
@@ -179,20 +176,18 @@ async fn cancel_task_with_context<R: tauri::Runtime>(
     Ok(task)
 }
 
-async fn with_read_db<R>(
+/// Single helper for task commands that need `(Database, repo_path)` and
+/// nothing else. Replaces the v1 `with_read_db` / `with_write_db` split,
+/// which was meaningful only when the underlying lock provided exclusion
+/// — `Arc<RwLock<SchaltwerkCore>>` did not, so the read/write distinction
+/// was always cosmetic. The DB pool's WAL + `synchronous=NORMAL` is the
+/// real synchronization primitive.
+async fn with_core_handle<R>(
     project_path: Option<&str>,
     op: impl FnOnce(&Database, &Path) -> anyhow::Result<R>,
 ) -> Result<R, String> {
-    let core = get_core_read_for_project_path(project_path).await?;
-    op(&core.db, &core.repo_path).map_err(|e| e.to_string())
-}
-
-async fn with_write_db<R>(
-    project_path: Option<&str>,
-    op: impl FnOnce(&Database, &Path) -> anyhow::Result<R>,
-) -> Result<R, String> {
-    let core = get_core_write_for_project_path(project_path).await?;
-    op(&core.db, &core.repo_path).map_err(|e| e.to_string())
+    let handle = get_core_handle_for_project_path(project_path).await?;
+    op(&handle.db, &handle.repo_path).map_err(|e| e.to_string())
 }
 
 fn preserved_content_for_session(
@@ -363,7 +358,7 @@ pub async fn lucode_task_create(
         None => TaskVariant::Regular,
     };
 
-    let task = with_write_db(project_path.as_deref(), move |db, repo_path| {
+    let task = with_core_handle(project_path.as_deref(), move |db, repo_path| {
         let repo_name = derive_repository_name(repo_path);
         let svc = TaskService::new(db);
         svc.create_task(CreateTaskInput {
@@ -391,7 +386,7 @@ pub async fn lucode_task_create(
 
 #[tauri::command]
 pub async fn lucode_task_list(project_path: Option<String>) -> Result<Vec<Task>, String> {
-    with_read_db(project_path.as_deref(), |db, repo_path| {
+    with_core_handle(project_path.as_deref(), |db, repo_path| {
         TaskService::new(db).list_tasks(repo_path)
     })
     .await
@@ -404,7 +399,7 @@ pub async fn lucode_project_workflow_defaults_get(
     repository_path: String,
     project_path: Option<String>,
 ) -> Result<Vec<ProjectWorkflowDefault>, String> {
-    with_read_db(project_path.as_deref(), move |db, _repo_path| {
+    with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         get_project_workflow_defaults_for_repo(db, repository_path)
     })
     .await
@@ -419,7 +414,7 @@ pub async fn lucode_project_workflow_defaults_set(
     auto_chain: bool,
     project_path: Option<String>,
 ) -> Result<Vec<ProjectWorkflowDefault>, String> {
-    let defaults = with_write_db(project_path.as_deref(), move |db, _repo_path| {
+    let defaults = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         set_project_workflow_default_for_repo(db, repository_path, stage, preset_id, auto_chain)
     })
     .await?;
@@ -435,7 +430,7 @@ pub async fn lucode_project_workflow_defaults_delete(
     stage: String,
     project_path: Option<String>,
 ) -> Result<Vec<ProjectWorkflowDefault>, String> {
-    let defaults = with_write_db(project_path.as_deref(), move |db, _repo_path| {
+    let defaults = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         delete_project_workflow_default_for_repo(db, repository_path, stage)
     })
     .await?;
@@ -446,7 +441,7 @@ pub async fn lucode_project_workflow_defaults_delete(
 
 #[tauri::command]
 pub async fn lucode_task_get(id: String, project_path: Option<String>) -> Result<Task, String> {
-    with_read_db(project_path.as_deref(), move |db, _repo_path| {
+    with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         TaskService::new(db)
             .get_task(&id)
             .map_err(|_| anyhow::anyhow!("task '{id}' not found"))
@@ -466,7 +461,7 @@ pub async fn lucode_task_update_content(
 ) -> Result<Task, String> {
     let kind = parse_enum::<TaskArtifactKind>("artifact_kind", &artifact_kind)?;
 
-    let task = with_write_db(project_path.as_deref(), move |db, _repo_path| {
+    let task = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&id)
             .map_err(|_| anyhow::anyhow!("task '{id}' not found"))?;
@@ -494,7 +489,7 @@ pub async fn lucode_task_advance_stage(
 ) -> Result<Task, String> {
     let stage = parse_enum::<TaskStage>("stage", &stage)?;
 
-    let task = with_write_db(project_path.as_deref(), move |db, _repo_path| {
+    let task = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&id)
             .map_err(|_| anyhow::anyhow!("task '{id}' not found"))?;
@@ -515,7 +510,7 @@ pub async fn lucode_task_attach_issue(
     issue_url: Option<String>,
     project_path: Option<String>,
 ) -> Result<Task, String> {
-    let task = with_write_db(project_path.as_deref(), move |db, _repo_path| {
+    let task = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&id)
             .map_err(|_| anyhow::anyhow!("task '{id}' not found"))?;
@@ -537,7 +532,7 @@ pub async fn lucode_task_attach_pr(
     pr_state: Option<String>,
     project_path: Option<String>,
 ) -> Result<Task, String> {
-    let task = with_write_db(project_path.as_deref(), move |db, _repo_path| {
+    let task = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&id)
             .map_err(|_| anyhow::anyhow!("task '{id}' not found"))?;
@@ -556,7 +551,7 @@ pub async fn lucode_task_delete(
     id: String,
     project_path: Option<String>,
 ) -> Result<(), String> {
-    with_write_db(project_path.as_deref(), move |db, _repo_path| {
+    with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&id)
             .map_err(|_| anyhow::anyhow!("task '{id}' not found"))?;
@@ -696,7 +691,7 @@ pub async fn lucode_task_set_stage_config(
 ) -> Result<Vec<TaskStageConfig>, String> {
     let stage = parse_enum::<TaskStage>("stage", &stage)?;
 
-    let configs = with_write_db(project_path.as_deref(), move |db, _repo_path| {
+    let configs = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&task_id)
             .map_err(|_| anyhow::anyhow!("task '{task_id}' not found"))?;
@@ -719,7 +714,7 @@ pub async fn lucode_task_list_stage_configs(
     task_id: String,
     project_path: Option<String>,
 ) -> Result<Vec<TaskStageConfig>, String> {
-    with_read_db(project_path.as_deref(), move |db, _repo_path| {
+    with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&task_id)
             .map_err(|_| anyhow::anyhow!("task '{task_id}' not found"))?;
@@ -733,7 +728,7 @@ pub async fn lucode_task_run_list(
     task_id: String,
     project_path: Option<String>,
 ) -> Result<Vec<TaskRun>, String> {
-    with_read_db(project_path.as_deref(), move |db, _repo_path| {
+    with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&task_id)
             .map_err(|_| anyhow::anyhow!("task '{task_id}' not found"))?;
@@ -747,7 +742,7 @@ pub async fn lucode_task_run_get(
     run_id: String,
     project_path: Option<String>,
 ) -> Result<TaskRun, String> {
-    with_read_db(project_path.as_deref(), move |db, _repo_path| {
+    with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         TaskRunService::new(db)
             .get_run(&run_id)
             .map_err(|_| anyhow::anyhow!("task run '{run_id}' not found"))
@@ -762,7 +757,7 @@ pub async fn lucode_task_artifact_history(
     project_path: Option<String>,
 ) -> Result<Vec<TaskArtifactVersion>, String> {
     let kind = parse_enum::<TaskArtifactKind>("artifact_kind", &artifact_kind)?;
-    with_read_db(project_path.as_deref(), move |db, _repo_path| {
+    with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         TaskService::new(db).artifact_history(&task_id, kind)
     })
     .await
@@ -801,7 +796,7 @@ pub async fn lucode_task_reopen(
     project_path: Option<String>,
 ) -> Result<Task, String> {
     let target_stage = parse_enum::<TaskStage>("target_stage", &target_stage)?;
-    let task = with_write_db(project_path.as_deref(), move |db, _repo_path| {
+    let task = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         TaskService::new(db).reopen_task_to_stage(&task_id, target_stage)
     })
     .await?;
