@@ -94,9 +94,45 @@ fn is_ci_green(details: &ForgePrDetails) -> bool {
     }
 }
 
+fn is_ci_failed(details: &ForgePrDetails) -> bool {
+    if details
+        .ci_status
+        .as_ref()
+        .is_some_and(|ci| ci.state.eq_ignore_ascii_case("failed"))
+    {
+        return true;
+    }
+
+    match &details.provider_data {
+        lucode::domains::git::service::ForgeProviderData::GitHub { status_checks, .. } => {
+            status_checks.iter().any(|check| {
+                check
+                    .conclusion
+                    .as_deref()
+                    .is_some_and(|conclusion| conclusion.eq_ignore_ascii_case("failure"))
+            })
+        }
+        lucode::domains::git::service::ForgeProviderData::GitLab {
+            pipeline_status, ..
+        } => pipeline_status
+            .as_deref()
+            .is_some_and(|status| status.eq_ignore_ascii_case("failed")),
+        lucode::domains::git::service::ForgeProviderData::None => false,
+    }
+}
+
 fn pr_state_from_details(details: &ForgePrDetails) -> PrState {
     if is_merged_state(&details.summary.state) {
         PrState::Mred
+    } else if details.summary.state.eq_ignore_ascii_case("closed") || is_ci_failed(details) {
+        // Phase 1 plan §7 + auto_advance behavior: CI red OR closed-without-merge
+        // flips PrState to Failed, which auto_advance::on_pr_state_refreshed
+        // converts to task.failure_flag = true. Run-level Failed is NOT
+        // emitted from this path in v2 — that is a deliberate semantic change
+        // from v1, where forge.persist_pr_state_refresh used to flip
+        // task_runs.status to Failed in the same call. v2 reserves run-level
+        // Failed for agent/selection failures observed via session exit_code.
+        PrState::Failed
     } else if is_ci_green(details) {
         PrState::Succeeding
     } else {
