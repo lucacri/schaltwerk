@@ -52,7 +52,13 @@
   3. `commands/schaltwerk_core.rs` — 3 additional consolidation/orchestrator multi-field updates (Wave E.0 grep finalizes the list)
   4. `mcp_api.rs` — 3 REST handlers that update multiple consolidation fields (Wave E.0 grep finalizes)
 
-  The expected outcome of the audit is "all Cat-D sites already use a manager method that wraps a transaction internally" — i.e. the count drops to ~0 once we read each call site's body. The 8-site upper bound is conservative; the exploration pass classified the function bodies but not every transitively-called manager method. If the audit confirms ≤2 sites genuinely need a `conn.transaction(...)` wrapper, that's a small Wave E.0 commit before the parallel sweep begins. If it confirms 0, even better.
+  **E.0 audit result (run 2026-04-29 against task-flow-v2 HEAD):** *zero* genuine Cat-D sites. Each candidate from the prior exploration is in fact Cat A or Cat B:
+  - `update_consolidation_outcome_vertical` — single call to `SessionDbManager::update_consolidation_outcome_vertical` (Cat B).
+  - `update_git_stats` — read-only DB lookup followed by an in-process git computation that discards its result (Cat A).
+  - All other "multi-field consolidation update" candidates resolve to a single manager method that wraps its own transaction (Cat C).
+  - `mcp_api.rs::set_project_worktree_base_directory` — single `db.set_project_worktree_base_directory` call (Cat B).
+
+  Audit pass via `grep -n -A20 "get_core_write" <files> | grep "(db|repo|core)\.(set_|insert_|delete_|update_)"` returned exactly two hits across all six files in scope — both single-write Cat-B sites, neither needing a transaction wrapper. The lock removal does not change the synchronization contract for any non-task surface. E.0 ships as doc-only (this paragraph + the commit message).
 
   **What this list rules out:** there is no mention of state shared across calls within `SchaltwerkCore` itself (it's just `db` + `repo_path`). There is no in-memory cache the lock was guarding. There is no shared mutable map of session IDs that the lock was implicitly serializing. A reviewer doing the "is WAL enough?" check per site only needs to inspect the DB code path; nothing else was riding on the lock.
 
