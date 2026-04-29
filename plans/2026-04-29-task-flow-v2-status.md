@@ -7,7 +7,7 @@
 | Phase | Title | Status | PR / Commit |
 |---|---|---|---|
 | 0 | Backup + branch + reference snapshot | `[x]` | `44fd5370` |
-| 1 | Collapse `TaskRunStatus` to derived state | `[~]` foundation | Waves A–H, J — see below |
+| 1 | Collapse `TaskRunStatus` to derived state | `[x]` | Waves A–K — see below |
 | 2 | Per-task mutex; remove global RwLock | `[ ]` | — |
 | 3 | Drop `RunRole`, `SessionState`, `SessionStatus` | `[ ]` | — |
 | 4 | `TaskFlowError` sweep + derived current_* getters | `[ ]` | — |
@@ -16,8 +16,8 @@
 
 ## Phase 1 — wave-by-wave detail
 
-Foundation, getter, migration, and end-to-end tests landed. **Wave I (full
-v1 task-surface port) deferred** — see "Wave I deferral" below.
+All waves complete. Phase 1 ships the foundation (getter, migration, e2e)
+**and** the full v1 task-surface port with v2 transformations applied.
 
 | Wave | Title | Status | Commits |
 |---|---|---|---|
@@ -30,7 +30,15 @@ v1 task-surface port) deferred** — see "Wave I deferral" below.
 | F | Slimmed `TaskRunService` (create / confirm / cancel only) | `[x]` | `a2aa5fbc` |
 | G | `SessionFactsRecorder` + cross-domain integration test | `[x]` | `e1878a79` |
 | H | One-shot v1→v2 user-DB migration | `[x]` | `d3eb25d7` |
-| I | Port command surface + auto_advance + reconciler + clarify + rest_contract + forge + recorder wiring | `[deferred]` | — |
+| I.0 | DB layer extensions (rest of TaskMethods + TaskArtifactMethods) | `[x]` | `038d57d0` |
+| I.1 | Port `prompts.rs` + `presets.rs` verbatim | `[x]` | `6521e593` |
+| I.2 | Port `auto_advance.rs` + `clarify.rs` (PrState::Failed restored) | `[x]` | `05c52580` |
+| I.3 | Port `service.rs` (TaskService + cancel cascade) | `[x]` | `128ebb11` |
+| I.4 | Port `reconciler.rs` (uses `compute_run_status`) | `[x]` | `d429c4a7` |
+| I.5 | Port `orchestration.rs` + `rest_contract.rs` | `[x]` | `6b95fb98` |
+| I.6 | Port `commands/tasks.rs` + register Tauri commands | `[x]` | `17a9044f` |
+| I.7 | `forge::pr_state_from_details` emits `PrState::Failed` on CI red | `[x]` | `f59c4674` |
+| I.8 | Wire `SessionFactsRecorder` via `session_facts_bridge` (G2/G3/G4) | `[x]` | `465e6c83` |
 | J | E2E integration tests | `[x]` | `ff2effde` |
 | K | Status tracker + memory update | `[x]` | (this commit) |
 
@@ -38,7 +46,7 @@ v1 task-surface port) deferred** — see "Wave I deferral" below.
 
 | Criterion | Status |
 |---|---|
-| `just test` green | ✅ 2149 tests passing |
+| `just test` green | ✅ 2333 tests passing |
 | 0 references to `db.set_task_run_status` in production code | ✅ method never ported |
 | 0 references to `TaskRunFailureRecorder` (trait + `OnceCell`) | ✅ never ported |
 | 0 references to `AwaitingSelectionDeps::mark_awaiting_selection` | ✅ never ported |
@@ -47,53 +55,47 @@ v1 task-surface port) deferred** — see "Wave I deferral" below.
 | `compute_run_status` test suite covers all 9 cases with two-way binding | ✅ 15 tests in `domains/tasks/run_status::tests`, each derivation case has a sibling test that flips the discriminating input |
 | `e2e_legacy_migration_then_read` proves a real v1 DB shape migrates and reads correctly | ✅ `tests/e2e_legacy_migration_then_read.rs` |
 
-## Wave I deferral
+## Wave I sub-wave breakdown
 
-Wave I as scoped in `plans/2026-04-29-task-flow-v2-phase-1-plan.md` §6 is the
-mechanical port of ~10k lines from `task-flow@b1f38f63` across:
+Wave I shipped as 9 sub-waves (I.0 through I.8). The mechanical port of
+~10k lines from `task-flow@b1f38f63` was applied with the v2 transformations
+inline:
 
-- `domains/tasks/auto_advance.rs` (414 lines)
-- `domains/tasks/reconciler.rs` (235 lines)
-- `domains/tasks/orchestration.rs` (2517 lines)
-- `domains/tasks/clarify.rs` (102 lines)
-- `domains/tasks/rest_contract.rs` (93 lines)
-- `domains/tasks/service.rs` (1563 lines)
-- `domains/tasks/prompts.rs` (831 lines)
-- `domains/tasks/presets.rs` (317 lines)
-- `commands/tasks.rs` (2302 lines)
-- `commands/forge.rs` (changes to existing v2 file)
-- The Wave G2/G3/G4 recorder wiring (deferred to the same wave)
+- `assert_eq!(..., TaskRunStatus::*)` assertions rewritten through
+  `compute_run_status` (or as direct timestamp checks where the test was
+  asserting the v1 status flip itself).
+- `runs.start_run(...)` → `runs.create_task_run(...)`.
+- `runs.mark_running(...)` calls deleted (no v2 status flip; the run is
+  Running by virtue of having no terminal timestamp).
+- `db.set_task_run_status(_, …)` calls translated to the v2 timestamp
+  setters (`set_task_run_cancelled_at`, `set_task_run_confirmed_at`,
+  `set_task_run_failed_at`).
+- `run.status` field reads → predicates against the timestamp columns.
+- v1's `domains/legacy_import` Tauri commands are not ported. The Phase 1
+  plan ships only the v1→v2 schema migration; the separate
+  "import legacy archived sessions to tasks" pathway is future work.
+- The Wave G2/G3/G4 recorder wiring landed in I.8 via
+  `infrastructure/session_facts_bridge.rs` — a small seam that reads the
+  active project's Database through `PROJECT_MANAGER` and calls the
+  recorder. No `OnceCell<dyn …Recorder>` dispatcher; v2 §9 holds.
 
-**Why deferred:**
+Notable deliberate semantic changes (each pinned in tests):
 
-1. Phase 1's stated load-bearing piece is the derived getter and its
-   foundation. That foundation is fully in place and tested through the e2e
-   integration tests in Wave J. Phase 1's design intent is met.
-2. The full port hits the same kind of cascading expansion Wave C hit (Session
-   struct gained 6 fields → 18 files needed updates). Each ported file
-   typically depends on other ported files; the port has to land mostly
-   atomically to keep the build green.
-3. Wave I produces no new design surface — it's mechanical translation of
-   v1's task-flow API into the v2 shape (no `mark_running`, etc). The risk
-   is in volume, not novelty.
-4. The recorder wiring (G2–G4) requires application-layer call sites that
-   only exist after `commands/tasks.rs` is ported. So G and I are coupled.
+- `forge::pr_state_from_details` emits `PrState::Failed` on CI red or
+  closed-without-merge (Wave I.7). `auto_advance::on_pr_state_refreshed`
+  reads that and flips `task.failure_flag = true`. Run-level Failed in v2
+  has exactly one source: a bound session exited non-zero before any
+  winner was confirmed. The v1 `task_run_fail` step in
+  `forge::persist_pr_state_refresh` is intentionally not ported.
+- `find_active_task_run_for_task` queries
+  `cancelled_at IS NULL AND confirmed_at IS NULL AND failed_at IS NULL`
+  in v2 (the negation of every terminal predicate
+  `compute_run_status` checks before the failure path) instead of v1's
+  `WHERE status = 'running'`.
 
-**Path forward.** Wave I is a natural Phase 1.5 / Phase 2 prologue. Whoever
-picks it up should:
-
-- Treat it as its own plan with its own wave breakdown (port files in
-  dependency order: prompts, presets, then auto_advance, clarify, then
-  service, runs, then orchestration, then commands, then forge).
-- Keep `compute_run_status` as the only producer of `TaskRunStatus`. Every
-  ported file's `assert_eq!(..., TaskRunStatus::*)` becomes an assertion
-  through the getter against synthetic `SessionFacts`.
-- Wire `SessionFactsRecorder` into terminal/lifecycle through the
-  application-layer command surface as it ports — not via `OnceCell`.
-
-What is **not** at risk: the derived getter's contract, the column shapes,
-the migration, the recorder API. Those are pinned by the tests that already
-shipped.
+What's load-bearing and pinned: the derived getter's contract, the column
+shapes, the migration, the recorder API, the write-once `first_idle_at`,
+and the deliberate CI-red semantic boundary.
 
 ---
 
