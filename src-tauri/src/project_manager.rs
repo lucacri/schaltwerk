@@ -15,6 +15,7 @@ pub static PROJECT_MANAGER: OnceCell<Arc<ProjectManager>> = OnceCell::const_new(
 
 use crate::domains::sessions::lifecycle::bootstrapper::migrate_legacy_hooks_in_dir;
 use crate::domains::terminal::TerminalManager;
+use crate::infrastructure::task_lock_manager::TaskLockManager;
 use crate::schaltwerk_core::SchaltwerkCore;
 
 fn canonicalize_project_path(path: &Path) -> Result<PathBuf> {
@@ -51,6 +52,7 @@ pub struct Project {
     pub path: PathBuf,
     pub terminal_manager: Arc<TerminalManager>,
     pub schaltwerk_core: Arc<RwLock<SchaltwerkCore>>,
+    pub task_locks: Arc<TaskLockManager>,
 }
 
 impl Project {
@@ -85,6 +87,7 @@ impl Project {
             path,
             terminal_manager,
             schaltwerk_core,
+            task_locks: Arc::new(TaskLockManager::new()),
         })
     }
 
@@ -208,6 +211,7 @@ impl Project {
             path,
             terminal_manager,
             schaltwerk_core,
+            task_locks: Arc::new(TaskLockManager::new()),
         })
     }
 }
