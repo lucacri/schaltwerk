@@ -86,7 +86,7 @@ impl ProjectHistory {
 
     pub fn get_recent_projects(&self) -> Vec<RecentProject> {
         let mut projects: Vec<_> = self.projects.values().cloned().collect();
-        projects.sort_by(|a, b| b.last_opened.cmp(&a.last_opened));
+        projects.sort_by_key(|p| std::cmp::Reverse(p.last_opened));
         projects.truncate(20);
         projects
     }

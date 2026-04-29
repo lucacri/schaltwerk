@@ -6,18 +6,6 @@ description: Compare parallel Lucode sessions for the same spec and promote the 
 
 Use this workflow when multiple Lucode sessions worked on the same spec and you need to contribute your strongest implementation to a consolidation round. Lucode will eventually use a synthesis judge to produce the final version that ships.
 
-## Critical: use the Lucode MCP server for all session and spec data
-
-Every reference to "Call `lucode_*`" below is a tool call on the **Lucode MCP server**. Depending on your agent these tools are exposed either as `lucode_<name>` or `mcp__lucode__lucode_<name>` — use whichever your client provides.
-
-**You MUST NOT** try to find sessions, specs, prompts, or task lists by:
-
-- Searching the filesystem (`Read`, `Grep`, `Glob`, `find`, `rg`, `ls`) for spec content, session metadata, or initial prompts.
-- Opening Lucode's SQLite database, JSON caches, or any file under `~/Library/Application Support/lucode/` or `~/.local/share/lucode/`.
-- Inferring session names, branches, or spec text from `git log`, branch names, or working-directory contents when an MCP tool can return them authoritatively.
-
-If the Lucode MCP server is not connected, or a tool call returns an error, **stop and report it to the user**. Do not fall back to filesystem search — the canonical data lives in Lucode's database and is only reachable through the MCP tools.
-
 ## Arguments
 
 Accept an optional `--auto` flag and an optional display-name substring to target a specific spec group.
