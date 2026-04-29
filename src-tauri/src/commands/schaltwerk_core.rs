@@ -6,9 +6,8 @@ use crate::mcp_api::{
 };
 use crate::{
     PROJECT_MANAGER, SETTINGS_MANAGER, commands::session_lookup_cache::global_session_lookup_cache,
-    errors::SchaltError, get_core_read, get_core_read_for_project_path, get_core_write,
-    get_core_write_for_project_path, get_file_watcher_manager, get_settings_manager,
-    get_terminal_manager,
+    errors::SchaltError, get_core_handle, get_core_handle_for_project_path,
+    get_file_watcher_manager, get_settings_manager, get_terminal_manager,
 };
 use lucode::infrastructure::attention_bridge::{
     clear_session_attention_state, clear_session_attention_state_immediate,
@@ -1065,7 +1064,7 @@ fn spawn_session_name_generation(app_handle: tauri::AppHandle, session_name: Str
     tokio::spawn(async move {
         let session_name_clone = session_name.clone();
         let ((session_id, worktree_path, repo_path, current_branch, initial_prompt), db_clone) = {
-            let core = match get_core_read().await {
+            let core = match get_core_handle().await {
                 Ok(c) => c,
                 Err(e) => {
                     log::warn!(
@@ -1187,7 +1186,7 @@ fn spawn_spec_name_generation(
     spec_content: String,
 ) {
     tokio::spawn(async move {
-        let (db_clone, repo_path) = match get_core_read().await {
+        let (db_clone, repo_path) = match get_core_handle().await {
             Ok(core) => (core.db.clone(), core.repo_path.clone()),
             Err(e) => {
                 log::warn!("Cannot load core for spec '{spec_name}': {e}");
@@ -1249,7 +1248,7 @@ pub async fn schaltwerk_core_generate_session_name(
     content: String,
     _agent_type: Option<String>,
 ) -> Result<Option<String>, String> {
-    let (db_clone, repo_path) = match get_core_read().await {
+    let (db_clone, repo_path) = match get_core_handle().await {
         Ok(core) => (core.db.clone(), core.repo_path.clone()),
         Err(e) => {
             return Err(format!("Cannot load core for name generation: {e}"));
@@ -1292,7 +1291,7 @@ pub async fn schaltwerk_core_generate_commit_message(
     project_path: Option<String>,
 ) -> Result<Option<String>, String> {
     let (db_clone, repo_path, session) = {
-        let core = get_core_read_for_project_path(project_path.as_deref())
+        let core = get_core_handle_for_project_path(project_path.as_deref())
             .await
             .map_err(|e| format!("Cannot load core: {e}"))?;
         let manager = core.session_manager();
@@ -1416,7 +1415,7 @@ pub async fn forge_generate_writeback(
     project_path: Option<String>,
 ) -> Result<Option<String>, String> {
     let (db_clone, repo_path, session) = {
-        let core = get_core_read_for_project_path(project_path.as_deref())
+        let core = get_core_handle_for_project_path(project_path.as_deref())
             .await
             .map_err(|e| format!("Cannot load core: {e}"))?;
         let manager = core.session_manager();
@@ -1534,7 +1533,7 @@ pub async fn forge_generate_writeback(
 }
 
 async fn session_manager_read(project_path: Option<&str>) -> Result<SessionManager, String> {
-    Ok(get_core_read_for_project_path(project_path)
+    Ok(get_core_handle_for_project_path(project_path)
         .await?
         .session_manager())
 }
@@ -1594,7 +1593,7 @@ pub async fn schaltwerk_core_get_merge_preview(
     project_path: Option<String>,
 ) -> Result<MergePreview, String> {
     let (db, repo_path) = {
-        let core = get_core_read_for_project_path(project_path.as_deref()).await?;
+        let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
         (core.db.clone(), core.repo_path.clone())
     };
 
@@ -1608,7 +1607,7 @@ pub async fn schaltwerk_core_get_merge_preview_with_worktree(
     project_path: Option<String>,
 ) -> Result<MergePreview, String> {
     let (db, repo_path) = {
-        let core = get_core_read_for_project_path(project_path.as_deref()).await?;
+        let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
         (core.db.clone(), core.repo_path.clone())
     };
 
@@ -1632,7 +1631,7 @@ pub async fn merge_session_with_events(
     commit_message: Option<String>,
     project_path: Option<&str>,
 ) -> Result<MergeOutcome, MergeCommandError> {
-    let (db, repo_path) = match get_core_write_for_project_path(project_path).await {
+    let (db, repo_path) = match get_core_handle_for_project_path(project_path).await {
         Ok(core) => (core.db.clone(), core.repo_path.clone()),
         Err(e) => {
             return Err(MergeCommandError {
@@ -1798,7 +1797,7 @@ pub async fn schaltwerk_core_update_session_from_parent(
     name: String,
     project_path: Option<String>,
 ) -> Result<lucode::services::UpdateSessionFromParentResult, String> {
-    let core = get_core_read_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -1837,7 +1836,7 @@ pub async fn schaltwerk_core_archive_spec_session(
     name: String,
 ) -> Result<(), String> {
     let (repo, count) = {
-        let core = get_core_write().await?;
+        let core = get_core_handle().await?;
         let manager = core.session_manager();
         manager
             .archive_spec_session(&name)
@@ -1871,7 +1870,7 @@ pub async fn schaltwerk_core_restore_archived_spec(
     new_name: Option<String>,
 ) -> Result<Session, String> {
     let (spec_name, repo, count) = {
-        let core = get_core_write().await?;
+        let core = get_core_handle().await?;
         let manager = core.session_manager();
         let spec = manager
             .restore_archived_spec(&id, new_name.as_deref())
@@ -1883,7 +1882,7 @@ pub async fn schaltwerk_core_restore_archived_spec(
     events::emit_archive_updated(&app, &repo, count);
     events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SpecSync);
 
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
     let session = manager
         .list_sessions_by_state(SessionState::Spec)
@@ -1901,7 +1900,7 @@ pub async fn schaltwerk_core_delete_archived_spec(
     id: String,
 ) -> Result<(), String> {
     let (repo, count) = {
-        let core = get_core_write().await?;
+        let core = get_core_handle().await?;
         let manager = core.session_manager();
         manager
             .delete_archived_spec(&id)
@@ -1925,7 +1924,7 @@ pub async fn schaltwerk_core_get_archive_max_entries() -> Result<i32, String> {
 #[tauri::command]
 pub async fn schaltwerk_core_set_archive_max_entries(limit: i32) -> Result<(), String> {
     let manager = {
-        let core = get_core_write().await?;
+        let core = get_core_handle().await?;
         core.session_manager()
     };
     manager
@@ -1941,7 +1940,7 @@ pub async fn schaltwerk_core_list_project_files(
     let force_refresh = force_refresh.unwrap_or(false);
 
     let repo_path = {
-        let core = get_core_read().await?;
+        let core = get_core_handle().await?;
         core.repo_path.clone()
     };
 
@@ -2106,7 +2105,7 @@ pub async fn schaltwerk_core_create_session(
         consolidation_confirmation_mode: params.consolidation_confirmation_mode.as_deref(),
     };
     let (session, epic) = {
-        let core = get_core_write()
+        let core = get_core_handle()
             .await
             .map_err(|e| SchaltError::DatabaseError {
                 message: e.to_string(),
@@ -2153,7 +2152,7 @@ pub async fn schaltwerk_core_create_session(
             session.consolidation_confirmation_mode.as_deref(),
         )
         && let Err(err) = upsert_consolidation_round(
-            &get_core_read()
+            &get_core_handle()
                 .await
                 .map_err(|e| SchaltError::DatabaseError {
                     message: e.to_string(),
@@ -2252,7 +2251,7 @@ pub async fn schaltwerk_core_get_consolidation_stats(
     repository_path: Option<String>,
     vertical: Option<String>,
 ) -> Result<ConsolidationStats, String> {
-    let core = get_core_read_for_project_path(repository_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(repository_path.as_deref()).await?;
     let repo =
         lucode::domains::sessions::SessionDbManager::new(core.db.clone(), core.repo_path.clone());
     repo.get_consolidation_stats(ConsolidationStatsFilter {
@@ -2268,7 +2267,7 @@ pub async fn schaltwerk_core_update_consolidation_outcome_vertical(
     vertical: String,
     project_path: Option<String>,
 ) -> Result<(), String> {
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let repo =
         lucode::domains::sessions::SessionDbManager::new(core.db.clone(), core.repo_path.clone());
     repo.update_consolidation_outcome_vertical(&round_id, &vertical)
@@ -2288,7 +2287,7 @@ pub async fn schaltwerk_core_rename_version_group(
 
     // Get all sessions with this base name pattern
     let (all_sessions, db) = {
-        let core = get_core_read().await?;
+        let core = get_core_handle().await?;
         let manager = core.session_manager();
         let sessions = manager
             .list_sessions()
@@ -2473,7 +2472,7 @@ pub async fn schaltwerk_core_create_epic(
     name: String,
     color: Option<String>,
 ) -> Result<lucode::domains::sessions::entity::Epic, String> {
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
 
     let epic = manager
@@ -2491,7 +2490,7 @@ pub async fn schaltwerk_core_update_epic(
     name: String,
     color: Option<String>,
 ) -> Result<lucode::domains::sessions::entity::Epic, String> {
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
 
     let epic = manager
@@ -2504,7 +2503,7 @@ pub async fn schaltwerk_core_update_epic(
 
 #[tauri::command]
 pub async fn schaltwerk_core_delete_epic(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
     manager
         .delete_epic(&id)
@@ -2520,7 +2519,7 @@ pub async fn schaltwerk_core_set_item_epic(
     name: String,
     epic_id: Option<String>,
 ) -> Result<(), String> {
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
     manager
         .set_item_epic(&name, epic_id.as_deref())
@@ -2588,7 +2587,7 @@ pub async fn schaltwerk_core_cancel_session(
     log::info!("Starting cancel session: {name}");
 
     let (is_spec, repo_path_str, archive_count_after_opt) = {
-        let core = get_core_write_for_project_path(project_path.as_deref())
+        let core = get_core_handle_for_project_path(project_path.as_deref())
             .await
             .map_err(|e| SchaltError::DatabaseError {
                 message: e.to_string(),
@@ -2656,7 +2655,7 @@ pub async fn schaltwerk_core_cancel_session(
         terminals::close_session_terminals_if_any(&name_for_bg).await;
 
         // Get session info with a brief lock, then release before slow filesystem operations
-        let session_info = match get_core_write().await {
+        let session_info = match get_core_handle().await {
             Ok(core) => {
                 let manager = core.session_manager();
                 manager.get_session_for_cancellation(&name_for_bg)
@@ -2673,7 +2672,7 @@ pub async fn schaltwerk_core_cancel_session(
             // File an auto_stub report if the session is a candidate exiting without
             // one. Runs against the still-intact worktree so the stub can include a
             // branch diff snapshot.
-            if let Ok(core) = get_core_write().await {
+            if let Ok(core) = get_core_handle().await {
                 let db_manager = lucode::domains::sessions::SessionDbManager::new(
                     core.db.clone(),
                     core.repo_path.clone(),
@@ -2705,7 +2704,7 @@ pub async fn schaltwerk_core_cancel_session(
 
                 // Only acquire lock briefly for final DB update
                 match result {
-                    Ok(fs_result) => match get_core_write().await {
+                    Ok(fs_result) => match get_core_handle().await {
                         Ok(core) => {
                             let manager = core.session_manager();
                             manager.finalize_session_cancellation(&info.session.id, fs_result)
@@ -2721,7 +2720,7 @@ pub async fn schaltwerk_core_cancel_session(
         if cancel_result.is_ok()
             && let Some(round_id) = consolidation_round_id
         {
-            let auto_judge_context = match get_core_read().await {
+            let auto_judge_context = match get_core_handle().await {
                 Ok(core) => Some((core.db.clone(), core.session_manager())),
                 Err(error) => {
                     log::warn!(
@@ -2816,7 +2815,7 @@ pub async fn schaltwerk_core_force_cancel_session(
     log::info!("Starting force cancel session: {name}");
 
     let (manager, repo_path_str, round_id, db) = {
-        let core = get_core_write_for_project_path(project_path.as_deref())
+        let core = get_core_handle_for_project_path(project_path.as_deref())
             .await
             .map_err(|e| SchaltError::DatabaseError {
                 message: e.to_string(),
@@ -2876,7 +2875,7 @@ pub async fn schaltwerk_core_convert_session_to_draft(
 ) -> Result<String, String> {
     log::info!("Converting session to spec: {name}");
 
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
     let repo_path_str = core.repo_path.to_string_lossy().to_string();
 
@@ -2929,7 +2928,7 @@ pub async fn schaltwerk_core_convert_version_group_to_spec(
         session_names.len()
     );
 
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
     let repo_path_str = core.repo_path.to_string_lossy().to_string();
 
@@ -2970,7 +2969,7 @@ pub async fn schaltwerk_core_update_git_stats(
     session_id: String,
     project_path: Option<String>,
 ) -> Result<(), String> {
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -2987,7 +2986,7 @@ pub async fn schaltwerk_core_update_git_stats(
 
 #[tauri::command]
 pub async fn schaltwerk_core_cleanup_orphaned_worktrees() -> Result<(), String> {
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
 
     manager
@@ -3168,11 +3167,10 @@ async fn schaltwerk_core_start_agent_in_terminal(
     );
 
     // We only need read access to the core snapshot; avoid write lock to prevent launch deadlocks
-    let core = get_core_read().await?;
+    let core = get_core_handle().await?;
     let db = core.db.clone();
     let repo_path = core.repo_path.clone();
     let manager = core.session_manager();
-    drop(core); // release lock before any potentially long operations
 
     let session = manager
         .get_session(&session_name)
@@ -3692,7 +3690,7 @@ pub async fn schaltwerk_core_start_claude_orchestrator(
     );
 
     log::info!("[AGENT_LAUNCH_TRACE] Acquiring core read lock for {terminal_id}");
-    let core = match get_core_read().await {
+    let core = match get_core_handle().await {
         Ok(c) => c,
         Err(e) => {
             log::error!("Failed to get schaltwerk_core for orchestrator: {e}");
@@ -3735,9 +3733,6 @@ pub async fn schaltwerk_core_start_claude_orchestrator(
                 format!("Failed to start {agent_label} in orchestrator: {e}")
             })?
     };
-
-    drop(core);
-    log::info!("[AGENT_LAUNCH_TRACE] Dropped core read lock for {terminal_id}");
 
     let launch_result = agent_launcher::launch_in_terminal(
         terminal_id.clone(),
@@ -3820,7 +3815,7 @@ pub async fn start_spec_orchestrator_impl(
     rows: Option<u16>,
     agent_type: Option<String>,
 ) -> Result<String, String> {
-    let core = get_core_read().await.map_err(|e| {
+    let core = get_core_handle().await.map_err(|e| {
         log::error!("Failed to get schaltwerk_core for spec orchestrator: {e}");
         format!("Failed to initialize spec orchestrator: {e}")
     })?;
@@ -3854,8 +3849,6 @@ pub async fn start_spec_orchestrator_impl(
                 format!("Failed to start fresh {agent_label} for spec '{spec_name}': {e}")
             })?
     };
-
-    drop(core);
 
     let launch_result = agent_launcher::launch_in_terminal(
         terminal_id.clone(),
@@ -3914,7 +3907,7 @@ pub async fn submit_spec_clarification_prompt_impl(
     spec_name: String,
     agent_type: Option<String>,
 ) -> Result<String, String> {
-    let core = get_core_read().await.map_err(|e| {
+    let core = get_core_handle().await.map_err(|e| {
         log::error!("Failed to get schaltwerk_core for spec clarification submit: {e}");
         format!("Failed to initialize spec orchestrator: {e}")
     })?;
@@ -3925,8 +3918,6 @@ pub async fn submit_spec_clarification_prompt_impl(
     let spec = manager
         .get_spec(&spec_name)
         .map_err(|e| format!("Failed to load spec '{spec_name}': {e}"))?;
-
-    drop(core);
 
     let prompt = build_spec_clarification_prompt(&spec);
     let (use_bracketed_paste, needs_delayed_submit) =
@@ -4003,7 +3994,7 @@ pub async fn reset_spec_orchestrator_impl(
         log::warn!("Failed to close spec orchestrator terminal {terminal_id}: {err}");
     }
 
-    let core = get_core_read().await.map_err(|e| {
+    let core = get_core_handle().await.map_err(|e| {
         log::error!("Failed to get schaltwerk_core for spec orchestrator reset: {e}");
         format!("Failed to initialize spec orchestrator: {e}")
     })?;
@@ -4012,8 +4003,6 @@ pub async fn reset_spec_orchestrator_impl(
     let spec = session_manager
         .get_spec(&spec_name)
         .map_err(|e| format!("Failed to load spec '{spec_name}': {e}"))?;
-
-    drop(core);
 
     db.update_spec_clarification_started(&spec.id, false)
         .map_err(|e| format!("Failed to reset clarification_started for '{spec_name}': {e}"))?;
@@ -4036,7 +4025,7 @@ pub async fn schaltwerk_core_reset_spec_orchestrator(
 
 #[tauri::command]
 pub async fn schaltwerk_core_set_agent_type(agent_type: String) -> Result<(), String> {
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     core.db
         .set_agent_type(&agent_type)
         .map_err(|e| format!("Failed to set agent type: {e}"))
@@ -4061,7 +4050,7 @@ pub async fn schaltwerk_core_set_session_agent_type(
     agent_type: String,
     project_path: Option<String>,
 ) -> Result<(), String> {
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
 
     // Update global agent type
     core.db
@@ -4095,7 +4084,7 @@ pub async fn schaltwerk_core_set_session_agent_type(
 
 #[tauri::command]
 pub async fn schaltwerk_core_get_agent_type() -> Result<String, String> {
-    let core = get_core_read().await?;
+    let core = get_core_handle().await?;
     core.db
         .get_agent_type()
         .map_err(|e| format!("Failed to get agent type: {e}"))
@@ -4106,7 +4095,7 @@ pub async fn schaltwerk_core_set_orchestrator_agent_type(
     app: tauri::AppHandle,
     agent_type: String,
 ) -> Result<(), String> {
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     core.db
         .set_orchestrator_agent_type(&agent_type)
         .map_err(|e| format!("Failed to set orchestrator agent type: {e}"))?;
@@ -4118,7 +4107,7 @@ pub async fn schaltwerk_core_set_orchestrator_agent_type(
 
 #[tauri::command]
 pub async fn schaltwerk_core_get_orchestrator_agent_type() -> Result<String, String> {
-    let core = get_core_read().await?;
+    let core = get_core_handle().await?;
     core.db
         .get_orchestrator_agent_type()
         .map_err(|e| format!("Failed to get orchestrator agent type: {e}"))
@@ -4129,7 +4118,7 @@ pub async fn schaltwerk_core_set_spec_clarification_agent_type(
     app: tauri::AppHandle,
     agent_type: String,
 ) -> Result<(), String> {
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     core.db
         .set_spec_clarification_agent_type(&agent_type)
         .map_err(|e| format!("Failed to set spec clarification agent type: {e}"))?;
@@ -4141,7 +4130,7 @@ pub async fn schaltwerk_core_set_spec_clarification_agent_type(
 
 #[tauri::command]
 pub async fn schaltwerk_core_get_spec_clarification_agent_type() -> Result<String, String> {
-    let core = get_core_read().await?;
+    let core = get_core_handle().await?;
     core.db
         .get_spec_clarification_agent_type()
         .map_err(|e| format!("Failed to get spec clarification agent type: {e}"))
@@ -4170,7 +4159,7 @@ fn normalize_optional(value: Option<String>) -> Option<String> {
 #[tauri::command]
 pub async fn schaltwerk_core_get_consolidation_default_favorite()
 -> Result<ConsolidationDefaultFavoriteDto, String> {
-    let core = get_core_read().await?;
+    let core = get_core_handle().await?;
     let value = core
         .db
         .get_consolidation_default_favorite()
@@ -4196,7 +4185,7 @@ pub async fn schaltwerk_core_set_consolidation_default_favorite(
         preset_id,
     };
 
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     core.db
         .set_consolidation_default_favorite(&normalized)
         .map_err(|e| format!("Failed to set consolidation default favorite: {e}"))?;
@@ -4223,10 +4212,9 @@ pub async fn schaltwerk_core_get_font_sizes() -> Result<(i32, i32), String> {
     };
 
     if should_attempt_migration {
-        match get_core_read().await {
+        match get_core_handle().await {
             Ok(core) => {
                 let db_result = core.db.get_font_sizes();
-                drop(core);
 
                 if let Ok((db_terminal, db_ui)) = db_result
                     && (db_terminal, db_ui) != (terminal, ui)
@@ -4276,7 +4264,7 @@ pub async fn schaltwerk_core_set_font_sizes(
     };
 
     if should_attempt_db_update {
-        match get_core_write().await {
+        match get_core_handle().await {
             Ok(core) => {
                 core.db
                     .set_font_sizes(terminal_font_size, ui_font_size)
@@ -4326,7 +4314,7 @@ pub async fn schaltwerk_core_create_spec_session(
 ) -> Result<Session, String> {
     log::info!("Creating spec: {name} with agent_type={agent_type:?}");
 
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
 
     let spec = manager
@@ -4370,8 +4358,6 @@ pub async fn schaltwerk_core_create_spec_session(
     log::info!("Queueing sessions refresh after creating spec session");
     events::request_sessions_refreshed(&app, events::SessionsRefreshReason::SpecSync);
 
-    drop(core);
-
     Ok(spec_session)
 }
 #[tauri::command]
@@ -4385,7 +4371,7 @@ pub async fn schaltwerk_core_update_session_state(
         .parse::<SessionState>()
         .map_err(|e| format!("Invalid session state: {e}"))?;
 
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
 
     manager
@@ -4401,7 +4387,7 @@ pub async fn schaltwerk_core_update_spec_content(
 ) -> Result<(), String> {
     log::info!("Updating spec content for session: {name}");
 
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
 
     persist_spec_content_with_refresh(
@@ -4452,7 +4438,7 @@ pub async fn schaltwerk_core_save_spec_review_comments(
     comments: Vec<lucode::infrastructure::database::PersistedSpecReviewComment>,
     project_path: Option<String>,
 ) -> Result<(), String> {
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
     manager
         .save_spec_review_comments(&name, &comments)
@@ -4464,7 +4450,7 @@ pub async fn schaltwerk_core_clear_spec_review_comments(
     name: String,
     project_path: Option<String>,
 ) -> Result<(), String> {
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
     manager
         .clear_spec_review_comments(&name)
@@ -4488,7 +4474,7 @@ pub async fn schaltwerk_core_set_spec_stage(
         _ => return Err(format!("Invalid spec stage: {stage}")),
     };
 
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
     let spec = manager
         .get_spec(&name)
@@ -4510,7 +4496,7 @@ pub async fn schaltwerk_core_set_spec_attention_required(
 ) -> Result<(), String> {
     log::info!("Updating spec attention requirement: {name} -> {attention_required}");
 
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
     let spec = manager
         .get_spec(&name)
@@ -4536,7 +4522,7 @@ pub async fn schaltwerk_core_rename_draft_session(
 ) -> Result<(), String> {
     log::info!("Renaming spec session from '{old_name}' to '{new_name}'");
 
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
 
     manager
@@ -4564,7 +4550,7 @@ pub async fn schaltwerk_core_rename_session_display_name(
         return Err("Display name cannot be empty".to_string());
     }
 
-    let core = get_core_read().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
     let db = core.db.clone();
 
@@ -4621,7 +4607,7 @@ pub async fn schaltwerk_core_append_spec_content(
 ) -> Result<(), String> {
     log::info!("Appending to spec content for session: {name}");
 
-    let core = get_core_write().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
 
     manager
@@ -4639,7 +4625,7 @@ pub async fn schaltwerk_core_link_session_to_issue(
 ) -> Result<(), String> {
     log::info!("Linking session '{name}' to issue #{issue_number}");
 
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -4665,7 +4651,7 @@ pub async fn schaltwerk_core_link_session_to_pr(
 ) -> Result<(), String> {
     log::info!("Linking session '{name}' to PR #{pr_number}");
 
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -4689,7 +4675,7 @@ pub async fn schaltwerk_core_unlink_session_from_issue(
 ) -> Result<(), String> {
     log::info!("Unlinking issue from session '{name}'");
 
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -4713,7 +4699,7 @@ pub async fn schaltwerk_core_unlink_session_from_pr(
 ) -> Result<(), String> {
     log::info!("Unlinking PR from session '{name}'");
 
-    let core = get_core_write_for_project_path(project_path.as_deref()).await?;
+    let core = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = core.session_manager();
 
     let session = manager
@@ -4737,7 +4723,7 @@ pub async fn schaltwerk_core_list_sessions_by_state(state: String) -> Result<Vec
         .parse::<SessionState>()
         .map_err(|e| format!("Invalid session state: {e}"))?;
 
-    let core = get_core_read().await?;
+    let core = get_core_handle().await?;
     let manager = core.session_manager();
 
     manager
@@ -4821,7 +4807,7 @@ pub async fn schaltwerk_core_start_fresh_orchestrator(
     terminal_id: String,
 ) -> Result<String, String> {
     // First check if we have a valid project initialized
-    let core = match get_core_read().await {
+    let core = match get_core_handle().await {
         Ok(c) => c,
         Err(e) => {
             log::error!("Failed to get schaltwerk_core for fresh orchestrator: {e}");
@@ -4869,8 +4855,6 @@ pub async fn schaltwerk_core_start_fresh_orchestrator(
         true,
     )
     .await?;
-
-    drop(core);
 
     let base_branch = configured_default_branch.unwrap_or_else(|| {
         repository::get_default_branch(repo_path.as_path()).unwrap_or_else(|_| "main".to_string())
@@ -5308,7 +5292,7 @@ pub async fn reset_session_worktree_impl(
     session_name: String,
 ) -> Result<(), SchaltError> {
     log::info!("Resetting session worktree to base for: {session_name}");
-    let core = get_core_write()
+    let core = get_core_handle()
         .await
         .map_err(|e| SchaltError::DatabaseError {
             message: e.to_string(),
@@ -5349,7 +5333,7 @@ pub async fn schaltwerk_core_discard_file_in_session(
     file_path: String,
 ) -> Result<(), SchaltError> {
     log::info!("Discarding file changes in session '{session_name}' for path: {file_path}");
-    let core = get_core_write()
+    let core = get_core_handle()
         .await
         .map_err(|e| SchaltError::DatabaseError {
             message: e.to_string(),
@@ -5375,7 +5359,7 @@ pub async fn schaltwerk_core_discard_file_in_orchestrator(
     file_path: String,
 ) -> Result<(), SchaltError> {
     log::info!("Discarding file changes in orchestrator for path: {file_path}");
-    let core = get_core_write()
+    let core = get_core_handle()
         .await
         .map_err(|e| SchaltError::DatabaseError {
             message: e.to_string(),
@@ -5405,7 +5389,7 @@ pub async fn session_set_autofix(
     enabled: bool,
     project_path: Option<String>,
 ) -> Result<(), String> {
-    let core = get_core_read_for_project_path(project_path.as_deref())
+    let core = get_core_handle_for_project_path(project_path.as_deref())
         .await
         .map_err(|e| format!("Cannot load core: {e}"))?;
     let conn = core
@@ -5429,7 +5413,7 @@ pub async fn session_get_autofix(
     session_name: String,
     project_path: Option<String>,
 ) -> Result<bool, String> {
-    let core = get_core_read_for_project_path(project_path.as_deref())
+    let core = get_core_handle_for_project_path(project_path.as_deref())
         .await
         .map_err(|e| format!("Cannot load core: {e}"))?;
     let manager = core.session_manager();
@@ -5452,7 +5436,7 @@ pub async fn session_try_autofix(
         return Ok(false);
     }
 
-    let core = get_core_read_for_project_path(project_path.as_deref())
+    let core = get_core_handle_for_project_path(project_path.as_deref())
         .await
         .map_err(|e| format!("Cannot load core: {e}"))?;
     let manager = core.session_manager();

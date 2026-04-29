@@ -1,7 +1,7 @@
 use crate::{
     SETTINGS_MANAGER,
     commands::schaltwerk_core::{agent_ctx, codex_models, schaltwerk_core_cli},
-    get_core_read,
+    get_core_handle,
 };
 use lucode::services::AgentManifest;
 
@@ -14,7 +14,7 @@ pub async fn schaltwerk_core_list_codex_models() -> Result<codex_models::CodexMo
     };
 
     let (repo_path, db) = {
-        let core = get_core_read().await?;
+        let core = get_core_handle().await?;
         (core.repo_path.clone(), core.db.clone())
     };
 
