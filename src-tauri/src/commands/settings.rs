@@ -297,7 +297,7 @@ pub async fn get_project_settings() -> Result<ProjectSettings, String> {
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.read().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     let setup_script = db
@@ -329,7 +329,7 @@ pub async fn get_project_agent_plugin_config() -> Result<AgentPluginConfig, Stri
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.read().await;
+    let core = project.core_handle().await;
     core.database()
         .get_project_agent_plugins(&project.path)
         .map_err(|e| format!("Failed to get project agent plugin config: {e}"))
@@ -344,7 +344,7 @@ pub async fn set_project_agent_plugin_config(config: AgentPluginConfig) -> Resul
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.write().await;
+    let core = project.core_handle().await;
     core.database()
         .set_project_agent_plugins(&project.path, &config)
         .map_err(|e| format!("Failed to set project agent plugin config: {e}"))?;
@@ -363,7 +363,6 @@ pub async fn set_project_agent_plugin_config(config: AgentPluginConfig) -> Resul
         .into_iter()
         .map(|s| s.worktree_path)
         .collect();
-    drop(core);
     for wt in worktrees {
         if !wt.exists() {
             continue;
@@ -388,7 +387,7 @@ pub async fn set_project_settings(settings: ProjectSettings) -> Result<(), Strin
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.write().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     db.set_project_setup_script(&project.path, &settings.setup_script)
@@ -412,7 +411,7 @@ pub async fn get_project_sessions_settings() -> Result<ProjectSessionsSettings, 
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.read().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     db.get_project_sessions_settings(&project.path)
@@ -430,7 +429,7 @@ pub async fn set_project_sessions_settings(
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.write().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     db.set_project_sessions_settings(&project.path, &settings)
@@ -446,7 +445,7 @@ pub async fn get_project_environment_variables() -> Result<HashMap<String, Strin
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.read().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     db.get_project_environment_variables(&project.path)
@@ -464,7 +463,7 @@ pub async fn set_project_environment_variables(
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.write().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     db.set_project_environment_variables(&project.path, &env_vars)
@@ -480,7 +479,7 @@ pub async fn get_project_merge_preferences() -> Result<ProjectMergePreferences, 
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.read().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     db.get_project_merge_preferences(&project.path)
@@ -498,7 +497,7 @@ pub async fn set_project_merge_preferences(
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.write().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     db.set_project_merge_preferences(&project.path, &preferences)
@@ -631,7 +630,7 @@ pub async fn get_project_action_buttons() -> Result<Vec<HeaderActionConfig>, Str
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.read().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     let actions = db
@@ -662,7 +661,7 @@ pub async fn set_project_action_buttons(actions: Vec<HeaderActionConfig>) -> Res
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.write().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     log::info!(
@@ -685,7 +684,7 @@ pub async fn reset_project_action_buttons_to_defaults() -> Result<Vec<HeaderActi
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.write().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     let defaults = default_action_buttons();
@@ -726,7 +725,7 @@ pub async fn get_project_run_script() -> Result<Option<RunScript>, String> {
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.read().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     db.get_project_run_script(&project.path)
@@ -742,7 +741,7 @@ pub async fn set_project_run_script(run_script: RunScript) -> Result<(), String>
         .await
         .map_err(|e| format!("Failed to get current project: {e}"))?;
 
-    let core = project.schaltwerk_core.write().await;
+    let core = project.core_handle().await;
     let db = core.database();
 
     db.set_project_run_script(&project.path, &run_script)

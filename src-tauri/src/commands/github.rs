@@ -264,7 +264,7 @@ pub async fn github_connect_project(app: AppHandle) -> Result<GitHubRepositoryPa
     .map_err(|e| format!("Task join error: {e}"))??;
 
     {
-        let core = project.schaltwerk_core.write().await;
+        let core = project.core_handle().await;
         let db = core.database();
         let config = ProjectGithubConfig {
             repository: repo_info.name_with_owner.clone(),
@@ -297,7 +297,7 @@ pub async fn github_create_reviewed_pr(
     let project_path = project.path.clone();
 
     let repository_config = {
-        let core = project.schaltwerk_core.read().await;
+        let core = project.core_handle().await;
         let db = core.database();
         db.get_project_github_config(&project.path)
             .map_err(|e| format!("Failed to load GitHub project config: {e}"))?
@@ -402,7 +402,7 @@ pub async fn github_create_session_pr_impl(
     let project_path = project.path.clone();
 
     let repository_config = {
-        let core = project.schaltwerk_core.read().await;
+        let core = project.core_handle().await;
         let db = core.database();
         db.get_project_github_config(&project.path)
             .map_err(|e| format!("Failed to load GitHub project config: {e}"))?
@@ -413,7 +413,7 @@ pub async fn github_create_session_pr_impl(
     };
 
     let (session_worktree, session_branch, parent_branch, session_state) = {
-        let core = project.schaltwerk_core.read().await;
+        let core = project.core_handle().await;
         let session = core
             .session_manager()
             .get_session(&args.session_name)
@@ -525,7 +525,7 @@ pub async fn github_create_session_pr_impl(
         }
 
         {
-            let core = project.schaltwerk_core.read().await;
+            let core = project.core_handle().await;
             let session = core
                 .session_manager()
                 .get_session(&args.session_name)
@@ -546,7 +546,7 @@ pub async fn github_create_session_pr_impl(
     }
 
     if let Some(pr_number) = parse_created_pr_number(&pr_result.url) {
-        let core = project.schaltwerk_core.read().await;
+        let core = project.core_handle().await;
         let session = core
             .session_manager()
             .get_session(&args.session_name)
@@ -653,7 +653,7 @@ pub async fn github_preview_pr(
         .await
         .map_err(|e| format!("No active project: {e}"))?;
 
-    let core = project.schaltwerk_core.read().await;
+    let core = project.core_handle().await;
     let session = core
         .session_manager()
         .get_session(&session_name)
@@ -974,7 +974,7 @@ async fn resolve_project(project_manager: Arc<ProjectManager>) -> Result<Resolve
 
     let project_path = project.path.clone();
     let github_config = {
-        let core = project.schaltwerk_core.read().await;
+        let core = project.core_handle().await;
         let db = core.database();
         db.get_project_github_config(&project.path)
             .map_err(|e| format!("Failed to load GitHub project config: {e}"))?
@@ -1203,7 +1203,7 @@ async fn build_status() -> Result<GitHubStatusPayload, String> {
     let project_manager = get_project_manager().await;
     let repository_payload = match project_manager.current_project().await {
         Ok(project) => {
-            let core = project.schaltwerk_core.read().await;
+            let core = project.core_handle().await;
             let db = core.database();
             db.get_project_github_config(&project.path)
                 .map_err(|e| format!("Failed to load GitHub project config: {e}"))?
@@ -1404,7 +1404,7 @@ mod tests {
             .expect("project");
 
         {
-            let core = project.schaltwerk_core.write().await;
+            let core = project.core_handle().await;
             let db = core.database();
             let config = ProjectGithubConfig {
                 repository: "example/repo".to_string(),
