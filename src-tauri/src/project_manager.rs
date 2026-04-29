@@ -242,6 +242,14 @@ impl CoreHandle {
     pub fn merge_service(&self) -> MergeService {
         MergeService::new(self.db.clone(), self.repo_path.clone())
     }
+
+    /// Field-style access to the database handle. Mirrors the
+    /// `SchaltwerkCore::database(&self) -> &Database` accessor that some
+    /// call sites used through the legacy `OwnedRwLockReadGuard` so the
+    /// migration is a name-change-only edit.
+    pub fn database(&self) -> &Database {
+        &self.db
+    }
 }
 
 impl Project {
