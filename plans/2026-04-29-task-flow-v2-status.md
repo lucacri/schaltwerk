@@ -8,7 +8,7 @@
 |---|---|---|---|
 | 0 | Backup + branch + reference snapshot | `[x]` | `44fd5370` |
 | 1 | Collapse `TaskRunStatus` to derived state | `[x]` | Waves A–K — see below |
-| 2 | Per-task mutex; remove global RwLock | `[ ]` | — |
+| 2 | Per-task mutex; remove global RwLock | `[x]` | Waves A–I — see below |
 | 3 | Drop `RunRole`, `SessionState`, `SessionStatus` | `[ ]` | — |
 | 4 | `TaskFlowError` sweep + derived current_* getters | `[ ]` | — |
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[ ]` | — |
@@ -96,6 +96,74 @@ Notable deliberate semantic changes (each pinned in tests):
 What's load-bearing and pinned: the derived getter's contract, the column
 shapes, the migration, the recorder API, the write-once `first_idle_at`,
 and the deliberate CI-red semantic boundary.
+
+## Phase 2 — wave-by-wave detail
+
+All waves complete. Phase 2 replaces the per-project
+`Arc<RwLock<SchaltwerkCore>>` with per-task `Arc<Mutex<()>>` plus a
+lock-free `CoreHandle` accessor for non-task callers. Operations on
+different tasks proceed concurrently; same-task ops serialize.
+
+| Wave | Title | Status | Commits |
+|---|---|---|---|
+| A | Phase 2 implementation plan | `[x]` | `5076840a` |
+| B | `TaskLockManager` + 5 unit tests | `[x]` | `bf34ea9e` |
+| C | Lock-free `CoreHandle` accessor (additive) | `[x]` | `8d4cf06e` |
+| D.1+D.3 | Per-task lock in `commands/tasks.rs`; delete bundle/snapshot | `[x]` | `3158fe0a` |
+| D.2 | Consolidate `with_read_db`/`with_write_db` → `with_core_handle` | `[x]` | `c89a06b6` |
+| E.0 | Cat-D audit: zero multi-write sites; doc-only commit | `[x]` | `09ad3b66` |
+| (parity) | `CoreHandle::database()` for migration parity | `[x]` | `ffca692d` |
+| E.1 | `commands/schaltwerk_core.rs` + `codex_model_commands.rs` (76 sites) | `[x]` | `abaca337` |
+| E.2 | `mcp_api.rs` (39 sites) | `[x]` | `fc370aea` |
+| E.3 | `diff_commands.rs` + `sessions_refresh.rs` + `settings.rs` (10 sites) | `[x]` | `0d813090` |
+| E.4 | Restore v1 error message strings on `get_core_handle*` | `[x]` | `b4be03b1` |
+| F (bridge) | `session_facts_bridge.rs` no read guard | `[x]` | `330b4e7a` |
+| F.1 | `commands/settings.rs` + `commands/github.rs` direct lock callers (25 sites) | `[x]` | `faf0e987` |
+| F.2 | `commands/gitlab.rs` + `commands/forge.rs` direct lock callers (9 sites) | `[x]` | `a12881ad` |
+| F.3 | `diff_commands.rs` + `mcp_api.rs` + `services/terminals.rs` + `project_manager.rs` (5 sites) | `[x]` | `6cbf8b57` |
+| G | Drop `RwLock` from `Project`; delete `get_core_read/write*` + `LAST_CORE_WRITE` | `[x]` | `d28ee005` |
+| H | E2E per-task concurrency proof | `[x]` | `e76954d4` |
+| I | Status tracker + memory update | `[x]` | (this commit) |
+
+## Phase 2 — definition of done check
+
+| Criterion | Status |
+|---|---|
+| `just test` green | ✅ 2344 tests passing (TypeScript lint, MCP tests, frontend vitest, Rust clippy, cargo shear, knip, Rust nextest) |
+| 0 references to `Arc<RwLock<SchaltwerkCore>>` in production code | ✅ pinned by `project_schaltwerk_core_field_is_lock_free` (compile-time fn-pointer assertion) |
+| 0 references to `get_core_read`, `get_core_read_for_project_path`, `get_core_write`, `get_core_write_for_project_path` | ✅ deleted from `main.rs`; `grep -rn 'get_core_read\|get_core_write' src-tauri/src/` returns only doc-comment references |
+| 0 references to `LAST_CORE_WRITE` | ✅ deleted |
+| 0 references to `ProductionOrchestratorBundle`, `ConfirmStageResources`, `snapshot_from_core`, `confirm_stage_against_snapshot`, `with_production_orchestrator` | ✅ deleted in `3158fe0a` |
+| `Project::schaltwerk_core` field is `Arc<SchaltwerkCore>` (not `Arc<RwLock<…>>`) | ✅ pinned structurally |
+| `TaskLockManager` exists at `src-tauri/src/infrastructure/task_lock_manager.rs` with 5 unit tests | ✅ |
+| `e2e_per_task_concurrency` proves cross-task parallelism + same-task serialization + per-project scoping | ✅ 3 tests in `tests/e2e_per_task_concurrency.rs` |
+| `arch_domain_isolation` and `arch_layering_database` green | ✅ |
+
+## Wave E sub-wave breakdown
+
+The Wave E sweep dispatched three parallel agents on disjoint files
+per `feedback_parallel_agents_disjoint_files.md`. Each agent made
+mechanical `get_core_read/write* → get_core_handle*` substitutions
+and ran `cargo check` against its scope; the coordinator collected
+diffs and committed per sub-wave. ~125 call sites swept across 6
+files. Wave F repeated the pattern for the 40 callers that bypassed
+the entry points and acquired `project.schaltwerk_core.read/write()`
+directly.
+
+Notable mid-flight discovery: 6 sites in `mcp_api.rs` used
+`core.database()` (a method on `SchaltwerkCore` that `CoreHandle`
+initially lacked). Adding `CoreHandle::database()` for parity
+(`ffca692d`) made all subsequent migrations pure name-change edits.
+
+## Wave E.0 audit result
+
+The plan's §0 enumeration flagged ~10 candidate Cat-D
+multi-statement-without-explicit-transaction sites. The audit pass
+(grep + body inspection) confirmed **zero** genuine Cat-D sites:
+each candidate resolves to Cat A (read-only), Cat B (single
+`db.set_*`), or Cat C (manager method that wraps
+`conn.transaction(...)` internally). The lock removal does not
+change the synchronization contract for any non-task surface.
 
 ---
 
