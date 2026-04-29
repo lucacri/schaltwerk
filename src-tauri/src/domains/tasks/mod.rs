@@ -3,6 +3,7 @@ pub mod clarify;
 pub mod entity;
 pub mod presets;
 pub mod prompts;
+pub mod reconciler;
 pub mod run_status;
 pub mod runs;
 pub mod service;

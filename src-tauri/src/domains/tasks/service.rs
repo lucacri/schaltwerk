@@ -9,8 +9,9 @@ pub use crate::domains::tasks::entity::{
     ProjectWorkflowDefault, RunRole, Task, TaskArtifact, TaskArtifactKind, TaskArtifactVersion,
     TaskRun, TaskRunStatus, TaskStage, TaskStageConfig, TaskVariant,
 };
+use crate::domains::tasks::reconciler;
 // Wave I.5 will re-introduce the orchestration re-exports once that module is
-// ported. Reconciler (Wave I.4) is similar.
+// ported.
 pub use crate::domains::tasks::presets::{
     ExpandedRunSlot, PresetShape, PresetSlot, SelectionMode, expand_preset, selection_mode_for,
 };
@@ -164,12 +165,7 @@ impl<'a> TaskService<'a> {
     }
 
     pub fn reconcile_stage_drift(&self, repo: &Path) -> Result<usize> {
-        // Wave I.4 will plug in `reconciler::reconcile_all` once that module
-        // is ported. For now this is a no-op so the rest of the service
-        // surface compiles; the reconciler is a background sweep that does
-        // not gate any user-visible operation.
-        let _ = repo;
-        Ok(0)
+        reconciler::reconcile_all(self.db, repo)
     }
 
     fn with_runs(&self, mut task: Task) -> Result<Task> {
