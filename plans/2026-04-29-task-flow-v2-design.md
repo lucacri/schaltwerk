@@ -129,12 +129,22 @@ The v2 rewrite is not about adding features. It's about reducing the surface are
 - Set up `plans/task-flow-v2-status.md` for phase tracking.
 
 ### Phase 1 — collapse `TaskRunStatus`
-- Add `task_runs.cancelled_at` and `task_runs.confirmed_at` columns.
-- Backfill from existing `status` values.
-- Replace all `run.status` reads with derived getters.
-- Drop `task_runs.status` column.
-- Frontend: replace `run.status` reads with the new getter.
-- Run `just test` after each step; fix what breaks.
+
+Detailed plan: [`plans/2026-04-29-task-flow-v2-phase-1-plan.md`](./2026-04-29-task-flow-v2-phase-1-plan.md).
+
+Phase 0 branched v2 off `main`, so v2 has no v1 task-flow surface to mutate in place. Phase 1 has two streams that share a target schema but are otherwise independent:
+
+**Stream A — code evolution (greenfield port).** v2's task-runs surface is born without `task_runs.status`. The `TaskRun` entity has no `status` field. `compute_run_status(run, sessions) → TaskRunStatus` is a pure function over (run row, bound session rows); it is the only producer of the enum, which lives in memory and on the wire to the UI but is never persisted. The v1 helpers `mark_running`, `mark_awaiting_selection`, `fail_run` are not ported. Cross-domain wiring follows §9 — direct calls via a project-scoped `SessionFactsRecorder`, no `OnceCell` dispatcher.
+
+**Stream B — one-shot user-DB migration.** On first v2 launch against a v1 SQLite DB, a startup migration archives `task_runs` to `task_runs_v1_archive`, backfills `cancelled_at` / `confirmed_at` / `failed_at` from legacy `status` values, then drops `status` via the SQLite table-rebuild dance. Idempotent. v2-native DBs see a no-op.
+
+**Sticky-idle projection.** Sessions get a write-once `first_idle_at` column. AwaitingSelection trips when all bound sessions have `first_idle_at IS NOT NULL`; once tripped, it's sticky by construction (no overwrite path).
+
+**Frontend.** Phase 1 is backend-only — no UI work. The `TaskRun` wire payload synthesizes `status` via the getter so the existing UI can consume it once introduced in later phases.
+
+**Deliberate semantic change.** Post-merge CI red on a task-linked PR no longer marks the producing run Failed — it flips `task.failure_flag` (which `auto_advance` already reads). Run-level Failed has exactly one source: a bound session exited non-zero before any winner was confirmed. See the Phase 1 plan §7 for the rationale.
+
+Run `just test` between waves; commit per the plan's wave boundaries.
 
 ### Phase 2 — per-task mutex
 - Replace `Arc<RwLock<SchaltwerkCore>>` callers with `Arc<TaskLockManager>` that hands out per-task locks.
