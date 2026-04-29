@@ -10,8 +10,11 @@ pub use crate::domains::tasks::entity::{
     TaskRun, TaskRunStatus, TaskStage, TaskStageConfig, TaskVariant,
 };
 use crate::domains::tasks::reconciler;
-// Wave I.5 will re-introduce the orchestration re-exports once that module is
-// ported.
+pub use crate::domains::tasks::orchestration::{
+    BranchMerger, ClarifyRunStarted, MergeConflictDuringConfirm, ProductionMerger,
+    ProductionProvisioner, ProvisionedRunSession, ProvisionedSession, SessionProvisioner,
+    StageAdvanceAfterMergeFailed, StageRunStarted, TaskOrchestrator,
+};
 pub use crate::domains::tasks::presets::{
     ExpandedRunSlot, PresetShape, PresetSlot, SelectionMode, expand_preset, selection_mode_for,
 };
