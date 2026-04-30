@@ -6,8 +6,8 @@ use crate::domains::sessions::lifecycle::cancellation::{
 use crate::domains::sessions::repository::SessionDbManager;
 use crate::domains::sessions::service::SessionManager;
 pub use crate::domains::tasks::entity::{
-    ProjectWorkflowDefault, RunRole, SlotKind, Task, TaskArtifact, TaskArtifactKind,
-    TaskArtifactVersion, TaskRun, TaskRunStatus, TaskStage, TaskStageConfig, TaskVariant,
+    ProjectWorkflowDefault, SlotKind, Task, TaskArtifact, TaskArtifactKind, TaskArtifactVersion,
+    TaskRun, TaskRunStatus, TaskStage, TaskStageConfig, TaskVariant,
 };
 use crate::domains::tasks::reconciler;
 pub use crate::domains::tasks::orchestration::{
@@ -780,9 +780,8 @@ mod tests {
                 merged_at: None,
                 task_id: task_id.map(str::to_string),
                 task_stage: None,
-                task_role: run_role.map(str::to_string),
                 task_run_id: None,
-                run_role: None,
+                run_role: run_role.map(str::to_string),
                 slot_key: None,
                 exited_at: None,
                 exit_code: None,

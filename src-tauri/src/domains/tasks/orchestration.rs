@@ -3,7 +3,7 @@ use crate::domains::merge::types::MergeMode;
 use crate::domains::sessions::db_sessions::SessionMethods;
 use crate::domains::sessions::service::{SessionCreationParams, SessionManager};
 use crate::domains::tasks::clarify::build_task_clarification_prompt;
-use crate::domains::tasks::entity::{RunRole, SlotKind, Task, TaskRun, TaskStage};
+use crate::domains::tasks::entity::{SlotKind, Task, TaskRun, TaskStage};
 use crate::domains::tasks::prompts::{build_stage_run_prompt, build_task_host_prompt};
 use crate::domains::tasks::presets::{ExpandedRunSlot, PresetShape, expand_preset};
 use crate::domains::tasks::runs::TaskRunService;
@@ -290,7 +290,7 @@ impl<'a, P: SessionProvisioner, M: BranchMerger> TaskOrchestrator<'a, P, M> {
             sessions.push(ProvisionedRunSession {
                 session_id: provisioned.session_id,
                 branch: provisioned.branch,
-                run_role: slot.run_role.into(),
+                run_role: slot.run_role.as_str().to_string(),
                 slot_key: slot.slot_key.clone(),
             });
         }
@@ -501,11 +501,17 @@ pub struct ClarifyRunStarted {
     pub reused: bool,
 }
 
+/// Wire-side projection of a provisioned slot. Returned to the frontend
+/// inside `StageRunStarted`. `run_role` carries the role label as a
+/// String (e.g. `"candidate"`, `"consolidator"`, `"single"`) — same
+/// values v1's `RunRole::as_str()` produced, so the wire format is
+/// byte-identical, but the type itself is no longer the deleted
+/// `RunRole` enum.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProvisionedRunSession {
     pub session_id: String,
     pub branch: String,
-    pub run_role: RunRole,
+    pub run_role: String,
     pub slot_key: Option<String>,
 }
 
@@ -1214,7 +1220,7 @@ mod tests {
             .expect("start run");
 
         assert_eq!(started.sessions.len(), 1);
-        assert_eq!(started.sessions[0].run_role, RunRole::Single);
+        assert_eq!(started.sessions[0].run_role, "single");
         assert_eq!(
             started.sessions[0].slot_key.as_deref(),
             Some("claude"),
@@ -1329,16 +1335,10 @@ mod tests {
 
         // 2 candidates + consolidator + evaluator = 4 slots
         assert_eq!(started.sessions.len(), 4);
-        let roles: Vec<SlotKind> =
-            started.sessions.iter().map(|s| s.run_role.into()).collect();
+        let roles: Vec<&str> = started.sessions.iter().map(|s| s.run_role.as_str()).collect();
         assert_eq!(
             roles,
-            vec![
-                SlotKind::Candidate,
-                SlotKind::Candidate,
-                SlotKind::Consolidator,
-                SlotKind::Evaluator,
-            ]
+            vec!["candidate", "candidate", "consolidator", "evaluator"]
         );
 
         // Branches must be distinct and siblings of the task branch (not nested,
@@ -1361,7 +1361,7 @@ mod tests {
         // carries task_id/run_id/run_role/slot_key/agent_type/branch/base_branch.
         let calls = prov.slot_calls.borrow();
         assert_eq!(calls.len(), 4);
-        let roles_in_calls: Vec<SlotKind> = calls.iter().map(|c| c.run_role).collect();
+        let roles_in_calls: Vec<&str> = calls.iter().map(|c| c.run_role.as_str()).collect();
         assert_eq!(roles_in_calls, roles);
         assert!(
             calls.iter().all(|c| c.task_id == task.id

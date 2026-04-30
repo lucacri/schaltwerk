@@ -129,10 +129,9 @@ pub trait SessionMethods {
     /// `compute_run_status` should use this method.
     fn get_sessions_by_task_run_id(&self, task_run_id: &str) -> Result<Vec<Session>>;
 
-    /// Stamp the task-lineage columns on a session row. v2 ports v1's
-    /// behavior: the same `run_role` value is mirrored into the legacy
-    /// `task_role` column so older readers keep working until Phase 3 retires
-    /// `task_role`.
+    /// Stamp the task-lineage columns on a session row. Phase 3 dropped
+    /// the legacy `task_role` mirror — only `run_role` (the in-DB role
+    /// string) and `slot_key` (the preset-slot identifier) are written.
     fn set_session_task_lineage(
         &self,
         session_id: &str,
@@ -233,7 +232,6 @@ struct SessionSummaryRow {
     merged_at: Option<i64>,
     task_id: Option<String>,
     task_stage: Option<String>,
-    task_role: Option<String>,
 }
 
 impl Database {
@@ -306,7 +304,6 @@ impl Database {
                     merged_at: summary.merged_at.map(utc_from_epoch_seconds_lossy),
                     task_id: summary.task_id,
                     task_stage: summary.task_stage.and_then(|stage| stage.parse().ok()),
-                    task_role: summary.task_role,
                     task_run_id: None,
                     run_role: None,
                     slot_key: None,
@@ -362,8 +359,8 @@ impl SessionMethods for Database {
                 branch, parent_branch, original_parent_branch, worktree_path,
                 status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                 original_agent_type, pending_name_generation, was_auto_generated,
-                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44, ?45, ?46)",
+                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44, ?45)",
             params![
                 session.id,
                 session.name,
@@ -413,7 +410,6 @@ impl SessionMethods for Database {
                 session.original_agent_model,
                 session.task_id,
                 session.task_stage.as_ref().map(|stage| stage.as_str()),
-                session.task_role,
             ],
         )?;
 
@@ -428,7 +424,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
              FROM sessions
              WHERE repository_path = ?1 AND name = ?2"
         )?;
@@ -499,7 +495,6 @@ impl SessionMethods for Database {
                     .ok()
                     .flatten()
                     .and_then(|stage| stage.parse().ok()),
-                task_role: row.get(45).ok(),
                 task_run_id: None,
                 run_role: None,
                 slot_key: None,
@@ -520,7 +515,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
              FROM sessions
              WHERE id = ?1"
         )?;
@@ -591,7 +586,6 @@ impl SessionMethods for Database {
                     .ok()
                     .flatten()
                     .and_then(|stage| stage.parse().ok()),
-                task_role: row.get(45).ok(),
                 task_run_id: None,
                 run_role: None,
                 slot_key: None,
@@ -639,7 +633,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
                  FROM sessions
                  WHERE repository_path = ?1
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -697,7 +691,6 @@ impl SessionMethods for Database {
                     pr_state: row.get(39).ok(),
                     task_id: row.get(41).ok(),
                     task_stage: row.get(42).ok(),
-                    task_role: row.get(43).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -727,7 +720,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
                  FROM sessions
                  WHERE status = 'active'
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -785,7 +778,6 @@ impl SessionMethods for Database {
                     pr_state: row.get(39).ok(),
                     task_id: row.get(41).ok(),
                     task_stage: row.get(42).ok(),
-                    task_role: row.get(43).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -912,7 +904,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, task_role
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
                  FROM sessions
                  WHERE repository_path = ?1 AND session_state = ?2
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -974,7 +966,6 @@ impl SessionMethods for Database {
                         pr_state: row.get(39).ok(),
                         task_id: row.get(41).ok(),
                         task_stage: row.get(42).ok(),
-                        task_role: row.get(43).ok(),
                     })
                 },
             )?;
@@ -1325,7 +1316,6 @@ impl SessionMethods for Database {
                 task_run_id = ?2,
                 task_stage = ?3,
                 run_role = ?4,
-                task_role = ?4,
                 slot_key = ?5,
                 updated_at = ?6
              WHERE id = ?7",
@@ -1433,7 +1423,7 @@ impl SessionMethods for Database {
                 consolidation_recommended_session_id,
                 consolidation_confirmation_mode, promotion_reason,
                 ci_autofix_enabled, merged_at,
-                task_id, task_stage, task_role,
+                task_id, task_stage,
                 task_run_id, run_role, slot_key,
                 exited_at, exit_code, first_idle_at
              FROM sessions
@@ -1516,13 +1506,12 @@ fn row_to_session_with_facts(row: &rusqlite::Row<'_>) -> rusqlite::Result<Sessio
             .ok()
             .flatten()
             .and_then(|s| s.parse().ok()),
-        task_role: row.get(45).ok(),
-        task_run_id: row.get(46).ok(),
-        run_role: row.get(47).ok(),
-        slot_key: row.get(48).ok(),
-        exited_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(49)?),
-        exit_code: row.get(50).ok(),
-        first_idle_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(51)?),
+        task_run_id: row.get(45).ok(),
+        run_role: row.get(46).ok(),
+        slot_key: row.get(47).ok(),
+        exited_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(48)?),
+        exit_code: row.get(49).ok(),
+        first_idle_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(50)?),
     })
 }
 
@@ -1587,7 +1576,7 @@ mod tests {
             merged_at: None,
             task_id: None,
             task_stage: None,
-            task_role: None,
+
             task_run_id: None,
             run_role: None,
             slot_key: None,
@@ -1665,7 +1654,7 @@ mod tests {
             merged_at: None,
             task_id: None,
             task_stage: None,
-            task_role: None,
+
             task_run_id: None,
             run_role: None,
             slot_key: None,
@@ -1739,7 +1728,7 @@ mod tests {
             merged_at: None,
             task_id: None,
             task_stage: None,
-            task_role: None,
+
             task_run_id: None,
             run_role: None,
             slot_key: None,
@@ -1916,7 +1905,7 @@ mod tests {
             merged_at: None,
             task_id: None,
             task_stage: None,
-            task_role: None,
+
             task_run_id: None,
             run_role: None,
             slot_key: None,
@@ -1999,7 +1988,7 @@ mod tests {
             merged_at: None,
             task_id: None,
             task_stage: None,
-            task_role: None,
+
             task_run_id: None,
             run_role: None,
             slot_key: None,
@@ -2098,7 +2087,7 @@ mod tests {
             merged_at: None,
             task_id: None,
             task_stage: None,
-            task_role: None,
+
             task_run_id: None,
             run_role: None,
             slot_key: None,
@@ -2185,7 +2174,7 @@ mod tests {
             merged_at: None,
             task_id: None,
             task_stage: None,
-            task_role: None,
+
             task_run_id: None,
             run_role: None,
             slot_key: None,
@@ -2268,7 +2257,7 @@ mod tests {
             merged_at: None,
             task_id: None,
             task_stage: None,
-            task_role: None,
+
             task_run_id: task_run_id.map(String::from),
             run_role: None,
             slot_key: None,

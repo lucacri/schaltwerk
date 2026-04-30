@@ -128,7 +128,6 @@ pub struct Session {
     pub merged_at: Option<DateTime<Utc>>,
     pub task_id: Option<String>,
     pub task_stage: Option<SpecStage>,
-    pub task_role: Option<String>,
     pub task_run_id: Option<String>,
     pub run_role: Option<String>,
     pub slot_key: Option<String>,

@@ -198,86 +198,6 @@ impl SlotKind {
     }
 }
 
-// Kept alive across Wave D.1+D.2 so the orchestration/prompts/presets
-// sweep can rewrite each call site one at a time without breaking the
-// build. Deleted entirely in D.3 once every caller has moved to
-// `SlotKind`.
-//
-// Compile-time invariant: every variant matches a `SlotKind` variant 1:1
-// (the migration doesn't add or remove role identities, only renames
-// the type). The conversion `From<RunRole> for SlotKind` below is the
-// scaffolding that lets D.2's parallel agents migrate one file at a
-// time without flipping every call site simultaneously.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RunRole {
-    TaskHost,
-    Single,
-    Candidate,
-    Consolidator,
-    Evaluator,
-    MainHost,
-    Clarify,
-}
-
-impl RunRole {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            RunRole::TaskHost => "task_host",
-            RunRole::Single => "single",
-            RunRole::Candidate => "candidate",
-            RunRole::Consolidator => "consolidator",
-            RunRole::Evaluator => "evaluator",
-            RunRole::MainHost => "main_host",
-            RunRole::Clarify => "clarify",
-        }
-    }
-}
-
-impl FromStr for RunRole {
-    type Err = String;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value {
-            "task_host" => Ok(RunRole::TaskHost),
-            "single" => Ok(RunRole::Single),
-            "candidate" => Ok(RunRole::Candidate),
-            "consolidator" => Ok(RunRole::Consolidator),
-            "evaluator" => Ok(RunRole::Evaluator),
-            "main_host" => Ok(RunRole::MainHost),
-            "clarify" => Ok(RunRole::Clarify),
-            other => Err(format!("Invalid run role: {other}")),
-        }
-    }
-}
-
-impl From<RunRole> for SlotKind {
-    fn from(role: RunRole) -> Self {
-        match role {
-            RunRole::TaskHost => SlotKind::TaskHost,
-            RunRole::Single => SlotKind::Single,
-            RunRole::Candidate => SlotKind::Candidate,
-            RunRole::Consolidator => SlotKind::Consolidator,
-            RunRole::Evaluator => SlotKind::Evaluator,
-            RunRole::MainHost => SlotKind::MainHost,
-            RunRole::Clarify => SlotKind::Clarify,
-        }
-    }
-}
-
-impl From<SlotKind> for RunRole {
-    fn from(kind: SlotKind) -> Self {
-        match kind {
-            SlotKind::TaskHost => RunRole::TaskHost,
-            SlotKind::Single => RunRole::Single,
-            SlotKind::Candidate => RunRole::Candidate,
-            SlotKind::Consolidator => RunRole::Consolidator,
-            SlotKind::Evaluator => RunRole::Evaluator,
-            SlotKind::MainHost => RunRole::MainHost,
-            SlotKind::Clarify => RunRole::Clarify,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -525,7 +445,7 @@ mod stage_transition_tests {
 
 #[cfg(test)]
 mod serde_round_trip_tests {
-    use super::{RunRole, TaskArtifactKind, TaskRunStatus, TaskStage};
+    use super::{SlotKind, TaskArtifactKind, TaskRunStatus, TaskStage};
     use std::str::FromStr;
 
     fn round_trip<T>(value: T, wire: &str)
@@ -591,21 +511,25 @@ mod serde_round_trip_tests {
     }
 
     #[test]
-    fn run_role_round_trip_covers_every_variant() {
+    fn slot_kind_as_str_covers_every_variant() {
         let cases = [
-            (RunRole::TaskHost, "task_host"),
-            (RunRole::Single, "single"),
-            (RunRole::Candidate, "candidate"),
-            (RunRole::Consolidator, "consolidator"),
-            (RunRole::Evaluator, "evaluator"),
-            (RunRole::MainHost, "main_host"),
-            (RunRole::Clarify, "clarify"),
+            (SlotKind::TaskHost, "task_host"),
+            (SlotKind::Single, "single"),
+            (SlotKind::Candidate, "candidate"),
+            (SlotKind::Consolidator, "consolidator"),
+            (SlotKind::Evaluator, "evaluator"),
+            (SlotKind::MainHost, "main_host"),
+            (SlotKind::Clarify, "clarify"),
         ];
-        for (role, wire) in cases {
-            round_trip(role, wire);
-            assert_eq!(RunRole::from_str(wire).unwrap(), role);
-            assert_eq!(role.as_str(), wire);
+        for (kind, wire) in cases {
+            assert_eq!(kind.as_str(), wire);
         }
+        // Phase 3 invariant: SlotKind has no FromStr/Serde — wire-side
+        // role identifiers flow through as plain strings (set by
+        // SlotKind::as_str at the orchestration call site, read back
+        // as String by every consumer). The deleted `round_trip` half
+        // of this test would have required Deserialize, which the type
+        // deliberately doesn't have.
     }
 
     #[test]

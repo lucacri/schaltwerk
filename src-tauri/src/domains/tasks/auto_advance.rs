@@ -261,7 +261,6 @@ mod tests {
             merged_at: None,
             task_id: Some(task_id.into()),
             task_stage: None,
-            task_role: None,
             task_run_id: None,
             run_role: None,
             slot_key: None,

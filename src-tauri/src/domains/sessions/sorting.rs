@@ -71,7 +71,6 @@ mod session_sorting_tests {
             merged_at: None,
             task_id: None,
             task_stage: None,
-            task_role: None,
             task_run_id: None,
             run_role: None,
             slot_key: None,
