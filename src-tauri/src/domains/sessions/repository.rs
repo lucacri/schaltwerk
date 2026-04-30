@@ -144,20 +144,6 @@ impl SessionDbManager {
         Self { db, repo_path }
     }
 
-    fn normalize_spec_state(&self, session: &mut Session) -> Result<()> {
-        if session.status == SessionStatus::Spec && session.session_state != SessionState::Spec {
-            warn!(
-                "Correcting inconsistent session_state for spec session '{}': {:?} -> Spec",
-                session.name, session.session_state
-            );
-            self.db
-                .update_session_state(&session.id, SessionState::Spec)?;
-            session.session_state = SessionState::Spec;
-        }
-
-        Ok(())
-    }
-
     fn try_open_repo(&self) -> Option<Repository> {
         match Repository::open(&self.repo_path) {
             Ok(repo) => Some(repo),
@@ -233,7 +219,6 @@ impl SessionDbManager {
             .get_session_by_name(&self.repo_path, name)
             .map_err(|e| anyhow!("Failed to get session '{name}': {e}"))?;
 
-        self.normalize_spec_state(&mut session)?;
         let repo = self.try_open_repo();
         self.normalize_parent_branch_with_repo(repo.as_ref(), &mut session);
         Ok(session)
@@ -245,24 +230,26 @@ impl SessionDbManager {
             .get_session_by_id(id)
             .map_err(|e| anyhow!("Failed to get session with id '{id}': {e}"))?;
 
-        self.normalize_spec_state(&mut session)?;
         let repo = self.try_open_repo();
         self.normalize_parent_branch_with_repo(repo.as_ref(), &mut session);
         Ok(session)
     }
 
     pub fn list_sessions(&self) -> Result<Vec<Session>> {
+        // Phase 4 Wave B.6: cancellation is now an orthogonal axis
+        // (cancelled_at). The legacy `status != Cancelled` filter would
+        // pass everything after Wave B.1/B.2 stopped writing the column;
+        // switching to the timestamp predicate keeps the contract.
         let mut sessions = self.db.list_sessions(&self.repo_path)?;
         let repo = self.try_open_repo();
         let repo_ref = repo.as_ref();
         for session in sessions.iter_mut() {
-            self.normalize_spec_state(session)?;
             self.normalize_parent_branch_with_repo(repo_ref, session);
         }
 
         Ok(sessions
             .into_iter()
-            .filter(|session| session.status != SessionStatus::Cancelled)
+            .filter(|session| session.cancelled_at.is_none())
             .collect())
     }
 
@@ -273,14 +260,13 @@ impl SessionDbManager {
         let repo = self.try_open_repo();
         let repo_ref = repo.as_ref();
         for session in sessions.iter_mut() {
-            self.normalize_spec_state(session)?;
             self.normalize_parent_branch_with_repo(repo_ref, session);
         }
 
         Ok(sessions
             .into_iter()
             .filter(|session| {
-                session.status != SessionStatus::Cancelled && session.session_state == state
+                session.cancelled_at.is_none() && session.session_state == state
             })
             .collect())
     }
@@ -379,18 +365,6 @@ impl SessionDbManager {
         self.db
             .delete_spec(id)
             .map_err(|e| anyhow!("Failed to delete spec: {e}"))
-    }
-
-    pub fn update_session_status(&self, session_id: &str, status: SessionStatus) -> Result<()> {
-        self.db
-            .update_session_status(session_id, status)
-            .map_err(|e| anyhow!("Failed to update session status: {e}"))
-    }
-
-    pub fn update_session_state(&self, session_id: &str, state: SessionState) -> Result<()> {
-        self.db
-            .update_session_state(session_id, state)
-            .map_err(|e| anyhow!("Failed to update session state: {e}"))
     }
 
     pub fn update_session_ready_to_merge(&self, session_id: &str, ready: bool) -> Result<()> {

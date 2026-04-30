@@ -2691,38 +2691,11 @@ mod service_unified_tests {
         );
     }
 
-    #[test]
-    fn spec_sessions_reset_running_state_on_fetch() {
-        let (manager, temp_dir) = create_test_session_manager();
-        let session = create_test_session(&temp_dir, "claude", "normalize");
-        manager.db_manager.create_session(&session).unwrap();
-
-        manager
-            .db_manager
-            .update_session_status(&session.id, SessionStatus::Spec)
-            .unwrap();
-
-        let fetched = manager
-            .db_manager
-            .get_session_by_name(&session.name)
-            .unwrap();
-
-        assert_eq!(SessionStatus::Spec, fetched.status);
-        assert_eq!(
-            SessionState::Spec,
-            fetched.session_state,
-            "Spec sessions must not remain in running state"
-        );
-
-        let running_sessions = manager
-            .db_manager
-            .list_sessions_by_state(SessionState::Running)
-            .unwrap();
-        assert!(
-            !running_sessions.iter().any(|s| s.id == session.id),
-            "Spec session should not be returned when listing running sessions after normalization"
-        );
-    }
+    // Phase 4 Wave B.6: removed `spec_sessions_reset_running_state_on_fetch`.
+    // The test was pinning the v1 defensive `normalize_spec_state` resync,
+    // which was load-bearing in v1 because `status` and `session_state`
+    // could drift. Phase 3's single boolean `is_spec` makes drift impossible
+    // by construction, so the resync was deleted along with this test.
 
     fn sample_review_comment(
         id: &str,
