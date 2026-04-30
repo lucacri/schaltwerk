@@ -10,7 +10,7 @@
 | 1 | Collapse `TaskRunStatus` to derived state | `[x]` | Waves A–K — see below |
 | 2 | Per-task mutex; remove global RwLock | `[x]` | Waves A–I — see below |
 | 3 | Drop `RunRole`; collapse `TaskStage::Cancelled`; introduce orthogonal session axes (additive) | `[x]` | Waves A–H — see below |
-| 4 | `TaskFlowError` sweep + derived current_* getters + retire legacy session enums | `[~]` Waves B+C complete; D-H pending | Waves B–C — see below |
+| 4 | `TaskFlowError` sweep + derived current_* getters + retire legacy session enums | `[x]` | Waves A–H — see below |
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[ ]` | — |
 | 6 | `Sidebar.tsx` split | `[ ]` | — |
 
@@ -257,11 +257,15 @@ Wave F (derived `current_*` getters), Wave G (validation), and Wave H
 | C.1 | Read sweep: stage/activity/action_prompts/facts_recorder/consolidation_stub + commands/schaltwerk_core/tasks + lifecycle/cancellation/finalizer + tasks/service/auto_advance + utils.rs | `[x]` | `4818fc99` + `89503a07` |
 | C.2 | Read sweep: domains/sessions/service.rs + mcp_api.rs + mcp_api/diff_api.rs (27 sites incl. consolidation 3-arm) | `[x]` | `42da5d10` |
 | C.3 | Read sweep: domains/merge/service.rs + commands/github.rs spec guards | `[x]` | `c665f03c` |
-| D | Delete `SessionStatus` + `SessionState` enums + struct fields + drop columns via SQLite table-rebuild | `[ ]` | — |
-| E | `TaskFlowError` definition + migrate 23 task commands | `[ ]` | — |
-| F | Derived `current_spec` / `current_plan` / `current_summary` getters + drop denormalized columns | `[ ]` | — |
-| G | Final validation + grep verification | `[ ]` | — |
-| H | Status doc + memory update | `[ ]` | — |
+| D.0 | SessionInfo wire-format string conversion + ready_to_merge sig change | `[x]` | `7de87b5a` |
+| D.1+D.2+D.3 | Delete `SessionStatus` + `SessionState` enums + struct fields + DB SQL bindings (atomic — splitting across commits would leave the build red) | `[x]` | `4548291d` |
+| D.4+D.5 | `v2_drop_session_legacy_columns` migration + structural pins + DB round-trip test | `[x]` | `ac705306` |
+| E.1 | Define `TaskFlowError` canonical error type | `[x]` | `5343478d` |
+| E.2 | Migrate 23 task commands to `Result<_, TaskFlowError>` | `[x]` | `9e799305` |
+| E.3+E.4 | Frontend handler + delete legacy `SchaltError::TaskNotFound`/`TaskCancelFailed`/`StageAdvanceFailedAfterMerge` | `[x]` | `00295926` |
+| F | Derived `current_spec` / `current_plan` / `current_summary` getters + `v2_drop_task_current_columns` migration + DB round-trip tests | `[x]` | `2dbe0f3e` |
+| G | Final validation (grep verification, cargo clippy, just test green at 2391) | `[x]` | (this commit) |
+| H | Status doc + memory update | `[x]` | (this commit) |
 
 ### Phase 4 — what landed in waves B + C
 
@@ -293,28 +297,120 @@ behind structural assertions.
 
 **Tests at end of Wave C: 2371 / 2371 passing.** No mid-wave red trees.
 
-### What Wave D needs to deliver (next session)
+### Phase 4 — what landed in waves D + E + F + G + H (second push)
 
-1. Rework `SessionInfoBuilder` to synthesize wire-format strings
-   (`session_state`, `status`) from `lifecycle_state(...)` instead of
-   reading the enum fields directly. The frontend continues to read
-   string unions, unchanged.
-2. Delete the `SessionStatus` enum + impl + FromStr (~40 lines).
-3. Delete the `SessionState` enum + impl + FromStr (~25 lines).
-4. Remove the two fields from the `Session` struct.
-5. Migrate ~30+ test fixture builders that construct `Session` with
-   the legacy enum fields. The mechanical pattern is `status:
-   SessionStatus::Active, session_state: SessionState::Running,` →
-   delete those two lines (since `is_spec=false, cancelled_at=None`
-   defaults are correct for "active running" sessions).
-6. Update DB layer to stop binding/selecting `status` and
-   `session_state` columns in INSERT/UPDATE/SELECT.
-7. Add the `v2_drop_session_legacy_columns` one-shot migration via
-   the SQLite table-rebuild dance.
-8. Add the structural pins from Phase 4 plan §6.
+**Wave D (sessions enum collapse — atomic):**
+- `SessionInfoBuilder` reworked to synthesize wire-format strings from
+  `Session::lifecycle_state(...)` instead of reading the legacy enum
+  fields directly.
+- `SessionInfo.session_state: SessionState` → `String`. Both legacy
+  enums used `#[serde(rename_all = "lowercase")]` so the JSON wire
+  bytes are unchanged for the frontend.
+- `build_ready_to_merge_state` and `compute_ready_to_merge_for_event`
+  signatures changed from `&SessionState` to `is_running: bool`.
+- `SessionStatus` and `SessionState` enums deleted (~80 lines).
+- `Session.status` and `Session.session_state` struct fields removed.
+- 69 fixture sites across 20 files migrated to drop the legacy field
+  initializers (resurvey: bigger than the plan's "30+" estimate;
+  the long tail was test-only sites).
+- DB layer: legacy columns dropped from CREATE TABLE; INSERT/SELECT
+  bindings removed; row.get(N) indices shifted; trait setters
+  retired (`update_session_status` / `update_session_state`).
+- `list_sessions_by_state(state: SessionState)` signature changed
+  to `is_spec: bool`.
+- `idx_sessions_status` / `idx_sessions_status_order` indexes dropped.
+- New migration `v2_drop_session_legacy_columns` performs the
+  SQLite table-rebuild dance with archive table
+  `sessions_v2_status_archive` for forensics. 7 migration tests
+  including the **end-to-end v1-shape DB test** that sets up three
+  representative rows (Active, Cancelled, Spec), runs the full
+  migration chain, and asserts the orthogonal axes match what the
+  v1 enum projection would have said.
+- Structural pins: `Session::lifecycle_state` signature pinned via
+  fn-pointer coercion. `to_wire_string` return type pinned. **DB
+  round-trip test for `lifecycle_state` (Wave D.5)** that goes
+  through the actual write path (`db.create_session(...) →
+  db.get_session_by_id(...).lifecycle_state(...)`) — per
+  `feedback_compile_pins_dont_catch_wiring.md`, compile pins prove
+  the field exists; only the round-trip proves the SELECT/INSERT
+  path serves it.
 
-`#![deny(dead_code)]` is the safety net: any production reader Wave C
-missed will surface as a compile error in Wave D's deletion step.
+**Wave E (TaskFlowError sweep):**
+- New `domains/tasks/errors.rs` module with `TaskFlowError`
+  tagged-enum (10 variants).
+- 23 task commands in `commands/tasks.rs` migrated from
+  `Result<_, String>` (or `Result<_, SchaltError>`) to
+  `Result<_, TaskFlowError>`.
+- Frontend `src/types/errors.ts` gains `TaskFlowError` discriminator
+  + `formatTaskFlowError` mapper. `getErrorMessage` checks
+  `TaskFlowError` first (it can wrap a `SchaltError` via the
+  `Schalt(...)` variant), then SchaltError, then string fallback.
+- `SchaltError` sheds the 3 task variants
+  (`TaskNotFound`, `TaskCancelFailed`,
+  `StageAdvanceFailedAfterMerge`); they live in TaskFlowError
+  natively now.
+- `From<SchaltError> for TaskFlowError` impl collapsed to the
+  uniform `Self::Schalt(other)` arm.
+
+**Wave F (derived `current_*` getters):**
+- `Task::current_spec(&db)` / `current_plan(&db)` / `current_summary(&db)`
+  derived getters added. They wrap `Database::get_current_task_artifact(task_id, kind)`,
+  filtering `task_artifacts` by `is_current = true` and matching
+  `artifact_kind`.
+- `current_spec` / `current_plan` / `current_summary` fields removed
+  from the `Task` struct.
+- Denormalized-column mirror block in `service.rs::update_content`
+  deleted; the artifact's `is_current = true` flag is the canonical
+  source of truth.
+- `prompts.rs::build_stage_run_prompt` signature gains
+  `current_spec: Option<&str>` and `current_plan: Option<&str>`
+  parameters; callers pre-resolve via the derived getters.
+- DB layer: setters retired, INSERT/SELECT bindings removed, row.get
+  indices shifted -3, `from_row` updated.
+- New migration `v2_drop_task_current_columns` drops the columns via
+  the table-rebuild dance with `PRAGMA foreign_keys = OFF` (the FK
+  on `task_runs.task_id` is `ON DELETE CASCADE` which would
+  cascade-delete the runs during the rebuild's DROP TABLE step).
+  Archive table `tasks_v2_drop_current_archive` for forensics.
+  5 migration tests.
+- Structural pin: `Task::current_*` method signatures fn-pointer
+  coerced.
+- **DB round-trip tests for the derived getters** going through the
+  actual write path (`mark_task_artifact_current` → re-read via
+  `task.current_spec(&db)`). Pins both initial-None and
+  after-replacement-returns-revised cases. Plus a test that verifies
+  the kind dispatch picks the right artifact_kind through the query
+  (a Spec artifact must NOT show up under current_plan).
+
+**Wave G (final validation):**
+- `just test` green at 2391 / 2391 tests.
+- `cargo clippy -p lucode --tests`: 0 errors (only pre-existing warnings).
+- Wave G grep verification: `pub enum SessionStatus`, `pub enum SessionState`,
+  `task.current_spec` field reads, `SchaltError::TaskNotFound|TaskCancelFailed|StageAdvanceFailedAfterMerge`
+  all return zero hits in production code.
+
+**Wave H (status doc + memory update):**
+- This file's Phase 4 row marked `[x]`.
+- Sub-wave commit hashes captured in the table above.
+
+### Phase 4 — definition of done check
+
+| Criterion | Status |
+|---|---|
+| `just test` green | ✅ 2391 / 2391 passing |
+| 0 references to `pub enum SessionStatus` in production code | ✅ deleted in `4548291d` |
+| 0 references to `pub enum SessionState` in production code | ✅ deleted in `4548291d` |
+| 0 references to `Session.status` / `Session.session_state` field reads in production code | ✅ Wave G grep clean |
+| 0 references to `Task.current_spec` / `current_plan` / `current_summary` field reads in production code | ✅ Wave G grep clean |
+| 0 task command return signatures of `Result<_, String>` or `Result<_, SchaltError>` in `commands/tasks.rs` | ✅ all migrated to `Result<_, TaskFlowError>` |
+| `SchaltError` no longer has `TaskNotFound`, `TaskCancelFailed`, `StageAdvanceFailedAfterMerge` | ✅ deleted in `00295926` |
+| `domains/tasks/errors.rs::TaskFlowError` exists with tagged-enum format | ✅ pinned by `task_flow_error_serializes_with_tagged_enum_format` |
+| `Task::current_spec(&db)` / `current_plan(&db)` / `current_summary(&db)` derived getters exist | ✅ pinned by `task_current_artifact_methods_are_pinned` |
+| `v2_drop_session_legacy_columns` migration idempotent + has end-to-end v1-shape test | ✅ 7 tests in the migration module |
+| `v2_drop_task_current_columns` migration idempotent + archive table | ✅ 5 tests in the migration module |
+| `Session::lifecycle_state` DB round-trip test goes through the actual production write/read paths | ✅ `lifecycle_state_round_trips_through_production_write_and_read_paths` (per `feedback_compile_pins_dont_catch_wiring.md`) |
+| `Task::current_spec` DB round-trip test goes through the actual production write/read paths | ✅ `current_spec_round_trips_through_write_and_read_paths` and `current_plan_round_trips_independent_of_other_kinds` |
+| `arch_domain_isolation` and `arch_layering_database` green | ✅ |
 
 ---
 
