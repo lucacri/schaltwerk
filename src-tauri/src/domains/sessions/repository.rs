@@ -1,7 +1,7 @@
 use crate::{
     domains::git::service as git,
     domains::sessions::db_sessions::SessionMethods,
-    domains::sessions::entity::{Epic, PrState, Session, SessionState, SessionStatus, Spec},
+    domains::sessions::entity::{Epic, PrState, Session, SessionState, Spec},
     infrastructure::database::{
         AppConfigMethods, Database, EpicMethods, ProjectConfigMethods, SpecMethods,
     },

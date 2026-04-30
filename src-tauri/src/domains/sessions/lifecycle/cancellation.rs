@@ -1,5 +1,5 @@
 use crate::domains::git::service as git;
-use crate::domains::sessions::entity::{Session, SessionState, SessionStatus};
+use crate::domains::sessions::entity::Session;
 use crate::domains::sessions::process_cleanup::terminate_processes_with_cwd;
 use crate::domains::sessions::repository::SessionDbManager;
 use anyhow::{Context, Result, anyhow};
@@ -167,7 +167,7 @@ impl StandaloneCancellationCoordinator {
             self.session.name
         );
 
-        if self.session.session_state == SessionState::Spec {
+        if self.session.is_spec {
             return Err(anyhow!(
                 "Cannot cancel spec session '{}'. Use archive or delete spec operations instead.",
                 self.session.name
@@ -360,7 +360,7 @@ impl<'a> CancellationCoordinator<'a> {
     ) -> Result<CancellationResult> {
         info!("Canceling session '{}' (sync)", session.name);
 
-        if session.session_state == SessionState::Spec {
+        if session.is_spec {
             return Err(anyhow!(
                 "Cannot cancel spec session '{}'. Use archive or delete spec operations instead.",
                 session.name
@@ -425,7 +425,7 @@ impl<'a> CancellationCoordinator<'a> {
     ) -> Result<CancellationResult> {
         info!("Canceling session '{}' (async)", session.name);
 
-        if session.session_state == SessionState::Spec {
+        if session.is_spec {
             return Err(anyhow!(
                 "Cannot cancel spec session '{}'. Use archive or delete spec operations instead.",
                 session.name
@@ -507,7 +507,7 @@ impl<'a> CancellationCoordinator<'a> {
     ) -> Result<CancellationResult> {
         info!("Force canceling session '{}'", session.name);
 
-        if session.session_state == SessionState::Spec {
+        if session.is_spec {
             return Err(anyhow!(
                 "Cannot force cancel spec session '{}'. Use archive or delete spec operations instead.",
                 session.name
@@ -978,6 +978,7 @@ mod tests {
 
         let mut session = create_test_session(&repo_path, repo_path.join(".lucode/worktrees/test"));
         session.session_state = SessionState::Spec;
+        session.is_spec = true;
 
         let result = coordinator.cancel_session(&session, CancellationConfig::default());
         assert!(result.is_err());

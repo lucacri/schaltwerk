@@ -1,5 +1,5 @@
 use crate::domains::sessions::db_sessions::{SessionMethods, SessionTaskLineage};
-use crate::domains::sessions::entity::{Session, SessionStatus};
+use crate::domains::sessions::entity::Session;
 use crate::domains::sessions::lifecycle::cancellation::{
     CancellationConfig, CancellationCoordinator,
 };

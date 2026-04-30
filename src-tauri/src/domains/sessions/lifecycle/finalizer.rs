@@ -1,6 +1,6 @@
 use crate::domains::git::service as git;
 use crate::domains::sessions::cache::SessionCacheManager;
-use crate::domains::sessions::entity::{GitStats, Session, SessionState};
+use crate::domains::sessions::entity::{GitStats, Session};
 use crate::domains::sessions::repository::SessionDbManager;
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -71,7 +71,7 @@ impl<'a> SessionFinalizer<'a> {
         session: &Session,
         parent_branch: &str,
     ) -> Result<Option<GitStats>> {
-        if session.session_state == SessionState::Spec {
+        if session.is_spec {
             return Ok(None);
         }
 
@@ -256,6 +256,7 @@ mod tests {
 
         let mut session = create_test_session(PathBuf::from("/tmp/worktree"));
         session.session_state = SessionState::Spec;
+        session.is_spec = true;
 
         let result = finalizer.compute_git_stats(&session, "main").unwrap();
         assert!(result.is_none());

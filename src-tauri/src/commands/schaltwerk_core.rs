@@ -1804,7 +1804,7 @@ pub async fn schaltwerk_core_update_session_from_parent(
         .get_session(&name)
         .map_err(|e| format!("Session not found: {e}"))?;
 
-    if session.session_state == SessionState::Spec {
+    if session.is_spec {
         return Ok(lucode::services::UpdateSessionFromParentResult {
             status: lucode::services::UpdateFromParentStatus::NoSession,
             parent_branch: session.parent_branch.clone(),
@@ -2601,7 +2601,7 @@ pub async fn schaltwerk_core_cancel_session(
             }
         })?;
 
-        if session.session_state == lucode::domains::sessions::entity::SessionState::Spec {
+        if session.is_spec {
             manager
                 .archive_spec_session(&name)
                 .map_err(|e| SchaltError::DatabaseError {
@@ -5430,7 +5430,7 @@ pub async fn session_try_autofix(
         return Ok(false);
     }
 
-    if session.session_state != lucode::domains::sessions::SessionState::Running {
+    if session.is_spec || session.cancelled_at.is_some() {
         return Ok(false);
     }
 

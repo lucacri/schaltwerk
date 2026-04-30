@@ -18,7 +18,7 @@ use lucode::infrastructure::database::AppConfigMethods;
 use lucode::infrastructure::database::Database;
 use lucode::infrastructure::database::db_tasks::TaskMethods;
 use lucode::infrastructure::events::{SchaltEvent, TasksRefreshedPayload, emit_event};
-use lucode::services::{Session, SessionState};
+use lucode::services::Session;
 use serde::Deserialize;
 use std::path::Path;
 use std::str::FromStr;
@@ -598,7 +598,7 @@ pub async fn lucode_task_capture_session(
         .get_session(&session_name)
         .map_err(|e| format!("failed to load session '{session_name}': {e}"))?;
 
-    if session.session_state != SessionState::Running {
+    if session.is_spec || session.cancelled_at.is_some() {
         return Err(format!("session '{session_name}' is not running"));
     }
 
@@ -635,7 +635,7 @@ pub async fn lucode_task_capture_version_group(
     let mut running_sessions = Vec::new();
     for session_name in &session_names {
         let session = match manager.get_session(session_name) {
-            Ok(session) if session.session_state == SessionState::Running => session,
+            Ok(session) if !session.is_spec && session.cancelled_at.is_none() => session,
             Ok(_) => continue,
             Err(err) => {
                 log::warn!(

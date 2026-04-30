@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-use super::entity::{SessionState, SessionStatus, SpecStage};
+use super::entity::SpecStage;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
@@ -55,8 +55,8 @@ impl FromStr for Stage {
 
 #[derive(Debug, Clone)]
 pub struct StageInputs<'a> {
-    pub status: &'a SessionStatus,
-    pub session_state: &'a SessionState,
+    pub cancelled: bool,
+    pub is_spec: bool,
     pub ready_to_merge: bool,
     pub spec_stage: Option<&'a str>,
     pub task_stage: Option<&'a str>,
@@ -70,7 +70,7 @@ pub fn derive_stage(inputs: &StageInputs<'_>) -> Stage {
         return task_stage;
     }
 
-    if *inputs.status == SessionStatus::Cancelled {
+    if inputs.cancelled {
         return Stage::Cancelled;
     }
 
@@ -78,7 +78,7 @@ pub fn derive_stage(inputs: &StageInputs<'_>) -> Stage {
         return Stage::Done;
     }
 
-    if *inputs.status == SessionStatus::Spec || *inputs.session_state == SessionState::Spec {
+    if inputs.is_spec {
         return inputs
             .spec_stage
             .and_then(|value| SpecStage::from_str(value).ok())
@@ -106,10 +106,10 @@ pub fn derive_stage(inputs: &StageInputs<'_>) -> Stage {
 mod tests {
     use super::*;
 
-    fn base<'a>(status: &'a SessionStatus, session_state: &'a SessionState) -> StageInputs<'a> {
+    fn base(cancelled: bool, is_spec: bool) -> StageInputs<'static> {
         StageInputs {
-            status,
-            session_state,
+            cancelled,
+            is_spec,
             ready_to_merge: false,
             spec_stage: None,
             task_stage: None,
@@ -121,20 +121,20 @@ mod tests {
 
     #[test]
     fn spec_without_stage_maps_to_draft() {
-        let inputs = base(&SessionStatus::Spec, &SessionState::Spec);
+        let inputs = base(false, true);
         assert_eq!(derive_stage(&inputs), Stage::Draft);
     }
 
     #[test]
     fn spec_ready_maps_to_ready() {
-        let mut inputs = base(&SessionStatus::Spec, &SessionState::Spec);
+        let mut inputs = base(false, true);
         inputs.spec_stage = Some("ready");
         assert_eq!(derive_stage(&inputs), Stage::Ready);
     }
 
     #[test]
     fn persisted_task_stage_wins() {
-        let mut inputs = base(&SessionStatus::Active, &SessionState::Running);
+        let mut inputs = base(false, false);
         inputs.task_stage = Some("planned");
         inputs.ready_to_merge = true;
         assert_eq!(derive_stage(&inputs), Stage::Planned);
@@ -142,34 +142,34 @@ mod tests {
 
     #[test]
     fn running_session_defaults_to_implemented() {
-        let inputs = base(&SessionStatus::Active, &SessionState::Running);
+        let inputs = base(false, false);
         assert_eq!(derive_stage(&inputs), Stage::Implemented);
     }
 
     #[test]
     fn ready_to_merge_compatibility_maps_to_implemented() {
-        let mut inputs = base(&SessionStatus::Active, &SessionState::Running);
+        let mut inputs = base(false, false);
         inputs.ready_to_merge = true;
         assert_eq!(derive_stage(&inputs), Stage::Implemented);
     }
 
     #[test]
     fn consolidation_compatibility_maps_to_implemented() {
-        let mut inputs = base(&SessionStatus::Active, &SessionState::Running);
+        let mut inputs = base(false, false);
         inputs.consolidation_role = Some("candidate");
         assert_eq!(derive_stage(&inputs), Stage::Implemented);
     }
 
     #[test]
     fn merged_maps_to_done() {
-        let mut inputs = base(&SessionStatus::Active, &SessionState::Running);
+        let mut inputs = base(false, false);
         inputs.merged_at_is_some = true;
         assert_eq!(derive_stage(&inputs), Stage::Done);
     }
 
     #[test]
     fn cancelled_maps_to_cancelled() {
-        let inputs = base(&SessionStatus::Cancelled, &SessionState::Running);
+        let inputs = base(true, false);
         assert_eq!(derive_stage(&inputs), Stage::Cancelled);
     }
 
