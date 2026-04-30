@@ -1,4 +1,4 @@
-use crate::domains::tasks::entity::{RunRole, Task, TaskStage};
+use crate::domains::tasks::entity::{SlotKind, Task, TaskStage};
 
 pub fn build_task_host_prompt(task: &Task) -> String {
     format!(
@@ -17,7 +17,7 @@ pub fn build_task_host_prompt(task: &Task) -> String {
     )
 }
 
-pub fn build_stage_run_prompt(task: &Task, stage: TaskStage, role: RunRole) -> String {
+pub fn build_stage_run_prompt(task: &Task, stage: TaskStage, kind: SlotKind) -> String {
     debug_assert!(
         matches!(
             stage,
@@ -26,46 +26,46 @@ pub fn build_stage_run_prompt(task: &Task, stage: TaskStage, role: RunRole) -> S
         "build_stage_run_prompt should only be called for stage-run stages"
     );
     match stage {
-        TaskStage::Brainstormed => match role {
-            RunRole::Single => build_brainstorm_single_prompt(task),
-            RunRole::Candidate => build_brainstorm_candidate_prompt(task),
-            RunRole::Consolidator => build_brainstorm_consolidator_prompt(task),
-            RunRole::Evaluator => build_brainstorm_evaluator_prompt(task),
+        TaskStage::Brainstormed => match kind {
+            SlotKind::Single => build_brainstorm_single_prompt(task),
+            SlotKind::Candidate => build_brainstorm_candidate_prompt(task),
+            SlotKind::Consolidator => build_brainstorm_consolidator_prompt(task),
+            SlotKind::Evaluator => build_brainstorm_evaluator_prompt(task),
             other => unsupported_role_prompt(task, stage, other),
         },
-        TaskStage::Planned => match role {
-            RunRole::Single => build_plan_single_prompt(task),
-            RunRole::Candidate => build_plan_candidate_prompt(task),
-            RunRole::Consolidator => build_plan_consolidator_prompt(task),
-            RunRole::Evaluator => build_plan_evaluator_prompt(task),
+        TaskStage::Planned => match kind {
+            SlotKind::Single => build_plan_single_prompt(task),
+            SlotKind::Candidate => build_plan_candidate_prompt(task),
+            SlotKind::Consolidator => build_plan_consolidator_prompt(task),
+            SlotKind::Evaluator => build_plan_evaluator_prompt(task),
             other => unsupported_role_prompt(task, stage, other),
         },
-        TaskStage::Implemented => match role {
-            RunRole::Single => build_implementation_single_prompt(task),
-            RunRole::Candidate => build_implementation_candidate_prompt(task),
-            RunRole::Consolidator => build_implementation_consolidator_prompt(task),
-            RunRole::Evaluator => build_implementation_evaluator_prompt(task),
+        TaskStage::Implemented => match kind {
+            SlotKind::Single => build_implementation_single_prompt(task),
+            SlotKind::Candidate => build_implementation_candidate_prompt(task),
+            SlotKind::Consolidator => build_implementation_consolidator_prompt(task),
+            SlotKind::Evaluator => build_implementation_evaluator_prompt(task),
             other => unsupported_role_prompt(task, stage, other),
         },
-        other => unsupported_stage_prompt(task, other, role),
+        other => unsupported_stage_prompt(task, other, kind),
     }
 }
 
-fn unsupported_role_prompt(task: &Task, stage: TaskStage, role: RunRole) -> String {
+fn unsupported_role_prompt(task: &Task, stage: TaskStage, kind: SlotKind) -> String {
     format!(
         "Task prompt wiring bug for `{name}`: unsupported role `{role}` reached stage `{stage}`. Surface this to the user and do not guess.",
         name = task.name,
-        role = role.as_str(),
+        role = kind.as_str(),
         stage = stage.as_str(),
     )
 }
 
-fn unsupported_stage_prompt(task: &Task, stage: TaskStage, role: RunRole) -> String {
+fn unsupported_stage_prompt(task: &Task, stage: TaskStage, kind: SlotKind) -> String {
     format!(
         "Task prompt wiring bug for `{name}`: build_stage_run_prompt was called for unsupported stage `{stage}` and role `{role}`. Surface this to the user and do not guess.",
         name = task.name,
         stage = stage.as_str(),
-        role = role.as_str(),
+        role = kind.as_str(),
     )
 }
 
@@ -806,26 +806,26 @@ mod tests {
         task.current_plan = Some("plan text".into());
 
         let cells = [
-            (TaskStage::Brainstormed, RunRole::Single),
-            (TaskStage::Brainstormed, RunRole::Candidate),
-            (TaskStage::Brainstormed, RunRole::Consolidator),
-            (TaskStage::Brainstormed, RunRole::Evaluator),
-            (TaskStage::Planned, RunRole::Single),
-            (TaskStage::Planned, RunRole::Candidate),
-            (TaskStage::Planned, RunRole::Consolidator),
-            (TaskStage::Planned, RunRole::Evaluator),
-            (TaskStage::Implemented, RunRole::Single),
-            (TaskStage::Implemented, RunRole::Candidate),
-            (TaskStage::Implemented, RunRole::Consolidator),
-            (TaskStage::Implemented, RunRole::Evaluator),
+            (TaskStage::Brainstormed, SlotKind::Single),
+            (TaskStage::Brainstormed, SlotKind::Candidate),
+            (TaskStage::Brainstormed, SlotKind::Consolidator),
+            (TaskStage::Brainstormed, SlotKind::Evaluator),
+            (TaskStage::Planned, SlotKind::Single),
+            (TaskStage::Planned, SlotKind::Candidate),
+            (TaskStage::Planned, SlotKind::Consolidator),
+            (TaskStage::Planned, SlotKind::Evaluator),
+            (TaskStage::Implemented, SlotKind::Single),
+            (TaskStage::Implemented, SlotKind::Candidate),
+            (TaskStage::Implemented, SlotKind::Consolidator),
+            (TaskStage::Implemented, SlotKind::Evaluator),
         ];
 
-        for (stage, role) in cells {
-            let prompt = build_stage_run_prompt(&task, stage, role);
+        for (stage, kind) in cells {
+            let prompt = build_stage_run_prompt(&task, stage, kind);
             assert_ne!(
                 prompt, task.request_body,
-                "stage {:?} role {:?} regressed to the raw request body",
-                stage, role,
+                "stage {:?} kind {:?} regressed to the raw request body",
+                stage, kind,
             );
         }
     }
