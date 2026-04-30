@@ -3,7 +3,7 @@ use crate::domains::merge::types::MergeMode;
 use crate::domains::sessions::db_sessions::SessionMethods;
 use crate::domains::sessions::service::{SessionCreationParams, SessionManager};
 use crate::domains::tasks::clarify::build_task_clarification_prompt;
-use crate::domains::tasks::entity::{RunRole, Task, TaskRun, TaskStage};
+use crate::domains::tasks::entity::{RunRole, SlotKind, Task, TaskRun, TaskStage};
 use crate::domains::tasks::prompts::{build_stage_run_prompt, build_task_host_prompt};
 use crate::domains::tasks::presets::{ExpandedRunSlot, PresetShape, expand_preset};
 use crate::domains::tasks::runs::TaskRunService;
@@ -290,7 +290,7 @@ impl<'a, P: SessionProvisioner, M: BranchMerger> TaskOrchestrator<'a, P, M> {
             sessions.push(ProvisionedRunSession {
                 session_id: provisioned.session_id,
                 branch: provisioned.branch,
-                run_role: slot.run_role,
+                run_role: slot.run_role.into(),
                 slot_key: slot.slot_key.clone(),
             });
         }
@@ -605,7 +605,7 @@ impl<'a> SessionProvisioner for ProductionProvisioner<'a> {
             Some(&task.id),
             None,
             Some(task.stage.as_str()),
-            Some(RunRole::TaskHost.as_str()),
+            Some(SlotKind::TaskHost.as_str()),
             None,
         )?;
 
@@ -716,7 +716,7 @@ impl<'a> SessionProvisioner for ProductionProvisioner<'a> {
             Some(&task.id),
             Some(&run.id),
             Some(run.stage.as_str()),
-            Some(RunRole::Clarify.as_str()),
+            Some(SlotKind::Clarify.as_str()),
             None,
         )?;
 
@@ -848,7 +848,7 @@ mod tests {
     struct SlotCall {
         task_id: String,
         run_id: String,
-        run_role: RunRole,
+        run_role: SlotKind,
         slot_key: Option<String>,
         agent_type: String,
         prompt: String,
@@ -922,7 +922,7 @@ mod tests {
                 Some(&task.id),
                 None,
                 Some(task.stage.as_str()),
-                Some(RunRole::TaskHost.as_str()),
+                Some(SlotKind::TaskHost.as_str()),
                 None,
             )?;
             self.host_calls.borrow_mut().push(HostCall {
@@ -1240,7 +1240,7 @@ mod tests {
         let call = &slot_calls[0];
         assert_eq!(call.task_id, task.id);
         assert_eq!(call.run_id, started.run.id);
-        assert_eq!(call.run_role, RunRole::Single);
+        assert_eq!(call.run_role, SlotKind::Single);
         assert_eq!(call.slot_key.as_deref(), Some("claude"));
         assert_eq!(call.agent_type, "claude");
         assert_eq!(call.branch, started.sessions[0].branch);
@@ -1329,14 +1329,15 @@ mod tests {
 
         // 2 candidates + consolidator + evaluator = 4 slots
         assert_eq!(started.sessions.len(), 4);
-        let roles: Vec<RunRole> = started.sessions.iter().map(|s| s.run_role).collect();
+        let roles: Vec<SlotKind> =
+            started.sessions.iter().map(|s| s.run_role.into()).collect();
         assert_eq!(
             roles,
             vec![
-                RunRole::Candidate,
-                RunRole::Candidate,
-                RunRole::Consolidator,
-                RunRole::Evaluator,
+                SlotKind::Candidate,
+                SlotKind::Candidate,
+                SlotKind::Consolidator,
+                SlotKind::Evaluator,
             ]
         );
 
@@ -1360,7 +1361,7 @@ mod tests {
         // carries task_id/run_id/run_role/slot_key/agent_type/branch/base_branch.
         let calls = prov.slot_calls.borrow();
         assert_eq!(calls.len(), 4);
-        let roles_in_calls: Vec<RunRole> = calls.iter().map(|c| c.run_role).collect();
+        let roles_in_calls: Vec<SlotKind> = calls.iter().map(|c| c.run_role).collect();
         assert_eq!(roles_in_calls, roles);
         assert!(
             calls.iter().all(|c| c.task_id == task.id
@@ -1372,18 +1373,18 @@ mod tests {
         // evaluator bypass slot_key but carry a synthetic agent_type.
         let candidate_keys: Vec<Option<&str>> = calls
             .iter()
-            .filter(|c| c.run_role == RunRole::Candidate)
+            .filter(|c| c.run_role == SlotKind::Candidate)
             .map(|c| c.slot_key.as_deref())
             .collect();
         assert_eq!(candidate_keys, vec![Some("claude"), Some("codex")]);
         let consolidator = calls
             .iter()
-            .find(|c| c.run_role == RunRole::Consolidator)
+            .find(|c| c.run_role == SlotKind::Consolidator)
             .expect("consolidator slot");
         assert_eq!(consolidator.agent_type, "claude");
         let evaluator = calls
             .iter()
-            .find(|c| c.run_role == RunRole::Evaluator)
+            .find(|c| c.run_role == SlotKind::Evaluator)
             .expect("evaluator slot");
         assert_eq!(evaluator.agent_type, "gemini");
     }
@@ -1408,7 +1409,7 @@ mod tests {
         let calls = prov.slot_calls.borrow();
         let candidate = calls
             .iter()
-            .find(|c| c.run_role == RunRole::Candidate)
+            .find(|c| c.run_role == SlotKind::Candidate)
             .expect("candidate slot");
         assert!(
             candidate.prompt.contains("one of the brainstorm candidates"),
@@ -1418,7 +1419,7 @@ mod tests {
 
         let consolidator = calls
             .iter()
-            .find(|c| c.run_role == RunRole::Consolidator)
+            .find(|c| c.run_role == SlotKind::Consolidator)
             .expect("consolidator slot");
         assert!(
             consolidator
@@ -1430,7 +1431,7 @@ mod tests {
 
         let evaluator = calls
             .iter()
-            .find(|c| c.run_role == RunRole::Evaluator)
+            .find(|c| c.run_role == SlotKind::Evaluator)
             .expect("evaluator slot");
         assert!(
             evaluator
@@ -1540,7 +1541,7 @@ mod tests {
         let calls = prov.slot_calls.borrow();
         let candidate = calls
             .iter()
-            .find(|c| c.run_role == RunRole::Candidate)
+            .find(|c| c.run_role == SlotKind::Candidate)
             .expect("candidate slot");
         assert!(
             candidate.prompt.contains("one of the planning candidates"),
@@ -1550,7 +1551,7 @@ mod tests {
 
         let consolidator = calls
             .iter()
-            .find(|c| c.run_role == RunRole::Consolidator)
+            .find(|c| c.run_role == SlotKind::Consolidator)
             .expect("consolidator slot");
         assert!(
             consolidator.prompt.contains("synthesize the plan candidates"),
@@ -1560,7 +1561,7 @@ mod tests {
 
         let evaluator = calls
             .iter()
-            .find(|c| c.run_role == RunRole::Evaluator)
+            .find(|c| c.run_role == SlotKind::Evaluator)
             .expect("evaluator slot");
         assert!(
             evaluator
@@ -1670,7 +1671,7 @@ mod tests {
         let calls = prov.slot_calls.borrow();
         let candidate = calls
             .iter()
-            .find(|c| c.run_role == RunRole::Candidate)
+            .find(|c| c.run_role == SlotKind::Candidate)
             .expect("candidate slot");
         assert!(
             candidate
@@ -1682,7 +1683,7 @@ mod tests {
 
         let consolidator = calls
             .iter()
-            .find(|c| c.run_role == RunRole::Consolidator)
+            .find(|c| c.run_role == SlotKind::Consolidator)
             .expect("consolidator slot");
         assert!(
             consolidator
@@ -1694,7 +1695,7 @@ mod tests {
 
         let evaluator = calls
             .iter()
-            .find(|c| c.run_role == RunRole::Evaluator)
+            .find(|c| c.run_role == SlotKind::Evaluator)
             .expect("evaluator slot");
         assert!(
             evaluator
@@ -2331,7 +2332,7 @@ mod tests {
                 .unwrap();
 
             let slot = ExpandedRunSlot {
-                run_role: RunRole::Candidate,
+                run_role: SlotKind::Candidate,
                 slot_key: Some("claude-0".into()),
                 agent_type: "claude".into(),
             };
@@ -2391,7 +2392,7 @@ mod tests {
                 .unwrap();
 
             let slot = ExpandedRunSlot {
-                run_role: RunRole::Candidate,
+                run_role: SlotKind::Candidate,
                 slot_key: Some("claude-0".into()),
                 agent_type: "claude".into(),
             };
@@ -2458,7 +2459,7 @@ mod tests {
                 .unwrap();
 
             let slot = ExpandedRunSlot {
-                run_role: RunRole::Single,
+                run_role: SlotKind::Single,
                 slot_key: Some("claude".into()),
                 agent_type: "claude".into(),
             };
