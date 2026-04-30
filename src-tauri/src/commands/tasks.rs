@@ -1080,7 +1080,7 @@ mod tests {
         ProvisionedSession, SessionProvisioner, SlotKind, TaskRun, TaskService,
     };
     use lucode::infrastructure::database::TaskRunMethods;
-    use lucode::services::{Session, SessionMethods, SessionState, SessionStatus};
+    use lucode::services::{Session, SessionMethods};
     use std::cell::RefCell;
     use std::path::PathBuf;
     use std::process::Command;
@@ -1238,7 +1238,6 @@ mod tests {
                 parent_branch: "master".to_string(),
                 original_parent_branch: Some("master".to_string()),
                 worktree_path,
-                status: SessionStatus::Active,
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
                 last_activity: None,
@@ -1249,7 +1248,6 @@ mod tests {
                 pending_name_generation: false,
                 was_auto_generated: false,
                 spec_content: None,
-                session_state: SessionState::Running,
                 resume_allowed: true,
                 amp_thread_id: None,
                 issue_number: None,
@@ -1312,7 +1310,6 @@ mod tests {
                 parent_branch: "master".to_string(),
                 original_parent_branch: Some("master".to_string()),
                 worktree_path,
-                status: SessionStatus::Active,
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
                 last_activity: None,
@@ -1323,7 +1320,6 @@ mod tests {
                 pending_name_generation: false,
                 was_auto_generated: false,
                 spec_content: None,
-                session_state: SessionState::Running,
                 resume_allowed: true,
                 amp_thread_id: None,
                 issue_number: None,
@@ -1526,7 +1522,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: PathBuf::from("/tmp/wt"),
-            status: SessionStatus::Active,
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
             last_activity: None,
@@ -1537,7 +1532,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -1668,12 +1662,13 @@ mod tests {
             parent_branch: &str,
         ) -> anyhow::Result<()> {
             let conn = self.db.get_conn()?;
+            // Phase 4 Wave D.3: legacy `status` column removed.
             conn.execute(
                 "INSERT INTO sessions (
                     id, name, repository_path, repository_name,
-                    branch, parent_branch, worktree_path, status,
+                    branch, parent_branch, worktree_path,
                     created_at, updated_at
-                ) VALUES (?1, ?2, '/repo', 'repo', ?3, ?4, ?5, 'active', 0, 0)",
+                ) VALUES (?1, ?2, '/repo', 'repo', ?3, ?4, ?5, 0, 0)",
                 rusqlite::params![
                     session_id,
                     name,

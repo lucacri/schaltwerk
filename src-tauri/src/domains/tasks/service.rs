@@ -628,7 +628,7 @@ pub fn require_session_task(
 mod tests {
     use super::*;
     use crate::domains::sessions::db_sessions::SessionMethods;
-    use crate::domains::sessions::entity::{Session, SessionState, SessionStatus};
+    use crate::domains::sessions::entity::Session;
     use crate::domains::sessions::repository::SessionDbManager;
     use crate::infrastructure::database::Database;
     use chrono::Utc;
@@ -767,7 +767,6 @@ mod tests {
                 parent_branch: "master".to_string(),
                 original_parent_branch: Some("master".to_string()),
                 worktree_path: worktree_path.clone(),
-                status: SessionStatus::Active,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
                 last_activity: None,
@@ -778,7 +777,6 @@ mod tests {
                 pending_name_generation: false,
                 was_auto_generated: false,
                 spec_content: None,
-                session_state: SessionState::Running,
                 resume_allowed: true,
                 amp_thread_id: None,
                 issue_number: None,
@@ -1256,14 +1254,11 @@ mod tests {
             true,
             "Phase 4 Wave B.2: cancellation stamps cancelled_at on the orthogonal axis",
         );
-        assert_eq!(
-            fixture
-                .db_manager()
-                .get_session_by_id(&blocked.id)
-                .unwrap()
-                .status,
-            SessionStatus::Active
-        );
+        let blocked_session = fixture
+            .db_manager()
+            .get_session_by_id(&blocked.id)
+            .unwrap();
+        assert!(blocked_session.cancelled_at.is_none() && !blocked_session.is_spec);
         assert!(svc.get_task(&task.id).unwrap().is_cancelled());
         let blocked = runs.get_run(&blocked_run.id).unwrap();
         assert!(

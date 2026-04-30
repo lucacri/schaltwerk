@@ -675,7 +675,7 @@ pub fn fetch_session_spec(session: &Session) -> Result<SessionSpecResponse, Diff
 mod tests {
     use super::*;
     use git2::{Oid, Repository};
-    use lucode::domains::sessions::entity::{SessionState, SessionStatus};
+    use lucode::domains::sessions::entity::Session;
     use lucode::domains::workspace::diff_engine::{add_collapsible_sections, compute_unified_diff};
     use std::process::{Command, Stdio};
     use tempfile::TempDir;
@@ -744,7 +744,6 @@ mod tests {
             parent_branch: parent_branch.to_string(),
             original_parent_branch: Some(parent_branch.to_string()),
             worktree_path: repo_path.to_path_buf(),
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -755,7 +754,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -1284,7 +1282,6 @@ mod tests {
         let tmp = init_repo();
         let repo_path = tmp.path();
         let mut session = make_session(repo_path, "feature", "main");
-        session.status = SessionStatus::Cancelled;
         session.cancelled_at = Some(chrono::Utc::now());
         let err = DiffScope::for_session(&session).expect_err("cancelled session");
         assert_eq!(err.status, StatusCode::CONFLICT);

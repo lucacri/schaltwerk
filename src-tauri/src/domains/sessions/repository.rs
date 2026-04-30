@@ -1,7 +1,7 @@
 use crate::{
     domains::git::service as git,
     domains::sessions::db_sessions::SessionMethods,
-    domains::sessions::entity::{Epic, PrState, Session, SessionState, Spec},
+    domains::sessions::entity::{Epic, PrState, Session, Spec},
     infrastructure::database::{
         AppConfigMethods, Database, EpicMethods, ProjectConfigMethods, SpecMethods,
     },
@@ -253,10 +253,8 @@ impl SessionDbManager {
             .collect())
     }
 
-    pub fn list_sessions_by_state(&self, state: SessionState) -> Result<Vec<Session>> {
-        let mut sessions = self
-            .db
-            .list_sessions_by_state(&self.repo_path, state.clone())?;
+    pub fn list_sessions_by_state(&self, is_spec: bool) -> Result<Vec<Session>> {
+        let mut sessions = self.db.list_sessions_by_state(&self.repo_path, is_spec)?;
         let repo = self.try_open_repo();
         let repo_ref = repo.as_ref();
         for session in sessions.iter_mut() {
@@ -265,9 +263,7 @@ impl SessionDbManager {
 
         Ok(sessions
             .into_iter()
-            .filter(|session| {
-                session.cancelled_at.is_none() && session.session_state == state
-            })
+            .filter(|session| session.cancelled_at.is_none() && session.is_spec == is_spec)
             .collect())
     }
 
@@ -469,7 +465,7 @@ impl SessionDbManager {
             return Ok(cached);
         }
 
-        let (spec_content, initial_prompt, session_state) = match self
+        let (spec_content, initial_prompt, is_spec) = match self
             .db
             .get_session_task_content(&self.repo_path, name)
         {
@@ -505,10 +501,7 @@ impl SessionDbManager {
 
         let result = (spec_content, initial_prompt);
 
-        if matches!(
-            session_state,
-            crate::domains::sessions::entity::SessionState::Running
-        ) {
+        if !is_spec {
             log::debug!("Caching spec content for running session: {name}");
             crate::domains::sessions::cache::cache_spec_content(
                 &self.repo_path,
@@ -1227,7 +1220,7 @@ impl SessionDbManager {
 mod tests {
     use super::*;
     use crate::domains::sessions::db_sessions::SessionMethods;
-    use crate::domains::sessions::entity::{Session, SessionState, SessionStatus};
+    use crate::domains::sessions::entity::Session;
     use chrono::Utc;
     use std::path::Path;
     use tempfile::TempDir;
@@ -1246,7 +1239,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: None,
             worktree_path: repo_path.join(".lucode/worktrees/session-1"),
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: Some(Utc::now()),
@@ -1257,7 +1249,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,

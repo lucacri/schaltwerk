@@ -46,7 +46,7 @@ pub use crate::domains::sessions::entity::{ChangedFile, EnrichedSession};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::sessions::entity::{Session, SessionState, SessionStatus};
+    use crate::domains::sessions::entity::Session;
     use chrono::Utc;
     use tempfile::TempDir;
     use uuid::Uuid;
@@ -65,7 +65,6 @@ mod tests {
             parent_branch: "main".into(),
             original_parent_branch: Some("main".into()),
             worktree_path: repo.join("worktrees").join("test-session"),
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -76,7 +75,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,

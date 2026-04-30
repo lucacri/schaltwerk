@@ -1,7 +1,7 @@
 use crate::{
     domains::git::service as git,
     domains::sessions::cache::SessionCacheManager,
-    domains::sessions::entity::{EnrichedSession, FilterMode, SessionState, SortMode},
+    domains::sessions::entity::{EnrichedSession, FilterMode, SortMode},
     domains::sessions::repository::SessionDbManager,
     domains::terminal::{build_login_shell_invocation, sh_quote_string},
     infrastructure::database::{DEFAULT_BRANCH_PREFIX, ProjectConfigMethods},

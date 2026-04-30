@@ -42,6 +42,14 @@ use rusqlite::Connection;
 /// `status = 'cancelled'` without a populated `cancelled_at`. No-op
 /// once both backfills have applied.
 pub fn run(conn: &Connection) -> Result<()> {
+    // Phase 4 Wave D.3: this migration backfills from legacy columns
+    // that no longer exist on v2-native DBs (Phase 4 Wave D dropped
+    // them from the CREATE schema). Guard against running on a DB
+    // that already lacks the legacy columns.
+    if !has_legacy_columns(conn)? {
+        return Ok(());
+    }
+
     if !needs_backfill(conn)? {
         return Ok(());
     }
@@ -50,6 +58,16 @@ pub fn run(conn: &Connection) -> Result<()> {
     backfill_cancelled_at(conn).context("backfill sessions.cancelled_at from status='cancelled'")?;
 
     Ok(())
+}
+
+fn has_legacy_columns(conn: &Connection) -> Result<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('sessions')
+            WHERE name IN ('status', 'session_state')",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(count >= 2)
 }
 
 fn needs_backfill(conn: &Connection) -> Result<bool> {

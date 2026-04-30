@@ -1,4 +1,4 @@
-use crate::domains::sessions::entity::{PrState, Session, SessionState, SessionStatus};
+use crate::domains::sessions::entity::{PrState, Session};
 use crate::infrastructure::database::Database;
 use crate::infrastructure::database::timestamps::{
     utc_from_epoch_seconds_lossy, utc_from_epoch_seconds_lossy_opt,
@@ -8,23 +8,27 @@ use chrono::Utc;
 use rusqlite::{Result as SqlResult, ToSql, params};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::time::Instant;
 
 pub trait SessionMethods {
     fn create_session(&self, session: &Session) -> Result<()>;
     fn get_session_by_name(&self, repo_path: &Path, name: &str) -> Result<Session>;
     fn get_session_by_id(&self, id: &str) -> Result<Session>;
+    /// Phase 4 Wave D.3: returns `(spec_content, initial_prompt, is_spec)`.
+    /// The legacy `SessionState` enum projection has been replaced by the
+    /// boolean spec axis.
     fn get_session_task_content(
         &self,
         repo_path: &Path,
         name: &str,
-    ) -> Result<(Option<String>, Option<String>, SessionState)>;
+    ) -> Result<(Option<String>, Option<String>, bool)>;
     fn list_sessions(&self, repo_path: &Path) -> Result<Vec<Session>>;
     fn list_all_active_sessions(&self) -> Result<Vec<Session>>;
-    fn list_sessions_by_state(&self, repo_path: &Path, state: SessionState)
-    -> Result<Vec<Session>>;
-    fn update_session_status(&self, id: &str, status: SessionStatus) -> Result<()>;
+    fn list_sessions_by_state(&self, repo_path: &Path, is_spec: bool) -> Result<Vec<Session>>;
+    // Phase 4 Wave D.3: `update_session_status` and `update_session_state`
+    // setters retired — Wave B writers stamp `cancelled_at` / `is_spec`
+    // directly, and the column-drop migration removes the legacy
+    // columns.
     fn set_session_activity(
         &self,
         id: &str,
@@ -34,7 +38,6 @@ pub trait SessionMethods {
     fn update_session_branch(&self, id: &str, new_branch: &str) -> Result<()>;
     fn update_session_parent_branch(&self, id: &str, new_parent_branch: &str) -> Result<()>;
     fn update_session_ready_to_merge(&self, id: &str, ready: bool) -> Result<()>;
-    fn update_session_state(&self, id: &str, state: SessionState) -> Result<()>;
     fn update_spec_content(&self, id: &str, content: &str) -> Result<()>;
     fn append_spec_content(&self, id: &str, content: &str) -> Result<()>;
     fn update_session_initial_prompt(&self, id: &str, prompt: &str) -> Result<()>;
@@ -219,7 +222,6 @@ struct SessionSummaryRow {
     parent_branch: String,
     original_parent_branch: Option<String>,
     worktree_path: PathBuf,
-    status: SessionStatus,
     created_at: chrono::DateTime<Utc>,
     updated_at: chrono::DateTime<Utc>,
     last_activity: Option<chrono::DateTime<Utc>>,
@@ -228,7 +230,6 @@ struct SessionSummaryRow {
     original_agent_model: Option<String>,
     pending_name_generation: bool,
     was_auto_generated: bool,
-    session_state: SessionState,
     resume_allowed: bool,
     amp_thread_id: Option<String>,
     issue_number: Option<i64>,
@@ -288,7 +289,6 @@ impl Database {
                     parent_branch: summary.parent_branch,
                     original_parent_branch: summary.original_parent_branch,
                     worktree_path: summary.worktree_path,
-                    status: summary.status,
                     created_at: summary.created_at,
                     updated_at: summary.updated_at,
                     last_activity: summary.last_activity,
@@ -299,7 +299,6 @@ impl Database {
                     pending_name_generation: summary.pending_name_generation,
                     was_auto_generated: summary.was_auto_generated,
                     spec_content,
-                    session_state: summary.session_state,
                     resume_allowed: summary.resume_allowed,
                     amp_thread_id: summary.amp_thread_id,
                     issue_number: summary.issue_number,
@@ -379,11 +378,11 @@ impl SessionMethods for Database {
                 id, name, display_name, version_group_id, version_number, epic_id,
                 repository_path, repository_name,
                 branch, parent_branch, original_parent_branch, worktree_path,
-                status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
+                created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                 original_agent_type, pending_name_generation, was_auto_generated,
-                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage,
+                spec_content, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage,
                 is_spec, cancelled_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44, ?45, ?46, ?47)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44, ?45)",
             params![
                 session.id,
                 session.name,
@@ -397,7 +396,6 @@ impl SessionMethods for Database {
                 session.parent_branch,
                 session.original_parent_branch,
                 session.worktree_path.to_string_lossy(),
-                session.status.as_str(),
                 session.created_at.timestamp(),
                 session.updated_at.timestamp(),
                 session.last_activity.map(|dt| dt.timestamp()),
@@ -407,7 +405,6 @@ impl SessionMethods for Database {
                 session.pending_name_generation,
                 session.was_auto_generated,
                 session.spec_content,
-                session.session_state.as_str(),
                 session.resume_allowed,
                 session.amp_thread_id,
                 session.issue_number,
@@ -447,9 +444,9 @@ impl SessionMethods for Database {
         let mut stmt = conn.prepare(
             "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
                     branch, parent_branch, original_parent_branch, worktree_path,
-                    status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
+                    created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
+                    spec_content, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
              FROM sessions
              WHERE repository_path = ?1 AND name = ?2"
         )?;
@@ -468,55 +465,46 @@ impl SessionMethods for Database {
                 parent_branch: row.get(9)?,
                 original_parent_branch: row.get(10).ok(),
                 worktree_path: PathBuf::from(row.get::<_, String>(11)?),
-                status: row
-                    .get::<_, String>(12)?
-                    .parse()
-                    .unwrap_or(SessionStatus::Active),
-                created_at: utc_from_epoch_seconds_lossy(row.get(13)?),
-                updated_at: utc_from_epoch_seconds_lossy(row.get(14)?),
-                last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(15)?),
-                initial_prompt: row.get(16)?,
-                ready_to_merge: row.get(17).unwrap_or(false),
-                original_agent_type: row.get(18).ok(),
-                original_agent_model: row.get(42).ok(),
-                pending_name_generation: row.get(19).unwrap_or(false),
-                was_auto_generated: row.get(20).unwrap_or(false),
-                spec_content: row.get(21).ok(),
-                session_state: row
-                    .get::<_, String>(22)
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(SessionState::Running),
-                resume_allowed: row.get(23).unwrap_or(true),
-                amp_thread_id: row.get(24).ok(),
-                issue_number: row.get(25).ok(),
-                issue_url: row.get(26).ok(),
-                pr_number: row.get(27).ok(),
-                pr_url: row.get(28).ok(),
-                is_consolidation: row.get(29).unwrap_or(false),
+                created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
+                updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
+                last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(14)?),
+                initial_prompt: row.get(15)?,
+                ready_to_merge: row.get(16).unwrap_or(false),
+                original_agent_type: row.get(17).ok(),
+                original_agent_model: row.get(40).ok(),
+                pending_name_generation: row.get(18).unwrap_or(false),
+                was_auto_generated: row.get(19).unwrap_or(false),
+                spec_content: row.get(20).ok(),
+                resume_allowed: row.get(21).unwrap_or(true),
+                amp_thread_id: row.get(22).ok(),
+                issue_number: row.get(23).ok(),
+                issue_url: row.get(24).ok(),
+                pr_number: row.get(25).ok(),
+                pr_url: row.get(26).ok(),
+                is_consolidation: row.get(27).unwrap_or(false),
                 consolidation_sources: row
-                    .get::<_, Option<String>>(30)
+                    .get::<_, Option<String>>(28)
                     .ok()
                     .flatten()
                     .and_then(|s| serde_json::from_str(&s).ok()),
-                consolidation_round_id: row.get(31).ok(),
-                consolidation_role: row.get(32).ok(),
-                consolidation_report: row.get(33).ok(),
-                consolidation_report_source: row.get(34).ok(),
-                consolidation_base_session_id: row.get(35).ok(),
-                consolidation_recommended_session_id: row.get(36).ok(),
-                consolidation_confirmation_mode: row.get(37).ok(),
-                promotion_reason: row.get(38).ok(),
-                ci_autofix_enabled: row.get(39).unwrap_or(false),
-                merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(40)?),
+                consolidation_round_id: row.get(29).ok(),
+                consolidation_role: row.get(30).ok(),
+                consolidation_report: row.get(31).ok(),
+                consolidation_report_source: row.get(32).ok(),
+                consolidation_base_session_id: row.get(33).ok(),
+                consolidation_recommended_session_id: row.get(34).ok(),
+                consolidation_confirmation_mode: row.get(35).ok(),
+                promotion_reason: row.get(36).ok(),
+                ci_autofix_enabled: row.get(37).unwrap_or(false),
+                merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(38)?),
                 pr_state: row
-                    .get::<_, Option<String>>(41)
+                    .get::<_, Option<String>>(39)
                     .ok()
                     .flatten()
                     .and_then(|state| state.parse().ok()),
-                task_id: row.get(43).ok(),
+                task_id: row.get(41).ok(),
                 task_stage: row
-                    .get::<_, Option<String>>(44)
+                    .get::<_, Option<String>>(42)
                     .ok()
                     .flatten()
                     .and_then(|stage| stage.parse().ok()),
@@ -526,9 +514,9 @@ impl SessionMethods for Database {
                 exited_at: None,
                 exit_code: None,
                 first_idle_at: None,
-                is_spec: row.get(45).unwrap_or(false),
+                is_spec: row.get(43).unwrap_or(false),
                 cancelled_at: utc_from_epoch_seconds_lossy_opt(
-                    row.get::<_, Option<i64>>(46).ok().flatten(),
+                    row.get::<_, Option<i64>>(44).ok().flatten(),
                 ),
             })
         })?;
@@ -542,9 +530,9 @@ impl SessionMethods for Database {
         let mut stmt = conn.prepare(
             "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
                     branch, parent_branch, original_parent_branch, worktree_path,
-                    status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
+                    created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
+                    spec_content, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
              FROM sessions
              WHERE id = ?1"
         )?;
@@ -563,55 +551,46 @@ impl SessionMethods for Database {
                 parent_branch: row.get(9)?,
                 original_parent_branch: row.get(10).ok(),
                 worktree_path: PathBuf::from(row.get::<_, String>(11)?),
-                status: row
-                    .get::<_, String>(12)?
-                    .parse()
-                    .unwrap_or(SessionStatus::Active),
-                created_at: utc_from_epoch_seconds_lossy(row.get(13)?),
-                updated_at: utc_from_epoch_seconds_lossy(row.get(14)?),
-                last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(15)?),
-                initial_prompt: row.get(16)?,
-                ready_to_merge: row.get(17).unwrap_or(false),
-                original_agent_type: row.get(18).ok(),
-                original_agent_model: row.get(42).ok(),
-                pending_name_generation: row.get(19).unwrap_or(false),
-                was_auto_generated: row.get(20).unwrap_or(false),
-                spec_content: row.get(21).ok(),
-                session_state: row
-                    .get::<_, String>(22)
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(SessionState::Running),
-                resume_allowed: row.get(23).unwrap_or(true),
-                amp_thread_id: row.get(24).ok(),
-                issue_number: row.get(25).ok(),
-                issue_url: row.get(26).ok(),
-                pr_number: row.get(27).ok(),
-                pr_url: row.get(28).ok(),
-                is_consolidation: row.get(29).unwrap_or(false),
+                created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
+                updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
+                last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(14)?),
+                initial_prompt: row.get(15)?,
+                ready_to_merge: row.get(16).unwrap_or(false),
+                original_agent_type: row.get(17).ok(),
+                original_agent_model: row.get(40).ok(),
+                pending_name_generation: row.get(18).unwrap_or(false),
+                was_auto_generated: row.get(19).unwrap_or(false),
+                spec_content: row.get(20).ok(),
+                resume_allowed: row.get(21).unwrap_or(true),
+                amp_thread_id: row.get(22).ok(),
+                issue_number: row.get(23).ok(),
+                issue_url: row.get(24).ok(),
+                pr_number: row.get(25).ok(),
+                pr_url: row.get(26).ok(),
+                is_consolidation: row.get(27).unwrap_or(false),
                 consolidation_sources: row
-                    .get::<_, Option<String>>(30)
+                    .get::<_, Option<String>>(28)
                     .ok()
                     .flatten()
                     .and_then(|s| serde_json::from_str(&s).ok()),
-                consolidation_round_id: row.get(31).ok(),
-                consolidation_role: row.get(32).ok(),
-                consolidation_report: row.get(33).ok(),
-                consolidation_report_source: row.get(34).ok(),
-                consolidation_base_session_id: row.get(35).ok(),
-                consolidation_recommended_session_id: row.get(36).ok(),
-                consolidation_confirmation_mode: row.get(37).ok(),
-                promotion_reason: row.get(38).ok(),
-                ci_autofix_enabled: row.get(39).unwrap_or(false),
-                merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(40)?),
+                consolidation_round_id: row.get(29).ok(),
+                consolidation_role: row.get(30).ok(),
+                consolidation_report: row.get(31).ok(),
+                consolidation_report_source: row.get(32).ok(),
+                consolidation_base_session_id: row.get(33).ok(),
+                consolidation_recommended_session_id: row.get(34).ok(),
+                consolidation_confirmation_mode: row.get(35).ok(),
+                promotion_reason: row.get(36).ok(),
+                ci_autofix_enabled: row.get(37).unwrap_or(false),
+                merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(38)?),
                 pr_state: row
-                    .get::<_, Option<String>>(41)
+                    .get::<_, Option<String>>(39)
                     .ok()
                     .flatten()
                     .and_then(|state| state.parse().ok()),
-                task_id: row.get(43).ok(),
+                task_id: row.get(41).ok(),
                 task_stage: row
-                    .get::<_, Option<String>>(44)
+                    .get::<_, Option<String>>(42)
                     .ok()
                     .flatten()
                     .and_then(|stage| stage.parse().ok()),
@@ -621,9 +600,9 @@ impl SessionMethods for Database {
                 exited_at: None,
                 exit_code: None,
                 first_idle_at: None,
-                is_spec: row.get(45).unwrap_or(false),
+                is_spec: row.get(43).unwrap_or(false),
                 cancelled_at: utc_from_epoch_seconds_lossy_opt(
-                    row.get::<_, Option<i64>>(46).ok().flatten(),
+                    row.get::<_, Option<i64>>(44).ok().flatten(),
                 ),
             })
         })?;
@@ -635,11 +614,11 @@ impl SessionMethods for Database {
         &self,
         repo_path: &Path,
         name: &str,
-    ) -> Result<(Option<String>, Option<String>, SessionState)> {
+    ) -> Result<(Option<String>, Option<String>, bool)> {
         let conn = self.get_conn()?;
 
         let mut stmt = conn.prepare(
-            "SELECT spec_content, initial_prompt, session_state
+            "SELECT spec_content, initial_prompt, is_spec
              FROM sessions
              WHERE repository_path = ?1 AND name = ?2",
         )?;
@@ -647,10 +626,8 @@ impl SessionMethods for Database {
         let result = stmt.query_row(params![repo_path.to_string_lossy(), name], |row| {
             let spec_content: Option<String> = row.get(0)?;
             let initial_prompt: Option<String> = row.get(1)?;
-            let session_state_str: String = row.get(2)?;
-            let session_state = SessionState::from_str(&session_state_str)
-                .map_err(|_e| rusqlite::Error::InvalidQuery)?;
-            Ok((spec_content, initial_prompt, session_state))
+            let is_spec: bool = row.get(2).unwrap_or(false);
+            Ok((spec_content, initial_prompt, is_spec))
         })?;
 
         Ok(result)
@@ -664,9 +641,9 @@ impl SessionMethods for Database {
             let mut stmt = conn.prepare(
                 "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
                         branch, parent_branch, original_parent_branch, worktree_path,
-                        status, created_at, updated_at, last_activity, ready_to_merge,
+                        created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
+                        resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
                  FROM sessions
                  WHERE repository_path = ?1
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -686,46 +663,37 @@ impl SessionMethods for Database {
                     parent_branch: row.get(9)?,
                     original_parent_branch: row.get(10).ok(),
                     worktree_path: PathBuf::from(row.get::<_, String>(11)?),
-                    status: row
-                        .get::<_, String>(12)?
-                        .parse()
-                        .unwrap_or(SessionStatus::Active),
-                    created_at: utc_from_epoch_seconds_lossy(row.get(13)?),
-                    updated_at: utc_from_epoch_seconds_lossy(row.get(14)?),
-                    last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(15)?),
-                    ready_to_merge: row.get(16).unwrap_or(false),
-                    original_agent_type: row.get(17).ok(),
-                    original_agent_model: row.get(40).ok(),
-                    pending_name_generation: row.get(18).unwrap_or(false),
-                    was_auto_generated: row.get(19).unwrap_or(false),
-                    session_state: row
-                        .get::<_, String>(20)
-                        .ok()
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(SessionState::Running),
-                    resume_allowed: row.get(21).unwrap_or(true),
-                    amp_thread_id: row.get(22).ok(),
-                    issue_number: row.get(23).ok(),
-                    issue_url: row.get(24).ok(),
-                    pr_number: row.get(25).ok(),
-                    pr_url: row.get(26).ok(),
-                    is_consolidation: row.get(27).unwrap_or(false),
-                    consolidation_sources: row.get(28).ok(),
-                    consolidation_round_id: row.get(29).ok(),
-                    consolidation_role: row.get(30).ok(),
-                    consolidation_report: row.get(31).ok(),
-                    consolidation_report_source: row.get(32).ok(),
-                    consolidation_base_session_id: row.get(33).ok(),
-                    consolidation_recommended_session_id: row.get(34).ok(),
-                    consolidation_confirmation_mode: row.get(35).ok(),
-                    promotion_reason: row.get(36).ok(),
-                    ci_autofix_enabled: row.get(37).unwrap_or(false),
-                    merged_at: row.get(38).ok(),
-                    pr_state: row.get(39).ok(),
-                    task_id: row.get(41).ok(),
-                    task_stage: row.get(42).ok(),
-                    is_spec: row.get(43).unwrap_or(false),
-                    cancelled_at: row.get(44).ok(),
+                    created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
+                    updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
+                    last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(14)?),
+                    ready_to_merge: row.get(15).unwrap_or(false),
+                    original_agent_type: row.get(16).ok(),
+                    original_agent_model: row.get(38).ok(),
+                    pending_name_generation: row.get(17).unwrap_or(false),
+                    was_auto_generated: row.get(18).unwrap_or(false),
+                    resume_allowed: row.get(19).unwrap_or(true),
+                    amp_thread_id: row.get(20).ok(),
+                    issue_number: row.get(21).ok(),
+                    issue_url: row.get(22).ok(),
+                    pr_number: row.get(23).ok(),
+                    pr_url: row.get(24).ok(),
+                    is_consolidation: row.get(25).unwrap_or(false),
+                    consolidation_sources: row.get(26).ok(),
+                    consolidation_round_id: row.get(27).ok(),
+                    consolidation_role: row.get(28).ok(),
+                    consolidation_report: row.get(29).ok(),
+                    consolidation_report_source: row.get(30).ok(),
+                    consolidation_base_session_id: row.get(31).ok(),
+                    consolidation_recommended_session_id: row.get(32).ok(),
+                    consolidation_confirmation_mode: row.get(33).ok(),
+                    promotion_reason: row.get(34).ok(),
+                    ci_autofix_enabled: row.get(35).unwrap_or(false),
+                    merged_at: row.get(36).ok(),
+                    pr_state: row.get(37).ok(),
+                    task_id: row.get(39).ok(),
+                    task_stage: row.get(40).ok(),
+                    is_spec: row.get(41).unwrap_or(false),
+                    cancelled_at: row.get(42).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -753,11 +721,11 @@ impl SessionMethods for Database {
             let mut stmt = conn.prepare(
                 "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
                         branch, parent_branch, original_parent_branch, worktree_path,
-                        status, created_at, updated_at, last_activity, ready_to_merge,
+                        created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
+                        resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
                  FROM sessions
-                 WHERE status = 'active'
+                 WHERE cancelled_at IS NULL
                  ORDER BY ready_to_merge ASC, last_activity DESC",
             )?;
 
@@ -775,46 +743,37 @@ impl SessionMethods for Database {
                     parent_branch: row.get(9)?,
                     original_parent_branch: row.get(10).ok(),
                     worktree_path: PathBuf::from(row.get::<_, String>(11)?),
-                    status: row
-                        .get::<_, String>(12)?
-                        .parse()
-                        .unwrap_or(SessionStatus::Active),
-                    created_at: utc_from_epoch_seconds_lossy(row.get(13)?),
-                    updated_at: utc_from_epoch_seconds_lossy(row.get(14)?),
-                    last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(15)?),
-                    ready_to_merge: row.get(16).unwrap_or(false),
-                    original_agent_type: row.get(17).ok(),
-                    original_agent_model: row.get(40).ok(),
-                    pending_name_generation: row.get(18).unwrap_or(false),
-                    was_auto_generated: row.get(19).unwrap_or(false),
-                    session_state: row
-                        .get::<_, String>(20)
-                        .ok()
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(SessionState::Running),
-                    resume_allowed: row.get(21).unwrap_or(true),
-                    amp_thread_id: row.get(22).ok(),
-                    issue_number: row.get(23).ok(),
-                    issue_url: row.get(24).ok(),
-                    pr_number: row.get(25).ok(),
-                    pr_url: row.get(26).ok(),
-                    is_consolidation: row.get(27).unwrap_or(false),
-                    consolidation_sources: row.get(28).ok(),
-                    consolidation_round_id: row.get(29).ok(),
-                    consolidation_role: row.get(30).ok(),
-                    consolidation_report: row.get(31).ok(),
-                    consolidation_report_source: row.get(32).ok(),
-                    consolidation_base_session_id: row.get(33).ok(),
-                    consolidation_recommended_session_id: row.get(34).ok(),
-                    consolidation_confirmation_mode: row.get(35).ok(),
-                    promotion_reason: row.get(36).ok(),
-                    ci_autofix_enabled: row.get(37).unwrap_or(false),
-                    merged_at: row.get(38).ok(),
-                    pr_state: row.get(39).ok(),
-                    task_id: row.get(41).ok(),
-                    task_stage: row.get(42).ok(),
-                    is_spec: row.get(43).unwrap_or(false),
-                    cancelled_at: row.get(44).ok(),
+                    created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
+                    updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
+                    last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(14)?),
+                    ready_to_merge: row.get(15).unwrap_or(false),
+                    original_agent_type: row.get(16).ok(),
+                    original_agent_model: row.get(38).ok(),
+                    pending_name_generation: row.get(17).unwrap_or(false),
+                    was_auto_generated: row.get(18).unwrap_or(false),
+                    resume_allowed: row.get(19).unwrap_or(true),
+                    amp_thread_id: row.get(20).ok(),
+                    issue_number: row.get(21).ok(),
+                    issue_url: row.get(22).ok(),
+                    pr_number: row.get(23).ok(),
+                    pr_url: row.get(24).ok(),
+                    is_consolidation: row.get(25).unwrap_or(false),
+                    consolidation_sources: row.get(26).ok(),
+                    consolidation_round_id: row.get(27).ok(),
+                    consolidation_role: row.get(28).ok(),
+                    consolidation_report: row.get(29).ok(),
+                    consolidation_report_source: row.get(30).ok(),
+                    consolidation_base_session_id: row.get(31).ok(),
+                    consolidation_recommended_session_id: row.get(32).ok(),
+                    consolidation_confirmation_mode: row.get(33).ok(),
+                    promotion_reason: row.get(34).ok(),
+                    ci_autofix_enabled: row.get(35).unwrap_or(false),
+                    merged_at: row.get(36).ok(),
+                    pr_state: row.get(37).ok(),
+                    task_id: row.get(39).ok(),
+                    task_stage: row.get(40).ok(),
+                    is_spec: row.get(41).unwrap_or(false),
+                    cancelled_at: row.get(42).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -833,19 +792,6 @@ impl SessionMethods for Database {
         );
 
         Ok(sessions)
-    }
-
-    fn update_session_status(&self, id: &str, status: SessionStatus) -> Result<()> {
-        let conn = self.get_conn()?;
-
-        conn.execute(
-            "UPDATE sessions
-             SET status = ?1, updated_at = ?2
-             WHERE id = ?3",
-            params![status.as_str(), Utc::now().timestamp(), id],
-        )?;
-
-        Ok(())
     }
 
     fn set_session_activity(
@@ -923,15 +869,11 @@ impl SessionMethods for Database {
         Ok(())
     }
 
-    fn list_sessions_by_state(
-        &self,
-        repo_path: &Path,
-        state: SessionState,
-    ) -> Result<Vec<Session>> {
+    fn list_sessions_by_state(&self, repo_path: &Path, is_spec: bool) -> Result<Vec<Session>> {
         log::debug!(
-            "list_sessions_by_state: start repo={} state={:?}",
+            "list_sessions_by_state: start repo={} is_spec={}",
             repo_path.display(),
-            state
+            is_spec
         );
         let summary_timer = Instant::now();
         let conn = self.get_conn()?;
@@ -939,16 +881,16 @@ impl SessionMethods for Database {
             let mut stmt = conn.prepare(
                 "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
                         branch, parent_branch, original_parent_branch, worktree_path,
-                        status, created_at, updated_at, last_activity, ready_to_merge,
+                        created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
+                        resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
                  FROM sessions
-                 WHERE repository_path = ?1 AND session_state = ?2
+                 WHERE repository_path = ?1 AND is_spec = ?2
                  ORDER BY ready_to_merge ASC, last_activity DESC",
             )?;
 
             let rows = stmt.query_map(
-                params![repo_path.to_string_lossy(), state.as_str()],
+                params![repo_path.to_string_lossy(), is_spec],
                 |row| {
                     Ok(SessionSummaryRow {
                         id: row.get(0)?,
@@ -963,48 +905,39 @@ impl SessionMethods for Database {
                         parent_branch: row.get(9)?,
                         original_parent_branch: row.get(10).ok(),
                         worktree_path: PathBuf::from(row.get::<_, String>(11)?),
-                        status: row
-                            .get::<_, String>(12)?
-                            .parse()
-                            .unwrap_or(SessionStatus::Active),
-                        created_at: utc_from_epoch_seconds_lossy(row.get(13)?),
-                        updated_at: utc_from_epoch_seconds_lossy(row.get(14)?),
+                        created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
+                        updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
                         last_activity: utc_from_epoch_seconds_lossy_opt(
-                            row.get::<_, Option<i64>>(15)?,
+                            row.get::<_, Option<i64>>(14)?,
                         ),
-                        ready_to_merge: row.get(16).unwrap_or(false),
-                        original_agent_type: row.get(17).ok(),
-                        original_agent_model: row.get(40).ok(),
-                        pending_name_generation: row.get(18).unwrap_or(false),
-                        was_auto_generated: row.get(19).unwrap_or(false),
-                        session_state: row
-                            .get::<_, String>(20)
-                            .ok()
-                            .and_then(|s| s.parse().ok())
-                            .unwrap_or(SessionState::Running),
-                        resume_allowed: row.get(21).unwrap_or(true),
-                        amp_thread_id: row.get(22).ok(),
-                        issue_number: row.get(23).ok(),
-                        issue_url: row.get(24).ok(),
-                        pr_number: row.get(25).ok(),
-                        pr_url: row.get(26).ok(),
-                        is_consolidation: row.get(27).unwrap_or(false),
-                        consolidation_sources: row.get(28).ok(),
-                        consolidation_round_id: row.get(29).ok(),
-                        consolidation_role: row.get(30).ok(),
-                        consolidation_report: row.get(31).ok(),
-                        consolidation_report_source: row.get(32).ok(),
-                        consolidation_base_session_id: row.get(33).ok(),
-                        consolidation_recommended_session_id: row.get(34).ok(),
-                        consolidation_confirmation_mode: row.get(35).ok(),
-                        promotion_reason: row.get(36).ok(),
-                        ci_autofix_enabled: row.get(37).unwrap_or(false),
-                        merged_at: row.get(38).ok(),
-                        pr_state: row.get(39).ok(),
-                        task_id: row.get(41).ok(),
-                        task_stage: row.get(42).ok(),
-                        is_spec: row.get(43).unwrap_or(false),
-                        cancelled_at: row.get(44).ok(),
+                        ready_to_merge: row.get(15).unwrap_or(false),
+                        original_agent_type: row.get(16).ok(),
+                        original_agent_model: row.get(38).ok(),
+                        pending_name_generation: row.get(17).unwrap_or(false),
+                        was_auto_generated: row.get(18).unwrap_or(false),
+                        resume_allowed: row.get(19).unwrap_or(true),
+                        amp_thread_id: row.get(20).ok(),
+                        issue_number: row.get(21).ok(),
+                        issue_url: row.get(22).ok(),
+                        pr_number: row.get(23).ok(),
+                        pr_url: row.get(24).ok(),
+                        is_consolidation: row.get(25).unwrap_or(false),
+                        consolidation_sources: row.get(26).ok(),
+                        consolidation_round_id: row.get(27).ok(),
+                        consolidation_role: row.get(28).ok(),
+                        consolidation_report: row.get(29).ok(),
+                        consolidation_report_source: row.get(30).ok(),
+                        consolidation_base_session_id: row.get(31).ok(),
+                        consolidation_recommended_session_id: row.get(32).ok(),
+                        consolidation_confirmation_mode: row.get(33).ok(),
+                        promotion_reason: row.get(34).ok(),
+                        ci_autofix_enabled: row.get(35).unwrap_or(false),
+                        merged_at: row.get(36).ok(),
+                        pr_state: row.get(37).ok(),
+                        task_id: row.get(39).ok(),
+                        task_stage: row.get(40).ok(),
+                        is_spec: row.get(41).unwrap_or(false),
+                        cancelled_at: row.get(42).ok(),
                     })
                 },
             )?;
@@ -1017,27 +950,14 @@ impl SessionMethods for Database {
         let hydrate_elapsed = hydrate_timer.elapsed();
 
         log::debug!(
-            "list_sessions_by_state({}): {} rows (summary={}ms, hydrate={}ms)",
-            state.as_str(),
+            "list_sessions_by_state(is_spec={}): {} rows (summary={}ms, hydrate={}ms)",
+            is_spec,
             sessions.len(),
             summary_elapsed.as_millis(),
             hydrate_elapsed.as_millis()
         );
 
         Ok(sessions)
-    }
-
-    fn update_session_state(&self, id: &str, state: SessionState) -> Result<()> {
-        let conn = self.get_conn()?;
-
-        conn.execute(
-            "UPDATE sessions
-             SET session_state = ?1, updated_at = ?2
-             WHERE id = ?3",
-            params![state.as_str(), Utc::now().timestamp(), id],
-        )?;
-
-        Ok(())
     }
 
     fn update_spec_content(&self, id: &str, content: &str) -> Result<()> {
@@ -1478,10 +1398,10 @@ impl SessionMethods for Database {
                 id, name, display_name, version_group_id, version_number, epic_id,
                 repository_path, repository_name, branch, parent_branch,
                 original_parent_branch, worktree_path,
-                status, created_at, updated_at, last_activity, initial_prompt,
+                created_at, updated_at, last_activity, initial_prompt,
                 ready_to_merge, original_agent_type, original_agent_model,
                 pending_name_generation, was_auto_generated, spec_content,
-                session_state, resume_allowed, amp_thread_id,
+                resume_allowed, amp_thread_id,
                 issue_number, issue_url, pr_number, pr_url, pr_state,
                 is_consolidation, consolidation_sources,
                 consolidation_round_id, consolidation_role,
@@ -1522,66 +1442,57 @@ fn row_to_session_with_facts(row: &rusqlite::Row<'_>) -> rusqlite::Result<Sessio
         parent_branch: row.get(9)?,
         original_parent_branch: row.get(10).ok(),
         worktree_path: PathBuf::from(row.get::<_, String>(11)?),
-        status: row
-            .get::<_, String>(12)?
-            .parse()
-            .unwrap_or(SessionStatus::Active),
-        created_at: utc_from_epoch_seconds_lossy(row.get(13)?),
-        updated_at: utc_from_epoch_seconds_lossy(row.get(14)?),
-        last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(15)?),
-        initial_prompt: row.get(16)?,
-        ready_to_merge: row.get(17).unwrap_or(false),
-        original_agent_type: row.get(18).ok(),
-        original_agent_model: row.get(19).ok(),
-        pending_name_generation: row.get(20).unwrap_or(false),
-        was_auto_generated: row.get(21).unwrap_or(false),
-        spec_content: row.get(22).ok(),
-        session_state: row
-            .get::<_, String>(23)
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(SessionState::Running),
-        resume_allowed: row.get(24).unwrap_or(true),
-        amp_thread_id: row.get(25).ok(),
-        issue_number: row.get(26).ok(),
-        issue_url: row.get(27).ok(),
-        pr_number: row.get(28).ok(),
-        pr_url: row.get(29).ok(),
+        created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
+        updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
+        last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(14)?),
+        initial_prompt: row.get(15)?,
+        ready_to_merge: row.get(16).unwrap_or(false),
+        original_agent_type: row.get(17).ok(),
+        original_agent_model: row.get(18).ok(),
+        pending_name_generation: row.get(19).unwrap_or(false),
+        was_auto_generated: row.get(20).unwrap_or(false),
+        spec_content: row.get(21).ok(),
+        resume_allowed: row.get(22).unwrap_or(true),
+        amp_thread_id: row.get(23).ok(),
+        issue_number: row.get(24).ok(),
+        issue_url: row.get(25).ok(),
+        pr_number: row.get(26).ok(),
+        pr_url: row.get(27).ok(),
         pr_state: row
+            .get::<_, Option<String>>(28)
+            .ok()
+            .flatten()
+            .and_then(|s| s.parse().ok()),
+        is_consolidation: row.get(29).unwrap_or(false),
+        consolidation_sources: row
             .get::<_, Option<String>>(30)
             .ok()
             .flatten()
-            .and_then(|s| s.parse().ok()),
-        is_consolidation: row.get(31).unwrap_or(false),
-        consolidation_sources: row
-            .get::<_, Option<String>>(32)
-            .ok()
-            .flatten()
             .and_then(|s| serde_json::from_str(&s).ok()),
-        consolidation_round_id: row.get(33).ok(),
-        consolidation_role: row.get(34).ok(),
-        consolidation_report: row.get(35).ok(),
-        consolidation_report_source: row.get(36).ok(),
-        consolidation_base_session_id: row.get(37).ok(),
-        consolidation_recommended_session_id: row.get(38).ok(),
-        consolidation_confirmation_mode: row.get(39).ok(),
-        promotion_reason: row.get(40).ok(),
-        ci_autofix_enabled: row.get(41).unwrap_or(false),
-        merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(42)?),
-        task_id: row.get(43).ok(),
+        consolidation_round_id: row.get(31).ok(),
+        consolidation_role: row.get(32).ok(),
+        consolidation_report: row.get(33).ok(),
+        consolidation_report_source: row.get(34).ok(),
+        consolidation_base_session_id: row.get(35).ok(),
+        consolidation_recommended_session_id: row.get(36).ok(),
+        consolidation_confirmation_mode: row.get(37).ok(),
+        promotion_reason: row.get(38).ok(),
+        ci_autofix_enabled: row.get(39).unwrap_or(false),
+        merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(40)?),
+        task_id: row.get(41).ok(),
         task_stage: row
-            .get::<_, Option<String>>(44)
+            .get::<_, Option<String>>(42)
             .ok()
             .flatten()
             .and_then(|s| s.parse().ok()),
-        task_run_id: row.get(45).ok(),
-        run_role: row.get(46).ok(),
-        slot_key: row.get(47).ok(),
-        exited_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(48)?),
-        exit_code: row.get(49).ok(),
-        first_idle_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(50)?),
-        is_spec: row.get(51).unwrap_or(false),
-        cancelled_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(52)?),
+        task_run_id: row.get(43).ok(),
+        run_role: row.get(44).ok(),
+        slot_key: row.get(45).ok(),
+        exited_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(46)?),
+        exit_code: row.get(47).ok(),
+        first_idle_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(48)?),
+        is_spec: row.get(49).unwrap_or(false),
+        cancelled_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(50)?),
     })
 }
 
@@ -1612,7 +1523,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: repo_path.join(".lucode/worktrees/millis-session"),
-            status: SessionStatus::Active,
             created_at,
             updated_at,
             last_activity: None,
@@ -1624,7 +1534,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -1692,7 +1601,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: PathBuf::from("/tmp/repo/.lucode/worktrees/test-session"),
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -1704,7 +1612,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -1768,7 +1675,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: PathBuf::from("/tmp/repo/.lucode/worktrees/test-session-2"),
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -1780,7 +1686,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -1893,41 +1798,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_status_order_index_structure_and_plan() {
-        let db = Database::new_in_memory().expect("failed to build in-memory database");
-        let conn = db.get_conn().expect("failed to borrow connection");
-
-        let mut columns_stmt = conn
-            .prepare("PRAGMA index_info('idx_sessions_status_order')")
-            .expect("failed to prepare PRAGMA index_info");
-        let columns = columns_stmt
-            .query_map([], |row| row.get::<_, String>(2))
-            .expect("failed to query index info")
-            .collect::<Result<Vec<_>, _>>()
-            .expect("failed to collect index info");
-        assert_eq!(
-            columns,
-            vec!["status", "ready_to_merge", "last_activity"],
-            "idx_sessions_status_order should cover status, ready_to_merge, last_activity"
-        );
-
-        let plan_sql = "EXPLAIN QUERY PLAN SELECT id FROM sessions WHERE status = ?1 ORDER BY ready_to_merge ASC, last_activity DESC";
-        let mut stmt = conn
-            .prepare(plan_sql)
-            .expect("failed to prepare EXPLAIN statement");
-        let mut rows = stmt
-            .query(params!["active"])
-            .expect("failed to run EXPLAIN");
-
-        while let Some(row) = rows.next().expect("failed to read EXPLAIN row") {
-            let detail: String = row.get(3).expect("failed to read detail column");
-            assert!(
-                !detail.to_uppercase().contains("TEMP B-TREE"),
-                "query plan unexpectedly uses a temp B-tree: {detail}"
-            );
-        }
-    }
+    // Phase 4 Wave D.3: removed `test_status_order_index_structure_and_plan`.
+    // The test pinned the legacy `idx_sessions_status_order` index, which
+    // covered `[status, ready_to_merge, last_activity]`. With the `status`
+    // column dropped in Wave D, the index no longer exists. The new query
+    // path filters by `cancelled_at IS NULL`; if a future maintainer needs
+    // a covering index for that predicate, they'll add it explicitly.
 
     #[test]
     fn test_spec_content_returned_for_running_sessions() {
@@ -1947,7 +1823,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: PathBuf::from("/tmp/repo/.lucode/worktrees/running-with-spec"),
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -1959,7 +1834,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: Some("# Spec Content\nThis is the spec description".to_string()),
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -2001,7 +1875,7 @@ mod tests {
         assert_eq!(sessions.len(), 1);
 
         let loaded = &sessions[0];
-        assert_eq!(loaded.session_state, SessionState::Running);
+        assert!(!loaded.is_spec);
         assert_eq!(
             loaded.spec_content,
             Some("# Spec Content\nThis is the spec description".to_string()),
@@ -2032,7 +1906,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: PathBuf::from("/tmp/repo/.lucode/worktrees/consolidation-session"),
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -2044,7 +1917,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -2133,7 +2005,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: repo_path.join(".lucode/worktrees/promote-test"),
-            status: SessionStatus::Active,
             created_at: now,
             updated_at: now,
             last_activity: None,
@@ -2145,7 +2016,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -2223,7 +2093,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: repo_path.join(".lucode/worktrees/round-fields"),
-            status: SessionStatus::Active,
             created_at: now,
             updated_at: now,
             last_activity: None,
@@ -2234,7 +2103,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -2308,7 +2176,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: repo.join(format!(".lucode/worktrees/{id}")),
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -2319,7 +2186,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,

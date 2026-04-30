@@ -84,7 +84,6 @@ pub struct Session {
     pub parent_branch: String,
     pub original_parent_branch: Option<String>,
     pub worktree_path: PathBuf,
-    pub status: SessionStatus,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub last_activity: Option<DateTime<Utc>>,
@@ -99,8 +98,12 @@ pub struct Session {
     pub was_auto_generated: bool,
     // Content for spec agents (markdown format)
     pub spec_content: Option<String>,
-    // Current session state (Spec, Processing, Running)
-    pub session_state: SessionState,
+    // Phase 4 Wave D.3: legacy `status: SessionStatus` and
+    // `session_state: SessionState` fields removed. Lifecycle now
+    // derives from `is_spec` + `cancelled_at` + worktree existence
+    // via `Session::lifecycle_state(...)`. The wire-format adapter
+    // (`SessionInfoBuilder`) projects these axes onto the same
+    // lowercase strings the frontend has always read.
     // Whether agent resume/continue is allowed (freshly false after Spec/Cancel until first start)
     pub resume_allowed: bool,
     // Amp thread ID for resuming threads across Lucode sessions
@@ -427,67 +430,13 @@ pub struct Epic {
     pub color: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum SessionStatus {
-    Active,
-    Cancelled,
-    Spec,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum SessionState {
-    Spec,
-    Processing,
-    Running,
-}
-
-impl SessionStatus {
-    pub fn as_str(&self) -> &str {
-        match self {
-            SessionStatus::Active => "active",
-            SessionStatus::Cancelled => "cancelled",
-            SessionStatus::Spec => "spec",
-        }
-    }
-}
-
-impl FromStr for SessionStatus {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "active" => Ok(SessionStatus::Active),
-            "cancelled" => Ok(SessionStatus::Cancelled),
-            "spec" => Ok(SessionStatus::Spec),
-            _ => Err(format!("Invalid session status: {s}")),
-        }
-    }
-}
-
-impl SessionState {
-    pub fn as_str(&self) -> &str {
-        match self {
-            SessionState::Spec => "spec",
-            SessionState::Processing => "processing",
-            SessionState::Running => "running",
-        }
-    }
-}
-
-impl FromStr for SessionState {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "spec" => Ok(SessionState::Spec),
-            "processing" => Ok(SessionState::Processing),
-            "running" => Ok(SessionState::Running),
-            _ => Err(format!("Invalid session state: {s}")),
-        }
-    }
-}
+// Phase 4 Wave D.3: `SessionStatus` and `SessionState` enums removed.
+// They were a correlated pair the v1 reconciler had to defend against
+// drift on. v2's orthogonal axes (`is_spec` + `cancelled_at`) make
+// drift impossible by construction. The runtime-only
+// `SessionLifecycleState` (above) reproduces the v1 enum surface for
+// callers that need a four-variant projection; the wire format ships
+// strings synthesized by `SessionInfoBuilder`.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitStats {

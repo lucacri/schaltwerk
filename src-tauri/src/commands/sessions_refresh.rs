@@ -13,7 +13,7 @@ use crate::{
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::services::power::sync_running_sessions;
 use lucode::services::sessions::enrich_sessions_with_parallel_git;
-use lucode::services::{EnrichedSession, SessionState};
+use lucode::services::EnrichedSession;
 use serde::Serialize;
 
 const DEFAULT_COOLDOWN: Duration = Duration::from_millis(125);

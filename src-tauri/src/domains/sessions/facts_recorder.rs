@@ -74,7 +74,7 @@ impl<'a> SessionFactsRecorder<'a> {
 mod tests {
     use super::*;
     use crate::domains::sessions::db_sessions::SessionMethods;
-    use crate::domains::sessions::entity::{Session, SessionState, SessionStatus};
+    use crate::domains::sessions::entity::Session;
     use chrono::TimeZone;
     use std::path::PathBuf;
 
@@ -96,7 +96,6 @@ mod tests {
             parent_branch: "main".into(),
             original_parent_branch: Some("main".into()),
             worktree_path: PathBuf::from(format!("/tmp/wt-{id}")),
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -107,7 +106,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,

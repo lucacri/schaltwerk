@@ -2,30 +2,24 @@
 mod session_sorting_tests {
     use crate::{
         domains::sessions::db_sessions::SessionMethods,
-        domains::sessions::entity::{FilterMode, Session, SessionState, SessionStatus, SortMode},
+        domains::sessions::entity::{FilterMode, Session, SortMode},
         domains::sessions::service::SessionManager,
         infrastructure::database::{Database, initialize_schema},
     };
-    use chrono::{Duration, Utc};
+    use chrono::{DateTime, Duration, Utc};
     use std::path::PathBuf;
     use tempfile::TempDir;
 
     fn create_test_session_with_repo(
         name: &str,
-        status: SessionStatus,
-        state: SessionState,
+        is_spec: bool,
+        cancelled_at: Option<DateTime<Utc>>,
         ready_to_merge: bool,
         created_offset_minutes: i64,
         last_activity_offset_minutes: Option<i64>,
         repo_path: &PathBuf,
     ) -> Session {
         let now = Utc::now();
-        let derived_is_spec = state == SessionState::Spec || status == SessionStatus::Spec;
-        let derived_cancelled_at = if status == SessionStatus::Cancelled {
-            Some(now)
-        } else {
-            None
-        };
         Session {
             id: uuid::Uuid::new_v4().to_string(),
             name: name.to_string(),
@@ -39,7 +33,6 @@ mod session_sorting_tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: repo_path.join(format!("worktree-{}", name)),
-            status,
             created_at: now - Duration::minutes(created_offset_minutes),
             updated_at: now,
             last_activity: last_activity_offset_minutes
@@ -50,12 +43,11 @@ mod session_sorting_tests {
             original_agent_model: None,
             pending_name_generation: false,
             was_auto_generated: false,
-            spec_content: if state == SessionState::Spec {
+            spec_content: if is_spec {
                 Some(format!("Spec content for {}", name))
             } else {
                 None
             },
-            session_state: state,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -83,11 +75,8 @@ mod session_sorting_tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
-            // Phase 4 Wave D.0: derive the orthogonal axes from the legacy
-            // enums so the fixture works whether enrichment reads the old
-            // or the new fields.
-            is_spec: derived_is_spec,
-            cancelled_at: derived_cancelled_at,
+            is_spec,
+            cancelled_at,
         }
     }
 
@@ -107,8 +96,8 @@ mod session_sorting_tests {
             // Spec sessions
             create_test_session_with_repo(
                 "spec-alpha",
-                SessionStatus::Spec,
-                SessionState::Spec,
+                true,
+                None,
                 false,
                 60,
                 None,
@@ -116,8 +105,8 @@ mod session_sorting_tests {
             ),
             create_test_session_with_repo(
                 "spec-beta",
-                SessionStatus::Spec,
-                SessionState::Spec,
+                true,
+                None,
                 false,
                 30,
                 None,
@@ -126,8 +115,8 @@ mod session_sorting_tests {
             // Running sessions (different last activity)
             create_test_session_with_repo(
                 "running-charlie",
-                SessionStatus::Active,
-                SessionState::Running,
+                false,
+                None,
                 false,
                 90,
                 Some(5),
@@ -135,8 +124,8 @@ mod session_sorting_tests {
             ),
             create_test_session_with_repo(
                 "running-delta",
-                SessionStatus::Active,
-                SessionState::Running,
+                false,
+                None,
                 false,
                 45,
                 Some(10),
@@ -144,8 +133,8 @@ mod session_sorting_tests {
             ),
             create_test_session_with_repo(
                 "running-echo",
-                SessionStatus::Active,
-                SessionState::Running,
+                false,
+                None,
                 false,
                 20,
                 Some(15),
@@ -154,8 +143,8 @@ mod session_sorting_tests {
             // Ready-to-merge sessions
             create_test_session_with_repo(
                 "ready-foxtrot",
-                SessionStatus::Active,
-                SessionState::Running,
+                false,
+                None,
                 true,
                 120,
                 Some(2),
@@ -163,8 +152,8 @@ mod session_sorting_tests {
             ),
             create_test_session_with_repo(
                 "ready-golf",
-                SessionStatus::Active,
-                SessionState::Running,
+                false,
+                None,
                 true,
                 75,
                 Some(8),
@@ -327,8 +316,8 @@ mod session_sorting_tests {
         // Create a new running session
         let new_session = create_test_session_with_repo(
             "new-session",
-            SessionStatus::Active,
-            SessionState::Running,
+            false,
+            None,
             false,
             1,
             Some(1),

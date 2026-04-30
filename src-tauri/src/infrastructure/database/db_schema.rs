@@ -15,7 +15,11 @@ fn alter_add_column_idempotent(conn: &rusqlite::Connection, sql: &str) -> anyhow
 pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
     let conn = db.get_conn()?;
 
-    // Main sessions table - consolidated schema
+    // Main sessions table - consolidated schema.
+    // Phase 4 Wave D.3: legacy `status` and `session_state` enum columns
+    // dropped from the v2-native CREATE. Lifecycle now derives from
+    // `is_spec` + `cancelled_at` + worktree existence. The
+    // `v2_drop_session_legacy_columns` migration handles upgraded DBs.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
@@ -29,8 +33,6 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
                 branch TEXT NOT NULL,
                 parent_branch TEXT NOT NULL,
                 worktree_path TEXT NOT NULL,
-            status TEXT NOT NULL,  -- 'active', 'cancelled', or 'spec'
-            session_state TEXT DEFAULT 'running',  -- 'spec', 'processing', or 'running'
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
             last_activity INTEGER,
@@ -51,7 +53,6 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
             promotion_reason TEXT DEFAULT NULL,
             task_id TEXT DEFAULT NULL,
             task_stage TEXT DEFAULT NULL,
-            task_role TEXT DEFAULT NULL,
             UNIQUE(repository_path, name)
         )",
         [],
@@ -62,11 +63,9 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
         [],
     )?;
 
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)",
-        [],
-    )?;
-
+    // Phase 4 Wave D.3: indexes on dropped `status` column removed from
+    // the v2-native CREATE. The `v2_drop_session_legacy_columns`
+    // migration drops the legacy indexes when it rebuilds the table.
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sessions_activity ON sessions(last_activity)",
         [],
@@ -74,16 +73,6 @@ pub fn initialize_schema(db: &Database) -> anyhow::Result<()> {
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sessions_repo_order ON sessions(repository_path, ready_to_merge, last_activity DESC)",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_sessions_status_order ON sessions(status, ready_to_merge, last_activity DESC)",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_sessions_repo_status ON sessions(repository_path, status)",
         [],
     )?;
 
@@ -500,14 +489,10 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
         [],
     );
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN spec_content TEXT", []);
-    let _ = conn.execute(
-        "ALTER TABLE sessions ADD COLUMN session_state TEXT DEFAULT 'running'",
-        [],
-    );
-    let _ = conn.execute(
-        "UPDATE sessions SET session_state = 'running' WHERE session_state = 'reviewed'",
-        [],
-    );
+    // Phase 4 Wave D.3: legacy `session_state` ALTER removed. v2 schemas
+    // never had the column; v1 schemas had it and the
+    // `v2_drop_session_legacy_columns` migration removes it during the
+    // table rebuild. Re-adding it here would resurrect the column.
     // New: gate agent resume after Spec/Cancel until first fresh start
     let _ = conn.execute(
         "ALTER TABLE sessions ADD COLUMN resume_allowed BOOLEAN DEFAULT TRUE",
@@ -579,7 +564,9 @@ fn apply_sessions_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> 
     );
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN task_id TEXT", []);
     let _ = conn.execute("ALTER TABLE sessions ADD COLUMN task_stage TEXT", []);
-    let _ = conn.execute("ALTER TABLE sessions ADD COLUMN task_role TEXT", []);
+    // Phase 3 Wave D.4 dropped `task_role`; re-adding it here would
+    // resurrect the column on every schema init. The v1→v2 migration
+    // archives and removes it for upgraded DBs.
     let _ = conn.execute(
         "ALTER TABLE sessions ADD COLUMN ci_autofix_enabled BOOLEAN DEFAULT FALSE",
         [],
@@ -654,26 +641,37 @@ fn apply_specs_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
         [],
     );
 
-    let tx = conn.unchecked_transaction()?;
-
-    tx.execute(
-        "INSERT INTO specs (id, name, display_name, epic_id, issue_number, issue_url, pr_number, pr_url, improve_plan_round_id, repository_path, repository_name, content, stage, attention_required, clarification_started, created_at, updated_at)
-         SELECT s.id, s.name, s.display_name, s.epic_id, s.issue_number, s.issue_url, s.pr_number, s.pr_url, NULL,
-                s.repository_path, s.repository_name,
-                COALESCE(s.spec_content, s.initial_prompt, ''),
-                'draft',
-                FALSE,
-                FALSE,
-                s.created_at, s.updated_at
-         FROM sessions s
-         WHERE s.session_state = 'spec'
-           AND NOT EXISTS (SELECT 1 FROM specs sp WHERE sp.id = s.id)",
+    // Phase 4 Wave D.3: legacy v1→v2 session_state='spec' → specs migration.
+    // On v2-native DBs the `session_state` column doesn't exist, so skip
+    // this block entirely. Real v1 upgrade paths still hit it because their
+    // sessions table has the column.
+    let session_state_exists: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'session_state'",
         [],
+        |row| row.get(0),
     )?;
+    if session_state_exists > 0 {
+        let tx = conn.unchecked_transaction()?;
 
-    tx.execute("DELETE FROM sessions WHERE session_state = 'spec'", [])?;
+        tx.execute(
+            "INSERT INTO specs (id, name, display_name, epic_id, issue_number, issue_url, pr_number, pr_url, improve_plan_round_id, repository_path, repository_name, content, stage, attention_required, clarification_started, created_at, updated_at)
+             SELECT s.id, s.name, s.display_name, s.epic_id, s.issue_number, s.issue_url, s.pr_number, s.pr_url, NULL,
+                    s.repository_path, s.repository_name,
+                    COALESCE(s.spec_content, s.initial_prompt, ''),
+                    'draft',
+                    FALSE,
+                    FALSE,
+                    s.created_at, s.updated_at
+             FROM sessions s
+             WHERE s.session_state = 'spec'
+               AND NOT EXISTS (SELECT 1 FROM specs sp WHERE sp.id = s.id)",
+            [],
+        )?;
 
-    tx.commit()?;
+        tx.execute("DELETE FROM sessions WHERE session_state = 'spec'", [])?;
+
+        tx.commit()?;
+    }
     let _ = conn.execute(
         "CREATE TABLE IF NOT EXISTS task_stage_workflows (
             task_id TEXT NOT NULL,
@@ -1475,6 +1473,10 @@ mod tests {
 
     #[test]
     fn sessions_migrations_add_expected_columns() {
+        // Phase 4 Wave D.3: this test pinned the v1→v2 migration's job of
+        // adding `ready_to_merge` (and other columns) on top of a minimal
+        // v1 sessions table. The legacy `status` and `session_state`
+        // columns are dropped; only the additive columns are still asserted.
         let conn = Connection::open_in_memory().unwrap();
         conn.execute(
             "CREATE TABLE sessions (
@@ -1496,8 +1498,8 @@ mod tests {
         super::apply_sessions_migrations(&conn).unwrap();
 
         conn.execute(
-            "INSERT INTO sessions (id, name, repository_path, repository_name, branch, parent_branch, worktree_path, status, created_at, updated_at, ready_to_merge, epic_id, session_state)
-             VALUES ('s1', 'test', '/repo', 'repo', 'b', 'main', '/wt', 'active', 0, 0, FALSE, NULL, 'running')",
+            "INSERT INTO sessions (id, name, repository_path, repository_name, branch, parent_branch, worktree_path, status, created_at, updated_at, ready_to_merge, epic_id)
+             VALUES ('s1', 'test', '/repo', 'repo', 'b', 'main', '/wt', 'active', 0, 0, FALSE, NULL)",
             [],
         )
         .unwrap();
@@ -1531,44 +1533,13 @@ mod tests {
     }
 
     #[test]
-    fn sessions_migration_rewrites_reviewed_state_to_running() {
-        let conn = Connection::open_in_memory().unwrap();
-        conn.execute(
-            "CREATE TABLE sessions (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                repository_path TEXT NOT NULL,
-                repository_name TEXT NOT NULL,
-                branch TEXT NOT NULL,
-                parent_branch TEXT NOT NULL,
-                worktree_path TEXT NOT NULL,
-                status TEXT NOT NULL,
-                session_state TEXT NOT NULL,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
-            )",
-            [],
-        )
-        .unwrap();
-
-        conn.execute(
-            "INSERT INTO sessions (id, name, repository_path, repository_name, branch, parent_branch, worktree_path, status, session_state, created_at, updated_at)
-             VALUES ('s1', 'legacy-reviewed', '/repo', 'repo', 'b', 'main', '/wt', 'active', 'reviewed', 0, 0)",
-            [],
-        )
-        .unwrap();
-
-        super::apply_sessions_migrations(&conn).unwrap();
-
-        let state: String = conn
-            .query_row(
-                "SELECT session_state FROM sessions WHERE id = 's1'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(state, "running");
-    }
+    // Phase 4 Wave D.3: removed `sessions_migration_rewrites_reviewed_state_to_running`.
+    // The test pinned the v1-era UPDATE that rewrote `session_state =
+    // 'reviewed'` rows to `'running'`. Wave D.3 deleted both the
+    // `session_state` column and that UPDATE; the migration is irrelevant
+    // for v2 schemas, and v1 schemas that did need the rewrite have
+    // long since had `session_state` populated and dropped via the
+    // table-rebuild dance. No regression intent left to pin.
 
     #[test]
     fn specs_migration_moves_spec_sessions_to_specs_table() {
@@ -1669,9 +1640,12 @@ mod tests {
         let db = Database::new_in_memory().unwrap();
         let conn = db.get_conn().unwrap();
 
+        // Phase 4 Wave D.3: `idx_sessions_status` removed along with the
+        // `status` column. Lifecycle filtering now uses `cancelled_at IS
+        // NULL` predicates against unindexed scans (or future
+        // is_spec/cancelled_at indexes added on demand).
         let expected_indexes = [
             "idx_sessions_repo",
-            "idx_sessions_status",
             "idx_sessions_activity",
             "idx_specs_repo",
             "idx_epics_repo",

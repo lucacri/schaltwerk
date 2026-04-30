@@ -6,7 +6,7 @@
 
 use chrono::{TimeZone, Utc};
 use lucode::domains::sessions::db_sessions::SessionMethods;
-use lucode::domains::sessions::entity::{Session, SessionState, SessionStatus};
+use lucode::domains::sessions::entity::Session;
 use lucode::domains::sessions::facts_recorder::SessionFactsRecorder;
 use lucode::domains::tasks::entity::{Task, TaskRunStatus, TaskStage, TaskVariant};
 use lucode::domains::tasks::run_status::{SessionFacts, compute_run_status};
@@ -72,7 +72,6 @@ fn make_session(id: &str, run_id: &str) -> Session {
         parent_branch: "main".into(),
         original_parent_branch: Some("main".into()),
         worktree_path: PathBuf::from(format!("/tmp/wt-{id}")),
-        status: SessionStatus::Active,
         created_at: Utc::now(),
         updated_at: Utc::now(),
         last_activity: None,
@@ -83,7 +82,6 @@ fn make_session(id: &str, run_id: &str) -> Session {
         pending_name_generation: false,
         was_auto_generated: false,
         spec_content: None,
-        session_state: SessionState::Running,
         resume_allowed: true,
         amp_thread_id: None,
         issue_number: None,

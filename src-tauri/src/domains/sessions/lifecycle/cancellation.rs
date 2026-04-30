@@ -863,7 +863,7 @@ impl<'a> CancellationCoordinator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::sessions::entity::{Session, SessionState, SessionStatus};
+    use crate::domains::sessions::entity::Session;
     use crate::infrastructure::database::Database;
     use chrono::Utc;
     use serial_test::serial;
@@ -924,7 +924,6 @@ mod tests {
             parent_branch: "master".to_string(),
             original_parent_branch: Some("master".to_string()),
             worktree_path,
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -935,7 +934,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -977,7 +975,6 @@ mod tests {
         let coordinator = CancellationCoordinator::new(&repo_path, &db_manager);
 
         let mut session = create_test_session(&repo_path, repo_path.join(".lucode/worktrees/test"));
-        session.session_state = SessionState::Spec;
         session.is_spec = true;
 
         let result = coordinator.cancel_session(&session, CancellationConfig::default());
@@ -1218,7 +1215,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: worktree_path.clone(),
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -1229,7 +1225,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -1322,11 +1317,6 @@ mod tests {
         assert!(
             updated.cancelled_at.is_some(),
             "finalize_cancellation must stamp cancelled_at synchronously (Phase 4 Wave B.2)"
-        );
-        assert_eq!(
-            updated.status,
-            SessionStatus::Active,
-            "legacy status column must not be written by finalize after Phase 4 Wave B.2"
         );
         assert!(!updated.resume_allowed);
     }

@@ -206,7 +206,7 @@ fn cap_lines(s: &str, limit: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::sessions::entity::{Session, SessionState, SessionStatus};
+    use crate::domains::sessions::entity::Session;
     use crate::infrastructure::database::Database;
     use chrono::Utc;
     use std::path::PathBuf;
@@ -228,7 +228,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: worktree,
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -239,7 +238,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,

@@ -116,7 +116,7 @@ impl<'a> SessionFinalizer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::sessions::entity::{Session, SessionState, SessionStatus};
+    use crate::domains::sessions::entity::Session;
     use crate::infrastructure::database::Database;
     use chrono::Utc;
     use serial_test::serial;
@@ -144,7 +144,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path,
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -155,7 +154,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -255,7 +253,6 @@ mod tests {
         let finalizer = SessionFinalizer::new(&db_manager, &cache_manager);
 
         let mut session = create_test_session(PathBuf::from("/tmp/worktree"));
-        session.session_state = SessionState::Spec;
         session.is_spec = true;
 
         let result = finalizer.compute_git_stats(&session, "main").unwrap();

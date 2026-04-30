@@ -365,8 +365,8 @@ use crate::{
     domains::sessions::db_sessions::SessionMethods,
     domains::sessions::entity::ArchivedSpec,
     domains::sessions::entity::{
-        DiffStats, EnrichedSession, Epic, FilterMode, GitStats, Session, SessionInfo, SessionState,
-        SessionStatus, SessionStatusType, SessionType, SortMode, Spec, SpecStage,
+        DiffStats, EnrichedSession, Epic, FilterMode, GitStats, Session, SessionInfo,
+        SessionStatusType, SessionType, SortMode, Spec, SpecStage,
     },
     domains::sessions::repository::SessionDbManager,
     domains::sessions::utils::SessionUtils,
@@ -381,7 +381,7 @@ mod epics;
 #[cfg(test)]
 mod service_unified_tests {
     use super::*;
-    use crate::domains::sessions::entity::{Session, SessionState, SessionStatus};
+    use crate::domains::sessions::entity::Session;
     use crate::infrastructure::database::Database;
     use crate::utils::env_adapter::EnvAdapter;
     use chrono::Utc;
@@ -458,7 +458,6 @@ mod service_unified_tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path,
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -469,7 +468,6 @@ mod service_unified_tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -887,7 +885,7 @@ mod service_unified_tests {
         );
 
         let loaded = manager.get_session(&session.name).unwrap();
-        assert_eq!(loaded.status, SessionStatus::Active);
+        assert!(loaded.cancelled_at.is_none() && !loaded.is_spec);
         assert!(loaded.consolidation_report.is_none());
     }
 
@@ -2821,11 +2819,7 @@ mod service_unified_tests {
             pre.cancelled_at.is_none(),
             "fixture must start with cancelled_at = None"
         );
-        assert_eq!(
-            pre.status,
-            SessionStatus::Active,
-            "fixture must start active"
-        );
+        assert!(!pre.is_spec, "fixture must start active (non-spec)");
 
         let fs_result = CancellationResult {
             terminated_processes: vec![],
@@ -2845,11 +2839,6 @@ mod service_unified_tests {
         assert!(
             post.cancelled_at.is_some(),
             "finalize must stamp cancelled_at synchronously (Phase 4 Wave B.1)"
-        );
-        assert_eq!(
-            post.status,
-            SessionStatus::Active,
-            "legacy status column must not be written by finalize after Phase 4 Wave B.1"
         );
     }
 }
@@ -3246,7 +3235,6 @@ impl SessionManager {
             parent_branch: bootstrap_result.parent_branch.clone(),
             original_parent_branch: Some(bootstrap_result.parent_branch.clone()),
             worktree_path: bootstrap_result.worktree_path.clone(),
-            status: SessionStatus::Active,
             created_at: now,
             updated_at: now,
             last_activity: None,
@@ -3257,7 +3245,6 @@ impl SessionManager {
             pending_name_generation: params.was_auto_generated,
             was_auto_generated: params.was_auto_generated,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -5026,7 +5013,6 @@ impl SessionManager {
                 .unwrap_or_else(|_| "main".to_string()),
             original_parent_branch: None,
             worktree_path,
-            status: SessionStatus::Spec,
             created_at: spec.created_at,
             updated_at: spec.updated_at,
             last_activity: Some(spec.updated_at),
@@ -5037,7 +5023,6 @@ impl SessionManager {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: Some(spec.content),
-            session_state: SessionState::Spec,
             resume_allowed: false,
             issue_number: spec.issue_number,
             issue_url: spec.issue_url,
@@ -5065,7 +5050,7 @@ impl SessionManager {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
-            is_spec: false,
+            is_spec: true,
             cancelled_at: None,
         }
     }
@@ -5307,8 +5292,8 @@ impl SessionManager {
         Ok(())
     }
 
-    pub fn list_sessions_by_state(&self, state: SessionState) -> Result<Vec<Session>> {
-        if state == SessionState::Spec {
+    pub fn list_sessions_by_state(&self, is_spec: bool) -> Result<Vec<Session>> {
+        if is_spec {
             let specs = self.db_manager.list_specs()?;
             let sessions = specs
                 .into_iter()
@@ -5317,7 +5302,7 @@ impl SessionManager {
             return Ok(sessions);
         }
 
-        self.db_manager.list_sessions_by_state(state)
+        self.db_manager.list_sessions_by_state(is_spec)
     }
 
     pub fn rename_draft_session(&self, old_name: &str, new_name: &str) -> Result<()> {

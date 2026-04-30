@@ -422,11 +422,11 @@ pub async fn github_create_session_pr_impl(
             session.worktree_path.clone(),
             session.branch.clone(),
             session.parent_branch.clone(),
-            session.session_state,
+            session.is_spec,
         )
     };
 
-    if session_state == lucode::domains::sessions::SessionState::Spec {
+    if session_state {
         return Err("Cannot create PR for a spec session. Start the session first.".to_string());
     }
 

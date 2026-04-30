@@ -44,8 +44,7 @@ pub use crate::domains::power::types::GlobalState;
 pub use crate::domains::sessions::db_sessions::SessionMethods;
 pub use crate::domains::sessions::entity::EnrichedSession;
 pub use crate::domains::sessions::entity::{
-    EnrichedSession as EnrichedSessionEntity, FilterMode, PrState, Session, SessionState,
-    SessionStatus, SortMode,
+    EnrichedSession as EnrichedSessionEntity, FilterMode, PrState, Session, SortMode,
 };
 pub use crate::domains::sessions::lifecycle::bootstrapper::apply_agent_plugins_to_worktree;
 pub use crate::domains::sessions::repository::{ConsolidationStats, ConsolidationStatsFilter};

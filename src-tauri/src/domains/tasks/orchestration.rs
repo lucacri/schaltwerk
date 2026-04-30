@@ -896,12 +896,15 @@ mod tests {
             parent_branch: &str,
         ) -> Result<()> {
             let conn = self.db.get_conn()?;
+            // Phase 4 Wave D.3: legacy `status` column removed; v2 sessions
+            // derive lifecycle from is_spec / cancelled_at (defaults: false/NULL
+            // = active running session).
             conn.execute(
                 "INSERT INTO sessions (
                     id, name, repository_path, repository_name,
-                    branch, parent_branch, worktree_path, status,
+                    branch, parent_branch, worktree_path,
                     created_at, updated_at
-                ) VALUES (?1, ?2, '/repo', 'repo', ?3, ?4, ?5, 'active', 0, 0)",
+                ) VALUES (?1, ?2, '/repo', 'repo', ?3, ?4, ?5, 0, 0)",
                 rusqlite::params![
                     session_id,
                     name,

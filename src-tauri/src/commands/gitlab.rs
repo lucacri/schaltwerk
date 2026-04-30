@@ -643,11 +643,11 @@ pub async fn gitlab_create_session_mr(
             session.worktree_path.clone(),
             session.branch.clone(),
             session.parent_branch.clone(),
-            session.session_state,
+            session.is_spec,
         )
     };
 
-    if session_state == lucode::domains::sessions::SessionState::Spec {
+    if session_state {
         return Err("Cannot create MR for a spec session. Start the session first.".to_string());
     }
 

@@ -16,7 +16,7 @@ pub mod utils;
 #[cfg(test)]
 pub mod sorting;
 
-pub use entity::{EnrichedSession, SessionState};
+pub use entity::EnrichedSession;
 pub use stage::{Stage, StageInputs, derive_stage};
 pub use repository::SessionDbManager;
 pub use service::{

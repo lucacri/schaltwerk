@@ -149,9 +149,7 @@ mod tests {
         render_action_prompt_template, render_force_restart_prompt, render_plan_candidate_prompt,
         render_plan_judge_prompt, render_synthesis_judge_prompt,
     };
-    use crate::domains::sessions::entity::{
-        PrState, Session, SessionState, SessionStatus, Spec, SpecStage,
-    };
+    use crate::domains::sessions::entity::{PrState, Session, Spec, SpecStage};
     use chrono::Utc;
     use std::path::PathBuf;
 
@@ -204,7 +202,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: None,
             worktree_path: PathBuf::from(format!("/tmp/wt/{name}")),
-            status: SessionStatus::Active,
             created_at: now,
             updated_at: now,
             last_activity: None,
@@ -215,7 +212,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,

@@ -26,7 +26,7 @@ use lucode::services::repository;
 use lucode::services::{AgentManifest, parse_agent_command, submission_options_for_agent};
 use lucode::services::{
     ConsolidationStats, ConsolidationStatsFilter, EnrichedSessionEntity as EnrichedSession,
-    FilterMode, Session, SessionState, SortMode,
+    FilterMode, Session, SortMode,
 };
 use lucode::services::{MergeMode, MergeOutcome, MergePreview, MergeService};
 use lucode::services::{
@@ -1885,7 +1885,7 @@ pub async fn schaltwerk_core_restore_archived_spec(
     let core = get_core_handle().await?;
     let manager = core.session_manager();
     let session = manager
-        .list_sessions_by_state(SessionState::Spec)
+        .list_sessions_by_state(true)
         .map_err(|e| format!("Failed to list specs: {e}"))?
         .into_iter()
         .find(|s| s.name == spec_name)
@@ -4347,7 +4347,7 @@ pub async fn schaltwerk_core_create_spec_session(
     }
 
     let spec_session = manager
-        .list_sessions_by_state(SessionState::Spec)
+        .list_sessions_by_state(true)
         .map_err(|e| format!("Failed to list specs: {e}"))?
         .into_iter()
         .find(|s| s.name == spec.name)
@@ -4700,15 +4700,17 @@ pub async fn schaltwerk_core_unlink_session_from_pr(
 pub async fn schaltwerk_core_list_sessions_by_state(state: String) -> Result<Vec<Session>, String> {
     log::info!("Listing sessions by state: {state}");
 
-    let session_state = state
-        .parse::<SessionState>()
-        .map_err(|e| format!("Invalid session state: {e}"))?;
+    let is_spec = match state.as_str() {
+        "spec" => true,
+        "running" => false,
+        other => return Err(format!("Invalid session state: {other}")),
+    };
 
     let core = get_core_handle().await?;
     let manager = core.session_manager();
 
     manager
-        .list_sessions_by_state(session_state)
+        .list_sessions_by_state(is_spec)
         .map_err(|e| format!("Failed to list sessions by state: {e}"))
 }
 
@@ -5155,7 +5157,6 @@ mod tests {
                 worktree_path: std::path::PathBuf::from(
                     "/tmp/repo/.lucode/worktrees/feature-consolidation",
                 ),
-                status: lucode::domains::sessions::entity::SessionStatus::Active,
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
                 last_activity: Some(Utc::now()),
@@ -5166,7 +5167,6 @@ mod tests {
                 pending_name_generation: false,
                 was_auto_generated: false,
                 spec_content: None,
-                session_state: SessionState::Running,
                 resume_allowed: true,
                 amp_thread_id: None,
                 issue_number: None,

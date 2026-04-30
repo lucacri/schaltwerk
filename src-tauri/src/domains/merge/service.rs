@@ -29,7 +29,6 @@ use crate::domains::merge::types::{
     UpdateFromParentStatus, UpdateSessionFromParentResult,
 };
 use crate::domains::sessions::db_sessions::SessionMethods;
-use crate::domains::sessions::entity::SessionState;
 use crate::domains::sessions::service::SessionManager;
 use crate::infrastructure::database::Database;
 
@@ -2407,7 +2406,8 @@ mod tests {
 
         let refreshed = manager.get_session(&session.name).unwrap();
         assert!(refreshed.ready_to_merge);
-        assert_eq!(refreshed.session_state, SessionState::Running);
+        assert!(!refreshed.is_spec);
+        assert!(refreshed.cancelled_at.is_none());
     }
 
     #[tokio::test]
@@ -2977,7 +2977,8 @@ mod tests {
 
         let session_after = manager.get_session(&session.name).unwrap();
         assert!(session_after.ready_to_merge);
-        assert_eq!(session_after.session_state, SessionState::Running);
+        assert!(!session_after.is_spec);
+        assert!(session_after.cancelled_at.is_none());
     }
 
     #[tokio::test]
@@ -3163,7 +3164,8 @@ mod tests {
 
         let final_session = manager.get_session(&session_after.name).unwrap();
         assert!(final_session.ready_to_merge);
-        assert_eq!(final_session.session_state, SessionState::Running);
+        assert!(!final_session.is_spec);
+        assert!(final_session.cancelled_at.is_none());
     }
 
     #[tokio::test]
@@ -3226,7 +3228,8 @@ mod tests {
 
         let session_after = manager.get_session(&session.name).unwrap();
         assert!(session_after.ready_to_merge);
-        assert_eq!(session_after.session_state, SessionState::Running);
+        assert!(!session_after.is_spec);
+        assert!(session_after.cancelled_at.is_none());
     }
 
     #[tokio::test]

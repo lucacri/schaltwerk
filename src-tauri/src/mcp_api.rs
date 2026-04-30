@@ -45,7 +45,7 @@ use lucode::infrastructure::database::db_project_config::{
 use lucode::infrastructure::database::{Database, SpecMethods};
 use lucode::infrastructure::events::{SchaltEvent, emit_event};
 use lucode::schaltwerk_core::db_app_config::AppConfigMethods;
-use lucode::schaltwerk_core::{SessionManager, SessionState};
+use lucode::schaltwerk_core::SessionManager;
 use lucode::services::SessionMethods;
 use lucode::services::sessions::compute_git_enrichment_parallel;
 use lucode::shared::branch::format_branch_name;
@@ -1366,12 +1366,16 @@ where
     }
 
     if winner.cancelled_at.is_some() || winner.is_spec {
+        let status_label = if winner.cancelled_at.is_some() {
+            "cancelled"
+        } else {
+            "spec"
+        };
         return Err((
             StatusCode::BAD_REQUEST,
             format!(
                 "Winner session '{}' is not active (status: {}); cannot transplant consolidated work",
-                winner.name,
-                winner.status.as_str()
+                winner.name, status_label
             ),
         ));
     }
@@ -1972,7 +1976,6 @@ mod tests {
     use chrono::Utc;
     use git2::Repository;
     use hyper::HeaderMap;
-    use lucode::domains::sessions::entity::SessionStatus;
     use lucode::domains::sessions::service::SessionCreationParams;
     use lucode::domains::settings::{AgentPreset, AgentPresetSlot};
     use lucode::schaltwerk_core::Database;
@@ -3030,7 +3033,6 @@ mod tests {
             parent_branch: "main".to_string(),
             original_parent_branch: Some("main".to_string()),
             worktree_path: repo_path.join(".lucode/worktrees/candidate-1"),
-            status: SessionStatus::Active,
             created_at: now,
             updated_at: now,
             last_activity: None,
@@ -3041,7 +3043,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -3208,8 +3209,6 @@ mod tests {
             )
             .expect("create v3");
 
-        db.update_session_status(&v2.id, SessionStatus::Cancelled)
-            .expect("cancel v2");
         db.set_session_cancelled_at(&v2.id, chrono::Utc::now())
             .expect("sync cancelled_at v2");
 
@@ -3308,8 +3307,6 @@ mod tests {
         let session = manager
             .create_session_with_auto_flag("feature_v1", None, None, false, None, None)
             .expect("create session");
-        db.update_session_state(&session.id, SessionState::Spec)
-            .expect("mark as spec");
         db.set_session_is_spec(&session.id, true)
             .expect("sync is_spec");
 
@@ -4589,7 +4586,7 @@ mod tests {
         let winner_after = db
             .get_session_by_name(Path::new(&repo_path), &v1.name)
             .expect("load winner after promote");
-        assert_eq!(winner_after.status, SessionStatus::Active);
+        assert!(winner_after.cancelled_at.is_none() && !winner_after.is_spec);
 
         let loser_after = db
             .get_session_by_name(Path::new(&repo_path), &v2.name)
@@ -4599,7 +4596,7 @@ mod tests {
         let consolidation_after = db
             .get_session_by_name(Path::new(&repo_path), &consolidation.name)
             .expect("load consolidation after promote");
-        assert_eq!(consolidation_after.status, SessionStatus::Active);
+        assert!(consolidation_after.cancelled_at.is_none() && !consolidation_after.is_spec);
         assert!(
             consolidation_after.worktree_path.exists(),
             "consolidation worktree should remain on disk after promote"
@@ -4778,8 +4775,6 @@ mod tests {
             })
             .expect("create consolidation session");
 
-        db.update_session_status(&v1.id, SessionStatus::Cancelled)
-            .expect("cancel v1");
         db.set_session_cancelled_at(&v1.id, chrono::Utc::now())
             .expect("sync cancelled_at v1");
 
@@ -5281,7 +5276,6 @@ mod tests {
             branch: format!("lucode/{}", name),
             original_parent_branch: None,
             worktree_path: PathBuf::from(format!("/tmp/{}", name)),
-            status: SessionStatus::Active,
             created_at: Utc::now(),
             updated_at: Utc::now(),
             last_activity: None,
@@ -5292,7 +5286,6 @@ mod tests {
             pending_name_generation: false,
             was_auto_generated: false,
             spec_content: None,
-            session_state: SessionState::Running,
             resume_allowed: true,
             amp_thread_id: None,
             issue_number: None,
@@ -6570,7 +6563,7 @@ mod tests {
         let winner_after = manager
             .get_session(&candidate.name)
             .expect("load winner after recovery");
-        assert_eq!(winner_after.status, SessionStatus::Active);
+        assert!(winner_after.cancelled_at.is_none() && !winner_after.is_spec);
 
         for session_name in [
             judge.name.as_str(),
@@ -8135,16 +8128,15 @@ async fn create_session(
 async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper::Error> {
     // Parse query parameters
     let query = req.uri().query().unwrap_or("");
-    let mut filter_state: Option<SessionState> = None;
-
-    // Simple query parameter parsing for state filter
-    if query.contains("state=processing") {
-        filter_state = Some(SessionState::Processing);
+    let filter_state: Option<&'static str> = if query.contains("state=processing") {
+        Some("processing")
     } else if query.contains("state=running") {
-        filter_state = Some(SessionState::Running);
+        Some("running")
     } else if query.contains("state=spec") {
-        filter_state = Some(SessionState::Spec);
-    }
+        Some("spec")
+    } else {
+        None
+    };
 
     let (base_sessions, git_tasks, db) = match get_core_handle().await {
         Ok(core) => match core.session_manager().list_enriched_sessions_base() {
@@ -8176,11 +8168,7 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
 
         if let Some(state) = filter_state {
             // Phase 4 Wave D.0: info.session_state is now a wire-format string.
-            sessions.retain(|s| match state {
-                SessionState::Running => s.info.session_state == "running",
-                SessionState::Processing => s.info.session_state == "processing",
-                SessionState::Spec => s.info.session_state == "spec",
-            });
+            sessions.retain(|s| s.info.session_state == state);
         }
 
         if let Some(registry) = get_session_attention_state() {

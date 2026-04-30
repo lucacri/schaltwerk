@@ -64,7 +64,7 @@ mod launch_script_cleanup_tests {
     }
 }
 
-pub use crate::domains::sessions::entity::{EnrichedSession, SessionState};
+pub use crate::domains::sessions::entity::EnrichedSession;
 pub use crate::domains::sessions::lifecycle::cancellation::{
     CancellationConfig, CancellationResult, StandaloneCancellationCoordinator,
 };

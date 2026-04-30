@@ -3,8 +3,6 @@ use crate::domains::git::stats::{
     get_git_stats_call_count, reset_git_stats_call_count, track_git_stats_on_current_thread,
 };
 #[cfg(test)]
-use crate::domains::sessions::entity::SessionStatus;
-#[cfg(test)]
 use crate::shared::terminal_id::{terminal_id_for_session_bottom, terminal_id_for_session_top};
 #[cfg(test)]
 use crate::utils::env_adapter::EnvAdapter;
@@ -26,8 +24,6 @@ use tempfile::TempDir;
 // Import database traits for method access in tests
 #[cfg(test)]
 use crate::domains::sessions::db_sessions::SessionMethods;
-#[cfg(test)]
-use crate::domains::sessions::entity::SessionState;
 #[cfg(test)]
 use crate::infrastructure::database::db_archived_specs::ArchivedSpecMethods;
 #[cfg(test)]
@@ -117,7 +113,7 @@ fn test_create_session() {
     assert_eq!(session.name, "test-feature");
     assert_eq!(session.branch, "test-feature");
     assert_eq!(session.initial_prompt, Some("Test prompt".to_string()));
-    assert_eq!(session.status, SessionStatus::Active);
+    assert!(session.cancelled_at.is_none() && !session.is_spec);
 
     // Verify worktree path
     let expected_worktree = env
@@ -224,7 +220,7 @@ fn test_create_spec_session_name_collision_returns_created_spec() {
 
     // Ensure the created spec is present via spec listing (virtual sessions)
     let specs = manager
-        .list_sessions_by_state(crate::domains::sessions::entity::SessionState::Spec)
+        .list_sessions_by_state(true)
         .unwrap();
     assert!(specs.iter().any(|s| s.name == spec.name));
 }
@@ -325,7 +321,7 @@ fn test_archive_and_restore_spec() {
     manager.archive_spec_session(&spec.name).unwrap();
 
     // Spec should be gone from sessions list
-    let specs = manager.list_sessions_by_state(SessionState::Spec).unwrap();
+    let specs = manager.list_sessions_by_state(true).unwrap();
     assert!(specs.into_iter().find(|s| s.name == spec.name).is_none());
 
     // It should appear in archived list
@@ -1426,8 +1422,8 @@ fn test_convert_running_session_to_draft() {
     let running_session = manager
         .start_spec_session("auth-feature", None, None, None)
         .unwrap();
-    assert_eq!(running_session.session_state, SessionState::Running);
-    assert_eq!(running_session.status, SessionStatus::Active);
+    assert!(!running_session.is_spec);
+    assert!(running_session.cancelled_at.is_none());
 
     let running_worktree = running_session.worktree_path.clone();
     let running_branch = running_session.branch.clone();
@@ -1690,7 +1686,7 @@ fn test_mark_ready_never_auto_commits_dirty_worktree() {
         .db_ref()
         .get_session_by_name(&env.repo_path, &session.name)
         .unwrap();
-    assert_eq!(db_session.session_state, SessionState::Running);
+    assert!(!db_session.is_spec && db_session.cancelled_at.is_none());
     assert!(!db_session.ready_to_merge);
 }
 
@@ -1715,9 +1711,8 @@ fn test_mark_ready_with_missing_worktree_keeps_running_state() {
         .db_ref()
         .get_session_by_name(&env.repo_path, &session.name)
         .unwrap();
-    assert_eq!(
-        db_session.session_state,
-        SessionState::Running,
+    assert!(
+        !db_session.is_spec && db_session.cancelled_at.is_none(),
         "missing worktrees should not change the runtime state"
     );
     assert!(!db_session.ready_to_merge);
@@ -1816,7 +1811,7 @@ fn test_mark_ready_when_dirty_keeps_ready_flag_false() {
         .get_session_by_name(&env.repo_path, &session.name)
         .unwrap();
     assert!(!refreshed.ready_to_merge);
-    assert_eq!(refreshed.session_state, SessionState::Running);
+    assert!(!refreshed.is_spec && refreshed.cancelled_at.is_none());
 }
 
 #[test]
