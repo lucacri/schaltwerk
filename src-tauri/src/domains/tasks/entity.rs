@@ -157,6 +157,57 @@ impl FromStr for TaskRunStatus {
     }
 }
 
+/// Runtime-only role tag for orchestration / prompt building.
+///
+/// **Phase 3 successor to `RunRole`.** Unlike v1's `RunRole`, this enum is:
+/// - **Not serialized** (no `Serialize`/`Deserialize`/`FromStr`).
+/// - **Not persisted** (the SQL columns `sessions.run_role` and
+///   `sessions.task_role` are dropped in the v1→v2 migration).
+/// - **Derived inline** at the orchestration call site from `PresetShape`
+///   position (`.candidates → SlotKind::Candidate`, `.consolidator →
+///   SlotKind::Consolidator`, etc.). The "role" is implicit in *which*
+///   collection a slot belongs to; storing it as a separate column is
+///   redundant.
+///
+/// Slot identity *across* persistence is via `Session.slot_key:
+/// Option<String>` (e.g. `"claude-0"`, `"consolidator"`). The wire-side
+/// label that the UI shows ("Candidate", "Consolidator", "Evaluator") is
+/// computed from `slot_key` patterns by the frontend, not stored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SlotKind {
+    TaskHost,
+    Single,
+    Candidate,
+    Consolidator,
+    Evaluator,
+    MainHost,
+    Clarify,
+}
+
+impl SlotKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SlotKind::TaskHost => "task_host",
+            SlotKind::Single => "single",
+            SlotKind::Candidate => "candidate",
+            SlotKind::Consolidator => "consolidator",
+            SlotKind::Evaluator => "evaluator",
+            SlotKind::MainHost => "main_host",
+            SlotKind::Clarify => "clarify",
+        }
+    }
+}
+
+// Kept alive across Wave D.1+D.2 so the orchestration/prompts/presets
+// sweep can rewrite each call site one at a time without breaking the
+// build. Deleted entirely in D.3 once every caller has moved to
+// `SlotKind`.
+//
+// Compile-time invariant: every variant matches a `SlotKind` variant 1:1
+// (the migration doesn't add or remove role identities, only renames
+// the type). The conversion `From<RunRole> for SlotKind` below is the
+// scaffolding that lets D.2's parallel agents migrate one file at a
+// time without flipping every call site simultaneously.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RunRole {
@@ -196,6 +247,34 @@ impl FromStr for RunRole {
             "main_host" => Ok(RunRole::MainHost),
             "clarify" => Ok(RunRole::Clarify),
             other => Err(format!("Invalid run role: {other}")),
+        }
+    }
+}
+
+impl From<RunRole> for SlotKind {
+    fn from(role: RunRole) -> Self {
+        match role {
+            RunRole::TaskHost => SlotKind::TaskHost,
+            RunRole::Single => SlotKind::Single,
+            RunRole::Candidate => SlotKind::Candidate,
+            RunRole::Consolidator => SlotKind::Consolidator,
+            RunRole::Evaluator => SlotKind::Evaluator,
+            RunRole::MainHost => SlotKind::MainHost,
+            RunRole::Clarify => SlotKind::Clarify,
+        }
+    }
+}
+
+impl From<SlotKind> for RunRole {
+    fn from(kind: SlotKind) -> Self {
+        match kind {
+            SlotKind::TaskHost => RunRole::TaskHost,
+            SlotKind::Single => RunRole::Single,
+            SlotKind::Candidate => RunRole::Candidate,
+            SlotKind::Consolidator => RunRole::Consolidator,
+            SlotKind::Evaluator => RunRole::Evaluator,
+            SlotKind::MainHost => RunRole::MainHost,
+            SlotKind::Clarify => RunRole::Clarify,
         }
     }
 }
