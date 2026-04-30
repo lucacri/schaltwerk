@@ -822,6 +822,13 @@ pub(crate) fn apply_tasks_migrations(conn: &rusqlite::Connection) -> anyhow::Res
         conn,
         "ALTER TABLE tasks ADD COLUMN failure_flag BOOLEAN NOT NULL DEFAULT FALSE",
     )?;
+    // Phase 3 Wave C: cancellation is an orthogonal timestamp, no longer
+    // a stage transition. Wave E populates this from legacy
+    // `stage = 'cancelled'` rows during the v1→v2 migration.
+    alter_add_column_idempotent(
+        conn,
+        "ALTER TABLE tasks ADD COLUMN cancelled_at INTEGER",
+    )?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS task_stage_configs (
@@ -941,6 +948,20 @@ pub(crate) fn apply_tasks_migrations(conn: &rusqlite::Connection) -> anyhow::Res
     alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN exited_at INTEGER")?;
     alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN exit_code INTEGER")?;
     alter_add_column_idempotent(conn, "ALTER TABLE sessions ADD COLUMN first_idle_at INTEGER")?;
+    // Phase 3 Wave C: identity vs lifecycle axes split out from the
+    // legacy `status` / `session_state` columns. `is_spec` is the
+    // identity axis (does this session have a real worktree?).
+    // `cancelled_at` is the lifecycle axis. Wave F populates both
+    // during the v1→v2 session_status migration; F also drops the
+    // legacy columns via the table-rebuild dance.
+    alter_add_column_idempotent(
+        conn,
+        "ALTER TABLE sessions ADD COLUMN is_spec INTEGER NOT NULL DEFAULT 0",
+    )?;
+    alter_add_column_idempotent(
+        conn,
+        "ALTER TABLE sessions ADD COLUMN cancelled_at INTEGER",
+    )?;
 
     // One-shot v1→v2 migration. Runs after the new columns are present so
     // backfill UPDATEs find their target columns. Idempotent — a v2-native DB
