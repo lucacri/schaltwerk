@@ -196,7 +196,7 @@ impl SessionUtils {
         let sessions = self.db_manager.list_sessions()?;
         let sessions_with_worktrees: Vec<_> = sessions
             .into_iter()
-            .filter(|s| s.session_state != SessionState::Spec)
+            .filter(|s| !s.is_spec)
             .collect();
         let canonical_session_worktrees: HashSet<PathBuf> = sessions_with_worktrees
             .iter()
