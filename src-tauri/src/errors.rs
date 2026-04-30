@@ -67,24 +67,10 @@ pub enum SchaltError {
         feature: String,
         platform: String,
     },
-    /// Task not found by id. Surfaced by the task command surface for
-    /// 404-style returns to the UI.
-    TaskNotFound {
-        task_id: String,
-    },
-    /// One or more sessions failed during a `cancel_task_cascading` fan-out.
-    /// `failures` is the list of underlying error messages from the workers.
-    TaskCancelFailed {
-        task_id: String,
-        failures: Vec<String>,
-    },
-    /// `confirm_stage` succeeded the merge but failed to advance the task
-    /// stage. The merge has already happened; the caller surfaces this as a
-    /// distinct error so the UI can prompt for manual stage advancement.
-    StageAdvanceFailedAfterMerge {
-        task_id: String,
-        message: String,
-    },
+    // Phase 4 Wave E.4: `TaskNotFound`, `TaskCancelFailed`, and
+    // `StageAdvanceFailedAfterMerge` moved to `domains::tasks::errors::TaskFlowError`.
+    // SchaltError continues to exist for non-task surfaces (forge, sessions
+    // outside tasks, power); task commands use TaskFlowError exclusively.
 }
 
 impl SchaltError {
@@ -197,23 +183,6 @@ impl fmt::Display for SchaltError {
             }
             Self::NotSupported { feature, platform } => {
                 write!(f, "Feature '{feature}' is not supported on {platform}")
-            }
-            Self::TaskNotFound { task_id } => {
-                write!(f, "Task '{task_id}' not found")
-            }
-            Self::TaskCancelFailed { task_id, failures } => {
-                write!(
-                    f,
-                    "Failed to cancel task '{task_id}': {} session error(s): {}",
-                    failures.len(),
-                    failures.join("; ")
-                )
-            }
-            Self::StageAdvanceFailedAfterMerge { task_id, message } => {
-                write!(
-                    f,
-                    "Task '{task_id}' merged but failed to advance stage: {message}"
-                )
             }
         }
     }

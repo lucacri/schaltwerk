@@ -146,7 +146,7 @@ async fn cancel_task_with_context<R: tauri::Runtime>(
     project_path: Option<&str>,
 ) -> Result<Task, TaskFlowError> {
     let svc = TaskService::new(db);
-    svc.get_task(id).map_err(|_| SchaltError::TaskNotFound {
+    svc.get_task(id).map_err(|_| TaskFlowError::TaskNotFound {
         task_id: id.to_string(),
     })?;
 
@@ -155,7 +155,7 @@ async fn cancel_task_with_context<R: tauri::Runtime>(
         .await
         .map_err(|error| {
             if let Some(cascade) = error.downcast_ref::<TaskCascadeCancelError>() {
-                SchaltError::TaskCancelFailed {
+                TaskFlowError::TaskCancelFailed {
                     task_id: cascade.task_id.clone(),
                     failures: cascade
                         .failures
@@ -169,7 +169,7 @@ async fn cancel_task_with_context<R: tauri::Runtime>(
                         .collect(),
                 }
             } else {
-                SchaltError::DatabaseError {
+                TaskFlowError::DatabaseError {
                     message: error.to_string(),
                 }
             }
@@ -897,7 +897,7 @@ async fn confirm_stage_against_handle(
         .await
     {
         Ok(task) => Ok(task),
-        Err(error) => Err(TaskFlowError::from(map_confirm_stage_error(error))),
+        Err(error) => Err(map_confirm_stage_error(error)),
     }
 }
 
@@ -979,26 +979,22 @@ pub async fn lucode_task_start_clarify_run(
 /// sentinels (`MergeConflictDuringConfirm`, `StageAdvanceAfterMergeFailed`)
 /// take precedence so the UI never has to substring-match localized text;
 /// anything else degrades to `DatabaseError` carrying the raw display.
-fn map_confirm_stage_error(error: anyhow::Error) -> SchaltError {
+fn map_confirm_stage_error(error: anyhow::Error) -> TaskFlowError {
+    // Phase 4 Wave E.4: returns TaskFlowError directly; the
+    // StageAdvanceFailedAfterMerge variant lives natively here now.
     if let Some(conflict) = error.downcast_ref::<MergeConflictDuringConfirm>() {
-        return SchaltError::MergeConflict {
+        return TaskFlowError::Schalt(SchaltError::MergeConflict {
             files: conflict.files.clone(),
             message: conflict.message.clone(),
-        };
+        });
     }
     if let Some(advance) = error.downcast_ref::<StageAdvanceAfterMergeFailed>() {
-        return SchaltError::StageAdvanceFailedAfterMerge {
-            // StageAdvanceAfterMergeFailed (orchestration.rs) does not carry
-            // task_id; the v2 SchaltError variant requires it for symmetry
-            // with TaskCancelFailed but the call site doesn't have it on the
-            // error itself. Use a placeholder; map_confirm_stage_error is
-            // only reached from the confirm path which has the task in scope
-            // for logging/display. Phase 4 (TaskFlowError) will tighten this.
+        return TaskFlowError::StageAdvanceFailedAfterMerge {
             task_id: "<unknown>".to_string(),
             message: advance.message.clone(),
         };
     }
-    SchaltError::DatabaseError {
+    TaskFlowError::DatabaseError {
         message: error.to_string(),
     }
 }
@@ -2192,7 +2188,7 @@ mod tests {
         let mapped = super::map_confirm_stage_error(err);
 
         match mapped {
-            SchaltError::MergeConflict { files, message } => {
+            TaskFlowError::Schalt(SchaltError::MergeConflict { files, message }) => {
                 assert_eq!(
                     files,
                     vec!["src/foo.rs".to_string(), "src/bar.rs".to_string()],
@@ -2203,7 +2199,7 @@ mod tests {
                     "downcast must preserve the original message: {message}",
                 );
             }
-            other => panic!("expected SchaltError::MergeConflict, got: {other:?}"),
+            other => panic!("expected MergeConflict, got: {other:?}"),
         }
     }
 
@@ -2217,7 +2213,7 @@ mod tests {
         let mapped = super::map_confirm_stage_error(err);
 
         match mapped {
-            SchaltError::StageAdvanceFailedAfterMerge { task_id: _, message } => {
+            TaskFlowError::StageAdvanceFailedAfterMerge { task_id: _, message } => {
                 assert_eq!(message, "DB busy");
             }
             other => panic!("expected StageAdvanceFailedAfterMerge, got: {other:?}"),
@@ -2231,7 +2227,7 @@ mod tests {
         let mapped = super::map_confirm_stage_error(err);
 
         match mapped {
-            SchaltError::DatabaseError { message } => {
+            TaskFlowError::DatabaseError { message } => {
                 assert_eq!(message, "some random failure");
             }
             other => panic!("expected DatabaseError, got: {other:?}"),

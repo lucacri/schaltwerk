@@ -145,21 +145,9 @@ impl std::error::Error for TaskFlowError {}
 
 impl From<SchaltError> for TaskFlowError {
     fn from(e: SchaltError) -> Self {
-        // Phase 4 Wave E.4 will delete the three task variants from
-        // SchaltError; until then this match routes the legacy variants
-        // to their new home. After E.4 the routed arms become
-        // unreachable (the variants no longer exist) and the match
-        // collapses to `other => Self::Schalt(other)`.
-        match e {
-            SchaltError::TaskNotFound { task_id } => Self::TaskNotFound { task_id },
-            SchaltError::TaskCancelFailed { task_id, failures } => {
-                Self::TaskCancelFailed { task_id, failures }
-            }
-            SchaltError::StageAdvanceFailedAfterMerge { task_id, message } => {
-                Self::StageAdvanceFailedAfterMerge { task_id, message }
-            }
-            other => Self::Schalt(other),
-        }
+        // Phase 4 Wave E.4: SchaltError no longer has the 3 task variants
+        // (they moved here). Every SchaltError now wraps as Self::Schalt.
+        Self::Schalt(e)
     }
 }
 
@@ -251,31 +239,24 @@ mod tests {
         assert_eq!(json["data"]["task_id"], "abc");
     }
 
+    /// Phase 4 Wave E.4: SchaltError no longer has the 3 task variants
+    /// — they live in TaskFlowError natively. The `From<SchaltError>`
+    /// impl now wraps every SchaltError as `Self::Schalt(...)`. The
+    /// previous test that pinned the routing of TaskNotFound /
+    /// TaskCancelFailed / StageAdvanceFailedAfterMerge is gone.
     #[test]
-    fn from_schalt_error_routes_task_variants_through() {
-        let task_not_found = SchaltError::TaskNotFound {
-            task_id: "t".into(),
-        };
-        let routed: TaskFlowError = task_not_found.into();
-        assert!(matches!(
-            routed,
-            TaskFlowError::TaskNotFound { ref task_id } if task_id == "t"
-        ));
-
-        let cancel_failed = SchaltError::TaskCancelFailed {
-            task_id: "t".into(),
-            failures: vec!["err".into()],
-        };
-        let routed: TaskFlowError = cancel_failed.into();
-        assert!(matches!(routed, TaskFlowError::TaskCancelFailed { .. }));
-    }
-
-    #[test]
-    fn from_schalt_error_wraps_non_task_variants() {
+    fn from_schalt_error_wraps_all_variants_uniformly() {
         let session_not_found = SchaltError::SessionNotFound {
             session_id: "s".into(),
         };
         let routed: TaskFlowError = session_not_found.into();
+        assert!(matches!(routed, TaskFlowError::Schalt(_)));
+
+        let merge_conflict = SchaltError::MergeConflict {
+            files: vec!["a.rs".into()],
+            message: "boom".into(),
+        };
+        let routed: TaskFlowError = merge_conflict.into();
         assert!(matches!(routed, TaskFlowError::Schalt(_)));
     }
 }
