@@ -696,4 +696,28 @@ mod tests {
             SessionLifecycleState::Cancelled => "cancelled",
         };
     }
+
+    /// **Phase 4 Wave D.5 structural pin:** `Session::lifecycle_state`
+    /// exists, takes a `bool` (`worktree_exists_on_disk`), and returns a
+    /// `SessionLifecycleState`. The fn-pointer coercion below fails to
+    /// compile if the signature drifts (a refactor changes the
+    /// parameter type, return type, or accidentally renames the
+    /// method).
+    #[test]
+    fn session_lifecycle_state_method_signature_is_pinned() {
+        fn assert_signature(_: fn(&Session, bool) -> SessionLifecycleState) {}
+        assert_signature(Session::lifecycle_state);
+    }
+
+    /// **Phase 4 Wave D.5 structural pin:**
+    /// `SessionLifecycleState::to_wire_string` returns a static string
+    /// literal mapping that the SessionInfoBuilder relies on. If a
+    /// future refactor changes the return type (e.g., to `String`), the
+    /// fn-pointer coercion below fails to compile and surfaces the
+    /// wire-format compatibility break.
+    #[test]
+    fn session_lifecycle_state_to_wire_string_signature_is_pinned() {
+        fn assert_signature(_: fn(SessionLifecycleState) -> &'static str) {}
+        assert_signature(SessionLifecycleState::to_wire_string);
+    }
 }

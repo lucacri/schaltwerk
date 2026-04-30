@@ -2495,4 +2495,57 @@ mod tests {
         db.set_session_is_spec("set-s", false).expect("set false");
         assert!(!db.get_session_by_id("set-s").expect("get").is_spec);
     }
+
+    /// **Phase 4 Wave D.5 — load-bearing DB round-trip test for the
+    /// `lifecycle_state` derived getter.**
+    ///
+    /// Per `feedback_compile_pins_dont_catch_wiring.md`: compile-time
+    /// pins prove the field exists; only a DB round-trip proves the
+    /// SELECT/INSERT path actually reads/writes it. This test exercises
+    /// `Session::lifecycle_state(...)` against values that came back
+    /// from the production INSERT + production hydrator (`get_session_by_id`),
+    /// not from a synthetic in-memory `Session { ... }` literal — which
+    /// is what hid the Phase 3 wiring gap that Wave B.0 closed.
+    ///
+    /// If the SELECT projection or hydrator regresses on either axis,
+    /// this test fails because the lifecycle_state projection no longer
+    /// matches what was inserted.
+    #[test]
+    fn lifecycle_state_round_trips_through_production_write_and_read_paths() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+
+        // Spec session: is_spec=true, cancelled_at=None.
+        let mut spec_session = make_session_for_run("rt-spec", &repo, None);
+        spec_session.is_spec = true;
+        db.create_session(&spec_session).expect("create spec");
+        let loaded_spec = db.get_session_by_id("rt-spec").expect("get spec");
+        assert_eq!(
+            loaded_spec.lifecycle_state(false),
+            crate::domains::sessions::entity::SessionLifecycleState::Spec,
+            "spec session round-trips through INSERT/SELECT to lifecycle_state=Spec"
+        );
+
+        // Cancelled session: cancelled_at=Some, takes precedence over is_spec.
+        let cancel_ts = Utc.timestamp_opt(50_000, 0).single().unwrap();
+        let mut cancelled_session = make_session_for_run("rt-cancelled", &repo, None);
+        cancelled_session.cancelled_at = Some(cancel_ts);
+        db.create_session(&cancelled_session).expect("create cancelled");
+        let loaded_cancelled = db.get_session_by_id("rt-cancelled").expect("get cancelled");
+        assert_eq!(
+            loaded_cancelled.lifecycle_state(false),
+            crate::domains::sessions::entity::SessionLifecycleState::Cancelled,
+            "cancelled session round-trips through INSERT/SELECT to lifecycle_state=Cancelled"
+        );
+
+        // Active running session: both axes default; worktree_exists=true.
+        let active_session = make_session_for_run("rt-active", &repo, None);
+        db.create_session(&active_session).expect("create active");
+        let loaded_active = db.get_session_by_id("rt-active").expect("get active");
+        assert_eq!(
+            loaded_active.lifecycle_state(true),
+            crate::domains::sessions::entity::SessionLifecycleState::Running,
+            "active session round-trips through INSERT/SELECT to lifecycle_state=Running"
+        );
+    }
 }
