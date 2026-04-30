@@ -89,6 +89,36 @@ just test          # Run ALL validations: TypeScript, Rust lints, and tests
 ```
 **Why:** Ensures code quality and prevents broken commits. The script runs TypeScript lint + type-checking, MCP lint/tests, frontend vitest, Rust clippy, dependency hygiene (`cargo shear`), `knip`, and Rust tests (`cargo nextest`).
 
+### Test scope discipline (MANDATORY)
+
+`just test` takes ~90s. Running it after every edit is wasteful. Use scoped tests for inner-loop work; reserve `just test` for integration boundaries and pre-commit.
+
+**Inner loop (after each edit):**
+- Rust edit: `cargo check` + `cargo nextest run -p lucode <module::path>` matching the touched surface.
+  - Edited `domains/tasks/runs.rs` → `cargo nextest run -p lucode domains::tasks::runs`
+  - Edited `commands/forge.rs` → `cargo nextest run -p lucode commands::forge`
+- TypeScript edit: `bun run lint -- <changed-paths>` + `bun vitest run <test-file-or-dir>`.
+  - Edited `src/components/sidebar/Sidebar.tsx` → `bun vitest run src/components/sidebar/`
+- **Shortcut:** `just test-single <path>` routes to the right subset based on path prefix. Examples:
+  ```bash
+  just test-single src-tauri/src/domains/tasks/runs.rs
+  just test-single src/components/sidebar/Sidebar.tsx
+  ```
+
+**Wave / sub-wave boundaries:**
+- After parallel agents finish a sub-wave on disjoint files: `just test` once.
+- After a coordinated multi-file refactor lands as a logical unit: `just test`.
+
+**Before commit:**
+- `just test` always. Scoped tests catch regressions in the touched area; the full suite catches architecture violations (`arch_domain_isolation`, `arch_layering_database`), `knip` dead-code, `cargo shear`, and cross-module type drift that scoped tests miss.
+
+**Never:**
+- Skip tests entirely. 5 seconds of scoped tests beats zero.
+- Use `cargo check` alone as proof of correctness — it catches compile errors but not behavior.
+- Run `just test` mid-debug or for typo-level edits. That's the slow path; use it at boundaries.
+
+**Parallel agent dispatch:** when dispatching parallel agents, each agent runs scoped tests against ITS file set only. The coordinator runs `just test` once after all agents return. Per-agent full suites multiply runtime by N for no extra signal.
+
 ### Autonomy for Tests (MANDATORY)
 - Codex and Factory Droid may run `just test`, `bun run test`, `bun run lint`, `bun run lint:rust`, `bun run test:rust`, and `cargo` checks without asking for user approval, even when the CLI approval mode is set to “on-request”.
 - Rationale: Running the full validation suite is required to keep the repository green and accelerate iteration. Do not pause to request permission before executing these commands.

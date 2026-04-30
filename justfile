@@ -594,6 +594,62 @@ test-rust *ARGS:
     set -euo pipefail
     RUSTFLAGS="${RUSTFLAGS:-} -Awarnings" scripts/cargo-worktree.sh nextest run --cargo-quiet --status-level leak {{ARGS}}
 
+# Run scoped tests for one path. Routes to nextest for src-tauri/* paths
+# (extracts the module from the file path) and vitest for src/* / mcp-server/*
+# paths. Use this for inner-loop work; use `just test` at integration boundaries
+# and pre-commit. See CLAUDE.md "Test scope discipline" for the full rules.
+#
+# Examples:
+#   just test-single src-tauri/src/domains/tasks/runs.rs
+#   just test-single src-tauri/src/commands/forge.rs
+#   just test-single src/components/sidebar/Sidebar.tsx
+#   just test-single src/types/task.ts
+test-single PATH:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    path="{{PATH}}"
+    if [[ "$path" == src-tauri/src/* ]]; then
+        if [[ "$path" != *.rs ]]; then
+            echo "test-single: src-tauri/* path must be a .rs file, got: $path" >&2
+            exit 2
+        fi
+        # Strip the src-tauri/src/ prefix and the .rs / mod.rs suffix, then turn
+        # / into :: so e.g. domains/tasks/runs.rs -> domains::tasks::runs and
+        # domains/tasks/mod.rs -> domains::tasks. nextest prefix-matches, so the
+        # module path catches every test inside the file plus its submodules.
+        module=$(echo "$path" \
+            | sed -E 's|^src-tauri/src/||; s|/mod\.rs$||; s|\.rs$||; s|/|::|g')
+        if [[ -z "$module" ]]; then
+            echo "test-single: could not derive module from $path" >&2
+            exit 2
+        fi
+        echo "Running cargo nextest for module: $module"
+        just test-rust -p lucode "$module"
+    elif [[ "$path" == src/* ]]; then
+        # Vitest only matches *.test.ts / *.test.tsx. For source files we run
+        # the containing DIRECTORY so every sibling test that exercises the
+        # source file is picked up — touching `Sidebar.tsx` should run every
+        # `Sidebar.*.test.tsx`, not just `Sidebar.test.tsx`. For test files
+        # and directories, run as-is.
+        if [[ "$path" == *.test.ts || "$path" == *.test.tsx ]]; then
+            target="$path"
+        elif [[ -d "$path" ]]; then
+            target="$path"
+        else
+            target="$(dirname "$path")"
+        fi
+        echo "Running bun vitest for: $target"
+        {{pm}} run lint -- "$path" || true
+        bun vitest run "$target"
+    elif [[ "$path" == mcp-server/* ]]; then
+        echo "Running bun vitest for mcp-server path: $path"
+        cd mcp-server && bun vitest run "${path#mcp-server/}"
+    else
+        echo "test-single: unrecognized path prefix. Use src-tauri/src/... or src/... or mcp-server/..." >&2
+        echo "Got: $path" >&2
+        exit 2
+    fi
+
 # Run the application using the compiled release binary (no autoreload)
 run-release:
     #!/usr/bin/env bash
