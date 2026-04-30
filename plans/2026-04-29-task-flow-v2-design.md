@@ -73,9 +73,11 @@ The v2 rewrite is not about adding features. It's about reducing the surface are
 - Eliminates ~12 match arms across the codebase.
 
 ### 5. Session state is observable
-- Drop `SessionState::{Processing, Running}` and `SessionStatus::{Active, Cancelled}`.
-- Replace with `cancelled_at: Option<Timestamp>` only.
+- Drop `SessionState::{Spec, Processing, Running}` and `SessionStatus::{Active, Cancelled, Spec}`.
+- Replace with two orthogonal axes: `is_spec: bool` (identity — does this session have a real worktree, or is it a draft?) and `cancelled_at: Option<Timestamp>` (lifecycle — has this session been cancelled?).
 - Liveness, agent-running, idle-ness are computed from worktree existence + PTY state + attention bridge.
+- A runtime-only derived getter `Session::lifecycle_state(worktree_exists) → {Spec, Processing, Running, Cancelled}` reproduces the v1 enum on demand for callers that need it; the wire format keeps emitting `session_state` and `status` strings synthesized from the getter so the existing UI is untouched.
+- **Why two booleans, not just `cancelled_at`:** Phase 3 planning surfaced that v2's `SessionStatus` is 3-variant (`Active`, `Cancelled`, `Spec`), not 2 as this design originally framed. The `Spec` axis is genuinely orthogonal to the cancelled axis (a draft can be cancelled before becoming a worktree session). Two boolean fields are simpler than a tri-state and impossible to drift, which the v1 reconciler proved via its defensive `status==Spec && session_state!=Spec` resync.
 - The reconciler has less work to do (no DB↔runtime drift to detect).
 
 ### 6. `TaskStage::Cancelled` becomes `task.cancelled_at`
@@ -211,6 +213,7 @@ Run `just test` between waves; commit per the plan's wave boundaries.
 - Multi-project task coordination.
 - Cloud sync / multi-machine task continuity.
 - Renaming `Mred` → `Merged` (cosmetic; do separately).
+- `SpecStage::Cancelled` cleanup deferred — domain-internal duplicate of `TaskStage::Cancelled` (which Phase 3 collapses to `task.cancelled_at`); doesn't participate in the cross-machine sync surface v2 targets. A future scout-rule cleanup should remove the `SpecStage` duplicate (`domains/sessions/entity.rs:298-326`) along with `TaskWorkflowStage` (the other v1-era subset enum). Tracked here so it doesn't quietly fall off the radar.
 
 ## Tracking
 
