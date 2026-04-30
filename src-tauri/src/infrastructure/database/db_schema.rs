@@ -985,6 +985,13 @@ pub(crate) fn apply_tasks_migrations(conn: &rusqlite::Connection) -> anyhow::Res
     // the documented safe fallback. Idempotent — skips when no
     // stage='cancelled' rows remain.
     super::migrations::v1_to_v2_task_cancelled::run(conn)?;
+    // Phase 3 Wave F.7: backfill sessions.is_spec and
+    // sessions.cancelled_at from the legacy `status` / `session_state`
+    // columns. Idempotent — skips when both backfills have applied.
+    // The legacy enum columns are NOT dropped (the production-call-site
+    // sweep that would remove their last consumers is deferred to a
+    // follow-up phase). Both old and new shapes coexist.
+    super::migrations::v1_to_v2_session_status::run(conn)?;
     let _ = conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sessions_task ON sessions(task_id)",
         [],
