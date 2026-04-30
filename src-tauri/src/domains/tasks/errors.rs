@@ -187,6 +187,16 @@ impl From<TaskFlowError> for String {
     }
 }
 
+/// String errors at the task surface come from `get_core_handle_*` and
+/// similar Tauri infrastructure helpers that return `Result<_, String>`.
+/// Wrap them as `DatabaseError` so the frontend has a structured-enough
+/// surface to render the message.
+impl From<String> for TaskFlowError {
+    fn from(message: String) -> Self {
+        Self::DatabaseError { message }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

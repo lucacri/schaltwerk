@@ -1,5 +1,6 @@
-use crate::errors::SchaltError;
 use crate::{get_core_handle_for_project_path, get_project_with_handle};
+use lucode::errors::SchaltError;
+use lucode::services::TaskFlowError;
 // v1's domains/legacy_import (importing legacy archived sessions into tasks) is
 // not ported to v2. Phase 1 ships only the v1→v2 task_runs schema migration in
 // infrastructure/database/migrations/v1_to_v2_task_runs.rs. The three
@@ -33,8 +34,11 @@ fn derive_repository_name(repo_path: &Path) -> String {
         .unwrap_or_else(|| repo_path.to_string_lossy().to_string())
 }
 
-fn parse_enum<T: FromStr<Err = String>>(label: &str, value: &str) -> Result<T, String> {
-    T::from_str(value).map_err(|e| format!("invalid {label}: {e}"))
+fn parse_enum<T: FromStr<Err = String>>(label: &str, value: &str) -> Result<T, TaskFlowError> {
+    T::from_str(value).map_err(|e| TaskFlowError::InvalidInput {
+        field: label.to_string(),
+        message: e,
+    })
 }
 
 fn get_project_workflow_defaults_for_repo(
@@ -140,7 +144,7 @@ async fn cancel_task_with_context<R: tauri::Runtime>(
     repo_path: &Path,
     id: &str,
     project_path: Option<&str>,
-) -> Result<Task, SchaltError> {
+) -> Result<Task, TaskFlowError> {
     let svc = TaskService::new(db);
     svc.get_task(id).map_err(|_| SchaltError::TaskNotFound {
         task_id: id.to_string(),
@@ -185,9 +189,9 @@ async fn cancel_task_with_context<R: tauri::Runtime>(
 async fn with_core_handle<R>(
     project_path: Option<&str>,
     op: impl FnOnce(&Database, &Path) -> anyhow::Result<R>,
-) -> Result<R, String> {
+) -> Result<R, TaskFlowError> {
     let handle = get_core_handle_for_project_path(project_path).await?;
-    op(&handle.db, &handle.repo_path).map_err(|e| e.to_string())
+    op(&handle.db, &handle.repo_path).map_err(TaskFlowError::from)
 }
 
 fn preserved_content_for_session(
@@ -352,7 +356,7 @@ pub async fn lucode_task_create(
     pr_number: Option<i64>,
     pr_url: Option<String>,
     project_path: Option<String>,
-) -> Result<Task, String> {
+) -> Result<Task, TaskFlowError> {
     let variant = match variant {
         Some(v) => parse_enum::<TaskVariant>("variant", &v)?,
         None => TaskVariant::Regular,
@@ -385,7 +389,7 @@ pub async fn lucode_task_create(
 }
 
 #[tauri::command]
-pub async fn lucode_task_list(project_path: Option<String>) -> Result<Vec<Task>, String> {
+pub async fn lucode_task_list(project_path: Option<String>) -> Result<Vec<Task>, TaskFlowError> {
     with_core_handle(project_path.as_deref(), |db, repo_path| {
         TaskService::new(db).list_tasks(repo_path)
     })
@@ -398,7 +402,7 @@ pub async fn lucode_task_list(project_path: Option<String>) -> Result<Vec<Task>,
 pub async fn lucode_project_workflow_defaults_get(
     repository_path: String,
     project_path: Option<String>,
-) -> Result<Vec<ProjectWorkflowDefault>, String> {
+) -> Result<Vec<ProjectWorkflowDefault>, TaskFlowError> {
     with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         get_project_workflow_defaults_for_repo(db, repository_path)
     })
@@ -413,7 +417,7 @@ pub async fn lucode_project_workflow_defaults_set(
     preset_id: Option<String>,
     auto_chain: bool,
     project_path: Option<String>,
-) -> Result<Vec<ProjectWorkflowDefault>, String> {
+) -> Result<Vec<ProjectWorkflowDefault>, TaskFlowError> {
     let defaults = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         set_project_workflow_default_for_repo(db, repository_path, stage, preset_id, auto_chain)
     })
@@ -429,7 +433,7 @@ pub async fn lucode_project_workflow_defaults_delete(
     repository_path: String,
     stage: String,
     project_path: Option<String>,
-) -> Result<Vec<ProjectWorkflowDefault>, String> {
+) -> Result<Vec<ProjectWorkflowDefault>, TaskFlowError> {
     let defaults = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         delete_project_workflow_default_for_repo(db, repository_path, stage)
     })
@@ -440,7 +444,7 @@ pub async fn lucode_project_workflow_defaults_delete(
 }
 
 #[tauri::command]
-pub async fn lucode_task_get(id: String, project_path: Option<String>) -> Result<Task, String> {
+pub async fn lucode_task_get(id: String, project_path: Option<String>) -> Result<Task, TaskFlowError> {
     with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         TaskService::new(db)
             .get_task(&id)
@@ -458,7 +462,7 @@ pub async fn lucode_task_update_content(
     produced_by_session_id: Option<String>,
     produced_by_run_id: Option<String>,
     project_path: Option<String>,
-) -> Result<Task, String> {
+) -> Result<Task, TaskFlowError> {
     let kind = parse_enum::<TaskArtifactKind>("artifact_kind", &artifact_kind)?;
 
     let task = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
@@ -486,7 +490,7 @@ pub async fn lucode_task_advance_stage(
     id: String,
     stage: String,
     project_path: Option<String>,
-) -> Result<Task, String> {
+) -> Result<Task, TaskFlowError> {
     let stage = parse_enum::<TaskStage>("stage", &stage)?;
 
     let task = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
@@ -509,7 +513,7 @@ pub async fn lucode_task_attach_issue(
     issue_number: Option<i64>,
     issue_url: Option<String>,
     project_path: Option<String>,
-) -> Result<Task, String> {
+) -> Result<Task, TaskFlowError> {
     let task = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&id)
@@ -531,7 +535,7 @@ pub async fn lucode_task_attach_pr(
     pr_url: Option<String>,
     pr_state: Option<String>,
     project_path: Option<String>,
-) -> Result<Task, String> {
+) -> Result<Task, TaskFlowError> {
     let task = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&id)
@@ -550,7 +554,7 @@ pub async fn lucode_task_delete(
     app: tauri::AppHandle,
     id: String,
     project_path: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), TaskFlowError> {
     with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&id)
@@ -568,7 +572,7 @@ pub async fn lucode_task_cancel(
     app: tauri::AppHandle,
     id: String,
     project_path: Option<String>,
-) -> Result<Task, SchaltError> {
+) -> Result<Task, TaskFlowError> {
     let (project, handle) = get_project_with_handle(project_path.as_deref())
         .await
         .map_err(|message| SchaltError::DatabaseError { message })?;
@@ -591,25 +595,32 @@ pub async fn lucode_task_capture_session(
     app: tauri::AppHandle,
     session_name: String,
     project_path: Option<String>,
-) -> Result<Task, String> {
+) -> Result<Task, TaskFlowError> {
     let handle = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = handle.session_manager();
     let session = manager
         .get_session(&session_name)
-        .map_err(|e| format!("failed to load session '{session_name}': {e}"))?;
+        .map_err(|e| TaskFlowError::DatabaseError {
+            message: format!("failed to load session '{session_name}': {e}"),
+        })?;
 
     if session.is_spec || session.cancelled_at.is_some() {
-        return Err(format!("session '{session_name}' is not running"));
+        return Err(TaskFlowError::InvalidInput {
+            field: "session_name".to_string(),
+            message: format!("session '{session_name}' is not running"),
+        });
     }
 
     let task = draft_task_from_session(&handle.db, &handle.repo_path, &manager, &session, None)
-        .map_err(|e| e.to_string())?;
+        .map_err(TaskFlowError::from)?;
 
     terminals::close_session_terminals_if_any(&session_name).await;
     manager
         .fast_cancel_session(&session_name)
         .await
-        .map_err(|e| format!("failed to cancel session '{session_name}': {e}"))?;
+        .map_err(|e| TaskFlowError::DatabaseError {
+            message: format!("failed to cancel session '{session_name}': {e}"),
+        })?;
     if let Err(err) = manager.cleanup_orphaned_worktrees() {
         log::error!(
             "lucode_task_capture_session: failed to clean orphaned worktrees after capturing session '{session_name}' (task id={task_id}, name='{task_name}'): {err}. Task was captured successfully but stale worktrees may remain in .lucode/worktrees/.",
@@ -628,7 +639,7 @@ pub async fn lucode_task_capture_version_group(
     base_name: String,
     session_names: Vec<String>,
     project_path: Option<String>,
-) -> Result<Task, String> {
+) -> Result<Task, TaskFlowError> {
     let handle = get_core_handle_for_project_path(project_path.as_deref()).await?;
     let manager = handle.session_manager();
 
@@ -659,7 +670,7 @@ pub async fn lucode_task_capture_version_group(
         &anchor,
         Some(&base_name),
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(TaskFlowError::from)?;
 
     for session in &running_sessions {
         terminals::close_session_terminals_if_any(&session.name).await;
@@ -688,7 +699,7 @@ pub async fn lucode_task_set_stage_config(
     preset_id: Option<String>,
     auto_chain: bool,
     project_path: Option<String>,
-) -> Result<Vec<TaskStageConfig>, String> {
+) -> Result<Vec<TaskStageConfig>, TaskFlowError> {
     let stage = parse_enum::<TaskStage>("stage", &stage)?;
 
     let configs = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
@@ -713,7 +724,7 @@ pub async fn lucode_task_set_stage_config(
 pub async fn lucode_task_list_stage_configs(
     task_id: String,
     project_path: Option<String>,
-) -> Result<Vec<TaskStageConfig>, String> {
+) -> Result<Vec<TaskStageConfig>, TaskFlowError> {
     with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&task_id)
@@ -727,7 +738,7 @@ pub async fn lucode_task_list_stage_configs(
 pub async fn lucode_task_run_list(
     task_id: String,
     project_path: Option<String>,
-) -> Result<Vec<TaskRun>, String> {
+) -> Result<Vec<TaskRun>, TaskFlowError> {
     with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         let svc = TaskService::new(db);
         svc.get_task(&task_id)
@@ -741,7 +752,7 @@ pub async fn lucode_task_run_list(
 pub async fn lucode_task_run_get(
     run_id: String,
     project_path: Option<String>,
-) -> Result<TaskRun, String> {
+) -> Result<TaskRun, TaskFlowError> {
     with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         TaskRunService::new(db)
             .get_run(&run_id)
@@ -755,7 +766,7 @@ pub async fn lucode_task_artifact_history(
     task_id: String,
     artifact_kind: String,
     project_path: Option<String>,
-) -> Result<Vec<TaskArtifactVersion>, String> {
+) -> Result<Vec<TaskArtifactVersion>, TaskFlowError> {
     let kind = parse_enum::<TaskArtifactKind>("artifact_kind", &artifact_kind)?;
     with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         TaskService::new(db).artifact_history(&task_id, kind)
@@ -768,7 +779,7 @@ pub async fn lucode_task_run_cancel(
     app: tauri::AppHandle,
     run_id: String,
     project_path: Option<String>,
-) -> Result<TaskRun, String> {
+) -> Result<TaskRun, TaskFlowError> {
     let (project, handle) = get_project_with_handle(project_path.as_deref()).await?;
 
     let task_id = TaskRunService::new(&handle.db)
@@ -783,7 +794,7 @@ pub async fn lucode_task_run_cancel(
     let run = TaskService::new(&handle.db)
         .cancel_task_run_cascading(&handle.repo_path, &run_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(TaskFlowError::from)?;
     notify_task_mutation(&app, project_path.as_deref()).await;
     Ok(run)
 }
@@ -794,7 +805,7 @@ pub async fn lucode_task_reopen(
     task_id: String,
     target_stage: String,
     project_path: Option<String>,
-) -> Result<Task, String> {
+) -> Result<Task, TaskFlowError> {
     let target_stage = parse_enum::<TaskStage>("target_stage", &target_stage)?;
     let task = with_core_handle(project_path.as_deref(), move |db, _repo_path| {
         TaskService::new(db).reopen_task_to_stage(&task_id, target_stage)
@@ -857,13 +868,13 @@ fn with_production_orchestrator_handle<R>(
     op: impl FnOnce(
         &TaskOrchestrator<'_, ProductionProvisioner<'_>, ProductionMerger<'_>>,
     ) -> anyhow::Result<R>,
-) -> Result<R, String> {
+) -> Result<R, TaskFlowError> {
     let manager = handle.session_manager();
     let merge_service = handle.merge_service();
     let provisioner = ProductionProvisioner::new(&manager, &handle.db);
     let merger = ProductionMerger::new(&merge_service, &manager);
     let orch = TaskOrchestrator::new(&handle.db, &provisioner, &merger, TASK_BRANCH_PREFIX);
-    op(&orch).map_err(|e| e.to_string())
+    op(&orch).map_err(TaskFlowError::from)
 }
 
 /// Wave D successor to `confirm_stage_against_snapshot`. Drives the async
@@ -874,7 +885,7 @@ async fn confirm_stage_against_handle(
     winning_session_id: &str,
     winning_branch: &str,
     selection_mode: &str,
-) -> Result<Task, SchaltError> {
+) -> Result<Task, TaskFlowError> {
     let manager = handle.session_manager();
     let merge_service = handle.merge_service();
     let provisioner = ProductionProvisioner::new(&manager, &handle.db);
@@ -886,7 +897,7 @@ async fn confirm_stage_against_handle(
         .await
     {
         Ok(task) => Ok(task),
-        Err(error) => Err(map_confirm_stage_error(error)),
+        Err(error) => Err(TaskFlowError::from(map_confirm_stage_error(error))),
     }
 }
 
@@ -895,7 +906,7 @@ pub async fn lucode_task_promote_to_ready(
     app: tauri::AppHandle,
     id: String,
     project_path: Option<String>,
-) -> Result<Task, String> {
+) -> Result<Task, TaskFlowError> {
     let (project, handle) = get_project_with_handle(project_path.as_deref()).await?;
     let task_lock = project.task_locks.lock_for(&id);
     let _guard = task_lock.lock().await;
@@ -912,7 +923,7 @@ pub async fn lucode_task_start_stage_run(
     preset_id: Option<String>,
     shape: PresetShapePayload,
     project_path: Option<String>,
-) -> Result<StageRunStarted, String> {
+) -> Result<StageRunStarted, TaskFlowError> {
     let stage = parse_enum::<TaskStage>("stage", &stage)?;
     let shape: PresetShape = shape.into();
 
@@ -945,7 +956,7 @@ pub async fn lucode_task_start_clarify_run(
     app: tauri::AppHandle,
     task_id: String,
     project_path: Option<String>,
-) -> Result<ClarifyRunStarted, String> {
+) -> Result<ClarifyRunStarted, TaskFlowError> {
     let (project, handle) = get_project_with_handle(project_path.as_deref()).await?;
     let task_lock = project.task_locks.lock_for(&task_id);
     let _guard = task_lock.lock().await;
@@ -954,7 +965,7 @@ pub async fn lucode_task_start_clarify_run(
         .db
         .get_consolidation_default_favorite()
         .map(|f| f.agent_type)
-        .map_err(|e| e.to_string())?;
+        .map_err(TaskFlowError::from)?;
     let started = with_production_orchestrator_handle(&handle, |orch| {
         orch.start_clarify_run(&task_id, agent_type.as_deref())
     })?;
@@ -1000,7 +1011,7 @@ pub async fn lucode_task_confirm_stage(
     winning_branch: String,
     selection_mode: Option<String>,
     project_path: Option<String>,
-) -> Result<Task, SchaltError> {
+) -> Result<Task, TaskFlowError> {
     let mode = selection_mode.unwrap_or_else(|| "manual".to_string());
 
     let (project, handle) = get_project_with_handle(project_path.as_deref())
@@ -1072,7 +1083,7 @@ mod payload_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::errors::SchaltError;
+    use lucode::errors::SchaltError;
     use async_trait::async_trait;
     use lucode::domains::git::service as git;
     use lucode::domains::tasks::service::{
@@ -1399,11 +1410,19 @@ mod tests {
     #[test]
     fn parse_enum_surfaces_label_on_failure() {
         let err = parse_enum::<TaskStage>("stage", "nonsense").unwrap_err();
-        assert!(err.contains("invalid stage"), "unexpected error: {err}");
-        assert!(
-            err.contains("Invalid task stage"),
-            "unexpected error: {err}"
-        );
+        // Phase 4 Wave E.2: parse_enum now returns
+        // `TaskFlowError::InvalidInput { field, message }` which displays
+        // the field label and the underlying parse error verbatim.
+        match &err {
+            TaskFlowError::InvalidInput { field, message } => {
+                assert_eq!(field, "stage");
+                assert!(
+                    message.contains("Invalid task stage"),
+                    "unexpected message: {message}"
+                );
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
     }
 
     #[test]
@@ -1467,7 +1486,7 @@ mod tests {
         let svc = TaskService::new(db);
 
         let err = parse_enum::<TaskStage>("stage", "bogus").unwrap_err();
-        assert!(err.contains("invalid stage"));
+        assert!(matches!(err, TaskFlowError::InvalidInput { ref field, .. } if field == "stage"));
 
         for s in ["ready", "brainstormed", "planned"] {
             let parsed = parse_enum::<TaskStage>("stage", s).unwrap();
@@ -1505,7 +1524,7 @@ mod tests {
         let db = &*testdb;
         let svc = TaskRunService::new(db);
         let err = svc.get_run("nope").unwrap_err().to_string();
-        assert!(err.contains("task run not found"));
+        assert!(err.to_string().contains("task run not found"));
     }
 
     fn make_session_with_task_id(task_id: Option<&str>) -> Session {
@@ -1970,7 +1989,7 @@ mod tests {
         .expect_err("cancel should fail");
 
         match error {
-            SchaltError::TaskCancelFailed { task_id, failures } => {
+            TaskFlowError::TaskCancelFailed { task_id, failures } => {
                 assert_eq!(task_id, task.id);
                 assert_eq!(failures.len(), 1);
                 assert!(failures[0].contains(&blocked.id));

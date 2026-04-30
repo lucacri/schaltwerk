@@ -59,6 +59,7 @@ pub use crate::domains::terminal::{
     manager::CreateTerminalWithAppAndSizeParams, sh_quote_string, shell_invocation_to_posix,
     submission::submission_options_for_agent,
 };
+pub use crate::domains::tasks::TaskFlowError;
 pub use crate::domains::workspace::get_project_files_with_status;
 pub use crate::shared::format_branch_name;
 
