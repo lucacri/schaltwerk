@@ -8175,10 +8175,11 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
         }
 
         if let Some(state) = filter_state {
+            // Phase 4 Wave D.0: info.session_state is now a wire-format string.
             sessions.retain(|s| match state {
-                SessionState::Running => s.info.session_state == SessionState::Running,
-                SessionState::Processing => s.info.session_state == SessionState::Processing,
-                SessionState::Spec => s.info.session_state == SessionState::Spec,
+                SessionState::Running => s.info.session_state == "running",
+                SessionState::Processing => s.info.session_state == "processing",
+                SessionState::Spec => s.info.session_state == "spec",
             });
         }
 
@@ -8200,7 +8201,7 @@ async fn list_sessions(req: Request<Incoming>) -> Result<Response<String>, hyper
                                 "waiting_for_input".to_string()
                             }
                         });
-                        if session.info.session_state == SessionState::Spec
+                        if session.info.session_state == "spec"
                             && let Some(stable_id) = session.info.stable_id.as_deref()
                         {
                             let persisted_attention = match attention.kind {

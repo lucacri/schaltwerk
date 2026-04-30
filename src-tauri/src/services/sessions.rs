@@ -215,8 +215,7 @@ impl SessionsBackend for ProjectSessionsBackend {
                             }
                         });
 
-                        if session.info.session_state
-                            == crate::domains::sessions::entity::SessionState::Spec
+                        if session.info.session_state == "spec"
                             && let Some(stable_id) = session.info.stable_id.as_deref()
                         {
                             let persisted_attention = match attention.kind {
@@ -303,7 +302,7 @@ mod tests {
 
     fn sample_session(name: &str) -> EnrichedSession {
         use crate::domains::sessions::entity::{
-            SessionInfo, SessionState, SessionStatusType, SessionType,
+            SessionInfo, SessionStatusType, SessionType,
         };
 
         EnrichedSession {
@@ -339,7 +338,7 @@ mod tests {
                 spec_stage: None,
                 improve_plan_round_id: None,
                 clarification_started: None,
-                session_state: SessionState::Running,
+                session_state: "running".to_string(),
                 issue_number: None,
                 issue_url: None,
                 pr_number: None,

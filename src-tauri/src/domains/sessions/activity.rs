@@ -156,7 +156,8 @@ impl<E: EventEmitter> ActivityTracker<E> {
                             )
                         });
                     let readiness = crate::domains::sessions::service::compute_ready_to_merge_for_event(
-                        &session.session_state,
+                        // Phase 4 Wave D.0: only running sessions can be ready to merge.
+                        !session.is_spec && session.cancelled_at.is_none(),
                         Some(stats.has_uncommitted),
                         Some(stats.has_conflicts),
                         worktree_repo.as_ref().and_then(|repo| {

@@ -372,7 +372,7 @@ fn test_restore_archived_spec_included_in_enriched_sessions() {
         enriched
             .iter()
             .any(|session| session.info.session_id == restored.name
-                && session.info.session_state == SessionState::Spec),
+                && session.info.session_state == "spec"),
         "restored spec should appear in enriched sessions snapshot"
     );
 }
@@ -605,7 +605,7 @@ fn test_epic_assignment_round_trip() {
         .iter()
         .find(|s| s.info.session_id == "spec-one")
         .unwrap();
-    assert_eq!(spec.info.session_state, SessionState::Spec);
+    assert_eq!(spec.info.session_state, "spec");
     assert_eq!(spec.info.epic.as_ref().unwrap().name, "billing-v2");
 }
 
@@ -676,7 +676,7 @@ fn test_list_enriched_sessions_skips_spec_git_stats() {
 
     let spec_sessions: Vec<_> = enriched
         .iter()
-        .filter(|session| session.info.session_state == SessionState::Spec)
+        .filter(|session| session.info.session_state == "spec")
         .collect();
     assert_eq!(spec_sessions.len(), 2);
     for spec in spec_sessions {
@@ -1666,7 +1666,7 @@ fn test_mark_ready_refreshes_git_stats_without_changing_state() {
         Some(false),
         "Git stats should reflect clean state after readiness refresh"
     );
-    assert_eq!(me.info.session_state, SessionState::Running);
+    assert_eq!(me.info.session_state, "running");
 }
 
 #[test]
@@ -1751,7 +1751,7 @@ fn test_list_enriched_sessions_marks_clean_committed_session_ready() {
         .expect("session present");
 
     assert!(refreshed.info.ready_to_merge);
-    assert_eq!(refreshed.info.session_state, SessionState::Running);
+    assert_eq!(refreshed.info.session_state, "running");
 }
 
 #[test]
@@ -1774,7 +1774,7 @@ fn test_list_enriched_sessions_keeps_pristine_session_not_ready() {
         "fresh sessions without committed work should not be marked ready_to_merge"
     );
     assert_eq!(refreshed.info.commits_ahead_count, Some(0));
-    assert_eq!(refreshed.info.session_state, SessionState::Running);
+    assert_eq!(refreshed.info.session_state, "running");
 }
 
 #[test]
@@ -1796,7 +1796,7 @@ fn test_list_enriched_sessions_clears_stale_ready_flag_for_dirty_session() {
         .expect("session present");
 
     assert!(!refreshed.info.ready_to_merge);
-    assert_eq!(refreshed.info.session_state, SessionState::Running);
+    assert_eq!(refreshed.info.session_state, "running");
 }
 
 #[test]

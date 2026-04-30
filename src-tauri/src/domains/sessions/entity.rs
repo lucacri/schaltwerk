@@ -180,6 +180,23 @@ pub enum SessionLifecycleState {
     Cancelled,
 }
 
+impl SessionLifecycleState {
+    /// Phase 4 Wave D.0: project the runtime-only enum onto the
+    /// frontend-facing wire format string. The Cancelled variant maps
+    /// to `"running"` because cancelled sessions are filtered out
+    /// before reaching the sidebar (the wire-format adapter only sees
+    /// non-cancelled sessions in production); emitting "running"
+    /// preserves the v1 contract for the rare path that hits it.
+    pub fn to_wire_string(self) -> &'static str {
+        match self {
+            SessionLifecycleState::Spec => "spec",
+            SessionLifecycleState::Processing => "processing",
+            SessionLifecycleState::Running => "running",
+            SessionLifecycleState::Cancelled => "running",
+        }
+    }
+}
+
 impl Session {
     /// Phase 3 derived getter. `worktree_exists_on_disk` is supplied by
     /// the caller (the enrichment layer in `domains/sessions/service.rs`
@@ -603,7 +620,13 @@ pub struct SessionInfo {
     pub improve_plan_round_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clarification_started: Option<bool>,
-    pub session_state: SessionState,
+    /// Phase 4 Wave D.0: wire-format string ("spec" | "processing" |
+    /// "running"). Synthesized by `SessionInfoBuilder` from
+    /// `Session::lifecycle_state(...)`. Same lowercase strings the
+    /// legacy `SessionState` enum produced via
+    /// `#[serde(rename_all = "lowercase")]`, so the JSON wire bytes
+    /// are unchanged for the frontend.
+    pub session_state: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub issue_number: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]

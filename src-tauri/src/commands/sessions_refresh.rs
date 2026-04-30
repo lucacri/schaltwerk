@@ -162,7 +162,7 @@ impl RefreshHub {
         let running: HashSet<String> = payload
             .sessions
             .iter()
-            .filter(|s| s.info.session_state == SessionState::Running)
+            .filter(|s| s.info.session_state == "running")
             .map(|s| s.info.session_id.clone())
             .collect();
         tauri::async_runtime::spawn(async move {

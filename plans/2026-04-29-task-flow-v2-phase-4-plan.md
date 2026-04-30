@@ -1205,3 +1205,173 @@ The whole phase ships in one session (per the user's "execute end-to-end" instru
 - After Wave E (TaskFlowError done; current_* pending)
 
 Awaiting plan review before starting code.
+
+---
+
+## 12 — Wave D plan addendum (next-session entry, post Waves B+C)
+
+Waves B and C shipped. This addendum captures the resurvey done at the
+start of the second push and the concrete sub-wave breakdown.
+
+### 12.1 — Resurvey (executed at session start)
+
+**Tests at session start: 2371 / 2371 passing.** Branch is green.
+
+**SessionInfoBuilder enum reads (production):** 4 sites in
+`domains/sessions/service.rs`, all in `list_enriched_sessions_base`:
+
+| File | Line | Pattern | Wave D treatment |
+|---|---|---|---|
+| `service.rs` | 3892 | `info.session_state: session.session_state.clone()` (spec branch) | Replace with literal `"spec".to_string()` |
+| `service.rs` | 3940 | `match session.status { Active → Active, Cancelled → Archived, Spec → Spec }` | Replace with `if session.is_spec { Spec } else if session.cancelled_at.is_some() { Archived } else { Active }` |
+| `service.rs` | 3949 | `&& session.session_state == SessionState::Running` (Processing-derive guard) | Replace with `&& !session.is_spec` (the only non-cancelled non-spec state writes "running" today) |
+| `service.rs` | 3953 | `session.session_state.clone()` (else branch) | Replace with `lifecycle_state_to_wire_string(session.lifecycle_state(worktree_exists))` |
+
+**Fixture sites (struct-init `status: SessionStatus::*` / `session_state: SessionState::*`):** **69 sites across 20 files.** Larger than the plan's "30+" estimate. Top files (sorted):
+
+| File | Sites |
+|---|---|
+| `domains/sessions/db_sessions.rs` | 16 |
+| `domains/sessions/service.rs` | 7 |
+| `domains/sessions/activity.rs` | 6 |
+| `commands/tasks.rs` | 6 |
+| `mcp_api.rs` | 4 |
+| `domains/sessions/lifecycle/cancellation.rs` | 4 |
+| `tests/run_status_integration.rs`, `e2e_run_lifecycle.rs`, `e2e_run_failure.rs` | 2 each |
+| `shared/session_metadata_gateway.rs`, `mcp_api/diff_api.rs` | 2 each |
+| `domains/tasks/{service,auto_advance}.rs`, `domains/sessions/{repository,lifecycle/finalizer,facts_recorder,consolidation_stub,action_prompts}.rs` | 2 each |
+| `services/sessions.rs`, `commands/schaltwerk_core.rs` | 1 each |
+
+**Mechanical pattern for fixture migration:** every site is a struct
+literal that includes `status: SessionStatus::Active, session_state:
+SessionState::Running` (or the spec/cancelled variants). Once
+`SessionStatus` and `SessionState` are deleted, those two field-init
+lines need to disappear. Default fixture state ("active running") is
+already what `is_spec=false, cancelled_at=None` (existing defaults)
+produces, so most sites just lose two lines. Spec fixtures need
+`is_spec: true` added. Cancelled fixtures need `cancelled_at:
+Some(some_ts)` added.
+
+**Cross-cutting consolidation tests** in `mcp_api.rs` already received
+dual-axis writes in Wave C.2 (added `set_session_cancelled_at(_)` /
+`set_session_is_spec(_)` calls alongside the legacy
+`update_session_status` / `update_session_state` calls). Wave D's
+deletion will require removing the legacy calls too — `cargo check`
+catches it.
+
+**`tasks.current_*` reads:** 4 production sites + several test
+assertions. Production reads:
+- `domains/tasks/prompts.rs:124` (current_spec read in build_brainstorm_prompt)
+- `domains/tasks/prompts.rs:221` (current_plan read in build_implement_prompt)
+- `domains/tasks/prompts.rs:485, 643` (test fixtures inside `#[cfg(test)]`)
+- `commands/tasks.rs:283` (preserve-on-update guard in lucode_task_update_content)
+- `db_tasks.rs:191-193, 939` (TASK_SELECT_COLUMNS + INSERT bindings — Wave F.4)
+
+Test assertions in `service.rs:877-879, 1489-1491`, `commands/tasks.rs:1461-1463, 2103`.
+
+**Task command return-type signatures:** confirmed 23 commands in
+`commands/tasks.rs` returning `Result<_, String>` (lines 340-996).
+The 4 SchaltError-returning commands (`lucode_task_cancel:567`,
+`lucode_task_confirm_stage:996` + 2 helpers) are mixed in.
+
+### 12.2 — Wave D sub-wave order
+
+| Sub-wave | Title | Mode | Files / agents |
+|---|---|---|---|
+| D.0 | SessionInfoBuilder rework + SessionInfo wire-format change | sequential | `service.rs` + `entity.rs::SessionInfo` |
+| D.1 | Fixture migration: domains/sessions cluster (parallel agents on disjoint files) | **parallel ×3** | A1: `db_sessions.rs`; A2: `service.rs` + `repository.rs` + `lifecycle/{cancellation,finalizer}.rs`; A3: `activity.rs` + `facts_recorder.rs` + `consolidation_stub.rs` + `action_prompts.rs` |
+| D.2 | Fixture migration: commands + tasks + integration + misc | **parallel ×3** | A1: `commands/tasks.rs` + `commands/schaltwerk_core.rs`; A2: `mcp_api.rs` + `mcp_api/diff_api.rs` + `domains/tasks/{service,auto_advance}.rs`; A3: `services/sessions.rs` + `shared/session_metadata_gateway.rs` + `tests/{run_status_integration,e2e_run_lifecycle,e2e_run_failure}.rs` |
+| D.3 | Delete `SessionStatus` + `SessionState` enums + `Session.status`/`Session.session_state` fields + DB layer SQL | sequential | `entity.rs` + `db_sessions.rs` + cleanup |
+| D.4 | New migration `v2_drop_session_legacy_columns` (table-rebuild dance) + 6 migration tests | sequential | `migrations/v2_drop_session_legacy_columns.rs` + `db_schema.rs` |
+| D.5 | Structural pins (compile-time field assertions + lifecycle_state fn-pointer) + DB round-trip test for `lifecycle_state(...)` | sequential | tests in `entity.rs` + `db_sessions.rs` |
+
+**Why D.1/D.2 need parallel agents:** 69 fixture sites is mechanical
+work where agents on disjoint files don't conflict. Coordinator
+commits per sub-wave; `just test` after each commit; no mid-wave red.
+
+**Why D.3 must come AFTER D.1+D.2:** `#![deny(dead_code)]` means
+deleting the enum makes every fixture that uses it fail to compile.
+Migrate fixtures first; delete enum second.
+
+**Why D.5 includes a DB round-trip test for `lifecycle_state`:** per
+`feedback_compile_pins_dont_catch_wiring.md` — the Wave B.0
+wiring-gap retroactively requires this. Compile-time pins prove the
+field exists; only a DB round-trip proves the SELECT/INSERT actually
+read/write it. The test inserts a session with `is_spec=true,
+cancelled_at=Some(t)`, reads it back, calls
+`session.lifecycle_state(false)`, asserts `Cancelled` (cancellation
+wins regardless of worktree state). Two-way binding: revert the
+SELECT projection and the test fails on the cancelled assertion.
+
+### 12.3 — Wave E plan addendum (TaskFlowError sweep)
+
+| Sub-wave | Title | Mode | Files |
+|---|---|---|---|
+| E.1 | Define `TaskFlowError` at `domains/tasks/errors.rs` + From impls + Display + 3 compile-time tests | sequential | `errors.rs` + `mod.rs` |
+| E.2 | Migrate the 23 task commands' return types (`Result<_, String>` / `Result<_, SchaltError>` → `Result<_, TaskFlowError>`) | **parallel ×3** | A1: lines 340-549 (8 commands); A2: lines 567-727 (7 commands); A3: lines 741-996 (8 commands) |
+| E.3 | Frontend `src/types/errors.ts` — add `TaskFlowError` discriminator + `getErrorMessage` branch + tests | sequential | `errors.ts` + tests |
+| E.4 | Delete the 3 task variants from `SchaltError`; collapse `From<SchaltError> for TaskFlowError` match | sequential | `errors.rs` + `domains/tasks/errors.rs` |
+
+**Compile-time pins:**
+- `task_flow_error_match_is_exhaustive_without_wildcard` (every variant)
+- `task_flow_error_serializes_with_tagged_enum_format` (asserts
+  `{"type":"TaskNotFound","data":{...}}` shape)
+- `schalt_error_no_longer_has_task_variants` post-E.4
+
+**No DB round-trip test** for E — TaskFlowError is a pure type, not a
+schema change.
+
+### 12.4 — Wave F plan addendum (derived current_* getters)
+
+| Sub-wave | Title | Mode | Files |
+|---|---|---|---|
+| F.1 | Add `Task::current_spec(&db) / current_plan / current_summary` methods + structural pin | sequential | `entity.rs` |
+| F.2 | Delete `domains/tasks/service.rs` denormalized-mirror block | sequential | `service.rs` |
+| F.3 | Sweep readers — `prompts.rs:124,221` + `commands/tasks.rs:283` + test assertions | **parallel ×2** | A1: `prompts.rs`; A2: `commands/tasks.rs` + `domains/tasks/service.rs` test assertions |
+| F.4 | Drop `current_spec/plan/summary` columns from `TASK_SELECT_COLUMNS` + INSERT + `from_row` + remove setters | sequential | `db_tasks.rs` |
+| F.5 | Remove `Task.current_spec/current_plan/current_summary` fields from struct | sequential | `entity.rs` |
+| F.6 | New migration `v2_drop_task_current_columns` (table-rebuild) + 6 migration tests + DB round-trip test for the derived getters | sequential | `migrations/v2_drop_task_current_columns.rs` + `db_schema.rs` + tests |
+
+**Why F.5 splits from F.1:** F.1 adds the methods alongside the
+fields (additive). F.3 migrates readers to call the methods. F.5
+removes the fields. `#![deny(dead_code)]` validates the order — if
+F.5 runs before F.3 finishes, the build fails on missed callers.
+
+**DB round-trip test for derived getters:** insert a task with no
+artifacts, assert `task.current_spec(&db)? == None`. Insert a Spec
+artifact with `is_current=true`, re-read, assert `current_spec(&db)
+== Some(content)`. Replace the artifact (insert new with
+`is_current=true`, prior `is_current=false`), assert
+`current_spec(&db)` returns the new content.
+
+### 12.5 — Wave G + H
+
+Wave G: `bun run lint:rust`, `cargo shear`, `bun run lint`, `knip`,
+arch tests, full `just test`, Wave G grep verification per §6 of this
+plan.
+
+Wave H: update `plans/.../status.md` with the post-Wave-H commit hash;
+update auto-memory `project_taskflow_v2_charter.md` to reflect Phase 4
+complete; mark the Phase 4 row `[x]` in the phase tracker.
+
+### 12.6 — Risks specific to Wave D
+
+| Risk | Mitigation |
+|---|---|
+| Fixture migration agents introduce subtle drift (e.g. setting `is_spec: true` but leaving an unrelated field stale) | Each agent runs `cargo check -p lucode --tests` before reporting; coordinator runs `just test` between sub-waves; reverting any sub-wave is a single commit. |
+| The wire-format `session_state: SessionState` field on `SessionInfo` is read by frontend tests | Audit confirmed frontend reads strings (`"spec" \| "processing" \| "running"`). Changing the Rust field type from `SessionState` to `String` is wire-compatible. Verified by an existing frontend test that compares the serialized JSON. |
+| `lifecycle_state(...)` returns `Cancelled` for both is_spec sessions and worktree-missing sessions, breaking the wire format | Adapter logic: `if is_spec → "spec"; if cancelled_at → "running"` (cancelled sessions are filtered out before reaching the sidebar; "running" is harmless); else lifecycle_state mapping. The plan's §1 wire-format table specifies this exact mapping. |
+| The migration's table-rebuild loses an index that wasn't recreated | Phase 3 Wave D.4's `recreate_indexes_after_rebuild` is the template — copy verbatim and verify against the v2 schema. |
+| Wave D.5's DB round-trip test is itself flaky if it depends on `worktree_path.exists()` | The test passes `worktree_exists=false` explicitly to `lifecycle_state`; no filesystem dependency. |
+
+### 12.7 — Definition of done for the Wave D–H push
+
+- All 23 task commands return `Result<_, TaskFlowError>`.
+- Zero references to `pub enum SessionStatus` / `pub enum SessionState` / `Session.status` / `Session.session_state` / `tasks.current_spec` / `current_plan` / `current_summary` in production code (per the Wave G grep).
+- `SchaltError` no longer has `TaskNotFound`, `TaskCancelFailed`, or `StageAdvanceFailedAfterMerge` variants.
+- 2 new migrations idempotent + tested (v2_drop_session_legacy_columns, v2_drop_task_current_columns) with archive tables.
+- 3 new structural compile-time pins + 2 new DB round-trip tests.
+- `arch_domain_isolation` and `arch_layering_database` green.
+- `just test` green. Tests count expected: 2371 (start) + ~15 new tests in Waves D/E/F + (-some deleted obsolete-fixture tests) ≈ 2380+.
+
+Awaiting approval. On approval, executing end-to-end with the no-mid-gating pattern.

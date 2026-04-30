@@ -20,6 +20,12 @@ mod session_sorting_tests {
         repo_path: &PathBuf,
     ) -> Session {
         let now = Utc::now();
+        let derived_is_spec = state == SessionState::Spec || status == SessionStatus::Spec;
+        let derived_cancelled_at = if status == SessionStatus::Cancelled {
+            Some(now)
+        } else {
+            None
+        };
         Session {
             id: uuid::Uuid::new_v4().to_string(),
             name: name.to_string(),
@@ -77,8 +83,11 @@ mod session_sorting_tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
-            is_spec: false,
-            cancelled_at: None,
+            // Phase 4 Wave D.0: derive the orthogonal axes from the legacy
+            // enums so the fixture works whether enrichment reads the old
+            // or the new fields.
+            is_spec: derived_is_spec,
+            cancelled_at: derived_cancelled_at,
         }
     }
 
@@ -270,7 +279,7 @@ mod session_sorting_tests {
 
         // All sessions should have spec state
         for session in &filtered_sessions {
-            assert_eq!(session.info.session_state, SessionState::Spec);
+            assert_eq!(session.info.session_state, "spec");
         }
     }
 
@@ -301,7 +310,7 @@ mod session_sorting_tests {
         );
 
         for session in &filtered_sessions {
-            assert_ne!(session.info.session_state, SessionState::Spec);
+            assert_ne!(session.info.session_state, "spec");
         }
     }
 

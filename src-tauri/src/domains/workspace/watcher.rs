@@ -491,7 +491,9 @@ impl FileWatcher {
                         _ => None,
                     };
                     let readiness = crate::domains::sessions::service::compute_ready_to_merge_for_event(
-                        &crate::domains::sessions::entity::SessionState::Running,
+                        // Phase 4 Wave D.0: this watcher path always runs against
+                        // a live worktree → is_running=true.
+                        true,
                         Some(stats.has_uncommitted),
                         Some(has_conflicts),
                         crate::domains::sessions::service::compute_rebased_onto_parent_with_repo(

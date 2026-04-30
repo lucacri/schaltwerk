@@ -1,5 +1,5 @@
 use crate::domains::agents::{AgentLaunchSpec, naming::sanitize_name};
-use crate::domains::sessions::entity::SessionReadyToMergeCheck;
+use crate::domains::sessions::entity::{SessionLifecycleState, SessionReadyToMergeCheck};
 use crate::shared::terminal_id::{terminal_id_for_session_bottom, terminal_id_for_session_top};
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
@@ -185,8 +185,11 @@ pub fn compute_rebased_onto_parent(
     compute_rebased_onto_parent_with_repo(&repo, session_branch, parent_branch)
 }
 
+/// Phase 4 Wave D.0: Replaced `&SessionState` with `is_running: bool`.
+/// Callers compute `is_running = !session.is_spec && session.cancelled_at.is_none()`
+/// (matches the v1 invariant that only Running sessions can be ready to merge).
 fn build_ready_to_merge_state(
-    session_state: &SessionState,
+    is_running: bool,
     worktree_exists: bool,
     has_uncommitted_changes: Option<bool>,
     has_conflicts: Option<bool>,
@@ -217,21 +220,20 @@ fn build_ready_to_merge_state(
     ];
 
     SessionReadyToMergeState {
-        ready_to_merge: matches!(session_state, SessionState::Running)
-            && checks.iter().all(|check| check.passed),
+        ready_to_merge: is_running && checks.iter().all(|check| check.passed),
         checks,
     }
 }
 
 pub fn compute_ready_to_merge_for_event(
-    session_state: &SessionState,
+    is_running: bool,
     has_uncommitted_changes: Option<bool>,
     has_conflicts: Option<bool>,
     rebased_onto_parent: Option<bool>,
     commits_ahead_count: Option<u32>,
 ) -> (bool, Vec<SessionReadyToMergeCheck>) {
     let state = build_ready_to_merge_state(
-        session_state,
+        is_running,
         true,
         has_uncommitted_changes,
         has_conflicts,
@@ -304,8 +306,11 @@ pub fn apply_git_enrichment(sessions: &mut [EnrichedSession], results: Vec<GitEn
         }
         session.info.has_conflicts = result.has_conflicts;
         session.info.commits_ahead_count = result.commits_ahead_count;
+        // Phase 4 Wave D.0: derive is_running from the wire-format string the
+        // SessionInfoBuilder synthesized. Only "running" gates ready_to_merge.
+        let is_running = session.info.session_state == "running";
         let readiness = build_ready_to_merge_state(
-            &session.info.session_state,
+            is_running,
             true,
             has_uncommitted_changes,
             result.has_conflicts,
@@ -3812,7 +3817,7 @@ impl SessionManager {
                 spec_stage: Some(spec.stage.clone()),
                 improve_plan_round_id: spec.improve_plan_round_id.clone(),
                 clarification_started: Some(spec.clarification_started),
-                session_state: SessionState::Spec,
+                session_state: "spec".to_string(),
                 issue_number: spec.issue_number,
                 issue_url: spec.issue_url.clone(),
                 pr_number: spec.pr_number,
@@ -3889,7 +3894,12 @@ impl SessionManager {
                     spec_stage: Some(SpecStage::Draft),
                     improve_plan_round_id: None,
                     clarification_started: None,
-                    session_state: session.session_state.clone(),
+                    // Phase 4 Wave D.0: this is the spec-branch of the
+                    // enriched-session loop; the legacy code emitted
+                    // `session.session_state` which for a spec session
+                    // serialized to `"spec"`. After D.0 we emit the wire
+                    // string directly, decoupled from the legacy enum.
+                    session_state: "spec".to_string(),
                     issue_number: session.issue_number,
                     issue_url: session.issue_url.clone(),
                     pr_number: session.pr_number,
@@ -3934,24 +3944,24 @@ impl SessionManager {
                 );
             }
 
+            // Phase 4 Wave D.0: synthesize the wire-format strings from the
+            // orthogonal axes (is_spec, cancelled_at) plus worktree existence.
+            // The legacy enum projection used `session.status` and
+            // `session.session_state`; both now derive from
+            // `Session::lifecycle_state(...)` plus the cancelled axis.
+            let lifecycle = session.lifecycle_state(worktree_exists);
             let status_type = if !worktree_exists && !cfg!(test) {
                 SessionStatusType::Missing
+            } else if session.is_spec {
+                SessionStatusType::Spec
+            } else if session.cancelled_at.is_some() {
+                SessionStatusType::Archived
             } else {
-                match session.status {
-                    SessionStatus::Active => SessionStatusType::Active,
-                    SessionStatus::Cancelled => SessionStatusType::Archived,
-                    SessionStatus::Spec => SessionStatusType::Spec,
-                }
+                SessionStatusType::Active
             };
 
-            let session_state = if !worktree_exists
-                && !cfg!(test)
-                && session.session_state == SessionState::Running
-            {
-                SessionState::Processing
-            } else {
-                session.session_state.clone()
-            };
+            let session_state_wire: String = lifecycle.to_wire_string().to_string();
+            let is_running = lifecycle == SessionLifecycleState::Running;
 
             let original_agent_type = session
                 .original_agent_type
@@ -3960,7 +3970,7 @@ impl SessionManager {
 
             let current_index = enriched.len();
             let base_readiness =
-                build_ready_to_merge_state(&session_state, worktree_exists, None, None, None, None);
+                build_ready_to_merge_state(is_running, worktree_exists, None, None, None, None);
 
             let info = SessionInfo {
                 session_id: session.name.clone(),
@@ -3997,7 +4007,7 @@ impl SessionManager {
                 spec_stage: None,
                 improve_plan_round_id: None,
                 clarification_started: None,
-                session_state,
+                session_state: session_state_wire.clone(),
                 issue_number: session.issue_number,
                 issue_url: session.issue_url.clone(),
                 pr_number: session.pr_number,
@@ -4869,13 +4879,10 @@ impl SessionManager {
                     )
                 }
             };
-            let readiness_state = if session.is_spec || session.cancelled_at.is_some() {
-                SessionState::Spec
-            } else {
-                SessionState::Running
-            };
+            // Phase 4 Wave D.0: only running sessions can be ready to merge.
+            let is_running = !session.is_spec && session.cancelled_at.is_none();
             build_ready_to_merge_state(
-                &readiness_state,
+                is_running,
                 worktree_exists,
                 has_uncommitted_changes,
                 has_conflicts,

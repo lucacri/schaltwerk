@@ -471,13 +471,14 @@ impl SessionUtils {
         filter_mode: &FilterMode,
     ) -> Vec<EnrichedSession> {
         match filter_mode {
+            // Phase 4 Wave D.0: info.session_state is now a wire-format string.
             FilterMode::Spec => sessions
                 .into_iter()
-                .filter(|s| s.info.session_state == SessionState::Spec)
+                .filter(|s| s.info.session_state == "spec")
                 .collect(),
             FilterMode::Running => sessions
                 .into_iter()
-                .filter(|s| s.info.session_state != SessionState::Spec)
+                .filter(|s| s.info.session_state != "spec")
                 .collect(),
         }
     }
@@ -510,15 +511,11 @@ impl SessionUtils {
         match sort_mode {
             SortMode::Name => {
                 sessions.sort_by(|a, b| {
-                    // First sort by session state priority (Spec > Active)
-                    let a_priority = match a.info.session_state {
-                        SessionState::Spec => 0,
-                        SessionState::Processing | SessionState::Running => 1,
-                    };
-                    let b_priority = match b.info.session_state {
-                        SessionState::Spec => 0,
-                        SessionState::Processing | SessionState::Running => 1,
-                    };
+                    // First sort by session state priority (Spec > Active).
+                    // Phase 4 Wave D.0: info.session_state is now a string;
+                    // any non-"spec" value (running/processing) ranks lower.
+                    let a_priority = if a.info.session_state == "spec" { 0 } else { 1 };
+                    let b_priority = if b.info.session_state == "spec" { 0 } else { 1 };
 
                     match a_priority.cmp(&b_priority) {
                         std::cmp::Ordering::Equal => {
