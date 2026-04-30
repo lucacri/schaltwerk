@@ -1,6 +1,7 @@
 pub mod auto_advance;
 pub mod clarify;
 pub mod entity;
+pub mod errors;
 pub mod orchestration;
 pub mod presets;
 pub mod prompts;
@@ -9,6 +10,8 @@ pub mod rest_contract;
 pub mod run_status;
 pub mod runs;
 pub mod service;
+
+pub use errors::TaskFlowError;
 
 pub use orchestration::StageRunStarted;
 
