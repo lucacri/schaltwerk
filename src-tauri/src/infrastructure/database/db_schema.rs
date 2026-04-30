@@ -980,6 +980,11 @@ pub(crate) fn apply_tasks_migrations(conn: &rusqlite::Connection) -> anyhow::Res
     // Phase 3 Wave D.4: drop the legacy task_role column. Idempotent —
     // skips immediately on v2-native DBs that never had the column.
     super::migrations::v1_to_v2_run_role::run(conn)?;
+    // Phase 3 Wave E.3: backfill tasks.cancelled_at from legacy
+    // stage='cancelled' rows. Rewrites those rows' stage to 'draft' as
+    // the documented safe fallback. Idempotent — skips when no
+    // stage='cancelled' rows remain.
+    super::migrations::v1_to_v2_task_cancelled::run(conn)?;
     let _ = conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sessions_task ON sessions(task_id)",
         [],
