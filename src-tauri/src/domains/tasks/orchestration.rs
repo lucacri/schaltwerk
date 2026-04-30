@@ -141,7 +141,7 @@ fn next_stage_after(stage: TaskStage) -> Option<TaskStage> {
         TaskStage::Planned => Some(TaskStage::Implemented),
         TaskStage::Implemented => Some(TaskStage::Pushed),
         TaskStage::Pushed => Some(TaskStage::Done),
-        TaskStage::Done | TaskStage::Cancelled => None,
+        TaskStage::Done => None,
     }
 }
 

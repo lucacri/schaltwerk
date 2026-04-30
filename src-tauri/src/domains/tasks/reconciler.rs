@@ -14,7 +14,6 @@ fn stage_rank(stage: TaskStage) -> u8 {
         TaskStage::Implemented => 4,
         TaskStage::Pushed => 5,
         TaskStage::Done => 6,
-        TaskStage::Cancelled => 7,
     }
 }
 
@@ -30,6 +29,13 @@ where
     T: TaskMethods + TaskRunMethods + SessionMethods,
 {
     if task.stage.is_terminal() {
+        return Ok(false);
+    }
+
+    // Phase 3 Wave E: cancellation is orthogonal to stage. A cancelled
+    // task does not reconcile (a future reopen via `cancelled_at = None`
+    // returns it to normal advancement).
+    if task.cancelled_at.is_some() {
         return Ok(false);
     }
 
@@ -158,7 +164,6 @@ mod tests {
                 TaskStage::Pushed,
                 TaskStage::Done,
             ],
-            TaskStage::Cancelled => vec![TaskStage::Cancelled],
         }
     }
 

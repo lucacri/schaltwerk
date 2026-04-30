@@ -1934,7 +1934,10 @@ mod tests {
         app.unlisten(tasks_listener);
         app.unlisten(sessions_listener);
 
-        assert_eq!(cancelled.stage, TaskStage::Cancelled);
+        assert!(
+            cancelled.is_cancelled(),
+            "cancelled task must have cancelled_at set; Phase 3 records cancellation orthogonally to stage"
+        );
         assert_eq!(*tasks_refreshed.lock().unwrap(), 1);
         assert_eq!(*sessions_refreshed.lock().unwrap(), 1);
     }
@@ -2071,7 +2074,11 @@ mod tests {
         svc.update_content(&task.id, TaskArtifactKind::Spec, "spec body", None, None)
             .unwrap();
         svc.advance_stage(&task.id, TaskStage::Ready).unwrap();
-        svc.advance_stage(&task.id, TaskStage::Cancelled).unwrap();
+        // Phase 3: cancellation is now an orthogonal timestamp, not a
+        // stage. Reopen still works; it advances to the target stage
+        // and clears `cancelled_at`.
+        db.set_task_cancelled_at(&task.id, Some(chrono::Utc::now()))
+            .unwrap();
 
         let reopened = svc
             .reopen_task_to_stage(&task.id, TaskStage::Brainstormed)
@@ -2124,7 +2131,9 @@ mod tests {
             svc.advance_stage(&task.id, stage).unwrap();
         }
         db.set_task_failure_flag(&task.id, true).unwrap();
-        svc.advance_stage(&task.id, TaskStage::Cancelled).unwrap();
+        // Phase 3: cancellation is `cancelled_at`, not a stage transition.
+        db.set_task_cancelled_at(&task.id, Some(chrono::Utc::now()))
+            .unwrap();
         assert!(svc.get_task(&task.id).unwrap().failure_flag);
 
         let reopened = svc

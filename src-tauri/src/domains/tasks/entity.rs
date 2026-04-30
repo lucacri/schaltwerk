@@ -45,7 +45,12 @@ pub enum TaskStage {
     Implemented,
     Pushed,
     Done,
-    Cancelled,
+    // Phase 3 Wave E: `Cancelled` is no longer a TaskStage variant.
+    // Cancellation is recorded as `task.cancelled_at = now()` —
+    // orthogonal to `stage`, so a cancelled task retains whatever stage
+    // it had at cancel time and can be reopened by clearing the
+    // timestamp without an awkward "advance from cancelled to ready"
+    // backwards transition.
 }
 
 impl TaskStage {
@@ -58,27 +63,24 @@ impl TaskStage {
             TaskStage::Implemented => "implemented",
             TaskStage::Pushed => "pushed",
             TaskStage::Done => "done",
-            TaskStage::Cancelled => "cancelled",
         }
     }
 
     pub fn is_terminal(&self) -> bool {
-        matches!(self, TaskStage::Done | TaskStage::Cancelled)
+        matches!(self, TaskStage::Done)
     }
 
     /// Canonical stage flow: Draft → Ready → Brainstormed → Planned →
-    /// Implemented → Pushed → Done. Any non-terminal stage may jump to
-    /// Cancelled. Ready → Draft is the only allowed backwards edge so a
-    /// reviewer can send a task back for rework.
+    /// Implemented → Pushed → Done. Ready → Draft is the only allowed
+    /// backwards edge so a reviewer can send a task back for rework.
+    /// Cancellation is no longer a stage transition (Phase 3); it lives
+    /// as `task.cancelled_at: Option<Timestamp>` — orthogonal to stage.
     pub fn can_advance_to(&self, next: TaskStage) -> bool {
         if *self == next {
             return false;
         }
         if self.is_terminal() {
             return false;
-        }
-        if next == TaskStage::Cancelled {
-            return true;
         }
         matches!(
             (*self, next),
@@ -106,7 +108,13 @@ impl FromStr for TaskStage {
             "implemented" => Ok(TaskStage::Implemented),
             "pushed" => Ok(TaskStage::Pushed),
             "done" => Ok(TaskStage::Done),
-            "cancelled" => Ok(TaskStage::Cancelled),
+            // Phase 3 Wave E: legacy "cancelled" stage maps to Draft
+            // here. The migration in v1_to_v2_task_cancelled.rs rewrites
+            // tasks.stage='cancelled' rows to 'draft' before this
+            // FromStr impl is exercised in production. The leniency
+            // here is a defensive fallback for any in-flight wire-format
+            // payload that crosses the upgrade boundary.
+            "cancelled" => Ok(TaskStage::Draft),
             other => Err(format!("Invalid task stage: {other}")),
         }
     }
@@ -365,7 +373,7 @@ pub struct TaskArtifactVersion {
 mod stage_transition_tests {
     use super::TaskStage;
 
-    const ALL_STAGES: [TaskStage; 8] = [
+    const ALL_STAGES: [TaskStage; 7] = [
         TaskStage::Draft,
         TaskStage::Ready,
         TaskStage::Brainstormed,
@@ -373,7 +381,6 @@ mod stage_transition_tests {
         TaskStage::Implemented,
         TaskStage::Pushed,
         TaskStage::Done,
-        TaskStage::Cancelled,
     ];
 
     #[test]
@@ -394,32 +401,42 @@ mod stage_transition_tests {
         }
     }
 
+    /// Phase 3 Wave E: cancellation is no longer a stage transition.
+    /// Compile-time pin via exhaustive match — if `Cancelled` ever
+    /// returns to the `TaskStage` enum, the wildcard-free match below
+    /// becomes non-exhaustive and rustc rejects this test.
     #[test]
-    fn any_non_terminal_stage_can_jump_to_cancelled() {
-        for stage in [
-            TaskStage::Draft,
-            TaskStage::Ready,
-            TaskStage::Brainstormed,
-            TaskStage::Planned,
-            TaskStage::Implemented,
-            TaskStage::Pushed,
-        ] {
-            assert!(
-                stage.can_advance_to(TaskStage::Cancelled),
-                "{stage:?} -> Cancelled must be allowed",
+    fn task_stage_has_seven_variants_not_eight() {
+        let stage = TaskStage::Done;
+        let _label: &str = match stage {
+            TaskStage::Draft => "draft",
+            TaskStage::Ready => "ready",
+            TaskStage::Brainstormed => "brainstormed",
+            TaskStage::Planned => "planned",
+            TaskStage::Implemented => "implemented",
+            TaskStage::Pushed => "pushed",
+            TaskStage::Done => "done",
+        };
+    }
+
+    #[test]
+    fn done_is_the_only_terminal_stage() {
+        for stage in ALL_STAGES {
+            assert_eq!(
+                stage.is_terminal(),
+                matches!(stage, TaskStage::Done),
+                "{stage:?} is_terminal must be true iff stage == Done",
             );
         }
     }
 
     #[test]
-    fn terminal_stages_cannot_transition_anywhere() {
-        for terminal in [TaskStage::Done, TaskStage::Cancelled] {
-            for next in ALL_STAGES {
-                assert!(
-                    !terminal.can_advance_to(next),
-                    "{terminal:?} -> {next:?} must be forbidden",
-                );
-            }
+    fn done_cannot_transition_anywhere() {
+        for next in ALL_STAGES {
+            assert!(
+                !TaskStage::Done.can_advance_to(next),
+                "Done -> {next:?} must be forbidden (Done is terminal)",
+            );
         }
     }
 
@@ -492,13 +509,25 @@ mod serde_round_trip_tests {
             (TaskStage::Implemented, "implemented"),
             (TaskStage::Pushed, "pushed"),
             (TaskStage::Done, "done"),
-            (TaskStage::Cancelled, "cancelled"),
         ];
         for (stage, wire) in cases {
             round_trip(stage, wire);
             assert_eq!(TaskStage::from_str(wire).unwrap(), stage);
             assert_eq!(stage.as_str(), wire);
         }
+    }
+
+    /// Phase 3 Wave E: legacy `"cancelled"` strings (in-flight wire
+    /// payloads, archived rows) map to `TaskStage::Draft`. Migration
+    /// rewrites stored stages; this FromStr leniency catches any
+    /// payload that crosses the upgrade boundary in flight. Cancelled
+    /// state is now in `task.cancelled_at`, not `stage`.
+    #[test]
+    fn legacy_cancelled_stage_string_maps_to_draft_on_parse() {
+        assert_eq!(TaskStage::from_str("cancelled").unwrap(), TaskStage::Draft);
+        // Serializing Draft always emits "draft", never "cancelled".
+        let serialized = serde_json::to_string(&TaskStage::Draft).unwrap();
+        assert_eq!(serialized, "\"draft\"");
     }
 
     #[test]

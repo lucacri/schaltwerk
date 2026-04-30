@@ -33,6 +33,13 @@ pub fn on_pr_state_refreshed(
         return Ok(());
     };
 
+    // Phase 3: cancellation is orthogonal to stage. A cancelled task
+    // does not auto-advance regardless of PR state. Reopening (clear
+    // `cancelled_at`) lets the next event resume normal advancement.
+    if task.cancelled_at.is_some() {
+        return Ok(());
+    }
+
     let decision = decide_next_stage(task.stage, task.failure_flag, &pr_state);
 
     if let Some(new_stage) = decision.next_stage
@@ -107,11 +114,11 @@ fn decide_next_stage(current: TaskStage, failure_flag: bool, pr_state: &PrState)
             failure_flag: None,
             warn_terminal: true,
         },
-        (TaskStage::Cancelled, _) => Decision {
-            next_stage: None,
-            failure_flag: None,
-            warn_terminal: false,
-        },
+        // Phase 3 Wave E: cancellation no longer lives in `stage`. The
+        // cancelled-task short-circuit moved to the caller (which now
+        // checks `task.cancelled_at.is_some()` before calling
+        // `decide_next_stage`); this match is reached only for
+        // non-cancelled tasks.
         (TaskStage::Draft | TaskStage::Ready | TaskStage::Brainstormed | TaskStage::Planned, _) => {
             Decision {
                 next_stage: None,
@@ -208,7 +215,6 @@ mod tests {
                 TaskStage::Pushed,
                 TaskStage::Done,
             ],
-            TaskStage::Cancelled => vec![TaskStage::Cancelled],
         }
     }
 
@@ -391,16 +397,32 @@ mod tests {
         on_pr_state_refreshed(&db, "/r", 999, PrState::Open).unwrap();
     }
 
+    /// Phase 3 Wave E: cancellation is `task.cancelled_at`, not a stage.
+    /// A cancelled task carrying any PR state must not auto-advance,
+    /// regardless of how the PR resolves. The `cancelled_at.is_some()`
+    /// guard at the top of `on_pr_state_refreshed` is the load-bearing
+    /// check; this test fails on revert (e.g. if the guard is removed,
+    /// `Mred` would advance the task to `Done`).
     #[test]
-    fn cancelled_plus_mred_is_noop() {
+    fn cancelled_task_plus_mred_is_noop() {
         let db = db();
-        let task = seed_task(&db, "t1", TaskStage::Cancelled);
+        let task = seed_task(&db, "t1", TaskStage::Implemented);
+        db.set_task_cancelled_at(&task.id, Some(Utc::now()))
+            .unwrap();
         link_session(&db, &task.id, 42);
 
         on_pr_state_refreshed(&db, "/r", 42, PrState::Mred).unwrap();
 
         let after = db.get_task_by_id(&task.id).unwrap();
-        assert_eq!(after.stage, TaskStage::Cancelled);
+        assert_eq!(
+            after.stage,
+            TaskStage::Implemented,
+            "cancelled task must not auto-advance even on Mred"
+        );
+        assert!(
+            after.cancelled_at.is_some(),
+            "cancellation must persist across the noop event"
+        );
     }
 
     #[test]

@@ -182,7 +182,11 @@ impl<'a> TaskService<'a> {
     }
 
     pub fn cancel_task(&self, id: &str) -> Result<()> {
-        self.db.set_task_stage(id, TaskStage::Cancelled)
+        let task = self.db.get_task_by_id(id)?;
+        if task.cancelled_at.is_some() {
+            return Ok(());
+        }
+        self.db.set_task_cancelled_at(id, Some(Utc::now()))
     }
 
     /// Cancel the task and every linked active session in parallel.
@@ -202,7 +206,7 @@ impl<'a> TaskService<'a> {
     /// lifecycle transition.
     pub async fn cancel_task_cascading(&self, repo_path: &Path, id: &str) -> Result<Task> {
         let task = self.db.get_task_by_id(id)?;
-        if task.stage == TaskStage::Cancelled {
+        if task.cancelled_at.is_some() {
             return self.get_task(id);
         }
 
@@ -277,7 +281,7 @@ impl<'a> TaskService<'a> {
                 }
             }
 
-            self.db.set_task_stage(id, TaskStage::Cancelled)?;
+            self.db.set_task_cancelled_at(id, Some(Utc::now()))?;
         }
 
         if !failures.is_empty() {
@@ -292,6 +296,10 @@ impl<'a> TaskService<'a> {
     }
 
     pub fn reopen_task(&self, id: &str) -> Result<()> {
+        let task = self.db.get_task_by_id(id)?;
+        if task.cancelled_at.is_some() {
+            self.db.set_task_cancelled_at(id, None)?;
+        }
         self.db.set_task_stage(id, TaskStage::Draft)
     }
 
@@ -307,7 +315,7 @@ impl<'a> TaskService<'a> {
         ) {
             return Err(anyhow!("invalid reopen target: {}", target_stage.as_str()));
         }
-        if !matches!(task.stage, TaskStage::Cancelled | TaskStage::Done) {
+        if !(task.cancelled_at.is_some() || task.stage == TaskStage::Done) {
             return Err(anyhow!(
                 "task '{}' must be done or cancelled before reopening",
                 task.id
@@ -315,6 +323,9 @@ impl<'a> TaskService<'a> {
         }
 
         self.db.set_task_stage(id, target_stage)?;
+        if task.cancelled_at.is_some() {
+            self.db.set_task_cancelled_at(id, None)?;
+        }
         if task.failure_flag {
             self.db.set_task_failure_flag(id, false)?;
         }
@@ -352,6 +363,9 @@ impl<'a> TaskService<'a> {
 
     pub fn on_branch_merged_without_pr(&self, task_id: &str) -> Result<()> {
         let task = self.db.get_task_by_id(task_id)?;
+        if task.cancelled_at.is_some() {
+            return Ok(());
+        }
         match task.stage {
             TaskStage::Implemented | TaskStage::Pushed => {
                 self.db.set_task_stage(task_id, TaskStage::Done)?;
@@ -359,7 +373,7 @@ impl<'a> TaskService<'a> {
                     self.db.set_task_failure_flag(task_id, false)?;
                 }
             }
-            TaskStage::Done | TaskStage::Cancelled => {}
+            TaskStage::Done => {}
             TaskStage::Draft | TaskStage::Ready | TaskStage::Brainstormed | TaskStage::Planned => {}
         }
         Ok(())
@@ -917,10 +931,12 @@ mod tests {
         let task = svc.create_task(basic_input()).unwrap();
 
         svc.cancel_task(&task.id).unwrap();
-        assert_eq!(svc.get_task(&task.id).unwrap().stage, TaskStage::Cancelled);
+        assert!(svc.get_task(&task.id).unwrap().is_cancelled());
 
         svc.reopen_task(&task.id).unwrap();
-        assert_eq!(svc.get_task(&task.id).unwrap().stage, TaskStage::Draft);
+        let reopened = svc.get_task(&task.id).unwrap();
+        assert_eq!(reopened.stage, TaskStage::Draft);
+        assert!(!reopened.is_cancelled());
     }
 
     #[test]
@@ -960,11 +976,10 @@ mod tests {
         let task = svc.create_task(basic_input()).unwrap();
 
         svc.advance_stage(&task.id, TaskStage::Ready).unwrap();
-        svc.advance_stage(&task.id, TaskStage::Cancelled).unwrap();
-        assert_eq!(svc.get_task(&task.id).unwrap().stage, TaskStage::Cancelled);
-
-        let err = svc.advance_stage(&task.id, TaskStage::Draft).unwrap_err();
-        assert!(err.to_string().contains("illegal stage transition"));
+        svc.cancel_task(&task.id).unwrap();
+        let cancelled = svc.get_task(&task.id).unwrap();
+        assert!(cancelled.is_cancelled());
+        assert_eq!(cancelled.stage, TaskStage::Ready);
     }
 
     #[test]
@@ -1014,7 +1029,7 @@ mod tests {
         assert_eq!(svc.get_task(&task.id).unwrap().stage, TaskStage::Done);
 
         let err = svc
-            .advance_stage(&task.id, TaskStage::Cancelled)
+            .advance_stage(&task.id, TaskStage::Pushed)
             .unwrap_err();
         assert!(err.to_string().contains("illegal stage transition"));
     }
@@ -1105,7 +1120,7 @@ mod tests {
             .await
             .expect("cancel task");
 
-        assert_eq!(cancelled.stage, TaskStage::Cancelled);
+        assert!(cancelled.is_cancelled());
         assert_eq!(
             fixture
                 .db_manager()
@@ -1157,7 +1172,7 @@ mod tests {
             .await
             .expect("idempotent cancel");
 
-        assert_eq!(cancelled.stage, TaskStage::Cancelled);
+        assert!(cancelled.is_cancelled());
     }
 
     #[tokio::test]
@@ -1233,7 +1248,7 @@ mod tests {
                 .status,
             SessionStatus::Active
         );
-        assert_eq!(svc.get_task(&task.id).unwrap().stage, TaskStage::Cancelled);
+        assert!(svc.get_task(&task.id).unwrap().is_cancelled());
         let blocked = runs.get_run(&blocked_run.id).unwrap();
         assert!(
             blocked.cancelled_at.is_none()
@@ -1290,7 +1305,7 @@ mod tests {
             .await
             .expect_err("dirty session should surface as cascade failure");
 
-        assert_eq!(svc.get_task(&task.id).unwrap().stage, TaskStage::Cancelled);
+        assert!(svc.get_task(&task.id).unwrap().is_cancelled());
 
         let reopened = svc
             .reopen_task_to_stage(&task.id, TaskStage::Ready)
@@ -1394,7 +1409,7 @@ mod tests {
         let task = svc.create_task(basic_input()).unwrap();
 
         svc.advance_stage(&task.id, TaskStage::Ready).unwrap();
-        svc.advance_stage(&task.id, TaskStage::Cancelled).unwrap();
+        svc.cancel_task(&task.id).unwrap();
 
         let reopened = svc
             .reopen_task_to_stage(&task.id, TaskStage::Planned)
@@ -1445,7 +1460,7 @@ mod tests {
         )
         .unwrap();
         svc.advance_stage(&task.id, TaskStage::Ready).unwrap();
-        svc.advance_stage(&task.id, TaskStage::Cancelled).unwrap();
+        svc.cancel_task(&task.id).unwrap();
 
         let reopened = svc
             .reopen_task_to_stage(&task.id, TaskStage::Implemented)

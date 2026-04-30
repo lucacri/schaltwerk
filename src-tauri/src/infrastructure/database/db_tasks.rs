@@ -4,9 +4,11 @@ use crate::domains::tasks::entity::{
     TaskStage, TaskStageConfig, TaskVariant,
 };
 use crate::domains::tasks::service::TaskNotFoundError;
-use crate::infrastructure::database::timestamps::utc_from_epoch_seconds_lossy;
+use crate::infrastructure::database::timestamps::{
+    utc_from_epoch_seconds_lossy, utc_from_epoch_seconds_lossy_opt,
+};
 use anyhow::{Result, anyhow};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use rusqlite::{OptionalExtension, Row, params};
 use std::path::{Path, PathBuf};
 
@@ -42,6 +44,15 @@ pub trait TaskMethods {
         pr_state: Option<&str>,
     ) -> Result<()>;
     fn set_task_failure_flag(&self, id: &str, failure_flag: bool) -> Result<()>;
+    /// Phase 3 Wave E: cancellation as an orthogonal timestamp. Pass
+    /// `Some(now)` to record cancellation; `None` to clear it (reopen).
+    /// Independent of `stage` — a cancelled task retains whatever stage
+    /// it had at cancel time, and reopen is just a `None` write.
+    fn set_task_cancelled_at(
+        &self,
+        id: &str,
+        cancelled_at: Option<DateTime<Utc>>,
+    ) -> Result<()>;
     fn set_task_attention_required(&self, id: &str, attention_required: bool) -> Result<()>;
     fn set_task_source(
         &self,
@@ -314,6 +325,22 @@ impl TaskMethods for Database {
 
     fn set_task_failure_flag(&self, id: &str, failure_flag: bool) -> Result<()> {
         update_task_field(self, "failure_flag = ?1", params![failure_flag, Utc::now().timestamp(), id])
+    }
+
+    fn set_task_cancelled_at(
+        &self,
+        id: &str,
+        cancelled_at: Option<DateTime<Utc>>,
+    ) -> Result<()> {
+        update_task_field(
+            self,
+            "cancelled_at = ?1",
+            params![
+                cancelled_at.map(|dt| dt.timestamp()),
+                Utc::now().timestamp(),
+                id
+            ],
+        )
     }
 
     fn set_task_attention_required(&self, id: &str, attention_required: bool) -> Result<()> {
@@ -827,7 +854,7 @@ const TASK_SELECT_COLUMNS: &str = "
     task_host_session_id, task_branch, base_branch,
     issue_number, issue_url, pr_number, pr_url, pr_state,
     failure_flag, epic_id, attention_required,
-    created_at, updated_at
+    created_at, updated_at, cancelled_at
 ";
 
 const TASK_SELECT_WHERE_ID: &str = "
@@ -840,7 +867,7 @@ const TASK_SELECT_WHERE_ID: &str = "
         task_host_session_id, task_branch, base_branch,
         issue_number, issue_url, pr_number, pr_url, pr_state,
         failure_flag, epic_id, attention_required,
-        created_at, updated_at
+        created_at, updated_at, cancelled_at
     FROM tasks WHERE id = ?1
 ";
 
@@ -854,7 +881,7 @@ const TASK_SELECT_WHERE_REPO_ORDER: &str = "
         task_host_session_id, task_branch, base_branch,
         issue_number, issue_url, pr_number, pr_url, pr_state,
         failure_flag, epic_id, attention_required,
-        created_at, updated_at
+        created_at, updated_at, cancelled_at
     FROM tasks WHERE repository_path = ?1 ORDER BY updated_at DESC, name ASC
 ";
 
@@ -900,7 +927,7 @@ const TASK_SELECT_WHERE_REPO_NAME: &str = "
         task_host_session_id, task_branch, base_branch,
         issue_number, issue_url, pr_number, pr_url, pr_state,
         failure_flag, epic_id, attention_required,
-        created_at, updated_at
+        created_at, updated_at, cancelled_at
     FROM tasks WHERE repository_path = ?1 AND name = ?2
 ";
 
@@ -914,12 +941,12 @@ const TASK_SELECT_FOR_PR_NUMBER: &str = "
         t.task_host_session_id, t.task_branch, t.base_branch,
         t.issue_number, t.issue_url, t.pr_number, t.pr_url, t.pr_state,
         t.failure_flag, t.epic_id, t.attention_required,
-        t.created_at, t.updated_at
+        t.created_at, t.updated_at, t.cancelled_at
     FROM tasks t
     JOIN sessions s ON s.task_id = t.id
     WHERE s.repository_path = ?1
       AND s.pr_number = ?2
-      AND t.stage <> 'cancelled'
+      AND t.cancelled_at IS NULL
     ORDER BY t.updated_at DESC
 ";
 
@@ -1017,9 +1044,7 @@ fn row_to_task(row: &Row<'_>) -> rusqlite::Result<Task> {
         attention_required: row.get(23)?,
         created_at: utc_from_epoch_seconds_lossy(row.get(24)?),
         updated_at: utc_from_epoch_seconds_lossy(row.get(25)?),
-        // Wave B: field exists, column lands in Wave C and is read in
-        // Wave E once `tasks.cancelled_at` is part of TASK_SELECT_COLUMNS.
-        cancelled_at: None,
+        cancelled_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(26)?),
         task_runs: Vec::new(),
     })
 }
