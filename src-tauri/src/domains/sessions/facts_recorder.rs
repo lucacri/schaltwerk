@@ -135,6 +135,8 @@ mod tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         }
     }
 

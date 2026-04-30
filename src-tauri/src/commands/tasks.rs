@@ -1277,6 +1277,8 @@ mod tests {
                 exited_at: None,
                 exit_code: None,
                 first_idle_at: None,
+                is_spec: false,
+                cancelled_at: None,
             };
             self.db.create_session(&session).expect("session");
             self.db
@@ -1349,6 +1351,8 @@ mod tests {
                 exited_at: None,
                 exit_code: None,
                 first_idle_at: None,
+                is_spec: false,
+                cancelled_at: None,
             };
             self.db.create_session(&session).expect("session");
             self.db
@@ -1561,6 +1565,8 @@ mod tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         }
     }
 

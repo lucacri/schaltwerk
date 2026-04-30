@@ -492,6 +492,8 @@ mod service_unified_tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         }
     }
 
@@ -3246,6 +3248,8 @@ impl SessionManager {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         };
 
         let finalizer = SessionFinalizer::new(&self.db_manager, &self.cache_manager);
@@ -5005,6 +5009,8 @@ impl SessionManager {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         }
     }
 

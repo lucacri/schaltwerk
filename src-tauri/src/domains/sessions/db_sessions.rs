@@ -310,6 +310,8 @@ impl Database {
                     exited_at: None,
                     exit_code: None,
                     first_idle_at: None,
+                    is_spec: false,
+                    cancelled_at: None,
                 }
             })
             .collect())
@@ -501,6 +503,8 @@ impl SessionMethods for Database {
                 exited_at: None,
                 exit_code: None,
                 first_idle_at: None,
+                is_spec: false,
+                cancelled_at: None,
             })
         })?;
 
@@ -592,6 +596,8 @@ impl SessionMethods for Database {
                 exited_at: None,
                 exit_code: None,
                 first_idle_at: None,
+                is_spec: false,
+                cancelled_at: None,
             })
         })?;
 
@@ -1512,6 +1518,12 @@ fn row_to_session_with_facts(row: &rusqlite::Row<'_>) -> rusqlite::Result<Sessio
         exited_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(48)?),
         exit_code: row.get(49).ok(),
         first_idle_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(50)?),
+        // Phase 3 Wave F.1: new orthogonal axes are not yet read in
+        // this projection (the SELECT used by row_to_session_with_facts
+        // doesn't include them). Default to None/false; F.6 wires them
+        // into the SELECT once the wire-format adapter lands.
+        is_spec: false,
+        cancelled_at: None,
     })
 }
 
@@ -1583,6 +1595,8 @@ mod tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         };
 
         db.create_session(&session)
@@ -1661,6 +1675,8 @@ mod tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         };
 
         db.create_session(&session)
@@ -1735,6 +1751,8 @@ mod tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         };
 
         db.create_session(&session)
@@ -1912,6 +1930,8 @@ mod tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         };
 
         db.create_session(&session)
@@ -1995,6 +2015,8 @@ mod tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         };
 
         db.create_session(&session)
@@ -2094,6 +2116,8 @@ mod tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         };
 
         db.create_session(&session)
@@ -2181,6 +2205,8 @@ mod tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         };
 
         db.create_session(&session)
@@ -2264,6 +2290,8 @@ mod tests {
             exited_at: None,
             exit_code: None,
             first_idle_at: None,
+            is_spec: false,
+            cancelled_at: None,
         }
     }
 

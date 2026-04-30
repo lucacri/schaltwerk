@@ -143,6 +143,66 @@ pub struct Session {
     /// overwrite. Read by [`crate::domains::tasks::run_status::compute_run_status`]
     /// to derive sticky `AwaitingSelection`.
     pub first_idle_at: Option<DateTime<Utc>>,
+    /// Phase 3 Wave F: identity axis. `true` for spec sessions (drafts
+    /// without a real worktree); `false` for active worktree-bearing
+    /// sessions. Orthogonal to `cancelled_at`. Replaces the
+    /// `SessionStatus::Spec` / `SessionState::Spec` correlated pair —
+    /// see plan §1.
+    #[serde(default)]
+    pub is_spec: bool,
+    /// Phase 3 Wave F: lifecycle axis. `Some(ts)` records that this
+    /// session has been cancelled at `ts`; `None` means active.
+    /// Orthogonal to `is_spec`. Replaces `SessionStatus::Cancelled`.
+    #[serde(default)]
+    pub cancelled_at: Option<DateTime<Utc>>,
+}
+
+/// Runtime-only derived enum produced by [`Session::lifecycle_state`].
+/// **Not serialized, not persisted** — the wire format ships
+/// `info.session_state` and `info.status` strings synthesized from
+/// this getter so the existing UI keeps rendering. The four variants
+/// reproduce the v1 `SessionState` × `SessionStatus` axis the
+/// frontend reads today.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionLifecycleState {
+    /// `is_spec = true`, not cancelled. Draft session without a
+    /// worktree.
+    Spec,
+    /// `is_spec = false`, not cancelled, but worktree is missing on
+    /// disk. Reproduces the v1 enrichment-time synthesis at
+    /// `domains/sessions/service.rs:3901-3905`.
+    Processing,
+    /// `is_spec = false`, not cancelled, worktree present.
+    Running,
+    /// `cancelled_at.is_some()` — trumps `is_spec` because a cancelled
+    /// session is no longer participating in the lifecycle regardless
+    /// of identity.
+    Cancelled,
+}
+
+impl Session {
+    /// Phase 3 derived getter. `worktree_exists_on_disk` is supplied by
+    /// the caller (the enrichment layer in `domains/sessions/service.rs`
+    /// already does this `worktree_exists` check); this getter is a
+    /// pure projection over the persisted facts plus that boolean.
+    pub fn lifecycle_state(&self, worktree_exists_on_disk: bool) -> SessionLifecycleState {
+        if self.cancelled_at.is_some() {
+            return SessionLifecycleState::Cancelled;
+        }
+        if self.is_spec {
+            return SessionLifecycleState::Spec;
+        }
+        if !worktree_exists_on_disk && !cfg!(test) {
+            return SessionLifecycleState::Processing;
+        }
+        SessionLifecycleState::Running
+    }
+
+    /// Convenience: `true` iff the session has been cancelled
+    /// (independent of identity).
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled_at.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -620,7 +680,8 @@ pub struct ArchivedSpec {
 
 #[cfg(test)]
 mod tests {
-    use super::SpecStage;
+    use super::{Session, SessionLifecycleState, SpecStage};
+    use chrono::{DateTime, Utc};
     use std::str::FromStr;
 
     #[test]
@@ -629,5 +690,38 @@ mod tests {
             SpecStage::from_str("clarified").expect("legacy alias should parse"),
             SpecStage::Ready
         );
+    }
+
+    /// Phase 3 Wave F.1 structural pin: `Session.is_spec: bool`. If a
+    /// future change reverts this field to an enum (or drops it),
+    /// the function-pointer coercion below fails to compile.
+    #[test]
+    fn session_is_spec_field_is_bool() {
+        fn assert_is_spec_field(_: fn(&Session) -> &bool) {}
+        assert_is_spec_field(|s: &Session| &s.is_spec);
+    }
+
+    /// Phase 3 Wave F.1 structural pin: `Session.cancelled_at:
+    /// Option<DateTime<Utc>>`. If a future change replaces it with a
+    /// `SessionStatus`-like enum, the coercion below fails to compile.
+    #[test]
+    fn session_cancelled_at_field_is_option_datetime() {
+        fn assert_cancelled_at_field(_: fn(&Session) -> &Option<DateTime<Utc>>) {}
+        assert_cancelled_at_field(|s: &Session| &s.cancelled_at);
+    }
+
+    /// Phase 3 Wave F.1 structural pin: `SessionLifecycleState` has
+    /// exactly four variants, exhaustive-matchable without a wildcard.
+    /// Adding a fifth variant forces the match below non-exhaustive
+    /// and rustc rejects this test.
+    #[test]
+    fn session_lifecycle_state_has_four_variants() {
+        let st = SessionLifecycleState::Running;
+        let _label: &str = match st {
+            SessionLifecycleState::Spec => "spec",
+            SessionLifecycleState::Processing => "processing",
+            SessionLifecycleState::Running => "running",
+            SessionLifecycleState::Cancelled => "cancelled",
+        };
     }
 }
