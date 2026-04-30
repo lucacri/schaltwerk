@@ -283,8 +283,10 @@ fn draft_task_from_session(
             db.set_task_request_body(&existing.id, &requested_body)?;
         }
 
+        // Phase 4 Wave F: derived getter — fetches current Spec artifact body.
+        let existing_spec = existing.current_spec(db).map_err(TaskFlowError::from)?;
         if !preserved_content.is_empty()
-            && existing.current_spec.as_deref() != Some(preserved_content.as_str())
+            && existing_spec.as_deref() != Some(preserved_content.as_str())
         {
             svc.update_content(
                 &existing.id,
@@ -1469,9 +1471,9 @@ mod tests {
             .expect("update");
 
         let reloaded = svc.get_task(&task.id).unwrap();
-        assert_eq!(reloaded.current_spec.as_deref(), Some("spec text v1"));
-        assert!(reloaded.current_plan.is_none());
-        assert!(reloaded.current_summary.is_none());
+        assert_eq!(reloaded.current_spec(db).unwrap().as_deref(), Some("spec text v1"));
+        assert!(reloaded.current_plan(db).unwrap().is_none());
+        assert!(reloaded.current_summary(db).unwrap().is_none());
     }
 
     #[test]
@@ -2110,7 +2112,7 @@ mod tests {
             .expect("reopen");
 
         assert_eq!(reopened.stage, TaskStage::Brainstormed);
-        assert_eq!(reopened.current_spec.as_deref(), Some("spec body"));
+        assert_eq!(reopened.current_spec(&db).unwrap().as_deref(), Some("spec body"));
     }
 
     #[test]

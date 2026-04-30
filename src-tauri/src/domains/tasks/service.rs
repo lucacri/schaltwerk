@@ -127,9 +127,6 @@ impl<'a> TaskService<'a> {
             variant: input.variant,
             stage: TaskStage::Draft,
             request_body: input.request_body.to_string(),
-            current_spec: None,
-            current_plan: None,
-            current_summary: None,
             source_kind: input.source_kind.map(str::to_string),
             source_url: input.source_url.map(str::to_string),
             task_host_session_id: None,
@@ -458,15 +455,11 @@ impl<'a> TaskService<'a> {
         self.db
             .mark_task_artifact_current(task_id, kind, &artifact.id)?;
 
-        match kind {
-            TaskArtifactKind::Spec => self.db.set_task_current_spec(task_id, Some(content))?,
-            TaskArtifactKind::Plan => self.db.set_task_current_plan(task_id, Some(content))?,
-            TaskArtifactKind::Summary => {
-                self.db.set_task_current_summary(task_id, Some(content))?;
-            }
-            _ => {}
-        }
-
+        // Phase 4 Wave F: removed denormalized-column mirror. The
+        // `is_current = true` flag on the artifact row is now the
+        // canonical source of truth; readers go through the derived
+        // getters `Task::current_spec(&db)` / `current_plan` /
+        // `current_summary`.
         Ok(artifact)
     }
 
@@ -872,9 +865,9 @@ mod tests {
             .unwrap();
 
         let reloaded = svc.get_task(&task.id).unwrap();
-        assert_eq!(reloaded.current_spec.as_deref(), Some("spec v2"));
-        assert_eq!(reloaded.current_plan.as_deref(), Some("plan v1"));
-        assert!(reloaded.current_summary.is_none());
+        assert_eq!(reloaded.current_spec(&db).unwrap().as_deref(), Some("spec v2"));
+        assert_eq!(reloaded.current_plan(&db).unwrap().as_deref(), Some("plan v1"));
+        assert!(reloaded.current_summary(&db).unwrap().is_none());
 
         let current_spec_artifact = db
             .get_current_task_artifact(&task.id, TaskArtifactKind::Spec)
@@ -1481,9 +1474,9 @@ mod tests {
             .reopen_task_to_stage(&task.id, TaskStage::Implemented)
             .expect("reopen");
 
-        assert_eq!(reopened.current_spec.as_deref(), Some("spec v1"));
-        assert_eq!(reopened.current_plan.as_deref(), Some("plan v1"));
-        assert_eq!(reopened.current_summary.as_deref(), Some("summary v1"));
+        assert_eq!(reopened.current_spec(&db).unwrap().as_deref(), Some("spec v1"));
+        assert_eq!(reopened.current_plan(&db).unwrap().as_deref(), Some("plan v1"));
+        assert_eq!(reopened.current_summary(&db).unwrap().as_deref(), Some("summary v1"));
         assert_eq!(reopened.stage, TaskStage::Implemented);
     }
 

@@ -263,9 +263,12 @@ pub struct Task {
     pub variant: TaskVariant,
     pub stage: TaskStage,
     pub request_body: String,
-    pub current_spec: Option<String>,
-    pub current_plan: Option<String>,
-    pub current_summary: Option<String>,
+    // Phase 4 Wave F: legacy `current_spec` / `current_plan` /
+    // `current_summary` denormalized columns deleted. The values are
+    // derived at read time from the `task_artifacts` table via the
+    // `Task::current_spec(&db)` / `current_plan(&db)` / `current_summary(&db)`
+    // methods (see impl block below). The artifact's `is_current = true`
+    // flag is the canonical source of truth.
     pub source_kind: Option<String>,
     pub source_url: Option<String>,
     pub task_host_session_id: Option<String>,
@@ -295,6 +298,44 @@ impl Task {
     pub fn is_cancelled(&self) -> bool {
         self.cancelled_at.is_some()
     }
+
+    /// Phase 4 Wave F: derived getter for the current Spec artifact's
+    /// content. Returns the body of the `task_artifacts` row with
+    /// `is_current = true` and `artifact_kind = 'spec'`, or None if no
+    /// current Spec exists.
+    pub fn current_spec(
+        &self,
+        db: &crate::infrastructure::database::Database,
+    ) -> anyhow::Result<Option<String>> {
+        derive_current_artifact_body(db, &self.id, TaskArtifactKind::Spec)
+    }
+
+    /// Phase 4 Wave F: derived getter for the current Plan artifact body.
+    pub fn current_plan(
+        &self,
+        db: &crate::infrastructure::database::Database,
+    ) -> anyhow::Result<Option<String>> {
+        derive_current_artifact_body(db, &self.id, TaskArtifactKind::Plan)
+    }
+
+    /// Phase 4 Wave F: derived getter for the current Summary artifact body.
+    pub fn current_summary(
+        &self,
+        db: &crate::infrastructure::database::Database,
+    ) -> anyhow::Result<Option<String>> {
+        derive_current_artifact_body(db, &self.id, TaskArtifactKind::Summary)
+    }
+}
+
+fn derive_current_artifact_body(
+    db: &crate::infrastructure::database::Database,
+    task_id: &str,
+    kind: TaskArtifactKind,
+) -> anyhow::Result<Option<String>> {
+    use crate::infrastructure::database::TaskArtifactMethods;
+    Ok(db
+        .get_current_task_artifact(task_id, kind)?
+        .and_then(|a| a.content))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -578,5 +619,195 @@ mod serde_round_trip_tests {
             assert_eq!(TaskArtifactKind::from_str(wire).unwrap(), kind);
             assert_eq!(kind.as_str(), wire);
         }
+    }
+
+    /// **Phase 4 Wave F structural pin.** `Task::current_spec` /
+    /// `current_plan` / `current_summary` exist with the expected
+    /// signature `fn(&Task, &Database) -> Result<Option<String>>`. If a
+    /// future refactor changes any of these, the fn-pointer coercions
+    /// fail to compile.
+    #[test]
+    fn task_current_artifact_methods_are_pinned() {
+        use crate::infrastructure::database::Database;
+        fn assert_signature(_: fn(&super::Task, &Database) -> anyhow::Result<Option<String>>) {}
+        assert_signature(super::Task::current_spec);
+        assert_signature(super::Task::current_plan);
+        assert_signature(super::Task::current_summary);
+    }
+}
+
+#[cfg(test)]
+mod current_artifact_round_trip_tests {
+    use super::*;
+    use crate::domains::tasks::service::{CreateTaskInput, TaskService};
+    use crate::infrastructure::database::{Database, TaskArtifactMethods};
+    use chrono::Utc;
+    use std::path::PathBuf;
+    use uuid::Uuid;
+
+    /// **Phase 4 Wave F load-bearing DB round-trip test.** Per
+    /// `feedback_compile_pins_dont_catch_wiring.md`: compile-time pins
+    /// prove the field/method exists; only a DB round-trip proves the
+    /// SELECT/INSERT path actually serves it. This test exercises
+    /// `Task::current_spec(&db)` against artifacts inserted through
+    /// the production write path (`mark_task_artifact_current`) and
+    /// reads them back through the production hydrator
+    /// (`get_current_task_artifact`).
+    #[test]
+    fn current_spec_round_trips_through_write_and_read_paths() {
+        let db = Database::new_in_memory().expect("in-memory db");
+        crate::infrastructure::database::initialize_schema(&db).expect("init schema");
+
+        let svc = TaskService::new(&db);
+        let repo = PathBuf::from("/tmp/repo");
+        let task = svc
+            .create_task(CreateTaskInput {
+                name: "rt-spec",
+                display_name: None,
+                repository_path: &repo,
+                repository_name: "repo",
+                request_body: "body",
+                variant: TaskVariant::Regular,
+                epic_id: None,
+                base_branch: None,
+                source_kind: None,
+                source_url: None,
+                issue_number: None,
+                issue_url: None,
+                pr_number: None,
+                pr_url: None,
+            })
+            .expect("create task");
+
+        // Initially no current Spec → derived getter returns None.
+        let initial = task.current_spec(&db).expect("call current_spec");
+        assert!(initial.is_none());
+
+        // Insert a Spec artifact via the production write path.
+        let artifact = TaskArtifact {
+            id: Uuid::new_v4().to_string(),
+            task_id: task.id.clone(),
+            artifact_kind: TaskArtifactKind::Spec,
+            title: None,
+            content: Some("the spec".to_string()),
+            url: None,
+            metadata_json: None,
+            is_current: false,
+            produced_by_run_id: None,
+            produced_by_session_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        db.create_task_artifact(&artifact).expect("create artifact");
+        db.mark_task_artifact_current(&task.id, TaskArtifactKind::Spec, &artifact.id)
+            .expect("mark current");
+
+        // Derived getter now returns the artifact body.
+        let after = task.current_spec(&db).expect("call current_spec");
+        assert_eq!(after.as_deref(), Some("the spec"));
+
+        // Replace the artifact: insert a new one and mark it current.
+        let artifact2 = TaskArtifact {
+            id: Uuid::new_v4().to_string(),
+            task_id: task.id.clone(),
+            artifact_kind: TaskArtifactKind::Spec,
+            title: None,
+            content: Some("revised spec".to_string()),
+            url: None,
+            metadata_json: None,
+            is_current: false,
+            produced_by_run_id: None,
+            produced_by_session_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        db.create_task_artifact(&artifact2).expect("create v2");
+        db.mark_task_artifact_current(&task.id, TaskArtifactKind::Spec, &artifact2.id)
+            .expect("mark v2 current");
+
+        // Derived getter returns the new content. If the
+        // `is_current = true` flag isn't being flipped correctly (or
+        // if the SELECT doesn't filter by it), the assertion fails.
+        let revised = task.current_spec(&db).expect("call current_spec");
+        assert_eq!(revised.as_deref(), Some("revised spec"));
+    }
+
+    /// Same DB round-trip pattern for current_plan, ensuring the kind
+    /// dispatch picks the right artifact_kind through the production
+    /// query.
+    #[test]
+    fn current_plan_round_trips_independent_of_other_kinds() {
+        let db = Database::new_in_memory().expect("in-memory db");
+        crate::infrastructure::database::initialize_schema(&db).expect("init schema");
+
+        let svc = TaskService::new(&db);
+        let repo = PathBuf::from("/tmp/repo");
+        let task = svc
+            .create_task(CreateTaskInput {
+                name: "rt-plan",
+                display_name: None,
+                repository_path: &repo,
+                repository_name: "repo",
+                request_body: "body",
+                variant: TaskVariant::Regular,
+                epic_id: None,
+                base_branch: None,
+                source_kind: None,
+                source_url: None,
+                issue_number: None,
+                issue_url: None,
+                pr_number: None,
+                pr_url: None,
+            })
+            .expect("create task");
+
+        // Add a Spec artifact (NOT a Plan) to verify the kind dispatch.
+        let spec_artifact = TaskArtifact {
+            id: Uuid::new_v4().to_string(),
+            task_id: task.id.clone(),
+            artifact_kind: TaskArtifactKind::Spec,
+            title: None,
+            content: Some("spec content".to_string()),
+            url: None,
+            metadata_json: None,
+            is_current: false,
+            produced_by_run_id: None,
+            produced_by_session_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        db.create_task_artifact(&spec_artifact).expect("create spec");
+        db.mark_task_artifact_current(&task.id, TaskArtifactKind::Spec, &spec_artifact.id)
+            .expect("mark spec");
+
+        // current_plan should still be None because no Plan artifact exists.
+        assert!(
+            task.current_plan(&db).expect("plan getter").is_none(),
+            "current_plan must NOT pick up the Spec artifact"
+        );
+
+        // Now add the Plan.
+        let plan_artifact = TaskArtifact {
+            id: Uuid::new_v4().to_string(),
+            task_id: task.id.clone(),
+            artifact_kind: TaskArtifactKind::Plan,
+            title: None,
+            content: Some("plan content".to_string()),
+            url: None,
+            metadata_json: None,
+            is_current: false,
+            produced_by_run_id: None,
+            produced_by_session_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        db.create_task_artifact(&plan_artifact).expect("create plan");
+        db.mark_task_artifact_current(&task.id, TaskArtifactKind::Plan, &plan_artifact.id)
+            .expect("mark plan");
+
+        assert_eq!(
+            task.current_plan(&db).expect("plan getter").as_deref(),
+            Some("plan content")
+        );
     }
 }

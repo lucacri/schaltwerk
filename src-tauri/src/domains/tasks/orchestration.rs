@@ -640,7 +640,18 @@ impl<'a> SessionProvisioner for ProductionProvisioner<'a> {
             run = short_run_id(&run.id),
             disc = discriminator,
         );
-        let prompt = build_stage_run_prompt(task, run.stage, slot.run_role);
+        // Phase 4 Wave F: pre-resolve current_spec / current_plan
+        // through the derived getters; the prompt builder is now a pure
+        // formatter that takes the bodies as parameters.
+        let current_spec = task.current_spec(self.db)?;
+        let current_plan = task.current_plan(self.db)?;
+        let prompt = build_stage_run_prompt(
+            task,
+            run.stage,
+            slot.run_role,
+            current_spec.as_deref(),
+            current_plan.as_deref(),
+        );
 
         let params = SessionCreationParams {
             name: &session_name,
@@ -970,7 +981,13 @@ mod tests {
                 run_role: slot.run_role,
                 slot_key: slot.slot_key.clone(),
                 agent_type: slot.agent_type.clone(),
-                prompt: build_stage_run_prompt(task, run.stage, slot.run_role),
+                prompt: build_stage_run_prompt(
+                    task,
+                    run.stage,
+                    slot.run_role,
+                    task.current_spec(self.db).unwrap_or(None).as_deref(),
+                    task.current_plan(self.db).unwrap_or(None).as_deref(),
+                ),
                 branch: branch.to_string(),
                 base_branch: base_branch.to_string(),
             });

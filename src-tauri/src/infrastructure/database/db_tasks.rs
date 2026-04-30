@@ -61,9 +61,11 @@ pub trait TaskMethods {
         source_url: Option<&str>,
     ) -> Result<()>;
     fn set_task_request_body(&self, id: &str, request_body: &str) -> Result<()>;
-    fn set_task_current_spec(&self, id: &str, spec: Option<&str>) -> Result<()>;
-    fn set_task_current_plan(&self, id: &str, plan: Option<&str>) -> Result<()>;
-    fn set_task_current_summary(&self, id: &str, summary: Option<&str>) -> Result<()>;
+    // Phase 4 Wave F: `set_task_current_spec` / `_plan` / `_summary`
+    // setters retired. The denormalized columns are dropped; readers
+    // go through `Task::current_spec(&db)` / `current_plan` /
+    // `current_summary` which look up `task_artifacts` with
+    // `is_current = true`.
 
     fn upsert_task_stage_config(&self, config: &TaskStageConfig) -> Result<()>;
     fn list_task_stage_configs(&self, task_id: &str) -> Result<Vec<TaskStageConfig>>;
@@ -168,7 +170,6 @@ impl TaskMethods for Database {
                 id, name, display_name,
                 repository_path, repository_name,
                 variant, stage, request_body,
-                current_spec, current_plan, current_summary,
                 source_kind, source_url,
                 task_host_session_id, task_branch, base_branch,
                 issue_number, issue_url, pr_number, pr_url, pr_state,
@@ -177,7 +178,7 @@ impl TaskMethods for Database {
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
                 ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20,
-                ?21, ?22, ?23, ?24, ?25, ?26
+                ?21, ?22, ?23
             )",
             params![
                 task.id,
@@ -188,9 +189,6 @@ impl TaskMethods for Database {
                 task.variant.as_str(),
                 task.stage.as_str(),
                 task.request_body,
-                task.current_spec,
-                task.current_plan,
-                task.current_summary,
                 task.source_kind,
                 task.source_url,
                 task.task_host_session_id,
@@ -369,17 +367,9 @@ impl TaskMethods for Database {
         update_task_field(self, "request_body = ?1", params![request_body, Utc::now().timestamp(), id])
     }
 
-    fn set_task_current_spec(&self, id: &str, spec: Option<&str>) -> Result<()> {
-        update_task_field(self, "current_spec = ?1", params![spec, Utc::now().timestamp(), id])
-    }
-
-    fn set_task_current_plan(&self, id: &str, plan: Option<&str>) -> Result<()> {
-        update_task_field(self, "current_plan = ?1", params![plan, Utc::now().timestamp(), id])
-    }
-
-    fn set_task_current_summary(&self, id: &str, summary: Option<&str>) -> Result<()> {
-        update_task_field(self, "current_summary = ?1", params![summary, Utc::now().timestamp(), id])
-    }
+    // Phase 4 Wave F: `set_task_current_spec` / `_plan` / `_summary`
+    // setters retired with the column drop. The artifact's `is_current`
+    // flag is now the canonical source of truth.
 
     fn upsert_task_stage_config(&self, config: &TaskStageConfig) -> Result<()> {
         let conn = self.get_conn()?;
@@ -849,8 +839,7 @@ const TASK_SELECT_COLUMNS: &str = "
     id, name, display_name,
     repository_path, repository_name,
     variant, stage, request_body,
-    current_spec, current_plan, current_summary,
-    source_kind, source_url,
+        source_kind, source_url,
     task_host_session_id, task_branch, base_branch,
     issue_number, issue_url, pr_number, pr_url, pr_state,
     failure_flag, epic_id, attention_required,
@@ -862,8 +851,7 @@ const TASK_SELECT_WHERE_ID: &str = "
         id, name, display_name,
         repository_path, repository_name,
         variant, stage, request_body,
-        current_spec, current_plan, current_summary,
-        source_kind, source_url,
+                source_kind, source_url,
         task_host_session_id, task_branch, base_branch,
         issue_number, issue_url, pr_number, pr_url, pr_state,
         failure_flag, epic_id, attention_required,
@@ -876,8 +864,7 @@ const TASK_SELECT_WHERE_REPO_ORDER: &str = "
         id, name, display_name,
         repository_path, repository_name,
         variant, stage, request_body,
-        current_spec, current_plan, current_summary,
-        source_kind, source_url,
+                source_kind, source_url,
         task_host_session_id, task_branch, base_branch,
         issue_number, issue_url, pr_number, pr_url, pr_state,
         failure_flag, epic_id, attention_required,
@@ -922,8 +909,7 @@ const TASK_SELECT_WHERE_REPO_NAME: &str = "
         id, name, display_name,
         repository_path, repository_name,
         variant, stage, request_body,
-        current_spec, current_plan, current_summary,
-        source_kind, source_url,
+                source_kind, source_url,
         task_host_session_id, task_branch, base_branch,
         issue_number, issue_url, pr_number, pr_url, pr_state,
         failure_flag, epic_id, attention_required,
@@ -936,8 +922,7 @@ const TASK_SELECT_FOR_PR_NUMBER: &str = "
         t.id, t.name, t.display_name,
         t.repository_path, t.repository_name,
         t.variant, t.stage, t.request_body,
-        t.current_spec, t.current_plan, t.current_summary,
-        t.source_kind, t.source_url,
+                t.source_kind, t.source_url,
         t.task_host_session_id, t.task_branch, t.base_branch,
         t.issue_number, t.issue_url, t.pr_number, t.pr_url, t.pr_state,
         t.failure_flag, t.epic_id, t.attention_required,
@@ -1018,6 +1003,9 @@ fn row_to_task(row: &Row<'_>) -> rusqlite::Result<Task> {
         )
     })?;
     Ok(Task {
+        // Phase 4 Wave F: indices shifted -3 after dropping
+        // current_spec / current_plan / current_summary from the SELECT
+        // projection.
         id: row.get(0)?,
         name: row.get(1)?,
         display_name: row.get(2)?,
@@ -1026,25 +1014,22 @@ fn row_to_task(row: &Row<'_>) -> rusqlite::Result<Task> {
         variant,
         stage,
         request_body: row.get(7)?,
-        current_spec: row.get(8)?,
-        current_plan: row.get(9)?,
-        current_summary: row.get(10)?,
-        source_kind: row.get(11)?,
-        source_url: row.get(12)?,
-        task_host_session_id: row.get(13)?,
-        task_branch: row.get(14)?,
-        base_branch: row.get(15)?,
-        issue_number: row.get(16)?,
-        issue_url: row.get(17)?,
-        pr_number: row.get(18)?,
-        pr_url: row.get(19)?,
-        pr_state: row.get(20)?,
-        failure_flag: row.get(21)?,
-        epic_id: row.get(22)?,
-        attention_required: row.get(23)?,
-        created_at: utc_from_epoch_seconds_lossy(row.get(24)?),
-        updated_at: utc_from_epoch_seconds_lossy(row.get(25)?),
-        cancelled_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(26)?),
+        source_kind: row.get(8)?,
+        source_url: row.get(9)?,
+        task_host_session_id: row.get(10)?,
+        task_branch: row.get(11)?,
+        base_branch: row.get(12)?,
+        issue_number: row.get(13)?,
+        issue_url: row.get(14)?,
+        pr_number: row.get(15)?,
+        pr_url: row.get(16)?,
+        pr_state: row.get(17)?,
+        failure_flag: row.get(18)?,
+        epic_id: row.get(19)?,
+        attention_required: row.get(20)?,
+        created_at: utc_from_epoch_seconds_lossy(row.get(21)?),
+        updated_at: utc_from_epoch_seconds_lossy(row.get(22)?),
+        cancelled_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(23)?),
         task_runs: Vec::new(),
     })
 }
@@ -1196,9 +1181,6 @@ mod tests {
             variant: TaskVariant::Regular,
             stage: TaskStage::Draft,
             request_body: "do the thing".to_string(),
-            current_spec: None,
-            current_plan: None,
-            current_summary: None,
             source_kind: None,
             source_url: None,
             task_host_session_id: None,

@@ -768,6 +768,11 @@ fn apply_project_config_migrations(conn: &rusqlite::Connection) -> anyhow::Resul
 /// `SessionFactsRecorder` (Wave G of the Phase 1 plan) and the design rationale in
 /// `plans/2026-04-29-task-flow-v2-phase-1-plan.md` §1.
 pub(crate) fn apply_tasks_migrations(conn: &rusqlite::Connection) -> anyhow::Result<()> {
+    // Phase 4 Wave F.6: legacy `current_spec` / `current_plan` /
+    // `current_summary` columns dropped from the v2-native CREATE.
+    // Derived at read time from `task_artifacts` via
+    // `Task::current_spec(&db)` etc. Upgraded DBs hit
+    // `v2_drop_task_current_columns` to drop the columns physically.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS tasks (
             id TEXT PRIMARY KEY,
@@ -778,9 +783,6 @@ pub(crate) fn apply_tasks_migrations(conn: &rusqlite::Connection) -> anyhow::Res
             variant TEXT NOT NULL DEFAULT 'regular',
             stage TEXT NOT NULL DEFAULT 'draft',
             request_body TEXT NOT NULL DEFAULT '',
-            current_spec TEXT,
-            current_plan TEXT,
-            current_summary TEXT,
             source_kind TEXT,
             source_url TEXT,
             task_host_session_id TEXT,
@@ -992,6 +994,11 @@ pub(crate) fn apply_tasks_migrations(conn: &rusqlite::Connection) -> anyhow::Res
     // `cancelled_at` directly. Idempotent — skips when the columns
     // are already gone (v2-native DBs see this as a no-op).
     super::migrations::v2_drop_session_legacy_columns::run(conn)?;
+    // Phase 4 Wave F.6: drop `tasks.current_spec` / `current_plan` /
+    // `current_summary` denormalized columns. Readers go through
+    // `Task::current_spec(&db)` etc. which look up the artifact with
+    // `is_current = true`. Idempotent — v2-native DBs no-op.
+    super::migrations::v2_drop_task_current_columns::run(conn)?;
     let _ = conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sessions_task ON sessions(task_id)",
         [],
