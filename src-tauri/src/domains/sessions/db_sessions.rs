@@ -208,6 +208,80 @@ pub struct SessionForRun {
 
 const SQLITE_MAX_VARIABLE_NUMBER: usize = 999;
 
+/// Phase 5.5 Wave D: shared column list for the 3 list_* SELECTs that go
+/// through `hydrate_session_summaries`. Hoisting this avoids the drift
+/// pattern where one caller's SELECT was extended but the others
+/// silently kept the old shape — exactly what happened to the 6 fact
+/// columns in Phase 1.
+const SESSION_SUMMARY_SELECT_COLUMNS: &str =
+    "id, name, display_name, version_group_id, version_number, epic_id, \
+     repository_path, repository_name, branch, parent_branch, \
+     original_parent_branch, worktree_path, \
+     created_at, updated_at, last_activity, ready_to_merge, \
+     original_agent_type, pending_name_generation, was_auto_generated, \
+     resume_allowed, amp_thread_id, issue_number, issue_url, \
+     pr_number, pr_url, is_consolidation, consolidation_sources, \
+     consolidation_round_id, consolidation_role, consolidation_report, \
+     consolidation_report_source, consolidation_base_session_id, \
+     consolidation_recommended_session_id, consolidation_confirmation_mode, \
+     promotion_reason, ci_autofix_enabled, merged_at, pr_state, \
+     original_agent_model, task_id, task_stage, is_spec, cancelled_at, \
+     task_run_id, run_role, slot_key, exited_at, exit_code, first_idle_at";
+
+fn row_to_session_summary(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionSummaryRow> {
+    Ok(SessionSummaryRow {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        display_name: row.get(2).ok(),
+        version_group_id: row.get(3).ok(),
+        version_number: row.get(4).ok(),
+        epic_id: row.get(5).ok(),
+        repository_path: PathBuf::from(row.get::<_, String>(6)?),
+        repository_name: row.get(7)?,
+        branch: row.get(8)?,
+        parent_branch: row.get(9)?,
+        original_parent_branch: row.get(10).ok(),
+        worktree_path: PathBuf::from(row.get::<_, String>(11)?),
+        created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
+        updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
+        last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(14)?),
+        ready_to_merge: row.get(15).unwrap_or(false),
+        original_agent_type: row.get(16).ok(),
+        pending_name_generation: row.get(17).unwrap_or(false),
+        was_auto_generated: row.get(18).unwrap_or(false),
+        resume_allowed: row.get(19).unwrap_or(true),
+        amp_thread_id: row.get(20).ok(),
+        issue_number: row.get(21).ok(),
+        issue_url: row.get(22).ok(),
+        pr_number: row.get(23).ok(),
+        pr_url: row.get(24).ok(),
+        is_consolidation: row.get(25).unwrap_or(false),
+        consolidation_sources: row.get(26).ok(),
+        consolidation_round_id: row.get(27).ok(),
+        consolidation_role: row.get(28).ok(),
+        consolidation_report: row.get(29).ok(),
+        consolidation_report_source: row.get(30).ok(),
+        consolidation_base_session_id: row.get(31).ok(),
+        consolidation_recommended_session_id: row.get(32).ok(),
+        consolidation_confirmation_mode: row.get(33).ok(),
+        promotion_reason: row.get(34).ok(),
+        ci_autofix_enabled: row.get(35).unwrap_or(false),
+        merged_at: row.get(36).ok(),
+        pr_state: row.get(37).ok(),
+        original_agent_model: row.get(38).ok(),
+        task_id: row.get(39).ok(),
+        task_stage: row.get(40).ok(),
+        is_spec: row.get(41).unwrap_or(false),
+        cancelled_at: row.get(42).ok(),
+        task_run_id: row.get(43).ok(),
+        run_role: row.get(44).ok(),
+        slot_key: row.get(45).ok(),
+        exited_at: row.get(46).ok(),
+        exit_code: row.get(47).ok(),
+        first_idle_at: row.get(48).ok(),
+    })
+}
+
 #[derive(Debug, Clone)]
 struct SessionSummaryRow {
     id: String,
@@ -253,6 +327,15 @@ struct SessionSummaryRow {
     task_stage: Option<String>,
     is_spec: bool,
     cancelled_at: Option<i64>,
+    // Phase 5.5 Wave D: fact columns now flow through the summary row so
+    // `hydrate_session_summaries` can populate them on the produced
+    // `Session` instead of hardcoding `None`.
+    task_run_id: Option<String>,
+    run_role: Option<String>,
+    slot_key: Option<String>,
+    exited_at: Option<i64>,
+    exit_code: Option<i32>,
+    first_idle_at: Option<i64>,
 }
 
 impl Database {
@@ -323,12 +406,14 @@ impl Database {
                     merged_at: summary.merged_at.map(utc_from_epoch_seconds_lossy),
                     task_id: summary.task_id,
                     task_stage: summary.task_stage.and_then(|stage| stage.parse().ok()),
-                    task_run_id: None,
-                    run_role: None,
-                    slot_key: None,
-                    exited_at: None,
-                    exit_code: None,
-                    first_idle_at: None,
+                    // Phase 5.5 Wave D: facts flow through SessionSummaryRow
+                    // instead of being hardcoded to None.
+                    task_run_id: summary.task_run_id,
+                    run_role: summary.run_role,
+                    slot_key: summary.slot_key,
+                    exited_at: summary.exited_at.map(utc_from_epoch_seconds_lossy),
+                    exit_code: summary.exit_code,
+                    first_idle_at: summary.first_idle_at.map(utc_from_epoch_seconds_lossy),
                     is_spec: summary.is_spec,
                     cancelled_at: summary.cancelled_at.map(utc_from_epoch_seconds_lossy),
                 }
@@ -541,64 +626,15 @@ impl SessionMethods for Database {
         let summary_timer = Instant::now();
         let conn = self.get_conn()?;
         let summaries = {
-            let mut stmt = conn.prepare(
-                "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
-                        branch, parent_branch, original_parent_branch, worktree_path,
-                        created_at, updated_at, last_activity, ready_to_merge,
-                        original_agent_type, pending_name_generation, was_auto_generated,
-                        resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
-                 FROM sessions
-                 WHERE repository_path = ?1
+            let sql = format!(
+                "SELECT {} FROM sessions \
+                 WHERE repository_path = ?1 \
                  ORDER BY ready_to_merge ASC, last_activity DESC",
-            )?;
-
-            let rows = stmt.query_map(params![repo_path.to_string_lossy()], |row| {
-                Ok(SessionSummaryRow {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    display_name: row.get(2).ok(),
-                    version_group_id: row.get(3).ok(),
-                    version_number: row.get(4).ok(),
-                    epic_id: row.get(5).ok(),
-                    repository_path: PathBuf::from(row.get::<_, String>(6)?),
-                    repository_name: row.get(7)?,
-                    branch: row.get(8)?,
-                    parent_branch: row.get(9)?,
-                    original_parent_branch: row.get(10).ok(),
-                    worktree_path: PathBuf::from(row.get::<_, String>(11)?),
-                    created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
-                    updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
-                    last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(14)?),
-                    ready_to_merge: row.get(15).unwrap_or(false),
-                    original_agent_type: row.get(16).ok(),
-                    original_agent_model: row.get(38).ok(),
-                    pending_name_generation: row.get(17).unwrap_or(false),
-                    was_auto_generated: row.get(18).unwrap_or(false),
-                    resume_allowed: row.get(19).unwrap_or(true),
-                    amp_thread_id: row.get(20).ok(),
-                    issue_number: row.get(21).ok(),
-                    issue_url: row.get(22).ok(),
-                    pr_number: row.get(23).ok(),
-                    pr_url: row.get(24).ok(),
-                    is_consolidation: row.get(25).unwrap_or(false),
-                    consolidation_sources: row.get(26).ok(),
-                    consolidation_round_id: row.get(27).ok(),
-                    consolidation_role: row.get(28).ok(),
-                    consolidation_report: row.get(29).ok(),
-                    consolidation_report_source: row.get(30).ok(),
-                    consolidation_base_session_id: row.get(31).ok(),
-                    consolidation_recommended_session_id: row.get(32).ok(),
-                    consolidation_confirmation_mode: row.get(33).ok(),
-                    promotion_reason: row.get(34).ok(),
-                    ci_autofix_enabled: row.get(35).unwrap_or(false),
-                    merged_at: row.get(36).ok(),
-                    pr_state: row.get(37).ok(),
-                    task_id: row.get(39).ok(),
-                    task_stage: row.get(40).ok(),
-                    is_spec: row.get(41).unwrap_or(false),
-                    cancelled_at: row.get(42).ok(),
-                })
-            })?;
+                SESSION_SUMMARY_SELECT_COLUMNS,
+            );
+            let mut stmt = conn.prepare(&sql)?;
+            let rows = stmt
+                .query_map(params![repo_path.to_string_lossy()], row_to_session_summary)?;
             rows.collect::<SqlResult<Vec<_>>>()?
         };
 
@@ -621,64 +657,15 @@ impl SessionMethods for Database {
         let summary_timer = Instant::now();
         let conn = self.get_conn()?;
         let summaries = {
-            let mut stmt = conn.prepare(
-                "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
-                        branch, parent_branch, original_parent_branch, worktree_path,
-                        created_at, updated_at, last_activity, ready_to_merge,
-                        original_agent_type, pending_name_generation, was_auto_generated,
-                        resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
-                 FROM sessions
-                 WHERE cancelled_at IS NULL
+            let sql = format!(
+                "SELECT {} FROM sessions \
+                 WHERE cancelled_at IS NULL \
                  ORDER BY ready_to_merge ASC, last_activity DESC",
-            )?;
+                SESSION_SUMMARY_SELECT_COLUMNS,
+            );
+            let mut stmt = conn.prepare(&sql)?;
 
-            let rows = stmt.query_map([], |row| {
-                Ok(SessionSummaryRow {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    display_name: row.get(2).ok(),
-                    version_group_id: row.get(3).ok(),
-                    version_number: row.get(4).ok(),
-                    epic_id: row.get(5).ok(),
-                    repository_path: PathBuf::from(row.get::<_, String>(6)?),
-                    repository_name: row.get(7)?,
-                    branch: row.get(8)?,
-                    parent_branch: row.get(9)?,
-                    original_parent_branch: row.get(10).ok(),
-                    worktree_path: PathBuf::from(row.get::<_, String>(11)?),
-                    created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
-                    updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
-                    last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(14)?),
-                    ready_to_merge: row.get(15).unwrap_or(false),
-                    original_agent_type: row.get(16).ok(),
-                    original_agent_model: row.get(38).ok(),
-                    pending_name_generation: row.get(17).unwrap_or(false),
-                    was_auto_generated: row.get(18).unwrap_or(false),
-                    resume_allowed: row.get(19).unwrap_or(true),
-                    amp_thread_id: row.get(20).ok(),
-                    issue_number: row.get(21).ok(),
-                    issue_url: row.get(22).ok(),
-                    pr_number: row.get(23).ok(),
-                    pr_url: row.get(24).ok(),
-                    is_consolidation: row.get(25).unwrap_or(false),
-                    consolidation_sources: row.get(26).ok(),
-                    consolidation_round_id: row.get(27).ok(),
-                    consolidation_role: row.get(28).ok(),
-                    consolidation_report: row.get(29).ok(),
-                    consolidation_report_source: row.get(30).ok(),
-                    consolidation_base_session_id: row.get(31).ok(),
-                    consolidation_recommended_session_id: row.get(32).ok(),
-                    consolidation_confirmation_mode: row.get(33).ok(),
-                    promotion_reason: row.get(34).ok(),
-                    ci_autofix_enabled: row.get(35).unwrap_or(false),
-                    merged_at: row.get(36).ok(),
-                    pr_state: row.get(37).ok(),
-                    task_id: row.get(39).ok(),
-                    task_stage: row.get(40).ok(),
-                    is_spec: row.get(41).unwrap_or(false),
-                    cancelled_at: row.get(42).ok(),
-                })
-            })?;
+            let rows = stmt.query_map([], row_to_session_summary)?;
             rows.collect::<SqlResult<Vec<_>>>()?
         };
 
@@ -781,68 +768,17 @@ impl SessionMethods for Database {
         let summary_timer = Instant::now();
         let conn = self.get_conn()?;
         let summaries = {
-            let mut stmt = conn.prepare(
-                "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
-                        branch, parent_branch, original_parent_branch, worktree_path,
-                        created_at, updated_at, last_activity, ready_to_merge,
-                        original_agent_type, pending_name_generation, was_auto_generated,
-                        resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
-                 FROM sessions
-                 WHERE repository_path = ?1 AND is_spec = ?2
+            let sql = format!(
+                "SELECT {} FROM sessions \
+                 WHERE repository_path = ?1 AND is_spec = ?2 \
                  ORDER BY ready_to_merge ASC, last_activity DESC",
-            )?;
+                SESSION_SUMMARY_SELECT_COLUMNS,
+            );
+            let mut stmt = conn.prepare(&sql)?;
 
             let rows = stmt.query_map(
                 params![repo_path.to_string_lossy(), is_spec],
-                |row| {
-                    Ok(SessionSummaryRow {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        display_name: row.get(2).ok(),
-                        version_group_id: row.get(3).ok(),
-                        version_number: row.get(4).ok(),
-                        epic_id: row.get(5).ok(),
-                        repository_path: PathBuf::from(row.get::<_, String>(6)?),
-                        repository_name: row.get(7)?,
-                        branch: row.get(8)?,
-                        parent_branch: row.get(9)?,
-                        original_parent_branch: row.get(10).ok(),
-                        worktree_path: PathBuf::from(row.get::<_, String>(11)?),
-                        created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
-                        updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
-                        last_activity: utc_from_epoch_seconds_lossy_opt(
-                            row.get::<_, Option<i64>>(14)?,
-                        ),
-                        ready_to_merge: row.get(15).unwrap_or(false),
-                        original_agent_type: row.get(16).ok(),
-                        original_agent_model: row.get(38).ok(),
-                        pending_name_generation: row.get(17).unwrap_or(false),
-                        was_auto_generated: row.get(18).unwrap_or(false),
-                        resume_allowed: row.get(19).unwrap_or(true),
-                        amp_thread_id: row.get(20).ok(),
-                        issue_number: row.get(21).ok(),
-                        issue_url: row.get(22).ok(),
-                        pr_number: row.get(23).ok(),
-                        pr_url: row.get(24).ok(),
-                        is_consolidation: row.get(25).unwrap_or(false),
-                        consolidation_sources: row.get(26).ok(),
-                        consolidation_round_id: row.get(27).ok(),
-                        consolidation_role: row.get(28).ok(),
-                        consolidation_report: row.get(29).ok(),
-                        consolidation_report_source: row.get(30).ok(),
-                        consolidation_base_session_id: row.get(31).ok(),
-                        consolidation_recommended_session_id: row.get(32).ok(),
-                        consolidation_confirmation_mode: row.get(33).ok(),
-                        promotion_reason: row.get(34).ok(),
-                        ci_autofix_enabled: row.get(35).unwrap_or(false),
-                        merged_at: row.get(36).ok(),
-                        pr_state: row.get(37).ok(),
-                        task_id: row.get(39).ok(),
-                        task_stage: row.get(40).ok(),
-                        is_spec: row.get(41).unwrap_or(false),
-                        cancelled_at: row.get(42).ok(),
-                    })
-                },
+                row_to_session_summary,
             )?;
             rows.collect::<SqlResult<Vec<_>>>()?
         };
@@ -2246,6 +2182,60 @@ mod tests {
         assert_eq!(
             by_id["b"].first_idle_at.map(|t| t.timestamp()),
             Some(tb.timestamp())
+        );
+    }
+
+    /// Phase 5.5 Wave D: pin the round-trip for the 6 fact columns through
+    /// `list_sessions_by_state` (which goes through `hydrate_session_summaries`).
+    /// This single test is load-bearing for all three callers of the
+    /// hydrator (`list_sessions`, `list_all_active_sessions`,
+    /// `list_sessions_by_state`) — they all go through the same build block
+    /// that previously hardcoded these fields to None.
+    #[test]
+    fn list_sessions_by_state_round_trips_fact_columns() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        db.create_session(&make_session_for_run("listed-session", &repo, None))
+            .expect("create");
+
+        db.set_session_task_lineage(
+            "listed-session",
+            Some("task-1"),
+            Some("run-1"),
+            None,
+            Some("candidate"),
+            Some("claude-0"),
+        )
+        .expect("lineage");
+        let exit_ts = Utc.timestamp_opt(2_000, 0).single().unwrap();
+        db.set_session_exited_at("listed-session", exit_ts, Some(7))
+            .expect("exit");
+        let idle_ts = Utc.timestamp_opt(3_000, 0).single().unwrap();
+        db.set_session_first_idle_at("listed-session", idle_ts)
+            .expect("idle");
+
+        // Read via the listed path (is_spec = false). Before Phase 5.5
+        // this returned the session with all 6 fact columns hardcoded to
+        // None inside `hydrate_session_summaries`.
+        let listed = db
+            .list_sessions_by_state(&repo, false)
+            .expect("list_sessions_by_state");
+        let session = listed
+            .iter()
+            .find(|s| s.id == "listed-session")
+            .expect("session must be in the listing");
+
+        assert_eq!(session.task_run_id.as_deref(), Some("run-1"));
+        assert_eq!(session.run_role.as_deref(), Some("candidate"));
+        assert_eq!(session.slot_key.as_deref(), Some("claude-0"));
+        assert_eq!(
+            session.exited_at.map(|t| t.timestamp()),
+            Some(exit_ts.timestamp())
+        );
+        assert_eq!(session.exit_code, Some(7));
+        assert_eq!(
+            session.first_idle_at.map(|t| t.timestamp()),
+            Some(idle_ts.timestamp())
         );
     }
 
