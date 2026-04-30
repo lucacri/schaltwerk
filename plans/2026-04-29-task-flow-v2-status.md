@@ -10,7 +10,7 @@
 | 1 | Collapse `TaskRunStatus` to derived state | `[x]` | Waves A–K — see below |
 | 2 | Per-task mutex; remove global RwLock | `[x]` | Waves A–I — see below |
 | 3 | Drop `RunRole`; collapse `TaskStage::Cancelled`; introduce orthogonal session axes (additive) | `[x]` | Waves A–H — see below |
-| 4 | `TaskFlowError` sweep + derived current_* getters + retire legacy session enums | `[ ]` | — |
+| 4 | `TaskFlowError` sweep + derived current_* getters + retire legacy session enums | `[~]` Waves B+C complete; D-H pending | Waves B–C — see below |
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[ ]` | — |
 | 6 | `Sidebar.tsx` split | `[ ]` | — |
 
@@ -229,6 +229,92 @@ populated by the same writes.
 | `arch_domain_isolation` and `arch_layering_database` green | ✅ |
 | `plans/2026-04-29-task-flow-v2-status.md` Phase 3 row marked `[x]` | ✅ |
 | Auto-memory updated | (next commit) |
+
+---
+
+## Phase 4 — wave-by-wave detail (in progress; B+C complete, D–H pending)
+
+Phase 4's full scope per the plan is large enough that the work is
+landing in two pushes. The first push (this status update) ships
+**Waves B and C**: rewire every production writer of the legacy
+`Session.status` / `Session.session_state` columns to the orthogonal
+axes (`is_spec` / `cancelled_at`), and migrate every production reader
+likewise. The second push (next session) will ship Wave D (delete the
+enums, drop the columns), Wave E (TaskFlowError + 23-command sweep),
+Wave F (derived `current_*` getters), Wave G (validation), and Wave H
+(memory + status-doc finalize).
+
+| Wave | Title | Status | Commit |
+|---|---|---|---|
+| A | Phase 4 plan + audit (incl. Phase-3 wiring-gap discovery) | `[x]` | `f559d20b` (in same commit as B.0) |
+| B.0 | Wire `is_spec` / `cancelled_at` through INSERT, SELECT, hydrators | `[x]` | `f559d20b` |
+| B.1 | `service.rs::finalize_session_cancellation` stamps `cancelled_at` synchronously | `[x]` | `a59b9cd7` |
+| B.2 | `lifecycle/cancellation.rs::finalize_cancellation` rewire + cascading filter & test fixes | `[x]` | `b2665575` |
+| B.3 | Delete dead `finalize_state_transition` | `[x]` | `3a03e452` |
+| B.4 | Delete dead public `update_session_state` service method | `[x]` | `45545695` |
+| B.5 | Delete `schaltwerk_core_update_session_state` Tauri command | `[x]` | `bb2cd8fb` |
+| B.6 | Delete `normalize_spec_state` + dead repository wrappers | `[x]` | `0b76e8d6` |
+| C.1 | Read sweep: stage/activity/action_prompts/facts_recorder/consolidation_stub + commands/schaltwerk_core/tasks + lifecycle/cancellation/finalizer + tasks/service/auto_advance + utils.rs | `[x]` | `4818fc99` + `89503a07` |
+| C.2 | Read sweep: domains/sessions/service.rs + mcp_api.rs + mcp_api/diff_api.rs (27 sites incl. consolidation 3-arm) | `[x]` | `42da5d10` |
+| C.3 | Read sweep: domains/merge/service.rs + commands/github.rs spec guards | `[x]` | `c665f03c` |
+| D | Delete `SessionStatus` + `SessionState` enums + struct fields + drop columns via SQLite table-rebuild | `[ ]` | — |
+| E | `TaskFlowError` definition + migrate 23 task commands | `[ ]` | — |
+| F | Derived `current_spec` / `current_plan` / `current_summary` getters + drop denormalized columns | `[ ]` | — |
+| G | Final validation + grep verification | `[ ]` | — |
+| H | Status doc + memory update | `[ ]` | — |
+
+### Phase 4 — what landed in waves B + C
+
+**Audit findings (from §0 of the Phase 4 plan):**
+- Six production writers of `Session.status` / `Session.session_state`
+  identified and rewired; the original Phase 3 framing of "read-only
+  compat shims" was incorrect.
+- Critical Phase 3 wiring gap discovered: the `is_spec` and
+  `cancelled_at` columns existed in the SQLite schema and on the
+  `Session` struct, but the SELECT/INSERT/hydrator path never bound
+  them. Every Session loaded from DB returned `is_spec=false,
+  cancelled_at=None` regardless of what was stored. This made
+  `Session::lifecycle_state(...)` return wrong projections — but
+  no production code currently called the getter, so the bug was
+  dormant. Closed in Wave B.0.
+
+**Two-way binding contract held throughout:** every writer rewire
+shipped with a regression test that fails on revert. Existing tests
+that pinned the v1 contract (`assert_eq!(session.status,
+SessionStatus::Cancelled)`) were bulk-updated to the v2 contract
+(`assert!(session.cancelled_at.is_some())`).
+
+**~250 production read sites collapsed to ~40.** Most "sites" in the
+audit count were in test code (which Wave D handles when the enums get
+deleted) or in the `SessionInfoBuilder` wire-format adapter (which Wave
+D reworks to compute its outputs from the orthogonal axes). The actual
+production read migrations across waves C.1–C.3 numbered ~40, all
+behind structural assertions.
+
+**Tests at end of Wave C: 2371 / 2371 passing.** No mid-wave red trees.
+
+### What Wave D needs to deliver (next session)
+
+1. Rework `SessionInfoBuilder` to synthesize wire-format strings
+   (`session_state`, `status`) from `lifecycle_state(...)` instead of
+   reading the enum fields directly. The frontend continues to read
+   string unions, unchanged.
+2. Delete the `SessionStatus` enum + impl + FromStr (~40 lines).
+3. Delete the `SessionState` enum + impl + FromStr (~25 lines).
+4. Remove the two fields from the `Session` struct.
+5. Migrate ~30+ test fixture builders that construct `Session` with
+   the legacy enum fields. The mechanical pattern is `status:
+   SessionStatus::Active, session_state: SessionState::Running,` →
+   delete those two lines (since `is_spec=false, cancelled_at=None`
+   defaults are correct for "active running" sessions).
+6. Update DB layer to stop binding/selecting `status` and
+   `session_state` columns in INSERT/UPDATE/SELECT.
+7. Add the `v2_drop_session_legacy_columns` one-shot migration via
+   the SQLite table-rebuild dance.
+8. Add the structural pins from Phase 4 plan §6.
+
+`#![deny(dead_code)]` is the safety net: any production reader Wave C
+missed will surface as a compile error in Wave D's deletion step.
 
 ---
 
