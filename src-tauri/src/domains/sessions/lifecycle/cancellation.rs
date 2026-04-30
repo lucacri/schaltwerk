@@ -720,10 +720,15 @@ impl<'a> CancellationCoordinator<'a> {
         }
     }
 
+    /// Phase 4 Wave B.2: stamps `cancelled_at` directly on the orthogonal
+    /// axis instead of writing the legacy `status='cancelled'` column. The
+    /// caller chain (`cancel_session_internal` → `finalize_cancellation`)
+    /// runs synchronously under a brief lock, so no fire-and-forget shape
+    /// can let a reader observe the row post-cancel but pre-stamp.
     fn finalize_cancellation(&self, session_id: &str, errors: &mut Vec<String>) -> Result<()> {
         self.db_manager
-            .update_session_status(session_id, SessionStatus::Cancelled)
-            .with_context(|| format!("Failed to update session status for '{session_id}'"))?;
+            .set_session_cancelled_at(session_id, chrono::Utc::now())
+            .with_context(|| format!("Failed to stamp cancelled_at for '{session_id}'"))?;
 
         if let Err(e) = self
             .db_manager
@@ -1005,7 +1010,10 @@ mod tests {
         assert!(result.errors.is_empty());
 
         let updated = db_manager.get_session_by_id(&session.id).unwrap();
-        assert_eq!(updated.status, SessionStatus::Cancelled);
+        // Phase 4 Wave B.2: cancellation stamps cancelled_at on the
+        // orthogonal axis. The legacy `status` column stays Active and
+        // is no longer authoritative for "is this session cancelled?".
+        assert!(updated.cancelled_at.is_some());
         assert!(!updated.resume_allowed);
     }
 
@@ -1285,9 +1293,17 @@ mod tests {
         assert!(git::branch_exists(&repo_path, "lucode/test-session").unwrap());
     }
 
+    /// **Phase 4 Wave B.2 — load-bearing two-way-binding test.**
+    /// `finalize_cancellation` (the lifecycle module's variant) must stamp
+    /// `cancelled_at` directly and leave the legacy `status` column
+    /// unchanged. v1 wrote `status='cancelled'`; v2 stamps the timestamp
+    /// synchronously so the orthogonal axis (`cancelled_at`) becomes
+    /// authoritative immediately. Reverting the rewire to
+    /// `update_session_status(_, Cancelled)` makes this test fail because
+    /// `cancelled_at` would stay None.
     #[test]
     #[serial]
-    fn test_finalize_cancellation_updates_status() {
+    fn test_finalize_cancellation_stamps_cancelled_at_synchronously() {
         let (_temp_dir, repo_path) = setup_test_repo();
         let db = Database::new(Some(repo_path.join("test.db"))).unwrap();
         let db_manager = SessionDbManager::new(db, repo_path.clone());
@@ -1302,7 +1318,15 @@ mod tests {
             .unwrap();
 
         let updated = db_manager.get_session_by_id(&session.id).unwrap();
-        assert_eq!(updated.status, SessionStatus::Cancelled);
+        assert!(
+            updated.cancelled_at.is_some(),
+            "finalize_cancellation must stamp cancelled_at synchronously (Phase 4 Wave B.2)"
+        );
+        assert_eq!(
+            updated.status,
+            SessionStatus::Active,
+            "legacy status column must not be written by finalize after Phase 4 Wave B.2"
+        );
         assert!(!updated.resume_allowed);
     }
 

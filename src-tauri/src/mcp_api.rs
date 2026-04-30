@@ -3589,7 +3589,10 @@ mod tests {
             .expect("list sessions")
             .into_iter()
             .filter(|session| session.version_group_id.as_deref() == Some(version_group_id))
-            .filter(|session| session.status == SessionStatus::Active)
+            // Phase 4 Wave B.2: filter on the orthogonal cancelled_at axis,
+            // not the legacy status column. "Active" here = "not cancelled
+            // and not a spec".
+            .filter(|session| session.cancelled_at.is_none() && !session.is_spec)
             .map(|session| session.name)
             .collect();
         names.sort();
@@ -4581,7 +4584,7 @@ mod tests {
         let loser_after = db
             .get_session_by_name(Path::new(&repo_path), &v2.name)
             .expect("load loser after promote");
-        assert_eq!(loser_after.status, SessionStatus::Cancelled);
+        assert!(loser_after.cancelled_at.is_some(), "Phase 4 Wave B.2: cancelled_at is the orthogonal axis");
 
         let consolidation_after = db
             .get_session_by_name(Path::new(&repo_path), &consolidation.name)
@@ -6389,21 +6392,21 @@ mod tests {
             .db
             .get_session_by_name(&fixture.repo_path, &fixture.winning_candidate.name)
             .expect("load winning candidate");
-        assert_eq!(winning_candidate.status, SessionStatus::Cancelled);
+        assert!(winning_candidate.cancelled_at.is_some(), "Phase 4 Wave B.2: cancelled_at is the orthogonal axis");
         assert!(winning_candidate.is_consolidation);
 
         let losing_candidate = fixture
             .db
             .get_session_by_name(&fixture.repo_path, &fixture.losing_candidate.name)
             .expect("load losing candidate");
-        assert_eq!(losing_candidate.status, SessionStatus::Cancelled);
+        assert!(losing_candidate.cancelled_at.is_some(), "Phase 4 Wave B.2: cancelled_at is the orthogonal axis");
         assert!(losing_candidate.is_consolidation);
 
         let judge = fixture
             .db
             .get_session_by_name(&fixture.repo_path, &fixture.judge.name)
             .expect("load judge");
-        assert_eq!(judge.status, SessionStatus::Cancelled);
+        assert!(judge.cancelled_at.is_some(), "Phase 4 Wave B.2: cancelled_at is the orthogonal axis");
         assert!(judge.is_consolidation);
 
         let (enriched, _) = fixture
@@ -6565,7 +6568,7 @@ mod tests {
             let session = manager
                 .get_session(session_name)
                 .expect("load cancelled recovery session");
-            assert_eq!(session.status, SessionStatus::Cancelled);
+            assert!(session.cancelled_at.is_some(), "Phase 4 Wave B.2: cancelled_at is the orthogonal axis");
         }
 
         let round =

@@ -452,7 +452,7 @@ fn test_cancel_session() {
 
     // Verify session status is updated
     let db_session = manager.get_session("to-cancel").unwrap();
-    assert_eq!(db_session.status, SessionStatus::Cancelled);
+    assert!(db_session.cancelled_at.is_some(), "Phase 4 Wave B.2: cancelled_at is the orthogonal axis");
 }
 
 #[test]
@@ -1443,7 +1443,7 @@ fn test_convert_running_session_to_draft() {
         .db_ref()
         .get_session_by_name(&env.repo_path, &running_session.name)
         .unwrap();
-    assert_eq!(cancelled.status, SessionStatus::Cancelled);
+    assert!(cancelled.cancelled_at.is_some(), "Phase 4 Wave B.2: cancelled_at is the orthogonal axis");
 
     // Verify newly created spec session state and content
     let converted_session = manager.get_spec(&new_spec_name).unwrap();
@@ -1518,7 +1518,7 @@ async fn test_convert_version_group_to_spec_cancels_all_and_creates_one_spec() {
             .db_ref()
             .get_session_by_name(&env.repo_path, name)
             .unwrap();
-        assert_eq!(cancelled.status, SessionStatus::Cancelled);
+        assert!(cancelled.cancelled_at.is_some(), "Phase 4 Wave B.2: cancelled_at is the orthogonal axis");
     }
 
     let spec = manager.get_spec(&new_spec_name).unwrap();
@@ -1578,7 +1578,7 @@ async fn test_convert_version_group_to_spec_skips_non_running_sessions() {
         .db_ref()
         .get_session_by_name(&env.repo_path, &v1.name)
         .unwrap();
-    assert_eq!(cancelled.status, SessionStatus::Cancelled);
+    assert!(cancelled.cancelled_at.is_some(), "Phase 4 Wave B.2: cancelled_at is the orthogonal axis");
 
     // The untouched spec still exists
     let untouched = manager.get_spec("feature-y_v2").unwrap();

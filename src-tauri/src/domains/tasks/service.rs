@@ -562,15 +562,19 @@ impl<'a> TaskService<'a> {
         let db_manager = SessionDbManager::new(self.db.clone(), repo_path.to_path_buf());
         let mut sessions = BTreeMap::new();
 
+        // Phase 4 Wave B.2: cancellation stamps cancelled_at on the orthogonal
+        // axis; the legacy `status` column is no longer authoritative. "Active"
+        // here means "not cancelled and not a spec".
         if let Some(task_host_session_id) = task.task_host_session_id.as_deref()
             && let Ok(session) = db_manager.get_session_by_id(task_host_session_id)
-            && session.status == SessionStatus::Active
+            && session.cancelled_at.is_none()
+            && !session.is_spec
         {
             sessions.insert(session.id.clone(), session);
         }
 
         for session in db_manager.list_sessions()? {
-            if session.status != SessionStatus::Active {
+            if session.cancelled_at.is_some() || session.is_spec {
                 continue;
             }
             if session.task_id.as_deref() == Some(task.id.as_str()) {
@@ -586,7 +590,9 @@ impl<'a> TaskService<'a> {
         let mut sessions = Vec::new();
 
         for session in db_manager.list_sessions()? {
-            if session.status != SessionStatus::Active {
+            // Phase 4 Wave B.2: filter by the orthogonal axes, not the legacy
+            // status column.
+            if session.cancelled_at.is_some() || session.is_spec {
                 continue;
             }
             let SessionTaskLineage { task_run_id, .. } =
@@ -1128,24 +1134,30 @@ mod tests {
                 .db_manager()
                 .get_session_by_id(&host.id)
                 .unwrap()
-                .status,
-            SessionStatus::Cancelled
+                .cancelled_at
+                .is_some(),
+            true,
+            "Phase 4 Wave B.2: cancellation stamps cancelled_at on the orthogonal axis",
         );
         assert_eq!(
             fixture
                 .db_manager()
                 .get_session_by_id(&candidate.id)
                 .unwrap()
-                .status,
-            SessionStatus::Cancelled
+                .cancelled_at
+                .is_some(),
+            true,
+            "Phase 4 Wave B.2: cancellation stamps cancelled_at on the orthogonal axis",
         );
         assert_eq!(
             fixture
                 .db_manager()
                 .get_session_by_id(&clarify.id)
                 .unwrap()
-                .status,
-            SessionStatus::Cancelled
+                .cancelled_at
+                .is_some(),
+            true,
+            "Phase 4 Wave B.2: cancellation stamps cancelled_at on the orthogonal axis",
         );
         assert_eq!(
             runs.get_run(&candidate_run.id).unwrap().cancelled_at.is_some(),
@@ -1239,8 +1251,10 @@ mod tests {
                 .db_manager()
                 .get_session_by_id(&host.id)
                 .unwrap()
-                .status,
-            SessionStatus::Cancelled
+                .cancelled_at
+                .is_some(),
+            true,
+            "Phase 4 Wave B.2: cancellation stamps cancelled_at on the orthogonal axis",
         );
         assert_eq!(
             fixture
@@ -1365,16 +1379,20 @@ mod tests {
                 .db_manager()
                 .get_session_by_id(&first.id)
                 .unwrap()
-                .status,
-            SessionStatus::Cancelled
+                .cancelled_at
+                .is_some(),
+            true,
+            "Phase 4 Wave B.2: cancellation stamps cancelled_at on the orthogonal axis",
         );
         assert_eq!(
             fixture
                 .db_manager()
                 .get_session_by_id(&second.id)
                 .unwrap()
-                .status,
-            SessionStatus::Cancelled
+                .cancelled_at
+                .is_some(),
+            true,
+            "Phase 4 Wave B.2: cancellation stamps cancelled_at on the orthogonal axis",
         );
     }
 

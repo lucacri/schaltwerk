@@ -630,7 +630,9 @@ mod service_unified_tests {
 
     fn assert_cancelled_with_stub(manager: &SessionManager, session_name: &str) {
         let loaded = manager.get_session(session_name).unwrap();
-        assert_eq!(loaded.status, SessionStatus::Cancelled);
+        // Phase 4 Wave B.2: cancellation stamps cancelled_at on the
+        // orthogonal axis. Legacy `status` stays Active.
+        assert!(loaded.cancelled_at.is_some());
         assert!(!loaded.resume_allowed);
         assert!(
             loaded
@@ -3867,7 +3869,10 @@ impl SessionManager {
         }
 
         for session in sessions {
-            if session.status == SessionStatus::Cancelled {
+            // Phase 4 Wave B.2: filter on the orthogonal cancelled_at axis,
+            // not the legacy status column. Cancelled sessions are excluded
+            // from the enriched list (they appear in the archived view).
+            if session.cancelled_at.is_some() {
                 continue;
             }
 

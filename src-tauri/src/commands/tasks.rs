@@ -2030,13 +2030,22 @@ mod tests {
 
         assert_eq!(cancelled.cancelled_at.is_some(), true);
         assert!(cancelled.selected_session_id.is_none());
-        assert_eq!(
-            fixture.db.get_session_by_id(&first.id).unwrap().status,
-            SessionStatus::Cancelled
+        // Phase 4 Wave B.2: cancellation stamps cancelled_at on the orthogonal axis.
+        assert!(
+            fixture
+                .db
+                .get_session_by_id(&first.id)
+                .unwrap()
+                .cancelled_at
+                .is_some()
         );
-        assert_eq!(
-            fixture.db.get_session_by_id(&second.id).unwrap().status,
-            SessionStatus::Cancelled
+        assert!(
+            fixture
+                .db
+                .get_session_by_id(&second.id)
+                .unwrap()
+                .cancelled_at
+                .is_some()
         );
     }
 
