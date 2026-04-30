@@ -5223,12 +5223,6 @@ impl SessionManager {
         }
     }
 
-    pub fn update_session_state(&self, session_name: &str, state: SessionState) -> Result<()> {
-        let session = self.db_manager.get_session_by_name(session_name)?;
-        self.db_manager.update_session_state(&session.id, state)?;
-        Ok(())
-    }
-
     pub fn spawn_amp_thread_watcher(&self, session_name: &str) -> Result<()> {
         let session = self.db_manager.get_session_by_name(session_name)?;
 
