@@ -414,4 +414,25 @@ behind structural assertions.
 
 ---
 
+## Phase 5 — wave-by-wave detail (Wave A complete)
+
+Phase 5's plan: [`2026-04-29-task-flow-v2-phase-5-plan.md`](./2026-04-29-task-flow-v2-phase-5-plan.md).
+
+Phase 5 ships the explicit `lucode_task_run_done` MCP tool (per design
+§8). The tool is the canonical primary signal for run completion; the
+OSC/idle heuristic stays as a fallback for agents that don't cooperate.
+`status: "ok"` writes `session.first_idle_at` (strict superset of the
+OSC heuristic). `status: "failed"` writes `task_runs.failed_at` +
+`failure_reason` (authoritative source for agent self-reported failure).
+
+| Wave | Title | Status | Commit |
+|---|---|---|---|
+| A | Phase 5 plan + status row | `[x]` | (this commit) |
+| B | `TaskRunService::report_failure` + `lucode_task_run_done` Tauri command + tests | `[ ]` | — |
+| C | REST handler `POST /api/task-runs/{id}/done` | `[ ]` | — |
+| D | MCP server tool registration (bridge + schema + tool) | `[ ]` | — |
+| E | TauriCommands enum + design-doc update + Phase 5 DoD check | `[ ]` | — |
+
+---
+
 Updated when each phase merges to `task-flow-v2`.
