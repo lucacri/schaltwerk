@@ -121,6 +121,24 @@ pub trait SessionMethods {
         first_idle_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<()>;
 
+    /// Stamp the cancellation timestamp on a session row. Phase 4 Wave B
+    /// rewires the cancel-finalization path to use this setter instead of
+    /// the legacy `update_session_status(_, SessionStatus::Cancelled)`.
+    /// The `cancelled_at` axis is orthogonal to `is_spec`; cancelling a
+    /// session does not change its identity-as-spec.
+    fn set_session_cancelled_at(
+        &self,
+        id: &str,
+        cancelled_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()>;
+
+    /// Set the spec-identity flag on a session row. Phase 4 Wave B uses
+    /// this for any caller that needs to flip a session between spec and
+    /// non-spec (in v2's design, the only such caller is the spec→running
+    /// promotion; a regression here would manifest as the
+    /// `lifecycle_state(...)` getter returning the wrong projection).
+    fn set_session_is_spec(&self, id: &str, is_spec: bool) -> Result<()>;
+
     /// Return every session bound to the given `task_run_id`. The Sessions
     /// returned by this query include the v2 fact columns
     /// (`exited_at`, `exit_code`, `first_idle_at`) — unlike the legacy
@@ -232,6 +250,8 @@ struct SessionSummaryRow {
     merged_at: Option<i64>,
     task_id: Option<String>,
     task_stage: Option<String>,
+    is_spec: bool,
+    cancelled_at: Option<i64>,
 }
 
 impl Database {
@@ -310,8 +330,8 @@ impl Database {
                     exited_at: None,
                     exit_code: None,
                     first_idle_at: None,
-                    is_spec: false,
-                    cancelled_at: None,
+                    is_spec: summary.is_spec,
+                    cancelled_at: summary.cancelled_at.map(utc_from_epoch_seconds_lossy),
                 }
             })
             .collect())
@@ -361,8 +381,9 @@ impl SessionMethods for Database {
                 branch, parent_branch, original_parent_branch, worktree_path,
                 status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                 original_agent_type, pending_name_generation, was_auto_generated,
-                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44, ?45)",
+                spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage,
+                is_spec, cancelled_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43, ?44, ?45, ?46, ?47)",
             params![
                 session.id,
                 session.name,
@@ -412,6 +433,8 @@ impl SessionMethods for Database {
                 session.original_agent_model,
                 session.task_id,
                 session.task_stage.as_ref().map(|stage| stage.as_str()),
+                session.is_spec,
+                session.cancelled_at.map(|dt| dt.timestamp()),
             ],
         )?;
 
@@ -426,7 +449,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
              FROM sessions
              WHERE repository_path = ?1 AND name = ?2"
         )?;
@@ -503,8 +526,10 @@ impl SessionMethods for Database {
                 exited_at: None,
                 exit_code: None,
                 first_idle_at: None,
-                is_spec: false,
-                cancelled_at: None,
+                is_spec: row.get(45).unwrap_or(false),
+                cancelled_at: utc_from_epoch_seconds_lossy_opt(
+                    row.get::<_, Option<i64>>(46).ok().flatten(),
+                ),
             })
         })?;
 
@@ -519,7 +544,7 @@ impl SessionMethods for Database {
                     branch, parent_branch, original_parent_branch, worktree_path,
                     status, created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
                     original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
+                    spec_content, session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
              FROM sessions
              WHERE id = ?1"
         )?;
@@ -596,8 +621,10 @@ impl SessionMethods for Database {
                 exited_at: None,
                 exit_code: None,
                 first_idle_at: None,
-                is_spec: false,
-                cancelled_at: None,
+                is_spec: row.get(45).unwrap_or(false),
+                cancelled_at: utc_from_epoch_seconds_lossy_opt(
+                    row.get::<_, Option<i64>>(46).ok().flatten(),
+                ),
             })
         })?;
 
@@ -639,7 +666,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
                  FROM sessions
                  WHERE repository_path = ?1
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -697,6 +724,8 @@ impl SessionMethods for Database {
                     pr_state: row.get(39).ok(),
                     task_id: row.get(41).ok(),
                     task_stage: row.get(42).ok(),
+                    is_spec: row.get(43).unwrap_or(false),
+                    cancelled_at: row.get(44).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -726,7 +755,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
                  FROM sessions
                  WHERE status = 'active'
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -784,6 +813,8 @@ impl SessionMethods for Database {
                     pr_state: row.get(39).ok(),
                     task_id: row.get(41).ok(),
                     task_stage: row.get(42).ok(),
+                    is_spec: row.get(43).unwrap_or(false),
+                    cancelled_at: row.get(44).ok(),
                 })
             })?;
             rows.collect::<SqlResult<Vec<_>>>()?
@@ -910,7 +941,7 @@ impl SessionMethods for Database {
                         branch, parent_branch, original_parent_branch, worktree_path,
                         status, created_at, updated_at, last_activity, ready_to_merge,
                         original_agent_type, pending_name_generation, was_auto_generated,
-                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage
+                        session_state, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
                  FROM sessions
                  WHERE repository_path = ?1 AND session_state = ?2
                  ORDER BY ready_to_merge ASC, last_activity DESC",
@@ -972,6 +1003,8 @@ impl SessionMethods for Database {
                         pr_state: row.get(39).ok(),
                         task_id: row.get(41).ok(),
                         task_stage: row.get(42).ok(),
+                        is_spec: row.get(43).unwrap_or(false),
+                        cancelled_at: row.get(44).ok(),
                     })
                 },
             )?;
@@ -1306,6 +1339,34 @@ impl SessionMethods for Database {
         Ok(())
     }
 
+    fn set_session_cancelled_at(
+        &self,
+        id: &str,
+        cancelled_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()> {
+        let conn = self.get_conn()?;
+        let now = Utc::now().timestamp();
+        conn.execute(
+            "UPDATE sessions
+                SET cancelled_at = ?1, updated_at = ?2
+                WHERE id = ?3",
+            params![cancelled_at.timestamp(), now, id],
+        )?;
+        Ok(())
+    }
+
+    fn set_session_is_spec(&self, id: &str, is_spec: bool) -> Result<()> {
+        let conn = self.get_conn()?;
+        let now = Utc::now().timestamp();
+        conn.execute(
+            "UPDATE sessions
+                SET is_spec = ?1, updated_at = ?2
+                WHERE id = ?3",
+            params![is_spec, now, id],
+        )?;
+        Ok(())
+    }
+
     fn set_session_task_lineage(
         &self,
         session_id: &str,
@@ -1431,7 +1492,8 @@ impl SessionMethods for Database {
                 ci_autofix_enabled, merged_at,
                 task_id, task_stage,
                 task_run_id, run_role, slot_key,
-                exited_at, exit_code, first_idle_at
+                exited_at, exit_code, first_idle_at,
+                is_spec, cancelled_at
              FROM sessions
              WHERE task_run_id = ?1
              ORDER BY created_at ASC",
@@ -1518,12 +1580,8 @@ fn row_to_session_with_facts(row: &rusqlite::Row<'_>) -> rusqlite::Result<Sessio
         exited_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(48)?),
         exit_code: row.get(49).ok(),
         first_idle_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(50)?),
-        // Phase 3 Wave F.1: new orthogonal axes are not yet read in
-        // this projection (the SELECT used by row_to_session_with_facts
-        // doesn't include them). Default to None/false; F.6 wires them
-        // into the SELECT once the wire-format adapter lands.
-        is_spec: false,
-        cancelled_at: None,
+        is_spec: row.get(51).unwrap_or(false),
+        cancelled_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(52)?),
     })
 }
 
@@ -2446,5 +2504,129 @@ mod tests {
         let db = Database::new_in_memory().expect("db");
         let bound = db.get_sessions_by_task_run_id("does-not-exist").expect("query");
         assert!(bound.is_empty());
+    }
+
+    /// **Phase 4 Wave B.0 — load-bearing wiring test.** Closes the Phase 3
+    /// gap where `is_spec` and `cancelled_at` columns existed in SQLite + as
+    /// fields on `Session` but the SELECT/INSERT path never read or wrote
+    /// them — the hydrator hardcoded `false`/`None`. If the SELECT
+    /// projection or hydrator regresses, this test fails to round-trip
+    /// the values.
+    #[test]
+    fn db_round_trips_is_spec_and_cancelled_at_through_create_and_get_by_id() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        let mut session = make_session_for_run("phase4-rt-id", &repo, None);
+        session.is_spec = true;
+        let cancel_ts = Utc.timestamp_opt(7_000, 0).single().unwrap();
+        session.cancelled_at = Some(cancel_ts);
+
+        db.create_session(&session).expect("create");
+
+        let loaded = db.get_session_by_id("phase4-rt-id").expect("get by id");
+        assert!(loaded.is_spec, "is_spec=true must survive round-trip");
+        assert_eq!(
+            loaded.cancelled_at.map(|t| t.timestamp()),
+            Some(cancel_ts.timestamp()),
+            "cancelled_at must survive round-trip"
+        );
+    }
+
+    #[test]
+    fn db_round_trips_is_spec_and_cancelled_at_through_get_by_name() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        let mut session = make_session_for_run("phase4-rt-name", &repo, None);
+        session.is_spec = true;
+        let cancel_ts = Utc.timestamp_opt(8_000, 0).single().unwrap();
+        session.cancelled_at = Some(cancel_ts);
+
+        db.create_session(&session).expect("create");
+
+        let loaded = db
+            .get_session_by_name(&repo, "phase4-rt-name")
+            .expect("get by name");
+        assert!(loaded.is_spec);
+        assert_eq!(
+            loaded.cancelled_at.map(|t| t.timestamp()),
+            Some(cancel_ts.timestamp())
+        );
+    }
+
+    #[test]
+    fn db_round_trips_is_spec_and_cancelled_at_through_list_sessions() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        let mut session = make_session_for_run("phase4-rt-list", &repo, None);
+        session.is_spec = true;
+        let cancel_ts = Utc.timestamp_opt(9_000, 0).single().unwrap();
+        session.cancelled_at = Some(cancel_ts);
+
+        db.create_session(&session).expect("create");
+
+        let loaded = db.list_sessions(&repo).expect("list");
+        let s = loaded
+            .iter()
+            .find(|s| s.id == "phase4-rt-list")
+            .expect("session");
+        assert!(s.is_spec);
+        assert_eq!(
+            s.cancelled_at.map(|t| t.timestamp()),
+            Some(cancel_ts.timestamp())
+        );
+    }
+
+    #[test]
+    fn db_round_trips_is_spec_and_cancelled_at_through_get_sessions_by_task_run_id() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        let mut session = make_session_for_run("phase4-rt-run", &repo, None);
+        session.is_spec = true;
+        let cancel_ts = Utc.timestamp_opt(10_000, 0).single().unwrap();
+        session.cancelled_at = Some(cancel_ts);
+
+        db.create_session(&session).expect("create");
+        link_session_to_run(&db, "phase4-rt-run", "target-run");
+
+        let bound = db.get_sessions_by_task_run_id("target-run").expect("query");
+        assert_eq!(bound.len(), 1);
+        let s = &bound[0];
+        assert!(s.is_spec);
+        assert_eq!(
+            s.cancelled_at.map(|t| t.timestamp()),
+            Some(cancel_ts.timestamp())
+        );
+    }
+
+    #[test]
+    fn set_session_cancelled_at_writes_column() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        db.create_session(&make_session_for_run("set-c", &repo, None))
+            .expect("create");
+
+        let cancel_ts = Utc.timestamp_opt(11_000, 0).single().unwrap();
+        db.set_session_cancelled_at("set-c", cancel_ts)
+            .expect("set");
+
+        let loaded = db.get_session_by_id("set-c").expect("get");
+        assert_eq!(
+            loaded.cancelled_at.map(|t| t.timestamp()),
+            Some(cancel_ts.timestamp())
+        );
+    }
+
+    #[test]
+    fn set_session_is_spec_writes_column() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        db.create_session(&make_session_for_run("set-s", &repo, None))
+            .expect("create");
+
+        db.set_session_is_spec("set-s", true).expect("set true");
+        assert!(db.get_session_by_id("set-s").expect("get").is_spec);
+
+        db.set_session_is_spec("set-s", false).expect("set false");
+        assert!(!db.get_session_by_id("set-s").expect("get").is_spec);
     }
 }
