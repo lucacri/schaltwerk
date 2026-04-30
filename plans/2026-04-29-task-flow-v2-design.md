@@ -93,10 +93,13 @@ The v2 rewrite is not about adding features. It's about reducing the surface are
 - `SchaltError` continues to exist for non-task surfaces (forge, sessions outside tasks, power) but doesn't leak into task commands.
 
 ### 8. Idle detection: explicit MCP tool, not heuristic
-- New MCP tool: `lucode_task_run_done { run_id, slot_session_id, artifact_id, status: "ok" | "failed", reason? }`.
+- MCP tool `lucode_task_run_done { run_id, slot_session_id, status: "ok" | "failed", artifact_id?, error? }` (Phase 5).
 - Agents call this when they finish work.
-- The 5s OSC-based heuristic stays as a fallback for agents that don't cooperate, but the primary signal is explicit.
+- `status: "ok"` writes `session.first_idle_at` on the slot session — strict superset of the OSC idle heuristic. The run does **not** auto-confirm; it derives `AwaitingSelection` once every bound slot has reported done. Confirmation stays a separate human action via `lucode_task_confirm_stage`.
+- `status: "failed"` writes `task_runs.failed_at` + `failure_reason` — authoritative source for agent self-reported failure. Distinct from a non-zero PTY exit (`session.exit_code`); a future query against either column reads what it says it does.
+- The 5s OSC-based heuristic stays as the documented fallback for agents that don't cooperate. Both paths write to the same column (`first_idle_at`), so the explicit tool is a deterministic version of the heuristic, not a parallel surface.
 - Eliminates flapping risk and the "missed the signal" risk (5s threshold, sticky AwaitingSelection, etc.).
+- `artifact_id` is accepted in the payload but not yet persisted (Phase 5 limitation; future phases may surface it for human inspection before confirmation).
 
 ### 9. Direct calls, not event-bus coordination for domain logic
 - `attention_bridge` no longer flips `TaskRun` status. It just maintains its in-memory map and calls `task_run_observer.on_session_idle(session_id)` directly.

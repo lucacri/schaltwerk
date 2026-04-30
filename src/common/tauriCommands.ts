@@ -129,6 +129,7 @@ export const TauriCommands = {
   ListInstalledFonts: 'list_installed_fonts',
   ListLucodeTmuxServers: 'list_lucode_tmux_servers',
   ListProjectBranches: 'list_project_branches',
+  LucodeTaskRunDone: 'lucode_task_run_done',
   OpenInApp: 'open_in_app',
   PasteAndSubmitTerminal: 'paste_and_submit_terminal',
   PathExists: 'path_exists',

@@ -11,7 +11,7 @@
 | 2 | Per-task mutex; remove global RwLock | `[x]` | Waves A–I — see below |
 | 3 | Drop `RunRole`; collapse `TaskStage::Cancelled`; introduce orthogonal session axes (additive) | `[x]` | Waves A–H — see below |
 | 4 | `TaskFlowError` sweep + derived current_* getters + retire legacy session enums | `[x]` | Waves A–H — see below |
-| 5 | Explicit `lucode_task_run_done` MCP tool | `[ ]` | — |
+| 5 | Explicit `lucode_task_run_done` MCP tool | `[x]` | Waves A–E — see below |
 | 6 | `Sidebar.tsx` split | `[ ]` | — |
 
 ## Phase 1 — wave-by-wave detail
@@ -414,24 +414,61 @@ behind structural assertions.
 
 ---
 
-## Phase 5 — wave-by-wave detail (Wave A complete)
+## Phase 5 — wave-by-wave detail
 
 Phase 5's plan: [`2026-04-29-task-flow-v2-phase-5-plan.md`](./2026-04-29-task-flow-v2-phase-5-plan.md).
 
-Phase 5 ships the explicit `lucode_task_run_done` MCP tool (per design
-§8). The tool is the canonical primary signal for run completion; the
-OSC/idle heuristic stays as a fallback for agents that don't cooperate.
-`status: "ok"` writes `session.first_idle_at` (strict superset of the
-OSC heuristic). `status: "failed"` writes `task_runs.failed_at` +
-`failure_reason` (authoritative source for agent self-reported failure).
+All waves complete. Phase 5 ships the explicit `lucode_task_run_done`
+MCP tool (per design §8). The tool is the canonical primary signal for
+run completion; the OSC/idle heuristic stays as a fallback for agents
+that don't cooperate. `status: "ok"` writes `session.first_idle_at`
+(strict superset of the OSC heuristic — both paths write the same
+column). `status: "failed"` writes `task_runs.failed_at` +
+`failure_reason` (authoritative source for agent self-reported failure;
+distinct from PTY-exit failure observed via `session.exit_code`).
 
 | Wave | Title | Status | Commit |
 |---|---|---|---|
-| A | Phase 5 plan + status row | `[x]` | (this commit) |
-| B | `TaskRunService::report_failure` + `lucode_task_run_done` Tauri command + tests | `[ ]` | — |
-| C | REST handler `POST /api/task-runs/{id}/done` | `[ ]` | — |
-| D | MCP server tool registration (bridge + schema + tool) | `[ ]` | — |
-| E | TauriCommands enum + design-doc update + Phase 5 DoD check | `[ ]` | — |
+| A | Phase 5 plan + status row | `[x]` | `76bb0591` |
+| B | `TaskRunService::report_failure` + `lucode_task_run_done` Tauri command + tests + service re-exports | `[x]` | `247477b6` |
+| C | REST handler `POST /api/task-runs/{id}/done` + path-extractor tests | `[x]` | `cfe02c14` |
+| D | MCP server tool registration (bridge + schema + tool description) | `[x]` | `fcd49d26` |
+| E | TauriCommands enum + design-doc §8 update + Phase 5 DoD check | `[x]` | (this commit) |
+
+## Phase 5 — definition of done check
+
+| Criterion | Status |
+|---|---|
+| `just test` green | ✅ 2400 tests passing across TS lint, MCP, vitest, clippy, cargo shear, knip, nextest |
+| `lucode_task_run_done` Tauri command registered | ✅ `commands::tasks::lucode_task_run_done` in `main.rs` invoke handler list |
+| `POST /api/task-runs/{id}/done` REST route exists | ✅ dispatch case in `mcp_api.rs:486-491`; `extract_run_id_for_action` helper + 2 unit tests |
+| `lucode_task_run_done` MCP tool registered | ✅ tool entry, `LucodeTaskRunDoneArgs`, switch case in `mcp-server/src/lucode-mcp-server.ts`; `LucodeBridge.taskRunDone` in `lucode-bridge.ts`; output schema in `schemas.ts` |
+| `TauriCommands.LucodeTaskRunDone` exists | ✅ `src/common/tauriCommands.ts:131` |
+| `TaskRunService::report_failure` exists with round-trip test | ✅ `domains::tasks::runs::tests::report_failure_round_trips_through_compute_run_status` (per `feedback_compile_pins_dont_catch_wiring.md`) |
+| `set_task_run_failed_at` doc rewritten to drop "Migration-only" framing | ✅ `db_tasks.rs:109-117` |
+| `status: "ok"` writes `first_idle_at`, NOT `confirmed_at` | ✅ pinned by `lucode_task_run_done_with_status_ok_records_first_idle` (positive: first_idle_at landed; negative: confirmed_at stayed None) |
+| `status: "failed"` writes `failed_at`, NOT `session.exit_code` | ✅ pinned by `lucode_task_run_done_with_status_failed_marks_run_failed` (positive: failed_at + failure_reason landed; negative: exit_code stayed None) |
+| Lineage check rejects sessions not bound to the run | ✅ `lucode_task_run_done_rejects_session_not_bound_to_run` |
+| Idempotency: second `status: "ok"` call does not overwrite `first_idle_at` | ✅ `lucode_task_run_done_status_ok_is_idempotent` |
+| `arch_domain_isolation` and `arch_layering_database` green | ✅ |
+| Design doc §8 reflects landed tool shape | ✅ updated in this commit |
+
+### Phase 5 — known limitation surfaced for future cleanup
+
+`get_session_by_id` has a pre-existing wiring gap: its SELECT/row builder
+do not include `first_idle_at` / `task_run_id` / `run_role` / `slot_key`
+/ `exited_at` / `exit_code` columns. These columns *are* written
+correctly (the `set_*` setters work), and `get_sessions_by_task_run_id`
+reads them correctly via `row_to_session_with_facts`, but
+`get_session_by_id` returns `None` for all of them regardless of what's
+stored. This is the same class of bug `feedback_compile_pins_dont_catch_wiring.md`
+codifies — compile pins prove the field exists; only the round-trip
+proves the SELECT/INSERT path serves it.
+
+The fix is mechanical (extend the SELECT, swap to
+`row_to_session_with_facts`) but touches a hot path with 66 call sites.
+Out of scope for Phase 5; a focused follow-up will close the gap.
+Phase 5 tests use `get_sessions_by_task_run_id` for verification.
 
 ---
 
