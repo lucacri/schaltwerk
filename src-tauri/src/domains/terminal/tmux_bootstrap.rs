@@ -306,7 +306,7 @@ mod tests {
     fn ensure_and_reload_only_reloads_when_stamp_changed() {
         let _g = app_paths_testing::serial_lock();
         let tmp = TempDir::new().unwrap();
-        app_paths_testing::set_app_support_override(tmp.path());
+        let _override = app_paths_testing::OverrideGuard::new(tmp.path());
 
         let sockets = vec![PathBuf::from(
             "/tmp/tmux-501/lucode-v2-aaaaaaaaaaaaaaaa",
@@ -321,14 +321,13 @@ mod tests {
         let state2 = super::ensure_and_reload_if_rewrote(&sockets, &second).unwrap();
         assert!(!state2.wrote);
 
-        app_paths_testing::clear_app_support_override();
     }
 
     #[test]
     fn first_call_writes_the_file() {
         let _g = app_paths_testing::serial_lock();
         let tmp = TempDir::new().unwrap();
-        app_paths_testing::set_app_support_override(tmp.path());
+        let _override = app_paths_testing::OverrideGuard::new(tmp.path());
 
         let state = ensure_tmux_conf_on_disk().unwrap();
 
@@ -338,14 +337,13 @@ mod tests {
         let body = fs::read_to_string(&state.path).unwrap();
         assert_eq!(body, TMUX_CONF_BODY);
 
-        app_paths_testing::clear_app_support_override();
     }
 
     #[test]
     fn second_call_is_noop_when_stamp_matches() {
         let _g = app_paths_testing::serial_lock();
         let tmp = TempDir::new().unwrap();
-        app_paths_testing::set_app_support_override(tmp.path());
+        let _override = app_paths_testing::OverrideGuard::new(tmp.path());
 
         let first = ensure_tmux_conf_on_disk().unwrap();
         assert!(first.wrote);
@@ -356,14 +354,13 @@ mod tests {
             Some(config_version_stamp())
         );
 
-        app_paths_testing::clear_app_support_override();
     }
 
     #[test]
     fn rewrites_when_stamp_changes() {
         let _g = app_paths_testing::serial_lock();
         let tmp = TempDir::new().unwrap();
-        app_paths_testing::set_app_support_override(tmp.path());
+        let _override = app_paths_testing::OverrideGuard::new(tmp.path());
 
         let path = tmux_conf_path().unwrap();
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -378,7 +375,6 @@ mod tests {
         let body = fs::read_to_string(&path).unwrap();
         assert_eq!(body, TMUX_CONF_BODY);
 
-        app_paths_testing::clear_app_support_override();
     }
 
     #[test]
@@ -386,12 +382,11 @@ mod tests {
         let _g = app_paths_testing::serial_lock();
         let tmp = TempDir::new().unwrap();
         let nested = tmp.path().join("a").join("b").join("c");
-        app_paths_testing::set_app_support_override(&nested);
+        let _override = app_paths_testing::OverrideGuard::new(&nested);
 
         let state = ensure_tmux_conf_on_disk().unwrap();
         assert!(state.wrote);
         assert!(state.path.exists());
 
-        app_paths_testing::clear_app_support_override();
     }
 }

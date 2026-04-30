@@ -9,8 +9,12 @@ const APP_IDENTIFIER: &str = "lucode";
 /// Lucode's per-user application support directory.
 /// macOS: `~/Library/Application Support/com.lucacri.lucode`.
 /// Other platforms: `$XDG_DATA_HOME/lucode` (fallback for Linux dev builds).
+///
+/// The override check is unconditionally compiled (not gated by `cfg(test)`)
+/// so binary-target tests that import this lib see the override too. The
+/// default override value is `None`, so production builds skip the branch
+/// after a single `Mutex<Option>` check — negligible cost.
 pub fn app_support_dir() -> Result<PathBuf, String> {
-    #[cfg(test)]
     if let Some(override_dir) = testing::app_support_override() {
         return Ok(override_dir);
     }
@@ -21,12 +25,32 @@ pub fn app_support_dir() -> Result<PathBuf, String> {
     Ok(data_dir.join(APP_IDENTIFIER))
 }
 
+/// Per-project data root (`<data_dir>/lucode`). Honors the same test
+/// override as `app_support_dir` so `set_app_support_override(tmp)`
+/// redirects both surfaces during tests. Routed through here (not direct
+/// `dirs::data_dir()`) because tests must be able to redirect writes
+/// without touching the user's real Application Support.
+pub fn project_data_dir() -> Result<PathBuf, String> {
+    if let Some(override_dir) = testing::app_support_override() {
+        return Ok(override_dir);
+    }
+
+    let data_dir = dirs::data_dir().ok_or_else(|| {
+        "Failed to resolve the user's data directory (dirs::data_dir returned None)".to_string()
+    })?;
+    Ok(data_dir.join("lucode"))
+}
+
 /// Canonical on-disk path to Lucode's tmux config.
 pub fn tmux_conf_path() -> Result<PathBuf, String> {
     Ok(app_support_dir()?.join("tmux").join("tmux.conf"))
 }
 
-#[cfg(test)]
+/// Test-only override mechanism, exposed unconditionally so binary-side
+/// tests (which run under the `bin lucode` test target, not the library
+/// test target) can reach it. The override is only READ by `app_support_dir`
+/// / `project_data_dir` and defaults to `None`, so production semantics
+/// are unchanged.
 pub mod testing {
     use std::path::{Path, PathBuf};
     use std::sync::{Mutex, OnceLock};
@@ -55,6 +79,26 @@ pub mod testing {
 
     pub fn app_support_override() -> Option<PathBuf> {
         cell().lock().unwrap().clone()
+    }
+
+    /// RAII guard that sets the app-support override on construction and
+    /// clears it on drop — including during panic-unwind. Replaces the
+    /// `set_app_support_override(...)` / `clear_app_support_override()`
+    /// pattern that left the override poisoned when a test panicked between
+    /// the two calls.
+    pub struct OverrideGuard;
+
+    impl OverrideGuard {
+        pub fn new(path: &Path) -> Self {
+            set_app_support_override(path);
+            Self
+        }
+    }
+
+    impl Drop for OverrideGuard {
+        fn drop(&mut self) {
+            clear_app_support_override();
+        }
     }
 }
 

@@ -1362,17 +1362,28 @@ mod tests {
     struct TempHomeGuard {
         previous: Option<String>,
         _temp_dir: TempDir,
+        // On macOS, dirs::data_dir() reads NSSearchPathForDirectoriesInDomains,
+        // not $HOME — so overriding $HOME alone won't redirect Application
+        // Support writes. The app-support override is what actually catches
+        // project_data_dir reads.
+        _app_support: lucode::shared::app_paths::testing::OverrideGuard,
+        _serial: std::sync::MutexGuard<'static, ()>,
     }
 
     impl TempHomeGuard {
         fn new() -> Self {
+            use lucode::shared::app_paths::testing as app_paths_testing;
             use lucode::utils::env_adapter::EnvAdapter;
+            let serial = app_paths_testing::serial_lock();
             let temp_dir = TempDir::new().expect("temp home directory");
             let previous = std::env::var("HOME").ok();
             EnvAdapter::set_var("HOME", &temp_dir.path().to_string_lossy());
+            let app_support = app_paths_testing::OverrideGuard::new(temp_dir.path());
             Self {
                 previous,
                 _temp_dir: temp_dir,
+                _app_support: app_support,
+                _serial: serial,
             }
         }
     }

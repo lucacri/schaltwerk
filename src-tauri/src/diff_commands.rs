@@ -555,6 +555,9 @@ mod tests {
         rt.block_on(async {
             let temp_dir = TempDir::new().unwrap();
             let repo_path = temp_dir.path();
+            let _serial = lucode::shared::app_paths::testing::serial_lock();
+            let _app_support =
+                lucode::shared::app_paths::testing::OverrideGuard::new(temp_dir.path());
 
             let main_content = "# Main baseline\n";
             let feature_content = "# Feature baseline\n";

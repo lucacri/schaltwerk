@@ -108,9 +108,12 @@ impl Project {
 
     /// Get the database path for a project in the global app data directory
     fn get_project_db_path(project_path: &Path) -> Result<PathBuf> {
-        // Get the app data directory (same location as settings)
-        let data_dir =
-            dirs::data_dir().ok_or_else(|| anyhow!("Failed to get app data directory"))?;
+        // Routes through `app_paths::project_data_dir` so tests that set the
+        // app-support override redirect their writes too. Direct
+        // `dirs::data_dir()` would bypass the override and write to the
+        // user's real Application Support during test runs.
+        let data_root = crate::shared::app_paths::project_data_dir()
+            .map_err(|e| anyhow!("Failed to resolve project data directory: {e}"))?;
 
         // Create a unique folder name for this project using a hash
         // This ensures uniqueness even for projects with the same name in different locations
@@ -140,8 +143,8 @@ impl Project {
             hash_short
         );
 
-        // Build the full path: ~/.local/share/lucode/projects/{projectname_hash}/sessions.db
-        let project_data_dir = data_dir.join("lucode").join("projects").join(folder_name);
+        // Build the full path: <data_root>/projects/{projectname_hash}/sessions.db
+        let project_data_dir = data_root.join("projects").join(folder_name);
 
         Ok(project_data_dir.join("sessions.db"))
     }
@@ -210,17 +213,12 @@ impl Project {
 
     #[cfg(test)]
     pub fn new_in_memory(path: PathBuf) -> Result<Self> {
-        // Each project gets its own terminal manager
         let terminal_manager = Arc::new(TerminalManager::new_local());
 
-        // For tests, create a temporary database file that will be cleaned up
-        let temp_dir = std::env::temp_dir();
-        let temp_db_path = temp_dir.join(format!("test-{}.db", uuid::Uuid::new_v4()));
-
-        let schaltwerk_core = Arc::new(SchaltwerkCore::new_with_repo_path(
-            Some(temp_db_path),
-            path.clone(),
-        )?);
+        // True `:memory:` SQLite — no disk artifact, no cleanup race. The
+        // previous implementation wrote a per-test `.db` file to `$TMPDIR`
+        // with no `Drop` impl, leaking on every test run.
+        let schaltwerk_core = Arc::new(SchaltwerkCore::new_in_memory_with_repo_path(path.clone())?);
 
         Ok(Self {
             path,
