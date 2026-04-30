@@ -9,8 +9,8 @@
 | 0 | Backup + branch + reference snapshot | `[x]` | `44fd5370` |
 | 1 | Collapse `TaskRunStatus` to derived state | `[x]` | Waves A–K — see below |
 | 2 | Per-task mutex; remove global RwLock | `[x]` | Waves A–I — see below |
-| 3 | Drop `RunRole`, `SessionState`, `SessionStatus` | `[ ]` | — |
-| 4 | `TaskFlowError` sweep + derived current_* getters | `[ ]` | — |
+| 3 | Drop `RunRole`; collapse `TaskStage::Cancelled`; introduce orthogonal session axes (additive) | `[x]` | Waves A–H — see below |
+| 4 | `TaskFlowError` sweep + derived current_* getters + retire legacy session enums | `[ ]` | — |
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[ ]` | — |
 | 6 | `Sidebar.tsx` split | `[ ]` | — |
 
@@ -164,6 +164,71 @@ each candidate resolves to Cat A (read-only), Cat B (single
 `db.set_*`), or Cat C (manager method that wraps
 `conn.transaction(...)` internally). The lock removal does not
 change the synchronization contract for any non-task surface.
+
+## Phase 3 — wave-by-wave detail
+
+Phase 3 ships in **additive scope**: the new orthogonal axes
+(`Session.is_spec`, `Session.cancelled_at`, `Task.cancelled_at`),
+the `SessionLifecycleState` derived getter, and the `SlotKind`
+runtime-only enum land alongside the v1 shape. The legacy enums
+`SessionStatus` and `SessionState` and the `Session.status` /
+`Session.session_state` columns are **retained** for the
+~173 production call sites that still read them. Phase 4 (or a
+dedicated Phase 3.5) will sweep those callers to the new shape and
+drop the legacy columns. `RunRole`, `TaskStage::Cancelled`, and
+`Session.task_role` are fully removed in this phase per plan §10.
+
+| Wave | Title | Status | Commit |
+|---|---|---|---|
+| A | Phase 3 implementation plan + design-doc updates | `[x]` | `755875af` |
+| B | `Task.cancelled_at` field + `is_cancelled` accessor | `[x]` | `dc8c568a` |
+| C | Schema columns (sessions.is_spec, sessions.cancelled_at, tasks.cancelled_at) | `[x]` | `0e67632d` |
+| D.1 | `SlotKind` runtime-only enum (RunRole successor) | `[x]` | `37b217e9` |
+| D.2.a | orchestration.rs: SlotKind sweep | `[x]` | `1b80f14f` |
+| D.2.b | prompts.rs: SlotKind sweep | `[x]` | `c83c35c0` |
+| D.2.c | presets/clarify/service/commands: SlotKind sweep | `[x]` | `0843826a` |
+| D.3 | drop RunRole enum; drop Session.task_role field | `[x]` | `49e476ea` |
+| D.4 | one-shot v1→v2 task_role column drop migration | `[x]` | `abe45d9a` |
+| E.1+E.2 | drop TaskStage::Cancelled; collapse to task.cancelled_at | `[x]` | `13371910` |
+| E.3 | one-shot v1→v2 task_cancelled migration | `[x]` | `343f6872` |
+| F.1 | Session.is_spec + cancelled_at + SessionLifecycleState (additive) | `[x]` | `287c52f2` |
+| F.7 | one-shot v1→v2 session_status backfill migration | `[x]` | `38af5813` |
+| G | full validation (just test green at 2366 tests) | `[x]` | (this commit's predecessor) |
+| H | status tracker + memory update | `[x]` | (this commit) |
+
+**Deferred to Phase 4 (or follow-up Phase 3.5):**
+- Wave F.2–F.6: the ~173-site call-site sweep that migrates every
+  consumer of `Session.status` / `Session.session_state` to read
+  `Session.is_spec` / `Session.cancelled_at` / `lifecycle_state()`.
+- The drop of `Session.status` / `Session.session_state` columns
+  via the SQLite table-rebuild dance (depends on the sweep
+  completing first).
+- Wire-format adapter for `info.session_state` / `info.status`
+  strings synthesized from the derived getter (the existing
+  serialization paths still read the legacy enum fields).
+
+These deferrals do not weaken Phase 3's design intent: the new
+orthogonal axes are populated and authoritative for any code that
+reads them; the legacy enums coexist as compatibility shims
+populated by the same writes.
+
+## Phase 3 — definition of done check (additive scope)
+
+| Criterion | Status |
+|---|---|
+| `just test` green | ✅ 2366 tests passing across TS lint, MCP, vitest, clippy, cargo shear, knip, nextest |
+| 0 references to `pub enum RunRole` in production code | ✅ deleted in `49e476ea`; pinned by absence + 0 grep hits |
+| 0 references to `TaskStage::Cancelled` in production code | ✅ pinned by `task_stage_has_seven_variants_not_eight` (compile-time exhaustive match without wildcard) |
+| 0 references to `Session.task_role` field in production code | ✅ deleted in `49e476ea` |
+| `Task.cancelled_at: Option<DateTime<Utc>>` field exists | ✅ pinned by `task_cancelled_at_field_is_option_datetime` (compile-time fn-pointer assertion) |
+| `Session.is_spec: bool` field exists | ✅ pinned by `session_is_spec_field_is_bool` |
+| `Session.cancelled_at: Option<DateTime<Utc>>` field exists | ✅ pinned by `session_cancelled_at_field_is_option_datetime` |
+| `SessionLifecycleState` runtime-only enum with 4 variants | ✅ pinned by `session_lifecycle_state_has_four_variants` (exhaustive match) |
+| `SlotKind` runtime-only enum, NOT serializable | ✅ defined without `Serialize`/`Deserialize`/`FromStr` derives |
+| All four one-shot migrations idempotent with archive forensics | ✅ `v1_to_v2_run_role` (D.4), `v1_to_v2_task_cancelled` (E.3), `v1_to_v2_session_status` (F.7) — each has `noop_on_v2_native_db` + `idempotent_repeat_run` tests |
+| `arch_domain_isolation` and `arch_layering_database` green | ✅ |
+| `plans/2026-04-29-task-flow-v2-status.md` Phase 3 row marked `[x]` | ✅ |
+| Auto-memory updated | (next commit) |
 
 ---
 
