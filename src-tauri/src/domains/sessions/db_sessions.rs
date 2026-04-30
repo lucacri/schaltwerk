@@ -1157,7 +1157,7 @@ impl SessionMethods for Database {
 
         // First check if the session exists and is a spec
         let session = self.get_session_by_name(repo_path, old_name)?;
-        if session.session_state != SessionState::Spec {
+        if !session.is_spec {
             return Err(anyhow::anyhow!("Can only rename spec sessions"));
         }
 

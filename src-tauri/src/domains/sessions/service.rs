@@ -3334,7 +3334,7 @@ impl SessionManager {
         };
         log::debug!("Cancel {name}: Retrieved session");
 
-        if session.session_state == SessionState::Spec {
+        if session.is_spec {
             log::info!("Cancel {name}: Archiving spec session instead of cancelling");
             self.archive_spec_session(name)?;
             return Ok(());
@@ -3443,7 +3443,7 @@ impl SessionManager {
     pub fn get_session_for_cancellation(&self, name: &str) -> Result<SessionCancellationInfo> {
         let session = self.db_manager.get_session_by_name(name)?;
 
-        if session.session_state == SessionState::Spec {
+        if session.is_spec {
             return Err(anyhow!(
                 "Cannot cancel spec session '{name}'. Use archive or delete spec operations instead."
             ));
@@ -3492,7 +3492,7 @@ impl SessionManager {
     pub fn convert_session_to_draft(&self, name: &str) -> Result<String> {
         let session = self.db_manager.get_session_by_name(name)?;
 
-        if session.session_state != SessionState::Running {
+        if session.is_spec {
             return Err(anyhow!("Session '{name}' is not in running state"));
         }
 
@@ -3528,7 +3528,7 @@ impl SessionManager {
     pub async fn convert_session_to_draft_async(&self, name: &str) -> Result<String> {
         let session = self.db_manager.get_session_by_name(name)?;
 
-        if session.session_state != SessionState::Running {
+        if session.is_spec {
             return Err(anyhow!("Session '{name}' is not in running state"));
         }
 
@@ -3618,7 +3618,7 @@ impl SessionManager {
         let mut running: Vec<Session> = Vec::with_capacity(session_names.len());
         for name in session_names {
             match self.db_manager.get_session_by_name(name) {
-                Ok(s) if s.session_state == SessionState::Running => running.push(s),
+                Ok(s) if !s.is_spec => running.push(s),
                 Ok(_) => log::warn!(
                     "Skipping non-running session '{name}' during group convert of '{base_name}'"
                 ),
@@ -3748,7 +3748,7 @@ impl SessionManager {
 
         let spec_count = sessions
             .iter()
-            .filter(|s| s.session_state == SessionState::Spec)
+            .filter(|s| s.is_spec)
             .count();
         log::info!(
             "[SES] totals sessions={} specs_in_sessions={} specs_table={} non_specs={}",
@@ -3849,7 +3849,7 @@ impl SessionManager {
                 continue;
             }
 
-            let is_spec_session = session.session_state == SessionState::Spec;
+            let is_spec_session = session.is_spec;
             if is_spec_session {
                 let info = SessionInfo {
                     session_id: session.name.clone(),
@@ -4784,7 +4784,7 @@ impl SessionManager {
         let session = self.db_manager.get_session_by_name(session_name)?;
 
         // Validate that the session is in a valid state for conversion
-        if session.session_state == SessionState::Spec {
+        if session.is_spec {
             return Err(anyhow!("Session '{session_name}' is already a spec"));
         }
 
@@ -4869,8 +4869,13 @@ impl SessionManager {
                     )
                 }
             };
+            let readiness_state = if session.is_spec || session.cancelled_at.is_some() {
+                SessionState::Spec
+            } else {
+                SessionState::Running
+            };
             build_ready_to_merge_state(
-                &session.session_state,
+                &readiness_state,
                 worktree_exists,
                 has_uncommitted_changes,
                 has_conflicts,

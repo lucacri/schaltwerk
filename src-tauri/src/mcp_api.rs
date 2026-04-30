@@ -32,7 +32,7 @@ use lucode::domains::attention::get_session_attention_state;
 use lucode::domains::git::service::{ForgeType, detect_forge};
 use lucode::domains::merge::MergeMode;
 use lucode::domains::sessions::apply_git_enrichment;
-use lucode::domains::sessions::entity::{Session, SessionStatus, Spec, SpecStage};
+use lucode::domains::sessions::entity::{Session, Spec, SpecStage};
 use lucode::domains::sessions::repository::{
     ConsolidationOutcomeCandidateInput, ConsolidationOutcomeInput, default_consolidation_vertical,
 };
@@ -237,11 +237,12 @@ where
     // Collect all sessions to cancel: candidates, extra judges, and sources
     let mut to_cancel = Vec::new();
     let preserved_session_id = promoted_session.id.clone();
-    if judge.status == SessionStatus::Active && judge.id != preserved_session_id {
+    if judge.cancelled_at.is_none() && !judge.is_spec && judge.id != preserved_session_id {
         to_cancel.push(judge.clone());
     }
     for c in candidates.iter().chain(extra_judges.iter()) {
-        if c.status == SessionStatus::Active
+        if c.cancelled_at.is_none()
+            && !c.is_spec
             && c.id != preserved_session_id
             && !to_cancel.iter().any(|session| session.id == c.id)
         {
@@ -255,7 +256,8 @@ where
         else {
             continue;
         };
-        if source.status == SessionStatus::Active
+        if source.cancelled_at.is_none()
+            && !source.is_spec
             && source.id != preserved_session_id
             && !to_cancel.iter().any(|s| s.id == source.id)
         {
@@ -1147,7 +1149,8 @@ fn find_promotion_siblings(
         let mut siblings = all_sessions
             .iter()
             .filter(|candidate| {
-                candidate.status == SessionStatus::Active
+                candidate.cancelled_at.is_none()
+                    && !candidate.is_spec
                     && source_ids
                         .iter()
                         .any(|source_id| source_id == &candidate.id || source_id == &candidate.name)
@@ -1167,7 +1170,8 @@ fn find_promotion_siblings(
             .filter(|candidate| {
                 candidate.id != session.id
                     && candidate.version_group_id.as_deref() == Some(group_id)
-                    && candidate.status == SessionStatus::Active
+                    && candidate.cancelled_at.is_none()
+                    && !candidate.is_spec
             })
             .cloned()
             .collect::<Vec<_>>()
@@ -1181,7 +1185,8 @@ fn find_promotion_siblings(
             .into_iter()
             .filter(|candidate| {
                 candidate.id != session.id
-                    && candidate.status == SessionStatus::Active
+                    && candidate.cancelled_at.is_none()
+                    && !candidate.is_spec
                     && has_version_suffix(&candidate.name)
                     && strip_version_suffix(&candidate.name) == base_name
             })
@@ -1217,7 +1222,7 @@ where
         )
     })?;
 
-    if session.session_state == SessionState::Spec {
+    if session.is_spec {
         return Err((
             StatusCode::BAD_REQUEST,
             format!("Session '{name}' is a spec and cannot be promoted"),
@@ -1360,7 +1365,7 @@ where
         ));
     }
 
-    if winner.status != SessionStatus::Active {
+    if winner.cancelled_at.is_some() || winner.is_spec {
         return Err((
             StatusCode::BAD_REQUEST,
             format!(
@@ -1371,7 +1376,7 @@ where
         ));
     }
 
-    if winner.session_state == SessionState::Spec {
+    if winner.is_spec {
         return Err((
             StatusCode::BAD_REQUEST,
             format!(
@@ -1967,6 +1972,7 @@ mod tests {
     use chrono::Utc;
     use git2::Repository;
     use hyper::HeaderMap;
+    use lucode::domains::sessions::entity::SessionStatus;
     use lucode::domains::sessions::service::SessionCreationParams;
     use lucode::domains::settings::{AgentPreset, AgentPresetSlot};
     use lucode::schaltwerk_core::Database;
@@ -3204,6 +3210,8 @@ mod tests {
 
         db.update_session_status(&v2.id, SessionStatus::Cancelled)
             .expect("cancel v2");
+        db.set_session_cancelled_at(&v2.id, chrono::Utc::now())
+            .expect("sync cancelled_at v2");
 
         let outcome = execute_session_promotion(
             &manager,
@@ -3302,6 +3310,8 @@ mod tests {
             .expect("create session");
         db.update_session_state(&session.id, SessionState::Spec)
             .expect("mark as spec");
+        db.set_session_is_spec(&session.id, true)
+            .expect("sync is_spec");
 
         let err = execute_session_promotion(
             &manager,
@@ -4770,6 +4780,8 @@ mod tests {
 
         db.update_session_status(&v1.id, SessionStatus::Cancelled)
             .expect("cancel v1");
+        db.set_session_cancelled_at(&v1.id, chrono::Utc::now())
+            .expect("sync cancelled_at v1");
 
         let err = execute_session_promotion(
             &manager,
@@ -8369,7 +8381,7 @@ async fn merge_session(
             let manager = core.session_manager();
             match manager.get_session(name) {
                 Ok(session) => {
-                    if session.session_state == SessionState::Spec {
+                    if session.is_spec {
                         return Ok(error_response(
                             StatusCode::BAD_REQUEST,
                             format!(
@@ -8674,7 +8686,7 @@ async fn prepare_pull_request(
             let manager = core.session_manager();
             match manager.get_session(name) {
                 Ok(session) => {
-                    if session.session_state == SessionState::Spec {
+                    if session.is_spec {
                         return Ok(error_response(
                             StatusCode::BAD_REQUEST,
                             format!(
@@ -8758,7 +8770,7 @@ async fn prepare_gitlab_merge_request(
             let manager = core.session_manager();
             match manager.get_session(name) {
                 Ok(session) => {
-                    if session.session_state == SessionState::Spec {
+                    if session.is_spec {
                         return Ok(error_response(
                             StatusCode::BAD_REQUEST,
                             format!(
@@ -8857,7 +8869,7 @@ async fn prepare_merge(
             let manager = core.session_manager();
             match manager.get_session(name) {
                 Ok(session) => {
-                    if session.session_state == SessionState::Spec {
+                    if session.is_spec {
                         return Ok(error_response(
                             StatusCode::BAD_REQUEST,
                             format!("Session '{name}' is a spec. Start the spec before merging."),
@@ -9413,7 +9425,9 @@ fn active_judge_sessions_for_round(round_sessions: &[Session]) -> Vec<Session> {
     round_sessions
         .iter()
         .filter(|s| {
-            s.status == SessionStatus::Active && s.consolidation_role.as_deref() == Some("judge")
+            s.cancelled_at.is_none()
+                && !s.is_spec
+                && s.consolidation_role.as_deref() == Some("judge")
         })
         .cloned()
         .collect()
@@ -9594,7 +9608,7 @@ where
         let mut judge_sessions_cancelled = Vec::new();
         let mut cleanup_failures = Vec::new();
         for round_session in round_sessions {
-            if round_session.status != SessionStatus::Active {
+            if round_session.cancelled_at.is_some() || round_session.is_spec {
                 continue;
             }
             let role = round_session
@@ -9722,7 +9736,7 @@ where
     let mut cleanup_failures = Vec::new();
 
     for round_session in round_sessions {
-        if round_session.status != SessionStatus::Active {
+        if round_session.cancelled_at.is_some() || round_session.is_spec {
             continue;
         }
 

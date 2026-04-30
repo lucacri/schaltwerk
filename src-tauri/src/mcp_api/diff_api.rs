@@ -12,7 +12,7 @@ use serde_json::json;
 
 use lucode::binary_detection::{get_unsupported_reason, is_binary_file_by_extension};
 use lucode::domains::git;
-use lucode::domains::sessions::entity::{ChangedFile, Session, SessionStatus};
+use lucode::domains::sessions::entity::{ChangedFile, Session};
 use lucode::domains::workspace::diff_engine::{
     DiffLine, LineType, add_collapsible_sections, calculate_diff_stats, compute_unified_diff,
 };
@@ -47,7 +47,7 @@ impl DiffScope {
             ));
         }
 
-        if session.status == SessionStatus::Cancelled {
+        if session.cancelled_at.is_some() {
             return Err(DiffApiError::new(
                 StatusCode::CONFLICT,
                 format!("Session '{}' cancellation is in progress.", session.name),
@@ -1285,6 +1285,7 @@ mod tests {
         let repo_path = tmp.path();
         let mut session = make_session(repo_path, "feature", "main");
         session.status = SessionStatus::Cancelled;
+        session.cancelled_at = Some(chrono::Utc::now());
         let err = DiffScope::for_session(&session).expect_err("cancelled session");
         assert_eq!(err.status, StatusCode::CONFLICT);
         assert!(err.message.contains("cancellation"));
