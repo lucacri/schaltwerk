@@ -1329,7 +1329,19 @@ Line 4"
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_namegen_env_allows_user_overrides() {
+        // Install an empty test env override so build_namegen_env doesn't
+        // spawn a login shell to capture the user's environment — this
+        // test only cares about the user-override merge logic, not the
+        // base env, so the spawn was pure overhead (was 5–10s on macOS
+        // CI).
+        use crate::shared::login_shell_env::testing as env_testing;
+        use std::collections::HashMap;
+
+        let _guard = env_testing::env_lock();
+        let prior = env_testing::install_env(Some(HashMap::new()));
+
         let envs = build_namegen_env(&[("NO_COLOR".to_string(), "0".to_string())]);
 
         let no_color_entries: Vec<_> = envs
@@ -1340,6 +1352,8 @@ Line 4"
 
         assert_eq!(no_color_entries.last(), Some(&&"0".to_string()));
         assert!(envs.iter().any(|(k, _)| k == "CLICOLOR"));
+
+        env_testing::restore_env(prior);
     }
 
     #[test]
