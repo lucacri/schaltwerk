@@ -12,7 +12,7 @@
 | 3 | Drop `RunRole`; collapse `TaskStage::Cancelled`; introduce orthogonal session axes (additive) | `[x]` | Waves A–H — see below |
 | 4 | `TaskFlowError` sweep + derived current_* getters + retire legacy session enums | `[x]` | Waves A–H — see below |
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[x]` | Waves A–E — see below |
-| 5.5 | Hydrator wiring-gap interlude (`get_session_by_id` + 2 siblings) | `[ ]` | — |
+| 5.5 | Hydrator wiring-gap interlude (`get_session_by_id` + 2 siblings) | `[x]` | Waves A–F — see below |
 | 6 | `Sidebar.tsx` split | `[ ]` | — |
 
 ## Phase 1 — wave-by-wave detail
@@ -454,22 +454,53 @@ distinct from PTY-exit failure observed via `session.exit_code`).
 | `arch_domain_isolation` and `arch_layering_database` green | ✅ |
 | Design doc §8 reflects landed tool shape | ✅ updated in this commit |
 
-### Phase 5 — known limitation surfaced for future cleanup
+### Phase 5 — known limitation (closed by Phase 5.5)
 
-`get_session_by_id` has a pre-existing wiring gap: its SELECT/row builder
-do not include `first_idle_at` / `task_run_id` / `run_role` / `slot_key`
-/ `exited_at` / `exit_code` columns. These columns *are* written
-correctly (the `set_*` setters work), and `get_sessions_by_task_run_id`
-reads them correctly via `row_to_session_with_facts`, but
-`get_session_by_id` returns `None` for all of them regardless of what's
-stored. This is the same class of bug `feedback_compile_pins_dont_catch_wiring.md`
-codifies — compile pins prove the field exists; only the round-trip
-proves the SELECT/INSERT path serves it.
+`get_session_by_id` had a pre-existing wiring gap (6 fact columns
+missing). Phase 5 deferred the fix; **Phase 5.5 closed it.** See the
+Phase 5.5 wave detail below for the full audit and fix.
 
-The fix is mechanical (extend the SELECT, swap to
-`row_to_session_with_facts`) but touches a hot path with 66 call sites.
-Out of scope for Phase 5; a focused follow-up will close the gap.
-Phase 5 tests use `get_sessions_by_task_run_id` for verification.
+---
+
+## Phase 5.5 — wave-by-wave detail
+
+Phase 5.5's plan: [`2026-04-29-task-flow-v2-phase-5.5-plan.md`](./2026-04-29-task-flow-v2-phase-5.5-plan.md).
+
+All waves complete. Phase 5.5 closed three hydrator wiring gaps that
+the Phase 5 audit surfaced (`get_session_by_id`, `get_session_by_name`,
+and `hydrate_session_summaries`) and added an architecture test that
+guards against the same class of bug recurring.
+
+| Wave | Title | Status | Commit |
+|---|---|---|---|
+| A | Phase 5.5 plan + audit (13 hydrators across 4 modules) | `[x]` | `8a898082` |
+| B+C | `get_session_by_id` + `get_session_by_name` use shared `row_to_session_with_facts` (twin-fix) | `[x]` | `df52f83f` |
+| D | `list_sessions*` hydrators carry fact columns via shared SELECT const + `row_to_session_summary` helper | `[x]` | `d29fd503` |
+| E | `arch_hydrator_completeness.rs` — pinned column counts for 6 entity tables | `[x]` | `cceb999e` |
+| F | Status doc + memory update | `[x]` | (this commit) |
+
+## Phase 5.5 — definition of done check
+
+| Criterion | Status |
+|---|---|
+| `just test` green | ✅ 2404 tests passing |
+| `get_session_by_id` returns the 6 fact columns | ✅ pinned by `get_session_by_id_round_trips_fact_columns` |
+| `get_session_by_name` returns the 6 fact columns | ✅ pinned by `get_session_by_name_round_trips_fact_columns` |
+| `list_sessions_by_state` returns the 6 fact columns | ✅ pinned by `list_sessions_by_state_round_trips_fact_columns` |
+| 0 inline `\|row\| Ok(Session { … })` blocks in `db_sessions.rs` for full-Session lookups | ✅ all 3 lookups now share `row_to_session_with_facts`; the 3 list_* hydrators share `row_to_session_summary` |
+| `arch_hydrator_completeness` test passes for 6 entity tables (sessions, tasks, task_runs, task_artifacts, specs, epics) | ✅ |
+| `arch_domain_isolation` and `arch_layering_database` green | ✅ |
+
+### Phase 5.5 — known follow-up surfaced
+
+The `arch_hydrator_completeness` audit revealed a **vestigial column**
+on the `sessions` table: `stage TEXT` (added in `db_schema.rs:575`).
+No hydrator reads it; the active column for task-stage projection is
+`task_stage`. The test currently expects 52 columns to acknowledge
+this column exists; a future cleanup should drop `stage` via the
+SQLite table-rebuild dance and bump the expected count to 51.
+Out of scope for Phase 5.5 — closing one wiring gap and surfacing the
+next is the right scope for the interlude.
 
 ---
 
