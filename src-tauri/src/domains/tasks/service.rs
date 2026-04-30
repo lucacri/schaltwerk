@@ -6,8 +6,8 @@ use crate::domains::sessions::lifecycle::cancellation::{
 use crate::domains::sessions::repository::SessionDbManager;
 use crate::domains::sessions::service::SessionManager;
 pub use crate::domains::tasks::entity::{
-    ProjectWorkflowDefault, RunRole, Task, TaskArtifact, TaskArtifactKind, TaskArtifactVersion,
-    TaskRun, TaskRunStatus, TaskStage, TaskStageConfig, TaskVariant,
+    ProjectWorkflowDefault, RunRole, SlotKind, Task, TaskArtifact, TaskArtifactKind,
+    TaskArtifactVersion, TaskRun, TaskRunStatus, TaskStage, TaskStageConfig, TaskVariant,
 };
 use crate::domains::tasks::reconciler;
 pub use crate::domains::tasks::orchestration::{
@@ -1075,7 +1075,7 @@ mod tests {
             "lucode/alpha-run-01",
             Some(&task.id),
             Some(&candidate_run.id),
-            Some(RunRole::Candidate.as_str()),
+            Some(SlotKind::Candidate.as_str()),
         );
 
         let clarify_run = runs
@@ -1087,7 +1087,7 @@ mod tests {
             "lucode/alpha-clarify",
             Some(&task.id),
             Some(&clarify_run.id),
-            Some(RunRole::Clarify.as_str()),
+            Some(SlotKind::Clarify.as_str()),
         );
 
         let completed_run = runs
@@ -1199,7 +1199,7 @@ mod tests {
             "lucode/alpha-run-01",
             Some(&task.id),
             Some(&blocked_run.id),
-            Some(RunRole::Candidate.as_str()),
+            Some(SlotKind::Candidate.as_str()),
         );
         std::fs::write(blocked.worktree_path.join("dirty.txt"), "dirty").unwrap();
 
@@ -1282,7 +1282,7 @@ mod tests {
             "lucode/alpha-run-01",
             Some(&task.id),
             Some(&blocked_run.id),
-            Some(RunRole::Candidate.as_str()),
+            Some(SlotKind::Candidate.as_str()),
         );
         std::fs::write(blocked.worktree_path.join("dirty.txt"), "dirty").unwrap();
 
@@ -1326,7 +1326,7 @@ mod tests {
             "lucode/alpha-run-01",
             Some(&task.id),
             Some(&run.id),
-            Some(RunRole::Candidate.as_str()),
+            Some(SlotKind::Candidate.as_str()),
         );
         let second = fixture.create_session(
             "run-session-2",
@@ -1334,7 +1334,7 @@ mod tests {
             "lucode/alpha-run-02",
             Some(&task.id),
             Some(&run.id),
-            Some(RunRole::Candidate.as_str()),
+            Some(SlotKind::Candidate.as_str()),
         );
 
         let cancelled = svc

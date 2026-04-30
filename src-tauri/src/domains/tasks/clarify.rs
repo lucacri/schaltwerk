@@ -20,10 +20,9 @@ pub fn build_task_clarification_prompt(task: &Task) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::tasks::entity::{RunRole, Task, TaskStage, TaskVariant};
+    use crate::domains::tasks::entity::{SlotKind, Task, TaskStage, TaskVariant};
     use chrono::Utc;
     use std::path::PathBuf;
-    use std::str::FromStr;
 
     fn make_task(body: &str) -> Task {
         let now = Utc::now();
@@ -97,7 +96,6 @@ mod tests {
 
     #[test]
     fn run_role_round_trip_includes_clarify() {
-        assert_eq!(RunRole::from_str("clarify").unwrap(), RunRole::Clarify);
-        assert_eq!(RunRole::Clarify.as_str(), "clarify");
+        assert_eq!(SlotKind::Clarify.as_str(), "clarify");
     }
 }

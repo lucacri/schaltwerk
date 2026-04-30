@@ -1077,7 +1077,7 @@ mod tests {
     use lucode::domains::git::service as git;
     use lucode::domains::tasks::service::{
         BranchMerger, ClarifyRunStarted, CreateTaskInput, ExpandedRunSlot, ProjectWorkflowDefault,
-        ProvisionedSession, RunRole, SessionProvisioner, TaskRun, TaskService,
+        ProvisionedSession, SessionProvisioner, SlotKind, TaskRun, TaskService,
     };
     use lucode::infrastructure::database::TaskRunMethods;
     use lucode::services::{Session, SessionMethods, SessionState, SessionStatus};
@@ -1720,7 +1720,7 @@ mod tests {
                 Some(&task.id),
                 Some(&run.id),
                 Some(task.stage.as_str()),
-                Some(RunRole::Clarify.as_str()),
+                Some(SlotKind::Clarify.as_str()),
                 None,
             )?;
             self.clarify_calls.borrow_mut().push(ClarifyCall {
@@ -2006,7 +2006,7 @@ mod tests {
             "lucode/alpha-run-01",
             Some(&task.id),
             Some(&run.id),
-            Some(RunRole::Candidate.as_str()),
+            Some(SlotKind::Candidate.as_str()),
         );
         let second = fixture.create_run_session(
             "run-session-2",
@@ -2014,7 +2014,7 @@ mod tests {
             "lucode/alpha-run-02",
             Some(&task.id),
             Some(&run.id),
-            Some(RunRole::Candidate.as_str()),
+            Some(SlotKind::Candidate.as_str()),
         );
 
         let cancelled = TaskService::new(&fixture.db)

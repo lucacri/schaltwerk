@@ -13,6 +13,6 @@ pub mod service;
 pub use orchestration::StageRunStarted;
 
 pub use entity::{
-    ProjectWorkflowDefault, RunRole, Task, TaskArtifact, TaskArtifactKind, TaskArtifactVersion,
-    TaskRun, TaskRunStatus, TaskStage, TaskStageConfig, TaskVariant,
+    ProjectWorkflowDefault, RunRole, SlotKind, Task, TaskArtifact, TaskArtifactKind,
+    TaskArtifactVersion, TaskRun, TaskRunStatus, TaskStage, TaskStageConfig, TaskVariant,
 };

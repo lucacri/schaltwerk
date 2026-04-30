@@ -1,4 +1,4 @@
-use crate::domains::tasks::entity::RunRole;
+use crate::domains::tasks::entity::SlotKind;
 use anyhow::{Result, anyhow};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,7 +18,7 @@ pub struct PresetShape {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpandedRunSlot {
-    pub run_role: RunRole,
+    pub run_role: SlotKind,
     pub slot_key: Option<String>,
     pub agent_type: String,
 }
@@ -52,7 +52,7 @@ pub fn expand_preset(shape: &PresetShape) -> Result<Vec<ExpandedRunSlot>> {
     if shape.candidates.len() == 1 && !shape.synthesize && !shape.select {
         let slot = &shape.candidates[0];
         expanded.push(ExpandedRunSlot {
-            run_role: RunRole::Single,
+            run_role: SlotKind::Single,
             slot_key: Some(slot.slot_key.clone()),
             agent_type: slot.agent_type.clone(),
         });
@@ -61,7 +61,7 @@ pub fn expand_preset(shape: &PresetShape) -> Result<Vec<ExpandedRunSlot>> {
 
     for slot in &shape.candidates {
         expanded.push(ExpandedRunSlot {
-            run_role: RunRole::Candidate,
+            run_role: SlotKind::Candidate,
             slot_key: Some(slot.slot_key.clone()),
             agent_type: slot.agent_type.clone(),
         });
@@ -73,7 +73,7 @@ pub fn expand_preset(shape: &PresetShape) -> Result<Vec<ExpandedRunSlot>> {
             .as_ref()
             .expect("consolidator presence checked above");
         expanded.push(ExpandedRunSlot {
-            run_role: RunRole::Consolidator,
+            run_role: SlotKind::Consolidator,
             slot_key: None,
             agent_type: consolidator.agent_type.clone(),
         });
@@ -85,7 +85,7 @@ pub fn expand_preset(shape: &PresetShape) -> Result<Vec<ExpandedRunSlot>> {
             .as_ref()
             .expect("evaluator presence checked above");
         expanded.push(ExpandedRunSlot {
-            run_role: RunRole::Evaluator,
+            run_role: SlotKind::Evaluator,
             slot_key: None,
             agent_type: evaluator.agent_type.clone(),
         });
@@ -140,7 +140,7 @@ mod tests {
         let shape = base_shape(vec![slot("claude", "claude")]);
         let out = expand_preset(&shape).unwrap();
         assert_eq!(out.len(), 1);
-        assert_eq!(out[0].run_role, RunRole::Single);
+        assert_eq!(out[0].run_role, SlotKind::Single);
         assert_eq!(out[0].slot_key.as_deref(), Some("claude"));
         assert_eq!(out[0].agent_type, "claude");
     }
@@ -150,10 +150,10 @@ mod tests {
         let shape = base_shape(vec![slot("claude-0", "claude"), slot("codex-1", "codex")]);
         let out = expand_preset(&shape).unwrap();
         assert_eq!(out.len(), 2);
-        assert_eq!(out[0].run_role, RunRole::Candidate);
+        assert_eq!(out[0].run_role, SlotKind::Candidate);
         assert_eq!(out[0].slot_key.as_deref(), Some("claude-0"));
         assert_eq!(out[0].agent_type, "claude");
-        assert_eq!(out[1].run_role, RunRole::Candidate);
+        assert_eq!(out[1].run_role, SlotKind::Candidate);
         assert_eq!(out[1].slot_key.as_deref(), Some("codex-1"));
         assert_eq!(out[1].agent_type, "codex");
     }
@@ -173,10 +173,10 @@ mod tests {
         };
         let out = expand_preset(&shape).unwrap();
         assert_eq!(out.len(), 4);
-        assert_eq!(out[0].run_role, RunRole::Candidate);
-        assert_eq!(out[1].run_role, RunRole::Candidate);
-        assert_eq!(out[2].run_role, RunRole::Candidate);
-        assert_eq!(out[3].run_role, RunRole::Consolidator);
+        assert_eq!(out[0].run_role, SlotKind::Candidate);
+        assert_eq!(out[1].run_role, SlotKind::Candidate);
+        assert_eq!(out[2].run_role, SlotKind::Candidate);
+        assert_eq!(out[3].run_role, SlotKind::Consolidator);
         assert_eq!(out[3].slot_key, None);
         assert_eq!(out[3].agent_type, "claude");
     }
@@ -192,9 +192,9 @@ mod tests {
         };
         let out = expand_preset(&shape).unwrap();
         assert_eq!(out.len(), 3);
-        assert_eq!(out[0].run_role, RunRole::Candidate);
-        assert_eq!(out[1].run_role, RunRole::Candidate);
-        assert_eq!(out[2].run_role, RunRole::Evaluator);
+        assert_eq!(out[0].run_role, SlotKind::Candidate);
+        assert_eq!(out[1].run_role, SlotKind::Candidate);
+        assert_eq!(out[2].run_role, SlotKind::Evaluator);
         assert_eq!(out[2].slot_key, None);
         assert_eq!(out[2].agent_type, "gemini");
     }
@@ -210,11 +210,11 @@ mod tests {
         };
         let out = expand_preset(&shape).unwrap();
         assert_eq!(out.len(), 4);
-        assert_eq!(out[0].run_role, RunRole::Candidate);
-        assert_eq!(out[1].run_role, RunRole::Candidate);
-        assert_eq!(out[2].run_role, RunRole::Consolidator);
+        assert_eq!(out[0].run_role, SlotKind::Candidate);
+        assert_eq!(out[1].run_role, SlotKind::Candidate);
+        assert_eq!(out[2].run_role, SlotKind::Consolidator);
         assert_eq!(out[2].agent_type, "claude");
-        assert_eq!(out[3].run_role, RunRole::Evaluator);
+        assert_eq!(out[3].run_role, SlotKind::Evaluator);
         assert_eq!(out[3].agent_type, "gemini");
     }
 
@@ -306,7 +306,7 @@ mod tests {
         let out = expand_preset(&shape).unwrap();
         let candidate_keys: Vec<Option<&str>> = out
             .iter()
-            .filter(|s| s.run_role == RunRole::Candidate)
+            .filter(|s| s.run_role == SlotKind::Candidate)
             .map(|s| s.slot_key.as_deref())
             .collect();
         assert_eq!(
