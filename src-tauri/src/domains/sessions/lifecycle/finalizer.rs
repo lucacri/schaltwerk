@@ -66,25 +66,6 @@ impl<'a> SessionFinalizer<'a> {
         })
     }
 
-    pub fn finalize_state_transition(
-        &self,
-        session_id: &str,
-        new_state: SessionState,
-    ) -> Result<()> {
-        let state_str = format!("{:?}", &new_state);
-        info!("Finalizing state transition for session '{session_id}' to {state_str}");
-
-        self.db_manager
-            .update_session_state(session_id, new_state)
-            .with_context(|| {
-                format!("Failed to update session state for '{session_id}' to {state_str}")
-            })?;
-
-        self.update_activity(session_id).ok();
-
-        Ok(())
-    }
-
     pub fn compute_git_stats(
         &self,
         session: &Session,
@@ -243,25 +224,6 @@ mod tests {
         let result = finalizer.finalize_creation(config).unwrap();
         assert_eq!(result.session.name, "test-session");
         assert!(result.git_stats.is_none());
-    }
-
-    #[test]
-    #[serial]
-    fn test_finalize_state_transition() {
-        let (temp_dir, db) = setup_test_db();
-        let repo_path = temp_dir.path().to_path_buf();
-        let db_manager = SessionDbManager::new(db.clone(), repo_path.clone());
-        let cache_manager = SessionCacheManager::new(repo_path);
-        let finalizer = SessionFinalizer::new(&db_manager, &cache_manager);
-
-        let session = create_test_session(PathBuf::from("/tmp/worktree"));
-        finalizer.persist_session(&session).unwrap();
-
-        let result = finalizer.finalize_state_transition(&session.id, SessionState::Running);
-        assert!(result.is_ok());
-
-        let updated = db_manager.get_session_by_id(&session.id).unwrap();
-        assert_eq!(updated.session_state, SessionState::Running);
     }
 
     #[test]
