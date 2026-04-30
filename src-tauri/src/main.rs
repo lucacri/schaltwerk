@@ -1800,6 +1800,7 @@ fn main() {
             commands::tasks::lucode_task_start_stage_run,
             commands::tasks::lucode_task_start_clarify_run,
             commands::tasks::lucode_task_confirm_stage,
+            commands::tasks::lucode_task_run_done,
             commands::tasks::lucode_project_workflow_defaults_get,
             commands::tasks::lucode_project_workflow_defaults_set,
             commands::tasks::lucode_project_workflow_defaults_delete,

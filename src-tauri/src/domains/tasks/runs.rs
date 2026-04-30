@@ -126,6 +126,28 @@ impl<'a> TaskRunService<'a> {
         self.db.set_task_run_cancelled_at(run_id)
     }
 
+    /// Phase 5: record an explicit agent self-reported failure. Stamps
+    /// `failed_at = now()` and `failure_reason`. Used by the
+    /// `lucode_task_run_done` MCP tool when an agent reports `status:
+    /// "failed"`. This is the **authoritative** source for agent
+    /// self-reported failure — distinct from a non-zero PTY exit, which is
+    /// a different signal observed via `session.exit_code`.
+    ///
+    /// Does NOT touch `session.exit_code`: an agent that called this
+    /// tool didn't exit non-zero (it ran a tool), and lying about the PTY
+    /// state would produce false positives for any future query against
+    /// `WHERE exit_code IS NOT NULL`.
+    ///
+    /// `compute_run_status` Case 3 reads `failed_at` to derive `Failed`.
+    /// Decision order has Cancelled and Completed ahead of Failed, so a
+    /// run that's already terminal in those states stays in those states
+    /// (write goes through, derivation does not flip).
+    pub fn report_failure(&self, run_id: &str, reason: &str) -> Result<TaskRun> {
+        self.db.set_task_run_failed_at(run_id)?;
+        self.db.set_task_run_failure_reason(run_id, Some(reason))?;
+        self.db.get_task_run(run_id)
+    }
+
     pub fn list_runs_for_task(&self, task_id: &str) -> Result<Vec<TaskRun>> {
         self.db.list_task_runs(task_id)
     }
@@ -384,6 +406,84 @@ mod tests {
         for run in &listed {
             assert_eq!(run.task_id, "t1");
         }
+    }
+
+    // --- Phase 5 Wave B: report_failure ---
+
+    #[test]
+    fn report_failure_writes_failed_at_and_failure_reason() {
+        let db = db();
+        seed_task(&db, "t1", "first");
+        let svc = TaskRunService::new(&db);
+        let run = svc
+            .create_task_run("t1", TaskStage::Implemented, None, None, None)
+            .expect("create");
+
+        let after = svc
+            .report_failure(&run.id, "agent reported failure")
+            .expect("report_failure");
+
+        assert!(after.failed_at.is_some());
+        assert_eq!(after.failure_reason.as_deref(), Some("agent reported failure"));
+        assert!(
+            after.confirmed_at.is_none(),
+            "report_failure must not stamp confirmed_at"
+        );
+        assert!(
+            after.cancelled_at.is_none(),
+            "report_failure must not stamp cancelled_at"
+        );
+    }
+
+    #[test]
+    fn report_failure_round_trips_through_compute_run_status() {
+        // Per feedback_compile_pins_dont_catch_wiring.md: the additive write
+        // path needs a DB round-trip test. We go service → SQL → re-read →
+        // derived getter so a future regression where the write skips the
+        // column or the read can't see it surfaces here.
+        let db = db();
+        seed_task(&db, "t1", "first");
+        let svc = TaskRunService::new(&db);
+        let run = svc
+            .create_task_run("t1", TaskStage::Implemented, None, None, None)
+            .expect("create");
+
+        svc.report_failure(&run.id, "boom").expect("report_failure");
+
+        let read_back = svc.get_run(&run.id).expect("re-read");
+        assert!(read_back.failed_at.is_some());
+        assert_eq!(read_back.failure_reason.as_deref(), Some("boom"));
+        assert_eq!(
+            compute_run_status(&read_back, &[]),
+            crate::domains::tasks::entity::TaskRunStatus::Failed,
+            "after report_failure, compute_run_status reads failed_at and derives Failed"
+        );
+    }
+
+    #[test]
+    fn report_failure_after_cancel_does_not_unwind_cancelled_at() {
+        // Two-way binding for compute_run_status's decision order: Cancelled
+        // trumps Failed even when failed_at is also set. report_failure stamps
+        // failed_at unconditionally; the derivation precedence is what makes
+        // the cancelled run still read as Cancelled.
+        let db = db();
+        seed_task(&db, "t1", "first");
+        let svc = TaskRunService::new(&db);
+        let run = svc
+            .create_task_run("t1", TaskStage::Implemented, None, None, None)
+            .expect("create");
+        svc.cancel_run(&run.id).expect("cancel");
+
+        svc.report_failure(&run.id, "boom").expect("report_failure");
+
+        let after = svc.get_run(&run.id).expect("re-read");
+        assert!(after.cancelled_at.is_some(), "cancel timestamp persists");
+        assert!(after.failed_at.is_some(), "failed timestamp also written");
+        assert_eq!(
+            compute_run_status(&after, &[]),
+            crate::domains::tasks::entity::TaskRunStatus::Cancelled,
+            "Cancelled wins over Failed in compute_run_status decision order"
+        );
     }
 
     /// Integration check that the service writes column shapes consistent with

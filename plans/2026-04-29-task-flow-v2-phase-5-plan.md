@@ -71,12 +71,15 @@ heuristic write to the same column (`session.first_idle_at`); the MCP
 path is the deterministic version where OSC is the fallback. A future
 refactor that drops one path leaves the derivation contract intact.
 
-**`artifact_id` handling:** validated for existence (FK round-trip via
-`db.get_task_artifact`) when provided, then logged. Phase 5 does *not*
-persist a back-reference (would require a schema change). Future
-phases can add a `reported_artifact_id` column on `task_runs` or on
-the session row if/when a human-inspection UI surfaces. Accepting the
-parameter now keeps the wire format stable.
+**`artifact_id` handling:** accepted in the payload and logged via
+`log::info!` so the trace shows what the agent reported. Phase 5
+does *not* validate existence and does *not* persist a back-reference.
+
+- *Not validated*: `TaskArtifactMethods` has only `get_current_task_artifact(task_id, kind)` and `list_*` lookups, no by-id lookup. Adding one is a trait change for ~zero Phase 5 benefit (the run's `task_id` isn't necessarily known at the lookup boundary).
+- *Not persisted*: would require a schema change (`reported_artifact_id` column on `task_runs` or similar).
+
+Accepting the parameter now keeps the wire format stable; future phases
+can wire validation + persistence if/when a human-inspection UI surfaces.
 
 ### `status: "failed"`
 
@@ -305,16 +308,11 @@ pub async fn lucode_task_run_done(
     let task_lock = project.task_locks.lock_for(&run.task_id);
     let _guard = task_lock.lock().await;
 
-    // Validate artifact_id exists if provided. Phase 5 does not persist a
-    // back-reference; the validation is purely a sanity check so the wire
-    // format stays stable for future phases that may persist this.
     if let Some(art_id) = payload.artifact_id.as_deref() {
-        handle.db.get_task_artifact(art_id).map_err(|err| {
-            TaskFlowError::InvalidInput {
-                field: "artifact_id".into(),
-                message: format!("artifact '{art_id}' not found: {err}"),
-            }
-        })?;
+        log::info!(
+            "lucode_task_run_done: agent reported artifact '{}' for run '{}' (Phase 5 logs only; persistence is future work)",
+            art_id, run.id,
+        );
     }
 
     let updated = match payload.status.as_str() {

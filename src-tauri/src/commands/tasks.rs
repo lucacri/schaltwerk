@@ -1001,6 +1001,134 @@ fn map_confirm_stage_error(error: anyhow::Error) -> TaskFlowError {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRunDonePayload {
+    pub run_id: String,
+    pub slot_session_id: String,
+    /// One of "ok" | "failed". Validated in the helper; unknown strings
+    /// surface as `TaskFlowError::InvalidInput { field: "status", … }`.
+    pub status: String,
+    #[serde(default)]
+    pub artifact_id: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+/// Phase 5: backing logic for [`lucode_task_run_done`]. Extracted so unit
+/// tests can drive the validation + dispatch without going through
+/// `get_project_with_handle` (which needs a tauri Runtime + project
+/// manager). Mirrors the `cancel_task_with_context` shape used by
+/// `lucode_task_cancel`.
+async fn task_run_done_with_context<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    db: &Database,
+    repo_path: &Path,
+    payload: TaskRunDonePayload,
+) -> Result<TaskRun, TaskFlowError> {
+    use lucode::services::{SessionFactsRecorder, SessionMethods};
+
+    let run_svc = TaskRunService::new(db);
+    let run = run_svc.get_run(&payload.run_id).map_err(|err| {
+        TaskFlowError::InvalidInput {
+            field: "run_id".into(),
+            message: format!("task run '{}' not found: {err}", payload.run_id),
+        }
+    })?;
+
+    let lineage = db
+        .get_session_task_lineage(&payload.slot_session_id)
+        .map_err(|e| TaskFlowError::DatabaseError {
+            message: format!(
+                "lineage lookup for session '{}' failed: {e}",
+                payload.slot_session_id
+            ),
+        })?;
+    if lineage.task_run_id.as_deref() != Some(run.id.as_str()) {
+        return Err(TaskFlowError::InvalidInput {
+            field: "slot_session_id".into(),
+            message: format!(
+                "session '{}' is bound to run {:?}, not run '{}'",
+                payload.slot_session_id, lineage.task_run_id, run.id,
+            ),
+        });
+    }
+
+    if let Some(art_id) = payload.artifact_id.as_deref() {
+        log::info!(
+            "lucode_task_run_done: agent reported artifact '{}' for run '{}' (Phase 5 logs only; persistence is future work)",
+            art_id,
+            run.id,
+        );
+    }
+
+    let updated = match payload.status.as_str() {
+        "ok" => {
+            // Strict superset of the OSC idle heuristic: write first_idle_at
+            // on the slot session. compute_run_status Case 5 trips
+            // AwaitingSelection once all bound sessions have first_idle_at
+            // set. Confirmation stays a separate human action.
+            SessionFactsRecorder::new(db)
+                .record_first_idle(&payload.slot_session_id, chrono::Utc::now())
+                .map_err(|e| TaskFlowError::DatabaseError {
+                    message: format!(
+                        "record_first_idle for session '{}' failed: {e}",
+                        payload.slot_session_id
+                    ),
+                })?;
+            run_svc.get_run(&run.id).map_err(TaskFlowError::from)?
+        }
+        "failed" => {
+            // Authoritative source for agent self-reported failure.
+            // Does NOT touch session.exit_code: an agent that called this
+            // tool didn't exit non-zero. Setting exit_code would be a lie
+            // that produces false positives for any future query against
+            // `WHERE exit_code IS NOT NULL` looking for process crashes.
+            let reason = payload
+                .error
+                .as_deref()
+                .unwrap_or("agent reported failure");
+            run_svc
+                .report_failure(&run.id, reason)
+                .map_err(TaskFlowError::from)?
+        }
+        other => {
+            return Err(TaskFlowError::InvalidInput {
+                field: "status".into(),
+                message: format!("unknown status '{other}'; expected 'ok' or 'failed'"),
+            });
+        }
+    };
+
+    notify_task_mutation_with_db(app, db, repo_path);
+    Ok(updated)
+}
+
+#[tauri::command]
+pub async fn lucode_task_run_done(
+    app: tauri::AppHandle,
+    payload: TaskRunDonePayload,
+    project_path: Option<String>,
+) -> Result<TaskRun, TaskFlowError> {
+    let (project, handle) = get_project_with_handle(project_path.as_deref()).await?;
+
+    // Resolve run → task_id so the per-task lock guards run-done against any
+    // concurrent same-task command.
+    let task_id = TaskRunService::new(&handle.db)
+        .get_run(&payload.run_id)
+        .map_err(|err| TaskFlowError::InvalidInput {
+            field: "run_id".into(),
+            message: format!("task run '{}' not found: {err}", payload.run_id),
+        })?
+        .task_id
+        .clone();
+
+    let task_lock = project.task_locks.lock_for(&task_id);
+    let _guard = task_lock.lock().await;
+
+    task_run_done_with_context(&app, &handle.db, &handle.repo_path, payload).await
+}
+
 #[tauri::command]
 pub async fn lucode_task_confirm_stage(
     app: tauri::AppHandle,
@@ -2234,5 +2362,280 @@ mod tests {
             }
             other => panic!("expected DatabaseError, got: {other:?}"),
         }
+    }
+
+    // --- Phase 5 Wave B: lucode_task_run_done ---
+
+    use super::{TaskRunDonePayload, task_run_done_with_context};
+    use lucode::services::{SessionFacts, TaskRunStatus, compute_run_status};
+
+    /// Build a SessionFacts projection from a session row, mirroring what
+    /// compute_run_status reads through SessionFactsRecorder writes. Keeps the
+    /// test assertions colocated with the actual derivation so a future drift
+    /// in either side surfaces here.
+    fn session_facts_for(session: &lucode::services::Session) -> SessionFacts {
+        SessionFacts {
+            task_run_id: session.task_run_id.clone(),
+            exit_code: session.exit_code,
+            first_idle_at: session.first_idle_at,
+        }
+    }
+
+    #[tokio::test]
+    async fn lucode_task_run_done_with_status_ok_records_first_idle() {
+        let fixture = CancelCommandFixture::new();
+        let task = fixture.create_task("alpha");
+        TaskService::new(&fixture.db)
+            .advance_stage(&task.id, TaskStage::Ready)
+            .unwrap();
+        let runs = TaskRunService::new(&fixture.db);
+        let run = runs
+            .create_task_run(&task.id, TaskStage::Brainstormed, None, Some("master"), None)
+            .unwrap();
+        let session = fixture.create_run_session(
+            "slot-session-1",
+            "slot-session-1",
+            "lucode/alpha-run-01",
+            Some(&task.id),
+            Some(&run.id),
+            Some(SlotKind::Candidate.as_str()),
+        );
+
+        let app = tauri::test::mock_app();
+        let payload = TaskRunDonePayload {
+            run_id: run.id.clone(),
+            slot_session_id: session.id.clone(),
+            status: "ok".into(),
+            artifact_id: None,
+            error: None,
+        };
+        let updated = task_run_done_with_context(
+            &app.handle(),
+            &fixture.db,
+            &fixture.repo_path,
+            payload,
+        )
+        .await
+        .expect("status=ok must succeed");
+
+        // Negative: confirmed_at MUST stay None — this tool does not auto-confirm.
+        assert!(
+            updated.confirmed_at.is_none(),
+            "status=ok must not auto-confirm; confirmation stays a separate human action"
+        );
+        assert!(updated.cancelled_at.is_none());
+        assert!(updated.failed_at.is_none());
+
+        // Positive: first_idle_at landed on the slot session.
+        let after_session = fixture
+            .db
+            .get_sessions_by_task_run_id(&run.id)
+            .unwrap()
+            .into_iter()
+            .find(|s| s.id == session.id)
+            .expect("slot session must be found by run id");
+        assert!(
+            after_session.first_idle_at.is_some(),
+            "status=ok must write first_idle_at on the slot session"
+        );
+
+        // Derived: AwaitingSelection (the only bound session is now idle).
+        let facts = session_facts_for(&after_session);
+        assert_eq!(
+            compute_run_status(&updated, &[facts]),
+            TaskRunStatus::AwaitingSelection,
+            "with one bound idle session and no winner, derive AwaitingSelection"
+        );
+    }
+
+    #[tokio::test]
+    async fn lucode_task_run_done_with_status_failed_marks_run_failed() {
+        let fixture = CancelCommandFixture::new();
+        let task = fixture.create_task("alpha");
+        TaskService::new(&fixture.db)
+            .advance_stage(&task.id, TaskStage::Ready)
+            .unwrap();
+        let runs = TaskRunService::new(&fixture.db);
+        let run = runs
+            .create_task_run(&task.id, TaskStage::Brainstormed, None, Some("master"), None)
+            .unwrap();
+        let session = fixture.create_run_session(
+            "slot-session-1",
+            "slot-session-1",
+            "lucode/alpha-run-01",
+            Some(&task.id),
+            Some(&run.id),
+            Some(SlotKind::Candidate.as_str()),
+        );
+
+        let app = tauri::test::mock_app();
+        let payload = TaskRunDonePayload {
+            run_id: run.id.clone(),
+            slot_session_id: session.id.clone(),
+            status: "failed".into(),
+            artifact_id: None,
+            error: Some("boom".into()),
+        };
+        let updated = task_run_done_with_context(
+            &app.handle(),
+            &fixture.db,
+            &fixture.repo_path,
+            payload,
+        )
+        .await
+        .expect("status=failed must succeed");
+
+        // Authoritative source: failed_at + failure_reason on the run row.
+        assert!(updated.failed_at.is_some());
+        assert_eq!(updated.failure_reason.as_deref(), Some("boom"));
+        assert!(updated.confirmed_at.is_none());
+        assert!(updated.cancelled_at.is_none());
+
+        // Negative: session.exit_code MUST stay None. The agent didn't exit;
+        // setting exit_code would be a lie that produces false positives for
+        // any future query against `WHERE exit_code IS NOT NULL`.
+        let after_session = fixture
+            .db
+            .get_sessions_by_task_run_id(&run.id)
+            .unwrap()
+            .into_iter()
+            .find(|s| s.id == session.id)
+            .expect("slot session must be found by run id");
+        assert!(
+            after_session.exit_code.is_none(),
+            "agent self-reported failure must not synthesize a fake PTY exit"
+        );
+        assert!(after_session.exited_at.is_none());
+
+        // Derived: Failed (Case 3 reads failed_at).
+        let facts = session_facts_for(&after_session);
+        assert_eq!(
+            compute_run_status(&updated, &[facts]),
+            TaskRunStatus::Failed,
+            "compute_run_status derives Failed from failed_at, not exit_code"
+        );
+    }
+
+    #[tokio::test]
+    async fn lucode_task_run_done_rejects_session_not_bound_to_run() {
+        let fixture = CancelCommandFixture::new();
+        let task = fixture.create_task("alpha");
+        TaskService::new(&fixture.db)
+            .advance_stage(&task.id, TaskStage::Ready)
+            .unwrap();
+        let runs = TaskRunService::new(&fixture.db);
+        let run_a = runs
+            .create_task_run(&task.id, TaskStage::Brainstormed, None, Some("master"), None)
+            .unwrap();
+        let run_b = runs
+            .create_task_run(&task.id, TaskStage::Brainstormed, None, Some("master"), None)
+            .unwrap();
+        // Slot session is bound to run_b.
+        let session = fixture.create_run_session(
+            "slot-session-b",
+            "slot-session-b",
+            "lucode/alpha-run-b-01",
+            Some(&task.id),
+            Some(&run_b.id),
+            Some(SlotKind::Candidate.as_str()),
+        );
+
+        let app = tauri::test::mock_app();
+        // Caller passes run_a.id with the run_b-bound session — must be rejected.
+        let payload = TaskRunDonePayload {
+            run_id: run_a.id.clone(),
+            slot_session_id: session.id.clone(),
+            status: "ok".into(),
+            artifact_id: None,
+            error: None,
+        };
+        let err = task_run_done_with_context(
+            &app.handle(),
+            &fixture.db,
+            &fixture.repo_path,
+            payload,
+        )
+        .await
+        .expect_err("cross-run lineage must be rejected");
+
+        match err {
+            TaskFlowError::InvalidInput { field, message } => {
+                assert_eq!(field, "slot_session_id");
+                assert!(
+                    message.contains(&run_a.id),
+                    "error must name the rejected run id: {message}"
+                );
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
+
+        // Negative: nothing written on the slot session.
+        let after_session = fixture
+            .db
+            .get_sessions_by_task_run_id(&run_b.id)
+            .unwrap()
+            .into_iter()
+            .find(|s| s.id == session.id)
+            .expect("slot session must be found by run id");
+        assert!(after_session.first_idle_at.is_none());
+        assert!(after_session.exit_code.is_none());
+    }
+
+    #[tokio::test]
+    async fn lucode_task_run_done_status_ok_is_idempotent() {
+        // Pins the write-once invariant on first_idle_at: a second status=ok
+        // call leaves the original timestamp intact. Regressing this would
+        // break sticky AwaitingSelection (per Phase 1 plan §1).
+        let fixture = CancelCommandFixture::new();
+        let task = fixture.create_task("alpha");
+        TaskService::new(&fixture.db)
+            .advance_stage(&task.id, TaskStage::Ready)
+            .unwrap();
+        let runs = TaskRunService::new(&fixture.db);
+        let run = runs
+            .create_task_run(&task.id, TaskStage::Brainstormed, None, Some("master"), None)
+            .unwrap();
+        let session = fixture.create_run_session(
+            "slot-session-1",
+            "slot-session-1",
+            "lucode/alpha-run-01",
+            Some(&task.id),
+            Some(&run.id),
+            Some(SlotKind::Candidate.as_str()),
+        );
+
+        let app = tauri::test::mock_app();
+        let payload = || TaskRunDonePayload {
+            run_id: run.id.clone(),
+            slot_session_id: session.id.clone(),
+            status: "ok".into(),
+            artifact_id: None,
+            error: None,
+        };
+        let read_session = || {
+            fixture
+                .db
+                .get_sessions_by_task_run_id(&run.id)
+                .unwrap()
+                .into_iter()
+                .find(|s| s.id == session.id)
+                .expect("slot session must be found by run id")
+        };
+
+        task_run_done_with_context(&app.handle(), &fixture.db, &fixture.repo_path, payload())
+            .await
+            .expect("first call");
+        let first_idle = read_session()
+            .first_idle_at
+            .expect("first call must stamp first_idle_at");
+
+        task_run_done_with_context(&app.handle(), &fixture.db, &fixture.repo_path, payload())
+            .await
+            .expect("second call must succeed (idempotent)");
+        assert_eq!(
+            read_session().first_idle_at,
+            Some(first_idle),
+            "second call must NOT overwrite first_idle_at — write-once invariant"
+        );
     }
 }

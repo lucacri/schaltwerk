@@ -106,10 +106,14 @@ pub trait TaskRunMethods {
     /// [`Self::set_task_run_selection`] before or after this call — `compute_run_status`
     /// reads `confirmed_at` to derive `Completed` regardless of selection state.
     fn set_task_run_confirmed_at(&self, id: &str) -> Result<()>;
-    /// Record a failure timestamp. **Migration-only.** v2-native code should never
-    /// call this; the derived getter computes Failed from session `exit_code`. The
-    /// only writer is the v1→v2 user-DB migration (Wave H), which populates this
-    /// column for legacy rows where `status='failed'`.
+    /// Record a failure timestamp. Two callers in v2: (1) the v1→v2 user-DB
+    /// migration in Wave H, which populates this column for legacy rows where
+    /// `status='failed'`; (2) `TaskRunService::report_failure` (Phase 5), used
+    /// by the `lucode_task_run_done` MCP tool when an agent self-reports a
+    /// failure. Compute_run_status Case 3 reads this column. The session
+    /// `exit_code` path remains the canonical source for PTY-exit failures —
+    /// the two are distinct states (PTY-exit failure vs. agent self-reported
+    /// failure), and queries against either column read what they say they do.
     fn set_task_run_failed_at(&self, id: &str) -> Result<()>;
     fn set_task_run_failure_reason(&self, id: &str, reason: Option<&str>) -> Result<()>;
     fn set_task_run_completed_at(&self, id: &str) -> Result<()>;

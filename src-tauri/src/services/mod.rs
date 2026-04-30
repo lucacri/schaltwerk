@@ -46,6 +46,7 @@ pub use crate::domains::sessions::entity::EnrichedSession;
 pub use crate::domains::sessions::entity::{
     EnrichedSession as EnrichedSessionEntity, FilterMode, PrState, Session, SortMode,
 };
+pub use crate::domains::sessions::facts_recorder::SessionFactsRecorder;
 pub use crate::domains::sessions::lifecycle::bootstrapper::apply_agent_plugins_to_worktree;
 pub use crate::domains::sessions::repository::{ConsolidationStats, ConsolidationStatsFilter};
 pub use crate::domains::settings::{
@@ -60,6 +61,8 @@ pub use crate::domains::terminal::{
     submission::submission_options_for_agent,
 };
 pub use crate::domains::tasks::TaskFlowError;
+pub use crate::domains::tasks::entity::TaskRunStatus;
+pub use crate::domains::tasks::run_status::{SessionFacts, compute_run_status};
 pub use crate::domains::workspace::get_project_files_with_status;
 pub use crate::shared::format_branch_name;
 
