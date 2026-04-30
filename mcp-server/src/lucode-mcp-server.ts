@@ -119,6 +119,14 @@ interface LucodeConfirmConsolidationWinnerArgs {
   override_reason?: string | null
 }
 
+interface LucodeTaskRunDoneArgs {
+  run_id: string
+  slot_session_id: string
+  status: 'ok' | 'failed'
+  artifact_id?: string | null
+  error?: string | null
+}
+
 interface LucodeCreatePrArgs {
   session_name: string
   pr_title: string
@@ -908,6 +916,29 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           additionalProperties: false,
         },
         outputSchema: toolOutputSchemas.lucode_confirm_consolidation_winner,
+      },
+      {
+        name: "lucode_task_run_done",
+        description: `Report that an agent has finished work on a task run slot. This is the canonical primary signal for run completion in task-flow v2; the OSC/idle heuristic remains as a fallback for agents that don't cooperate.
+
+status="ok" records that the agent is done by stamping first_idle_at on the slot session. The run does NOT auto-confirm — confirmation stays a separate human action via lucode_task_confirm_stage. Once every bound slot has reported done, the run derives AwaitingSelection so the human can inspect candidates and pick a winner.
+
+status="failed" records an explicit agent self-reported failure on the run row (failed_at + failure_reason). This is distinct from a non-zero PTY exit (session.exit_code) — a future query against either column reads what it says it does. The optional 'error' field carries the agent's failure description.
+
+The optional 'artifact_id' parameter is accepted but not yet persisted in this phase; future phases may surface it for human inspection. slot_session_id must be a session bound to this run; lineage mismatches are rejected.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            run_id: { type: 'string', description: 'TaskRun ID being reported on.' },
+            slot_session_id: { type: 'string', description: 'Session ID for the slot that owns this report. Must be bound to run_id.' },
+            status: { enum: ['ok', 'failed'], description: 'Outcome: "ok" trips AwaitingSelection on the run; "failed" marks the run Failed.' },
+            artifact_id: { type: 'string', description: 'Optional artifact ID the agent produced; recorded for trace, not persisted.' },
+            error: { type: 'string', description: 'Optional failure description (only meaningful when status="failed").' },
+          },
+          required: ['run_id', 'slot_session_id', 'status'],
+          additionalProperties: false,
+        },
+        outputSchema: toolOutputSchemas.lucode_task_run_done,
       },
       {
         name: "lucode_convert_to_spec",
@@ -1976,6 +2007,45 @@ ${presetStart.sessions
         }
         response = buildStructuredResponse(structured, {
           summaryText: `Confirmed consolidation winner '${result.winnerSessionName}' for round '${result.roundId}'. Promoted session: '${result.promotedSessionName}'.`,
+          jsonFirst: true,
+        })
+        break
+      }
+
+      case "lucode_task_run_done": {
+        const doneArgs = args as unknown as LucodeTaskRunDoneArgs
+        if (!doneArgs.run_id || typeof doneArgs.run_id !== 'string') {
+          throw new Error('run_id is required when invoking lucode_task_run_done.')
+        }
+        if (!doneArgs.slot_session_id || typeof doneArgs.slot_session_id !== 'string') {
+          throw new Error('slot_session_id is required when invoking lucode_task_run_done.')
+        }
+        if (doneArgs.status !== 'ok' && doneArgs.status !== 'failed') {
+          throw new Error("status is required and must be 'ok' or 'failed' when invoking lucode_task_run_done.")
+        }
+
+        const result = await bridge.taskRunDone(doneArgs.run_id, doneArgs.slot_session_id, doneArgs.status, {
+          artifactId: doneArgs.artifact_id ?? undefined,
+          error: doneArgs.error ?? undefined,
+          projectPath,
+        })
+
+        const structured = {
+          run_id: result.runId,
+          task_id: result.taskId,
+          stage: result.stage,
+          status: result.status,
+          failed_at: result.failedAt ?? null,
+          failure_reason: result.failureReason ?? null,
+          confirmed_at: result.confirmedAt ?? null,
+          cancelled_at: result.cancelledAt ?? null,
+        }
+        const summary =
+          result.status === 'ok'
+            ? `Recorded run '${result.runId}' as done (status=ok). Run will derive AwaitingSelection once every bound slot reports done.`
+            : `Recorded run '${result.runId}' as failed${result.failureReason ? ` (${result.failureReason})` : ''}.`
+        response = buildStructuredResponse(structured, {
+          summaryText: summary,
           jsonFirst: true,
         })
         break

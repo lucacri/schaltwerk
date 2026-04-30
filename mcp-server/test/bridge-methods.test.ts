@@ -915,6 +915,84 @@ describe('LucodeBridge untested methods', () => {
     })
   })
 
+  describe('taskRunDone', () => {
+    it('posts status=ok to /api/task-runs/{id}/done with the slot session id', async () => {
+      fetchMock.mockResolvedValue(createResponse({
+        id: 'run-abc',
+        task_id: 'task-1',
+        stage: 'brainstormed',
+        failed_at: null,
+        failure_reason: null,
+        confirmed_at: null,
+        cancelled_at: null,
+      }))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.taskRunDone('run-abc', 'slot-session-1', 'ok')
+
+      expect(result).toEqual({
+        runId: 'run-abc',
+        taskId: 'task-1',
+        stage: 'brainstormed',
+        status: 'ok',
+        failedAt: null,
+        failureReason: null,
+        confirmedAt: null,
+        cancelledAt: null,
+      })
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/task-runs/run-abc/done')
+      expect(init?.method).toBe('POST')
+      expect(JSON.parse(String(init?.body))).toEqual({
+        slot_session_id: 'slot-session-1',
+        status: 'ok',
+      })
+    })
+
+    it('posts status=failed with the error reason and forwards artifact_id', async () => {
+      fetchMock.mockResolvedValue(createResponse({
+        id: 'run-abc',
+        task_id: 'task-1',
+        stage: 'brainstormed',
+        failed_at: '2026-04-30T00:00:00Z',
+        failure_reason: 'boom',
+        confirmed_at: null,
+        cancelled_at: null,
+      }))
+
+      const bridge = new LucodeBridge()
+      const result = await bridge.taskRunDone('run-abc', 'slot-session-1', 'failed', {
+        artifactId: 'art-42',
+        error: 'boom',
+      })
+
+      expect(result.status).toBe('failed')
+      expect(result.failureReason).toBe('boom')
+      expect(result.failedAt).toBe('2026-04-30T00:00:00Z')
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/task-runs/run-abc/done')
+      expect(JSON.parse(String(init?.body))).toEqual({
+        slot_session_id: 'slot-session-1',
+        status: 'failed',
+        artifact_id: 'art-42',
+        error: 'boom',
+      })
+    })
+
+    it('url-encodes the run id in the path', async () => {
+      fetchMock.mockResolvedValue(createResponse({
+        id: 'run with spaces',
+        task_id: 'task-1',
+        stage: 'brainstormed',
+      }))
+
+      const bridge = new LucodeBridge()
+      await bridge.taskRunDone('run with spaces', 'slot-1', 'ok')
+      const [url] = fetchMock.mock.calls[0]
+      expect(String(url)).toContain('/api/task-runs/run%20with%20spaces/done')
+    })
+  })
+
   describe('linkSessionToPr', () => {
     it('posts PR metadata to the link-pr endpoint', async () => {
       const payload = {

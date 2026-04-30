@@ -327,6 +327,16 @@ const sampleStructuredOutputs: Record<string, any> = {
     source_sessions_cancelled: ['feature_v1'],
     judge_sessions_cancelled: ['judge-1'],
   },
+  lucode_task_run_done: {
+    run_id: 'run-abc',
+    task_id: 'task-1',
+    stage: 'brainstormed',
+    status: 'ok',
+    failed_at: null,
+    failure_reason: null,
+    confirmed_at: null,
+    cancelled_at: null,
+  },
 }
 
 describe('MCP output schemas', () => {

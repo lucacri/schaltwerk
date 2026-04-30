@@ -676,6 +676,23 @@ export const toolOutputSchemas = {
     additionalProperties: false,
   },
 
+  lucode_task_run_done: {
+    $schema: draft2020,
+    type: 'object',
+    properties: {
+      run_id: { type: 'string' },
+      task_id: { type: 'string' },
+      stage: { type: 'string' },
+      status: { enum: ['ok', 'failed'] },
+      failed_at: nullableString,
+      failure_reason: nullableString,
+      confirmed_at: nullableString,
+      cancelled_at: nullableString,
+    },
+    required: ['run_id', 'task_id', 'stage', 'status'],
+    additionalProperties: false,
+  },
+
   lucode_convert_to_spec: {
     $schema: draft2020,
     type: 'object',

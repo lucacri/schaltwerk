@@ -184,6 +184,17 @@ export interface ConfirmConsolidationWinnerResult {
   judgeSessionsCancelled: string[]
 }
 
+export interface TaskRunDoneResult {
+  runId: string
+  taskId: string
+  stage: string
+  status: 'ok' | 'failed'
+  failedAt?: string | null
+  failureReason?: string | null
+  confirmedAt?: string | null
+  cancelledAt?: string | null
+}
+
 export interface MergeSessionResult {
   sessionName: string
   parentBranch: string
@@ -1773,6 +1784,51 @@ export class LucodeBridge {
       candidateSessionsCancelled: payload.candidate_sessions_cancelled,
       sourceSessionsCancelled: payload.source_sessions_cancelled,
       judgeSessionsCancelled: payload.judge_sessions_cancelled,
+    }
+  }
+
+  async taskRunDone(
+    runId: string,
+    slotSessionId: string,
+    status: 'ok' | 'failed',
+    options: { artifactId?: string | null; error?: string | null; projectPath?: string } = {}
+  ): Promise<TaskRunDoneResult> {
+    const response = await this.fetchWithAutoPort(`/api/task-runs/${encodeURIComponent(runId)}/done`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getProjectHeaders(options.projectPath)
+      },
+      body: JSON.stringify({
+        slot_session_id: slotSessionId,
+        status,
+        artifact_id: options.artifactId ?? undefined,
+        error: options.error ?? undefined,
+      })
+    })
+
+    const payload = await this.parseJsonResponse<{
+      id: string
+      task_id: string
+      stage: string
+      failed_at?: string | null
+      failure_reason?: string | null
+      confirmed_at?: string | null
+      cancelled_at?: string | null
+    }>(response, 'task run done')
+    if (!payload) {
+      throw new Error('Task run done payload missing')
+    }
+
+    return {
+      runId: payload.id,
+      taskId: payload.task_id,
+      stage: payload.stage,
+      status,
+      failedAt: payload.failed_at ?? null,
+      failureReason: payload.failure_reason ?? null,
+      confirmedAt: payload.confirmed_at ?? null,
+      cancelledAt: payload.cancelled_at ?? null,
     }
   }
 
