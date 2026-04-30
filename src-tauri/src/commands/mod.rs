@@ -87,7 +87,7 @@ pub use schaltwerk_core::{
     schaltwerk_core_start_improve_plan_round,
     schaltwerk_core_trigger_consolidation_judge,
     schaltwerk_core_update_consolidation_outcome_vertical,
-    schaltwerk_core_update_git_stats, schaltwerk_core_update_session_state,
+    schaltwerk_core_update_git_stats,
     schaltwerk_core_update_spec_content,
     schaltwerk_core_list_spec_review_comments,
     schaltwerk_core_save_spec_review_comments,

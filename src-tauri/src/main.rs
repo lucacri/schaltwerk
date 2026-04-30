@@ -1615,7 +1615,6 @@ fn main() {
             schaltwerk_core_create_spec_session,
             schaltwerk_core_generate_commit_message,
             schaltwerk_core_generate_session_name,
-            schaltwerk_core_update_session_state,
             schaltwerk_core_update_spec_content,
             schaltwerk_core_list_spec_review_comments,
             schaltwerk_core_save_spec_review_comments,

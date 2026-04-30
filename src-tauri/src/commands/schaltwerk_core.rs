@@ -4361,25 +4361,6 @@ pub async fn schaltwerk_core_create_spec_session(
     Ok(spec_session)
 }
 #[tauri::command]
-pub async fn schaltwerk_core_update_session_state(
-    name: String,
-    state: String,
-) -> Result<(), String> {
-    log::info!("Updating session state: {name} -> {state}");
-
-    let session_state = state
-        .parse::<SessionState>()
-        .map_err(|e| format!("Invalid session state: {e}"))?;
-
-    let core = get_core_handle().await?;
-    let manager = core.session_manager();
-
-    manager
-        .update_session_state(&name, session_state)
-        .map_err(|e| format!("Failed to update session state: {e}"))
-}
-
-#[tauri::command]
 pub async fn schaltwerk_core_update_spec_content(
     app: tauri::AppHandle,
     name: String,
