@@ -69,7 +69,7 @@ impl MergeService {
             .get_session(session_name)
             .with_context(|| format!("Session '{session_name}' not found"))?;
 
-        if session.session_state == SessionState::Spec {
+        if session.is_spec {
             return Err(anyhow!(
                 "Session '{session_name}' is still a spec. Start it before merging."
             ));
@@ -238,7 +238,7 @@ impl MergeService {
         let manager = self.session_manager();
         let session = manager.get_session(session_name)?;
 
-        if session.session_state == SessionState::Spec {
+        if session.is_spec {
             return Err(anyhow!(
                 "Session '{session_name}' is still a spec. Start it before merging."
             ));
@@ -446,7 +446,7 @@ impl MergeService {
             .get_session(session_name)
             .with_context(|| format!("Session '{session_name}' not found"))?;
 
-        if session.session_state == SessionState::Spec {
+        if session.is_spec {
             return Err(anyhow!(
                 "Session '{session_name}' is still a spec. Start it before merging."
             ));

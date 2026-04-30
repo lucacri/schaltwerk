@@ -659,7 +659,7 @@ pub async fn github_preview_pr(
         .get_session(&session_name)
         .map_err(|e| format!("Session not found: {e}"))?;
 
-    if session.session_state == lucode::domains::sessions::SessionState::Spec {
+    if session.is_spec {
         return Err("Cannot create PR for a spec session. Start the session first.".to_string());
     }
 
