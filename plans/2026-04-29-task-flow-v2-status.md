@@ -12,6 +12,7 @@
 | 3 | Drop `RunRole`; collapse `TaskStage::Cancelled`; introduce orthogonal session axes (additive) | `[x]` | Waves A–H — see below |
 | 4 | `TaskFlowError` sweep + derived current_* getters + retire legacy session enums | `[x]` | Waves A–H — see below |
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[x]` | Waves A–E — see below |
+| 5.5 | Hydrator wiring-gap interlude (`get_session_by_id` + 2 siblings) | `[ ]` | — |
 | 6 | `Sidebar.tsx` split | `[ ]` | — |
 
 ## Phase 1 — wave-by-wave detail
