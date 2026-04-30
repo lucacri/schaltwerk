@@ -968,11 +968,18 @@ pub(crate) fn apply_tasks_migrations(conn: &rusqlite::Connection) -> anyhow::Res
     // (no `task_runs.status` column) skips immediately. See
     // `infrastructure/database/migrations/v1_to_v2_task_runs.rs` for details.
     super::migrations::v1_to_v2_task_runs::run(conn)?;
+    // Phase 1's task_role → run_role backfill must run before Phase 3
+    // drops the task_role column. After this UPDATE, every row that v1
+    // populated with a task_role has the same value mirrored into
+    // run_role; the next migration (Wave D.4) drops task_role entirely.
     let _ = conn.execute(
         "UPDATE sessions SET run_role = task_role
             WHERE run_role IS NULL AND task_role IS NOT NULL",
         [],
     );
+    // Phase 3 Wave D.4: drop the legacy task_role column. Idempotent —
+    // skips immediately on v2-native DBs that never had the column.
+    super::migrations::v1_to_v2_run_role::run(conn)?;
     let _ = conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sessions_task ON sessions(task_id)",
         [],
@@ -990,17 +997,64 @@ mod tests {
     use super::{apply_specs_migrations, apply_tasks_migrations};
     use rusqlite::Connection;
 
+    /// Test fixture mimicking what `apply_sessions_migrations` produces:
+    /// the canonical column set the rebuild dance in
+    /// `migrations::v1_to_v2_run_role` SELECTs from. Phase 3 Wave D.4
+    /// requires the full schema because the rebuild copies every
+    /// not-NULL-able column 1:1; an in-isolation test of
+    /// `apply_tasks_migrations` would otherwise hit a SQL logic error
+    /// the moment the rebuild references a missing column.
     fn create_minimal_sessions_table(conn: &Connection) {
         conn.execute(
             "CREATE TABLE sessions (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
+                display_name TEXT,
+                version_group_id TEXT,
+                version_number INTEGER,
+                epic_id TEXT,
                 repository_path TEXT NOT NULL,
+                repository_name TEXT NOT NULL DEFAULT '',
+                branch TEXT NOT NULL DEFAULT '',
+                parent_branch TEXT NOT NULL DEFAULT '',
+                original_parent_branch TEXT,
+                worktree_path TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active',
+                session_state TEXT DEFAULT 'running',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                last_activity INTEGER,
+                initial_prompt TEXT,
+                ready_to_merge BOOLEAN DEFAULT FALSE,
+                original_agent_type TEXT,
+                original_agent_model TEXT,
+                pending_name_generation BOOLEAN DEFAULT FALSE,
+                was_auto_generated BOOLEAN DEFAULT FALSE,
+                spec_content TEXT,
+                resume_allowed BOOLEAN DEFAULT TRUE,
+                amp_thread_id TEXT,
+                issue_number INTEGER,
+                issue_url TEXT,
+                pr_number INTEGER,
+                pr_url TEXT,
+                pr_state TEXT,
+                is_consolidation INTEGER NOT NULL DEFAULT 0,
+                consolidation_sources TEXT,
+                consolidation_round_id TEXT,
+                consolidation_role TEXT,
+                consolidation_report TEXT,
+                consolidation_report_source TEXT,
+                consolidation_base_session_id TEXT,
+                consolidation_recommended_session_id TEXT,
+                consolidation_confirmation_mode TEXT,
+                promotion_reason TEXT,
+                ci_autofix_enabled BOOLEAN DEFAULT FALSE,
+                merged_at INTEGER,
+                stage TEXT,
                 task_id TEXT,
                 task_stage TEXT,
                 task_role TEXT,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
+                UNIQUE(repository_path, name)
             )",
             [],
         )
