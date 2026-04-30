@@ -1020,7 +1020,7 @@ pub struct TaskRunDonePayload {
 /// `get_project_with_handle` (which needs a tauri Runtime + project
 /// manager). Mirrors the `cancel_task_with_context` shape used by
 /// `lucode_task_cancel`.
-async fn task_run_done_with_context<R: tauri::Runtime>(
+pub(crate) async fn task_run_done_with_context<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     db: &Database,
     repo_path: &Path,

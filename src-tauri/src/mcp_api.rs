@@ -482,6 +482,12 @@ async fn handle_mcp_request_inner(
             let round_id = extract_round_id_for_action(path, "/confirm");
             confirm_consolidation_winner(req, &round_id, app).await
         }
+        (&Method::POST, path)
+            if path.starts_with("/api/task-runs/") && path.ends_with("/done") =>
+        {
+            let run_id = extract_run_id_for_action(path, "/done");
+            task_run_done(req, &run_id, app).await
+        }
         (&Method::POST, path) if path.starts_with("/api/sessions/") && path.ends_with("/reset") => {
             let name = extract_session_name_for_action(path, "/reset");
             reset_session(req, &name, app).await
@@ -555,6 +561,14 @@ fn extract_round_id_for_action(path: &str, action: &str) -> String {
     let round_id = &path[prefix.len()..path.len() - action.len()];
     urlencoding::decode(round_id)
         .unwrap_or(std::borrow::Cow::Borrowed(round_id))
+        .to_string()
+}
+
+fn extract_run_id_for_action(path: &str, action: &str) -> String {
+    let prefix = "/api/task-runs/";
+    let run_id = &path[prefix.len()..path.len() - action.len()];
+    urlencoding::decode(run_id)
+        .unwrap_or(std::borrow::Cow::Borrowed(run_id))
         .to_string()
 }
 
@@ -2709,6 +2723,22 @@ mod tests {
                 "/prepare-merge"
             ),
             "my session"
+        );
+    }
+
+    #[test]
+    fn extract_run_id_for_action_strips_done_suffix() {
+        assert_eq!(
+            extract_run_id_for_action("/api/task-runs/run-abc-123/done", "/done"),
+            "run-abc-123"
+        );
+    }
+
+    #[test]
+    fn extract_run_id_for_action_decodes_url_encoding() {
+        assert_eq!(
+            extract_run_id_for_action("/api/task-runs/run%20with%20spaces/done", "/done"),
+            "run with spaces"
         );
     }
 
@@ -10097,6 +10127,92 @@ async fn trigger_consolidation_judge(
             serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string()),
         )),
         Err((status, message)) => Ok(json_error_response(status, message)),
+    }
+}
+
+/// Phase 5 REST surface for `lucode_task_run_done`. Body shape:
+/// `{ "slot_session_id": "...", "status": "ok"|"failed", "artifact_id": "...", "error": "..." }`.
+/// `run_id` comes from the path segment.
+#[derive(Debug, Clone, serde::Deserialize)]
+struct TaskRunDoneApiRequest {
+    slot_session_id: String,
+    status: String,
+    #[serde(default)]
+    artifact_id: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+async fn task_run_done(
+    req: Request<Incoming>,
+    run_id: &str,
+    app: tauri::AppHandle,
+) -> Result<Response<String>, hyper::Error> {
+    use crate::commands::tasks::{TaskRunDonePayload, task_run_done_with_context};
+    use lucode::services::TaskFlowError;
+
+    let body_bytes = req.into_body().collect().await?.to_bytes();
+    let payload: TaskRunDoneApiRequest = match serde_json::from_slice(&body_bytes) {
+        Ok(payload) => payload,
+        Err(error) => {
+            return Ok(json_error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Invalid JSON payload: {error}"),
+            ));
+        }
+    };
+
+    let (project, handle) = match crate::get_project_with_handle(None).await {
+        Ok(pair) => pair,
+        Err(e) => {
+            error!("Failed to acquire project for task-run-done: {e}");
+            return Ok(json_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to acquire project: {e}"),
+            ));
+        }
+    };
+
+    // Resolve run → task_id for the per-task lock.
+    let task_id = match lucode::domains::tasks::service::TaskRunService::new(&handle.db)
+        .get_run(run_id)
+    {
+        Ok(run) => run.task_id,
+        Err(err) => {
+            return Ok(json_error_response(
+                StatusCode::NOT_FOUND,
+                format!("task run '{run_id}' not found: {err}"),
+            ));
+        }
+    };
+
+    let task_lock = project.task_locks.lock_for(&task_id);
+    let _guard = task_lock.lock().await;
+
+    let cmd_payload = TaskRunDonePayload {
+        run_id: run_id.to_string(),
+        slot_session_id: payload.slot_session_id,
+        status: payload.status,
+        artifact_id: payload.artifact_id,
+        error: payload.error,
+    };
+
+    match task_run_done_with_context(&app, &handle.db, &handle.repo_path, cmd_payload).await {
+        Ok(updated_run) => {
+            let json = serde_json::to_string(&updated_run).unwrap_or_else(|e| {
+                error!("Failed to serialize task_run_done response: {e}");
+                "{}".to_string()
+            });
+            Ok(json_response(StatusCode::OK, json))
+        }
+        Err(TaskFlowError::InvalidInput { field, message }) => Ok(json_error_response(
+            StatusCode::BAD_REQUEST,
+            format!("invalid {field}: {message}"),
+        )),
+        Err(other) => Ok(json_error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            other.to_string(),
+        )),
     }
 }
 
