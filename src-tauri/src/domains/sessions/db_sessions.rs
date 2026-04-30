@@ -441,172 +441,75 @@ impl SessionMethods for Database {
     fn get_session_by_name(&self, repo_path: &Path, name: &str) -> Result<Session> {
         let conn = self.get_conn()?;
 
+        // Phase 5.5 Wave C: same column list as `get_session_by_id`; both
+        // share `row_to_session_with_facts` so the 6 fact columns are
+        // included on every full-Session lookup.
         let mut stmt = conn.prepare(
-            "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
-                    branch, parent_branch, original_parent_branch, worktree_path,
-                    created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
-                    original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
+            "SELECT
+                id, name, display_name, version_group_id, version_number, epic_id,
+                repository_path, repository_name, branch, parent_branch,
+                original_parent_branch, worktree_path,
+                created_at, updated_at, last_activity, initial_prompt,
+                ready_to_merge, original_agent_type, original_agent_model,
+                pending_name_generation, was_auto_generated, spec_content,
+                resume_allowed, amp_thread_id,
+                issue_number, issue_url, pr_number, pr_url, pr_state,
+                is_consolidation, consolidation_sources,
+                consolidation_round_id, consolidation_role,
+                consolidation_report, consolidation_report_source,
+                consolidation_base_session_id,
+                consolidation_recommended_session_id,
+                consolidation_confirmation_mode, promotion_reason,
+                ci_autofix_enabled, merged_at,
+                task_id, task_stage,
+                task_run_id, run_role, slot_key,
+                exited_at, exit_code, first_idle_at,
+                is_spec, cancelled_at
              FROM sessions
-             WHERE repository_path = ?1 AND name = ?2"
+             WHERE repository_path = ?1 AND name = ?2",
         )?;
 
-        let session = stmt.query_row(params![repo_path.to_string_lossy(), name], |row| {
-            Ok(Session {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                display_name: row.get(2).ok(),
-                version_group_id: row.get(3).ok(),
-                version_number: row.get(4).ok(),
-                epic_id: row.get(5).ok(),
-                repository_path: PathBuf::from(row.get::<_, String>(6)?),
-                repository_name: row.get(7)?,
-                branch: row.get(8)?,
-                parent_branch: row.get(9)?,
-                original_parent_branch: row.get(10).ok(),
-                worktree_path: PathBuf::from(row.get::<_, String>(11)?),
-                created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
-                updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
-                last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(14)?),
-                initial_prompt: row.get(15)?,
-                ready_to_merge: row.get(16).unwrap_or(false),
-                original_agent_type: row.get(17).ok(),
-                original_agent_model: row.get(40).ok(),
-                pending_name_generation: row.get(18).unwrap_or(false),
-                was_auto_generated: row.get(19).unwrap_or(false),
-                spec_content: row.get(20).ok(),
-                resume_allowed: row.get(21).unwrap_or(true),
-                amp_thread_id: row.get(22).ok(),
-                issue_number: row.get(23).ok(),
-                issue_url: row.get(24).ok(),
-                pr_number: row.get(25).ok(),
-                pr_url: row.get(26).ok(),
-                is_consolidation: row.get(27).unwrap_or(false),
-                consolidation_sources: row
-                    .get::<_, Option<String>>(28)
-                    .ok()
-                    .flatten()
-                    .and_then(|s| serde_json::from_str(&s).ok()),
-                consolidation_round_id: row.get(29).ok(),
-                consolidation_role: row.get(30).ok(),
-                consolidation_report: row.get(31).ok(),
-                consolidation_report_source: row.get(32).ok(),
-                consolidation_base_session_id: row.get(33).ok(),
-                consolidation_recommended_session_id: row.get(34).ok(),
-                consolidation_confirmation_mode: row.get(35).ok(),
-                promotion_reason: row.get(36).ok(),
-                ci_autofix_enabled: row.get(37).unwrap_or(false),
-                merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(38)?),
-                pr_state: row
-                    .get::<_, Option<String>>(39)
-                    .ok()
-                    .flatten()
-                    .and_then(|state| state.parse().ok()),
-                task_id: row.get(41).ok(),
-                task_stage: row
-                    .get::<_, Option<String>>(42)
-                    .ok()
-                    .flatten()
-                    .and_then(|stage| stage.parse().ok()),
-                task_run_id: None,
-                run_role: None,
-                slot_key: None,
-                exited_at: None,
-                exit_code: None,
-                first_idle_at: None,
-                is_spec: row.get(43).unwrap_or(false),
-                cancelled_at: utc_from_epoch_seconds_lossy_opt(
-                    row.get::<_, Option<i64>>(44).ok().flatten(),
-                ),
-            })
-        })?;
-
+        let session = stmt.query_row(
+            params![repo_path.to_string_lossy(), name],
+            row_to_session_with_facts,
+        )?;
         Ok(session)
     }
 
     fn get_session_by_id(&self, id: &str) -> Result<Session> {
         let conn = self.get_conn()?;
 
+        // Phase 5.5 Wave B: column list mirrors `row_to_session_with_facts`
+        // exactly so a single hydrator can serve every full-Session lookup.
+        // The previous inline lambda excluded the 6 Phase 1 fact columns
+        // (task_run_id, run_role, slot_key, exited_at, exit_code,
+        // first_idle_at), making them invisible to 66 production callers.
         let mut stmt = conn.prepare(
-            "SELECT id, name, display_name, version_group_id, version_number, epic_id, repository_path, repository_name,
-                    branch, parent_branch, original_parent_branch, worktree_path,
-                    created_at, updated_at, last_activity, initial_prompt, ready_to_merge,
-                    original_agent_type, pending_name_generation, was_auto_generated,
-                    spec_content, resume_allowed, amp_thread_id, issue_number, issue_url, pr_number, pr_url, is_consolidation, consolidation_sources, consolidation_round_id, consolidation_role, consolidation_report, consolidation_report_source, consolidation_base_session_id, consolidation_recommended_session_id, consolidation_confirmation_mode, promotion_reason, ci_autofix_enabled, merged_at, pr_state, original_agent_model, task_id, task_stage, is_spec, cancelled_at
+            "SELECT
+                id, name, display_name, version_group_id, version_number, epic_id,
+                repository_path, repository_name, branch, parent_branch,
+                original_parent_branch, worktree_path,
+                created_at, updated_at, last_activity, initial_prompt,
+                ready_to_merge, original_agent_type, original_agent_model,
+                pending_name_generation, was_auto_generated, spec_content,
+                resume_allowed, amp_thread_id,
+                issue_number, issue_url, pr_number, pr_url, pr_state,
+                is_consolidation, consolidation_sources,
+                consolidation_round_id, consolidation_role,
+                consolidation_report, consolidation_report_source,
+                consolidation_base_session_id,
+                consolidation_recommended_session_id,
+                consolidation_confirmation_mode, promotion_reason,
+                ci_autofix_enabled, merged_at,
+                task_id, task_stage,
+                task_run_id, run_role, slot_key,
+                exited_at, exit_code, first_idle_at,
+                is_spec, cancelled_at
              FROM sessions
-             WHERE id = ?1"
+             WHERE id = ?1",
         )?;
 
-        let session = stmt.query_row(params![id], |row| {
-            Ok(Session {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                display_name: row.get(2).ok(),
-                version_group_id: row.get(3).ok(),
-                version_number: row.get(4).ok(),
-                epic_id: row.get(5).ok(),
-                repository_path: PathBuf::from(row.get::<_, String>(6)?),
-                repository_name: row.get(7)?,
-                branch: row.get(8)?,
-                parent_branch: row.get(9)?,
-                original_parent_branch: row.get(10).ok(),
-                worktree_path: PathBuf::from(row.get::<_, String>(11)?),
-                created_at: utc_from_epoch_seconds_lossy(row.get(12)?),
-                updated_at: utc_from_epoch_seconds_lossy(row.get(13)?),
-                last_activity: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(14)?),
-                initial_prompt: row.get(15)?,
-                ready_to_merge: row.get(16).unwrap_or(false),
-                original_agent_type: row.get(17).ok(),
-                original_agent_model: row.get(40).ok(),
-                pending_name_generation: row.get(18).unwrap_or(false),
-                was_auto_generated: row.get(19).unwrap_or(false),
-                spec_content: row.get(20).ok(),
-                resume_allowed: row.get(21).unwrap_or(true),
-                amp_thread_id: row.get(22).ok(),
-                issue_number: row.get(23).ok(),
-                issue_url: row.get(24).ok(),
-                pr_number: row.get(25).ok(),
-                pr_url: row.get(26).ok(),
-                is_consolidation: row.get(27).unwrap_or(false),
-                consolidation_sources: row
-                    .get::<_, Option<String>>(28)
-                    .ok()
-                    .flatten()
-                    .and_then(|s| serde_json::from_str(&s).ok()),
-                consolidation_round_id: row.get(29).ok(),
-                consolidation_role: row.get(30).ok(),
-                consolidation_report: row.get(31).ok(),
-                consolidation_report_source: row.get(32).ok(),
-                consolidation_base_session_id: row.get(33).ok(),
-                consolidation_recommended_session_id: row.get(34).ok(),
-                consolidation_confirmation_mode: row.get(35).ok(),
-                promotion_reason: row.get(36).ok(),
-                ci_autofix_enabled: row.get(37).unwrap_or(false),
-                merged_at: utc_from_epoch_seconds_lossy_opt(row.get::<_, Option<i64>>(38)?),
-                pr_state: row
-                    .get::<_, Option<String>>(39)
-                    .ok()
-                    .flatten()
-                    .and_then(|state| state.parse().ok()),
-                task_id: row.get(41).ok(),
-                task_stage: row
-                    .get::<_, Option<String>>(42)
-                    .ok()
-                    .flatten()
-                    .and_then(|stage| stage.parse().ok()),
-                task_run_id: None,
-                run_role: None,
-                slot_key: None,
-                exited_at: None,
-                exit_code: None,
-                first_idle_at: None,
-                is_spec: row.get(43).unwrap_or(false),
-                cancelled_at: utc_from_epoch_seconds_lossy_opt(
-                    row.get::<_, Option<i64>>(44).ok().flatten(),
-                ),
-            })
-        })?;
-
+        let session = stmt.query_row(params![id], row_to_session_with_facts)?;
         Ok(session)
     }
 
@@ -2343,6 +2246,96 @@ mod tests {
         assert_eq!(
             by_id["b"].first_idle_at.map(|t| t.timestamp()),
             Some(tb.timestamp())
+        );
+    }
+
+    /// Phase 5.5 Wave C: same round-trip pin for `get_session_by_name`.
+    /// Same gap as Wave B; both lookups now share `row_to_session_with_facts`.
+    #[test]
+    fn get_session_by_name_round_trips_fact_columns() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        db.create_session(&make_session_for_run("named-session", &repo, None))
+            .expect("create");
+
+        db.set_session_task_lineage(
+            "named-session",
+            Some("task-1"),
+            Some("run-1"),
+            None,
+            Some("candidate"),
+            Some("claude-0"),
+        )
+        .expect("lineage");
+        let exit_ts = Utc.timestamp_opt(2_000, 0).single().unwrap();
+        db.set_session_exited_at("named-session", exit_ts, Some(7))
+            .expect("exit");
+        let idle_ts = Utc.timestamp_opt(3_000, 0).single().unwrap();
+        db.set_session_first_idle_at("named-session", idle_ts)
+            .expect("idle");
+
+        let session = db
+            .get_session_by_name(&repo, "named-session")
+            .expect("get_session_by_name");
+
+        assert_eq!(session.task_run_id.as_deref(), Some("run-1"));
+        assert_eq!(session.run_role.as_deref(), Some("candidate"));
+        assert_eq!(session.slot_key.as_deref(), Some("claude-0"));
+        assert_eq!(
+            session.exited_at.map(|t| t.timestamp()),
+            Some(exit_ts.timestamp())
+        );
+        assert_eq!(session.exit_code, Some(7));
+        assert_eq!(
+            session.first_idle_at.map(|t| t.timestamp()),
+            Some(idle_ts.timestamp())
+        );
+    }
+
+    /// Phase 5.5 Wave B: pin the round-trip for the 6 fact columns through
+    /// `get_session_by_id`. Per `feedback_compile_pins_dont_catch_wiring.md`,
+    /// the read-path SELECT must include every column the writer touches —
+    /// otherwise the column is "written but invisible to most callers".
+    /// This test goes through the production write paths (`set_session_*`)
+    /// and reads back via `get_session_by_id`; before Phase 5.5 it failed
+    /// because the SELECT excluded the 6 fact columns.
+    #[test]
+    fn get_session_by_id_round_trips_fact_columns() {
+        let db = Database::new_in_memory().expect("db");
+        let repo = PathBuf::from("/tmp/repo");
+        db.create_session(&make_session_for_run("s1", &repo, None))
+            .expect("create");
+
+        // Write each fact column via its production setter.
+        db.set_session_task_lineage(
+            "s1",
+            Some("task-1"),
+            Some("run-1"),
+            None,
+            Some("candidate"),
+            Some("claude-0"),
+        )
+        .expect("lineage");
+        let exit_ts = Utc.timestamp_opt(2_000, 0).single().unwrap();
+        db.set_session_exited_at("s1", exit_ts, Some(7))
+            .expect("exit");
+        let idle_ts = Utc.timestamp_opt(3_000, 0).single().unwrap();
+        db.set_session_first_idle_at("s1", idle_ts).expect("idle");
+
+        // Read back via the lookup that was broken before Phase 5.5.
+        let session = db.get_session_by_id("s1").expect("get_session_by_id");
+
+        assert_eq!(session.task_run_id.as_deref(), Some("run-1"));
+        assert_eq!(session.run_role.as_deref(), Some("candidate"));
+        assert_eq!(session.slot_key.as_deref(), Some("claude-0"));
+        assert_eq!(
+            session.exited_at.map(|t| t.timestamp()),
+            Some(exit_ts.timestamp())
+        );
+        assert_eq!(session.exit_code, Some(7));
+        assert_eq!(
+            session.first_idle_at.map(|t| t.timestamp()),
+            Some(idle_ts.timestamp())
         );
     }
 
