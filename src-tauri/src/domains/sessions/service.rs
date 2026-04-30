@@ -2813,6 +2813,65 @@ mod service_unified_tests {
         let result = manager.list_spec_review_comments("missing");
         assert!(result.is_err());
     }
+
+    /// **Phase 4 Wave B.1 — load-bearing two-way-binding test.**
+    /// `finalize_session_cancellation` must stamp `cancelled_at` directly
+    /// and leave the legacy `status` column unchanged. v1 wrote
+    /// `status='cancelled'` and lazily backfilled `cancelled_at` via the
+    /// migration; v2 stamps the timestamp synchronously so the
+    /// orthogonal axis (`cancelled_at`) becomes authoritative immediately.
+    /// Reverting the rewire to `update_session_status(_, Cancelled)`
+    /// makes this test fail because `cancelled_at` would stay `None`.
+    #[test]
+    fn finalize_session_cancellation_stamps_cancelled_at_synchronously() {
+        use crate::domains::sessions::lifecycle::cancellation::CancellationResult;
+
+        let (manager, temp_dir) = create_test_session_manager();
+        let session = create_test_session(&temp_dir, "claude", "b1-finalize");
+        manager
+            .db_manager
+            .create_session(&session)
+            .expect("create session");
+
+        let pre = manager
+            .db_manager
+            .get_session_by_id(&session.id)
+            .expect("pre-finalize");
+        assert!(
+            pre.cancelled_at.is_none(),
+            "fixture must start with cancelled_at = None"
+        );
+        assert_eq!(
+            pre.status,
+            SessionStatus::Active,
+            "fixture must start active"
+        );
+
+        let fs_result = CancellationResult {
+            terminated_processes: vec![],
+            worktree_removed: false,
+            branch_deleted: false,
+            errors: vec![],
+        };
+
+        manager
+            .finalize_session_cancellation(&session.id, fs_result)
+            .expect("finalize cancel");
+
+        let post = manager
+            .db_manager
+            .get_session_by_id(&session.id)
+            .expect("post-finalize");
+        assert!(
+            post.cancelled_at.is_some(),
+            "finalize must stamp cancelled_at synchronously (Phase 4 Wave B.1)"
+        );
+        assert_eq!(
+            post.status,
+            SessionStatus::Active,
+            "legacy status column must not be written by finalize after Phase 4 Wave B.1"
+        );
+    }
 }
 
 pub struct SessionManager {
@@ -3421,14 +3480,21 @@ impl SessionManager {
         })
     }
 
-    /// Finalize cancellation after filesystem operations complete (call with brief lock)
+    /// Finalize cancellation after filesystem operations complete (call with brief lock).
+    ///
+    /// Phase 4 Wave B.1: stamps `cancelled_at` directly on the orthogonal axis
+    /// instead of writing the legacy `status='cancelled'` column. Because
+    /// callers already serialize the cancel path under a brief lock (per the
+    /// doc comment above), the timestamp is stamped synchronously — there's
+    /// no fire-and-forget shape that would let a reader observe the row
+    /// post-cancel but pre-stamp.
     pub fn finalize_session_cancellation(
         &self,
         session_id: &str,
         fs_result: crate::domains::sessions::lifecycle::cancellation::CancellationResult,
     ) -> Result<()> {
         self.db_manager
-            .update_session_status(session_id, SessionStatus::Cancelled)?;
+            .set_session_cancelled_at(session_id, Utc::now())?;
 
         if let Err(e) = self
             .db_manager

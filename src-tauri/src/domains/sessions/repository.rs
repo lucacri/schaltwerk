@@ -596,6 +596,22 @@ impl SessionDbManager {
             .map_err(|e| anyhow!("Failed to set resume_allowed: {e}"))
     }
 
+    pub fn set_session_cancelled_at(
+        &self,
+        session_id: &str,
+        cancelled_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()> {
+        self.db
+            .set_session_cancelled_at(session_id, cancelled_at)
+            .map_err(|e| anyhow!("Failed to set cancelled_at: {e}"))
+    }
+
+    pub fn set_session_is_spec(&self, session_id: &str, is_spec: bool) -> Result<()> {
+        self.db
+            .set_session_is_spec(session_id, is_spec)
+            .map_err(|e| anyhow!("Failed to set is_spec: {e}"))
+    }
+
     pub fn set_session_amp_thread_id(&self, session_id: &str, thread_id: &str) -> Result<()> {
         self.db
             .set_session_amp_thread_id(session_id, thread_id)
