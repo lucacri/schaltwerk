@@ -1017,6 +1017,9 @@ fn row_to_task(row: &Row<'_>) -> rusqlite::Result<Task> {
         attention_required: row.get(23)?,
         created_at: utc_from_epoch_seconds_lossy(row.get(24)?),
         updated_at: utc_from_epoch_seconds_lossy(row.get(25)?),
+        // Wave B: field exists, column lands in Wave C and is read in
+        // Wave E once `tasks.cancelled_at` is part of TASK_SELECT_COLUMNS.
+        cancelled_at: None,
         task_runs: Vec::new(),
     })
 }
@@ -1186,6 +1189,7 @@ mod tests {
             attention_required: false,
             created_at: ts(1_000),
             updated_at: ts(1_000),
+            cancelled_at: None,
             task_runs: Vec::new(),
         }
     }

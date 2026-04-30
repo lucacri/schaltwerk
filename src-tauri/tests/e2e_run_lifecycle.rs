@@ -62,6 +62,7 @@ fn seed_task(db: &Database, id: &str) -> Task {
         attention_required: false,
         created_at: now,
         updated_at: now,
+        cancelled_at: None,
         task_runs: Vec::new(),
     };
     db.create_task(&task).expect("seed task");

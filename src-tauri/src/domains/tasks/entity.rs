@@ -274,8 +274,20 @@ pub struct Task {
     pub attention_required: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Phase 3: cancellation is no longer a stage transition. When a task is
+    /// cancelled, `stage` stays at whatever it was and `cancelled_at` is
+    /// stamped with the cancel time. `is_cancelled()` collapses the check.
+    /// `None` for non-cancelled tasks, including reopened ones.
+    #[serde(default)]
+    pub cancelled_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub task_runs: Vec<TaskRun>,
+}
+
+impl Task {
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled_at.is_some()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
