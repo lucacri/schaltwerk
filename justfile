@@ -1166,3 +1166,10 @@ sync-upstream:
     if [ "$ORIGINAL_BRANCH" != "dev" ] && [ "$ORIGINAL_BRANCH" != "main" ]; then
         git checkout "$ORIGINAL_BRANCH"
     fi
+
+# Export specs/plans/summaries from production Lucode (v1) DBs to each project's
+# plans/lucode/ directory. One-shot — run before cutting over to v2. Reads
+# ~/Library/Application Support/lucode/projects/*/sessions.db (untouched);
+# writes to each project's repo. Skips consolidation rounds + judge sessions.
+archive-prod-specs:
+    bash scripts/archive-prod-specs.sh
