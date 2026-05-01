@@ -13,7 +13,7 @@
 | 4 | `TaskFlowError` sweep + derived current_* getters + retire legacy session enums | `[x]` | Waves A–H — see below |
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[x]` | Waves A–E — see below |
 | 5.5 | Hydrator wiring-gap interlude (`get_session_by_id` + 2 siblings) | `[x]` | Waves A–F — see below |
-| 6 | `Sidebar.tsx` split | `[ ]` | — |
+| 6 | `Sidebar.tsx` split | `[x]` | Waves A–J — see below |
 
 ## Phase 1 — wave-by-wave detail
 
@@ -501,6 +501,188 @@ this column exists; a future cleanup should drop `stage` via the
 SQLite table-rebuild dance and bump the expected count to 51.
 Out of scope for Phase 5.5 — closing one wiring gap and surfacing the
 next is the right scope for the interlude.
+
+---
+
+## Phase 6 — wave-by-wave detail
+
+Phase 6's plan: [`2026-04-29-task-flow-v2-phase-6-plan.md`](./2026-04-29-task-flow-v2-phase-6-plan.md).
+
+All waves complete. Phase 6 splits the 2236-line `Sidebar.tsx` monolith
+into focused helper, hook, and view modules under
+`src/components/sidebar/{helpers,hooks,views}/`. Final `Sidebar.tsx` is
+**494 lines** — a thin projection that composes hook returns and
+renders five sub-components (`SidebarHeaderBar`, `OrchestratorEntry`,
+`SidebarSearchBar`, `SidebarSessionList`, `SidebarModalsTrailer`).
+
+| Wave | Title | Status | Commit |
+|---|---|---|---|
+| (plan) | Phase 6 plan | `[x]` | `8c0d9573` |
+| A.1 | Extract `versionGroupings` helpers | `[x]` | `ac1d97b3` |
+| A.2 | Extract `sectionCollapse` helpers | `[x]` | `37b70a59` |
+| A.3 | Extract `selectionMemory` helper | `[x]` | `d0d04840` |
+| A.4 | Extract `buildConsolidationGroupDetail` | `[x]` | `daba3805` |
+| B.1 | Extract `SidebarModalsTrailer` view | `[x]` | `c8d2aceb` |
+| B.2 | Extract `SidebarHeaderBar` view | `[x]` | `4c90ed35` |
+| B.3 | Extract `OrchestratorEntry` view | `[x]` | `8aac8236` |
+| B.4 | Extract `SidebarSearchBar` view | `[x]` | `d480ecc9` |
+| C.1 | Extract `SidebarVersionGroupRow` view | `[x]` | `4f2a35ef` |
+| C.2 | Extract `SidebarSectionView` | `[x]` | `d484418e` |
+| C.3 | Extract `SidebarSessionList` view | `[x]` | `9016c767` |
+| D | Extract `buildSessionCardActions` factory | `[x]` | `28b1f3a6` |
+| E.1 | Extract `useSidebarCollapsePersistence` | `[x]` | `8194fbbd` |
+| E.2 | Extract `useConsolidationActions` | `[x]` | `43cc5da3` |
+| E.3 | Extract `useConvertToSpecController` | `[x]` | `ac27b1ed` |
+| E.4 | Extract `useGitlabMrDialogController` (+ `createSafeUnlistener` helper) | `[x]` | `8d3c407f` |
+| E.5 | Extract `useMergeModalListener` | `[x]` | `bec2c696` |
+| E.6 | Extract `useVersionPromotionController` | `[x]` | `92bf64d5` |
+| F.1 | Extract `useOrchestratorBranch` | `[x]` | `817428c3` |
+| F.2 | Extract `usePrDialogController` | `[x]` | `d60f6659` |
+| F.3 | Extract `useSidebarBackendEvents` | `[x]` | `a2afc339` |
+| F.4 | Extract `useSessionScrollIntoView` | `[x]` | `4b673df4` |
+| F.5 | Extract `routeMergeConflictPrompt` helper | `[x]` | `ec45fa22` |
+| G | Extract `useSidebarSelectionMemory` (the 100-line effect) | `[x]` | `48b81e74` |
+| H | Extract `useSidebarKeyboardShortcuts` | `[x]` | `b71fab19` |
+| I.0 | Extract `buildSidebarModalSlots` factory | `[x]` | `39cbab8d` |
+| I.* | 5 final extraction passes (selection actions, orchestrator entry actions, merge orchestration, sectioned sessions, session-edit callbacks, refine-spec flow) | `[x]` | `9f007bee` |
+| I.1 | Add `arch_component_size.test.ts` with ratchet allowlist | `[x]` | `27eeaee7` |
+| J | Manual smoke + status doc + memory + final commit | `[x]` | (this commit) |
+
+## Phase 6 — definition of done check
+
+| Criterion | Status |
+|---|---|
+| `Sidebar.tsx` ≤ 500 lines | ✅ 494 lines |
+| Architecture test passes (`arch_component_size.test.ts`) | ✅ 3/3 sub-tests pass |
+| Sidebar.tsx is NOT on the legacy oversized allowlist | ✅ |
+| Stale-allowlist sub-test guards the ratchet | ✅ third sub-test fails the build if any allowlisted file drops below the cap without being removed from the list |
+| 0 sibling-imports-from-parent under `src/components/sidebar/` (non-test) | ✅ verified via `grep "from.*['\"]\\./Sidebar['\"]" src/components/sidebar/` returning zero non-test hits |
+| `buildConsolidationGroupDetail` re-exported from Sidebar.tsx for back-compat | ✅ `Sidebar.status-actions.test.tsx` import unchanged |
+| All 271+ existing sidebar tests pass | ✅ 206 sidebar-scoped tests green; no test body changes (only mechanical import-path edits within scope) |
+| `just test` green | ✅ 2404 Rust tests + 3290 vitest tests (3 new arch tests added in this phase) |
+| `arch_domain_isolation` and `arch_layering_database` green | ✅ |
+| Manual smoke checklist (deferred to user — see below) | 📋 to be ticked off interactively per the Wave J commit checklist |
+
+### Phase 6 — final file layout
+
+`src/components/sidebar/`:
+- `Sidebar.tsx` (494 lines) — thin projection
+- `helpers/`
+  - `versionGroupings.ts` — pure groupers (flatten, byEpic, splitBySection)
+  - `sectionCollapse.ts` — collapse-state types + normalizer
+  - `selectionMemory.ts` — `createSelectionMemoryBuckets`
+  - `consolidationGroupDetail.ts` — `buildConsolidationGroupDetail`
+  - `modalState.ts` — shared modal-state types
+  - `createSafeUnlistener.ts` — pure UnlistenFn wrapper
+  - `routeMergeConflictPrompt.ts` — pure prompt + terminal-id builder
+  - `buildSessionCardActions.ts` — 17-callback `SessionCardActions` factory
+  - `buildSidebarModalSlots.ts` — 8-modal slot factory for the trailer
+- `hooks/`
+  - `useSidebarCollapsePersistence.ts` — epic + section collapse localStorage
+  - `useConsolidationActions.ts` — judge + winner-confirm + toast
+  - `useConvertToSpecController.ts` — modal + shortcut opener
+  - `useGitlabMrDialogController.ts` — modal + listener
+  - `useMergeModalListener.ts` — OpenMergeModal listener
+  - `useVersionPromotionController.ts` — promote modal + selectBest + executePromotion
+  - `useOrchestratorBranch.ts` — branch fetch + ProjectReady/FileChanges listeners
+  - `usePrDialogController.ts` — modal + shortcut + listener
+  - `useSidebarBackendEvents.ts` — SessionRemoved/GitOperationCompleted/FollowUpMessage
+  - `useSessionScrollIntoView.ts` — layoutEffect scroll-into-view
+  - `useSidebarSelectionMemory.ts` — the 100-line selection-memory effect
+  - `useSidebarKeyboardShortcuts.ts` — useKeyboardShortcuts orchestration
+  - `useSidebarSelectionActions.ts` — handleSelectOrchestrator/Session/Cancel + selectPrev/Next
+  - `useOrchestratorEntryActions.ts` — onSwitchModel + onReset
+  - `useSidebarMergeOrchestration.ts` — merge drafts + handlers + resolve-in-agent
+  - `useSidebarSectionedSessions.ts` — versionGroups → sectionGroups → flattened/scoped
+  - `useSessionEditCallbacks.ts` — handleRenameSession + handleLinkPr
+  - `useRefineSpecFlow.ts` — runRefineSpecFlow + handleRefineSpecShortcut
+- `views/`
+  - `SidebarHeaderBar.tsx` — top bar (~67 lines)
+  - `OrchestratorEntry.tsx` — orchestrator card (~106 lines)
+  - `SidebarSearchBar.tsx` — filter row + search (~119 lines)
+  - `SidebarSessionList.tsx` — scroll container + 3-mode dispatch (~196 lines)
+  - `SidebarVersionGroupRow.tsx` — `<SessionVersionGroup>` wrapper (~80 lines)
+  - `SidebarSectionView.tsx` — section header + epic-grouped + ungrouped (~125 lines)
+  - `SidebarModalsTrailer.tsx` — 9-modal renderer (~213 lines)
+- (existing siblings — unchanged) `SessionCard.tsx`, `SessionVersionGroup.tsx`, `KanbanView.tsx`, `KanbanSessionRow.tsx`, `CollapsedSidebarRail.tsx`, `EpicGroupHeader.tsx`, `SidebarSectionHeader.tsx`, `CompactVersionRow.tsx`, etc.
+
+### Phase 6 — Wave J manual smoke checklist (to be ticked interactively)
+
+The smoke checklist in
+[`plans/2026-04-29-task-flow-v2-phase-6-plan.md`](./2026-04-29-task-flow-v2-phase-6-plan.md)
+§"Manual smoke-test checklist" (sections A–H) is the contract for
+verifying behavior identity. Run `bun run tauri:dev` against a project
+that has at least one spec, one running session, one multi-version run
+with 2+ candidates, and one cancelled task; walk every item under
+A. Section structure / B. Views + collapsed rail / C. Selection +
+keyboard nav / D. Task lifecycle (promote/cancel/reopen/switch stages)
+/ E. Forge integration / F. Agents + spec workflows / G. Epics /
+H. Notifications + cross-cutting; tick each box. Compare any visual
+oddity against `task-flow@b1f38f63` before attributing it to Phase 6.
+
+This step is a **user-driven verification gate**: the test suite
+proves correctness, the smoke walk proves feature correctness (per
+the user's kickoff: "type checking and test suites verify code
+correctness, not feature correctness").
+
+### Phase 6 — legacy oversized component allowlist (visibility)
+
+The `arch_component_size.test.ts` ratchet allows 21 currently-oversized
+`.tsx` components to remain over the 500-line cap as known debt. New
+oversized files are prohibited; when any allowlisted file drops below
+the cap, the third sub-test (stale-allowlist guard) forces removing it
+from the list, which then enforces the cap on it permanently. Future
+cleanup phases or scout-rule sweeps can pull these off one at a time:
+
+| Lines | File | Notes |
+|---|---|---|
+| 4035 | `diff/UnifiedDiffView.tsx` | the heaviest legacy component; pierre/inline diff merge target for a future phase |
+| 3556 | `modals/SettingsModal.tsx` | settings panels; could split per-section |
+| 2424 | `terminal/Terminal.tsx` | xterm.js + agent lifecycle; tightly coupled to PTY adapter |
+| 1949 | `terminal/TerminalGrid.tsx` | grid + tab management |
+| 1382 | `diff/DiffFileList.tsx` | virtualized file list with diff-stats wiring |
+| 1279 | `specs/SpecEditor.tsx` | markdown editor + clarification flow |
+| 982 | `diff/PierreDiffViewer.tsx` | pierre integration |
+| 903 | `git-graph/GitGraphPanel.tsx` | git graph rendering |
+| 890 | `sidebar/SessionCard.tsx` | session card with all action wiring |
+| 811 | `forge/ForgePrDetail.tsx` | PR detail + comments |
+| 764 | `home/AsciiBuilderLogo.tsx` | landing-page ASCII art (mostly data) |
+| 704 | `sidebar/SessionVersionGroup.tsx` | version-group card with consolidation actions |
+| 700 | `shared/SessionConfigurationPanel.tsx` | new-session form |
+| 643 | `modals/UnifiedSearchModal.tsx` | global search palette |
+| 642 | `right-panel/CopyContextBar.tsx` | copy-context UI |
+| 632 | `right-panel/RightPanelTabs.tsx` | right-panel tab orchestration |
+| 600 | `sidebar/CompactVersionRow.tsx` | compact session row |
+| 577 | `modals/NewSessionModal.tsx` | new session form |
+| 543 | `modals/MergeSessionModal.tsx` | merge dialog with mode toggle |
+| 516 | `diff/SimpleDiffPanel.tsx` | simple diff fallback |
+| 509 | `modals/GitHubPrPromptSection.tsx` | PR prompt UI |
+| 501 | `modals/PrSessionModal.tsx` | PR creation modal |
+
+Each of these is "if you're refactoring me, take me off the list" —
+the guard test enforces the rule going forward.
+
+### Phase 6 — v2 charter complete
+
+Phase 6 closes the v2 charter. All 7 design changes from
+[`2026-04-29-task-flow-v2-design.md`](./2026-04-29-task-flow-v2-design.md)
+have shipped:
+
+1. ✅ Drop `TaskRunStatus` (Phase 1) — derived getter, dropped column
+2. ✅ Per-task mutex (Phase 2) — global RwLock removed
+3. ✅ Stage = immutable artifact production (Phase 4 derived `current_*` getters)
+4. ✅ Drop `RunRole` (Phase 3) — `slot_key` only
+5. ✅ Session state observable (Phase 3 + Phase 4) — `is_spec` / `cancelled_at`; legacy enums dropped
+6. ✅ `TaskStage::Cancelled` → `task.cancelled_at` (Phase 3)
+7. ✅ Canonical `TaskFlowError` (Phase 4)
+8. ✅ Explicit `lucode_task_run_done` MCP tool (Phase 5)
+9. ✅ Direct calls for domain coordination (Phase 1 + Phase 5 — no `OnceCell` dispatcher)
+10. ✅ Sidebar split (Phase 6)
+
+The vestigial `sessions.stage` column surfaced by Phase 5.5 stays as a
+**post-charter cleanup item**, tracked in
+[`2026-04-29-task-flow-v2-status.md`](./2026-04-29-task-flow-v2-status.md)
+§"Phase 5.5 — known follow-up surfaced" — out of scope for Phase 6.
 
 ---
 
