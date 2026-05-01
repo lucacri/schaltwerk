@@ -373,6 +373,15 @@ run-logs log_level="debug" rust_log="trace":
     set -euo pipefail
     RUST_LOG="{{rust_log}}" LOG_LEVEL="{{log_level}}" just run
 
+# Run dev mode with an isolated data dir. Sets LUCODE_FLAVOR so app_paths
+# routes Application Support / project data through the suffixed identifier
+# instead of production paths. Default flavor is "taskflow-v2"; override
+# explicitly with `just dev-run myflavor`.
+dev-run flavor="taskflow-v2":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    LUCODE_FLAVOR={{flavor}} just run
+
 # Run only the frontend (Vite dev server) on auto-detected port
 run-frontend:
     #!/usr/bin/env bash
