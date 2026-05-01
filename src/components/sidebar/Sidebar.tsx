@@ -36,6 +36,7 @@ import {
 import { createSelectionMemoryBuckets } from './helpers/selectionMemory'
 import { buildConsolidationGroupDetail } from './helpers/consolidationGroupDetail'
 import { SidebarModalsTrailer } from './views/SidebarModalsTrailer'
+import { SidebarHeaderBar } from './views/SidebarHeaderBar'
 import {
     ConvertToSpecModalState,
     GitlabMrDialogState,
@@ -52,7 +53,7 @@ import { PrPreviewResponse, PrCreateOptions } from '../modals/PrSessionModal'
 import { useSessionPrShortcut } from '../../hooks/useSessionPrShortcut'
 import { useShortcutDisplay } from '../../keyboardShortcuts/useShortcutDisplay'
 import { KeyboardShortcutAction } from '../../keyboardShortcuts/config'
-import { VscRefresh, VscCode, VscLayoutSidebarLeft, VscLayoutSidebarLeftOff } from 'react-icons/vsc'
+import { VscRefresh, VscCode } from 'react-icons/vsc'
 import { IconButton } from '../common/IconButton'
 import { ProgressIndicator } from '../common/ProgressIndicator'
 import { logger } from '../../utils/logger'
@@ -1473,50 +1474,13 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 }
             }}
         >
-            <div className={clsx('flex items-center shrink-0 h-9', isCollapsed ? 'justify-center px-0' : 'justify-between px-2 pt-2')}>
-                {!isCollapsed && (
-                    <span className="text-xs font-medium text-text-tertiary uppercase tracking-wider ml-1">{t.sidebar.header}</span>
-                )}
-                {!isCollapsed && (
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            void setSidebarViewMode(sidebarViewMode === 'board' ? 'list' : 'board')
-                        }}
-                        data-testid="sidebar-view-mode-toggle"
-                        className="h-6 px-2 flex items-center justify-center rounded text-text-tertiary hover:text-text-primary hover:bg-bg-elevated transition-colors text-[11px] uppercase tracking-wider"
-                        title={sidebarViewMode === 'board' ? 'Switch to list view' : 'Switch to board view'}
-                        aria-label={sidebarViewMode === 'board' ? 'Switch to list view' : 'Switch to board view'}
-                        aria-pressed={sidebarViewMode === 'board'}
-                    >
-                        {sidebarViewMode === 'board' ? 'Board' : 'List'}
-                    </button>
-                )}
-                {onToggleSidebar && (
-                    <div className="flex items-center gap-2">
-                        {!isCollapsed && leftSidebarShortcut && (
-                            <span className="text-[11px] text-text-muted" aria-hidden="true">
-                                {leftSidebarShortcut}
-                            </span>
-                        )}
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                onToggleSidebar()
-                            }}
-                            className={clsx(
-                                "h-6 w-6 flex items-center justify-center rounded text-text-tertiary hover:text-text-primary hover:bg-bg-elevated transition-colors",
-                                !isCollapsed && "ml-auto"
-                            )}
-                            title={isCollapsed ? t.sidebar.showSidebar : t.sidebar.hideSidebar}
-                            aria-label={isCollapsed ? t.sidebar.showSidebar : t.sidebar.hideSidebar}
-                        >
-                            {isCollapsed ? <VscLayoutSidebarLeftOff /> : <VscLayoutSidebarLeft />}
-                        </button>
-                    </div>
-                )}
-            </div>
+            <SidebarHeaderBar
+                isCollapsed={isCollapsed}
+                sidebarViewMode={sidebarViewMode}
+                setSidebarViewMode={setSidebarViewMode}
+                leftSidebarShortcut={leftSidebarShortcut}
+                onToggleSidebar={onToggleSidebar}
+            />
 
             <div className={clsx('pt-1', isCollapsed ? 'px-1' : 'px-2')}>
                 <div
