@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, memo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { stableSessionTerminalId } from '../../common/terminalIdentity'
 import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
@@ -40,6 +40,7 @@ import { useVersionPromotionController } from './hooks/useVersionPromotionContro
 import { useOrchestratorBranch } from './hooks/useOrchestratorBranch'
 import { usePrDialogController } from './hooks/usePrDialogController'
 import { useSidebarBackendEvents } from './hooks/useSidebarBackendEvents'
+import { useSessionScrollIntoView } from './hooks/useSessionScrollIntoView'
 import {
     SwitchOrchestratorModalState,
 } from './helpers/modalState'
@@ -791,36 +792,13 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
 
     useEffect(() => { latestSessionsRef.current = allSessions }, [allSessions])
 
-    // Scroll selected session into view when selection changes
-    useLayoutEffect(() => {
-        if (selection.kind !== 'session') return
-
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                const selectedElement = sidebarRef.current?.querySelector(`[data-session-selected="true"]`)
-                if (selectedElement) {
-                    selectedElement.scrollIntoView({
-                        block: 'nearest',
-                        inline: 'nearest'
-                    })
-                    if (sessionListRef.current) {
-                        sessionScrollTopRef.current = sessionListRef.current.scrollTop
-                    }
-                }
-            })
-        })
-    }, [selection])
-
-    const handleSessionScroll = useCallback((event: { currentTarget: { scrollTop: number } }) => {
-        sessionScrollTopRef.current = event.currentTarget.scrollTop
-    }, [])
-
-    useEffect(() => {
-        const node = sessionListRef.current
-        if (node) {
-            node.scrollTop = sessionScrollTopRef.current
-        }
-    }, [isCollapsed])
+    const { handleSessionScroll } = useSessionScrollIntoView({
+        selection,
+        isCollapsed,
+        sidebarRef,
+        sessionListRef,
+        sessionScrollTopRef,
+    })
 
     useSidebarBackendEvents({
         createSafeUnlistener,
