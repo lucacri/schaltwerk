@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useEffectEvent, useMemo, memo } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { stableSessionTerminalId } from '../../common/terminalIdentity'
 import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
@@ -11,7 +11,7 @@ import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useFocus } from '../../contexts/FocusContext'
 import { UnlistenFn } from '@tauri-apps/api/event'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
-import { EventPayloadMap, GitOperationPayload, OpenPrModalPayload, matchesProjectScope } from '../../common/events'
+import { EventPayloadMap, GitOperationPayload, OpenPrModalPayload } from '../../common/events'
 import { useSelection } from '../../hooks/useSelection'
 import { clearTerminalStartedTracking } from '../terminal/Terminal'
 import { useSessions } from '../../hooks/useSessions'
@@ -41,6 +41,7 @@ import { useGitlabMrDialogController } from './hooks/useGitlabMrDialogController
 import { createSafeUnlistener } from './helpers/createSafeUnlistener'
 import { useMergeModalListener } from './hooks/useMergeModalListener'
 import { useVersionPromotionController } from './hooks/useVersionPromotionController'
+import { useOrchestratorBranch } from './hooks/useOrchestratorBranch'
 import {
     PrDialogState,
     SwitchOrchestratorModalState,
@@ -62,7 +63,6 @@ import { useToast } from '../../common/toast/ToastProvider'
 import { useModal } from '../../contexts/ModalContext'
 import { getSessionDisplayName } from '../../utils/sessionDisplayName'
 import { useClaudeSession } from '../../hooks/useClaudeSession'
-import { ORCHESTRATOR_SESSION_NAME } from '../../constants/sessions'
 import { projectPathAtom } from '../../store/atoms/project'
 import { useSessionMergeShortcut } from '../../hooks/useSessionMergeShortcut'
 import { openMergeDialogActionAtom } from '../../store/atoms/sessions'
@@ -138,7 +138,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     }, [])
 
     const [sessionsWithNotifications, setSessionsWithNotifications] = useState<Set<string>>(new Set())
-    const [orchestratorBranch, setOrchestratorBranch] = useState<string>("main")
     const [editingEpic, setEditingEpic] = useState<Epic | null>(null)
     const [deleteEpicTarget, setDeleteEpicTarget] = useState<Epic | null>(null)
     const [deleteEpicLoading, setDeleteEpicLoading] = useState(false)
@@ -149,16 +148,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     useEffect(() => {
         projectPathRef.current = projectPath
     }, [projectPath])
-    const fetchOrchestratorBranch = useEffectEvent(async () => {
-        try {
-            const projectPath = projectPathRef.current
-            const branch = await invoke<string>(TauriCommands.GetCurrentBranchName, { sessionName: null, ...(projectPath ? { projectPath } : {}) })
-            setOrchestratorBranch(branch || "main")
-        } catch (error) {
-            logger.warn('Failed to get current branch, defaulting to main:', error)
-            setOrchestratorBranch("main")
-        }
-    })
     const [switchOrchestratorModal, setSwitchOrchestratorModal] = useState<SwitchOrchestratorModalState>({ open: false })
     const [switchModelSessionId, setSwitchModelSessionId] = useState<string | null>(null)
     const orchestratorResetting = resettingSelection?.kind === 'orchestrator'
@@ -632,51 +621,11 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }, [allSessions, ensureProjectMemory, filterMode, selectionScopedSessions, selection, setSelection])
 
-    useEffect(() => { void fetchOrchestratorBranch() }, [])
-
-    useEffect(() => {
-        if (selection.kind !== 'orchestrator') return
-        void fetchOrchestratorBranch()
-    }, [selection])
-
-    useEffect(() => {
-        let unlistenProjectReady: UnlistenFn | null = null
-        let unlistenFileChanges: UnlistenFn | null = null
-
-        const attach = async () => {
-            try {
-                const unlisten = await listenEvent(SchaltEvent.ProjectReady, () => { void fetchOrchestratorBranch() })
-                unlistenProjectReady = createSafeUnlistener(unlisten)
-            } catch (error) {
-                logger.warn('Failed to listen for project ready events:', error)
-            }
-
-            try {
-                const unlisten = await listenEvent(SchaltEvent.FileChanges, event => {
-                    if (!matchesProjectScope(event.project_path, projectPathRef.current)) {
-                        return
-                    }
-                    if (event.session_name === ORCHESTRATOR_SESSION_NAME) {
-                        setOrchestratorBranch(event.branch_info.current_branch || 'HEAD')
-                    }
-                })
-                unlistenFileChanges = createSafeUnlistener(unlisten)
-            } catch (error) {
-                logger.warn('Failed to listen for orchestrator file changes:', error)
-            }
-        }
-
-        void attach()
-
-        return () => {
-            if (unlistenProjectReady) {
-                unlistenProjectReady()
-            }
-            if (unlistenFileChanges) {
-                unlistenFileChanges()
-            }
-        }
-    }, [createSafeUnlistener])
+    const { orchestratorBranch } = useOrchestratorBranch({
+        selection,
+        projectPathRef,
+        createSafeUnlistener,
+    })
 
     const handleSelectOrchestrator = useCallback(async () => {
         await setSelection({ kind: 'orchestrator' }, false, true) // User clicked - intentional
