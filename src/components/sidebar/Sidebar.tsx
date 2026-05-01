@@ -11,7 +11,7 @@ import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useFocus } from '../../contexts/FocusContext'
 import { UnlistenFn } from '@tauri-apps/api/event'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
-import { EventPayloadMap, GitOperationPayload, OpenGitlabMrModalPayload, OpenMergeModalPayload, OpenPrModalPayload, matchesProjectScope } from '../../common/events'
+import { EventPayloadMap, GitOperationPayload, OpenMergeModalPayload, OpenPrModalPayload, matchesProjectScope } from '../../common/events'
 import { useSelection } from '../../hooks/useSelection'
 import { clearTerminalStartedTracking } from '../terminal/Terminal'
 import { useSessions } from '../../hooks/useSessions'
@@ -37,8 +37,9 @@ import { buildSessionCardActions } from './helpers/buildSessionCardActions'
 import { useSidebarCollapsePersistence } from './hooks/useSidebarCollapsePersistence'
 import { useConsolidationActions } from './hooks/useConsolidationActions'
 import { useConvertToSpecController } from './hooks/useConvertToSpecController'
+import { useGitlabMrDialogController } from './hooks/useGitlabMrDialogController'
+import { createSafeUnlistener } from './helpers/createSafeUnlistener'
 import {
-    GitlabMrDialogState,
     PrDialogState,
     PromoteVersionModalState,
     SwitchOrchestratorModalState,
@@ -182,33 +183,11 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         error: null,
     })
 
-    const [gitlabMrDialogState, setGitlabMrDialogState] = useState<GitlabMrDialogState>({
-        isOpen: false,
-        sessionName: null,
-    })
-
-    const handleOpenGitlabMrModal = useCallback((
-        sessionName: string,
-        prefill?: {
-            suggestedTitle?: string
-            suggestedBody?: string
-            suggestedBaseBranch?: string
-            suggestedSourceProject?: string
-        }
-    ) => {
-        setGitlabMrDialogState({
-            isOpen: true,
-            sessionName,
-            prefill,
-        })
-    }, [])
-
-    const handleCloseGitlabMrModal = useCallback(() => {
-        setGitlabMrDialogState({
-            isOpen: false,
-            sessionName: null,
-        })
-    }, [])
+    const {
+        state: gitlabMrDialogState,
+        open: handleOpenGitlabMrModal,
+        close: handleCloseGitlabMrModal,
+    } = useGitlabMrDialogController({ createSafeUnlistener })
 
     const handleMergeSession = useCallback(
         (sessionId: string) => {
@@ -499,21 +478,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }, []);
 
-    const createSafeUnlistener = useCallback((fn: UnlistenFn): UnlistenFn => {
-        let called = false
-        return () => {
-            if (called) return
-            called = true
-            try {
-                void Promise.resolve(fn()).catch(error => {
-                    logger.warn('Failed to unlisten sidebar event', error)
-                })
-            } catch (error) {
-                logger.warn('Failed to unlisten sidebar event', error)
-            }
-        }
-    }, [])
-
     useEffect(() => {
         let unlistenOpenPrModal: UnlistenFn | null = null
 
@@ -554,34 +518,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             }
         }
     }, [createSafeUnlistener, handleOpenPrModal, pushToast])
-
-    useEffect(() => {
-        let unlistenOpenGitlabMrModal: UnlistenFn | null = null
-
-        const attach = async () => {
-            try {
-                const unlisten = await listenEvent(SchaltEvent.OpenGitlabMrModal, (payload: OpenGitlabMrModalPayload) => {
-                    handleOpenGitlabMrModal(payload.sessionName, {
-                        suggestedTitle: payload.suggestedTitle,
-                        suggestedBody: payload.suggestedBody,
-                        suggestedBaseBranch: payload.suggestedBaseBranch,
-                        suggestedSourceProject: payload.suggestedSourceProject,
-                    })
-                })
-                unlistenOpenGitlabMrModal = createSafeUnlistener(unlisten)
-            } catch (error) {
-                logger.warn('Failed to listen for OpenGitlabMrModal events:', error)
-            }
-        }
-
-        void attach()
-
-        return () => {
-            if (unlistenOpenGitlabMrModal) {
-                unlistenOpenGitlabMrModal()
-            }
-        }
-    }, [createSafeUnlistener, handleOpenGitlabMrModal])
 
     useEffect(() => {
         let unlistenOpenMergeModal: UnlistenFn | null = null
