@@ -38,6 +38,7 @@ import { SidebarHeaderBar } from './views/SidebarHeaderBar'
 import { OrchestratorEntry } from './views/OrchestratorEntry'
 import { SidebarSearchBar } from './views/SidebarSearchBar'
 import { SidebarSessionList } from './views/SidebarSessionList'
+import { buildSessionCardActions } from './helpers/buildSessionCardActions'
 import {
     ConvertToSpecModalState,
     GitlabMrDialogState,
@@ -71,7 +72,6 @@ import { DEFAULT_AGENT } from '../../constants/agents'
 import { extractPrNumberFromUrl } from '../../utils/githubUrls'
 import { useEpics } from '../../hooks/useEpics'
 import { projectForgeAtom } from '../../store/atoms/forge'
-import { type SessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { useImprovePlanAction } from '../../hooks/useImprovePlanAction'
 import { getSessionLifecycleState } from '../../utils/sessionState'
 import { sidebarViewModeAtom } from '../../store/atoms/sidebarViewMode'
@@ -1376,84 +1376,46 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }, [setCurrentFocus, setFocusForSession, setSelection, createSafeUnlistener])
 
-    const sessionCardActions: SessionCardActions = {
-        onSelect: (sessionId) => { void handleSelectSession(sessionId) },
-        onCancel: (sessionId, hasUncommitted) => {
-            const session = sessions.find(s => s.info.session_id === sessionId)
-            if (session) {
-                const sessionDisplayName = getSessionDisplayName(session.info)
-                emitUiEvent(UiEvent.SessionAction, {
-                    action: 'cancel',
-                    sessionId,
-                    sessionName: sessionId,
-                    sessionDisplayName,
-                    branch: session.info.branch,
-                    hasUncommittedChanges: hasUncommitted,
-                })
-            }
-        },
-        onConvertToSpec: (sessionId) => {
-            const session = sessions.find(s => s.info.session_id === sessionId)
-            if (session) {
-                setConvertToDraftModal({
-                    open: true,
-                    sessionName: sessionId,
-                    projectPath: projectPathRef.current,
-                    sessionDisplayName: getSessionDisplayName(session.info),
-                    hasUncommitted: session.info.has_uncommitted_changes || false
-                })
-            }
-        },
-        onRunDraft: (sessionId) => {
-            try {
-                emitUiEvent(UiEvent.StartAgentFromSpec, { name: sessionId })
-            } catch (err) {
-                logger.error('Failed to open start modal from spec:', err)
-            }
-        },
-        onRefineSpec: (sessionId) => {
-            runRefineSpecFlow(sessionId)
-        },
-        onDeleteSpec: (sessionId) => {
-            const session = sessions.find(s => s.info.session_id === sessionId)
-            const sessionDisplayName = session ? getSessionDisplayName(session.info) : sessionId
-            emitUiEvent(UiEvent.SessionAction, {
-                action: 'delete-spec',
-                sessionId,
-                sessionName: sessionId,
-                sessionDisplayName,
-                branch: session?.info.branch,
-                hasUncommittedChanges: false,
-            })
-        },
-        onImprovePlanSpec: (sessionId) => {
-            void improvePlanAction.start(sessionId)
-        },
-        onReset: (sessionId) => {
-            void (async () => {
-                const currentSelection = selection.kind === 'session' && selection.payload === sessionId
-                    ? selection
-                    : { kind: 'session' as const, payload: sessionId }
-                await resetSession(currentSelection, terminals)
-            })()
-        },
-        onSwitchModel: (sessionId) => {
-            setSwitchModelSessionId(sessionId)
-            const session = sessions.find(s => s.info.session_id === sessionId)
-            const initialAgentType = normalizeAgentType(session?.info.original_agent_type)
-            setSwitchOrchestratorModal({ open: true, initialAgentType, targetSessionId: sessionId })
-        },
-        onCreatePullRequest: (sessionId) => { void handlePrShortcut(sessionId) },
-        onCreateGitlabMr: (sessionId) => { handleOpenGitlabMrModal(sessionId) },
-        onMerge: handleMergeSession,
-        onQuickMerge: (sessionId) => { void handleMergeShortcut(sessionId) },
-        onRename: handleRenameSession,
-        onLinkPr: (sessionId, prNumber, prUrl) => { void handleLinkPr(sessionId, prNumber, prUrl) },
-        onPostToForge: (sessionId) => {
-            setForgeWritebackSessionId(sessionId)
-        },
-        improvePlanStartingSessionId: improvePlanAction.startingSessionId,
-    }
+    const sessionCardActions = useMemo(() => buildSessionCardActions({
+        sessions,
+        selection,
+        terminals,
+        projectPathRef,
+        setConvertToDraftModal,
+        setSwitchModelSessionId,
+        setSwitchOrchestratorModal,
+        setForgeWritebackSessionId,
+        runRefineSpecFlow,
+        improvePlanAction,
+        resetSession,
+        normalizeAgentType,
+        handleSelectSession,
+        handlePrShortcut,
+        handleOpenGitlabMrModal,
+        handleMergeSession,
+        handleMergeShortcut,
+        handleRenameSession,
+        handleLinkPr,
+    }), [
+        sessions,
+        selection,
+        terminals,
+        setConvertToDraftModal,
+        setSwitchModelSessionId,
+        setSwitchOrchestratorModal,
+        setForgeWritebackSessionId,
+        runRefineSpecFlow,
+        improvePlanAction,
+        resetSession,
+        normalizeAgentType,
+        handleSelectSession,
+        handlePrShortcut,
+        handleOpenGitlabMrModal,
+        handleMergeSession,
+        handleMergeShortcut,
+        handleRenameSession,
+        handleLinkPr,
+    ])
 
     return (
         <div
