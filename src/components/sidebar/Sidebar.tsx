@@ -39,6 +39,7 @@ import { SidebarModalsTrailer } from './views/SidebarModalsTrailer'
 import { SidebarHeaderBar } from './views/SidebarHeaderBar'
 import { OrchestratorEntry } from './views/OrchestratorEntry'
 import { SidebarSearchBar } from './views/SidebarSearchBar'
+import { SidebarVersionGroupRow } from './views/SidebarVersionGroupRow'
 import {
     ConvertToSpecModalState,
     GitlabMrDialogState,
@@ -48,7 +49,6 @@ import {
 } from './helpers/modalState'
 
 export { buildConsolidationGroupDetail }
-import { SessionVersionGroup } from './SessionVersionGroup'
 import { CollapsedSidebarRail } from './CollapsedSidebarRail'
 import { useSessionManagement } from '../../hooks/useSessionManagement'
 import { PrPreviewResponse, PrCreateOptions } from '../modals/PrSessionModal'
@@ -1560,45 +1560,20 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                 globalIndex += group.versions.length
 
                                 return (
-                                    <SessionVersionGroup
+                                    <SidebarVersionGroupRow
                                         key={group.id}
                                         group={group}
-                                        selection={selection}
                                         startIndex={groupStartIndex}
-
+                                        selection={selection}
                                         hasFollowUpMessage={(sessionId: string) => sessionsWithNotifications.has(sessionId)}
-                                        onSelectBestVersion={handleSelectBestVersion}
                                         resettingSelection={resettingSelection}
                                         isSessionRunning={isSessionRunning}
                                         isMergeDisabled={isSessionMerging}
                                         getMergeStatus={getMergeStatus}
                                         isSessionBusy={isSessionMutating}
-                                        onConsolidate={(group) => {
-                                            const detail = buildConsolidationGroupDetail(group)
-                                            if (detail) {
-                                                emitUiEvent(UiEvent.ConsolidateVersionGroup, detail)
-                                            }
-                                        }}
-                                        onTriggerConsolidationJudge={(roundId, early) => handleTriggerConsolidationJudge(roundId, early)}
-                                        onConfirmConsolidationWinner={(roundId, winnerSessionId) => handleConfirmConsolidationWinner(roundId, winnerSessionId)}
-                                        onTerminateAll={(group) => {
-                                            const runningSessions = group.versions
-                                                .filter(v => v.session.info.session_state === 'running')
-                                                .map(v => ({
-                                                    id: v.session.info.session_id,
-                                                    name: v.session.info.session_id,
-                                                    displayName: getSessionDisplayName(v.session.info),
-                                                    branch: v.session.info.branch,
-                                                    hasUncommittedChanges: Boolean(v.session.info.has_uncommitted_changes),
-                                                }))
-
-                                            if (runningSessions.length === 0) return
-
-                                            emitUiEvent(UiEvent.TerminateVersionGroup, {
-                                                baseName: group.baseName,
-                                                sessions: runningSessions,
-                                            })
-                                        }}
+                                        onSelectBestVersion={handleSelectBestVersion}
+                                        onTriggerConsolidationJudge={handleTriggerConsolidationJudge}
+                                        onConfirmConsolidationWinner={handleConfirmConsolidationWinner}
                                     />
                                 )
                             }
