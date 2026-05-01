@@ -257,6 +257,12 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     return state === 'running'
   }).length
   const canConsolidate = !hasConsolidationVersion && activeVersionCount >= 2
+  // Smoke-test stuck state: every candidate finished merging (idle in terminal,
+  // attention_kind='idle') but no judge has been spawned yet, so the user has
+  // no obvious next-step. Surface a labeled banner with a primary action.
+  const allCandidatesIdleNoJudge = consolidationCandidates.length > 0
+    && judgeSessions.length === 0
+    && consolidationCandidates.every(v => v.session.info.attention_kind === 'idle')
   const hasRunning = group.versions.some(v => v.session.info.session_state === 'running')
   const sourceVersionCount = Math.max(sourceVersions.length, 1)
   const primaryVersionIndex = primaryVersion
@@ -353,12 +359,13 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     title: string,
     icon: ReactNode,
     onClick: () => void,
-    options?: { disabled?: boolean; tone?: HeaderStatusTone; busy?: boolean; dimmedWhenBlocked?: boolean },
+    options?: { disabled?: boolean; tone?: HeaderStatusTone; busy?: boolean; dimmedWhenBlocked?: boolean; label?: string },
   ) => {
     const tone = options?.tone ?? 'neutral'
     const isBusy = options?.busy === true
     const isBlockedByOtherAction = options?.dimmedWhenBlocked === true
     const isDisabled = options?.disabled === true || isBusy || isBlockedByOtherAction
+    const label = options?.label
     return (
       <button
         type="button"
@@ -367,14 +374,21 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
         aria-busy={isBusy}
         title={title}
         data-testid={testId}
-        className="relative inline-flex h-6 w-6 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        className={clsx(
+          'relative inline-flex items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+          label ? 'h-6 gap-1.5 px-2' : 'h-6 w-6',
+        )}
         style={{
           backgroundColor: 'var(--color-bg-hover)',
           color: headerStatusToneStyles[tone].color,
           borderColor: 'var(--color-border-subtle)',
+          ...(label ? sessionText.badge : null),
         }}
       >
-        <span className={clsx('inline-flex items-center justify-center', isBusy && 'invisible')}>{icon}</span>
+        <span className={clsx('inline-flex items-center justify-center gap-1.5', isBusy && 'invisible')}>
+          {icon}
+          {label && <span>{label}</span>}
+        </span>
         {isBusy && (
           <span
             data-testid="consolidation-action-spinner"
@@ -543,6 +557,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                     tone: 'amber',
                     busy: busyActionId === 'consolidate',
                     dimmedWhenBlocked: busyActionId !== null && busyActionId !== 'consolidate',
+                    label: 'Consolidate versions',
                   },
                 )}
                 {activeRoundId && onTriggerConsolidationJudge && renderHeaderAction(
@@ -557,6 +572,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                     tone: 'amber',
                     busy: busyActionId === 'trigger-judge',
                     dimmedWhenBlocked: busyActionId !== null && busyActionId !== 'trigger-judge',
+                    label: latestCompletedJudge ? 'Re-run synthesis judge' : 'Run synthesis judge',
                   },
                 )}
                 {activeRoundId && confirmWinnerSessionId && onConfirmConsolidationWinner && renderHeaderAction(
@@ -568,6 +584,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                     tone: 'green',
                     busy: busyActionId === 'confirm-winner-header',
                     dimmedWhenBlocked: busyActionId !== null && busyActionId !== 'confirm-winner-header',
+                    label: isSynthesisJudgeReady ? `Promote ${group.baseName}` : 'Confirm winner',
                   },
                 )}
                 {hasRunning && onTerminateAll && renderHeaderAction(
@@ -579,6 +596,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
                     tone: 'red',
                     busy: busyActionId === 'terminate-all',
                     dimmedWhenBlocked: busyActionId !== null && busyActionId !== 'terminate-all',
+                    label: 'Terminate',
                   },
                 )}
               </div>
@@ -588,6 +606,62 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
 
         {isExpanded && (
           <div className="border-t px-3 pb-3 pt-2" style={{ borderTopColor: 'rgb(var(--color-border-subtle-rgb) / 0.7)' }}>
+            {allCandidatesIdleNoJudge && activeRoundId && onTriggerConsolidationJudge && (
+              <div
+                data-testid="candidates-idle-no-judge-banner"
+                className="mb-3 flex items-center justify-between gap-3 rounded-md border px-2.5 py-2"
+                style={{
+                  ...sessionText.body,
+                  borderColor: 'var(--color-accent-amber-border)',
+                  backgroundColor: 'var(--color-accent-amber-bg)',
+                  color: 'var(--color-accent-amber-light)',
+                }}
+              >
+                <span>
+                  All candidates idle. Run the synthesis judge to pick a winner.
+                </span>
+                {(() => {
+                  const isBannerBusy = busyActionId === 'trigger-judge'
+                  const isBannerDisabled = busyActionId !== null
+                  return (
+                    <button
+                      type="button"
+                      data-testid="candidates-idle-no-judge-banner-button"
+                      disabled={isBannerDisabled}
+                      aria-busy={isBannerBusy}
+                      title="Run synthesis judge"
+                      className="relative inline-flex h-7 items-center justify-center gap-1.5 rounded border px-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{
+                        ...sessionText.badge,
+                        backgroundColor: 'var(--color-accent-amber-bg)',
+                        color: 'var(--color-accent-amber-light)',
+                        borderColor: 'var(--color-accent-amber-border)',
+                      }}
+                      onClick={() => runConsolidationAction('trigger-judge', () => onTriggerConsolidationJudge(
+                        activeRoundId,
+                        consolidationCandidates.some(candidate => !candidate.session.info.consolidation_report),
+                      ))}
+                    >
+                      <span className={clsx('inline-flex items-center justify-center gap-1.5', isBannerBusy && 'invisible')}>
+                        <VscRefresh className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>Run synthesis judge</span>
+                      </span>
+                      {isBannerBusy && (
+                        <span
+                          data-testid="consolidation-action-spinner"
+                          aria-hidden="true"
+                          className="absolute h-3.5 w-3.5 rounded-full border-2 border-solid animate-spin"
+                          style={{
+                            borderColor: 'var(--color-accent-amber-light)',
+                            borderTopColor: 'transparent',
+                          }}
+                        />
+                      )}
+                    </button>
+                  )
+                })()}
+              </div>
+            )}
             {sourceListRows.length > 0 && (
               <div data-testid="version-group-source-list" className="space-y-1.5">
                 <div className="space-y-1.5">

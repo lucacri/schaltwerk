@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { SessionVersionGroup } from './SessionVersionGroup'
 import type { SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
@@ -283,6 +283,201 @@ describe('SessionVersionGroup affordance state table', () => {
       }
     })
   }
+})
+
+// Wave A: header action buttons must render their label text inline, not just
+// as a tooltip. The user couldn't find the trigger-judge button in the smoke
+// test because it was icon-only.
+describe('SessionVersionGroup header action labels are visible', () => {
+  it('renders "Run synthesis judge" label text inline when candidates are running', () => {
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup([
+            makeSource('src_v1', 1),
+            makeSource('src_v2', 2),
+            makeCandidate('src-merge_v1', 1, { idle: true }),
+            makeCandidate('src-merge_v2', 2, { idle: true }),
+            makeCandidate('src-merge_v3', 3, { idle: true }),
+          ])}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...callbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+    const button = screen.getByTestId('trigger-consolidation-judge-button')
+    expect(button.textContent).toContain('Run synthesis judge')
+  })
+
+  it('renders "Re-run synthesis judge" label text once a judge has filed', () => {
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup([
+            makeSource('src_v1', 1),
+            makeSource('src_v2', 2),
+            makeCandidate('src-merge_v1', 1, { idle: true }),
+            makeJudge('src-judge', { recommendedSessionId: 'src-merge_v1', baseSessionId: 'src_v1' }),
+          ])}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...callbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+    const button = screen.getByTestId('trigger-consolidation-judge-button')
+    expect(button.textContent).toContain('Re-run synthesis judge')
+  })
+
+  it('renders "Consolidate versions" label text inline on the consolidate button', () => {
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup([
+            makeSource('src_v1', 1),
+            makeSource('src_v2', 2),
+          ])}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...callbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+    const button = screen.getByTestId('consolidate-versions-button')
+    expect(button.textContent).toContain('Consolidate versions')
+  })
+
+  it('renders "Terminate" label text inline on the terminate-all button', () => {
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup([
+            makeSource('src_v1', 1),
+            makeSource('src_v2', 2),
+          ])}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...callbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+    const button = screen.getByTestId('terminate-group-button')
+    expect(button.textContent).toContain('Terminate')
+  })
+
+  it('renders confirm-winner button label text once judge has filed', () => {
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup([
+            makeSource('src_v1', 1),
+            makeSource('src_v2', 2),
+            makeCandidate('src-merge_v1', 1, { idle: true }),
+            makeJudge('src-judge', { recommendedSessionId: 'src-merge_v1', baseSessionId: 'src_v1' }),
+          ])}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...callbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+    const button = screen.getByTestId('confirm-consolidation-winner-button')
+    expect(button.textContent).toMatch(/Promote|Confirm/)
+  })
+})
+
+// Wave C: when all candidates are idle and no judge has run yet, the user is
+// stuck — render an explicit banner pointing at the next action.
+describe('SessionVersionGroup all-candidates-idle-no-judge nudge banner', () => {
+  it('renders the nudge banner with prominent judge-trigger button', () => {
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup([
+            makeSource('src_v1', 1),
+            makeSource('src_v2', 2),
+            makeCandidate('src-merge_v1', 1, { idle: true }),
+            makeCandidate('src-merge_v2', 2, { idle: true }),
+            makeCandidate('src-merge_v3', 3, { idle: true }),
+          ])}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...callbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+    const banner = screen.getByTestId('candidates-idle-no-judge-banner')
+    expect(banner.textContent).toContain('All candidates idle')
+    expect(banner.textContent).toContain('Run the synthesis judge')
+
+    const bannerButton = screen.getByTestId('candidates-idle-no-judge-banner-button')
+    expect(bannerButton.textContent).toContain('Run synthesis judge')
+  })
+
+  it('does NOT render the banner when at least one candidate is still running', () => {
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup([
+            makeSource('src_v1', 1),
+            makeSource('src_v2', 2),
+            makeCandidate('src-merge_v1', 1, { idle: true }),
+            makeCandidate('src-merge_v2', 2, { idle: false }),
+          ])}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...callbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+    expect(screen.queryByTestId('candidates-idle-no-judge-banner')).toBeNull()
+  })
+
+  it('does NOT render the banner once a judge has been spawned', () => {
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup([
+            makeSource('src_v1', 1),
+            makeSource('src_v2', 2),
+            makeCandidate('src-merge_v1', 1, { idle: true }),
+            makeCandidate('src-merge_v2', 2, { idle: true }),
+            makeJudge('src-judge'),
+          ])}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...callbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+    expect(screen.queryByTestId('candidates-idle-no-judge-banner')).toBeNull()
+  })
+
+  it('clicking the banner button invokes onTriggerConsolidationJudge with the active round id', () => {
+    const onTriggerConsolidationJudge = vi.fn()
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={baseGroup([
+            makeSource('src_v1', 1),
+            makeSource('src_v2', 2),
+            makeCandidate('src-merge_v1', 1, { idle: true }),
+            makeCandidate('src-merge_v2', 2, { idle: true }),
+          ])}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          {...callbacks}
+          onTriggerConsolidationJudge={onTriggerConsolidationJudge}
+        />
+      </SessionCardActionsProvider>
+    )
+    const bannerButton = screen.getByTestId('candidates-idle-no-judge-banner-button')
+    act(() => {
+      bannerButton.click()
+    })
+    expect(onTriggerConsolidationJudge).toHaveBeenCalledWith('round-7b43', expect.any(Boolean))
+  })
 })
 
 // Property-level invariant: any non-terminal round (activeRoundId truthy and round not confirmed)
