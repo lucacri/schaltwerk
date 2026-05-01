@@ -36,6 +36,7 @@ import { useSidebarBackendEvents } from './hooks/useSidebarBackendEvents'
 import { useSessionScrollIntoView } from './hooks/useSessionScrollIntoView'
 import { useSidebarSelectionMemory } from './hooks/useSidebarSelectionMemory'
 import { useSidebarKeyboardShortcuts } from './hooks/useSidebarKeyboardShortcuts'
+import { buildSidebarModalSlots } from './helpers/buildSidebarModalSlots'
 import {
     SwitchOrchestratorModalState,
 } from './helpers/modalState'
@@ -680,109 +681,51 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 onExpandRequest={onExpandRequest}
             />
 
-            <SidebarModalsTrailer
-                epic={{
-                    editing: editingEpic,
-                    deleteTarget: deleteEpicTarget,
-                    deleteLoading: deleteEpicLoading,
-                    onCloseEdit: () => setEditingEpic(null),
-                    onSubmitEdit: async ({ name, color }) => {
-                        if (!editingEpic) {
-                            throw new Error('No epic selected')
-                        }
-                        await updateEpic(editingEpic.id, name, color)
-                    },
-                    onCloseDelete: () => {
-                        if (deleteEpicLoading) return
-                        setDeleteEpicTarget(null)
-                    },
-                    onConfirmDelete: () => {
-                        if (!deleteEpicTarget || deleteEpicLoading) return
-                        void (async () => {
-                            setDeleteEpicLoading(true)
-                            try {
-                                await deleteEpic(deleteEpicTarget.id)
-                                setDeleteEpicTarget(null)
-                            } finally {
-                                setDeleteEpicLoading(false)
-                            }
-                        })()
-                    },
-                }}
-                convertToSpec={{
-                    state: convertToSpecModal,
-                    onClose: closeConvertToSpecModal,
-                    onSuccess: (newSpecName) => {
-                        if (convertToSpecModal.sessionName) {
-                            optimisticallyConvertSessionToSpec(convertToSpecModal.sessionName)
-                        }
-                        if (newSpecName) {
-                            void setSelection(
-                                {
-                                    kind: 'session',
-                                    payload: newSpecName,
-                                    sessionState: 'spec',
-                                },
-                                true,
-                                true,
-                            )
-                        }
-                    },
-                }}
-                promote={{
-                    state: promoteVersionModal,
-                    onClose: closePromoteVersionModal,
-                    onConfirm: confirmPromoteVersionModal,
-                }}
-                merge={{
-                    state: mergeDialogState,
-                    commitDraft: activeMergeCommitDraft,
-                    onClose: closeMergeDialog,
-                    onCommitMessageChange: updateActiveMergeCommitDraft,
-                    onConfirm: (mode, commitMessage) => {
-                        if (mergeDialogState.sessionName) {
-                            void confirmMerge(mergeDialogState.sessionName, mode, commitMessage)
-                        }
-                    },
-                    onResolveInAgentSession: () => { void handleResolveMergeInAgentSession() },
-                    autoCancelEnabled: autoCancelAfterMerge,
-                    onToggleAutoCancel: (next) => { void updateAutoCancelAfterMerge(next) },
-                }}
-                pr={{
-                    state: prDialogState,
-                    onClose: handleClosePrModal,
-                    onConfirm: (options) => { void handleConfirmPr(options) },
-                    autoCancelEnabled: autoCancelAfterPr,
-                    onToggleAutoCancel: (next) => { void updateAutoCancelAfterPr(next) },
-                }}
-                gitlabMr={{
-                    state: gitlabMrDialogState,
-                    onClose: handleCloseGitlabMrModal,
-                }}
-                switchOrchestrator={{
-                    state: switchOrchestratorModal,
-                    onClose: () => {
-                        setSwitchOrchestratorModal({ open: false })
-                        setSwitchModelSessionId(null)
-                    },
-                    onSwitch: async ({ agentType }) => {
-                        const targetSelection = switchModelSessionId
-                            ? { kind: 'session' as const, payload: switchModelSessionId }
-                            : selection
-
-                        await switchModel(agentType, targetSelection, terminals, clearTerminalTracking, clearTerminalStartedTracking, switchOrchestratorModal.initialAgentType)
-
-                        setSwitchOrchestratorModal({ open: false })
-                        setSwitchModelSessionId(null)
-                    },
-                }}
-                forgeWriteback={{
-                    sessionId: forgeWritebackSessionId,
-                    sessions,
-                    forgeIntegration,
-                    onClose: () => setForgeWritebackSessionId(null),
-                }}
-            />
+            <SidebarModalsTrailer {...buildSidebarModalSlots({
+                editingEpic,
+                setEditingEpic,
+                deleteEpicTarget,
+                setDeleteEpicTarget,
+                deleteEpicLoading,
+                setDeleteEpicLoading,
+                updateEpic,
+                deleteEpic,
+                convertToSpecModal,
+                closeConvertToSpecModal,
+                optimisticallyConvertSessionToSpec,
+                setSelection,
+                promoteVersionModal,
+                closePromoteVersionModal,
+                confirmPromoteVersionModal,
+                mergeDialogState,
+                activeMergeCommitDraft,
+                closeMergeDialog,
+                updateActiveMergeCommitDraft,
+                confirmMerge,
+                handleResolveMergeInAgentSession,
+                autoCancelAfterMerge,
+                updateAutoCancelAfterMerge,
+                prDialogState,
+                handleClosePrModal,
+                handleConfirmPr,
+                autoCancelAfterPr,
+                updateAutoCancelAfterPr,
+                gitlabMrDialogState,
+                handleCloseGitlabMrModal,
+                switchOrchestratorModal,
+                setSwitchOrchestratorModal,
+                switchModelSessionId,
+                setSwitchModelSessionId,
+                selection,
+                terminals,
+                clearTerminalTracking,
+                clearTerminalStartedTracking,
+                switchModel,
+                forgeWritebackSessionId,
+                setForgeWritebackSessionId,
+                sessions,
+                forgeIntegration,
+            })} />
         </div>
     )
 });
