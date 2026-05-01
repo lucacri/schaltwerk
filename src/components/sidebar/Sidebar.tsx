@@ -26,11 +26,6 @@ import {
     splitVersionGroupsBySection,
     type SidebarSectionKey,
 } from './helpers/versionGroupings'
-import {
-    DEFAULT_SECTION_COLLAPSE_STATE,
-    normalizeSectionCollapseState,
-    type SidebarSectionCollapseState,
-} from './helpers/sectionCollapse'
 import { createSelectionMemoryBuckets } from './helpers/selectionMemory'
 import { buildConsolidationGroupDetail } from './helpers/consolidationGroupDetail'
 import { SidebarModalsTrailer } from './views/SidebarModalsTrailer'
@@ -39,6 +34,7 @@ import { OrchestratorEntry } from './views/OrchestratorEntry'
 import { SidebarSearchBar } from './views/SidebarSearchBar'
 import { SidebarSessionList } from './views/SidebarSessionList'
 import { buildSessionCardActions } from './helpers/buildSessionCardActions'
+import { useSidebarCollapsePersistence } from './hooks/useSidebarCollapsePersistence'
 import {
     ConvertToSpecModalState,
     GitlabMrDialogState,
@@ -144,7 +140,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const [deleteEpicTarget, setDeleteEpicTarget] = useState<Epic | null>(null)
     const [deleteEpicLoading, setDeleteEpicLoading] = useState(false)
     const [epicMenuOpenId, setEpicMenuOpenId] = useState<string | null>(null)
-    const [collapsedEpicIds, setCollapsedEpicIds] = useState<Record<string, boolean>>({})
     const inlineDiffDefault = useAtomValue(inlineSidebarDefaultPreferenceAtom)
     const projectPathRef = useRef(projectPath)
 
@@ -439,96 +434,13 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
       return selectionMemoryRef.current.get(key)!;
     }, [projectPath]);
 
-    const epicCollapseStorageKey = useMemo(
-        () => (projectPath ? `schaltwerk:epic-collapse:${projectPath}` : null),
-        [projectPath],
-    )
-    const sectionCollapseStorageKey = useMemo(
-        () => (projectPath ? `schaltwerk:sidebar-sections:${projectPath}` : null),
-        [projectPath],
-    )
-    const [collapsedSections, setCollapsedSections] = useState<SidebarSectionCollapseState>(DEFAULT_SECTION_COLLAPSE_STATE)
-
-    useEffect(() => {
-        if (!epicCollapseStorageKey) {
-            setCollapsedEpicIds({})
-            return
-        }
-        try {
-            const raw = localStorage.getItem(epicCollapseStorageKey)
-            if (!raw) {
-                setCollapsedEpicIds({})
-                return
-            }
-            const parsed = JSON.parse(raw) as Record<string, boolean>
-            setCollapsedEpicIds(parsed ?? {})
-        } catch (err) {
-            logger.warn('[Sidebar] Failed to load epic collapse state, resetting:', err)
-            setCollapsedEpicIds({})
-        }
-    }, [epicCollapseStorageKey])
-
-    useEffect(() => {
-        if (!epicCollapseStorageKey) {
-            return
-        }
-        try {
-            localStorage.setItem(epicCollapseStorageKey, JSON.stringify(collapsedEpicIds))
-        } catch (err) {
-            logger.warn('[Sidebar] Failed to persist epic collapse state:', err)
-        }
-    }, [epicCollapseStorageKey, collapsedEpicIds])
-
-    useEffect(() => {
-        if (!sectionCollapseStorageKey) {
-            setCollapsedSections(DEFAULT_SECTION_COLLAPSE_STATE)
-            return
-        }
-        try {
-            const raw = localStorage.getItem(sectionCollapseStorageKey)
-            if (!raw) {
-                setCollapsedSections(DEFAULT_SECTION_COLLAPSE_STATE)
-                return
-            }
-            setCollapsedSections(normalizeSectionCollapseState(JSON.parse(raw)))
-        } catch (err) {
-            logger.warn('[Sidebar] Failed to load section collapse state, resetting:', err)
-            setCollapsedSections(DEFAULT_SECTION_COLLAPSE_STATE)
-        }
-    }, [sectionCollapseStorageKey])
-
-    useEffect(() => {
-        if (!sectionCollapseStorageKey) {
-            return
-        }
-        try {
-            localStorage.setItem(sectionCollapseStorageKey, JSON.stringify(collapsedSections))
-        } catch (err) {
-            logger.warn('[Sidebar] Failed to persist section collapse state:', err)
-        }
-    }, [sectionCollapseStorageKey, collapsedSections])
-
-    const getCollapsedEpicKey = useCallback((section: SidebarSectionKey, epicId: string) => `${section}:${epicId}`, [])
-
-    const toggleEpicCollapsed = useCallback((section: SidebarSectionKey, epicId: string) => {
-        const key = getCollapsedEpicKey(section, epicId)
-        setCollapsedEpicIds((prev) => {
-            const next = { ...prev }
-            if (next[key]) {
-                delete next[key]
-            } else {
-                next[key] = true
-            }
-            return next
-        })
-    }, [getCollapsedEpicKey])
-
-    const toggleSectionCollapsed = useCallback((section: SidebarSectionKey) => {
-        setCollapsedSections((prev) => ({
-            ...prev,
-            [section]: !prev[section],
-        }))
-    }, [])
+    const {
+        collapsedEpicIds,
+        collapsedSections,
+        getCollapsedEpicKey,
+        toggleEpicCollapsed,
+        toggleSectionCollapsed,
+    } = useSidebarCollapsePersistence(projectPath)
 
     const versionGroups = useMemo(() => groupSessionsByVersion(sessions), [sessions])
     const sectionGroups = useMemo(() => splitVersionGroupsBySection(versionGroups), [versionGroups])
