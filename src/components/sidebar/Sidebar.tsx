@@ -29,6 +29,11 @@ import {
     splitVersionGroupsBySection,
     type SidebarSectionKey,
 } from './helpers/versionGroupings'
+import {
+    DEFAULT_SECTION_COLLAPSE_STATE,
+    normalizeSectionCollapseState,
+    type SidebarSectionCollapseState,
+} from './helpers/sectionCollapse'
 import { SessionVersionGroup } from './SessionVersionGroup'
 import { CollapsedSidebarRail } from './CollapsedSidebarRail'
 import { PromoteVersionConfirmation } from '../modals/PromoteVersionConfirmation'
@@ -89,8 +94,6 @@ interface SidebarProps {
     onToggleSidebar?: () => void
 }
 
-type SidebarSectionCollapseState = Record<SidebarSectionKey, boolean>
-
 export const buildConsolidationGroupDetail = (group: SessionVersionGroupType) => {
     const sourceVersions = group.versions.filter(version => !version.session.info.is_consolidation)
     const firstSession = sourceVersions[0]?.session?.info
@@ -120,28 +123,11 @@ export const buildConsolidationGroupDetail = (group: SessionVersionGroupType) =>
     }
 }
 
-const DEFAULT_SECTION_COLLAPSE_STATE: SidebarSectionCollapseState = {
-    specs: false,
-    running: false,
-}
-
 const createSelectionMemoryBuckets = (): Record<FilterMode, SelectionMemoryEntry> => ({
     [FilterMode.All]: { lastSelection: null, lastSessions: [] },
     [FilterMode.Spec]: { lastSelection: null, lastSessions: [] },
     [FilterMode.Running]: { lastSelection: null, lastSessions: [] },
 })
-
-const normalizeSectionCollapseState = (value: unknown): SidebarSectionCollapseState => {
-    if (!value || typeof value !== 'object') {
-        return DEFAULT_SECTION_COLLAPSE_STATE
-    }
-
-    const record = value as Partial<Record<SidebarSectionKey, boolean>>
-    return {
-        specs: record.specs === true,
-        running: record.running === true,
-    }
-}
 
 export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], onSwitchToProject, onCycleNextProject, onCyclePrevProject, isCollapsed = false, onExpandRequest, onToggleSidebar }: SidebarProps) {
     const { t } = useTranslation()
