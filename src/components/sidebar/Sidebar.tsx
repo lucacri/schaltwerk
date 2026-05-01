@@ -18,7 +18,6 @@ import { clearTerminalStartedTracking } from '../terminal/Terminal'
 import { useSessions } from '../../hooks/useSessions'
 import { captureSelectionSnapshot, SelectionMemoryEntry } from '../../utils/selectionMemory'
 import { computeSelectionCandidate } from '../../utils/selectionPostMerge'
-import { ConvertToSpecConfirmation } from '../modals/ConvertToSpecConfirmation'
 import { FilterMode } from '../../types/sessionFilters'
 import { isSpec } from '../../utils/sessionFilters'
 import { theme } from '../../common/theme'
@@ -36,16 +35,20 @@ import {
 } from './helpers/sectionCollapse'
 import { createSelectionMemoryBuckets } from './helpers/selectionMemory'
 import { buildConsolidationGroupDetail } from './helpers/consolidationGroupDetail'
+import { SidebarModalsTrailer } from './views/SidebarModalsTrailer'
+import {
+    ConvertToSpecModalState,
+    GitlabMrDialogState,
+    PrDialogState,
+    PromoteVersionModalState,
+    SwitchOrchestratorModalState,
+} from './helpers/modalState'
 
 export { buildConsolidationGroupDetail }
 import { SessionVersionGroup } from './SessionVersionGroup'
 import { CollapsedSidebarRail } from './CollapsedSidebarRail'
-import { PromoteVersionConfirmation } from '../modals/PromoteVersionConfirmation'
 import { useSessionManagement } from '../../hooks/useSessionManagement'
-import { SwitchOrchestratorModal } from '../modals/SwitchOrchestratorModal'
-import { MergeSessionModal } from '../modals/MergeSessionModal'
-import { PrSessionModal, PrPreviewResponse, PrCreateOptions } from '../modals/PrSessionModal'
-import { GitlabMrSessionModal } from '../modals/GitlabMrSessionModal'
+import { PrPreviewResponse, PrCreateOptions } from '../modals/PrSessionModal'
 import { useSessionPrShortcut } from '../../hooks/useSessionPrShortcut'
 import { useShortcutDisplay } from '../../keyboardShortcuts/useShortcutDisplay'
 import { KeyboardShortcutAction } from '../../keyboardShortcuts/config'
@@ -69,8 +72,6 @@ import { openMergeDialogActionAtom } from '../../store/atoms/sessions'
 import { useUpdateSessionFromParent } from '../../hooks/useUpdateSessionFromParent'
 import { DEFAULT_AGENT } from '../../constants/agents'
 import { extractPrNumberFromUrl } from '../../utils/githubUrls'
-import { EpicModal } from '../modals/EpicModal'
-import { ConfirmModal } from '../modals/ConfirmModal'
 import { useEpics } from '../../hooks/useEpics'
 import { EpicGroupHeader } from './EpicGroupHeader'
 import { SidebarSectionHeader } from './SidebarSectionHeader'
@@ -82,7 +83,6 @@ import { getSessionLifecycleState } from '../../utils/sessionState'
 import { sidebarViewModeAtom } from '../../store/atoms/sidebarViewMode'
 import { KanbanView } from './KanbanView'
 import { KanbanSessionRow } from './KanbanSessionRow'
-import { ForgeWritebackModal } from '../forge/ForgeWritebackModal'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
 
 // Removed legacy terminal-stuck idle handling; we rely on last-edited timestamps only
@@ -169,7 +169,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             setOrchestratorBranch("main")
         }
     })
-    const [switchOrchestratorModal, setSwitchOrchestratorModal] = useState<{ open: boolean; initialAgentType?: AgentType; targetSessionId?: string | null }>({ open: false })
+    const [switchOrchestratorModal, setSwitchOrchestratorModal] = useState<SwitchOrchestratorModalState>({ open: false })
     const [switchModelSessionId, setSwitchModelSessionId] = useState<string | null>(null)
     const orchestratorResetting = resettingSelection?.kind === 'orchestrator'
     const orchestratorRunning = isSessionRunning('orchestrator')
@@ -186,20 +186,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const { updateAllSessionsFromParent } = useUpdateSessionFromParent()
     const openMergeDialogWithPrefill = useSetAtom(openMergeDialogActionAtom)
 
-    const [prDialogState, setPrDialogState] = useState<{
-        isOpen: boolean
-        sessionName: string | null
-        status: 'idle' | 'loading' | 'ready' | 'running'
-        preview: PrPreviewResponse | null
-        prefill?: {
-            suggestedTitle?: string
-            suggestedBody?: string
-            suggestedBaseBranch?: string
-            suggestedPrBranchName?: string
-            suggestedMode?: 'squash' | 'reapply'
-        }
-        error: string | null
-    }>({
+    const [prDialogState, setPrDialogState] = useState<PrDialogState>({
         isOpen: false,
         sessionName: null,
         status: 'idle',
@@ -207,16 +194,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         error: null,
     })
 
-    const [gitlabMrDialogState, setGitlabMrDialogState] = useState<{
-        isOpen: boolean
-        sessionName: string | null
-        prefill?: {
-            suggestedTitle?: string
-            suggestedBody?: string
-            suggestedBaseBranch?: string
-            suggestedSourceProject?: string
-        }
-    }>({
+    const [gitlabMrDialogState, setGitlabMrDialogState] = useState<GitlabMrDialogState>({
         isOpen: false,
         sessionName: null,
     })
@@ -346,24 +324,14 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         onOpenModal: handleOpenPrModal,
     })
 
-    const [convertToSpecModal, setConvertToDraftModal] = useState<{ 
-        open: boolean; 
-        sessionName: string; 
-        projectPath?: string | null;
-        sessionDisplayName?: string;
-        hasUncommitted: boolean 
-    }>({
+    const [convertToSpecModal, setConvertToDraftModal] = useState<ConvertToSpecModalState>({
         open: false,
         sessionName: '',
         projectPath: null,
         hasUncommitted: false
     })
-    
-    const [promoteVersionModal, setPromoteVersionModal] = useState<{
-        open: boolean
-        versionGroup: SessionVersionGroupType | null
-        selectedSessionId: string
-    }>({
+
+    const [promoteVersionModal, setPromoteVersionModal] = useState<PromoteVersionModalState>({
         open: false,
         versionGroup: null,
         selectedSessionId: ''
@@ -1946,164 +1914,115 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 )}
             </div>
 
-            <EpicModal
-                open={Boolean(editingEpic)}
-                mode="edit"
-                initialName={editingEpic?.name ?? ''}
-                initialColor={editingEpic?.color ?? null}
-                onClose={() => setEditingEpic(null)}
-                onSubmit={async ({ name, color }) => {
-                    if (!editingEpic) {
-                        throw new Error('No epic selected')
-                    }
-                    await updateEpic(editingEpic.id, name, color)
-                }}
-            />
-
-            <ConfirmModal
-                open={Boolean(deleteEpicTarget)}
-                title={t.deleteEpicDialog.title.replace('{name}', deleteEpicTarget?.name ?? '')}
-                body={
-                    <div style={{ color: 'var(--color-text-secondary)', fontSize: theme.fontSize.body }}>
-                        {t.deleteEpicDialog.body} <strong>{t.deleteEpicDialog.ungrouped}</strong>.
-                    </div>
-                }
-                confirmText={t.deleteEpicDialog.confirm}
-                cancelText={t.settings.common.cancel}
-                variant="danger"
-                loading={deleteEpicLoading}
-                onCancel={() => {
-                    if (deleteEpicLoading) {
-                        return
-                    }
-                    setDeleteEpicTarget(null)
-                }}
-                onConfirm={() => {
-                    if (!deleteEpicTarget || deleteEpicLoading) {
-                        return
-                    }
-                    void (async () => {
-                        setDeleteEpicLoading(true)
-                        try {
-                            await deleteEpic(deleteEpicTarget.id)
-                            setDeleteEpicTarget(null)
-                        } finally {
-                            setDeleteEpicLoading(false)
+            <SidebarModalsTrailer
+                epic={{
+                    editing: editingEpic,
+                    deleteTarget: deleteEpicTarget,
+                    deleteLoading: deleteEpicLoading,
+                    onCloseEdit: () => setEditingEpic(null),
+                    onSubmitEdit: async ({ name, color }) => {
+                        if (!editingEpic) {
+                            throw new Error('No epic selected')
                         }
-                    })()
+                        await updateEpic(editingEpic.id, name, color)
+                    },
+                    onCloseDelete: () => {
+                        if (deleteEpicLoading) return
+                        setDeleteEpicTarget(null)
+                    },
+                    onConfirmDelete: () => {
+                        if (!deleteEpicTarget || deleteEpicLoading) return
+                        void (async () => {
+                            setDeleteEpicLoading(true)
+                            try {
+                                await deleteEpic(deleteEpicTarget.id)
+                                setDeleteEpicTarget(null)
+                            } finally {
+                                setDeleteEpicLoading(false)
+                            }
+                        })()
+                    },
                 }}
-            />
-            
-            <ConvertToSpecConfirmation
-                open={convertToSpecModal.open}
-                sessionName={convertToSpecModal.sessionName}
-                projectPath={convertToSpecModal.projectPath}
-                sessionDisplayName={convertToSpecModal.sessionDisplayName}
-                hasUncommittedChanges={convertToSpecModal.hasUncommitted}
-                onClose={() => setConvertToDraftModal({ open: false, sessionName: '', projectPath: null, hasUncommitted: false })}
-                onSuccess={(newSpecName) => {
-                    if (convertToSpecModal.sessionName) {
-                        optimisticallyConvertSessionToSpec(convertToSpecModal.sessionName)
-                    }
-                    if (newSpecName) {
-                        void setSelection(
-                            {
-                                kind: 'session',
-                                payload: newSpecName,
-                                sessionState: 'spec',
-                            },
-                            true,
-                            true,
-                        )
-                    }
+                convertToSpec={{
+                    state: convertToSpecModal,
+                    onClose: () => setConvertToDraftModal({ open: false, sessionName: '', projectPath: null, hasUncommitted: false }),
+                    onSuccess: (newSpecName) => {
+                        if (convertToSpecModal.sessionName) {
+                            optimisticallyConvertSessionToSpec(convertToSpecModal.sessionName)
+                        }
+                        if (newSpecName) {
+                            void setSelection(
+                                {
+                                    kind: 'session',
+                                    payload: newSpecName,
+                                    sessionState: 'spec',
+                                },
+                                true,
+                                true,
+                            )
+                        }
+                    },
                 }}
-            />
-            <PromoteVersionConfirmation
-                open={promoteVersionModal.open}
-                versionGroup={promoteVersionModal.versionGroup}
-                selectedSessionId={promoteVersionModal.selectedSessionId}
-                onClose={() => setPromoteVersionModal({ open: false, versionGroup: null, selectedSessionId: '' })}
-                onConfirm={() => {
-                    const { versionGroup, selectedSessionId } = promoteVersionModal
-                    setPromoteVersionModal({ open: false, versionGroup: null, selectedSessionId: '' })
-                    if (versionGroup) {
-                        void executeVersionPromotion(versionGroup, selectedSessionId)
-                    }
+                promote={{
+                    state: promoteVersionModal,
+                    onClose: () => setPromoteVersionModal({ open: false, versionGroup: null, selectedSessionId: '' }),
+                    onConfirm: () => {
+                        const { versionGroup, selectedSessionId } = promoteVersionModal
+                        setPromoteVersionModal({ open: false, versionGroup: null, selectedSessionId: '' })
+                        if (versionGroup) {
+                            void executeVersionPromotion(versionGroup, selectedSessionId)
+                        }
+                    },
                 }}
-            />
-            <MergeSessionModal
-                open={mergeDialogState.isOpen}
-                sessionName={mergeDialogState.sessionName}
-                status={mergeDialogState.status}
-                preview={mergeDialogState.preview}
-                error={mergeDialogState.error ?? undefined}
-                onClose={closeMergeDialog}
-                cachedCommitMessage={activeMergeCommitDraft}
-                onCommitMessageChange={updateActiveMergeCommitDraft}
-                onConfirm={(mode, commitMessage) => {
-                    if (mergeDialogState.sessionName) {
-                        void confirmMerge(mergeDialogState.sessionName, mode, commitMessage)
-                    }
+                merge={{
+                    state: mergeDialogState,
+                    commitDraft: activeMergeCommitDraft,
+                    onClose: closeMergeDialog,
+                    onCommitMessageChange: updateActiveMergeCommitDraft,
+                    onConfirm: (mode, commitMessage) => {
+                        if (mergeDialogState.sessionName) {
+                            void confirmMerge(mergeDialogState.sessionName, mode, commitMessage)
+                        }
+                    },
+                    onResolveInAgentSession: () => { void handleResolveMergeInAgentSession() },
+                    autoCancelEnabled: autoCancelAfterMerge,
+                    onToggleAutoCancel: (next) => { void updateAutoCancelAfterMerge(next) },
                 }}
-                onResolveInAgentSession={() => { void handleResolveMergeInAgentSession() }}
-                autoCancelEnabled={autoCancelAfterMerge}
-                onToggleAutoCancel={(next) => { void updateAutoCancelAfterMerge(next) }}
-                prefillMode={mergeDialogState.prefillMode}
-            />
-            <PrSessionModal
-                open={prDialogState.isOpen}
-                sessionName={prDialogState.sessionName}
-                status={prDialogState.status}
-                preview={prDialogState.preview}
-                prefill={prDialogState.prefill}
-                error={prDialogState.error}
-                onClose={handleClosePrModal}
-                onConfirm={(options) => { void handleConfirmPr(options) }}
-                autoCancelEnabled={autoCancelAfterPr}
-                onToggleAutoCancel={(next) => { void updateAutoCancelAfterPr(next) }}
-            />
-            <GitlabMrSessionModal
-                open={gitlabMrDialogState.isOpen}
-                sessionName={gitlabMrDialogState.sessionName}
-                prefill={gitlabMrDialogState.prefill}
-                onClose={handleCloseGitlabMrModal}
-            />
-            <SwitchOrchestratorModal
-                open={switchOrchestratorModal.open}
-                scope={switchOrchestratorModal.targetSessionId ? 'session' : 'orchestrator'}
-                onClose={() => {
-                    setSwitchOrchestratorModal({ open: false })
-                    setSwitchModelSessionId(null)
+                pr={{
+                    state: prDialogState,
+                    onClose: handleClosePrModal,
+                    onConfirm: (options) => { void handleConfirmPr(options) },
+                    autoCancelEnabled: autoCancelAfterPr,
+                    onToggleAutoCancel: (next) => { void updateAutoCancelAfterPr(next) },
                 }}
-                onSwitch={async ({ agentType }) => {
-                    const targetSelection = switchModelSessionId
-                        ? { kind: 'session' as const, payload: switchModelSessionId }
-                        : selection
+                gitlabMr={{
+                    state: gitlabMrDialogState,
+                    onClose: handleCloseGitlabMrModal,
+                }}
+                switchOrchestrator={{
+                    state: switchOrchestratorModal,
+                    onClose: () => {
+                        setSwitchOrchestratorModal({ open: false })
+                        setSwitchModelSessionId(null)
+                    },
+                    onSwitch: async ({ agentType }) => {
+                        const targetSelection = switchModelSessionId
+                            ? { kind: 'session' as const, payload: switchModelSessionId }
+                            : selection
 
-                    await switchModel(agentType, targetSelection, terminals, clearTerminalTracking, clearTerminalStartedTracking, switchOrchestratorModal.initialAgentType)
+                        await switchModel(agentType, targetSelection, terminals, clearTerminalTracking, clearTerminalStartedTracking, switchOrchestratorModal.initialAgentType)
 
-                    setSwitchOrchestratorModal({ open: false })
-                    setSwitchModelSessionId(null)
+                        setSwitchOrchestratorModal({ open: false })
+                        setSwitchModelSessionId(null)
+                    },
                 }}
-                initialAgentType={switchOrchestratorModal.initialAgentType}
-                targetSessionId={switchOrchestratorModal.targetSessionId}
+                forgeWriteback={{
+                    sessionId: forgeWritebackSessionId,
+                    sessions,
+                    forgeIntegration,
+                    onClose: () => setForgeWritebackSessionId(null),
+                }}
             />
-            {forgeWritebackSessionId && (() => {
-                const writebackSession = sessions.find(s => s.info.session_id === forgeWritebackSessionId)
-                if (!writebackSession) return null
-                return (
-                    <ForgeWritebackModal
-                        sessionId={writebackSession.info.session_id}
-                        sessionName={writebackSession.info.session_id}
-                        prNumber={writebackSession.info.pr_number}
-                        prUrl={writebackSession.info.pr_url}
-                        issueNumber={writebackSession.info.issue_number}
-                        issueUrl={writebackSession.info.issue_url}
-                        forgeSource={forgeIntegration.sources[0] ?? null}
-                        onClose={() => setForgeWritebackSessionId(null)}
-                    />
-                )
-            })()}
         </div>
     )
 });
