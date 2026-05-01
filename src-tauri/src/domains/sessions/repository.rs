@@ -1137,6 +1137,27 @@ impl SessionDbManager {
         Ok(())
     }
 
+    pub fn set_session_consolidation_recommendation(
+        &self,
+        session_id: &str,
+        recommended_session_id: &str,
+    ) -> Result<()> {
+        let conn = self.db.get_conn()?;
+        conn.execute(
+            "UPDATE sessions
+             SET consolidation_recommended_session_id = ?1,
+                 updated_at = ?2
+             WHERE repository_path = ?3 AND id = ?4",
+            params![
+                recommended_session_id,
+                Utc::now().timestamp(),
+                self.repo_path.to_string_lossy().to_string(),
+                session_id,
+            ],
+        )?;
+        Ok(())
+    }
+
     pub fn clear_session_consolidation_metadata(&self, session_id: &str) -> Result<()> {
         let conn = self.db.get_conn()?;
         conn.execute(

@@ -657,6 +657,7 @@ describe('SessionVersionGroup status summary', () => {
               consolidation_round_id: 'round-123',
               consolidation_report: 'Use v1 as the base and keep v2 tests.',
               consolidation_base_session_id: 'feature-A_v1',
+              consolidation_recommended_session_id: 'feature-A-merge',
             },
             status: undefined,
             terminals: [],
@@ -685,6 +686,68 @@ describe('SessionVersionGroup status summary', () => {
     fireEvent.click(screen.getByTestId('confirm-consolidation-winner-banner-button'))
 
     expect(onConfirmConsolidationWinner).toHaveBeenCalledWith('round-123', 'feature-A-merge')
+  })
+
+  it('does not surface a confirm action for an implementation candidate before its judge files (regression for "no judge recommendation to confirm yet")', () => {
+    const onConfirmConsolidationWinner = vi.fn()
+    const implementationGroup: SessionVersionGroupType = {
+      ...baseGroup,
+      versions: [
+        createVersion({ id: 'feature-A_v1', sessionState: 'running', versionNumber: 1 }),
+        createVersion({ id: 'feature-A_v2', sessionState: 'running', versionNumber: 2 }),
+        {
+          ...createVersion({ id: 'feature-A-consolidation_v1', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-consolidation_v1', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+              consolidation_round_id: 'round-impl',
+              consolidation_role: 'candidate',
+              consolidation_report: 'Implementation report from candidate v1.',
+              consolidation_base_session_id: 'feature-A_v2',
+              consolidation_recommended_session_id: null,
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+        {
+          ...createVersion({ id: 'feature-A-consolidation_v2', sessionState: 'running' }),
+          session: {
+            info: {
+              ...createVersion({ id: 'feature-A-consolidation_v2', sessionState: 'running' }).session.info,
+              is_consolidation: true,
+              consolidation_sources: ['feature-A_v1', 'feature-A_v2'],
+              consolidation_round_id: 'round-impl',
+              consolidation_role: 'candidate',
+              consolidation_report: 'Implementation report from candidate v2.',
+              consolidation_base_session_id: 'feature-A_v2',
+              consolidation_recommended_session_id: null,
+            },
+            status: undefined,
+            terminals: [],
+          },
+        },
+      ],
+    }
+
+    render(
+      <SessionCardActionsProvider actions={mockActions}>
+        <SessionVersionGroup
+          group={implementationGroup}
+          selection={{ kind: 'session', payload: 'unrelated' }}
+          startIndex={0}
+          onConfirmConsolidationWinner={onConfirmConsolidationWinner}
+          {...requiredCallbacks}
+        />
+      </SessionCardActionsProvider>
+    )
+
+    expect(screen.queryByTestId('version-group-judge-recommendation')).toBeNull()
+    expect(screen.queryByTestId('confirm-consolidation-winner-banner-button')).toBeNull()
+    expect(screen.queryByTestId('confirm-consolidation-winner-button')).toBeNull()
+    expect(onConfirmConsolidationWinner).not.toHaveBeenCalled()
   })
 
   it('renders source versions without tree connectors in the parity source list', () => {

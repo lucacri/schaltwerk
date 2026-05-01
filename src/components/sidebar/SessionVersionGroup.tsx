@@ -231,10 +231,13 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     .find(v => {
       const report = v.session.info.consolidation_report?.trim()
       const baseSessionId = v.session.info.consolidation_base_session_id?.trim()
-      return Boolean(report && baseSessionId)
+      const recommendedSessionId = v.session.info.consolidation_recommended_session_id?.trim()
+      return Boolean(report && baseSessionId && recommendedSessionId)
     })
-  
-  // Implementation rounds only confirm through the judge
+
+  // Implementation rounds only confirm through the judge: candidates here intentionally
+  // lack consolidation_recommended_session_id until the judge files. Plan/synthesis
+  // candidates have it mirrored from the round-level recommendation, so they DO surface.
   const recommendationSource = latestCompletedJudge ?? (!isSynthesisJudgeActive ? latestReportedCandidate : null)
   const focusJudge = activeJudge ?? latestCompletedJudge ?? latestReportedCandidate
   const activeRoundId = focusJudge?.session.info.consolidation_round_id
@@ -243,11 +246,9 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     && selectedVersionInGroup.session.info.consolidation_role !== 'judge'
       ? selectedVersionInGroup.session.info
       : null
-  const confirmWinnerSessionId = recommendationSource
+  const confirmWinnerSessionId = recommendationSource?.session.info.consolidation_recommended_session_id
     ? (selectedCandidate?.session_id
-      ?? recommendationSource.session.info.consolidation_recommended_session_id
-      ?? recommendationSource.session.info.session_id
-      ?? null)
+      ?? recommendationSource.session.info.consolidation_recommended_session_id)
     : null
 
   const hasMultipleVersions = group.versions.length >= 2
@@ -262,8 +263,7 @@ export const SessionVersionGroup = memo<SessionVersionGroupProps>(({
     ? Math.max(sourceVersions.findIndex(version => version.session.info.session_id === primaryVersion.session.info.session_id), 0)
     : 0
   const recommendationLabel = getJudgeRecommendationLabel(
-    recommendationSource?.session.info.consolidation_recommended_session_id
-      ?? recommendationSource?.session.info.session_id,
+    recommendationSource?.session.info.consolidation_recommended_session_id,
     group.versions,
   )
   const maxTagLength = Math.max(

@@ -1623,6 +1623,17 @@ fn update_consolidation_round_recommendation(
     )
 }
 
+fn set_session_consolidation_recommendation(
+    db: &Database,
+    repo_path: &Path,
+    session_id: &str,
+    recommended_session_id: &str,
+) -> anyhow::Result<()> {
+    let repo =
+        lucode::domains::sessions::SessionDbManager::new(db.clone(), repo_path.to_path_buf());
+    repo.set_session_consolidation_recommendation(session_id, recommended_session_id)
+}
+
 fn confirm_consolidation_round_with_outcome(
     db: &Database,
     repo_path: &Path,
@@ -3862,6 +3873,13 @@ mod tests {
             .get_session_by_name(&repo_path, &candidate.name)
             .expect("load candidate");
         assert!(updated_candidate.ready_to_merge);
+        assert_eq!(
+            updated_candidate
+                .consolidation_recommended_session_id
+                .as_deref(),
+            Some(candidate.id.as_str()),
+            "plan/synthesis candidates must mirror the round-level self-recommendation onto their own session row so the sidebar can detect a confirmable verdict",
+        );
     }
 
     #[test]
@@ -5590,6 +5608,73 @@ mod tests {
         assert_eq!(
             round.recommended_session_id.as_deref(),
             Some(s1.id.as_str())
+        );
+
+        let stored = db
+            .get_session_by_name(&repo_path, &s1.name)
+            .expect("load candidate session");
+        assert_eq!(
+            stored.consolidation_recommended_session_id.as_deref(),
+            Some(s1.id.as_str()),
+            "plan-round candidate must mirror its self-recommendation onto its own session row so the UI can detect a confirmable verdict without round-type knowledge",
+        );
+    }
+
+    #[tokio::test]
+    async fn implementation_round_candidate_report_does_not_set_session_recommendation() {
+        let (_tmp, repo_path) = init_test_repo();
+        let db = Database::new(Some(repo_path.join("test.db"))).expect("db");
+        let manager = create_manager(&repo_path);
+
+        let round_id = "round-impl-no-session-rec";
+        let group_id = "group-impl-no-session-rec";
+
+        let s1 = manager
+            .create_session_with_agent(SessionCreationParams {
+                name: "impl_v1",
+                prompt: None,
+                base_branch: Some("main"),
+                custom_branch: None,
+                use_existing_branch: false,
+                sync_with_origin: false,
+                was_auto_generated: false,
+                version_group_id: Some(group_id),
+                version_number: Some(1),
+                epic_id: None,
+                agent_type: Some("claude"),
+                pr_number: None,
+                is_consolidation: true,
+                consolidation_source_ids: Some(vec!["source".to_string()]),
+                consolidation_round_id: Some(round_id),
+                consolidation_role: Some("candidate"),
+                consolidation_confirmation_mode: Some("confirm"),
+            })
+            .expect("create candidate");
+
+        upsert_consolidation_round_with_type(
+            &db,
+            &repo_path,
+            round_id,
+            group_id,
+            &["source".to_string()],
+            "confirm",
+            "implementation",
+        )
+        .expect("create round");
+
+        record_candidate_report_verdict(&db, &manager, round_id, &s1).expect("record");
+
+        let round = get_consolidation_round(&db, &repo_path, round_id).expect("get round");
+        assert!(
+            round.recommended_session_id.is_none(),
+            "implementation rounds must wait for a judge before any recommendation is recorded",
+        );
+        let stored = db
+            .get_session_by_name(&repo_path, &s1.name)
+            .expect("load candidate session");
+        assert!(
+            stored.consolidation_recommended_session_id.is_none(),
+            "implementation candidates must NOT advertise a session-level recommendation; only the judge does. The UI gates the confirm button on this field, so a stray value here causes the 'no judge recommendation to confirm yet' wiring bug.",
         );
     }
 
@@ -9134,6 +9219,17 @@ fn record_candidate_report_verdict(
             format!("Failed to update consolidation recommendation: {err}"),
         )
     })?;
+
+    set_session_consolidation_recommendation(db, manager.repo_path(), &candidate.id, &candidate.id)
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!(
+                    "Failed to mirror consolidation recommendation onto candidate session '{}': {err}",
+                    candidate.name
+                ),
+            )
+        })?;
 
     if !ready_to_merge {
         warn!(
