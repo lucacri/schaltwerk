@@ -35,6 +35,7 @@ import { SidebarSearchBar } from './views/SidebarSearchBar'
 import { SidebarSessionList } from './views/SidebarSessionList'
 import { buildSessionCardActions } from './helpers/buildSessionCardActions'
 import { useSidebarCollapsePersistence } from './hooks/useSidebarCollapsePersistence'
+import { useConsolidationActions } from './hooks/useConsolidationActions'
 import {
     ConvertToSpecModalState,
     GitlabMrDialogState,
@@ -955,47 +956,10 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }
 
-    const handleTriggerConsolidationJudge = useCallback(async (roundId: string, early = false) => {
-        try {
-            await invoke(TauriCommands.SchaltwerkCoreTriggerConsolidationJudge, {
-                roundId,
-                early,
-            })
-            pushToast({
-                tone: 'success',
-                title: 'Consolidation judge started',
-                description: early ? 'Judge launched before all candidates completed.' : 'Judge launched for completed consolidation candidates.',
-            })
-        } catch (error) {
-            logger.error('Failed to trigger consolidation judge:', error)
-            pushToast({
-                tone: 'error',
-                title: 'Failed to start judge',
-                description: String(error),
-            })
-        }
-    }, [pushToast])
-
-    const handleConfirmConsolidationWinner = useCallback(async (roundId: string, winnerSessionId: string) => {
-        try {
-            await invoke(TauriCommands.SchaltwerkCoreConfirmConsolidationWinner, {
-                roundId,
-                winnerSessionId,
-            })
-            pushToast({
-                tone: 'success',
-                title: 'Consolidation winner confirmed',
-                description: `Confirmed ${winnerSessionId} for round ${roundId}.`,
-            })
-        } catch (error) {
-            logger.error('Failed to confirm consolidation winner:', error)
-            pushToast({
-                tone: 'error',
-                title: 'Failed to confirm winner',
-                description: String(error),
-            })
-        }
-    }, [pushToast])
+    const {
+        triggerJudge: handleTriggerConsolidationJudge,
+        confirmWinner: handleConfirmConsolidationWinner,
+    } = useConsolidationActions()
 
     const handlePromoteSelectedVersion = () => {
         if (selection.kind !== 'session' || !selection.payload) {
