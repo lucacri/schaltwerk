@@ -36,8 +36,8 @@ import { SidebarSessionList } from './views/SidebarSessionList'
 import { buildSessionCardActions } from './helpers/buildSessionCardActions'
 import { useSidebarCollapsePersistence } from './hooks/useSidebarCollapsePersistence'
 import { useConsolidationActions } from './hooks/useConsolidationActions'
+import { useConvertToSpecController } from './hooks/useConvertToSpecController'
 import {
-    ConvertToSpecModalState,
     GitlabMrDialogState,
     PrDialogState,
     PromoteVersionModalState,
@@ -312,13 +312,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         onOpenModal: handleOpenPrModal,
     })
 
-    const [convertToSpecModal, setConvertToDraftModal] = useState<ConvertToSpecModalState>({
-        open: false,
-        sessionName: '',
-        projectPath: null,
-        hasUncommitted: false
-    })
-
     const [promoteVersionModal, setPromoteVersionModal] = useState<PromoteVersionModalState>({
         open: false,
         versionGroup: null,
@@ -442,6 +435,13 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         toggleEpicCollapsed,
         toggleSectionCollapsed,
     } = useSidebarCollapsePersistence(projectPath)
+
+    const {
+        modalState: convertToSpecModal,
+        setModalState: setConvertToDraftModal,
+        closeModal: closeConvertToSpecModal,
+        openFromShortcut: openConvertToSpecModalFromShortcut,
+    } = useConvertToSpecController({ sessions, selection, projectPathRef })
 
     const versionGroups = useMemo(() => groupSessionsByVersion(sessions), [sessions])
     const sectionGroups = useMemo(() => splitVersionGroupsBySection(versionGroups), [versionGroups])
@@ -906,20 +906,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }, [])
 
-    const handleSpecSelectedSession = () => {
-        if (selection.kind === 'session') {
-            const selectedSession = sessions.find(s => s.info.session_id === selection.payload)
-            if (selectedSession && !isSpec(selectedSession.info)) {
-                setConvertToDraftModal({
-                    open: true,
-                    sessionName: selectedSession.info.session_id,
-                    projectPath: projectPathRef.current,
-                    sessionDisplayName: getSessionDisplayName(selectedSession.info),
-                    hasUncommitted: selectedSession.info.has_uncommitted_changes || false
-                })
-            }
-        }
-    }
+    const handleSpecSelectedSession = openConvertToSpecModalFromShortcut
 
     const handleSelectBestVersion = (groupBaseName: string, selectedSessionId: string) => {
         const sessionGroups = groupSessionsByVersion(sessions)
@@ -1411,7 +1398,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 }}
                 convertToSpec={{
                     state: convertToSpecModal,
-                    onClose: () => setConvertToDraftModal({ open: false, sessionName: '', projectPath: null, hasUncommitted: false }),
+                    onClose: closeConvertToSpecModal,
                     onSuccess: (newSpecName) => {
                         if (convertToSpecModal.sessionName) {
                             optimisticallyConvertSessionToSpec(convertToSpecModal.sessionName)
