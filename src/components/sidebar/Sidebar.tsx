@@ -5,13 +5,12 @@ import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
 import { getPasteSubmissionOptions } from '../../common/terminalPaste'
 import { invoke } from '@tauri-apps/api/core'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { useTranslation } from '../../common/i18n/useTranslation'
 import { inlineSidebarDefaultPreferenceAtom } from '../../store/atoms/diffPreferences'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useFocus } from '../../contexts/FocusContext'
 import { UnlistenFn } from '@tauri-apps/api/event'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
-import { EventPayloadMap, GitOperationPayload, OpenPrModalPayload } from '../../common/events'
+import { EventPayloadMap, GitOperationPayload } from '../../common/events'
 import { useSelection } from '../../hooks/useSelection'
 import { clearTerminalStartedTracking } from '../terminal/Terminal'
 import { useSessions } from '../../hooks/useSessions'
@@ -42,15 +41,13 @@ import { createSafeUnlistener } from './helpers/createSafeUnlistener'
 import { useMergeModalListener } from './hooks/useMergeModalListener'
 import { useVersionPromotionController } from './hooks/useVersionPromotionController'
 import { useOrchestratorBranch } from './hooks/useOrchestratorBranch'
+import { usePrDialogController } from './hooks/usePrDialogController'
 import {
-    PrDialogState,
     SwitchOrchestratorModalState,
 } from './helpers/modalState'
 
 export { buildConsolidationGroupDetail }
 import { useSessionManagement } from '../../hooks/useSessionManagement'
-import { PrPreviewResponse, PrCreateOptions } from '../modals/PrSessionModal'
-import { useSessionPrShortcut } from '../../hooks/useSessionPrShortcut'
 import { useShortcutDisplay } from '../../keyboardShortcuts/useShortcutDisplay'
 import { KeyboardShortcutAction } from '../../keyboardShortcuts/config'
 import { logger } from '../../utils/logger'
@@ -68,7 +65,6 @@ import { useSessionMergeShortcut } from '../../hooks/useSessionMergeShortcut'
 import { openMergeDialogActionAtom } from '../../store/atoms/sessions'
 import { useUpdateSessionFromParent } from '../../hooks/useUpdateSessionFromParent'
 import { DEFAULT_AGENT } from '../../constants/agents'
-import { extractPrNumberFromUrl } from '../../utils/githubUrls'
 import { useEpics } from '../../hooks/useEpics'
 import { projectForgeAtom } from '../../store/atoms/forge'
 import { useImprovePlanAction } from '../../hooks/useImprovePlanAction'
@@ -90,7 +86,6 @@ interface SidebarProps {
 }
 
 export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], onSwitchToProject, onCycleNextProject, onCyclePrevProject, isCollapsed = false, onExpandRequest, onToggleSidebar }: SidebarProps) {
-    const { t } = useTranslation()
     const { selection, setSelection, terminals, clearTerminalTracking } = useSelection()
     const projectPath = useAtomValue(projectPathAtom)
     const { setFocusForSession, setCurrentFocus } = useFocus()
@@ -165,13 +160,12 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const { updateAllSessionsFromParent } = useUpdateSessionFromParent()
     const openMergeDialogWithPrefill = useSetAtom(openMergeDialogActionAtom)
 
-    const [prDialogState, setPrDialogState] = useState<PrDialogState>({
-        isOpen: false,
-        sessionName: null,
-        status: 'idle',
-        preview: null,
-        error: null,
-    })
+    const {
+        state: prDialogState,
+        close: handleClosePrModal,
+        confirm: handleConfirmPr,
+        handlePrShortcut,
+    } = usePrDialogController({ autoCancelAfterPr, createSafeUnlistener })
 
     const {
         state: gitlabMrDialogState,
@@ -186,100 +180,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         },
         [isSessionMerging, openMergeDialog]
     )
-
-    const handleOpenPrModal = useCallback((
-        sessionName: string,
-        preview: PrPreviewResponse,
-        prefill?: {
-            suggestedTitle?: string
-            suggestedBody?: string
-            suggestedBaseBranch?: string
-            suggestedPrBranchName?: string
-            suggestedMode?: 'squash' | 'reapply'
-        }
-    ) => {
-        setPrDialogState({
-            isOpen: true,
-            sessionName,
-            status: 'ready',
-            preview,
-            prefill,
-            error: null,
-        })
-    }, [])
-
-    const handleClosePrModal = useCallback(() => {
-        setPrDialogState({
-            isOpen: false,
-            sessionName: null,
-            status: 'idle',
-            preview: null,
-            error: null,
-        })
-    }, [])
-
-    const handleConfirmPr = useCallback(async (options: PrCreateOptions) => {
-        const { sessionName, preview } = prDialogState
-        if (!sessionName || !preview) return
-
-        setPrDialogState(prev => ({ ...prev, status: 'running', error: null }))
-
-        try {
-            const result = await invoke<{ url: string; branch: string }>(TauriCommands.GitHubCreateSessionPr, {
-                args: {
-                    sessionName,
-                    prTitle: options.title,
-                    prBody: options.body,
-                    baseBranch: options.baseBranch,
-                    prBranchName: options.prBranchName,
-                    commitMessage: options.commitMessage,
-                    mode: options.mode,
-                    cancelAfterPr: autoCancelAfterPr,
-                }
-            })
-
-            handleClosePrModal()
-            if (result.url) {
-                const prUrl = result.url
-                const prNumber = extractPrNumberFromUrl(prUrl)
-                if (prNumber) {
-                    try {
-                        await invoke(TauriCommands.SchaltwerkCoreLinkSessionToPr, {
-                            name: sessionName,
-                            prNumber,
-                            prUrl
-                        })
-                    } catch (linkError) {
-                        logger.warn('Failed to link session to PR after creation:', linkError)
-                    }
-                }
-                pushToast({
-                    tone: 'success',
-                    title: t.toasts.prCreated,
-                    description: prUrl,
-                    action: {
-                        label: t.settings.common.open,
-                        onClick: () => {
-                            void invoke(TauriCommands.OpenExternalUrl, { url: prUrl }).catch((err) => {
-                                logger.warn('Failed to open URL via Tauri, falling back to window.open', err)
-                                window.open(prUrl, '_blank', 'noopener,noreferrer')
-                            })
-                        },
-                    },
-                })
-            } else {
-                pushToast({ tone: 'success', title: t.toasts.prCreated, description: t.toasts.prCreatedBranch.replace('{branch}', result.branch) })
-            }
-        } catch (error) {
-            logger.error('Failed to create PR', error)
-            const message = error instanceof Error ? error.message : String(error)
-            setPrDialogState(prev => ({ ...prev, status: 'ready', error: message }))
-        }
-    }, [prDialogState, autoCancelAfterPr, handleClosePrModal, pushToast])
-
-    const { handlePrShortcut } = useSessionPrShortcut({
-        onOpenModal: handleOpenPrModal,
-    })
 
     const activeMergeSessionId = mergeDialogState.sessionName
     const activeMergeCommitDraft = activeMergeSessionId ? mergeCommitDrafts[activeMergeSessionId] ?? '' : ''
@@ -462,47 +362,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
             unsubscribe?.()
         }
     }, []);
-
-    useEffect(() => {
-        let unlistenOpenPrModal: UnlistenFn | null = null
-
-        const attach = async () => {
-            try {
-                const unlisten = await listenEvent(SchaltEvent.OpenPrModal, async (payload: OpenPrModalPayload) => {
-                    try {
-                        const preview = await invoke<PrPreviewResponse>(TauriCommands.GitHubPreviewPr, {
-                            sessionName: payload.sessionName,
-                        })
-                        handleOpenPrModal(payload.sessionName, preview, {
-                            suggestedTitle: payload.prTitle,
-                            suggestedBody: payload.prBody,
-                            suggestedBaseBranch: payload.baseBranch,
-                            suggestedPrBranchName: payload.prBranchName,
-                            suggestedMode: payload.mode,
-                        })
-                    } catch (error) {
-                        logger.error('Failed to load PR preview for MCP request:', error)
-                        pushToast({
-                            tone: 'error',
-                            title: t.toasts.prModalFailed,
-                            description: error instanceof Error ? error.message : String(error),
-                        })
-                    }
-                })
-                unlistenOpenPrModal = createSafeUnlistener(unlisten)
-            } catch (error) {
-                logger.warn('Failed to listen for OpenPrModal events:', error)
-            }
-        }
-
-        void attach()
-
-        return () => {
-            if (unlistenOpenPrModal) {
-                unlistenOpenPrModal()
-            }
-        }
-    }, [createSafeUnlistener, handleOpenPrModal, pushToast])
 
     useMergeModalListener({
         createSafeUnlistener,
