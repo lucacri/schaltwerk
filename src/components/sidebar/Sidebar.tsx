@@ -1,21 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
-import { TauriCommands } from '../../common/tauriCommands'
-import { buildResolveMergeInAgentRequest } from './helpers/routeMergeConflictPrompt'
-import { invoke } from '@tauri-apps/api/core'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { inlineSidebarDefaultPreferenceAtom } from '../../store/atoms/diffPreferences'
 import { useFocus } from '../../contexts/FocusContext'
 import { useSelection } from '../../hooks/useSelection'
 import { clearTerminalStartedTracking } from '../terminal/Terminal'
 import { useSessions } from '../../hooks/useSessions'
-import { isSpec } from '../../utils/sessionFilters'
-import { groupSessionsByVersion, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
-import {
-    flattenVersionGroups,
-    groupVersionGroupsByEpic,
-    splitVersionGroupsBySection,
-    type SidebarSectionKey,
-} from './helpers/versionGroupings'
 import { buildConsolidationGroupDetail } from './helpers/consolidationGroupDetail'
 import { SidebarModalsTrailer } from './views/SidebarModalsTrailer'
 import { SidebarHeaderBar } from './views/SidebarHeaderBar'
@@ -37,6 +26,12 @@ import { useSessionScrollIntoView } from './hooks/useSessionScrollIntoView'
 import { useSidebarSelectionMemory } from './hooks/useSidebarSelectionMemory'
 import { useSidebarKeyboardShortcuts } from './hooks/useSidebarKeyboardShortcuts'
 import { buildSidebarModalSlots } from './helpers/buildSidebarModalSlots'
+import { useSidebarSelectionActions } from './hooks/useSidebarSelectionActions'
+import { useOrchestratorEntryActions } from './hooks/useOrchestratorEntryActions'
+import { useSidebarMergeOrchestration } from './hooks/useSidebarMergeOrchestration'
+import { useSidebarSectionedSessions } from './hooks/useSidebarSectionedSessions'
+import { useSessionEditCallbacks } from './hooks/useSessionEditCallbacks'
+import { useRefineSpecFlow } from './hooks/useRefineSpecFlow'
 import {
     SwitchOrchestratorModalState,
 } from './helpers/modalState'
@@ -45,25 +40,18 @@ export { buildConsolidationGroupDetail }
 import { useSessionManagement } from '../../hooks/useSessionManagement'
 import { useShortcutDisplay } from '../../keyboardShortcuts/useShortcutDisplay'
 import { KeyboardShortcutAction } from '../../keyboardShortcuts/config'
-import { logger } from '../../utils/logger'
-import { getErrorMessage } from '../../types/errors'
-import { UiEvent, emitUiEvent } from '../../common/uiEvents'
 import { AGENT_TYPES, AgentType, type Epic } from '../../types/session'
 import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationContext'
 import { useRun } from '../../contexts/RunContext'
-import { useToast } from '../../common/toast/ToastProvider'
 import { useModal } from '../../contexts/ModalContext'
-import { getSessionDisplayName } from '../../utils/sessionDisplayName'
 import { useClaudeSession } from '../../hooks/useClaudeSession'
 import { projectPathAtom } from '../../store/atoms/project'
-import { useSessionMergeShortcut } from '../../hooks/useSessionMergeShortcut'
 import { openMergeDialogActionAtom } from '../../store/atoms/sessions'
 import { useUpdateSessionFromParent } from '../../hooks/useUpdateSessionFromParent'
 import { DEFAULT_AGENT } from '../../constants/agents'
 import { useEpics } from '../../hooks/useEpics'
 import { projectForgeAtom } from '../../store/atoms/forge'
 import { useImprovePlanAction } from '../../hooks/useImprovePlanAction'
-import { getSessionLifecycleState } from '../../utils/sessionState'
 import { sidebarViewModeAtom } from '../../store/atoms/sidebarViewMode'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
 
@@ -91,8 +79,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const [sidebarViewMode, setSidebarViewMode] = useAtom(sidebarViewModeAtom)
     const forgeIntegration = useForgeIntegrationContext()
     const [forgeWritebackSessionId, setForgeWritebackSessionId] = useState<string | null>(null)
-    const { pushToast } = useToast()
-    const { 
+    const {
         sessions,
         allSessions,
         loading,
@@ -144,14 +131,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const orchestratorRunning = isSessionRunning('orchestrator')
     const leftSidebarShortcut = useShortcutDisplay(KeyboardShortcutAction.ToggleLeftSidebar)
 
-    const [mergeCommitDrafts, setMergeCommitDrafts] = useState<Record<string, string>>({})
-    const getCommitDraftForSession = useCallback(
-        (sessionId: string) => mergeCommitDrafts[sessionId],
-        [mergeCommitDrafts],
-    )
-    const { handleMergeShortcut, isSessionMerging } = useSessionMergeShortcut({
-        getCommitDraftForSession,
-    })
     const { updateAllSessionsFromParent } = useUpdateSessionFromParent()
     const openMergeDialogWithPrefill = useSetAtom(openMergeDialogActionAtom)
 
@@ -168,87 +147,25 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         close: handleCloseGitlabMrModal,
     } = useGitlabMrDialogController({ createSafeUnlistener })
 
-    const handleMergeSession = useCallback(
-        (sessionId: string) => {
-            if (isSessionMerging(sessionId)) return
-            void openMergeDialog(sessionId)
-        },
-        [isSessionMerging, openMergeDialog]
-    )
-
-    const activeMergeSessionId = mergeDialogState.sessionName
-    const activeMergeCommitDraft = activeMergeSessionId ? mergeCommitDrafts[activeMergeSessionId] ?? '' : ''
-
-    const updateActiveMergeCommitDraft = useCallback(
-        (value: string) => {
-            if (!activeMergeSessionId) {
-                return
-            }
-            setMergeCommitDrafts(prev => {
-                if (!value) {
-                    if (!(activeMergeSessionId in prev)) {
-                        return prev
-                    }
-                    const { [activeMergeSessionId]: _removed, ...rest } = prev
-                    return rest
-                }
-                if (prev[activeMergeSessionId] === value) {
-                    return prev
-                }
-                return { ...prev, [activeMergeSessionId]: value }
-            })
-        },
-        [activeMergeSessionId]
-    )
-
-    const handleResolveMergeInAgentSession = useCallback(async () => {
-        const sessionName = mergeDialogState.sessionName
-        const preview = mergeDialogState.preview
-        if (!sessionName || !preview) return
-
-        const session = allSessions.find(candidate => candidate.info.session_id === sessionName)
-        if (!session) return
-
-        const { terminalId, prompt, useBracketedPaste, needsDelayedSubmit } = buildResolveMergeInAgentRequest({
-            sessionName,
-            session,
-            conflictingPaths: preview.conflictingPaths,
-            parentBranch: preview.parentBranch,
-            selection,
-            topTerminalId: terminals.top,
-        })
-
-        try {
-            await setSelection({ kind: 'session', payload: sessionName }, false, true)
-            await invoke(TauriCommands.PasteAndSubmitTerminal, {
-                id: terminalId,
-                data: prompt,
-                useBracketedPaste,
-                needsDelayedSubmit,
-            })
-            setFocusForSession(sessionName, 'claude')
-            setCurrentFocus('claude')
-            closeMergeDialog()
-        } catch (error) {
-            logger.error('[Sidebar] Failed to route merge conflict into agent session', error)
-            pushToast({
-                tone: 'error',
-                title: 'Unable to route conflicts to agent',
-                description: getErrorMessage(error),
-            })
-        }
-    }, [
+    const {
+        setMergeCommitDrafts,
+        activeMergeCommitDraft,
+        updateActiveMergeCommitDraft,
+        handleMergeShortcut,
+        isSessionMerging,
+        handleMergeSession,
+        handleResolveMergeInAgentSession,
+    } = useSidebarMergeOrchestration({
         allSessions,
-        closeMergeDialog,
-        mergeDialogState.preview,
-        mergeDialogState.sessionName,
-        pushToast,
         selection,
-        setCurrentFocus,
-        setFocusForSession,
+        terminals,
+        mergeDialogState,
+        openMergeDialog,
+        closeMergeDialog,
         setSelection,
-        terminals.top,
-    ])
+        setFocusForSession,
+        setCurrentFocus,
+    })
 
     const sidebarRef = useRef<HTMLDivElement>(null)
     const sessionListRef = useRef<HTMLDivElement>(null)
@@ -274,41 +191,12 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         openFromShortcut: openConvertToSpecModalFromShortcut,
     } = useConvertToSpecController({ sessions, selection, projectPathRef })
 
-    const versionGroups = useMemo(() => groupSessionsByVersion(sessions), [sessions])
-    const sectionGroups = useMemo(() => splitVersionGroupsBySection(versionGroups), [versionGroups])
-
-    const getVisibleGroupsForSection = useCallback((section: SidebarSectionKey, groups: SessionVersionGroupType[]) => {
-        const sectionGrouping = groupVersionGroupsByEpic(groups)
-        const expandedEpicGroups = sectionGrouping.epicGroups.flatMap((group) => (
-            collapsedEpicIds[getCollapsedEpicKey(section, group.epic.id)] ? [] : group.groups
-        ))
-        return [...expandedEpicGroups, ...sectionGrouping.ungroupedGroups]
-    }, [collapsedEpicIds, getCollapsedEpicKey])
-
-    const visibleSpecGroups = useMemo(
-        () => getVisibleGroupsForSection('specs', sectionGroups.specs),
-        [getVisibleGroupsForSection, sectionGroups.specs],
-    )
-    const visibleRunningGroups = useMemo(
-        () => getVisibleGroupsForSection('running', sectionGroups.running),
-        [getVisibleGroupsForSection, sectionGroups.running],
-    )
-
-    const flattenedSessions = useMemo(() => {
-        const visibleGroups: SessionVersionGroupType[] = []
-        if (!collapsedSections.specs) {
-            visibleGroups.push(...visibleSpecGroups)
-        }
-        if (!collapsedSections.running) {
-            visibleGroups.push(...visibleRunningGroups)
-        }
-        return flattenVersionGroups(visibleGroups)
-    }, [collapsedSections, visibleRunningGroups, visibleSpecGroups])
-
-    const selectionScopedSessions = useMemo(
-        () => [...flattenVersionGroups(visibleSpecGroups), ...flattenVersionGroups(visibleRunningGroups)],
-        [visibleSpecGroups, visibleRunningGroups],
-    )
+    const { sectionGroups, flattenedSessions, selectionScopedSessions } = useSidebarSectionedSessions({
+        sessions,
+        collapsedSections,
+        collapsedEpicIds,
+        getCollapsedEpicKey,
+    })
 
     useMergeModalListener({
         createSafeUnlistener,
@@ -334,130 +222,21 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         createSafeUnlistener,
     })
 
-    const handleSelectOrchestrator = useCallback(async () => {
-        await setSelection({ kind: 'orchestrator' }, false, true) // User clicked - intentional
-    }, [setSelection])
-    const handleSelectSession = async (sessionOrIndex: string | number) => {
-        const session = typeof sessionOrIndex === 'number'
-            ? flattenedSessions[sessionOrIndex]
-            : flattenedSessions.find(s => s.info.session_id === sessionOrIndex)
+    const {
+        handleSelectOrchestrator,
+        handleSelectSession,
+        handleCancelSelectedSession,
+        selectPrev,
+        selectNext,
+    } = useSidebarSelectionActions({
+        sessions,
+        flattenedSessions,
+        selection,
+        setSelection,
+        setSessionsWithNotifications,
+    })
 
-        if (session) {
-            const s = session.info
-            
-            // Clear follow-up message notification when user selects the session
-            setSessionsWithNotifications(prev => {
-                const updated = new Set(prev)
-                updated.delete(s.session_id)
-                return updated
-            })
-            
-            // Directly set selection to minimize latency in switching
-            await setSelection({
-                kind: 'session',
-                payload: s.session_id,
-                worktreePath: s.worktree_path,
-                sessionState: getSessionLifecycleState(s)
-            }, false, true) // User clicked - intentional
-        }
-    }
-
-    const handleCancelSelectedSession = (immediate: boolean) => {
-        if (selection.kind === 'session') {
-            const selectedSession = sessions.find(s => s.info.session_id === selection.payload)
-            if (selectedSession) {
-                const sessionDisplayName = getSessionDisplayName(selectedSession.info)
-                // Check if it's a spec
-                if (isSpec(selectedSession.info)) {
-                    // For specs, always show confirmation dialog (ignore immediate flag)
-                    emitUiEvent(UiEvent.SessionAction, {
-                        action: 'delete-spec',
-                        sessionId: selectedSession.info.session_id,
-                        sessionName: selectedSession.info.session_id,
-                        sessionDisplayName,
-                        branch: selectedSession.info.branch,
-                        hasUncommittedChanges: false,
-                    })
-                } else {
-                    // For regular sessions, handle as before
-                    if (immediate) {
-                        // immediate cancel without modal
-                        emitUiEvent(UiEvent.SessionAction, {
-                            action: 'cancel-immediate',
-                            sessionId: selectedSession.info.session_id,
-                            sessionName: selectedSession.info.session_id,
-                            sessionDisplayName,
-                            branch: selectedSession.info.branch,
-                            hasUncommittedChanges: selectedSession.info.has_uncommitted_changes || false,
-                        })
-                    } else {
-                        emitUiEvent(UiEvent.SessionAction, {
-                            action: 'cancel',
-                            sessionId: selectedSession.info.session_id,
-                            sessionName: selectedSession.info.session_id,
-                            sessionDisplayName,
-                            branch: selectedSession.info.branch,
-                            hasUncommittedChanges: selectedSession.info.has_uncommitted_changes || false,
-                        })
-                    }
-                }
-            }
-        }
-    }
-
-    const selectPrev = async () => {
-        if (sessions.length === 0) return
-
-        if (selection.kind === 'session') {
-            const currentIndex = flattenedSessions.findIndex(s => s.info.session_id === selection.payload)
-            if (currentIndex <= 0) {
-                await handleSelectOrchestrator()
-                return
-            }
-            await handleSelectSession(currentIndex - 1)
-        }
-    }
-
-    const selectNext = async () => {
-        if (sessions.length === 0) return
-
-        if (selection.kind === 'orchestrator') {
-            await handleSelectSession(0)
-            return
-        }
-
-        if (selection.kind === 'session') {
-            const currentIndex = flattenedSessions.findIndex(s => s.info.session_id === selection.payload)
-            const nextIndex = Math.min(currentIndex + 1, flattenedSessions.length - 1)
-            if (nextIndex != currentIndex) {
-                await handleSelectSession(nextIndex)
-            }
-        }
-    }
-
-    const handleRenameSession = useCallback(async (sessionId: string, newName: string) => {
-        try {
-            await invoke(TauriCommands.SchaltwerkCoreRenameSessionDisplayName, {
-                sessionId,
-                newDisplayName: newName
-            })
-        } catch (error) {
-            logger.error('Failed to rename session:', error)
-            throw error
-        }
-    }, [])
-
-    const handleLinkPr = useCallback(async (sessionId: string, prNumber: number, prUrl: string) => {
-        try {
-            await invoke(TauriCommands.SchaltwerkCoreLinkSessionToPr, {
-                name: sessionId,
-                prNumber,
-                prUrl
-            })
-        } catch (error) {
-            logger.error('Failed to link session to PR:', error)
-        }
-    }, [])
+    const { handleRenameSession, handleLinkPr } = useSessionEditCallbacks()
 
     const handleSpecSelectedSession = openConvertToSpecModalFromShortcut
 
@@ -474,27 +253,26 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         confirmWinner: handleConfirmConsolidationWinner,
     } = useConsolidationActions()
 
-    const runRefineSpecFlow = useCallback((sessionId: string) => {
-        void (async () => {
-            try {
-                await setSelection({ kind: 'session', payload: sessionId, sessionState: 'spec' }, false, true)
-                setFocusForSession(sessionId, 'claude')
-                setCurrentFocus('claude')
-            } catch (error) {
-                logger.warn('[Sidebar] Failed to open spec clarification workspace', { sessionId, error })
-            }
-        })()
-    }, [setCurrentFocus, setFocusForSession, setSelection])
+    const orchestratorEntryActions = useOrchestratorEntryActions({
+        selection,
+        terminals,
+        setSwitchModelSessionId,
+        setSwitchOrchestratorModal,
+        getOrchestratorAgentType,
+        normalizeAgentType,
+        resetSession,
+    })
+
+    const { runRefineSpecFlow, handleRefineSpecShortcut } = useRefineSpecFlow({
+        sessions,
+        selection,
+        isAnyModalOpen,
+        setSelection,
+        setFocusForSession,
+        setCurrentFocus,
+    })
 
     const improvePlanAction = useImprovePlanAction({ logContext: 'Sidebar' })
-
-    const handleRefineSpecShortcut = useCallback(() => {
-        if (isAnyModalOpen()) return
-        if (selection.kind !== 'session' || !selection.payload) return
-        const session = sessions.find(s => s.info.session_id === selection.payload)
-        if (!session || !isSpec(session.info)) return
-        runRefineSpecFlow(selection.payload)
-    }, [isAnyModalOpen, selection, sessions, runRefineSpecFlow])
 
     useSidebarKeyboardShortcuts({
         sessions,
@@ -620,23 +398,8 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 branch={orchestratorBranch}
                 shortcut={orchestratorShortcut}
                 onSelect={() => { void handleSelectOrchestrator() }}
-                onSwitchModel={() => {
-                    setSwitchModelSessionId(null)
-                    void getOrchestratorAgentType().then((initialAgentType) => {
-                        setSwitchOrchestratorModal({
-                            open: true,
-                            initialAgentType: normalizeAgentType(initialAgentType),
-                            targetSessionId: null,
-                        })
-                    })
-                }}
-                onReset={() => {
-                    void (async () => {
-                        if (selection.kind === 'orchestrator') {
-                            await resetSession(selection, terminals)
-                        }
-                    })()
-                }}
+                onSwitchModel={orchestratorEntryActions.onSwitchModel}
+                onReset={orchestratorEntryActions.onReset}
             />
 
             <SidebarSearchBar
