@@ -4,7 +4,6 @@ import { buildResolveMergeInAgentRequest } from './helpers/routeMergeConflictPro
 import { invoke } from '@tauri-apps/api/core'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { inlineSidebarDefaultPreferenceAtom } from '../../store/atoms/diffPreferences'
-import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useFocus } from '../../contexts/FocusContext'
 import { useSelection } from '../../hooks/useSelection'
 import { clearTerminalStartedTracking } from '../terminal/Terminal'
@@ -36,6 +35,7 @@ import { usePrDialogController } from './hooks/usePrDialogController'
 import { useSidebarBackendEvents } from './hooks/useSidebarBackendEvents'
 import { useSessionScrollIntoView } from './hooks/useSessionScrollIntoView'
 import { useSidebarSelectionMemory } from './hooks/useSidebarSelectionMemory'
+import { useSidebarKeyboardShortcuts } from './hooks/useSidebarKeyboardShortcuts'
 import {
     SwitchOrchestratorModalState,
 } from './helpers/modalState'
@@ -473,82 +473,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         confirmWinner: handleConfirmConsolidationWinner,
     } = useConsolidationActions()
 
-    const findSessionById = useCallback((sessionId?: string | null) => {
-        if (!sessionId) return null
-        return sessions.find(s => s.info.session_id === sessionId)
-            || allSessions.find(s => s.info.session_id === sessionId)
-            || null
-    }, [sessions, allSessions])
-
-    const getSelectedSessionState = useCallback((): ('spec' | 'processing' | 'running') | null => {
-        if (selection.kind !== 'session') return null
-        if (selection.sessionState) return selection.sessionState
-        const session = findSessionById(selection.payload || null)
-        return session ? getSessionLifecycleState(session.info) : null
-    }, [selection, findSessionById])
-
-    const handleResetSelectionShortcut = useCallback(() => {
-        if (isResetting) return
-        if (isAnyModalOpen()) return
-
-        if (selection.kind === 'orchestrator') {
-            void resetSession({ kind: 'orchestrator' }, terminals)
-            return
-        }
-
-        if (selection.kind !== 'session' || !selection.payload) return
-
-        const state = getSelectedSessionState()
-        if (state !== 'running') return
-
-        void resetSession({ kind: 'session', payload: selection.payload }, terminals)
-    }, [isResetting, isAnyModalOpen, selection, resetSession, terminals, getSelectedSessionState])
-
-    const handleOpenSwitchModelShortcut = useCallback(() => {
-        if (isAnyModalOpen()) return
-
-        if (selection.kind === 'orchestrator') {
-            setSwitchModelSessionId(null)
-            void getOrchestratorAgentType().then((initialAgentType) => {
-                setSwitchOrchestratorModal({
-                    open: true,
-                    initialAgentType: normalizeAgentType(initialAgentType),
-                    targetSessionId: null
-                })
-            })
-            return
-        }
-
-        if (selection.kind !== 'session' || !selection.payload) return
-
-        const state = getSelectedSessionState()
-        if (state !== 'running') return
-
-        setSwitchModelSessionId(selection.payload)
-        const session = sessions.find(s => s.info.session_id === selection.payload)
-        const initialAgentType = normalizeAgentType(session?.info.original_agent_type)
-        setSwitchOrchestratorModal({ open: true, initialAgentType, targetSessionId: selection.payload })
-    }, [
-        isAnyModalOpen,
-        selection,
-        getSelectedSessionState,
-        setSwitchModelSessionId,
-        setSwitchOrchestratorModal,
-        getOrchestratorAgentType,
-        sessions,
-        normalizeAgentType
-    ])
-
-    const handleCreatePullRequestShortcut = useCallback(() => {
-        if (forge === 'gitlab') {
-            if (selection.kind !== 'session' || !selection.payload) return
-            handleOpenGitlabMrModal(selection.payload)
-            return
-        }
-        if (!github.canCreatePr) return
-        void handlePrShortcut()
-    }, [forge, selection, github.canCreatePr, handlePrShortcut, handleOpenGitlabMrModal])
-
     const runRefineSpecFlow = useCallback((sessionId: string) => {
         void (async () => {
             try {
@@ -571,62 +495,42 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         runRefineSpecFlow(selection.payload)
     }, [isAnyModalOpen, selection, sessions, runRefineSpecFlow])
 
-    useKeyboardShortcuts({
-        onSelectOrchestrator: () => { void handleSelectOrchestrator() },
-        onSelectSession: (index) => { void handleSelectSession(index) },
-        onCancelSelectedSession: handleCancelSelectedSession,
-        onRefineSpec: handleRefineSpecShortcut,
-        onSpecSession: handleSpecSelectedSession,
-        onPromoteSelectedVersion: () => { void handlePromoteSelectedVersion() },
-        sessionCount: flattenedSessions.length,
-        onSelectPrevSession: () => { void selectPrev() },
-        onSelectNextSession: () => { void selectNext() },
-        onFocusSidebar: () => {
-            setCurrentFocus('sidebar')
-            // Focus the first button in the sidebar
-            setTimeout(() => {
-                const button = sidebarRef.current?.querySelector('button')
-                if (button instanceof HTMLElement) {
-                    button.focus()
-                }
-            }, 50)
-        },
-        onFocusClaude: () => {
-            const sessionKey = selection.kind === 'orchestrator' ? 'orchestrator' : (selection.payload || 'unknown')
-            setFocusForSession(sessionKey, 'claude')
-            setCurrentFocus('claude')
-        },
-        onOpenDiffViewer: () => {
-            if (selection.kind !== 'session' && selection.kind !== 'orchestrator') return
-            if (inlineDiffDefault) {
-                emitUiEvent(UiEvent.OpenInlineDiffView)
-            } else {
-                emitUiEvent(UiEvent.OpenDiffView)
-            }
-        },
-        onFocusTerminal: () => {
-            // Don't dispatch focus events if any modal is open
-            if (isAnyModalOpen()) {
-                return
-            }
-            
-            const sessionKey = selection.kind === 'orchestrator' ? 'orchestrator' : (selection.payload || 'unknown')
-            setFocusForSession(sessionKey, 'terminal')
-            setCurrentFocus('terminal')
-            emitUiEvent(UiEvent.FocusTerminal)
-        },
-        projectCount: openTabs.length,
+    useSidebarKeyboardShortcuts({
+        sessions,
+        allSessions,
+        selection,
+        terminals,
+        isResetting,
+        inlineDiffDefault,
+        isAnyModalOpen,
+        isDiffViewerOpen,
+        forge,
+        githubCanCreatePr: github.canCreatePr,
+        flattenedSessionsCount: flattenedSessions.length,
+        openTabsCount: openTabs.length,
+        sidebarRef,
+        resetSession,
+        setSwitchModelSessionId,
+        setSwitchOrchestratorModal,
+        getOrchestratorAgentType,
+        normalizeAgentType,
+        setFocusForSession,
+        setCurrentFocus,
+        handleSelectOrchestrator,
+        handleSelectSession,
+        handleCancelSelectedSession,
+        handlePromoteSelectedVersion,
+        handleSpecSelectedSession,
+        handleRefineSpecShortcut,
+        handleMergeShortcut,
+        handlePrShortcut,
+        handleOpenGitlabMrModal,
+        updateAllSessionsFromParent,
+        selectPrev,
+        selectNext,
         onSwitchToProject,
         onCycleNextProject,
         onCyclePrevProject,
-        onResetSelection: handleResetSelectionShortcut,
-        onOpenSwitchModel: handleOpenSwitchModelShortcut,
-        onOpenMergeModal: () => { void handleMergeShortcut() },
-        onUpdateSessionFromParent: () => { void updateAllSessionsFromParent() },
-        onCreatePullRequest: handleCreatePullRequestShortcut,
-        onOpenSettings: () => { emitUiEvent(UiEvent.OpenSettings) },
-        isDiffViewerOpen,
-        isModalOpen: isAnyModalOpen()
     })
 
     const { handleSessionScroll } = useSessionScrollIntoView({
