@@ -382,6 +382,136 @@ dev-run flavor="taskflow-v2":
     set -euo pipefail
     LUCODE_FLAVOR={{flavor}} just run
 
+# Install a flavor-isolated dev variant to /Applications. The .app bundle
+# id and productName are derived from the flavor name (e.g. flavor=
+# "taskflow-v2" → /Applications/Lucode-Taskflow-V2.app with identifier
+# com.lucacri.lucode-taskflow-v2). Uses the same compile-time LUCODE_FLAVOR
+# so the binary's app_paths reads from the matching data dir.
+#
+# Optional display_name lets callers override the auto-titlecased product
+# name when the heuristic produces something awkward (e.g. preserve casing
+# for `myFlavor` instead of getting `Myflavor`).
+dev-install flavor="taskflow-v2" display_name="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    flavor="{{flavor}}"
+    display_override="{{display_name}}"
+
+    if [ -n "$display_override" ]; then
+        product_name="$display_override"
+    else
+        product_name="Lucode"
+        IFS='-' read -ra _parts <<< "$flavor"
+        for _p in "${_parts[@]}"; do
+            if [ -z "$_p" ]; then continue; fi
+            _head="$(printf '%s' "${_p:0:1}" | tr '[:lower:]' '[:upper:]')"
+            _tail="${_p:1}"
+            product_name+="-${_head}${_tail}"
+        done
+    fi
+
+    bundle_id="com.lucacri.lucode-${flavor}"
+    app_basename="${product_name}.app"
+
+    echo "Building Lucode dev variant: flavor=${flavor} productName=${product_name} identifier=${bundle_id}"
+
+    just _stamp-calver
+    trap 'just _restore-version' EXIT
+
+    # Stamp productName / identifier into the same tauri.conf.json that
+    # _stamp-calver already backed up to tauri.conf.json.bak. _restore-version
+    # restores from the .bak created BEFORE either edit, so both layered
+    # changes get reverted together.
+    sed -i '' "s/\"productName\": \"[^\"]*\"/\"productName\": \"${product_name}\"/" src-tauri/tauri.conf.json
+    sed -i '' "s/\"identifier\": \"[^\"]*\"/\"identifier\": \"${bundle_id}\"/" src-tauri/tauri.conf.json
+
+    if [ ! -d "node_modules" ]; then
+        echo "Dependencies not found. Running setup first..."
+        just setup
+    fi
+
+    echo "Building frontend..."
+    {{pm}} run build
+    if [ -d "mcp-server" ]; then
+        echo "Building MCP server..."
+        cd mcp-server
+        node ../scripts/package-manager.mjs install --frozen-lockfile
+        node ../scripts/package-manager.mjs run build
+        node ../scripts/package-manager.mjs install --production --frozen-lockfile
+        cd ..
+        echo "MCP server built"
+    fi
+
+    echo "Building Tauri app (LUCODE_FLAVOR=${flavor}, thin LTO, parallel codegen)..."
+    LUCODE_FLAVOR="${flavor}" \
+    CARGO_PROFILE_RELEASE_LTO="thin" \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS="16" \
+    {{pm}} run tauri -- build --bundles app
+
+    APP_PATH=""
+    for candidate in \
+        "src-tauri/target/release/bundle/macos/${app_basename}" \
+        "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/${app_basename}" \
+        "src-tauri/target/x86_64-apple-darwin/release/bundle/macos/${app_basename}" \
+        "src-tauri/target/universal-apple-darwin/release/bundle/macos/${app_basename}"; do
+        if [ -d "$candidate" ]; then
+            APP_PATH="$candidate"
+            break
+        fi
+    done
+
+    if [ -z "$APP_PATH" ]; then
+        echo "Build failed - ${app_basename} not found"
+        echo "Searched in:"
+        echo "  - src-tauri/target/release/bundle/macos/"
+        echo "  - src-tauri/target/aarch64-apple-darwin/release/bundle/macos/"
+        echo "  - src-tauri/target/x86_64-apple-darwin/release/bundle/macos/"
+        echo "  - src-tauri/target/universal-apple-darwin/release/bundle/macos/"
+        exit 1
+    fi
+
+    echo "Found app bundle at: $APP_PATH"
+
+    if [ -d "mcp-server/build" ]; then
+        MCP_DIR="$APP_PATH/Contents/Resources/mcp-server"
+        mkdir -p "$MCP_DIR"
+        cp -R mcp-server/build "$MCP_DIR/"
+        cp mcp-server/package.json "$MCP_DIR/"
+        cp -R mcp-server/node_modules "$MCP_DIR/"
+        echo "MCP server embedded in app bundle"
+    fi
+
+    SIGNING_IDENTITY="$(bash scripts/ensure-local-macos-signing-identity.sh)"
+    if [ -n "$SIGNING_IDENTITY" ]; then
+        echo "Signing ${product_name} with local identity: $SIGNING_IDENTITY"
+        codesign --force --deep --timestamp=none --sign "$SIGNING_IDENTITY" "$APP_PATH"
+        codesign --verify --deep --strict "$APP_PATH"
+    fi
+
+    INSTALL_DIR="/Applications"
+
+    if [ -d "$INSTALL_DIR/${app_basename}" ]; then
+        echo "Removing existing ${app_basename} installation..."
+        echo "Admin password required to remove old installation"
+        sudo rm -rf "$INSTALL_DIR/${app_basename}"
+    fi
+
+    echo "Installing ${product_name} to $INSTALL_DIR..."
+    echo "Admin password required for installation"
+    sudo cp -R "$APP_PATH" "$INSTALL_DIR/"
+
+    sudo chmod -R 755 "$INSTALL_DIR/${app_basename}"
+    sudo xattr -cr "$INSTALL_DIR/${app_basename}" 2>/dev/null || true
+
+    echo "${product_name} installed successfully!"
+    echo ""
+    echo "Launch ${product_name}:"
+    echo "  - From Spotlight: Press Cmd+Space and type '${product_name}'"
+    echo "  - From Terminal: open '${INSTALL_DIR}/${app_basename}'"
+    echo ""
+    echo "Data dir: ~/Library/Application Support/${bundle_id}"
+
 # Run only the frontend (Vite dev server) on auto-detected port
 run-frontend:
     #!/usr/bin/env bash
