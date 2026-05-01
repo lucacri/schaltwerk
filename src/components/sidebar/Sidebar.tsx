@@ -19,7 +19,7 @@ import { captureSelectionSnapshot, SelectionMemoryEntry } from '../../utils/sele
 import { computeSelectionCandidate } from '../../utils/selectionPostMerge'
 import { FilterMode } from '../../types/sessionFilters'
 import { isSpec } from '../../utils/sessionFilters'
-import { groupSessionsByVersion, selectBestVersionAndCleanup, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
+import { groupSessionsByVersion, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
 import {
     flattenVersionGroups,
     groupVersionGroupsByEpic,
@@ -40,9 +40,9 @@ import { useConvertToSpecController } from './hooks/useConvertToSpecController'
 import { useGitlabMrDialogController } from './hooks/useGitlabMrDialogController'
 import { createSafeUnlistener } from './helpers/createSafeUnlistener'
 import { useMergeModalListener } from './hooks/useMergeModalListener'
+import { useVersionPromotionController } from './hooks/useVersionPromotionController'
 import {
     PrDialogState,
-    PromoteVersionModalState,
     SwitchOrchestratorModalState,
 } from './helpers/modalState'
 
@@ -292,11 +292,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         onOpenModal: handleOpenPrModal,
     })
 
-    const [promoteVersionModal, setPromoteVersionModal] = useState<PromoteVersionModalState>({
-        open: false,
-        versionGroup: null,
-        selectedSessionId: ''
-    })
     const activeMergeSessionId = mergeDialogState.sessionName
     const activeMergeCommitDraft = activeMergeSessionId ? mergeCommitDrafts[activeMergeSessionId] ?? '' : ''
 
@@ -810,62 +805,18 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
 
     const handleSpecSelectedSession = openConvertToSpecModalFromShortcut
 
-    const handleSelectBestVersion = (groupBaseName: string, selectedSessionId: string) => {
-        const sessionGroups = groupSessionsByVersion(sessions)
-        const targetGroup = sessionGroups.find(g => g.baseName === groupBaseName)
-        
-        if (!targetGroup) {
-            logger.error(`Version group ${groupBaseName} not found`)
-            return
-        }
-
-        // Check if user has opted out of confirmation for this project
-        const noConfirmKey = `promote-version-no-confirm-${groupBaseName}`
-        const skipConfirmation = localStorage.getItem(noConfirmKey) === 'true'
-        
-        if (skipConfirmation) {
-            // Execute directly without confirmation
-            void executeVersionPromotion(targetGroup, selectedSessionId)
-        } else {
-            // Show confirmation modal
-            setPromoteVersionModal({
-                open: true,
-                versionGroup: targetGroup,
-                selectedSessionId
-            })
-        }
-    }
-
-    const executeVersionPromotion = async (targetGroup: SessionVersionGroupType, selectedSessionId: string) => {
-        try {
-            await selectBestVersionAndCleanup(targetGroup, selectedSessionId, invoke, projectPathRef.current)
-        } catch (error) {
-            logger.error('Failed to select best version:', error)
-            alert(`Failed to select best version: ${error}`)
-        }
-    }
+    const {
+        modalState: promoteVersionModal,
+        selectBestVersion: handleSelectBestVersion,
+        promoteSelected: handlePromoteSelectedVersion,
+        closeModal: closePromoteVersionModal,
+        confirmModal: confirmPromoteVersionModal,
+    } = useVersionPromotionController({ sessions, selection, projectPathRef })
 
     const {
         triggerJudge: handleTriggerConsolidationJudge,
         confirmWinner: handleConfirmConsolidationWinner,
     } = useConsolidationActions()
-
-    const handlePromoteSelectedVersion = () => {
-        if (selection.kind !== 'session' || !selection.payload) {
-            return // No session selected
-        }
-
-        const sessionGroups = groupSessionsByVersion(sessions)
-        const targetGroup = sessionGroups.find(g => 
-            g.isVersionGroup && g.versions.some(v => v.session.info.session_id === selection.payload)
-        )
-        
-        if (!targetGroup) {
-            return // Selected session is not within a version group
-        }
-
-        handleSelectBestVersion(targetGroup.baseName, selection.payload)
-    }
 
     const findSessionById = useCallback((sessionId?: string | null) => {
         if (!sessionId) return null
@@ -1320,14 +1271,8 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 }}
                 promote={{
                     state: promoteVersionModal,
-                    onClose: () => setPromoteVersionModal({ open: false, versionGroup: null, selectedSessionId: '' }),
-                    onConfirm: () => {
-                        const { versionGroup, selectedSessionId } = promoteVersionModal
-                        setPromoteVersionModal({ open: false, versionGroup: null, selectedSessionId: '' })
-                        if (versionGroup) {
-                            void executeVersionPromotion(versionGroup, selectedSessionId)
-                        }
-                    },
+                    onClose: closePromoteVersionModal,
+                    onConfirm: confirmPromoteVersionModal,
                 }}
                 merge={{
                     state: mergeDialogState,
