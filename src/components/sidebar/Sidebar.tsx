@@ -22,7 +22,13 @@ import { ConvertToSpecConfirmation } from '../modals/ConvertToSpecConfirmation'
 import { FilterMode } from '../../types/sessionFilters'
 import { isSpec } from '../../utils/sessionFilters'
 import { theme } from '../../common/theme'
-import { getSessionVersionGroupAggregate, groupSessionsByVersion, selectBestVersionAndCleanup, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
+import { groupSessionsByVersion, selectBestVersionAndCleanup, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
+import {
+    flattenVersionGroups,
+    groupVersionGroupsByEpic,
+    splitVersionGroupsBySection,
+    type SidebarSectionKey,
+} from './helpers/versionGroupings'
 import { SessionVersionGroup } from './SessionVersionGroup'
 import { CollapsedSidebarRail } from './CollapsedSidebarRail'
 import { PromoteVersionConfirmation } from '../modals/PromoteVersionConfirmation'
@@ -40,7 +46,7 @@ import { ProgressIndicator } from '../common/ProgressIndicator'
 import { logger } from '../../utils/logger'
 import { getErrorMessage } from '../../types/errors'
 import { UiEvent, emitUiEvent, listenUiEvent } from '../../common/uiEvents'
-import { AGENT_TYPES, AgentType, EnrichedSession, type Epic } from '../../types/session'
+import { AGENT_TYPES, AgentType, type Epic } from '../../types/session'
 import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationContext'
 import { useRun } from '../../contexts/RunContext'
 import { useToast } from '../../common/toast/ToastProvider'
@@ -83,52 +89,7 @@ interface SidebarProps {
     onToggleSidebar?: () => void
 }
 
-type EpicVersionGroup = {
-    epic: Epic
-    groups: SessionVersionGroupType[]
-}
-
-type EpicGroupingResult = {
-    epicGroups: EpicVersionGroup[]
-    ungroupedGroups: SessionVersionGroupType[]
-}
-
-type SidebarSectionKey = 'specs' | 'running'
-
 type SidebarSectionCollapseState = Record<SidebarSectionKey, boolean>
-
-const flattenVersionGroups = (sessionGroups: SessionVersionGroupType[]): EnrichedSession[] => {
-    const flattenedSessions: EnrichedSession[] = []
-    
-    for (const group of sessionGroups) {
-        for (const version of group.versions) {
-            flattenedSessions.push(version.session)
-        }
-    }
-    
-    return flattenedSessions
-}
-
-const epicForVersionGroup = (group: SessionVersionGroupType): Epic | null => {
-    const epics = group.versions
-        .map(version => version.session.info.epic)
-        .filter(Boolean) as Epic[]
-
-    if (epics.length === 0) {
-        return null
-    }
-
-    const epicId = epics[0]?.id
-    if (!epicId) {
-        return null
-    }
-
-    if (!epics.every(epic => epic.id === epicId)) {
-        return null
-    }
-
-    return epics[0] ?? null
-}
 
 export const buildConsolidationGroupDetail = (group: SessionVersionGroupType) => {
     const sourceVersions = group.versions.filter(version => !version.session.info.is_consolidation)
@@ -159,29 +120,6 @@ export const buildConsolidationGroupDetail = (group: SessionVersionGroupType) =>
     }
 }
 
-const groupVersionGroupsByEpic = (sessionGroups: SessionVersionGroupType[]): EpicGroupingResult => {
-    const groupsByEpicId = new Map<string, EpicVersionGroup>()
-    const ungroupedGroups: SessionVersionGroupType[] = []
-
-    for (const group of sessionGroups) {
-        const epic = epicForVersionGroup(group)
-        if (!epic) {
-            ungroupedGroups.push(group)
-            continue
-        }
-
-        const existing = groupsByEpicId.get(epic.id)
-        if (existing) {
-            existing.groups.push(group)
-        } else {
-            groupsByEpicId.set(epic.id, { epic, groups: [group] })
-        }
-    }
-
-    const epicGroups = [...groupsByEpicId.values()].sort((a, b) => a.epic.name.localeCompare(b.epic.name))
-    return { epicGroups, ungroupedGroups }
-}
-
 const DEFAULT_SECTION_COLLAPSE_STATE: SidebarSectionCollapseState = {
     specs: false,
     running: false,
@@ -203,26 +141,6 @@ const normalizeSectionCollapseState = (value: unknown): SidebarSectionCollapseSt
         specs: record.specs === true,
         running: record.running === true,
     }
-}
-
-const splitVersionGroupsBySection = (
-    sessionGroups: SessionVersionGroupType[],
-): Record<SidebarSectionKey, SessionVersionGroupType[]> => {
-    const sections: Record<SidebarSectionKey, SessionVersionGroupType[]> = {
-        specs: [],
-        running: [],
-    }
-
-    for (const group of sessionGroups) {
-        const aggregate = getSessionVersionGroupAggregate(group)
-        if (aggregate.state === 'spec') {
-            sections.specs.push(group)
-            continue
-        }
-        sections.running.push(group)
-    }
-
-    return sections
 }
 
 export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], onSwitchToProject, onCycleNextProject, onCyclePrevProject, isCollapsed = false, onExpandRequest, onToggleSidebar }: SidebarProps) {
