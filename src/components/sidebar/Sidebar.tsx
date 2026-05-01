@@ -11,7 +11,7 @@ import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { useFocus } from '../../contexts/FocusContext'
 import { UnlistenFn } from '@tauri-apps/api/event'
 import { listenEvent, SchaltEvent } from '../../common/eventSystem'
-import { EventPayloadMap, GitOperationPayload, OpenMergeModalPayload, OpenPrModalPayload, matchesProjectScope } from '../../common/events'
+import { EventPayloadMap, GitOperationPayload, OpenPrModalPayload, matchesProjectScope } from '../../common/events'
 import { useSelection } from '../../hooks/useSelection'
 import { clearTerminalStartedTracking } from '../terminal/Terminal'
 import { useSessions } from '../../hooks/useSessions'
@@ -39,6 +39,7 @@ import { useConsolidationActions } from './hooks/useConsolidationActions'
 import { useConvertToSpecController } from './hooks/useConvertToSpecController'
 import { useGitlabMrDialogController } from './hooks/useGitlabMrDialogController'
 import { createSafeUnlistener } from './helpers/createSafeUnlistener'
+import { useMergeModalListener } from './hooks/useMergeModalListener'
 import {
     PrDialogState,
     PromoteVersionModalState,
@@ -519,46 +520,11 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         }
     }, [createSafeUnlistener, handleOpenPrModal, pushToast])
 
-    useEffect(() => {
-        let unlistenOpenMergeModal: UnlistenFn | null = null
-
-        const attach = async () => {
-            try {
-                const unlisten = await listenEvent(SchaltEvent.OpenMergeModal, async (payload: OpenMergeModalPayload) => {
-                    try {
-                        if (payload.commitMessage) {
-                            setMergeCommitDrafts(prev => ({
-                                ...prev,
-                                [payload.sessionName]: payload.commitMessage!,
-                            }))
-                        }
-                        await openMergeDialogWithPrefill({
-                            sessionId: payload.sessionName,
-                            prefillMode: payload.mode,
-                        })
-                    } catch (error) {
-                        logger.error('Failed to open merge modal for MCP request:', error)
-                        pushToast({
-                            tone: 'error',
-                            title: t.toasts.mergeModalFailed,
-                            description: error instanceof Error ? error.message : String(error),
-                        })
-                    }
-                })
-                unlistenOpenMergeModal = createSafeUnlistener(unlisten)
-            } catch (error) {
-                logger.warn('Failed to listen for OpenMergeModal events:', error)
-            }
-        }
-
-        void attach()
-
-        return () => {
-            if (unlistenOpenMergeModal) {
-                unlistenOpenMergeModal()
-            }
-        }
-    }, [createSafeUnlistener, openMergeDialogWithPrefill, pushToast])
+    useMergeModalListener({
+        createSafeUnlistener,
+        setMergeCommitDrafts,
+        openMergeDialogWithPrefill,
+    })
 
     // Maintain selection memory and choose the next best session when visibility changes.
     useEffect(() => {
