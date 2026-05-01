@@ -13,11 +13,18 @@
 # Optional override: LUCODE_PROD_DATA_ROOT=/path/to/projects bash archive-prod-specs.sh
 # Default: ~/Library/Application Support/lucode/projects
 #
+# Optional dry-run / testing override: LUCODE_ARCHIVE_OUTPUT_ROOT=/some/dir
+# When set, files land at <root>/<basename(repository_path)>/<filename>.md
+# instead of <repository_path>/plans/lucode/<filename>.md. Skips the
+# repository-path-must-exist check (since we're not writing into real repos).
+# Useful for previewing the archive output before running for real.
+#
 # Compatible with macOS bash 3.2.
 
 set -u
 
 DATA_ROOT="${LUCODE_PROD_DATA_ROOT:-${HOME}/Library/Application Support/lucode/projects}"
+OUTPUT_ROOT="${LUCODE_ARCHIVE_OUTPUT_ROOT:-}"
 
 if [ ! -d "$DATA_ROOT" ]; then
     printf 'archive-prod-specs: no production data found at %s — nothing to do.\n' "$DATA_ROOT"
@@ -116,11 +123,24 @@ process_row_fields() {
         return 0
     fi
 
-    if [ -z "$repo" ] || [ ! -d "$repo" ]; then
-        printf '  ! unreachable repository_path %s for %s "%s" — skipped\n' \
-            "${repo:-<empty>}" "$source_label" "$name" >&2
-        UNREACHABLE=$((UNREACHABLE + 1))
-        return 0
+    local out_dir
+    if [ -n "$OUTPUT_ROOT" ]; then
+        # Dry-run override: route every artifact under <OUTPUT_ROOT>/<repo-basename>/
+        # so the user can inspect the would-be output without touching real repos.
+        local repo_basename="${repo:-unknown}"
+        repo_basename="${repo_basename##*/}"
+        if [ -z "$repo_basename" ]; then
+            repo_basename="unknown"
+        fi
+        out_dir="${OUTPUT_ROOT}/${repo_basename}"
+    else
+        if [ -z "$repo" ] || [ ! -d "$repo" ]; then
+            printf '  ! unreachable repository_path %s for %s "%s" — skipped\n' \
+                "${repo:-<empty>}" "$source_label" "$name" >&2
+            UNREACHABLE=$((UNREACHABLE + 1))
+            return 0
+        fi
+        out_dir="${repo}/plans/lucode"
     fi
 
     local date_str safe_name base
@@ -128,30 +148,65 @@ process_row_fields() {
     safe_name=$(sanitize_name "$name")
     base="${date_str}-${safe_name}-${kind}"
 
-    write_artifact_from_file "${repo}/plans/lucode" "$base" "$body_file"
+    write_artifact_from_file "$out_dir" "$base" "$body_file"
 }
 
-# List rows from tasks/sessions as: id<TAB>name<TAB>repo<TAB>created_at
-# Names/repos in v1 don't contain tabs (sanitized session names + filesystem
-# paths). created_at is always integer.
-list_tasks() {
+# Real content lives in two places in v1:
+#   - `archived_specs` table: every spec that was promoted past draft and
+#     subsequently archived. By definition "ran". Body is in `content`.
+#   - `specs` table: active specs. Filter to those that ran (ready_session_id
+#     set, OR have a non-empty implementation_plan — both signal the spec
+#     was acted upon). Body is in `content` (kind=spec) and
+#     `implementation_plan` (kind=plan).
+#
+# Tables `tasks` / `sessions.spec_content` were the original target but turn
+# out to be nearly empty in real production data — the user's content lives
+# in the spec tables above. Per "not the consolidation/judges" rule:
+# specs/archived_specs don't carry consolidation rows, so no extra filter
+# needed.
+
+# Auto-generated consolidation/judge session names follow these suffixes in
+# v1 — exclude them per the user's "not the consolidation/judges" rule:
+#   - `<base>-consolidation`             (the merge candidate's archived spec)
+#   - `<base>-consolidation_v<N>`        (versioned candidate — typically only
+#                                         in `sessions`, but keep for safety)
+#   - `<base>-consolidation-judge-<ts>`  (judge session's archived spec)
+# A user-named spec like `the_consolidation_judge_step` (uses underscores)
+# does NOT match these suffixes and is kept.
+CONSOLIDATION_NAME_FILTER="\
+       AND name NOT LIKE '%-consolidation' \
+       AND name NOT LIKE '%-consolidation-judge-%' \
+       AND name NOT LIKE '%-consolidation\\_v%' ESCAPE '\\' "
+
+list_archived_specs() {
+    local db="$1"
+    # archived_at is stored as MILLISECONDS in v1 (sessions.created_at + most
+    # other timestamps are seconds; archived_at is the odd one out). Normalize
+    # to seconds here so format_date doesn't see a year-58281 epoch.
+    sqlite3 -readonly -bail -noheader -separator $'\t' "$db" \
+        "SELECT id, session_name AS name, repository_path, COALESCE(archived_at,0)/1000
+         FROM archived_specs
+         WHERE content IS NOT NULL AND length(trim(content)) > 0
+           AND session_name NOT LIKE '%-consolidation'
+           AND session_name NOT LIKE '%-consolidation-judge-%'
+           AND session_name NOT LIKE '%-consolidation\\_v%' ESCAPE '\\'
+         ORDER BY archived_at;" 2>/dev/null
+}
+
+list_active_specs() {
     local db="$1"
     sqlite3 -readonly -bail -noheader -separator $'\t' "$db" \
         "SELECT id, name, repository_path, COALESCE(created_at,0)
-         FROM tasks
-         WHERE task_branch IS NOT NULL
-         ORDER BY created_at;" 2>/dev/null
-}
-
-list_sessions() {
-    local db="$1"
-    sqlite3 -readonly -bail -noheader -separator $'\t' "$db" \
-        "SELECT id, name, repository_path, COALESCE(created_at,0)
-         FROM sessions
-         WHERE COALESCE(is_consolidation,0) = 0
-           AND consolidation_role IS NULL
-           AND spec_content IS NOT NULL
-           AND length(trim(spec_content)) > 0
+         FROM specs
+         WHERE (ready_session_id IS NOT NULL
+             OR (implementation_plan IS NOT NULL AND length(trim(implementation_plan)) > 0))
+           AND (
+                (content IS NOT NULL AND length(trim(content)) > 0)
+                OR (implementation_plan IS NOT NULL AND length(trim(implementation_plan)) > 0)
+               )
+           AND name NOT LIKE '%-consolidation'
+           AND name NOT LIKE '%-consolidation-judge-%'
+           AND name NOT LIKE '%-consolidation\\_v%' ESCAPE '\\'
          ORDER BY created_at;" 2>/dev/null
 }
 
@@ -160,26 +215,23 @@ process_db() {
     PROJECTS=$((PROJECTS + 1))
     printf 'project DB: %s\n' "$db"
 
-    local id name repo created_at
-    while IFS=$'\t' read -r id name repo created_at; do
-        [ -z "${id:-}" ] && continue
-        for kind in spec plan summary; do
-            local col
-            case "$kind" in
-                spec)    col="current_spec" ;;
-                plan)    col="current_plan" ;;
-                summary) col="current_summary" ;;
-            esac
-            fetch_body "$db" "tasks" "$col" "$id"
-            process_row_fields "task[$id]" "$name" "$repo" "$created_at" "$kind" "$TMP_BODY"
-        done
-    done < <(list_tasks "$db")
+    local id name repo ts
 
-    while IFS=$'\t' read -r id name repo created_at; do
+    # archived_specs: content only (no implementation_plan column).
+    while IFS=$'\t' read -r id name repo ts; do
         [ -z "${id:-}" ] && continue
-        fetch_body "$db" "sessions" "spec_content" "$id"
-        process_row_fields "session[$id]" "$name" "$repo" "$created_at" "spec" "$TMP_BODY"
-    done < <(list_sessions "$db")
+        fetch_body "$db" "archived_specs" "content" "$id"
+        process_row_fields "archived_spec[$id]" "$name" "$repo" "$ts" "spec" "$TMP_BODY"
+    done < <(list_archived_specs "$db")
+
+    # active specs: content (-spec.md) + implementation_plan (-plan.md) when present.
+    while IFS=$'\t' read -r id name repo ts; do
+        [ -z "${id:-}" ] && continue
+        fetch_body "$db" "specs" "content" "$id"
+        process_row_fields "spec[$id]" "$name" "$repo" "$ts" "spec" "$TMP_BODY"
+        fetch_body "$db" "specs" "implementation_plan" "$id"
+        process_row_fields "spec[$id]" "$name" "$repo" "$ts" "plan" "$TMP_BODY"
+    done < <(list_active_specs "$db")
 }
 
 TMP_BODY=$(mktemp -t archive-prod-specs.XXXXXX)

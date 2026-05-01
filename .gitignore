@@ -47,3 +47,6 @@ updater-private.key*
 .tracked-tests
 
 .claude/scheduled_tasks.lock
+
+# Local dry-run output for archive-prod-specs.sh
+.tmp/
