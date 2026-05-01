@@ -34,6 +34,7 @@ import {
     normalizeSectionCollapseState,
     type SidebarSectionCollapseState,
 } from './helpers/sectionCollapse'
+import { createSelectionMemoryBuckets } from './helpers/selectionMemory'
 import { SessionVersionGroup } from './SessionVersionGroup'
 import { CollapsedSidebarRail } from './CollapsedSidebarRail'
 import { PromoteVersionConfirmation } from '../modals/PromoteVersionConfirmation'
@@ -122,12 +123,6 @@ export const buildConsolidationGroupDetail = (group: SessionVersionGroupType) =>
         })),
     }
 }
-
-const createSelectionMemoryBuckets = (): Record<FilterMode, SelectionMemoryEntry> => ({
-    [FilterMode.All]: { lastSelection: null, lastSessions: [] },
-    [FilterMode.Spec]: { lastSelection: null, lastSessions: [] },
-    [FilterMode.Running]: { lastSelection: null, lastSessions: [] },
-})
 
 export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], onSwitchToProject, onCycleNextProject, onCyclePrevProject, isCollapsed = false, onExpandRequest, onToggleSidebar }: SidebarProps) {
     const { t } = useTranslation()
