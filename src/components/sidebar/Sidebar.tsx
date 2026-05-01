@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useEffectEvent, useMemo, memo, type ReactNode } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useEffectEvent, useMemo, memo } from 'react'
 import { TauriCommands } from '../../common/tauriCommands'
 import { stableSessionTerminalId } from '../../common/terminalIdentity'
 import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
@@ -20,7 +20,6 @@ import { captureSelectionSnapshot, SelectionMemoryEntry } from '../../utils/sele
 import { computeSelectionCandidate } from '../../utils/selectionPostMerge'
 import { FilterMode } from '../../types/sessionFilters'
 import { isSpec } from '../../utils/sessionFilters'
-import { theme } from '../../common/theme'
 import { groupSessionsByVersion, selectBestVersionAndCleanup, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
 import {
     flattenVersionGroups,
@@ -40,6 +39,7 @@ import { SidebarHeaderBar } from './views/SidebarHeaderBar'
 import { OrchestratorEntry } from './views/OrchestratorEntry'
 import { SidebarSearchBar } from './views/SidebarSearchBar'
 import { SidebarVersionGroupRow } from './views/SidebarVersionGroupRow'
+import { SidebarSectionView } from './views/SidebarSectionView'
 import {
     ConvertToSpecModalState,
     GitlabMrDialogState,
@@ -73,9 +73,6 @@ import { useUpdateSessionFromParent } from '../../hooks/useUpdateSessionFromPare
 import { DEFAULT_AGENT } from '../../constants/agents'
 import { extractPrNumberFromUrl } from '../../utils/githubUrls'
 import { useEpics } from '../../hooks/useEpics'
-import { EpicGroupHeader } from './EpicGroupHeader'
-import { SidebarSectionHeader } from './SidebarSectionHeader'
-import { getEpicAccentScheme } from '../../utils/epicColors'
 import { projectForgeAtom } from '../../store/atoms/forge'
 import { SessionCardActionsProvider, type SessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { useImprovePlanAction } from '../../hooks/useImprovePlanAction'
@@ -1578,108 +1575,35 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                                 )
                             }
 
-                            const renderSection = (
-                                sectionKey: SidebarSectionKey,
-                                title: string,
-                                groups: SessionVersionGroupType[],
-                                collapsed: boolean,
-                            ) => {
-                                if (groups.length === 0) {
-                                    return null
-                                }
-
-                                const grouping = groupVersionGroupsByEpic(groups)
-                                const hasEpics = grouping.epicGroups.length > 0
-                                const toggleLabel = collapsed
-                                    ? (sectionKey === 'specs' ? t.sidebar.sections.expandSpecs : t.sidebar.sections.expandRunning)
-                                    : (sectionKey === 'specs' ? t.sidebar.sections.collapseSpecs : t.sidebar.sections.collapseRunning)
-
-                                const sectionElements: ReactNode[] = []
-
-                                if (!collapsed) {
-                                    if (!hasEpics) {
-                                        sectionElements.push(...groups.map(renderVersionGroup))
-                                    } else {
-                                        for (const epicGroup of grouping.epicGroups) {
-                                            const epic = epicGroup.epic
-                                            const sessionCount = epicGroup.groups.reduce((acc, group) => acc + group.versions.length, 0)
-                                            const epicCollapsed = Boolean(collapsedEpicIds[getCollapsedEpicKey(sectionKey, epic.id)])
-                                            const countLabel = `${sessionCount} session${sessionCount === 1 ? '' : 's'}`
-                                            const epicScheme = getEpicAccentScheme(epic.color)
-
-                                            sectionElements.push(
-                                                <div key={`epic-group-${sectionKey}-${epic.id}`} className="mt-2 mb-2">
-                                                    <EpicGroupHeader
-                                                        epic={epic}
-                                                        collapsed={epicCollapsed}
-                                                        countLabel={countLabel}
-                                                        menuOpen={epicMenuOpenId === epic.id}
-                                                        onMenuOpenChange={(open) => setEpicMenuOpenId(open ? epic.id : null)}
-                                                        onToggleCollapsed={() => toggleEpicCollapsed(sectionKey, epic.id)}
-                                                        onEdit={() => setEditingEpic(epic)}
-                                                        onDelete={() => setDeleteEpicTarget(epic)}
-                                                    />
-                                                    {!epicCollapsed && (
-                                                        <div
-                                                            className="ml-1 pl-2 pb-1"
-                                                            style={{
-                                                                borderLeft: `2px solid ${epicScheme?.DEFAULT ?? 'var(--color-border-subtle)'}`,
-                                                                marginLeft: '6px',
-                                                            }}
-                                                        >
-                                                            {epicGroup.groups.map(group => renderVersionGroup(group))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )
-                                        }
-
-                                        if (grouping.ungroupedGroups.length > 0) {
-                                            sectionElements.push(
-                                                <div
-                                                    key={`ungrouped-header-${sectionKey}`}
-                                                    data-testid="epic-ungrouped-header"
-                                                    className="mt-4 mb-2 px-2 flex items-center gap-2"
-                                                    style={{ color: 'var(--color-text-muted)', fontSize: theme.fontSize.caption }}
-                                                >
-                                                    <div style={{ flex: 1, height: 1, backgroundColor: 'var(--color-border-subtle)' }} />
-                                                    <span>{t.sidebar.ungrouped}</span>
-                                                    <div style={{ flex: 1, height: 1, backgroundColor: 'var(--color-border-subtle)' }} />
-                                                </div>
-                                            )
-
-                                            for (const group of grouping.ungroupedGroups) {
-                                                sectionElements.push(renderVersionGroup(group))
-                                            }
-                                        }
-                                    }
-                                }
-
-                                return (
-                                    <div
-                                        key={`sidebar-section-${sectionKey}`}
-                                        data-testid={`sidebar-section-${sectionKey}`}
-                                        className="mt-2 first:mt-0"
-                                    >
-                                        <SidebarSectionHeader
-                                            title={title}
-                                            count={groups.length}
-                                            collapsed={collapsed}
-                                            toggleLabel={toggleLabel}
-                                            onToggle={() => toggleSectionCollapsed(sectionKey)}
-                                        />
-                                        {!collapsed && (
-                                            <div className="mt-1">
-                                                {sectionElements}
-                                            </div>
-                                        )}
-                                    </div>
-                                )
+                            const sectionViewCommon = {
+                                collapsedEpicIds,
+                                epicMenuOpenId,
+                                setEpicMenuOpenId,
+                                getCollapsedEpicKey,
+                                onToggleEpicCollapsed: toggleEpicCollapsed,
+                                onToggleSectionCollapsed: toggleSectionCollapsed,
+                                onEditEpic: setEditingEpic,
+                                onDeleteEpic: setDeleteEpicTarget,
+                                renderVersionGroup,
                             }
 
                             return [
-                                renderSection('specs', t.sidebar.sections.specs, sectionGroups.specs, collapsedSections.specs),
-                                renderSection('running', t.sidebar.sections.running, sectionGroups.running, collapsedSections.running),
+                                <SidebarSectionView
+                                    key="sidebar-section-specs"
+                                    sectionKey="specs"
+                                    title={t.sidebar.sections.specs}
+                                    groups={sectionGroups.specs}
+                                    collapsed={collapsedSections.specs}
+                                    {...sectionViewCommon}
+                                />,
+                                <SidebarSectionView
+                                    key="sidebar-section-running"
+                                    sectionKey="running"
+                                    title={t.sidebar.sections.running}
+                                    groups={sectionGroups.running}
+                                    collapsed={collapsedSections.running}
+                                    {...sectionViewCommon}
+                                />,
                             ]
                         })()}
                         </SessionCardActionsProvider>
