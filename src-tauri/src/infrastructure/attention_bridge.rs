@@ -30,9 +30,14 @@ pub async fn update_session_attention_state_immediate(
     // fact on the session row. compute_run_status reads first_idle_at to derive
     // sticky AwaitingSelection. The recorder is write-once at the SQL layer so
     // calling on every WaitingForInput event is safe — duplicates commit zero
-    // rows.
+    // rows. Persistence is universal across session shapes (task-run sessions,
+    // consolidation candidates, standalone sessions); derivation into a
+    // task-run status only happens for sessions actually bound to a task_run
+    // via compute_run_status. The terminal layer hands us the session NAME,
+    // so the bridge looks the row up by name and writes through the recorder
+    // by id.
     if needs_attention && attention_kind == Some("waiting_for_input") {
-        crate::infrastructure::session_facts_bridge::record_session_first_idle_by_id(session_id)
+        crate::infrastructure::session_facts_bridge::record_session_first_idle_by_name(session_id)
             .await;
     }
 }
