@@ -3,7 +3,6 @@ import { TauriCommands } from '../../common/tauriCommands'
 import { stableSessionTerminalId } from '../../common/terminalIdentity'
 import { getActiveAgentTerminalId } from '../../common/terminalTargeting'
 import { getPasteSubmissionOptions } from '../../common/terminalPaste'
-import clsx from 'clsx'
 import { invoke } from '@tauri-apps/api/core'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { useTranslation } from '../../common/i18n/useTranslation'
@@ -38,8 +37,7 @@ import { SidebarModalsTrailer } from './views/SidebarModalsTrailer'
 import { SidebarHeaderBar } from './views/SidebarHeaderBar'
 import { OrchestratorEntry } from './views/OrchestratorEntry'
 import { SidebarSearchBar } from './views/SidebarSearchBar'
-import { SidebarVersionGroupRow } from './views/SidebarVersionGroupRow'
-import { SidebarSectionView } from './views/SidebarSectionView'
+import { SidebarSessionList } from './views/SidebarSessionList'
 import {
     ConvertToSpecModalState,
     GitlabMrDialogState,
@@ -49,7 +47,6 @@ import {
 } from './helpers/modalState'
 
 export { buildConsolidationGroupDetail }
-import { CollapsedSidebarRail } from './CollapsedSidebarRail'
 import { useSessionManagement } from '../../hooks/useSessionManagement'
 import { PrPreviewResponse, PrCreateOptions } from '../modals/PrSessionModal'
 import { useSessionPrShortcut } from '../../hooks/useSessionPrShortcut'
@@ -74,12 +71,10 @@ import { DEFAULT_AGENT } from '../../constants/agents'
 import { extractPrNumberFromUrl } from '../../utils/githubUrls'
 import { useEpics } from '../../hooks/useEpics'
 import { projectForgeAtom } from '../../store/atoms/forge'
-import { SessionCardActionsProvider, type SessionCardActions } from '../../contexts/SessionCardActionsContext'
+import { type SessionCardActions } from '../../contexts/SessionCardActionsContext'
 import { useImprovePlanAction } from '../../hooks/useImprovePlanAction'
 import { getSessionLifecycleState } from '../../utils/sessionState'
 import { sidebarViewModeAtom } from '../../store/atoms/sidebarViewMode'
-import { KanbanView } from './KanbanView'
-import { KanbanSessionRow } from './KanbanSessionRow'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
 
 // Removed legacy terminal-stuck idle handling; we rely on last-edited timestamps only
@@ -1514,102 +1509,38 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 sessionCount={sessions.length}
                 selection={selection}
             />
-            <div
-                ref={sessionListRef}
+            <SidebarSessionList
+                listRef={sessionListRef}
+                isCollapsed={isCollapsed}
+                loading={loading}
+                sidebarViewMode={sidebarViewMode}
+                selection={selection}
+                sessions={sessions}
+                flattenedSessions={flattenedSessions}
+                sectionGroups={sectionGroups}
+                collapsedSections={collapsedSections}
+                collapsedEpicIds={collapsedEpicIds}
+                epicMenuOpenId={epicMenuOpenId}
+                setEpicMenuOpenId={setEpicMenuOpenId}
+                getCollapsedEpicKey={getCollapsedEpicKey}
+                onToggleEpicCollapsed={toggleEpicCollapsed}
+                onToggleSectionCollapsed={toggleSectionCollapsed}
+                onEditEpic={setEditingEpic}
+                onDeleteEpic={setDeleteEpicTarget}
+                sessionCardActions={sessionCardActions}
+                sessionsWithNotifications={sessionsWithNotifications}
+                resettingSelection={resettingSelection}
+                isSessionRunning={isSessionRunning}
+                isSessionMerging={isSessionMerging}
+                getMergeStatus={getMergeStatus}
+                isSessionMutating={isSessionMutating}
+                onSelectSession={(sessionOrIndex) => { void handleSelectSession(sessionOrIndex) }}
+                onSelectBestVersion={handleSelectBestVersion}
+                onTriggerConsolidationJudge={handleTriggerConsolidationJudge}
+                onConfirmConsolidationWinner={handleConfirmConsolidationWinner}
                 onScroll={handleSessionScroll}
-                className={clsx(
-                    'flex-1 min-h-0 overflow-y-auto pt-1',
-                    isCollapsed ? 'px-0.5' : 'px-2'
-                )}
-                data-testid="session-scroll-container"
-                data-onboarding="session-list"
-            >
-                {sessions.length === 0 && !loading ? (
-                    <div className="text-center text-text-muted py-4">{t.sidebar.empty}</div>
-                ) : (
-                    isCollapsed ? (
-                        <CollapsedSidebarRail
-                            sessions={flattenedSessions}
-                            selection={selection}
-                            hasFollowUpMessage={(sessionId: string) => sessionsWithNotifications.has(sessionId)}
-                            isSessionRunning={isSessionRunning}
-                            onSelect={(sessionOrIndex) => { void handleSelectSession(sessionOrIndex) }}
-                            onExpandRequest={onExpandRequest}
-                        />
-                    ) : sidebarViewMode === 'board' ? (
-                        <KanbanView
-                            sessions={sessions}
-                            renderSession={(session) => (
-                                <KanbanSessionRow
-                                    session={session}
-                                    isSelected={selection.kind === 'session' && selection.payload === session.info.session_id}
-                                    onSelect={(s) => { void handleSelectSession(s.info.session_id) }}
-                                />
-                            )}
-                        />
-                    ) : (
-                        <SessionCardActionsProvider actions={sessionCardActions}>
-                        {(() => {
-                            let globalIndex = 0
-
-                            const renderVersionGroup = (group: SessionVersionGroupType) => {
-                                const groupStartIndex = globalIndex
-                                globalIndex += group.versions.length
-
-                                return (
-                                    <SidebarVersionGroupRow
-                                        key={group.id}
-                                        group={group}
-                                        startIndex={groupStartIndex}
-                                        selection={selection}
-                                        hasFollowUpMessage={(sessionId: string) => sessionsWithNotifications.has(sessionId)}
-                                        resettingSelection={resettingSelection}
-                                        isSessionRunning={isSessionRunning}
-                                        isMergeDisabled={isSessionMerging}
-                                        getMergeStatus={getMergeStatus}
-                                        isSessionBusy={isSessionMutating}
-                                        onSelectBestVersion={handleSelectBestVersion}
-                                        onTriggerConsolidationJudge={handleTriggerConsolidationJudge}
-                                        onConfirmConsolidationWinner={handleConfirmConsolidationWinner}
-                                    />
-                                )
-                            }
-
-                            const sectionViewCommon = {
-                                collapsedEpicIds,
-                                epicMenuOpenId,
-                                setEpicMenuOpenId,
-                                getCollapsedEpicKey,
-                                onToggleEpicCollapsed: toggleEpicCollapsed,
-                                onToggleSectionCollapsed: toggleSectionCollapsed,
-                                onEditEpic: setEditingEpic,
-                                onDeleteEpic: setDeleteEpicTarget,
-                                renderVersionGroup,
-                            }
-
-                            return [
-                                <SidebarSectionView
-                                    key="sidebar-section-specs"
-                                    sectionKey="specs"
-                                    title={t.sidebar.sections.specs}
-                                    groups={sectionGroups.specs}
-                                    collapsed={collapsedSections.specs}
-                                    {...sectionViewCommon}
-                                />,
-                                <SidebarSectionView
-                                    key="sidebar-section-running"
-                                    sectionKey="running"
-                                    title={t.sidebar.sections.running}
-                                    groups={sectionGroups.running}
-                                    collapsed={collapsedSections.running}
-                                    {...sectionViewCommon}
-                                />,
-                            ]
-                        })()}
-                        </SessionCardActionsProvider>
-                    )
-                )}
-            </div>
+                onExpandRequest={onExpandRequest}
+            />
 
             <SidebarModalsTrailer
                 epic={{
