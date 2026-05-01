@@ -9,9 +9,6 @@ import { useFocus } from '../../contexts/FocusContext'
 import { useSelection } from '../../hooks/useSelection'
 import { clearTerminalStartedTracking } from '../terminal/Terminal'
 import { useSessions } from '../../hooks/useSessions'
-import { captureSelectionSnapshot, SelectionMemoryEntry } from '../../utils/selectionMemory'
-import { computeSelectionCandidate } from '../../utils/selectionPostMerge'
-import { FilterMode } from '../../types/sessionFilters'
 import { isSpec } from '../../utils/sessionFilters'
 import { groupSessionsByVersion, SessionVersionGroup as SessionVersionGroupType } from '../../utils/sessionVersions'
 import {
@@ -20,7 +17,6 @@ import {
     splitVersionGroupsBySection,
     type SidebarSectionKey,
 } from './helpers/versionGroupings'
-import { createSelectionMemoryBuckets } from './helpers/selectionMemory'
 import { buildConsolidationGroupDetail } from './helpers/consolidationGroupDetail'
 import { SidebarModalsTrailer } from './views/SidebarModalsTrailer'
 import { SidebarHeaderBar } from './views/SidebarHeaderBar'
@@ -39,6 +35,7 @@ import { useOrchestratorBranch } from './hooks/useOrchestratorBranch'
 import { usePrDialogController } from './hooks/usePrDialogController'
 import { useSidebarBackendEvents } from './hooks/useSidebarBackendEvents'
 import { useSessionScrollIntoView } from './hooks/useSessionScrollIntoView'
+import { useSidebarSelectionMemory } from './hooks/useSidebarSelectionMemory'
 import {
     SwitchOrchestratorModalState,
 } from './helpers/modalState'
@@ -49,7 +46,7 @@ import { useShortcutDisplay } from '../../keyboardShortcuts/useShortcutDisplay'
 import { KeyboardShortcutAction } from '../../keyboardShortcuts/config'
 import { logger } from '../../utils/logger'
 import { getErrorMessage } from '../../types/errors'
-import { UiEvent, emitUiEvent, listenUiEvent } from '../../common/uiEvents'
+import { UiEvent, emitUiEvent } from '../../common/uiEvents'
 import { AGENT_TYPES, AgentType, type Epic } from '../../types/session'
 import { useGithubIntegrationContext } from '../../contexts/GithubIntegrationContext'
 import { useRun } from '../../contexts/RunContext'
@@ -255,18 +252,11 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     const sidebarRef = useRef<HTMLDivElement>(null)
     const sessionListRef = useRef<HTMLDivElement>(null)
     const sessionScrollTopRef = useRef(0)
-    const isProjectSwitching = useRef(false)
-    const previousProjectPathRef = useRef<string | null>(null)
+    const latestSessionsRef = useRef(allSessions)
+    const lastRemovedSessionRef = useRef<string | null>(null)
+    const lastMergedReadySessionRef = useRef<string | null>(null)
 
-    const selectionMemoryRef = useRef<Map<string, Record<FilterMode, SelectionMemoryEntry>>>(new Map())
-
-    const ensureProjectMemory = useCallback(() => {
-      const key = projectPath || '__default__';
-      if (!selectionMemoryRef.current.has(key)) {
-        selectionMemoryRef.current.set(key, createSelectionMemoryBuckets());
-      }
-      return selectionMemoryRef.current.get(key)!;
-    }, [projectPath]);
+    useEffect(() => { latestSessionsRef.current = allSessions }, [allSessions])
 
     const {
         collapsedEpicIds,
@@ -319,142 +309,23 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         [visibleSpecGroups, visibleRunningGroups],
     )
 
-    useEffect(() => {
-        if (previousProjectPathRef.current !== null && previousProjectPathRef.current !== projectPath) {
-            isProjectSwitching.current = true
-        }
-        previousProjectPathRef.current = projectPath
-    }, [projectPath]);
-
-    useEffect(() => {
-        let unsubscribe: (() => void) | null = null
-        const attach = async () => {
-            unsubscribe = await listenUiEvent(UiEvent.ProjectSwitchComplete, () => {
-                isProjectSwitching.current = false
-            })
-        }
-        void attach()
-        return () => {
-            unsubscribe?.()
-        }
-    }, []);
-
     useMergeModalListener({
         createSafeUnlistener,
         setMergeCommitDrafts,
         openMergeDialogWithPrefill,
     })
 
-    // Maintain selection memory and choose the next best session when visibility changes.
-    useEffect(() => {
-        if (isProjectSwitching.current) {
-            // Allow refocus even if the project switch completion event is delayed
-            isProjectSwitching.current = false
-        }
-
-        const allSessionsSnapshot = allSessions.length > 0 ? allSessions : latestSessionsRef.current
-
-        const memory = ensureProjectMemory();
-        const entry = memory[filterMode];
-
-        const visibleSessions = selectionScopedSessions
-        const visibleIds = new Set(visibleSessions.map(s => s.info.session_id))
-        const currentSelectionId = selection.kind === 'session' ? (selection.payload ?? null) : null
-
-        const { previousSessions } = captureSelectionSnapshot(entry, visibleSessions)
-
-        const removalCandidateFromEvent = lastRemovedSessionRef.current
-        const mergedCandidate = lastMergedReadySessionRef.current
-
-        const mergedSessionInfo = mergedCandidate
-            ? allSessionsSnapshot.find(s => s.info.session_id === mergedCandidate)
-            : undefined
-        const mergedStillReady = Boolean(mergedSessionInfo?.info.ready_to_merge)
-
-        const shouldAdvanceFromMerged = Boolean(
-            mergedCandidate &&
-            currentSelectionId === mergedCandidate &&
-            !mergedStillReady
-        )
-
-        if (mergedCandidate && (!currentSelectionId || currentSelectionId !== mergedCandidate)) {
-            lastMergedReadySessionRef.current = null
-        }
-
-        const shouldPreserveForReadyRemoval = false
-
-        const currentSessionMovedToReady = false
-
-        const effectiveRemovalCandidate = currentSessionMovedToReady && currentSelectionId
-            ? currentSelectionId
-            : removalCandidateFromEvent
-
-        if (selection.kind === 'orchestrator') {
-            entry.lastSelection = null
-            if (!effectiveRemovalCandidate && !shouldAdvanceFromMerged) {
-                return
-            }
-        }
-
-        if (visibleSessions.length === 0) {
-            entry.lastSelection = null
-            void setSelection({ kind: 'orchestrator' }, false, false)
-            if (removalCandidateFromEvent) {
-                lastRemovedSessionRef.current = null
-            }
-            if (shouldAdvanceFromMerged) {
-                lastMergedReadySessionRef.current = null
-            }
-            return
-        }
-
-        if (selection.kind === 'session' && currentSelectionId && visibleIds.has(currentSelectionId) && !shouldAdvanceFromMerged) {
-            entry.lastSelection = currentSelectionId
-            if (lastRemovedSessionRef.current) {
-                lastRemovedSessionRef.current = null
-            }
-            return
-        }
-
-        const rememberedId = entry.lastSelection
-        const candidateId = computeSelectionCandidate({
-            currentSelectionId,
-            visibleSessions,
-            previousSessions,
-            rememberedId,
-            removalCandidate: effectiveRemovalCandidate,
-            mergedCandidate,
-            shouldAdvanceFromMerged,
-            shouldPreserveForReadyRemoval,
-            allSessions: allSessionsSnapshot
-        })
-
-        if (candidateId) {
-            entry.lastSelection = candidateId
-            if (candidateId !== currentSelectionId) {
-                const targetSession = visibleSessions.find(s => s.info.session_id === candidateId)
-                    ?? allSessionsSnapshot.find(s => s.info.session_id === candidateId)
-                if (targetSession) {
-                    void setSelection({
-                        kind: 'session',
-                        payload: candidateId,
-                        worktreePath: targetSession.info.worktree_path,
-                        sessionState: getSessionLifecycleState(targetSession.info)
-                    }, false, false)
-                }
-            }
-        } else {
-            entry.lastSelection = null
-            void setSelection({ kind: 'orchestrator' }, false, false)
-        }
-
-        if (removalCandidateFromEvent) {
-            lastRemovedSessionRef.current = null
-        }
-        if (shouldAdvanceFromMerged) {
-            lastMergedReadySessionRef.current = null
-        }
-    }, [allSessions, ensureProjectMemory, filterMode, selectionScopedSessions, selection, setSelection])
+    useSidebarSelectionMemory({
+        projectPath,
+        selection,
+        setSelection,
+        allSessions,
+        selectionScopedSessions,
+        filterMode,
+        latestSessionsRef,
+        lastRemovedSessionRef,
+        lastMergedReadySessionRef,
+    })
 
     const { orchestratorBranch } = useOrchestratorBranch({
         selection,
@@ -757,17 +628,6 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         isDiffViewerOpen,
         isModalOpen: isAnyModalOpen()
     })
-
-    // Selection is now restored by the selection state atoms
-
-    // No longer need to listen for events - context handles everything
-
-    // Keep latest values in refs for use in event handlers without re-attaching listeners
-    const latestSessionsRef = useRef(allSessions)
-    const lastRemovedSessionRef = useRef<string | null>(null)
-    const lastMergedReadySessionRef = useRef<string | null>(null)
-
-    useEffect(() => { latestSessionsRef.current = allSessions }, [allSessions])
 
     const { handleSessionScroll } = useSessionScrollIntoView({
         selection,
