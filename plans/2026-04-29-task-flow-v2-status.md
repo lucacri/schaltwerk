@@ -14,7 +14,7 @@
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[x]` | Waves A–E — see below |
 | 5.5 | Hydrator wiring-gap interlude (`get_session_by_id` + 2 siblings) | `[x]` | Waves A–F — see below |
 | 6 | `Sidebar.tsx` split | `[x]` | Waves A–J — see below |
-| 7 | Task UI as the unified surface (frontend rebuild on v2 backend) | `[x]` (backbone) | All chunks A–E.0 shipped; manual smoke (E.1) + D.1.b capture follow-ups + D.3 right-panel dispatch wiring remain user-gated |
+| 7 | Task UI as the unified surface (frontend rebuild on v2 backend) | `[x]` | Chunks A–E.0 + post-review fixes (D.3.b right-panel dispatch, D.1.b capture + bulk, kanban-disabled, arch test tightened); manual smoke (E.1) is the only remaining gate before merge |
 
 ## Phase 1 — wave-by-wave detail
 
@@ -717,8 +717,9 @@ timeline: 6–8 weeks of active dev with mid-flight splits expected.
 | E.0 | Programmatic full-lifecycle e2e (`tests/e2e_task_lifecycle_full.rs`) | `[x]` | `9d521056` |
 | E.1.smoke | Manual smoke walk checklist (lifecycle + migration; user-driven verification) | 📋 | [`phase-7-smoke.md`](./2026-04-29-task-flow-v2-phase-7-smoke.md) |
 | E.2 | Status doc + memory + Phase 7 close-out | `[x]` | (this commit) |
-| D.1.b | (follow-up) Capture-session right-click + bulk-capture button | `[ ]` | — |
-| D.3.b | (follow-up) RightPanelTabs dispatch on selection.kind for TaskArtifactEditor mounting | `[ ]` | — |
+| D.1.b | Capture-session right-click + bulk-capture button | `[x]` | `f7e716f3` |
+| D.3.b | RightPanelTabs mounts TaskRightPane for task-shaped selections | `[x]` | `aa6b5edc` |
+| (close-out) | Kanban visibly disabled for v2 cutover; arch test tightened | `[x]` | `3f2ff6e3`, `d8316219` |
 
 ### Wave A.1 — what landed
 
