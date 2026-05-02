@@ -22,6 +22,8 @@ import { useKeyboardShortcutsConfig } from '../../contexts/KeyboardShortcutsCont
 import { KeyboardShortcutAction } from '../../keyboardShortcuts/config'
 import { detectPlatformSafe, isShortcutForAction } from '../../keyboardShortcuts/helpers'
 import { RightPanelTabsHeader } from './RightPanelTabsHeader'
+import { TaskRightPane } from './TaskRightPane'
+import { selectionToTaskId } from '../../store/atoms/selectionHelpers'
 import { ForgeIssuesTab } from '../forge/ForgeIssuesTab'
 import { ForgePrsTab } from '../forge/ForgePrsTab'
 import { useForgeIntegrationContext } from '../../contexts/ForgeIntegrationContext'
@@ -80,6 +82,19 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const { openSpecInWorkspace, closeSpecTab, openTabs, activeTab: specActiveTab } = specModeHook
 
   const effectiveSelection = selectionOverride ?? selection
+  // Phase 7 Wave D.3.b: when selection is task-shaped, mount the
+  // dedicated TaskRightPane and return early. The legacy session-
+  // bound dispatch below assumes session.info.* fields that
+  // task-shaped selections don't have.
+  const taskIdForPane = selectionToTaskId(effectiveSelection)
+  if (taskIdForPane) {
+    return (
+      <TaskRightPane
+        taskId={taskIdForPane}
+        projectPath={effectiveSelection.projectPath ?? null}
+      />
+    )
+  }
   const currentSession = effectiveSelection.kind === 'session' && effectiveSelection.payload
     ? allSessions.find(s => s.info.session_id === effectiveSelection.payload || s.info.branch === effectiveSelection.payload)
     : null
