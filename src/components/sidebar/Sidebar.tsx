@@ -11,6 +11,7 @@ import { SidebarHeaderBar } from './views/SidebarHeaderBar'
 import { OrchestratorEntry } from './views/OrchestratorEntry'
 import { SidebarSearchBar } from './views/SidebarSearchBar'
 import { SidebarSessionList } from './views/SidebarSessionList'
+import { SidebarStageSectionsView } from './views/SidebarStageSectionsView'
 import { buildSessionCardActions } from './helpers/buildSessionCardActions'
 import { useSidebarCollapsePersistence } from './hooks/useSidebarCollapsePersistence'
 import { useConsolidationActions } from './hooks/useConsolidationActions'
@@ -411,6 +412,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
                 sessionCount={sessions.length}
                 selection={selection}
             />
+            {!isCollapsed && <SidebarStageSectionsView />}
             <SidebarSessionList
                 listRef={sessionListRef}
                 isCollapsed={isCollapsed}

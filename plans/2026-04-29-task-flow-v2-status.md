@@ -14,7 +14,7 @@
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[x]` | Waves A–E — see below |
 | 5.5 | Hydrator wiring-gap interlude (`get_session_by_id` + 2 siblings) | `[x]` | Waves A–F — see below |
 | 6 | `Sidebar.tsx` split | `[x]` | Waves A–J — see below |
-| 7 | Task UI as the unified surface (frontend rebuild on v2 backend) | `[ ]` | Plan: [`2026-04-29-task-flow-v2-phase-7-plan.md`](./2026-04-29-task-flow-v2-phase-7-plan.md) — Chunk A done; B.1 next |
+| 7 | Task UI as the unified surface (frontend rebuild on v2 backend) | `[ ]` | Plan: [`2026-04-29-task-flow-v2-phase-7-plan.md`](./2026-04-29-task-flow-v2-phase-7-plan.md) — Chunk A + B.1 + B.2 done; B.3 next |
 
 ## Phase 1 — wave-by-wave detail
 
@@ -704,8 +704,8 @@ timeline: 6–8 weeks of active dev with mid-flight splits expected.
 | A.2 | Frontend task atoms (`tasksAtom` canonical; `Task.task_runs` is the run list) | `[x]` | `f7623aea` |
 | A.3 | TasksRefreshed listener + typed `taskService` wrappers | `[x]` | `7ca1da75` |
 | A.3.b | OSC-emit gap closure: `app_handle_registry` + `record_first_idle_on_db` emits `TasksRefreshed` | `[x]` | `5481458e` |
-| B.1 | `useSidebarStageSections` + `buildStageSections` helper | `[ ]` | — |
-| B.2 | `SidebarStageSection` view component | `[ ]` | — |
+| B.1 | `useSidebarStageSections` + `buildStageSections` helper | `[x]` | `00b78bb2` |
+| B.2 | `SidebarStageSection` view component | `[x]` | `455838af` |
 | B.3 | Wire stage sections into `Sidebar.tsx` | `[ ]` | — |
 | B.4 | Selection model: discriminated union (orchestrator / session / task / task-run / task-slot) | `[ ]` | — |
 | C.1 | `TaskRow` shell + stage-action button + state-table affordance test | `[ ]` | — |
