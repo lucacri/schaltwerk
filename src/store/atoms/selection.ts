@@ -20,12 +20,26 @@ import { projectPathAtom } from './project'
 import { hydrateProjectSessionsForSwitchActionAtom } from './sessions'
 
 export interface Selection {
-  kind: 'session' | 'orchestrator'
+  // Phase 7 Wave B.4: discriminated-union extended additively. The
+  // existing 'session' and 'orchestrator' kinds keep their semantics; the
+  // three task-shaped kinds layer in for the v2 task surface. Existing
+  // call sites that narrow on `kind === 'session'` continue to work —
+  // task selections do not match that predicate.
+  //
+  // - 'task': a task header is selected (no specific run / slot bound).
+  //   `taskId` is set; `payload`/`runId` are unset.
+  // - 'task-run': a specific TaskRun is selected (e.g., for inspecting a
+  //   single Brainstorm run). `taskId` and `runId` are set.
+  // - 'task-slot': a specific slot session inside a multi-candidate run.
+  //   `taskId`, `runId`, and `payload` (the slot's session id) are all set.
+  kind: 'session' | 'orchestrator' | 'task' | 'task-run' | 'task-slot'
   payload?: string
   stableId?: string
   worktreePath?: string
   sessionState?: 'spec' | 'processing' | 'running'
   projectPath?: string | null
+  taskId?: string
+  runId?: string
 }
 
 interface TerminalSet {
