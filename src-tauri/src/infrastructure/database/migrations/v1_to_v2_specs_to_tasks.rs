@@ -103,7 +103,7 @@ fn collect_candidate_specs(conn: &Connection) -> Result<Vec<CandidateSpec>> {
 /// promoted to a task and the task id it became. Read-only after the
 /// migration runs; exists so a future cleanup or panic recovery can
 /// trace the linkage.
-fn archive_pre_migration_state(conn: &Connection, candidates: &[CandidateSpec]) -> Result<()> {
+fn archive_pre_migration_state(conn: &Connection, _candidates: &[CandidateSpec]) -> Result<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS sessions_v1_specs_to_tasks_archive (
             session_id TEXT NOT NULL,
