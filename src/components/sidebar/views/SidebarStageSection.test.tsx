@@ -48,8 +48,10 @@ describe('SidebarStageSection', () => {
         onToggleCollapsed={() => {}}
       />,
     )
-    // Header text uses the human-readable label, not the wire literal.
-    expect(screen.getByText(/ready/i)).toBeInTheDocument()
+    // Scope the header label to the toggle button (each TaskRow also
+    // renders a stage badge with the same text).
+    const header = screen.getByRole('button', { name: /Collapse Ready section/i })
+    expect(header).toBeInTheDocument()
     expect(screen.getByTestId('sidebar-section-count')).toHaveTextContent('2')
   })
 
@@ -66,7 +68,7 @@ describe('SidebarStageSection', () => {
         onToggleCollapsed={() => {}}
       />,
     )
-    expect(screen.getAllByTestId('sidebar-stage-task-row-placeholder')).toHaveLength(3)
+    expect(screen.getAllByTestId('task-row-stage-badge')).toHaveLength(3)
     expect(screen.getByText('alpha')).toBeInTheDocument()
     expect(screen.getByText('beta')).toBeInTheDocument()
     expect(screen.getByText('gamma')).toBeInTheDocument()
@@ -81,7 +83,7 @@ describe('SidebarStageSection', () => {
         onToggleCollapsed={() => {}}
       />,
     )
-    expect(screen.queryByTestId('sidebar-stage-task-row-placeholder')).toBeNull()
+    expect(screen.queryByTestId('task-row-stage-badge')).toBeNull()
   })
 
   it('renders an empty-state placeholder when no tasks are present', () => {
@@ -131,6 +133,8 @@ describe('SidebarStageSection', () => {
         onToggleCollapsed={() => {}}
       />,
     )
-    expect(screen.getByText(/cancelled/i)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Cancelled section/i }),
+    ).toBeInTheDocument()
   })
 })

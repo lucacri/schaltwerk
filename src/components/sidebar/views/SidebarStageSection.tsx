@@ -15,6 +15,7 @@ import { theme } from '../../../common/theme'
 import type { Task } from '../../../types/task'
 import type { StageSectionKey } from '../helpers/buildStageSections'
 import { SidebarSectionHeader } from '../SidebarSectionHeader'
+import { TaskRow } from '../TaskRow'
 
 export interface SidebarStageSectionProps {
   sectionKey: StageSectionKey
@@ -61,18 +62,8 @@ export function SidebarStageSection({
           className="flex flex-col gap-0.5 px-1 py-1"
         >
           {tasks.map((task) => (
-            <li
-              key={task.id}
-              data-testid="sidebar-stage-task-row-placeholder"
-              data-task-id={task.id}
-              className="px-2 py-1 rounded hover:bg-bg-hover/30"
-              style={{
-                fontSize: theme.fontSize.body,
-                color: 'var(--color-text-primary)',
-                lineHeight: theme.lineHeight.normal,
-              }}
-            >
-              {task.display_name ?? task.name}
+            <li key={task.id}>
+              <TaskRow task={task} />
             </li>
           ))}
         </ul>
