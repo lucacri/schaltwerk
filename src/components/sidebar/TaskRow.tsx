@@ -19,6 +19,9 @@
 
 import type { Task, TaskStage } from '../../types/task'
 import { theme } from '../../common/theme'
+import { TaskRunRow } from './TaskRunRow'
+import { useTaskRowActions } from './hooks/useTaskRowActions'
+import { logger } from '../../utils/logger'
 
 export interface TaskRowProps {
   task: Task
@@ -72,6 +75,35 @@ export function TaskRow({ task }: TaskRowProps) {
   const showReopen = isCancelled
 
   const displayName = task.display_name ?? task.name
+  const actions = useTaskRowActions()
+
+  const handleStageAction = () => {
+    // Wave C.2 wires the Draft → Ready promotion. Stage runs
+    // (Brainstorm/Plan/Implement) need a preset picker which lands in
+    // C.3; for now they log so the surface is interactive without
+    // dispatching an unconfigured run.
+    if (task.stage === 'draft') {
+      void actions.promoteToReady(task).catch((err) => {
+        logger.warn('[TaskRow] promoteToReady failed', err)
+      })
+    } else {
+      logger.info(
+        `[TaskRow] stage-action ${task.stage} on ${task.id} — wiring lands in Wave C.3`,
+      )
+    }
+  }
+
+  const handleCancel = () => {
+    void actions.cancelTask(task).catch((err) => {
+      logger.warn('[TaskRow] cancelTask failed', err)
+    })
+  }
+
+  const handleReopen = () => {
+    void actions.reopenTask(task, 'draft').catch((err) => {
+      logger.warn('[TaskRow] reopenTask failed', err)
+    })
+  }
 
   return (
     <article
@@ -79,8 +111,9 @@ export function TaskRow({ task }: TaskRowProps) {
       data-task-id={task.id}
       data-task-stage={task.stage}
       data-task-cancelled={isCancelled ? 'true' : 'false'}
-      className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-bg-hover/30"
+      className="flex flex-col gap-1 px-2 py-1.5 rounded-md hover:bg-bg-hover/30"
     >
+      <div className="flex items-center gap-2">
       <span
         className="flex-1 truncate"
         style={{
@@ -130,9 +163,7 @@ export function TaskRow({ task }: TaskRowProps) {
           type="button"
           data-testid="task-row-stage-action"
           aria-label={stageAction.ariaLabel}
-          onClick={() => {
-            // Wave C.2 wires this through useTaskRowActions.
-          }}
+          onClick={handleStageAction}
           className="shrink-0 inline-flex items-center gap-1.5 h-6 rounded border px-2"
           style={{
             fontSize: theme.fontSize.caption,
@@ -152,9 +183,7 @@ export function TaskRow({ task }: TaskRowProps) {
           type="button"
           data-testid="task-row-cancel"
           aria-label="Cancel task"
-          onClick={() => {
-            // Wave C.2 wires this through useTaskRowActions.
-          }}
+          onClick={handleCancel}
           className="shrink-0 inline-flex items-center gap-1.5 h-6 rounded border px-2"
           style={{
             fontSize: theme.fontSize.caption,
@@ -173,9 +202,7 @@ export function TaskRow({ task }: TaskRowProps) {
           type="button"
           data-testid="task-row-reopen"
           aria-label="Reopen cancelled task"
-          onClick={() => {
-            // Wave C.2 wires this through useTaskRowActions.
-          }}
+          onClick={handleReopen}
           className="shrink-0 inline-flex items-center gap-1.5 h-6 rounded border px-2"
           style={{
             fontSize: theme.fontSize.caption,
@@ -187,6 +214,27 @@ export function TaskRow({ task }: TaskRowProps) {
         >
           <span>Reopen</span>
         </button>
+      )}
+      </div>
+
+      {task.task_runs.length > 0 && (
+        <div
+          data-testid="task-row-run-history"
+          className="flex flex-col gap-0.5 pl-3 border-l"
+          style={{ borderColor: 'var(--color-border-subtle)' }}
+        >
+          {task.task_runs.map((run) => (
+            <TaskRunRow
+              key={run.id}
+              run={run}
+              onCancelRun={(runId) => {
+                void actions.cancelTaskRun(runId).catch((err) => {
+                  logger.warn('[TaskRow] cancelTaskRun failed', err)
+                })
+              }}
+            />
+          ))}
+        </div>
       )}
     </article>
   )
