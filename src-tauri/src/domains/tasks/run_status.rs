@@ -120,6 +120,7 @@ mod tests {
             failure_reason: None,
             created_at: ts(1_000),
             updated_at: ts(1_000),
+            derived_status: None,
         }
     }
 

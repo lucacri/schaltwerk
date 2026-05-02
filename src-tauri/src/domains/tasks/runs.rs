@@ -72,6 +72,7 @@ impl<'a> TaskRunService<'a> {
             failure_reason: None,
             created_at: now,
             updated_at: now,
+            derived_status: None,
         };
         self.db.create_task_run(&run)?;
         Ok(run)

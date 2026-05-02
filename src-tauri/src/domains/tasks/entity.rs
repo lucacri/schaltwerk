@@ -380,6 +380,16 @@ pub struct TaskRun {
     pub failure_reason: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Phase 7 Wave A.1: wire-only enrichment. `None` when the run is
+    /// constructed from a DB row without session-fact context (the canonical
+    /// internal state). Populated by handlers in
+    /// [`crate::domains::tasks::wire`] before the run leaves the backend, so
+    /// every wire payload that returns a `TaskRun` carries the derived
+    /// status. The frontend treats `null` as a backend regression — see
+    /// `feedback_compile_pins_dont_catch_wiring.md` and the pinning tests
+    /// in `domains::tasks::wire::tests`.
+    #[serde(default)]
+    pub derived_status: Option<TaskRunStatus>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

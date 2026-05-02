@@ -126,6 +126,7 @@ fn make_run(id: &str) -> TaskRun {
         failure_reason: None,
         created_at: now,
         updated_at: now,
+        derived_status: None,
     }
 }
 

@@ -1075,6 +1075,11 @@ fn row_to_task_run(row: &Row<'_>) -> rusqlite::Result<TaskRun> {
         failure_reason: row.get(14)?,
         created_at: utc_from_epoch_seconds_lossy(row.get(15)?),
         updated_at: utc_from_epoch_seconds_lossy(row.get(16)?),
+        // Phase 7 Wave A.1: derived_status is wire-only — populated by
+        // domains::tasks::wire helpers from session-fact rows before the
+        // run leaves the backend. Internal (DB-hydrated) rows always carry
+        // None here.
+        derived_status: None,
     })
 }
 
@@ -1224,6 +1229,7 @@ mod tests {
             failure_reason: None,
             created_at: ts(2_000),
             updated_at: ts(2_000),
+            derived_status: None,
         }
     }
 

@@ -10,6 +10,7 @@ pub mod rest_contract;
 pub mod run_status;
 pub mod runs;
 pub mod service;
+pub mod wire;
 
 pub use errors::TaskFlowError;
 

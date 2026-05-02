@@ -15,6 +15,10 @@ use lucode::domains::tasks::service::{
     TaskNotFoundError, TaskOrchestrator, TaskRun, TaskRunService, TaskService, TaskStage,
     TaskStageConfig, TaskVariant,
 };
+use lucode::services::{
+    TaskWithBodies, enrich_runs_with_derived_status, enrich_task_runs_with_derived_status,
+    enrich_tasks_with_derived_run_statuses,
+};
 use lucode::infrastructure::database::AppConfigMethods;
 use lucode::infrastructure::database::Database;
 use lucode::infrastructure::database::db_tasks::TaskMethods;
@@ -96,7 +100,7 @@ fn notify_task_mutation_with_db<R: tauri::Runtime>(
     db: &Database,
     repo_path: &Path,
 ) {
-    let tasks = match TaskService::new(db).list_tasks(repo_path) {
+    let mut tasks = match TaskService::new(db).list_tasks(repo_path) {
         Ok(tasks) => tasks,
         Err(err) => {
             log::warn!(
@@ -106,6 +110,12 @@ fn notify_task_mutation_with_db<R: tauri::Runtime>(
             return;
         }
     };
+    if let Err(err) = enrich_tasks_with_derived_run_statuses(&mut tasks, db) {
+        log::warn!(
+            "Failed to enrich tasks with derived run statuses for TasksRefreshed payload: {err}. \
+             Emitting payload with status=null; the next read will reconcile."
+        );
+    }
     let payload = TasksRefreshedPayload {
         project_path: repo_path.to_string_lossy().to_string(),
         tasks,
@@ -118,9 +128,16 @@ async fn notify_task_mutation<R: tauri::Runtime>(
     project_path: Option<&str>,
 ) {
     let payload = match with_core_handle(project_path, |db, repo_path| {
+        let mut tasks = TaskService::new(db).list_tasks(repo_path)?;
+        if let Err(err) = enrich_tasks_with_derived_run_statuses(&mut tasks, db) {
+            log::warn!(
+                "Failed to enrich tasks with derived run statuses inside notify_task_mutation: {err}. \
+                 Emitting payload with status=null; the next read will reconcile."
+            );
+        }
         Ok(TasksRefreshedPayload {
             project_path: repo_path.to_string_lossy().to_string(),
-            tasks: TaskService::new(db).list_tasks(repo_path)?,
+            tasks,
         })
     })
     .await
@@ -393,7 +410,12 @@ pub async fn lucode_task_create(
 #[tauri::command]
 pub async fn lucode_task_list(project_path: Option<String>) -> Result<Vec<Task>, TaskFlowError> {
     with_core_handle(project_path.as_deref(), |db, repo_path| {
-        TaskService::new(db).list_tasks(repo_path)
+        let mut tasks = TaskService::new(db).list_tasks(repo_path)?;
+        // Phase 7 Wave A.1: every embedded TaskRun on the wire carries
+        // `derived_status` populated via compute_run_status. Body fields
+        // are deliberately omitted from the list shape (see plan §0.3).
+        enrich_tasks_with_derived_run_statuses(&mut tasks, db)?;
+        Ok(tasks)
     })
     .await
 }
@@ -446,11 +468,19 @@ pub async fn lucode_project_workflow_defaults_delete(
 }
 
 #[tauri::command]
-pub async fn lucode_task_get(id: String, project_path: Option<String>) -> Result<Task, TaskFlowError> {
+pub async fn lucode_task_get(
+    id: String,
+    project_path: Option<String>,
+) -> Result<TaskWithBodies, TaskFlowError> {
     with_core_handle(project_path.as_deref(), move |db, _repo_path| {
-        TaskService::new(db)
+        let mut task = TaskService::new(db)
             .get_task(&id)
-            .map_err(|_| anyhow::anyhow!("task '{id}' not found"))
+            .map_err(|_| anyhow::anyhow!("task '{id}' not found"))?;
+        // Phase 7 Wave A.1: get-by-id is the body-bearing surface. Enrich
+        // the embedded runs with `derived_status` first, then wrap with the
+        // three current artifact bodies via the derived getters on Task.
+        enrich_task_runs_with_derived_status(&mut task, db)?;
+        TaskWithBodies::from_task(task, db)
     })
     .await
 }
@@ -745,7 +775,11 @@ pub async fn lucode_task_run_list(
         let svc = TaskService::new(db);
         svc.get_task(&task_id)
             .map_err(|_| anyhow::anyhow!("task '{task_id}' not found"))?;
-        TaskRunService::new(db).list_runs_for_task(&task_id)
+        let mut runs = TaskRunService::new(db).list_runs_for_task(&task_id)?;
+        // Phase 7 Wave A.1: every wire run carries `derived_status` via
+        // compute_run_status over the bound session-fact rows.
+        enrich_runs_with_derived_status(&mut runs, db)?;
+        Ok(runs)
     })
     .await
 }
@@ -756,9 +790,12 @@ pub async fn lucode_task_run_get(
     project_path: Option<String>,
 ) -> Result<TaskRun, TaskFlowError> {
     with_core_handle(project_path.as_deref(), move |db, _repo_path| {
-        TaskRunService::new(db)
+        let mut run = TaskRunService::new(db)
             .get_run(&run_id)
-            .map_err(|_| anyhow::anyhow!("task run '{run_id}' not found"))
+            .map_err(|_| anyhow::anyhow!("task run '{run_id}' not found"))?;
+        let mut single = std::slice::from_mut(&mut run);
+        enrich_runs_with_derived_status(&mut single, db)?;
+        Ok(run)
     })
     .await
 }

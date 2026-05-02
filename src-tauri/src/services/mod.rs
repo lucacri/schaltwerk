@@ -63,6 +63,10 @@ pub use crate::domains::terminal::{
 pub use crate::domains::tasks::TaskFlowError;
 pub use crate::domains::tasks::entity::TaskRunStatus;
 pub use crate::domains::tasks::run_status::{SessionFacts, compute_run_status};
+pub use crate::domains::tasks::wire::{
+    TaskWithBodies, enrich_runs_with_derived_status, enrich_task_runs_with_derived_status,
+    enrich_tasks_with_derived_run_statuses,
+};
 pub use crate::domains::workspace::get_project_files_with_status;
 pub use crate::shared::format_branch_name;
 
