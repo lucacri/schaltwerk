@@ -112,6 +112,7 @@ import { useKeyboardShortcutsConfig } from './contexts/KeyboardShortcutsContext'
 import { detectPlatformSafe, isShortcutForAction } from './keyboardShortcuts/helpers'
 import { selectAllTerminal } from './terminal/registry/terminalRegistry'
 import { useSelectionPreserver } from './hooks/useSelectionPreserver'
+import { useTaskRefreshListener } from './hooks/useTaskRefreshListener'
 import { AGENT_START_TIMEOUT_MESSAGE } from './common/agentSpawn'
 import { beginSplitDrag, endSplitDrag } from './utils/splitDragCoordinator'
 import { useOptionalToast } from './common/toast/ToastProvider'
@@ -145,6 +146,13 @@ import { FocusSync } from './components/FocusSync'
 import { parseCancelBlocker } from './common/cancelBlocker'
 
 function AppContent() {
+  // Phase 7 Wave A.3: subscribe to TasksRefreshed and dispatch payloads
+  // into tasksAtom. The listener mounts at the App shell so it survives
+  // project switches (the backend-side TasksRefreshedPayload carries the
+  // project_path, but the atom holds the active project's task list and
+  // is replaced wholesale on every emission).
+  useTaskRefreshListener()
+
   const { selection, clearTerminalTracking } = useSelection()
   const selectionIsSpec = selection.kind === 'session' && selection.sessionState === 'spec'
   const projectPath = useAtomValue(projectPathAtom)

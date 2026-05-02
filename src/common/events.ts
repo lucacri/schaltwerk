@@ -44,6 +44,10 @@ export enum SchaltEvent {
   OpenGitlabMrModal = 'schaltwerk:open-gitlab-mr-modal',
   SelectAllRequested = 'schaltwerk:select-all-requested',
   ViewProcessesRequested = 'schaltwerk:view-processes-requested',
+  // Phase 7 Wave A.3: backend already emits this on every task mutation
+  // (commands/tasks.rs:80 + infrastructure/events/mod.rs:18). Frontend
+  // listener wired in src/hooks/useTaskRefreshListener.
+  TasksRefreshed = 'schaltwerk:tasks-refreshed',
 }
 
 export type SessionAttentionKind = 'idle' | 'waiting_for_input'
@@ -243,10 +247,20 @@ export interface OpenGitlabMrModalPayload {
 
 import { type EnrichedSession, type Epic } from '../types/session'
 import { type ForgeStatusPayload } from '../types/forgeTypes'
+import { type Task } from '../types/task'
 
 export interface SessionsRefreshedEventPayload {
   projectPath: string
   sessions: EnrichedSession[]
+}
+
+// Phase 7 Wave A.3: payload for SchaltEvent.TasksRefreshed. Mirrors the
+// Rust-side TasksRefreshedPayload at infrastructure/events/mod.rs. The
+// Rust handler emits the snake_case key `project_path`; the listener
+// (src/hooks/useTaskRefreshListener) reads it directly.
+export interface TasksRefreshedEventPayload {
+  project_path: string
+  tasks: Task[]
 }
 
 export const matchesProjectScope = (
@@ -342,4 +356,5 @@ export type EventPayloadMap = {
   [SchaltEvent.OpenGitlabMrModal]: OpenGitlabMrModalPayload
   [SchaltEvent.SelectAllRequested]: null
   [SchaltEvent.ViewProcessesRequested]: null
+  [SchaltEvent.TasksRefreshed]: TasksRefreshedEventPayload
 }
