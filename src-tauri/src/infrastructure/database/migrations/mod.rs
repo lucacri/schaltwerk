@@ -1,5 +1,6 @@
 pub mod v1_to_v2_run_role;
 pub mod v1_to_v2_session_status;
+pub mod v1_to_v2_specs_to_tasks;
 pub mod v1_to_v2_task_cancelled;
 pub mod v1_to_v2_task_runs;
 pub mod v2_drop_session_legacy_columns;

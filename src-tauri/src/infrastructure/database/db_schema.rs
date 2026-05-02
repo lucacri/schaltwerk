@@ -999,6 +999,11 @@ pub(crate) fn apply_tasks_migrations(conn: &rusqlite::Connection) -> anyhow::Res
     // `Task::current_spec(&db)` etc. which look up the artifact with
     // `is_current = true`. Idempotent — v2-native DBs no-op.
     super::migrations::v2_drop_task_current_columns::run(conn)?;
+    // Phase 7 Wave D.2: promote v1 spec sessions to draft tasks.
+    // Each unbound spec session becomes a Draft task with the spec
+    // content as the seed Spec artifact (is_current=true). Idempotent —
+    // re-runs find no eligible candidates and no-op.
+    super::migrations::v1_to_v2_specs_to_tasks::run(conn)?;
     let _ = conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sessions_task ON sessions(task_id)",
         [],
