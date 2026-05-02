@@ -113,6 +113,7 @@ import { detectPlatformSafe, isShortcutForAction } from './keyboardShortcuts/hel
 import { selectAllTerminal } from './terminal/registry/terminalRegistry'
 import { useSelectionPreserver } from './hooks/useSelectionPreserver'
 import { useTaskRefreshListener } from './hooks/useTaskRefreshListener'
+import { NewTaskModal } from './components/modals/NewTaskModal'
 import { AGENT_START_TIMEOUT_MESSAGE } from './common/agentSpawn'
 import { beginSplitDrag, endSplitDrag } from './utils/splitDragCoordinator'
 import { useOptionalToast } from './common/toast/ToastProvider'
@@ -520,6 +521,8 @@ function AppContent() {
   ])
 
   const [newSessionOpen, setNewSessionOpen] = useState(false)
+  // Phase 7 Wave D.1: + New Task is the primary creation surface in v2.
+  const [newTaskOpen, setNewTaskOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsCategory | undefined>(undefined)
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false)
@@ -2565,11 +2568,11 @@ function AppContent() {
                           <span style={{ color: 'var(--color-text-secondary)' }}>⌘← · ⌘→</span>
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 gap-2">
                         <button
                           onClick={() => {
                             previousFocusRef.current = document.activeElement
-                            setNewSessionOpen(true)
+                            setNewTaskOpen(true)
                           }}
                           className="w-full text-sm px-3 py-2 rounded group transition-colors flex items-center justify-between border"
                           style={{
@@ -2577,16 +2580,17 @@ function AppContent() {
                             color: 'var(--color-text-primary)',
                             borderColor: 'var(--color-border-subtle)'
                           }}
-                          data-onboarding="start-agent-button"
+                          data-testid="home-new-task-button"
+                          data-onboarding="new-task-button"
                           onMouseEnter={(e) => {
                             e.currentTarget.style.backgroundColor = 'rgba(var(--color-bg-hover-rgb), 0.6)'
                           }}
                           onMouseLeave={(e) => {
                             e.currentTarget.style.backgroundColor = 'rgba(var(--color-bg-elevated-rgb), 0.6)'
                           }}
-                          title={`Start agent (${startShortcut})`}
+                          title={`+ New Task (${specShortcut})`}
                         >
-                          <span>Start Agent</span>
+                          <span>+ New Task</span>
                           <span
                             className="text-xs px-2 py-0.5 rounded transition-opacity group-hover:opacity-100"
                             style={{
@@ -2594,39 +2598,7 @@ function AppContent() {
                               color: 'var(--color-text-secondary)'
                             }}
                           >
-                            {startShortcut}
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            previousFocusRef.current = document.activeElement
-                            setOpenAsSpec(true)
-                            setNewSessionOpen(true)
-                          }}
-                          className="w-full text-sm px-3 py-2 rounded group border transition-colors flex items-center justify-between"
-                          style={{
-                            backgroundColor: 'var(--color-accent-amber-bg)',
-                            borderColor: 'var(--color-accent-amber-border)',
-                            color: 'var(--color-text-primary)'
-                          }}
-                          data-onboarding="create-spec-button"
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = 'rgba(var(--color-accent-amber-rgb), 0.2)'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'var(--color-accent-amber-bg)'
-                          }}
-                          title={`Create spec (${specShortcut})`}
-                        >
-                          <span>Create Spec</span>
-                          <span
-                            className="text-xs px-2 py-0.5 rounded transition-opacity group-hover:opacity-100"
-                            style={{
-                              backgroundColor: 'rgba(var(--color-accent-amber-rgb), 0.15)',
-                              color: 'var(--color-accent-amber-light)'
-                            }}
-                          >
-                          {specShortcut}
+                            {specShortcut}
                           </span>
                         </button>
                       </div>
@@ -2684,6 +2656,13 @@ function AppContent() {
              onPromptChange={setCachedPrompt}
              onClose={closeNewSessionModal}
              onCreate={handleCreateSession}
+           />
+
+           {/* Phase 7 Wave D.1: + New Task primary creation surface. */}
+           <NewTaskModal
+             isOpen={newTaskOpen}
+             onClose={() => setNewTaskOpen(false)}
+             projectPath={projectPath}
            />
 
           {currentSession && (
