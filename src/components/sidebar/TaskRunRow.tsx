@@ -12,6 +12,8 @@
 
 import { theme } from '../../common/theme'
 import type { TaskRun, TaskRunStatus } from '../../types/task'
+import { TaskRunSlots } from './TaskRunSlots'
+import { useTaskRunSlots } from './hooks/useTaskRunSlots'
 
 export interface TaskRunRowProps {
   run: TaskRun
@@ -79,13 +81,15 @@ export function TaskRunRow({ run, onCancelRun }: TaskRunRowProps) {
   const status = run.derived_status
   const visual = status ? STATUS_VISUALS[status] : UNKNOWN_VISUAL
   const showCancel = status === 'awaiting_selection'
+  const slots = useTaskRunSlots(run.id, run.selected_session_id)
 
   return (
     <div
       data-testid={`task-run-row-${run.id}`}
       data-run-id={run.id}
-      className="flex items-center gap-2 px-2 py-1 rounded-md"
+      className="flex flex-col gap-0.5 rounded-md"
     >
+      <div className="flex items-center gap-2 px-2 py-1">
       <span
         data-testid="task-run-row-stage-badge"
         className="shrink-0 rounded border px-1.5 py-[1px]"
@@ -145,6 +149,17 @@ export function TaskRunRow({ run, onCancelRun }: TaskRunRowProps) {
         >
           <span>Cancel run</span>
         </button>
+      )}
+      </div>
+
+      {slots.length > 0 && (
+        <TaskRunSlots
+          runId={run.id}
+          runStatus={status ?? 'running'}
+          slots={slots}
+          judgeFiled={false}
+          mergeFailureReason={null}
+        />
       )}
     </div>
   )

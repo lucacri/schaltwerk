@@ -610,6 +610,19 @@ pub struct SessionInfo {
     pub attention_kind: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stage: Option<SpecStage>,
+    // Phase 7 Wave C.3: task-aware fields surfaced to the frontend so
+    // the sidebar can derive multi-candidate slot lists for a given
+    // TaskRun. Wire-shape extension only — no schema or domain changes.
+    // Populated from the canonical `Session` row by every
+    // SessionInfo construction site.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_run_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub first_idle_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize)]

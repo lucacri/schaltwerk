@@ -98,6 +98,8 @@ export interface SessionReadyToMergeCheck {
     passed: boolean
 }
 
+// Phase 7 Wave C.3: task-aware wire fields land on SessionInfo so the
+// sidebar can derive multi-candidate slot lists for a given TaskRun.
 export interface SessionInfo {
     session_id: string
     stable_id?: string
@@ -159,6 +161,10 @@ export interface SessionInfo {
     promotionReason?: string | null
     ci_autofix_enabled?: boolean
     stage?: string | null
+    task_run_id?: string | null
+    slot_key?: string | null
+    first_idle_at?: string | null
+    exit_code?: number | null
 }
 
 export interface DiffStats {

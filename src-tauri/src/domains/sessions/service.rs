@@ -3822,6 +3822,10 @@ impl SessionManager {
                 promotion_reason: None,
                 attention_kind: None,
                 stage: Some(spec.stage.clone()),
+                task_run_id: None,
+                slot_key: None,
+                first_idle_at: None,
+                exit_code: None,
             };
 
             enriched.push(EnrichedSession {
@@ -3908,6 +3912,10 @@ impl SessionManager {
                     promotion_reason: session.promotion_reason.clone(),
                     attention_kind: None,
                     stage: session.task_stage.clone().or(Some(SpecStage::Draft)),
+                    task_run_id: session.task_run_id.clone(),
+                    slot_key: session.slot_key.clone(),
+                    first_idle_at: session.first_idle_at,
+                    exit_code: session.exit_code,
                 };
 
                 enriched.push(EnrichedSession {
@@ -4018,6 +4026,10 @@ impl SessionManager {
                 } else {
                     None
                 }),
+                task_run_id: session.task_run_id.clone(),
+                slot_key: session.slot_key.clone(),
+                first_idle_at: session.first_idle_at,
+                exit_code: session.exit_code,
             };
 
             let terminals = vec![
