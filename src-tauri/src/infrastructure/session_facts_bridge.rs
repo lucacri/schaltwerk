@@ -21,7 +21,11 @@
 //! async↔sync bridging dance, no `Arc<dyn Recorder>` runtime lookup.
 
 use crate::domains::sessions::facts_recorder::SessionFactsRecorder;
+use crate::domains::tasks::service::TaskService;
+use crate::domains::tasks::wire::enrich_tasks_with_derived_run_statuses;
+use crate::infrastructure::app_handle_registry;
 use crate::infrastructure::database::Database;
+use crate::infrastructure::events::{SchaltEvent, TasksRefreshedPayload, emit_event};
 use crate::project_manager::PROJECT_MANAGER;
 use chrono::{DateTime, Utc};
 use log::{debug, warn};
@@ -33,12 +37,31 @@ use std::path::Path;
 /// `PROJECT_MANAGER`. Returns the row id that was written, or `None` if the
 /// session was not found (the bridge intentionally treats unknown names as a
 /// no-op so the terminal layer never panics on stale ids).
+/// Outcome of a [`record_first_idle_on_db`] call. Distinguishes
+/// "transitioned now" from "was already idle" so callers (and tests)
+/// can verify the write-once semantics and the
+/// [`SchaltEvent::TasksRefreshed`] emission gating.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum FirstIdleOutcome {
+    /// The session row had `first_idle_at IS NULL` before this call;
+    /// the row was updated. The contained id is the session's UUID.
+    Transitioned(String),
+    /// The session row already had a `first_idle_at` value; this call
+    /// was a no-op at the SQL layer. No event was emitted.
+    AlreadyIdle,
+    /// The session lookup failed (unknown name, DB error). No write
+    /// attempted, no event emitted.
+    SessionNotFound,
+    /// The recorder write itself errored (rare; logged).
+    WriteFailed,
+}
+
 fn record_first_idle_on_db(
     db: &Database,
     repo_path: &Path,
     session_name: &str,
     first_idle_at: DateTime<Utc>,
-) -> Option<String> {
+) -> FirstIdleOutcome {
     let session = match crate::domains::sessions::db_sessions::SessionMethods::get_session_by_name(
         db,
         repo_path,
@@ -49,18 +72,79 @@ fn record_first_idle_on_db(
             debug!(
                 "session_facts_bridge: session '{session_name}' not found, skipping record_first_idle ({err})"
             );
-            return None;
+            return FirstIdleOutcome::SessionNotFound;
         }
     };
 
+    let was_already_idle = session.first_idle_at.is_some();
+    let session_id = session.id.clone();
+
     let recorder = SessionFactsRecorder::new(db);
-    if let Err(err) = recorder.record_first_idle(&session.id, first_idle_at) {
+    if let Err(err) = recorder.record_first_idle(&session_id, first_idle_at) {
         warn!(
             "session_facts_bridge: record_first_idle failed for session '{session_name}': {err}"
         );
-        return None;
+        return FirstIdleOutcome::WriteFailed;
     }
-    Some(session.id)
+
+    if was_already_idle {
+        // The SQL UPDATE was a 0-row no-op (write-once guard). No state
+        // changed; no UI refresh needed.
+        return FirstIdleOutcome::AlreadyIdle;
+    }
+
+    // Phase 7 Wave A.3.b: a fresh first-idle transition can flip the
+    // run's `derived_status` from Running to AwaitingSelection. The UI
+    // can't observe that without a TasksRefreshed broadcast — and the
+    // canonical command-side helper isn't reachable from here. Build
+    // the payload inline using the lib-side primitives the wire-shape
+    // helpers already expose.
+    emit_tasks_refreshed_for_repo(db, repo_path);
+
+    FirstIdleOutcome::Transitioned(session_id)
+}
+
+/// Build and emit a `TasksRefreshed` payload for the given repo path,
+/// using the active project's registered `AppHandle`. Silently no-ops
+/// (with debug logging) when the registry isn't populated yet — matches
+/// the rest of the bridge's "infrastructure layer never panics over
+/// startup-order" posture.
+fn emit_tasks_refreshed_for_repo(db: &Database, repo_path: &Path) {
+    let Some(handle) = app_handle_registry::app_handle() else {
+        debug!(
+            "session_facts_bridge: app_handle not registered yet, skipping TasksRefreshed emit"
+        );
+        return;
+    };
+
+    let mut tasks = match TaskService::new(db).list_tasks(repo_path) {
+        Ok(tasks) => tasks,
+        Err(err) => {
+            warn!(
+                "session_facts_bridge: list_tasks failed while building TasksRefreshed payload: {err}. \
+                 Skipping emit; the next mutation will reconcile."
+            );
+            return;
+        }
+    };
+
+    if let Err(err) = enrich_tasks_with_derived_run_statuses(&mut tasks, db) {
+        warn!(
+            "session_facts_bridge: enrich_tasks_with_derived_run_statuses failed: {err}. \
+             Emitting payload with status=null; the next mutation will reconcile."
+        );
+    }
+
+    let payload = TasksRefreshedPayload {
+        project_path: repo_path.to_string_lossy().to_string(),
+        tasks,
+    };
+
+    if let Err(err) = emit_event(&handle, SchaltEvent::TasksRefreshed, &payload) {
+        warn!(
+            "session_facts_bridge: failed to emit TasksRefreshed after first-idle transition: {err}"
+        );
+    }
 }
 
 /// Look up the session by name on the active project, then record the PTY
@@ -138,7 +222,7 @@ pub async fn record_session_first_idle_by_name(session_name: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::record_first_idle_on_db;
+    use super::{FirstIdleOutcome, record_first_idle_on_db};
     use crate::domains::sessions::db_sessions::SessionMethods;
     use crate::domains::sessions::entity::Session;
     use crate::infrastructure::database::Database;
@@ -231,11 +315,11 @@ mod tests {
         db.create_session(&session).expect("insert");
 
         let idle_ts = Utc.timestamp_opt(3_000, 0).single().unwrap();
-        let written_id = record_first_idle_on_db(&db, &repo, "src-merge_v1", idle_ts);
+        let outcome = record_first_idle_on_db(&db, &repo, "src-merge_v1", idle_ts);
         assert_eq!(
-            written_id.as_deref(),
-            Some(session.id.as_str()),
-            "bridge must resolve name 'src-merge_v1' to row id 'uuid-src-merge_v1'"
+            outcome,
+            FirstIdleOutcome::Transitioned(session.id.clone()),
+            "bridge must resolve name 'src-merge_v1' to row id and report a fresh transition"
         );
 
         let read_back = db
@@ -281,14 +365,49 @@ mod tests {
         );
     }
 
-    /// Unknown names return `None` and are a graceful no-op — the bridge
-    /// must never panic when the terminal layer hands us a stale name.
+    /// Unknown names return `SessionNotFound` and are a graceful no-op —
+    /// the bridge must never panic when the terminal layer hands us a
+    /// stale name.
     #[test]
     fn unknown_session_name_is_a_clean_no_op() {
         let db = db();
         let repo = PathBuf::from("/tmp/repo");
         let now = Utc::now();
         let result = record_first_idle_on_db(&db, &repo, "does-not-exist", now);
-        assert!(result.is_none(), "unknown name must return None");
+        assert_eq!(
+            result,
+            FirstIdleOutcome::SessionNotFound,
+            "unknown name must return SessionNotFound"
+        );
+    }
+
+    /// Phase 7 Wave A.3.b: write-once + AlreadyIdle pin. Repeated calls
+    /// after the first transition must report `AlreadyIdle` (not
+    /// `Transitioned`) so the bridge does NOT spam TasksRefreshed
+    /// emissions on every WaitingForInput re-fire after the run already
+    /// flipped to AwaitingSelection.
+    #[test]
+    fn second_call_returns_already_idle_outcome_for_emit_gating() {
+        let db = db();
+        let repo = PathBuf::from("/tmp/repo");
+        let session = make_consolidation_candidate("emit-gate", &repo);
+        db.create_session(&session).expect("insert");
+
+        let first_ts = Utc.timestamp_opt(3_000, 0).single().unwrap();
+        let later_ts = Utc.timestamp_opt(9_000, 0).single().unwrap();
+
+        let first = record_first_idle_on_db(&db, &repo, "emit-gate", first_ts);
+        assert_eq!(
+            first,
+            FirstIdleOutcome::Transitioned(session.id.clone()),
+            "first call must report a fresh transition"
+        );
+
+        let second = record_first_idle_on_db(&db, &repo, "emit-gate", later_ts);
+        assert_eq!(
+            second,
+            FirstIdleOutcome::AlreadyIdle,
+            "second call must report AlreadyIdle so the bridge skips the emit"
+        );
     }
 }

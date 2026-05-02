@@ -1,3 +1,4 @@
+pub mod app_handle_registry;
 pub mod attention_bridge;
 pub mod config;
 pub mod database;

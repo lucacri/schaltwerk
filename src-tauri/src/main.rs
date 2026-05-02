@@ -1811,6 +1811,15 @@ fn main() {
             // in the Tauri setup hook while WKWebView priming happens on page load.
             macos_accessibility::enable_manual_accessibility();
 
+            // Phase 7 Wave A.3.b: register the AppHandle into the lib-side
+            // singleton so infrastructure-layer emitters
+            // (e.g. session_facts_bridge::record_first_idle_on_db) can fire
+            // SchaltEvent::TasksRefreshed without reaching back through the
+            // bin crate. See infrastructure/app_handle_registry.rs for the
+            // contract; arch_app_handle_global_singleton enforces no second
+            // OnceCell<AppHandle> proliferates.
+            lucode::infrastructure::app_handle_registry::register(app.handle().clone());
+
             if ATTENTION_REGISTRY.get().is_none() {
                 let registry = Arc::new(Mutex::new(AttentionStateRegistry::default()));
                 let _ = ATTENTION_REGISTRY.set(registry);
