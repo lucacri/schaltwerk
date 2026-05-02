@@ -178,8 +178,14 @@ export function SidebarSessionList({
         if (isCollapsed) {
             return renderCollapsedRail()
         }
+        // Phase 7 close-out: kanban view is disabled during the v2
+        // cutover. Force list mode regardless of the persisted
+        // preference; the toggle in SidebarHeaderBar is already
+        // disabled with a "returns in v2.1" tooltip. Leaving the
+        // kanban renderer active would silently break for the task
+        // surface (KanbanView only knows how to render sessions).
         if (sidebarViewMode === 'board') {
-            return renderKanban()
+            return renderListBody()
         }
         return renderListBody()
     }

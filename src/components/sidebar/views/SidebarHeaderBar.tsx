@@ -26,19 +26,28 @@ export function SidebarHeaderBar({
                 <span className="text-xs font-medium text-text-tertiary uppercase tracking-wider ml-1">{t.sidebar.header}</span>
             )}
             {!isCollapsed && (
+                // Phase 7 close-out: kanban (board) view is disabled during
+                // the v2 cutover — the kanban renderer still renders sessions
+                // (not tasks), so leaving it active would silently break for
+                // the new task surface. The toggle stays visible as a
+                // disabled affordance so users see where the view returns.
                 <button
                     type="button"
+                    disabled
+                    aria-disabled="true"
                     onClick={(e) => {
                         e.stopPropagation()
-                        void setSidebarViewMode(sidebarViewMode === 'board' ? 'list' : 'board')
+                        // Force list mode if the persisted value is stale.
+                        if (sidebarViewMode !== 'list') {
+                            void setSidebarViewMode('list')
+                        }
                     }}
                     data-testid="sidebar-view-mode-toggle"
-                    className="h-6 px-2 flex items-center justify-center rounded text-text-tertiary hover:text-text-primary hover:bg-bg-elevated transition-colors text-[11px] uppercase tracking-wider"
-                    title={sidebarViewMode === 'board' ? 'Switch to list view' : 'Switch to board view'}
-                    aria-label={sidebarViewMode === 'board' ? 'Switch to list view' : 'Switch to board view'}
-                    aria-pressed={sidebarViewMode === 'board'}
+                    className="h-6 px-2 flex items-center justify-center rounded text-text-tertiary text-[11px] uppercase tracking-wider opacity-60 cursor-not-allowed"
+                    title="Kanban view returns in v2.1 — list view is the recommended task surface during the v2 transition."
+                    aria-label="Kanban view disabled during v2 transition; list view is the recommended task surface"
                 >
-                    {sidebarViewMode === 'board' ? 'Board' : 'List'}
+                    List · Board v2.1
                 </button>
             )}
             {onToggleSidebar && (
