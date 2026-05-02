@@ -14,7 +14,7 @@
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[x]` | Waves A–E — see below |
 | 5.5 | Hydrator wiring-gap interlude (`get_session_by_id` + 2 siblings) | `[x]` | Waves A–F — see below |
 | 6 | `Sidebar.tsx` split | `[x]` | Waves A–J — see below |
-| 7 | Task UI as the unified surface (frontend rebuild on v2 backend) | `[ ]` | Plan: [`2026-04-29-task-flow-v2-phase-7-plan.md`](./2026-04-29-task-flow-v2-phase-7-plan.md) — Wave A.1 done; A.2 next |
+| 7 | Task UI as the unified surface (frontend rebuild on v2 backend) | `[ ]` | Plan: [`2026-04-29-task-flow-v2-phase-7-plan.md`](./2026-04-29-task-flow-v2-phase-7-plan.md) — Chunk A done; B.1 next |
 
 ## Phase 1 — wave-by-wave detail
 
@@ -701,9 +701,9 @@ timeline: 6–8 weeks of active dev with mid-flight splits expected.
 | (plan) | Phase 7 plan landed (post-review pass; 12 decisions logged) | `[x]` | `1c00aa20` |
 | A.1.a | Backend wire-shape: `TaskWithBodies` + `TaskRun.derived_status` + `domains::tasks::wire` helpers + handler enrichment | `[x]` | `ad1116f0` |
 | A.1.b | 25 `TauriCommands` enum entries + `src/types/task.ts` + structural pinning tests | `[x]` | `95998fa8` |
-| A.2 | Frontend task atoms (`tasksAtom` canonical; `Task.task_runs` is the run list) | `[ ]` | — |
-| A.3 | TasksRefreshed listener + typed `taskService` wrappers | `[ ]` | — |
-| A.3.b | OSC-emit gap closure: `app_handle_registry` + `record_first_idle_on_db` emits `TasksRefreshed` | `[ ]` | — |
+| A.2 | Frontend task atoms (`tasksAtom` canonical; `Task.task_runs` is the run list) | `[x]` | `f7623aea` |
+| A.3 | TasksRefreshed listener + typed `taskService` wrappers | `[x]` | `7ca1da75` |
+| A.3.b | OSC-emit gap closure: `app_handle_registry` + `record_first_idle_on_db` emits `TasksRefreshed` | `[x]` | `5481458e` |
 | B.1 | `useSidebarStageSections` + `buildStageSections` helper | `[ ]` | — |
 | B.2 | `SidebarStageSection` view component | `[ ]` | — |
 | B.3 | Wire stage sections into `Sidebar.tsx` | `[ ]` | — |
