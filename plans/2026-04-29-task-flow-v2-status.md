@@ -687,14 +687,18 @@ The vestigial `sessions.stage` column surfaced by Phase 5.5 stays as a
 
 ---
 
-## Phase 7 — wave-by-wave detail (in progress)
+## Phase 7 — wave-by-wave detail (complete; smoke pending)
 
 Phase 7's plan: [`2026-04-29-task-flow-v2-phase-7-plan.md`](./2026-04-29-task-flow-v2-phase-7-plan.md).
+Smoke checklist: [`2026-04-29-task-flow-v2-phase-7-smoke.md`](./2026-04-29-task-flow-v2-phase-7-smoke.md).
 
-In progress. Phase 7 rebuilds the frontend on top of v2's task aggregate
-backend so the task surface becomes user-facing. Plan size after
-review: 18–22 sub-waves across 5 thematic chunks (A–E). Realistic
-timeline: 6–8 weeks of active dev with mid-flight splits expected.
+Phase 7 rebuilds the frontend on top of v2's task aggregate backend
+so the task surface becomes user-facing. All sub-waves landed,
+including the post-review fixes that closed the merge blockers
+(D.1.b, D.3.b, kanban scope cut, arch test tightened). Manual
+smoke walk is the only gate before merge to `main`.
+
+Final test counts: **2448 Rust + ~3514 vitest tests passing**.
 
 | Wave | Title | Status | Commit |
 |---|---|---|---|
@@ -711,15 +715,37 @@ timeline: 6–8 weeks of active dev with mid-flight splits expected.
 | C.1 | `TaskRow` shell + stage-action button + state-table affordance test | `[x]` | `2df2fd69` |
 | C.2 | Inline run history rendering + optimistic + rollback `useTaskRowActions` | `[x]` | `12bc3856` |
 | C.3 | Multi-candidate slot rendering + generalized labeled-affordance / nudge-banner / state-table pattern (incl. merge-failure-mid-confirm row) | `[x]` | `440b1adb` |
-| D.1 | NewTaskModal + replace home creation buttons (capture-session + bulk-capture deferred to D.1.b) | `[x]` | `96d887cd` |
+| D.1 | NewTaskModal + replace home creation buttons | `[x]` | `96d887cd` |
 | D.2 | v1→v2 specs → draft-tasks migration + tests | `[x]` | `eb978655` |
-| D.3 | TaskArtifactEditor for spec/plan write paths (right-panel dispatch wiring deferred to D.3.b) | `[x]` | `680f64eb` |
+| D.3 | TaskArtifactEditor for spec/plan write paths | `[x]` | `680f64eb` |
 | E.0 | Programmatic full-lifecycle e2e (`tests/e2e_task_lifecycle_full.rs`) | `[x]` | `9d521056` |
-| E.1.smoke | Manual smoke walk checklist (lifecycle + migration; user-driven verification) | 📋 | [`phase-7-smoke.md`](./2026-04-29-task-flow-v2-phase-7-smoke.md) |
-| E.2 | Status doc + memory + Phase 7 close-out | `[x]` | (this commit) |
-| D.1.b | Capture-session right-click + bulk-capture button | `[x]` | `f7e716f3` |
-| D.3.b | RightPanelTabs mounts TaskRightPane for task-shaped selections | `[x]` | `aa6b5edc` |
-| (close-out) | Kanban visibly disabled for v2 cutover; arch test tightened | `[x]` | `3f2ff6e3`, `d8316219` |
+| E.2 | Status doc + memory + initial Phase 7 close-out | `[x]` | `e21bf1d0` |
+| D.3.b | RightPanelTabs mounts TaskRightPane for task-shaped selections (post-review merge blocker) | `[x]` | `aa6b5edc` |
+| D.1.b | Capture-session right-click + sidebar bulk-capture button (post-review merge blocker) | `[x]` | `f7e716f3` |
+| Kanban | Visibly disable kanban view for v2 cutover ("Board v2.1" disabled toggle, force-list-mode) | `[x]` | `3f2ff6e3` |
+| Arch | Tighten `arch_app_handle_global_singleton` to catch every static-scope singleton shape | `[x]` | `d8316219` |
+| (memory) | Auto-memory + status doc final close-out | `[x]` | `cb6ba005` |
+| Smoke | Smoke checklist updates (§A.11 kanban, §B.7 capture, §C.4 task_id) — pre-walk push | `[x]` | (this commit) |
+| E.1 | Manual smoke walk against `bun run tauri:dev` (user-driven; gates merge) | 📋 | [`phase-7-smoke.md`](./2026-04-29-task-flow-v2-phase-7-smoke.md) |
+
+### Pre-merge verification answers (recorded for the audit trail)
+
+The user's pre-walk review surfaced three concerns; all three are
+recorded here so a future session reading this doc has the answer
+without re-deriving it.
+
+**1. Wire-shape split honored.**
+- `pub async fn lucode_task_list(project_path: Option<String>) -> Result<Vec<Task>, TaskFlowError>`
+- `pub async fn lucode_task_get(id: String, project_path: Option<String>) -> Result<TaskWithBodies, TaskFlowError>`
+- `Task` carries no body fields; `TaskWithBodies = #[serde(flatten)] Task + 3 body fields`. List/refresh payloads stay metadata-only. Pinned by `tasks_refreshed_payload_omits_body_fields_for_each_task` (regression guard).
+
+**2. Kanban: visibly disabled, not silently broken.**
+- Pre-fix state: the toggle button was active and `KanbanView` still rendered sessions in board mode for the new task surface — silent break.
+- Post-fix (commit `3f2ff6e3`): toggle reads "List · Board v2.1" with `aria-disabled="true"`, reduced opacity, tooltip "Kanban view returns in v2.1 — list view is the recommended task surface during the v2 transition." Click while persisted value is stale `'board'` forces it back to `'list'`. `SidebarSessionList` ignores `sidebarViewMode === 'board'` and always renders the list body. Honest scope cut, not a port-or-disable handwave.
+
+**3. `arch_app_handle_global_singleton` scope.**
+- Pre-fix state: only caught `OnceCell<AppHandle>` outside the allowed file. Too narrow — agent reaching for `OnceLock`, `Lazy`, `Mutex<Option<…>>`, or bare `static FOO: AppHandle` would slip through.
+- Post-fix (commit `d8316219`): catches every module-scope `static` singleton shape (OnceCell, OnceLock, Lazy, Lock<Option<…>>, bare-static). Struct fields are explicitly exempt — pty.rs's `RwLock<Option<AppHandle>>` field, terminal manager / lifecycle / coalescing fields are instance refs, not globals. ALLOWED_FILES narrowed to just `infrastructure/app_handle_registry.rs`. Two self-tests pin the detector both directions (catches static singletons, ignores struct fields + fn args + doc comments + unrelated `OnceCell<T>`).
 
 ### Wave A.1 — what landed
 
@@ -755,7 +781,70 @@ A.1 split into A.1.a (backend, ~10k lines reachable) + A.1.b
 - 14 vitest pinning tests including `@ts-expect-error` witnesses for
   forbidden literals and `extends` checks for union shapes.
 
-`just test` green at 2431 Rust + ~3300 vitest after each sub-wave.
+### Post-review merge-blocker landings
+
+**D.3.b — RightPanelTabs mounts TaskRightPane** (`aa6b5edc`):
+- New `TaskRightPane` component fetches a `TaskWithBodies` via
+  `lucode_task_get(taskId)` on selection swap; dispatches Spec / Plan
+  / Summary tabs to `TaskArtifactEditor`. Loading + error states are
+  testid'd. Refetch on `taskId` change.
+- `RightPanelTabs` early-returns to `TaskRightPane` when
+  `selectionToTaskId(effectiveSelection)` is non-null. Existing
+  session-shaped dispatch path untouched (18 RightPanelTabs tests +
+  60 sibling tests still green).
+- Without this, `TaskArtifactEditor` was unreachable from the UI; the
+  smoke walk's spec/plan editing checklist (§A.10) couldn't be
+  exercised.
+
+**D.1.b — capture-session right-click + bulk-capture** (`f7e716f3`):
+- `SessionInfo` wire-shape gained `task_id` (additive extension
+  across 3 SessionInfo construction sites; same pattern as Wave
+  C.3's task-aware fields).
+- `SessionCardActions.onCaptureAsTask?` optional callback wired
+  through the context provider, `buildSessionCardActions`, and
+  `Sidebar.tsx`. SessionCard right-click menu adds "Capture as Task"
+  gated to non-task-bound non-spec sessions.
+- `SidebarStageSectionsView` surfaces a "Capture N running sessions
+  as tasks" labeled button when standalone candidates exist.
+  Sequential capture with partial-success continuation: a single
+  failure does not abort the rest.
+- Without this, cutover-day users with active non-task sessions had
+  no path into the v2 task surface short of MCP calls.
+
+**Kanban scope cut** (`3f2ff6e3`):
+- See verification answer #2 above.
+- `SidebarHeaderBar` ships 4 vitest tests pinning the disabled state,
+  stale-value force-list, no-op click on list, collapsed-hide.
+- `SidebarSessionList` short-circuits to list mode when
+  `sidebarViewMode === 'board'` (commented as v2.1 reactivation
+  point).
+
+**Arch test tightening** (`d8316219`):
+- See verification answer #3 above.
+- Self-tests `detector_catches_each_static_singleton_pattern` and
+  `detector_ignores_struct_fields_and_local_uses` pin both directions.
+
+### Smoke checklist sections at smoke time
+
+The smoke walk is gated on the user-driven walk through
+[`phase-7-smoke.md`](./2026-04-29-task-flow-v2-phase-7-smoke.md):
+- **§A** (lifecycle, A.1–A.11): empty-state, task creation,
+  promote-to-Ready, multi-candidate runs, confirm winner, cancel +
+  reopen, failure flag, terminal-stage read-only, stage-section
+  collapse, right-pane bindings, **and the kanban-disabled UX (A.11
+  added in this commit)**.
+- **§B** (migration, B.1–B.7): pre-migration check, first-launch
+  migration, idempotency, forensics archive, bound-session safety,
+  empty-spec edge case, **and capture-session + bulk-capture (B.7
+  added in this commit)**.
+- **§C** (cross-cutting, C.1–C.4): no console errors, theme switch,
+  arch_component_size still green, **and bound-session task_id
+  field across surfaces (C.4 added in this commit)**.
+
+When all boxes pass, Phase 7 is shippable and `task-flow-v2` is
+mergeable to `main`. The pre-merge tag `pre-merge-task-flow-v2`
+captures this state for forensics if anything subtle surfaces post-
+merge.
 
 ---
 
