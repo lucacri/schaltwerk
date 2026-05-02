@@ -13,6 +13,8 @@ import { SidebarSearchBar } from './views/SidebarSearchBar'
 import { SidebarSessionList } from './views/SidebarSessionList'
 import { SidebarStageSectionsView } from './views/SidebarStageSectionsView'
 import { buildSessionCardActions } from './helpers/buildSessionCardActions'
+import { captureSessionAsTask } from '../../services/taskService'
+import { logger } from '../../utils/logger'
 import { useSidebarCollapsePersistence } from './hooks/useSidebarCollapsePersistence'
 import { useConsolidationActions } from './hooks/useConsolidationActions'
 import { useConvertToSpecController } from './hooks/useConvertToSpecController'
@@ -238,6 +240,17 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
     })
 
     const { handleRenameSession, handleLinkPr } = useSessionEditCallbacks()
+    // Phase 7 Wave D.1.b: capture-as-task handler. Uses the active
+    // project's path captured by ref so a project switch mid-flight
+    // doesn't bind to a stale path. The TasksRefreshed listener
+    // handles UI refresh after the call completes.
+    const handleCaptureAsTask = useCallback(async (sessionId: string) => {
+        try {
+            await captureSessionAsTask(sessionId, projectPathRef.current)
+        } catch (err) {
+            logger.warn('[Sidebar] captureSessionAsTask failed', err)
+        }
+    }, [])
 
     const handleSpecSelectedSession = openConvertToSpecModalFromShortcut
 
@@ -352,6 +365,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         handleMergeShortcut,
         handleRenameSession,
         handleLinkPr,
+        handleCaptureAsTask,
     }), [
         sessions,
         selection,
@@ -371,6 +385,7 @@ export const Sidebar = memo(function Sidebar({ isDiffViewerOpen, openTabs = [], 
         handleMergeShortcut,
         handleRenameSession,
         handleLinkPr,
+        handleCaptureAsTask,
     ])
 
     return (

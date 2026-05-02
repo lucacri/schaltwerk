@@ -32,6 +32,8 @@ export interface BuildSessionCardActionsDeps {
     handleMergeShortcut: (sessionId: string) => void | Promise<unknown>
     handleRenameSession: (sessionId: string, newName: string) => Promise<void>
     handleLinkPr: (sessionId: string, prNumber: number, prUrl: string) => Promise<void>
+    /** Phase 7 Wave D.1.b: optional capture-as-task handler. */
+    handleCaptureAsTask?: (sessionId: string) => void | Promise<void>
 }
 
 export function buildSessionCardActions(deps: BuildSessionCardActionsDeps): SessionCardActions {
@@ -55,6 +57,7 @@ export function buildSessionCardActions(deps: BuildSessionCardActionsDeps): Sess
         handleMergeShortcut,
         handleRenameSession,
         handleLinkPr,
+        handleCaptureAsTask,
     } = deps
 
     return {
@@ -134,5 +137,8 @@ export function buildSessionCardActions(deps: BuildSessionCardActionsDeps): Sess
             setForgeWritebackSessionId(sessionId)
         },
         improvePlanStartingSessionId: improvePlanAction.startingSessionId,
+        onCaptureAsTask: handleCaptureAsTask
+            ? (sessionId) => { void handleCaptureAsTask(sessionId) }
+            : undefined,
     }
 }

@@ -3826,6 +3826,7 @@ impl SessionManager {
                 slot_key: None,
                 first_idle_at: None,
                 exit_code: None,
+                task_id: None,
             };
 
             enriched.push(EnrichedSession {
@@ -3916,6 +3917,7 @@ impl SessionManager {
                     slot_key: session.slot_key.clone(),
                     first_idle_at: session.first_idle_at,
                     exit_code: session.exit_code,
+                    task_id: session.task_id.clone(),
                 };
 
                 enriched.push(EnrichedSession {
@@ -4030,6 +4032,7 @@ impl SessionManager {
                 slot_key: session.slot_key.clone(),
                 first_idle_at: session.first_idle_at,
                 exit_code: session.exit_code,
+                task_id: session.task_id.clone(),
             };
 
             let terminals = vec![

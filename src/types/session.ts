@@ -165,6 +165,11 @@ export interface SessionInfo {
     slot_key?: string | null
     first_idle_at?: string | null
     exit_code?: number | null
+    // Phase 7 Wave D.1.b: task lineage. Set when this session is bound
+    // to a task (via lucode_task_capture_session, the migration, or
+    // MCP-created tasks). The "Capture as Task" right-click affordance
+    // is hidden when this is set.
+    task_id?: string | null
 }
 
 export interface DiffStats {

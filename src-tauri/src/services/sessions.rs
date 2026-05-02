@@ -360,6 +360,7 @@ mod tests {
                 slot_key: None,
                 first_idle_at: None,
                 exit_code: None,
+                task_id: None,
             },
             status: None,
             terminals: vec![],

@@ -623,6 +623,12 @@ pub struct SessionInfo {
     pub first_idle_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
+    // Phase 7 Wave D.1.b: task lineage. The frontend's "Capture as
+    // Task" affordance uses `task_id` to gate eligibility — sessions
+    // already bound to a task should not be promoted again. Same
+    // pattern as the Wave C.3 wire-shape extension.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

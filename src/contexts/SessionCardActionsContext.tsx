@@ -18,6 +18,11 @@ export interface SessionCardActions {
   onRename: (sessionId: string, newName: string) => Promise<void>
   onLinkPr: (sessionId: string, prNumber: number, prUrl: string) => void
   onPostToForge: (sessionId: string) => void
+  // Phase 7 Wave D.1.b: promote a non-task session into a Draft task
+  // via lucode_task_capture_session. Optional — context menus only
+  // expose the affordance when the handler is present and the session
+  // is eligible (non-task-bound, non-spec, non-cancelled).
+  onCaptureAsTask?: (sessionId: string) => void
 }
 
 const SessionCardActionsContext = createContext<SessionCardActions | null>(null)
@@ -59,7 +64,13 @@ export function SessionCardActionsProvider({ actions, children }: ProviderProps)
   const stable = useMemo<SessionCardActions>(() => ({
     ...stableCallbacks,
     improvePlanStartingSessionId: actions.improvePlanStartingSessionId ?? null,
-  }), [stableCallbacks, actions.improvePlanStartingSessionId])
+    // Optional — propagate via direct ref read so callers that don't
+    // wire it (legacy session-only contexts) get `undefined` and the
+    // SessionCard menu hides the "Capture as Task" item gracefully.
+    onCaptureAsTask: actions.onCaptureAsTask
+      ? (...args: [string]) => ref.current.onCaptureAsTask?.(...args)
+      : undefined,
+  }), [stableCallbacks, actions.improvePlanStartingSessionId, actions.onCaptureAsTask])
 
   return (
     <SessionCardActionsContext.Provider value={stable}>
