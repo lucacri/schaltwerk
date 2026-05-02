@@ -14,7 +14,7 @@
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[x]` | Waves A–E — see below |
 | 5.5 | Hydrator wiring-gap interlude (`get_session_by_id` + 2 siblings) | `[x]` | Waves A–F — see below |
 | 6 | `Sidebar.tsx` split | `[x]` | Waves A–J — see below |
-| 7 | Task UI as the unified surface (frontend rebuild on v2 backend) | `[ ]` | Plan: [`2026-04-29-task-flow-v2-phase-7-plan.md`](./2026-04-29-task-flow-v2-phase-7-plan.md) — Waves A–E pending |
+| 7 | Task UI as the unified surface (frontend rebuild on v2 backend) | `[ ]` | Plan: [`2026-04-29-task-flow-v2-phase-7-plan.md`](./2026-04-29-task-flow-v2-phase-7-plan.md) — Wave A.1 done; A.2 next |
 
 ## Phase 1 — wave-by-wave detail
 
@@ -684,6 +684,76 @@ The vestigial `sessions.stage` column surfaced by Phase 5.5 stays as a
 **post-charter cleanup item**, tracked in
 [`2026-04-29-task-flow-v2-status.md`](./2026-04-29-task-flow-v2-status.md)
 §"Phase 5.5 — known follow-up surfaced" — out of scope for Phase 6.
+
+---
+
+## Phase 7 — wave-by-wave detail (in progress)
+
+Phase 7's plan: [`2026-04-29-task-flow-v2-phase-7-plan.md`](./2026-04-29-task-flow-v2-phase-7-plan.md).
+
+In progress. Phase 7 rebuilds the frontend on top of v2's task aggregate
+backend so the task surface becomes user-facing. Plan size after
+review: 18–22 sub-waves across 5 thematic chunks (A–E). Realistic
+timeline: 6–8 weeks of active dev with mid-flight splits expected.
+
+| Wave | Title | Status | Commit |
+|---|---|---|---|
+| (plan) | Phase 7 plan landed (post-review pass; 12 decisions logged) | `[x]` | `1c00aa20` |
+| A.1.a | Backend wire-shape: `TaskWithBodies` + `TaskRun.derived_status` + `domains::tasks::wire` helpers + handler enrichment | `[x]` | `ad1116f0` |
+| A.1.b | 25 `TauriCommands` enum entries + `src/types/task.ts` + structural pinning tests | `[x]` | `95998fa8` |
+| A.2 | Frontend task atoms (`tasksAtom` canonical; `Task.task_runs` is the run list) | `[ ]` | — |
+| A.3 | TasksRefreshed listener + typed `taskService` wrappers | `[ ]` | — |
+| A.3.b | OSC-emit gap closure: `app_handle_registry` + `record_first_idle_on_db` emits `TasksRefreshed` | `[ ]` | — |
+| B.1 | `useSidebarStageSections` + `buildStageSections` helper | `[ ]` | — |
+| B.2 | `SidebarStageSection` view component | `[ ]` | — |
+| B.3 | Wire stage sections into `Sidebar.tsx` | `[ ]` | — |
+| B.4 | Selection model: discriminated union (orchestrator / session / task / task-run / task-slot) | `[ ]` | — |
+| C.1 | `TaskRow` shell + stage-action button + state-table affordance test | `[ ]` | — |
+| C.2 | Inline run history rendering + optimistic + rollback `useTaskRowActions` | `[ ]` | — |
+| C.3 | Multi-candidate slot rendering + generalized labeled-affordance / nudge-banner / state-table pattern (incl. merge-failure-mid-confirm row) | `[ ]` | — |
+| D.1 | NewTaskModal + capture-session affordance + bulk-capture button + orchestrator agent affordance | `[ ]` | — |
+| D.2 | v1→v2 specs → draft-tasks migration + e2e | `[ ]` | — |
+| D.3 | Right-panel rebind for task selections + plan editor write path | `[ ]` | — |
+| E.0 | Programmatic full-lifecycle e2e (`tests/e2e_task_lifecycle_full.rs`) | `[ ]` | — |
+| E.1.lifecycle | Manual smoke walk: create → promote → run → confirm → push → done; cancel/reopen | `[ ]` | — |
+| E.1.migration | Manual smoke walk: v1 DB migrates, draft tasks populated, content preserved | `[ ]` | — |
+| E.2 | Status doc + memory + Phase 7 close-out | `[ ]` | — |
+
+### Wave A.1 — what landed
+
+A.1 split into A.1.a (backend, ~10k lines reachable) + A.1.b
+(frontend, ~500 lines added) per `feedback_test_scope_discipline`.
+
+**Wave A.1.a** (`ad1116f0`):
+- New module `src-tauri/src/domains/tasks/wire.rs` with
+  `TaskWithBodies` wrapper, `enrich_task_runs_with_derived_status`,
+  `enrich_runs_with_derived_status`,
+  `enrich_tasks_with_derived_run_statuses`, plus 8 pinning tests.
+- `TaskRun.derived_status: Option<TaskRunStatus>` field added with
+  `#[serde(default)]`; internal DB hydrators always carry None,
+  handlers populate before serialization.
+- Four read commands rewired (`lucode_task_get` returns
+  `TaskWithBodies` now; `lucode_task_list`, `lucode_task_run_list`,
+  `lucode_task_run_get` populate `derived_status`).
+- `notify_task_mutation_with_db` and `notify_task_mutation` enrich
+  `TasksRefreshedPayload` runs before emit; body fields stay omitted
+  per the §0.3 split decision.
+- Helpers re-exported through `services::` to satisfy
+  `arch_layering_database`.
+
+**Wave A.1.b** (`95998fa8`):
+- 25 task aggregate entries added to `src/common/tauriCommands.ts`
+  (the previously-extant `LucodeTaskRunDone` retained).
+- New `src/types/task.ts` with v2-corrected types: no `'queued'` in
+  `TaskRunStatus`, no `'cancelled'` in `TaskStage`, no `RunRole`,
+  `derived_status: TaskRunStatus | null` on `TaskRun`,
+  `TaskWithBodies extends Task` with three optional body fields.
+- `assertDerivedStatus(run)` narrows non-null and throws on regression
+  with run-id + stage in the message.
+- 14 vitest pinning tests including `@ts-expect-error` witnesses for
+  forbidden literals and `extends` checks for union shapes.
+
+`just test` green at 2431 Rust + ~3300 vitest after each sub-wave.
 
 ---
 
