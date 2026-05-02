@@ -399,12 +399,15 @@ impl<'a, P: SessionProvisioner, M: BranchMerger> TaskOrchestrator<'a, P, M> {
     /// up with its work merged onto our task branch. We verify the winning
     /// session's `task_id` and `task_run_id` match the run being confirmed.
     ///
-    /// Atomicity note: the merge and the subsequent stage advance are not
-    /// currently wrapped in a single DB transaction — the merge touches the
-    /// filesystem and spans async work, which can't live inside a rusqlite
-    /// transaction. If the stage advance fails after the merge succeeded we
-    /// surface a clearly-worded error so the operator knows manual recovery
-    /// is needed rather than retrying the whole command.
+    /// Ordering note: the merge runs **before** `confirm_selection` and
+    /// `advance_stage`, so a merge failure (notably conflicts) leaves the
+    /// run row untouched and the user can retry or pick a different winner.
+    /// The merge and the subsequent DB writes are not wrapped in a single
+    /// transaction — the merge touches the filesystem and spans async work,
+    /// which can't live inside a rusqlite transaction. If `confirm_selection`
+    /// or the stage advance fail after the merge succeeded we surface a
+    /// clearly-worded error so the operator knows manual recovery is needed
+    /// rather than retrying the whole command.
     // TODO(r4-transactional): explore whether we can stage the run selection
     // and the post-merge advance under a single rusqlite transaction, e.g.
     // by separating "mark-confirmed" from "advance-stage" and having the
@@ -448,9 +451,6 @@ impl<'a, P: SessionProvisioner, M: BranchMerger> TaskOrchestrator<'a, P, M> {
             ));
         }
 
-        self.run_svc()
-            .confirm_selection(run_id, Some(winning_session_id), None, selection_mode)?;
-
         if let Err(merge_err) = self
             .merger
             .merge_into_task_branch(&task, winning_session_id, winning_branch)
@@ -470,6 +470,9 @@ impl<'a, P: SessionProvisioner, M: BranchMerger> TaskOrchestrator<'a, P, M> {
             }
             return Err(merge_err);
         }
+
+        self.run_svc()
+            .confirm_selection(run_id, Some(winning_session_id), None, selection_mode)?;
 
         if let Some(next) = next_stage_after(task.stage)
             && let Err(e) = self.task_svc().advance_stage(&task.id, next)
@@ -1962,6 +1965,50 @@ mod tests {
         assert!(
             err.downcast_ref::<MergeConflictDuringConfirm>().is_some(),
             "expected MergeConflictDuringConfirm sentinel, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn confirm_stage_leaves_run_unconfirmed_when_merge_conflicts() {
+        // If the merge fails (e.g. conflict), the run row must NOT be stamped
+        // with confirmed_at/completed_at and must NOT have a selected session.
+        // Otherwise compute_run_status reports Completed and the UI thinks the
+        // task moved on, blocking retry / different selection. Regression for
+        // a P1 review finding where confirm_selection used to run before the
+        // merge and stick around even after the merge errored.
+        let db = db();
+        let task = seed_task(&db, "alpha", Some("main"));
+        let prov = FakeProvisioner::new(&db);
+        let merger = FakeMerger::default();
+        merger.arm_conflict();
+        let orch = TaskOrchestrator::new(&db, &prov, &merger, "lucode");
+
+        orch.promote_to_ready(&task.id).unwrap();
+        let started = orch
+            .start_stage_run(&task.id, TaskStage::Brainstormed, None, &single_agent_shape())
+            .expect("run started");
+        let winner = &started.sessions[0];
+
+        let _err = orch
+            .confirm_stage(&started.run.id, &winner.session_id, &winner.branch, "manual")
+            .await
+            .unwrap_err();
+
+        let run = db.get_task_run(&started.run.id).expect("reload run");
+        assert!(
+            run.confirmed_at.is_none(),
+            "merge conflict must not stamp confirmed_at; got {:?}",
+            run.confirmed_at,
+        );
+        assert!(
+            run.completed_at.is_none(),
+            "merge conflict must not stamp completed_at; got {:?}",
+            run.completed_at,
+        );
+        assert!(
+            run.selected_session_id.is_none(),
+            "merge conflict must not record a selected session; got {:?}",
+            run.selected_session_id,
         );
     }
 
