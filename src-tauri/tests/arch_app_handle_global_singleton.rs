@@ -1,44 +1,60 @@
 //! Phase 7 Wave A.3.b architecture guard: enforce that the lib crate
-//! holds **exactly one** `OnceCell<AppHandle>` (in
-//! `src/infrastructure/app_handle_registry.rs`). Any other module that
-//! introduces a duplicate global registry would defeat the seam this
-//! file pins.
+//! holds **at most the existing two AppHandle globals** — the
+//! Phase 7 `infrastructure::app_handle_registry` (`OnceCell<AppHandle>`)
+//! and the legacy `infrastructure::pty` (`RwLock<Option<AppHandle>>`).
+//! Any other module that introduces a new global registry would defeat
+//! the seam this file pins.
 //!
-//! The pty.rs registry uses a different shape
-//! (`RwLock<Option<AppHandle>>`) and is intentionally distinct — it has
-//! a lifecycle-clear semantics that doesn't fit `OnceCell`. The pattern
-//! we're guarding is "process-singleton, set-once" specifically.
+//! The original Phase 7 close-out test only caught `OnceCell<AppHandle>`.
+//! That's too narrow — a future agent reaching for `Lazy<AppHandle>`,
+//! `Mutex<Option<AppHandle>>`, `OnceLock<AppHandle>`, or even a bare
+//! `static APP: AppHandle` would silently sprawl the singleton. This
+//! tightened version catches the broader pattern: any single-handle
+//! global wrapper around `AppHandle` outside the explicit allowlist.
 
 use std::fs;
 use std::path::Path;
 
-const ALLOWED_FILE: &str = "src/infrastructure/app_handle_registry.rs";
+/// Files allowed to hold an `AppHandle` global static. Adding a new
+/// entry here is intentional and reviewable; it should be a one-line
+/// PR with the rationale documented in the test message below.
+///
+/// `pty.rs` holds `RwLock<Option<AppHandle>>` as a STRUCT FIELD on
+/// `TauriEventSink`, not as a global static — so it's not on this
+/// list. The detector below explicitly ignores struct-field uses.
+const ALLOWED_FILES: &[&str] = &[
+    "src/infrastructure/app_handle_registry.rs",
+];
 
 #[test]
-fn only_app_handle_registry_holds_a_once_cell_app_handle() {
+fn no_new_global_app_handle_registries_outside_the_allowlist() {
     let root = Path::new("src");
     let mut violations: Vec<(String, String)> = Vec::new();
     walk(root, &mut |path, body| {
         let rel = path.to_string_lossy().to_string();
-        if rel == ALLOWED_FILE {
+        if ALLOWED_FILES.contains(&rel.as_str()) {
             return;
         }
         for (lineno, line) in body.lines().enumerate() {
-            // Trim and collapse whitespace so multi-space variants match.
-            let normalized: String = line.split_whitespace().collect::<Vec<_>>().join(" ");
-            if contains_once_cell_app_handle(&normalized) {
-                violations.push((rel.clone(), format!("{}: {line}", lineno + 1)));
+            let normalized: String =
+                line.split_whitespace().collect::<Vec<_>>().join(" ");
+            if let Some(reason) = matches_global_app_handle(&normalized) {
+                violations.push((rel.clone(), format!("{}: {line} [{reason}]", lineno + 1)));
             }
         }
     });
 
     assert!(
         violations.is_empty(),
-        "Phase 7 Wave A.3.b violation: a `OnceCell<AppHandle>` was found outside \
-         the allowed module `{ALLOWED_FILE}`. The app handle global must stay \
-         a singleton — every additional registry is a new place to forget to \
-         install at startup. Move the global to `infrastructure::app_handle_registry` \
-         instead.\n\nMatches:\n{}",
+        "Phase 7 Wave A.3.b violation: a new global `AppHandle` registry was \
+         found outside the allowed files {:?}. Process-singleton AppHandle \
+         lives in `infrastructure::app_handle_registry` (set-once). The \
+         pty.rs registry is the only other allowed location (lifecycle-clear \
+         semantics that don't fit OnceCell). If you need to read an \
+         AppHandle from the lib layer, reuse one of those — don't add a \
+         new global. To allow a third location intentionally, edit \
+         ALLOWED_FILES with a code-review-time justification.\n\nMatches:\n{}",
+        ALLOWED_FILES,
         violations
             .iter()
             .map(|(file, line)| format!("  {file} :: {line}"))
@@ -47,20 +63,76 @@ fn only_app_handle_registry_holds_a_once_cell_app_handle() {
     );
 }
 
-fn contains_once_cell_app_handle(line: &str) -> bool {
-    // We only want to flag actual *new* registries — not comments, doc
-    // mentions, or test fixtures. The signal is `OnceCell<` immediately
-    // followed by an `AppHandle` token (with optional `tauri::` /
-    // generic params).
-    if line.trim_start().starts_with("//") || line.trim_start().starts_with("///") {
-        return false;
+/// Detect any **process-global static** carrier of `AppHandle`. The
+/// threat we guard against is "agent X needs to emit Tauri events from
+/// a new corner of the lib, so they add `static FOO: OnceCell<AppHandle>`."
+/// Struct fields holding `Arc<Mutex<Option<AppHandle>>>` (terminal
+/// manager, pty event sink, etc.) are NOT globals — they're
+/// instance-scoped refs and follow a different lifetime contract.
+///
+/// We catch only `static` and `pub static` declarations whose type
+/// involves AppHandle inside one of the singleton containers. Struct
+/// fields and function arguments are explicitly ignored.
+fn matches_global_app_handle(line: &str) -> Option<&'static str> {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with("//") || trimmed.starts_with("///") {
+        return None;
     }
-    if !line.contains("OnceCell<") {
-        return false;
+    if !line.contains("AppHandle") {
+        return None;
     }
-    line.contains("OnceCell<AppHandle")
-        || line.contains("OnceCell<tauri::AppHandle")
-        || line.contains("OnceCell<tauri :: AppHandle")
+
+    // Only static declarations at module scope are global-scope.
+    // Anything else (struct fields, fn args, let bindings) is
+    // instance- or call-scoped.
+    let is_static = trimmed.starts_with("static ") || trimmed.starts_with("pub static ");
+    if !is_static {
+        return None;
+    }
+
+    // Each singleton-shape match has a diagnostic so a violator sees
+    // exactly which pattern we caught.
+    if line.contains("OnceCell<") && contains_app_handle_after(line, "OnceCell<") {
+        return Some("OnceCell<AppHandle>");
+    }
+    if line.contains("OnceLock<") && contains_app_handle_after(line, "OnceLock<") {
+        return Some("OnceLock<AppHandle>");
+    }
+    if line.contains("Lazy<") && contains_app_handle_after(line, "Lazy<") {
+        return Some("Lazy<AppHandle>");
+    }
+    // Lock-wrapped Option<AppHandle> at static scope. The pty.rs
+    // pattern lives at struct scope (TauriEventSink field) so it does
+    // NOT match this guard — only a *global static* would.
+    if (line.contains("RwLock<") || line.contains("Mutex<") || line.contains("StdMutex<"))
+        && line.contains("Option<")
+        && contains_app_handle_after(line, "Option<")
+    {
+        return Some("static Lock<Option<AppHandle>>");
+    }
+    // Bare `static FOO: AppHandle` would sidestep all wrapper checks.
+    if line.contains(": AppHandle")
+        && !line.contains("&AppHandle")
+        && !line.contains("Option<AppHandle>")
+    {
+        return Some("static AppHandle");
+    }
+
+    None
+}
+
+/// True when `AppHandle` (or a generic-parameterized variant like
+/// `AppHandle<Wry>` / `tauri::AppHandle<…>`) appears textually after
+/// the given prefix on the same line. Used to distinguish
+/// `OnceCell<AppHandle>` (matches) from `OnceCell<SomethingElse>` (no
+/// match) without parsing the type tree.
+fn contains_app_handle_after(line: &str, prefix: &str) -> bool {
+    if let Some(idx) = line.find(prefix) {
+        let suffix = &line[idx + prefix.len()..];
+        suffix.contains("AppHandle")
+    } else {
+        false
+    }
 }
 
 fn walk(dir: &Path, on_file: &mut impl FnMut(&Path, &str)) {
@@ -81,21 +153,73 @@ fn walk(dir: &Path, on_file: &mut impl FnMut(&Path, &str)) {
 }
 
 #[test]
-fn pattern_detector_recognizes_actual_violations() {
-    // Sanity: the detector must catch the very pattern we're guarding
-    // against, otherwise the guard is silently broken.
-    assert!(contains_once_cell_app_handle(
-        "static X: OnceCell<AppHandle> = OnceCell::new();"
-    ));
-    assert!(contains_once_cell_app_handle(
-        "OnceCell<tauri::AppHandle<Wry>>"
-    ));
-    // And must NOT flag unrelated `OnceCell<T>` uses.
-    assert!(!contains_once_cell_app_handle(
-        "static SETTINGS: OnceCell<Arc<Mutex<SettingsManager>>> = OnceCell::new();"
-    ));
-    // And must not flag a doc-comment mention.
-    assert!(!contains_once_cell_app_handle(
-        "/// Holds a `OnceCell<AppHandle>` (see app_handle_registry)."
-    ));
+fn detector_catches_each_static_singleton_pattern() {
+    // Sanity: every static-scope pattern this guard claims to catch
+    // must actually be caught. A regression in any arm would silently
+    // let a new global registry through.
+    assert_eq!(
+        matches_global_app_handle("static X: OnceCell<AppHandle> = OnceCell::new();"),
+        Some("OnceCell<AppHandle>"),
+    );
+    assert_eq!(
+        matches_global_app_handle("static X: OnceCell<tauri::AppHandle<Wry>> = OnceCell::new();"),
+        Some("OnceCell<AppHandle>"),
+    );
+    assert_eq!(
+        matches_global_app_handle("pub static X: OnceLock<AppHandle> = OnceLock::new();"),
+        Some("OnceLock<AppHandle>"),
+    );
+    assert_eq!(
+        matches_global_app_handle("static X: Lazy<AppHandle> = Lazy::new(|| ...);"),
+        Some("Lazy<AppHandle>"),
+    );
+    assert_eq!(
+        matches_global_app_handle("static APP: Mutex<Option<AppHandle<Wry>>> = ...;"),
+        Some("static Lock<Option<AppHandle>>"),
+    );
+    assert_eq!(
+        matches_global_app_handle("static APP: AppHandle = bare_static();"),
+        Some("static AppHandle"),
+    );
+}
+
+#[test]
+fn detector_ignores_struct_fields_and_local_uses() {
+    // Critical: struct fields (terminal manager, pty event sink) are
+    // instance-scoped refs, not process-global registries. They must
+    // NOT trip the detector — that was the false-positive that the
+    // first iteration of this test surfaced before scope-narrowing.
+    assert_eq!(
+        matches_global_app_handle("    app_handle: Arc<RwLock<Option<AppHandle>>>,"),
+        None,
+    );
+    assert_eq!(
+        matches_global_app_handle("    pub(super) app_handle: Arc<Mutex<Option<AppHandle>>>,"),
+        None,
+    );
+    assert_eq!(
+        matches_global_app_handle("    app_handle: RwLock<Option<AppHandle>>,"),
+        None,
+    );
+    // Function arguments, method receivers, let bindings.
+    assert_eq!(
+        matches_global_app_handle("pub async fn handler(app: tauri::AppHandle)"),
+        None,
+    );
+    assert_eq!(
+        matches_global_app_handle("let handle: &AppHandle = &app;"),
+        None,
+    );
+    // Doc-comment mentions.
+    assert_eq!(
+        matches_global_app_handle("/// stores `OnceCell<AppHandle>` (see app_handle_registry)"),
+        None,
+    );
+    // Unrelated static OnceCell<T>.
+    assert_eq!(
+        matches_global_app_handle(
+            "static SETTINGS: OnceCell<Arc<Mutex<SettingsManager>>> = OnceCell::new();"
+        ),
+        None,
+    );
 }
