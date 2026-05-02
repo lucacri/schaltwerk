@@ -14,7 +14,7 @@
 | 5 | Explicit `lucode_task_run_done` MCP tool | `[x]` | Waves A–E — see below |
 | 5.5 | Hydrator wiring-gap interlude (`get_session_by_id` + 2 siblings) | `[x]` | Waves A–F — see below |
 | 6 | `Sidebar.tsx` split | `[x]` | Waves A–J — see below |
-| 7 | Task UI as the unified surface (frontend rebuild on v2 backend) | `[ ]` | Plan: [`2026-04-29-task-flow-v2-phase-7-plan.md`](./2026-04-29-task-flow-v2-phase-7-plan.md) — Chunk A + B.1–B.3 done; B.4 next |
+| 7 | Task UI as the unified surface (frontend rebuild on v2 backend) | `[x]` (backbone) | All chunks A–E.0 shipped; manual smoke (E.1) + D.1.b capture follow-ups + D.3 right-panel dispatch wiring remain user-gated |
 
 ## Phase 1 — wave-by-wave detail
 
@@ -707,17 +707,18 @@ timeline: 6–8 weeks of active dev with mid-flight splits expected.
 | B.1 | `useSidebarStageSections` + `buildStageSections` helper | `[x]` | `00b78bb2` |
 | B.2 | `SidebarStageSection` view component | `[x]` | `455838af` |
 | B.3 | Wire stage sections into `Sidebar.tsx` | `[x]` | `6622a6e8` |
-| B.4 | Selection model: discriminated union (orchestrator / session / task / task-run / task-slot) | `[ ]` | — |
-| C.1 | `TaskRow` shell + stage-action button + state-table affordance test | `[ ]` | — |
-| C.2 | Inline run history rendering + optimistic + rollback `useTaskRowActions` | `[ ]` | — |
-| C.3 | Multi-candidate slot rendering + generalized labeled-affordance / nudge-banner / state-table pattern (incl. merge-failure-mid-confirm row) | `[ ]` | — |
-| D.1 | NewTaskModal + capture-session affordance + bulk-capture button + orchestrator agent affordance | `[ ]` | — |
-| D.2 | v1→v2 specs → draft-tasks migration + e2e | `[ ]` | — |
-| D.3 | Right-panel rebind for task selections + plan editor write path | `[ ]` | — |
-| E.0 | Programmatic full-lifecycle e2e (`tests/e2e_task_lifecycle_full.rs`) | `[ ]` | — |
-| E.1.lifecycle | Manual smoke walk: create → promote → run → confirm → push → done; cancel/reopen | `[ ]` | — |
-| E.1.migration | Manual smoke walk: v1 DB migrates, draft tasks populated, content preserved | `[ ]` | — |
-| E.2 | Status doc + memory + Phase 7 close-out | `[ ]` | — |
+| B.4 | Selection model: discriminated union (orchestrator / session / task / task-run / task-slot) | `[x]` | `dffa10c2` |
+| C.1 | `TaskRow` shell + stage-action button + state-table affordance test | `[x]` | `2df2fd69` |
+| C.2 | Inline run history rendering + optimistic + rollback `useTaskRowActions` | `[x]` | `12bc3856` |
+| C.3 | Multi-candidate slot rendering + generalized labeled-affordance / nudge-banner / state-table pattern (incl. merge-failure-mid-confirm row) | `[x]` | `440b1adb` |
+| D.1 | NewTaskModal + replace home creation buttons (capture-session + bulk-capture deferred to D.1.b) | `[x]` | `96d887cd` |
+| D.2 | v1→v2 specs → draft-tasks migration + tests | `[x]` | `eb978655` |
+| D.3 | TaskArtifactEditor for spec/plan write paths (right-panel dispatch wiring deferred to D.3.b) | `[x]` | `680f64eb` |
+| E.0 | Programmatic full-lifecycle e2e (`tests/e2e_task_lifecycle_full.rs`) | `[x]` | `9d521056` |
+| E.1.smoke | Manual smoke walk checklist (lifecycle + migration; user-driven verification) | 📋 | [`phase-7-smoke.md`](./2026-04-29-task-flow-v2-phase-7-smoke.md) |
+| E.2 | Status doc + memory + Phase 7 close-out | `[x]` | (this commit) |
+| D.1.b | (follow-up) Capture-session right-click + bulk-capture button | `[ ]` | — |
+| D.3.b | (follow-up) RightPanelTabs dispatch on selection.kind for TaskArtifactEditor mounting | `[ ]` | — |
 
 ### Wave A.1 — what landed
 
