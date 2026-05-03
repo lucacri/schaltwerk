@@ -1,7 +1,7 @@
 # CLAUDE.md - Lucode Development Guidelines
 
 ## Project Overview
-Tauri-based desktop app for managing AI coding sessions using git worktrees. Each session gets an isolated branch/worktree where AI agents (Claude, GitHub Copilot CLI, Kilo Code, Gemini, OpenCode, Codex, Factory Droid, etc.) can work without affecting the main codebase.
+Tauri-based desktop app for managing AI coding tasks using git worktrees. Each task owns a base worktree, and stage runs spawn slot sub-sessions in their own worktrees so AI agents (Claude, GitHub Copilot CLI, Kilo Code, Gemini, OpenCode, Codex, Factory Droid, etc.) can work without affecting the main codebase.
 
 ## Platform Support
 - macOS 11+ supported; Linux builds are supported from source.
@@ -33,39 +33,42 @@ Tauri-based desktop app for managing AI coding sessions using git worktrees. Eac
 ## System Architecture
 
 ### Core Concepts
-- **Sessions**: Isolated git worktrees for AI agents to work in
-- **Specs**: Draft/planning sessions without worktrees (can be converted to running sessions)
-- **Orchestrator**: Special session that works directly in main repo (for planning/coordination)
-- **Terminals**: Each session gets 2 PTY terminals (top/bottom) for running agents
-- **Domains**: Business logic is organized in `src-tauri/src/domains/` - all new features should create appropriate domain modules, if there are legacy business domains duplicated they should be merged via scout rule into the new structure.
+- **Tasks**: The only top-level entity. Live in the `tasks` table. Each task owns a base worktree and a `task_branch`. Tasks group into stage sections (Draft / Ready / Brainstormed / Planned / Implemented / Pushed / Done). `Cancelled` is a separate axis carried by `cancelled_at`, not a stage.
+- **Stage runs**: A task progresses through stages by spawning a `task_run` (e.g., a Brainstorm run with 3 candidates). Each run creates N slot sessions, one per candidate.
+- **Sessions (slot sessions)**: Children of a `task_run`. Carry `task_id`, `task_run_id`, `slot_key`, `run_role` lineage. Each slot session has its own worktree under the task's directory. Sessions are NOT top-level — the v2 sidebar reads `tasksAtom` exclusively and never iterates `allSessionsAtom`.
+- **Orchestrator**: Singleton non-task surface that runs in the main repo worktree with its own agent terminals. Pinned in the sidebar between the header and the stage sections. It is not a task.
+- **Artifacts**: Specs, plans, and summaries are artifacts of a task. They live in `task_artifacts` keyed by `(task_id, artifact_kind, is_current)`. The task's initial prompt is its `request_body`; later artifact versions are written via `lucode_task_update_content`. There is no standalone "Spec" entity.
+- **Terminals**: Slot sessions and the orchestrator each get 2 PTY terminals (top agent / bottom shell). Task-level and task-run-level selections render a placeholder for the top pane (no agent yet).
+- **Domains**: Business logic is organized in `src-tauri/src/domains/` — all new features should create appropriate domain modules. Where legacy domains duplicate the new structure, merge via scout rule.
 
 ### Key Data Flows
 
-**Session Creation → Agent Startup:**
-1. `App.tsx:handleCreateSession()` → Tauri command `lucode_core_create_session`
-2. `domains/sessions/service.rs:SessionManager::create_session()` → Creates DB entry + worktree
-3. Frontend switches via `SelectionContext` → Lazy terminal creation
-4. Agent starts in terminal with worktree as working directory
+**Task Creation → Stage Run → Agent Startup:**
+1. Task is created (UI or MCP). The backend writes to `tasks`, allocates `task_branch`, and creates the base worktree.
+2. User invokes a stage run (e.g., Brainstorm with N candidates). The orchestrator creates a `task_run` with N slot sessions; each slot gets its own worktree under the task's directory.
+3. Frontend selection switches to a slot via `SelectionContext` → lazy terminal creation.
+4. Agent starts in the slot's top terminal with the slot worktree as cwd.
 
-**MCP API → Session Management:**
-- External tools call REST API (port 8547+hash) → Creates/updates specs
-- Backend emits `SessionsRefreshed` event → UI updates automatically
-- Optional `Selection` event → UI switches to new session
+**MCP API → Task Management:**
+- External tools call the REST API (port 8547+hash) → create/update tasks and artifacts.
+- Backend emits `SessionsRefreshed` (and task-related events) → UI updates automatically.
+- Optional `Selection` event → UI switches to a specific task / slot.
 
-**Session State Transitions:**
-- Spec → Running: `start_spec_session()` creates worktree + terminals
-- Running → Reviewed: `mark_session_reviewed()` flags for merge
-- Running → Spec: `convert_to_spec()` removes worktree, keeps content
+**Task Stage Transitions:**
+- Stage advancement is recorded on the task; runs and slot sessions are the work surface for each stage. Cancellation is an orthogonal axis (`cancelled_at`), not a stage.
 
 ### Critical Files to Know
 
 **Frontend Entry Points:**
-- `App.tsx`: Main orchestration, session management, agent startup
-- `SelectionContext.tsx`: Controls which session/terminals are active
+- `App.tsx`: Main orchestration, task/session wiring, agent startup
+- `SelectionContext.tsx`: Controls which selection (task / task-run / slot session / orchestrator) and terminals are active
+- `src/components/sidebar/Sidebar.tsx`: Reads `tasksAtom` exclusively to render the orchestrator entry plus stage sections
 
 **Backend Core:**
 - `main.rs`: Tauri commands entry point
-- `lucode_core/mod.rs`: Session gateway + database access
+- `lucode_core/mod.rs`: Gateway + database access
+- `domains/tasks/`: Tasks, runs, artifacts
+- `domains/sessions/`: Slot session lifecycle
 - `domains/terminal/manager.rs`: PTY lifecycle management
 - `domains/git/worktrees.rs`: Git worktree operations
 
@@ -153,37 +156,39 @@ just install-fast       # Faster app build stamped with a unique calver version
 
 ## How Things Actually Work
 
-### Session Storage
-Sessions use SQLite `sessions.db` under `~/Library/Application Support/lucode/projects/{project-name_hash}` (macOS) or `~/.local/share/lucode/projects/{project-name_hash}` (Linux) to store:
-- Git branch + worktree path (`.lucode/worktrees/{session-name}/`)
-- Session state (Spec/Running/Reviewed)
-- Spec content (markdown planning docs)
-- Git stats (files changed, lines added/removed)
+### Storage
+The SQLite `sessions.db` lives under `~/Library/Application Support/lucode/projects/{project-name_hash}` (macOS) or `~/.local/share/lucode/projects/{project-name_hash}` (Linux). It holds:
+- `tasks`: top-level tasks with `task_branch`, current stage, `cancelled_at`, etc.
+- `task_runs`: stage runs spawned for a task.
+- `task_artifacts`: specs, plans, and summaries keyed by `(task_id, artifact_kind, is_current)`.
+- `sessions`: slot sessions carrying `task_id`, `task_run_id`, `slot_key`, `run_role`, plus git branch + worktree path (`.lucode/worktrees/{session-name}/`) and git stats (files changed, lines added/removed).
 
 ### Configuration Storage
 - Application settings live in OS config (`~/Library/Application Support/com.lucacri.lucode/settings.json` on macOS, `~/.config/lucode/settings.json` on Linux).
-- Project-scoped data (sessions, specs, git stats, project config) reuse the same `sessions.db`.
+- Project-scoped data (tasks, runs, artifacts, sessions, git stats, project config) reuses the same `sessions.db`.
 
 ### Terminal Management
-- **Creation**: Lazy - only when session is selected in UI
-- **Persistence**: Terminals stay alive until explicitly closed
-- **PTY Backend**: `LocalPtyAdapter` spawns shell with session's worktree as working directory
-- Each session gets 2 terminals (top/bottom) with the worktree as working directory
+- **Creation**: Lazy — only when a selection is mounted in UI.
+- **Persistence**: Terminals stay alive until explicitly closed.
+- **PTY Backend**: `LocalPtyAdapter` spawns shell with the selection's worktree as cwd.
 - **Terminal ID rules (critical)**: Terminal IDs are derived **only** from the session name (sanitized) and never include `projectPath`. Tracking caches must use the same ID scope; changing projects should **rebind**, not recreate, existing IDs. Avoid project-scoped cache keys for terminals to prevent resets/remounts.
 
 #### Terminal Roles
-- **Top terminal** (`TerminalGrid` mounts `terminals.top` from `SelectionContext`) runs the active agent process for the selected session. Switching sessions swaps this agent terminal so Claude, Codex, etc. always stay in the upper pane tied to that session.
-- **Bottom terminals** (`TerminalTabs` manage `terminals.bottomBase`) are dedicated for user-driven shells. Tabs let the user open additional shells; selecting a different tab only swaps the bottom pane and leaves the top agent terminal untouched.
-- Combined session switches update both panes together, ensuring the agent shell and the user shells follow the session, while per-tab switches affect only the bottom user terminals.
+The behavior depends on the selection `kind`:
+- **`kind: 'session'` or `'task-slot'`**: Top terminal is the agent terminal (xterm bound to the slot session). Bottom terminal is the user shell in the slot's worktree.
+- **`kind: 'orchestrator'`**: Both terminals bind to the orchestrator's main-repo worktree (top = orchestrator agent, bottom = user shell).
+- **`kind: 'task'` or `'task-run'`** (no slot drilled in): Top pane renders the placeholder `data-testid="task-empty-agent-placeholder"` (no agent). Bottom-pane binding to the task's base worktree is currently deferred.
+
+`TerminalGrid` mounts `terminals.top` from `SelectionContext`; `TerminalTabs` manage `terminals.bottomBase`. Switching selections swaps both panes together; per-tab switches affect only the bottom user terminals.
 
 ### Agent Integration
 Agents start via terminal commands built in `App.tsx`:
-- Each agent runs in session's isolated worktree
+- Each agent runs in the slot session's isolated worktree (or the main-repo worktree for the orchestrator).
 
 ### MCP Server Webhook
 - Runs on project-specific port (8547 + project hash)
 - Receives notifications from external MCP clients
-- Updates session states and emits UI refresh events
+- Updates task/session state and emits UI refresh events
 
 
 ## UI Systems
