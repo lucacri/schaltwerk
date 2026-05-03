@@ -1,7 +1,11 @@
 import clsx from 'clsx'
 import { VscLayoutSidebarLeft, VscLayoutSidebarLeftOff } from 'react-icons/vsc'
 import { useTranslation } from '../../../common/i18n/useTranslation'
-import type { SidebarViewMode } from '../../../store/atoms/sidebarViewMode'
+
+// Phase 8 W.1: sidebarViewMode atom retired. Kanban toggle is a static
+// disabled affordance; the prop type stays so the existing SidebarHeaderBar
+// shape is preserved (Sidebar.tsx hardcodes `'list'`).
+type SidebarViewMode = 'list' | 'board'
 
 interface SidebarHeaderBarProps {
     isCollapsed: boolean

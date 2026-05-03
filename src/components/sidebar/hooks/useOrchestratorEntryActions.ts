@@ -2,7 +2,13 @@ import { useCallback } from 'react'
 import type { AgentType } from '../../../types/session'
 import type { Selection } from '../../../store/atoms/selection'
 import type { TerminalIds, SessionSelection } from '../../../hooks/useSessionManagement'
-import type { SwitchOrchestratorModalState } from '../helpers/modalState'
+// Phase 8 W.1: helpers/modalState retired alongside the legacy
+// SidebarModalsTrailer. Inlining the only shape this hook needs.
+interface SwitchOrchestratorModalState {
+    open: boolean
+    initialAgentType: AgentType
+    targetSessionId: string | null
+}
 
 interface UseOrchestratorEntryActionsParams {
     selection: Selection

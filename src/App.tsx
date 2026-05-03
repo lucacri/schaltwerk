@@ -589,7 +589,8 @@ function AppContent() {
   const { config: keyboardShortcutConfig } = useKeyboardShortcutsConfig()
   const platform = useMemo(() => detectPlatformSafe(), [])
   const isMac = platform === 'mac'
-  const startShortcut = shortcuts[KeyboardShortcutAction.NewSession] || (isMac ? '⌘N' : 'Ctrl + N')
+  // Phase 8 W.2 retires NewSpec; both ⌘N and ⇧⌘N collapse onto NewTask.
+  // The button title displays this single shortcut.
   const specShortcut = shortcuts[KeyboardShortcutAction.NewSpec] || (isMac ? '⇧⌘N' : 'Ctrl + Shift + N')
   const preserveSelection = useSelectionPreserver()
   const pendingActivePathRef = useRef<string | null>(null)

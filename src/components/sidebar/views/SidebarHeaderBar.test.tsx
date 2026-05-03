@@ -20,21 +20,7 @@ describe('SidebarHeaderBar — view-mode toggle (Phase 7 kanban disable)', () =>
     expect(toggle.textContent).toMatch(/Board v2\.1/i)
   })
 
-  it('forces list mode when clicked while persisted value is stale "board"', () => {
-    const setSidebarViewMode = vi.fn()
-    render(
-      <SidebarHeaderBar
-        isCollapsed={false}
-        sidebarViewMode="board"
-        setSidebarViewMode={setSidebarViewMode}
-        leftSidebarShortcut=""
-      />,
-    )
-    fireEvent.click(screen.getByTestId('sidebar-view-mode-toggle'))
-    expect(setSidebarViewMode).toHaveBeenCalledWith('list')
-  })
-
-  it('does not flip the persisted value when clicked while already on list', () => {
+  it('disabled buttons do not invoke onClick (Phase 8 W.1: kanban toggle is purely static)', () => {
     const setSidebarViewMode = vi.fn()
     render(
       <SidebarHeaderBar

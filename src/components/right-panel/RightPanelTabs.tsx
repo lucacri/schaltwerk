@@ -82,19 +82,11 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
   const { openSpecInWorkspace, closeSpecTab, openTabs, activeTab: specActiveTab } = specModeHook
 
   const effectiveSelection = selectionOverride ?? selection
-  // Phase 7 Wave D.3.b: when selection is task-shaped, mount the
-  // dedicated TaskRightPane and return early. The legacy session-
-  // bound dispatch below assumes session.info.* fields that
-  // task-shaped selections don't have.
+  // Phase 7 Wave D.3.b: task-shaped selections render `TaskRightPane`.
+  // The early-return MUST live AFTER every unconditional hook below;
+  // returning before the hooks violates the Rules of Hooks. Compute
+  // the dispatch key here, render-branch at the bottom of this fn.
   const taskIdForPane = selectionToTaskId(effectiveSelection)
-  if (taskIdForPane) {
-    return (
-      <TaskRightPane
-        taskId={taskIdForPane}
-        projectPath={effectiveSelection.projectPath ?? null}
-      />
-    )
-  }
   const currentSession = effectiveSelection.kind === 'session' && effectiveSelection.payload
     ? allSessions.find(s => s.info.session_id === effectiveSelection.payload || s.info.branch === effectiveSelection.payload)
     : null
@@ -453,6 +445,18 @@ const RightPanelTabsComponent = ({ onOpenHistoryDiff, selectionOverride, isSpecO
       { reformatSidebar: reformatSidebarEnabled, hasFiles: isInlineReviewing ? inlineHasFiles : true },
     )
   }, [isAnyReviewModeActive, onInlineReviewModeChange, reformatSidebarEnabled, inlineHasFiles, isInlineReviewing])
+
+  // Phase 7 Wave D.3.b render branch — placed AFTER every unconditional
+  // hook above so the Rules of Hooks ordering is preserved across both
+  // task-shaped and session-shaped selections.
+  if (taskIdForPane) {
+    return (
+      <TaskRightPane
+        taskId={taskIdForPane}
+        projectPath={effectiveSelection.projectPath ?? null}
+      />
+    )
+  }
 
   return (
     <div
