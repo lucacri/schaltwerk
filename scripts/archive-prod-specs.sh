@@ -40,6 +40,7 @@ ARCHIVED=0
 SKIPPED_DUP=0
 UNREACHABLE=0
 PROJECTS=0
+SCHEMA_SKIPPED=0
 
 sanitize_name() {
     local raw="$1"
@@ -193,6 +194,29 @@ list_archived_specs() {
          ORDER BY archived_at;" 2>/dev/null
 }
 
+# Older v1 schemas predate `ready_session_id` / `implementation_plan` on the
+# `specs` table. Running list_active_specs on those DBs would hit "no such
+# column" and silently return zero rows (the SELECT's stderr is suppressed so
+# we don't drown the user in noise on healthy DBs). Probe the schema first;
+# emit a one-line warning and skip the active-specs export when the columns
+# aren't there, so a real schema mismatch surfaces instead of hiding.
+specs_table_supports_active_export() {
+    local db="$1"
+    local missing
+    missing=$(sqlite3 -readonly -bail -noheader -list "$db" \
+        "SELECT 'ready_session_id' WHERE NOT EXISTS (SELECT 1 FROM pragma_table_info('specs') WHERE name = 'ready_session_id')
+         UNION ALL
+         SELECT 'implementation_plan' WHERE NOT EXISTS (SELECT 1 FROM pragma_table_info('specs') WHERE name = 'implementation_plan');" \
+        2>/dev/null)
+    if [ -n "$missing" ]; then
+        printf '  ! specs table missing columns (%s) — skipping active-specs export for %s\n' \
+            "$(printf '%s' "$missing" | tr '\n' ',' | sed 's/,$//')" "$db" >&2
+        SCHEMA_SKIPPED=$((SCHEMA_SKIPPED + 1))
+        return 1
+    fi
+    return 0
+}
+
 list_active_specs() {
     local db="$1"
     sqlite3 -readonly -bail -noheader -separator $'\t' "$db" \
@@ -225,13 +249,15 @@ process_db() {
     done < <(list_archived_specs "$db")
 
     # active specs: content (-spec.md) + implementation_plan (-plan.md) when present.
-    while IFS=$'\t' read -r id name repo ts; do
-        [ -z "${id:-}" ] && continue
-        fetch_body "$db" "specs" "content" "$id"
-        process_row_fields "spec[$id]" "$name" "$repo" "$ts" "spec" "$TMP_BODY"
-        fetch_body "$db" "specs" "implementation_plan" "$id"
-        process_row_fields "spec[$id]" "$name" "$repo" "$ts" "plan" "$TMP_BODY"
-    done < <(list_active_specs "$db")
+    if specs_table_supports_active_export "$db"; then
+        while IFS=$'\t' read -r id name repo ts; do
+            [ -z "${id:-}" ] && continue
+            fetch_body "$db" "specs" "content" "$id"
+            process_row_fields "spec[$id]" "$name" "$repo" "$ts" "spec" "$TMP_BODY"
+            fetch_body "$db" "specs" "implementation_plan" "$id"
+            process_row_fields "spec[$id]" "$name" "$repo" "$ts" "plan" "$TMP_BODY"
+        done < <(list_active_specs "$db")
+    fi
 }
 
 TMP_BODY=$(mktemp -t archive-prod-specs.XXXXXX)
@@ -252,5 +278,5 @@ if [ "$found_any" -eq 0 ]; then
     exit 0
 fi
 
-printf '\nArchived %d files across %d projects, skipped %d already-archived, %d rows had unreachable repository_path.\n' \
-    "$ARCHIVED" "$PROJECTS" "$SKIPPED_DUP" "$UNREACHABLE"
+printf '\nArchived %d files across %d projects, skipped %d already-archived, %d rows had unreachable repository_path, %d project DBs skipped active-specs export due to schema mismatch.\n' \
+    "$ARCHIVED" "$PROJECTS" "$SKIPPED_DUP" "$UNREACHABLE" "$SCHEMA_SKIPPED"

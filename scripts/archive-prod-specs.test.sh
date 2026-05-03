@@ -16,6 +16,9 @@
 #   - mutating an existing file forces a `-2.md` collision file
 #   - LUCODE_ARCHIVE_OUTPUT_ROOT bypasses the repo-existence check and routes
 #     output under <root>/<repo-basename>/
+#   - older v1 schemas (no `ready_session_id` / `implementation_plan`) are
+#     skipped for active-specs export with a stderr warning, instead of
+#     silently swallowing a "no such column" error.
 
 set -u
 
@@ -256,6 +259,10 @@ if ! grep -q '1 rows had unreachable' "$WORKDIR/run1.out"; then
     FAIL=$((FAIL + 1))
     printf 'FAIL: unreachable count wrong in run1.out (expected 1)\n' >&2
 fi
+if ! grep -q '0 project DBs skipped active-specs export due to schema mismatch' "$WORKDIR/run1.out"; then
+    FAIL=$((FAIL + 1))
+    printf 'FAIL: schema-skip count missing or wrong in run1.out (expected 0)\n' >&2
+fi
 
 # --- run 2: idempotency ---
 printf '\n--- run 2 (idempotency) ---\n'
@@ -330,6 +337,85 @@ fi
 if ! grep -q '0 rows had unreachable' "$WORKDIR/run5.out"; then
     FAIL=$((FAIL + 1))
     printf 'FAIL: override mode unreachable count wrong (expected 0)\n' >&2
+fi
+
+# --- run 6: older v1 schema (no ready_session_id / implementation_plan) ---
+# A second project DB is created with the legacy `specs` shape that predates
+# those columns. The script must warn on stderr, skip active-specs export for
+# that DB, and still export the project's archived_specs rows. The summary
+# line must report `1 project DBs skipped active-specs export due to schema
+# mismatch`.
+printf '\n--- run 6 (older v1 specs schema) ---\n'
+OLD_SCHEMA_PROJECTS_ROOT="$WORKDIR/projects_old"
+OLD_REPO="$WORKDIR/repo_old"
+mkdir -p "$OLD_SCHEMA_PROJECTS_ROOT/repo_old-xyz789"
+mkdir -p "$OLD_REPO"
+OLD_DB="$OLD_SCHEMA_PROJECTS_ROOT/repo_old-xyz789/sessions.db"
+
+sqlite3 "$OLD_DB" <<SQL
+CREATE TABLE specs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    repository_path TEXT NOT NULL,
+    repository_name TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL DEFAULT '',
+    stage TEXT NOT NULL DEFAULT 'draft',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+CREATE TABLE archived_specs (
+    id TEXT PRIMARY KEY,
+    session_name TEXT NOT NULL,
+    repository_path TEXT NOT NULL,
+    repository_name TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    archived_at INTEGER NOT NULL
+);
+INSERT INTO specs (id, name, repository_path, content, created_at, updated_at) VALUES
+  ('os-draft', 'old-schema-draft', '$OLD_REPO', 'old schema draft body', $TS_SPEC, $TS_SPEC);
+INSERT INTO archived_specs (id, session_name, repository_path, content, archived_at) VALUES
+  ('os-archived', 'old-schema-feature', '$OLD_REPO', 'old schema archived body', $TS_ARCHIVED_MS);
+SQL
+
+OLD_OUT="$WORKDIR/out_old"
+LUCODE_PROD_DATA_ROOT="$OLD_SCHEMA_PROJECTS_ROOT" \
+    LUCODE_ARCHIVE_OUTPUT_ROOT="$OLD_OUT" \
+    bash "$TARGET_SCRIPT" > "$WORKDIR/run6.out" 2> "$WORKDIR/run6.err"
+RC=$?
+if [ $RC -ne 0 ]; then
+    FAIL=$((FAIL + 1))
+    printf 'FAIL: old-schema run exited %d\n' "$RC" >&2
+fi
+cat "$WORKDIR/run6.out"
+cat "$WORKDIR/run6.err" >&2
+
+# stderr must include the schema-mismatch warning and name the missing columns.
+if ! grep -q 'specs table missing columns' "$WORKDIR/run6.err"; then
+    FAIL=$((FAIL + 1))
+    printf 'FAIL: expected schema-mismatch warning on stderr in run6.err\n' >&2
+fi
+if ! grep -q 'ready_session_id' "$WORKDIR/run6.err"; then
+    FAIL=$((FAIL + 1))
+    printf 'FAIL: schema-mismatch warning missing ready_session_id\n' >&2
+fi
+if ! grep -q 'implementation_plan' "$WORKDIR/run6.err"; then
+    FAIL=$((FAIL + 1))
+    printf 'FAIL: schema-mismatch warning missing implementation_plan\n' >&2
+fi
+
+# archived_specs row should still be exported (its schema is unaffected).
+assert_exists "$OLD_OUT/repo_old/${D_ARCHIVED}-old-schema-feature-spec.md" \
+    "old-schema DB still exports archived_specs rows"
+
+# specs row must NOT be exported (active-specs branch was skipped).
+assert_no_glob_match "$OLD_OUT/repo_old/*old-schema-draft*.md" \
+    "old-schema DB must not attempt active-specs export"
+
+# Summary must mark 1 project skipped due to schema mismatch.
+if ! grep -q '1 project DBs skipped active-specs export due to schema mismatch' "$WORKDIR/run6.out"; then
+    FAIL=$((FAIL + 1))
+    printf 'FAIL: schema-skip count wrong in run6.out (expected 1)\n' >&2
+    grep -E '^Archived' "$WORKDIR/run6.out" >&2 || :
 fi
 
 printf '\n=== %d passed, %d failed ===\n' "$PASS" "$FAIL"
