@@ -75,6 +75,7 @@ describe('TaskArtifactEditor — spec kind', () => {
 
   it('saves on submit and routes through lucode_task_update_content with the right kind', async () => {
     updateTaskContent.mockResolvedValue(makeTask({ current_spec_body: 'edited' }))
+    getTask.mockResolvedValue(makeTask({ current_spec_body: 'edited' }))
     render(<TaskArtifactEditor task={makeTask()} kind="spec" projectPath="/tmp/proj" />)
 
     fireEvent.change(screen.getByTestId('task-artifact-editor-textarea'), {
@@ -89,6 +90,74 @@ describe('TaskArtifactEditor — spec kind', () => {
       'edited spec',
       { projectPath: '/tmp/proj' },
     )
+  })
+
+  it('refetches the body-bearing task via getTask AFTER updateTaskContent succeeds and propagates that to onSaved', async () => {
+    // Phase 8 patch 2: the wire-shape split means updateTaskContent
+    // returns a body-less Task. The fix refetches via getTask (the
+    // body-bearing endpoint) so the parent doesn't end up with a
+    // TaskWithBodies whose body fields are undefined. Per
+    // feedback_stamp_after_side_effect — refetch after save succeeds.
+    const callOrder: string[] = []
+    updateTaskContent.mockImplementation(async () => {
+      callOrder.push('updateTaskContent')
+      // Body-less Task shape — what the real Tauri command returns.
+      return { id: 'task-1', stage: 'draft', request_body: 'request' }
+    })
+    getTask.mockImplementation(async () => {
+      callOrder.push('getTask')
+      return makeTask({ current_spec_body: 'edited spec' })
+    })
+
+    const onSaved = vi.fn()
+    render(
+      <TaskArtifactEditor
+        task={makeTask()}
+        kind="spec"
+        projectPath="/tmp/proj"
+        onSaved={onSaved}
+      />,
+    )
+
+    fireEvent.change(screen.getByTestId('task-artifact-editor-textarea'), {
+      target: { value: 'edited spec' },
+    })
+    fireEvent.click(screen.getByTestId('task-artifact-editor-save'))
+
+    await waitFor(() => expect(getTask).toHaveBeenCalled())
+    expect(callOrder).toEqual(['updateTaskContent', 'getTask'])
+    expect(getTask).toHaveBeenCalledWith('task-1', '/tmp/proj')
+    expect(onSaved).toHaveBeenCalledTimes(1)
+    // The TaskWithBodies passed to onSaved must carry body fields, not
+    // be a body-less Task smuggled in via `as unknown as`.
+    const passed = onSaved.mock.calls[0][0]
+    expect(passed.current_spec_body).toBe('edited spec')
+  })
+
+  it('does NOT refetch if updateTaskContent fails (avoids stomping the parent state on error)', async () => {
+    updateTaskContent.mockRejectedValue(new Error('backend explode'))
+
+    const onSaved = vi.fn()
+    render(
+      <TaskArtifactEditor
+        task={makeTask()}
+        kind="spec"
+        onSaved={onSaved}
+      />,
+    )
+
+    fireEvent.change(screen.getByTestId('task-artifact-editor-textarea'), {
+      target: { value: 'edited spec' },
+    })
+    fireEvent.click(screen.getByTestId('task-artifact-editor-save'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('task-artifact-editor-error')).toHaveTextContent(
+        /backend explode/,
+      ),
+    )
+    expect(getTask).not.toHaveBeenCalled()
+    expect(onSaved).not.toHaveBeenCalled()
   })
 
   it('surfaces backend errors and keeps the user input in the textarea', async () => {
@@ -148,6 +217,7 @@ describe('TaskArtifactEditor — plan kind', () => {
 
   it('saves with kind=plan in the Tauri call', async () => {
     updateTaskContent.mockResolvedValue(makeTask())
+    getTask.mockResolvedValue(makeTask({ current_plan_body: 'plan v1' }))
     render(<TaskArtifactEditor task={makeTask()} kind="plan" />)
 
     fireEvent.change(screen.getByTestId('task-artifact-editor-textarea'), {

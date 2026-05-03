@@ -158,4 +158,62 @@ describe('TaskRightPane', () => {
       expect(tab).toHaveAttribute('aria-label')
     }
   })
+
+  // Phase 8 patch 2 regression test (mirrors smoke checklist §A.10):
+  // Save the spec body, switch to Plan, switch back. The previously-
+  // saved spec body must still be the textarea content — NOT undefined,
+  // NOT the pre-save body. Pre-fix this would fail because
+  // `updateTaskContent`'s body-less Task got smuggled into the local
+  // task envelope, losing the body fields.
+  it('preserves saved spec body across tab switches (no body-smuggling regression)', async () => {
+    const initial = makeTask({
+      current_spec_body: 'pre-save spec',
+      current_plan_body: 'plan body unchanged',
+    })
+    const afterSave = makeTask({
+      current_spec_body: 'edited spec body',
+      current_plan_body: 'plan body unchanged',
+    })
+
+    // First call: initial mount.
+    // Second call: refetch after save in TaskArtifactEditor.handleSave.
+    getTask.mockResolvedValueOnce(initial).mockResolvedValueOnce(afterSave)
+    // updateTaskContent returns body-less Task on the wire; we don't
+    // care about the return value because the editor refetches.
+    updateTaskContent.mockResolvedValue({ id: 'task-1' })
+
+    render(<TaskRightPane taskId="task-1" />)
+    await waitFor(() =>
+      expect(screen.getByTestId('task-artifact-editor-textarea')).toHaveValue(
+        'pre-save spec',
+      ),
+    )
+
+    // Edit and save.
+    fireEvent.change(screen.getByTestId('task-artifact-editor-textarea'), {
+      target: { value: 'edited spec body' },
+    })
+    fireEvent.click(screen.getByTestId('task-artifact-editor-save'))
+
+    // Wait for refetch to complete.
+    await waitFor(() => expect(getTask).toHaveBeenCalledTimes(2))
+
+    // Switch to Plan tab — must show the unchanged plan body, not undefined.
+    fireEvent.click(screen.getByTestId('task-right-pane-tab-plan'))
+    await waitFor(() =>
+      expect(screen.getByTestId('task-artifact-editor-plan')).toBeInTheDocument(),
+    )
+    expect(screen.getByTestId('task-artifact-editor-textarea')).toHaveValue(
+      'plan body unchanged',
+    )
+
+    // Switch back to Spec — must show the edited body, not the pre-save body, not undefined.
+    fireEvent.click(screen.getByTestId('task-right-pane-tab-spec'))
+    await waitFor(() =>
+      expect(screen.getByTestId('task-artifact-editor-spec')).toBeInTheDocument(),
+    )
+    expect(screen.getByTestId('task-artifact-editor-textarea')).toHaveValue(
+      'edited spec body',
+    )
+  })
 })

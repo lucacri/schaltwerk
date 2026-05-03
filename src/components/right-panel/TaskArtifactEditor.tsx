@@ -1,11 +1,13 @@
 // Phase 7 Wave D.3: read/write editor for a task artifact (spec / plan).
 //
 // Reads `task.current_*_body` (Wave A.1.a wire fields). Saves through
-// `taskService.updateTaskContent` which routes to
-// `lucode_task_update_content` and triggers the TasksRefreshed
-// listener — the authoritative artifact body comes back via that
-// broadcast, so we don't need to maintain a parallel "saved version"
-// alongside the unsaved buffer.
+// `taskService.updateTaskContent` (returns body-less `Task` per the
+// Phase 7 wire-shape split — list/refresh shapes don't carry bodies).
+// After save, refetch via `getTask(id)` (the body-bearing endpoint)
+// and propagate the full `TaskWithBodies` upstream so the parent's
+// `task` state stays consistent. Per `feedback_stamp_after_side_effect`
+// the refetch must run AFTER the update succeeds; on update failure
+// the parent's task envelope is untouched.
 //
 // `summary` kind is read-only: summary artifacts are produced by the
 // agent at end-of-stage, not user-edited. The textarea renders with
@@ -15,7 +17,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { theme } from '../../common/theme'
 import { Button } from '../ui'
-import { updateTaskContent } from '../../services/taskService'
+import { getTask, updateTaskContent } from '../../services/taskService'
 import { logger } from '../../utils/logger'
 import type { TaskArtifactKind, TaskWithBodies } from '../../types/task'
 
@@ -70,10 +72,16 @@ export function TaskArtifactEditor({
     setError(null)
     setSubmitting(true)
     try {
-      const updated = (await updateTaskContent(task.id, kind, body, {
+      // updateTaskContent returns a body-less Task (per the wire-shape
+      // split); we discard that return value and refetch via getTask
+      // which IS the body-bearing endpoint. The refetch lands AFTER
+      // the save side-effect succeeds — on save failure the parent's
+      // task state is untouched. Per feedback_stamp_after_side_effect.
+      await updateTaskContent(task.id, kind, body, {
         projectPath: projectPath ?? null,
-      })) as unknown as TaskWithBodies
-      onSaved?.(updated)
+      })
+      const refreshed = await getTask(task.id, projectPath ?? null)
+      onSaved?.(refreshed)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       logger.warn('[TaskArtifactEditor] updateTaskContent failed', err)
