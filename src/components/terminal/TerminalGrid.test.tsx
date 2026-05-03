@@ -1826,7 +1826,7 @@ describe('TerminalGrid', () => {
       await waitForGridReady()
 
       await act(async () => {
-        bridge?.setSelection({
+        void bridge?.setSelection({
           kind: 'task',
           taskId: 'task-1',
           projectPath: '/tmp/project',
@@ -1843,7 +1843,7 @@ describe('TerminalGrid', () => {
       await waitForGridReady()
 
       await act(async () => {
-        bridge?.setSelection({
+        void bridge?.setSelection({
           kind: 'task-run',
           taskId: 'task-1',
           runId: 'run-1',
@@ -1861,7 +1861,7 @@ describe('TerminalGrid', () => {
       await waitForGridReady()
 
       await act(async () => {
-        bridge?.setSelection({
+        void bridge?.setSelection({
           kind: 'task-slot',
           taskId: 'task-1',
           runId: 'run-1',

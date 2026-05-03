@@ -14,6 +14,7 @@ import { theme } from '../../common/theme'
 import type { TaskRun, TaskRunStatus } from '../../types/task'
 import { TaskRunSlots } from './TaskRunSlots'
 import { useTaskRunSlots } from './hooks/useTaskRunSlots'
+import { useConfirmStage } from './hooks/useConfirmStage'
 
 export interface TaskRunRowProps {
   run: TaskRun
@@ -82,6 +83,7 @@ export function TaskRunRow({ run, onCancelRun }: TaskRunRowProps) {
   const visual = status ? STATUS_VISUALS[status] : UNKNOWN_VISUAL
   const showCancel = status === 'awaiting_selection'
   const slots = useTaskRunSlots(run.id, run.selected_session_id)
+  const { confirmStage } = useConfirmStage()
 
   return (
     <div
@@ -159,6 +161,9 @@ export function TaskRunRow({ run, onCancelRun }: TaskRunRowProps) {
           slots={slots}
           judgeFiled={false}
           mergeFailureReason={null}
+          onConfirmWinner={(sessionId) => {
+            void confirmStage(run.id, sessionId)
+          }}
         />
       )}
     </div>
