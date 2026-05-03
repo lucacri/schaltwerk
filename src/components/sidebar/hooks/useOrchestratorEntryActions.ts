@@ -48,7 +48,7 @@ export function useOrchestratorEntryActions({
     const onReset = useCallback(() => {
         void (async () => {
             if (selection.kind === 'orchestrator') {
-                await resetSession(selection, terminals)
+                await resetSession({ kind: 'orchestrator' }, terminals)
             }
         })()
     }, [selection, resetSession, terminals])

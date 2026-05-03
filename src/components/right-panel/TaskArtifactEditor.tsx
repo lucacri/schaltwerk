@@ -150,7 +150,7 @@ export function TaskArtifactEditor({
           color: 'var(--color-text-primary)',
           fontFamily: 'var(--font-family-mono)',
           fontSize: theme.fontSize.body,
-          lineHeight: theme.lineHeight.normal,
+          lineHeight: theme.lineHeight.body,
           resize: 'none',
         }}
       />

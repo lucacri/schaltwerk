@@ -82,7 +82,7 @@ export type SelectionResizeDetail =
   | { kind: 'orchestrator' }
 
 export interface SelectionChangedDetail {
-  kind: 'session' | 'orchestrator'
+  kind: 'session' | 'orchestrator' | 'task' | 'task-run' | 'task-slot'
   payload?: string
   worktreePath?: string
   sessionState?: 'spec' | 'processing' | 'running'

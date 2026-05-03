@@ -1834,44 +1834,6 @@ function AppContent() {
     }
   }, [closeProject])
 
-  const switchProject = useCallback(async (direction: 'prev' | 'next') => {
-    if (projectTabs.length <= 1) return
-    if (!projectPath) return
-
-    const currentIndex = projectTabs.findIndex(tab => tab.projectPath === projectPath)
-    if (currentIndex === -1) return
-
-    let newIndex: number
-    if (direction === 'next') {
-      newIndex = (currentIndex + 1) % projectTabs.length
-    } else {
-      newIndex = (currentIndex - 1 + projectTabs.length) % projectTabs.length
-    }
-
-    const targetTab = projectTabs[newIndex]
-    if (targetTab?.projectPath) {
-      await handleSelectTab(targetTab.projectPath)
-    }
-  }, [projectTabs, projectPath, handleSelectTab])
-
-  const switchToProject = useCallback(async (index: number) => {
-    const tab = projectTabs[index]
-    if (tab?.projectPath) {
-      await handleSelectTab(tab.projectPath)
-    }
-  }, [projectTabs, handleSelectTab])
-
-  const handleSwitchToProject = useCallback((index: number) => {
-    void switchToProject(index)
-  }, [switchToProject])
-
-  const handleCycleNextProject = useCallback(() => {
-    void switchProject('next')
-  }, [switchProject])
-
-  const handleCyclePrevProject = useCallback(() => {
-    void switchProject('prev')
-  }, [switchProject])
 
   const tabsWithAttention = useMemo(() => projectTabs.map(tab => {
     const cross = crossProjectCounts[tab.projectPath]
@@ -2047,12 +2009,7 @@ function AppContent() {
                   <div className="h-full flex flex-col min-h-0">
                     <div className="flex-1 min-h-0 overflow-y-auto">
                       <SessionErrorBoundary>
-                        <Sidebar 
-                          isDiffViewerOpen={isDiffViewerOpen}
-                          openTabs={projectTabs}
-                          onSwitchToProject={handleSwitchToProject}
-                          onCycleNextProject={handleCycleNextProject}
-                          onCyclePrevProject={handleCyclePrevProject}
+                        <Sidebar
                           isCollapsed={isLeftPanelCollapsed}
                           onExpandRequest={toggleLeftPanelCollapsed}
                           onToggleSidebar={toggleLeftPanelCollapsed}
@@ -2159,8 +2116,6 @@ function AppContent() {
             </div>
           </div>
 
-           {/* Phase 7 Wave D.1: + New Task primary creation surface.
-               Phase 8 W.2: NewSessionModal mount retired entirely. */}
            <NewTaskModal
              isOpen={newTaskOpen}
              onClose={() => setNewTaskOpen(false)}

@@ -1654,15 +1654,12 @@ const TerminalComponent = forwardRef<TerminalHandle, TerminalProps>(({ terminalI
             if (modifierKey && event.shiftKey && event.key === '~') {
                 return true
             }
-            // Prefer Shift+Modifier+N as "New spec"
-            if (modifierKey && event.shiftKey && (event.key === 'n' || event.key === 'N')) {
-                emitUiEvent(UiEvent.NewSpecRequest)
+            // Phase 8 W.2: NewSession + NewSpec shortcuts collapsed into a
+            // single NewTask. Both Mod+N and Mod+Shift+N route to the
+            // same NewTaskRequest; the handler decides what to open.
+            if (modifierKey && (event.key === 'n' || event.key === 'N')) {
+                emitUiEvent(UiEvent.NewTaskRequest)
                 return false
-            }
-            // Plain Modifier+N opens the regular new session modal
-            if (modifierKey && !event.shiftKey && (event.key === 'n' || event.key === 'N')) {
-                emitUiEvent(UiEvent.GlobalNewSessionShortcut)
-                return false // Prevent xterm.js from processing this event
             }
             if (modifierKey && (event.key === 'f' || event.key === 'F')) {
                 // Show search UI

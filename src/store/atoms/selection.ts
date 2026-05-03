@@ -40,6 +40,10 @@ export interface Selection {
   projectPath?: string | null
   taskId?: string
   runId?: string
+  // Phase 8 W.6: stable slot-key identifier for task-slot selections.
+  // Distinguishes slots inside a multi-candidate run (e.g. 'a', 'b').
+  // Unset for non-slot selections.
+  slotKey?: string
 }
 
 interface TerminalSet {

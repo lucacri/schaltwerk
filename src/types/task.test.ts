@@ -68,13 +68,13 @@ describe('task types — Phase 7 Wave A.1.b structural invariants', () => {
     // backend regression. The TS field is therefore required (always
     // present in the JSON) but nullable. This test pins both halves.
     type IsRequired = AssertExtends<
-      keyof TaskRun,
       | 'id'
       | 'task_id'
       | 'stage'
       | 'derived_status'
       | 'created_at'
-      | 'updated_at'
+      | 'updated_at',
+      keyof TaskRun
     >
     _typeAssert<IsRequired>()
 

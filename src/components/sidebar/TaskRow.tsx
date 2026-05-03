@@ -171,7 +171,7 @@ export function TaskRow({ task }: TaskRowProps) {
         style={{
           fontSize: theme.fontSize.body,
           color: 'var(--color-text-primary)',
-          lineHeight: theme.lineHeight.normal,
+          lineHeight: theme.lineHeight.body,
         }}
       >
         {displayName}

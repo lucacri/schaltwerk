@@ -71,7 +71,7 @@ export function Sidebar({ isCollapsed = false, onExpandRequest, onToggleSidebar 
     const { selection, terminals } = useSelection()
     const { resetSession } = useSessionManagement()
     const { getOrchestratorAgentType } = useClaudeSession()
-    const leftSidebarShortcut = useShortcutDisplay(KeyboardShortcutAction.ToggleLeftPanel)
+    const leftSidebarShortcut = useShortcutDisplay(KeyboardShortcutAction.ToggleLeftSidebar)
 
     const [isSearchVisible, setIsSearchVisible] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
@@ -173,7 +173,7 @@ export function Sidebar({ isCollapsed = false, onExpandRequest, onToggleSidebar 
                 open={switchOrchestratorModal.open}
                 initialAgentType={switchOrchestratorModal.initialAgentType}
                 onClose={closeSwitchOrchestrator}
-                onConfirm={() => {
+                onSwitch={() => {
                     closeSwitchOrchestrator()
                 }}
             />

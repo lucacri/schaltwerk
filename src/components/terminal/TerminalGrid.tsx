@@ -290,9 +290,10 @@ const TerminalGridComponent = () => {
 
     const handleConfigureAgentsSwitch = useCallback(async ({ agentType: nextAgent }: { agentType: AgentType }) => {
         try {
-            const targetSelection = selection.kind === 'session'
-                ? selection
-                : { kind: 'orchestrator' as const }
+            const targetSelection: { kind: 'orchestrator' | 'session'; payload?: string } =
+                selection.kind === 'session'
+                    ? { kind: 'session', payload: selection.payload }
+                    : { kind: 'orchestrator' }
 
             await switchModel(
                 nextAgent,

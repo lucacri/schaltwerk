@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { Provider, createStore } from 'jotai'
 import { renderHook, act } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 
 const confirmStageService = vi.fn()
 vi.mock('../../../services/taskService', () => ({
@@ -44,7 +44,7 @@ function makeSession(id: string, branch: string): EnrichedSession {
   }
 }
 
-function makeWrapper(sessions: EnrichedSession[] = []): (p: { children: ReactNode }) => JSX.Element {
+function makeWrapper(sessions: EnrichedSession[] = []): (p: { children: ReactNode }) => ReactElement {
   const store = createStore()
   store.set(allSessionsAtom, sessions)
   return ({ children }) => (

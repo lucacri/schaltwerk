@@ -358,7 +358,7 @@ describe('useSpecMode', () => {
 
       expect(dispatchEventSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: String(UiEvent.NewSpecRequest)
+          type: String(UiEvent.NewTaskRequest)
         })
       )
 

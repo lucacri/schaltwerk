@@ -308,7 +308,7 @@ export function useSpecMode({ projectPath, selection, sessions, setFilterMode, s
         if (selection.kind !== 'orchestrator') {
           await setSelection({ kind: 'orchestrator' })
         }
-        emitUiEvent(UiEvent.NewSpecRequest)
+        emitUiEvent(UiEvent.NewTaskRequest)
       }
     }
   }, [commanderSpecModeSession, sessions, enterSpecMode, selection.kind, setSelection, handleExitSpecMode, lastSelectedSpec, currentFilterMode])

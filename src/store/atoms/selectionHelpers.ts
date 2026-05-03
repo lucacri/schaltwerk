@@ -91,6 +91,21 @@ export function isTaskKind(kind: SelectionKind): boolean {
 }
 
 /**
+ * Phase 8 W.6: narrow a `Selection` to the legacy session-shape
+ * (`kind: 'orchestrator' | 'session'`). Returns true for the two
+ * v1-shaped variants. Task-shaped selections fall through to false.
+ *
+ * Use this guard at the boundary of code that hasn't been updated for
+ * the task selection variants — e.g. `useSessionManagement.resetSession`
+ * which only operates on session-shape selections.
+ */
+export function isSessionSelection(
+  selection: { kind: SelectionKind },
+): selection is { kind: 'orchestrator' | 'session'; [key: string]: unknown } {
+  return selection.kind === 'orchestrator' || selection.kind === 'session'
+}
+
+/**
  * Exhaustive matcher over the five `SelectionKind` variants. Each
  * branch receives the full Selection (already narrowed at the call
  * site by the dispatch). A future addition to the union without an

@@ -16,7 +16,6 @@ import { ResizableModal } from '../shared/ResizableModal'
 import { Button, FormGroup, TextInput } from '../ui'
 import { Dropdown } from '../inputs/Dropdown'
 import { theme } from '../../common/theme'
-import { typography } from '../../common/typography'
 import { sanitizeName } from '../../utils/sanitizeName'
 import { createTask } from '../../services/taskService'
 import { logger } from '../../utils/logger'
@@ -215,7 +214,7 @@ export function NewTaskModal({
             {({ toggle }) => (
               <Button
                 data-testid="new-task-modal-epic-trigger"
-                variant="secondary"
+                variant="default"
                 onClick={toggle}
                 disabled={submitting}
               >
@@ -233,7 +232,6 @@ export function NewTaskModal({
             placeholder="## Goal&#10;…"
             disabled={submitting}
             rows={8}
-            className={typography.bodyText}
             style={{
               width: '100%',
               padding: '8px 10px',
@@ -243,7 +241,7 @@ export function NewTaskModal({
               color: 'var(--color-text-primary)',
               fontFamily: 'var(--font-family-mono)',
               fontSize: theme.fontSize.body,
-              lineHeight: theme.lineHeight.normal,
+              lineHeight: theme.lineHeight.body,
               resize: 'vertical',
               minHeight: 160,
             }}
