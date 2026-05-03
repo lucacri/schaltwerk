@@ -1485,6 +1485,53 @@ const TerminalGridComponent = () => {
         }
     }, [dispatchOpencodeFinalResize]);
 
+    // Phase 8 W.5 GAP 3: task-shape selections (kind: 'task' or
+    // 'task-run') don't have an agent terminal bound — the agent runs
+    // inside slot sessions which carry their own terminal pair. Render
+    // a placeholder for the top pane so the surface is unambiguous;
+    // the bottom pane will get a base-worktree shell binding once the
+    // task aggregate exposes its base-worktree path on the wire (the
+    // current Task type carries `task_branch` but not the worktree
+    // path, so a base-shell binding is a follow-up). 'task-slot' is
+    // intentionally NOT short-circuited — its `payload` carries a
+    // session id and the existing session-shape branches handle it.
+    if (selection.kind === 'task' || selection.kind === 'task-run') {
+        return (
+            <div className="h-full flex flex-col items-center justify-center text-center px-6">
+                <div
+                    data-testid="task-empty-agent-placeholder"
+                    className="rounded-lg border border-dashed px-6 py-8 max-w-lg"
+                    style={{
+                        borderColor: 'var(--color-border-subtle)',
+                        backgroundColor: 'var(--color-bg-elevated)',
+                    }}
+                >
+                    <div
+                        className="font-semibold mb-2"
+                        style={{
+                            fontSize: 'var(--font-body-large)',
+                            color: 'var(--color-text-primary)',
+                            fontFamily: 'var(--font-family-sans)',
+                        }}
+                    >
+                        No agent running for this task
+                    </div>
+                    <div
+                        style={{
+                            fontSize: 'var(--font-body)',
+                            color: 'var(--color-text-secondary)',
+                            fontFamily: 'var(--font-family-sans)',
+                            lineHeight: 1.5,
+                        }}
+                    >
+                        Start a stage run to spawn agent slots, or click an
+                        existing slot in the sidebar to view its terminal.
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     if (selectionIsSpec) {
         const specName = selection.payload ?? ''
         return (

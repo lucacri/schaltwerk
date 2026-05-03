@@ -1816,6 +1816,67 @@ describe('TerminalGrid', () => {
     })
   })
 
+  // Phase 8 W.5 GAP 3: task-shape selection short-circuits to a
+  // placeholder pane so the user sees a clear "no agent yet" state
+  // instead of a stale session terminal when they select a top-level
+  // task or a task-run header.
+  describe('Task-shape selection placeholder', () => {
+    it('renders the empty-agent placeholder for kind="task" selection', async () => {
+      await renderGrid()
+      await waitForGridReady()
+
+      await act(async () => {
+        bridge?.setSelection({
+          kind: 'task',
+          taskId: 'task-1',
+          projectPath: '/tmp/project',
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('task-empty-agent-placeholder')).toBeInTheDocument()
+      })
+    })
+
+    it('renders the empty-agent placeholder for kind="task-run" selection', async () => {
+      await renderGrid()
+      await waitForGridReady()
+
+      await act(async () => {
+        bridge?.setSelection({
+          kind: 'task-run',
+          taskId: 'task-1',
+          runId: 'run-1',
+          projectPath: '/tmp/project',
+        })
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('task-empty-agent-placeholder')).toBeInTheDocument()
+      })
+    })
+
+    it('does NOT render the placeholder for kind="task-slot" selection (slot has session)', async () => {
+      await renderGrid()
+      await waitForGridReady()
+
+      await act(async () => {
+        bridge?.setSelection({
+          kind: 'task-slot',
+          taskId: 'task-1',
+          runId: 'run-1',
+          slotKey: 'a',
+          payload: 'slot-session-1',
+          projectPath: '/tmp/project',
+        })
+      })
+
+      // task-slot falls through to the session-shape branches; the
+      // placeholder must NOT render.
+      expect(screen.queryByTestId('task-empty-agent-placeholder')).toBeNull()
+    })
+  })
+
   describe('Keyboard Toggle Consistency', () => {
     it('collapses bottom terminal when Cmd+/ is pressed while terminal is focused', async () => {
       // Start collapsed=false in storage
