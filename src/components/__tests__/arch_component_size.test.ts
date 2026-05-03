@@ -13,6 +13,9 @@ const HARD_CAP_LINES = 500
 // then enforce the cap on it permanently.
 //
 // Sidebar.tsx came off this list in Phase 6 (task-flow v2 §10).
+// Phase 8 W.1 retired NewSessionModal.tsx, CompactVersionRow.tsx, and
+// SessionVersionGroup.tsx — they were deleted with the legacy session
+// flows.
 const LEGACY_OVERSIZED_ALLOWLIST: ReadonlySet<string> = new Set([
     'diff/UnifiedDiffView.tsx',
     'diff/DiffFileList.tsx',
@@ -21,18 +24,14 @@ const LEGACY_OVERSIZED_ALLOWLIST: ReadonlySet<string> = new Set([
     'forge/ForgePrDetail.tsx',
     'git-graph/GitGraphPanel.tsx',
     'home/AsciiBuilderLogo.tsx',
-    'modals/GitHubPrPromptSection.tsx',
     'modals/MergeSessionModal.tsx',
-    'modals/NewSessionModal.tsx',
     'modals/PrSessionModal.tsx',
     'modals/SettingsModal.tsx',
     'modals/UnifiedSearchModal.tsx',
     'right-panel/CopyContextBar.tsx',
     'right-panel/RightPanelTabs.tsx',
     'shared/SessionConfigurationPanel.tsx',
-    'sidebar/CompactVersionRow.tsx',
     'sidebar/SessionCard.tsx',
-    'sidebar/SessionVersionGroup.tsx',
     'specs/SpecEditor.tsx',
     'terminal/Terminal.tsx',
     'terminal/TerminalGrid.tsx',

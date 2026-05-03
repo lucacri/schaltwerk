@@ -67,8 +67,7 @@ export const KEYBOARD_SHORTCUT_SECTIONS: ShortcutSection[] = [
     id: 'sessionManagement',
     title: 'Session Management',
     items: [
-      { action: KeyboardShortcutAction.NewSession, label: 'Create new session' },
-      { action: KeyboardShortcutAction.NewSpec, label: 'Create new spec' },
+      { action: KeyboardShortcutAction.NewTask, label: 'Create new task' },
       { action: KeyboardShortcutAction.CancelSession, label: 'Cancel session' },
       { action: KeyboardShortcutAction.ForceCancelSession, label: 'Force cancel session' },
       { action: KeyboardShortcutAction.RefineSpec, label: 'Open clarification agent' },

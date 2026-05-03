@@ -12,9 +12,6 @@ import { UnifiedDiffModal, type HistoryDiffContext } from './components/diff/Uni
 import { PierreDiffProvider } from './components/diff/PierreDiffProvider'
 import type { HistoryItem, CommitFileChange } from './components/git-graph/types'
 import Split from 'react-split'
-import { NewSessionModal } from './components/modals/NewSessionModal'
-import { applyConsolidationDefaultFavorite } from './components/modals/newSession/consolidationPrefill'
-import type { ConsolidationDefaultFavorite } from './hooks/useClaudeSession'
 import { CancelConfirmation } from './components/modals/CancelConfirmation'
 import { CloseConfirmation } from './components/modals/CloseConfirmation'
 import { DeleteSpecConfirmation } from './components/modals/DeleteSpecConfirmation'
@@ -59,7 +56,6 @@ import {
   initializeSessionsEventsActionAtom,
   initializeSessionsSettingsActionAtom,
   refreshSessionsActionAtom,
-  expectSessionActionAtom,
   crossProjectCountsAtom,
   activeSessionsHydratedFromCacheAtom,
 } from './store/atoms/sessions'
@@ -77,7 +73,6 @@ import { TopBar } from './components/TopBar'
 import { PermissionPrompt } from './components/PermissionPrompt'
 import { OnboardingModal } from './components/onboarding/OnboardingModal'
 import { useOnboarding } from './hooks/useOnboarding'
-import { useSessionPrefill } from './hooks/useSessionPrefill'
 // useRightPanelPersistence removed
 import { useAttentionNotifications } from './hooks/useAttentionNotifications'
 import { useAgentBinarySnapshot } from './hooks/useAgentBinarySnapshot'
@@ -89,36 +84,27 @@ import { resolveOpenPathForOpenButton } from './utils/resolveOpenPath'
 import { TauriCommands } from './common/tauriCommands'
 import { validatePanelPercentage } from './utils/panel'
 import { calculateLogicalSessionCounts } from './utils/sessionVersions'
-import { loadGenerationPrompts, renderGenerationPrompt } from './common/generationPrompts'
 import {
   UiEvent,
   listenUiEvent,
   emitUiEvent,
   SessionActionDetail,
-  StartAgentFromSpecDetail,
   AgentLifecycleDetail,
   type PermissionErrorDetail,
-  type ConsolidateVersionGroupDetail,
-  type TerminateVersionGroupDetail,
-  type ContextualActionCreateSessionDetail,
-  type ContextualActionCreateSpecDetail,
 } from './common/uiEvents'
 import { clearTerminalStartState } from './common/terminalStartState'
-import { runContextualSpecClarify } from './hooks/contextualSpecClarify'
-import { sanitizeName } from './utils/sanitizeName'
 import { logger } from './utils/logger'
 import { installSmartDashGuards } from './utils/normalizeCliText'
 import { useKeyboardShortcutsConfig } from './contexts/KeyboardShortcutsContext'
 import { detectPlatformSafe, isShortcutForAction } from './keyboardShortcuts/helpers'
 import { selectAllTerminal } from './terminal/registry/terminalRegistry'
-import { useSelectionPreserver } from './hooks/useSelectionPreserver'
 import { useTaskRefreshListener } from './hooks/useTaskRefreshListener'
 import { NewTaskModal } from './components/modals/NewTaskModal'
 import { AGENT_START_TIMEOUT_MESSAGE } from './common/agentSpawn'
 import { beginSplitDrag, endSplitDrag } from './utils/splitDragCoordinator'
 import { useOptionalToast } from './common/toast/ToastProvider'
 import { ForgeConnectionIssuePayload, NewerBuildAvailablePayload } from './common/events'
-import { RawSession, RawSpec, SessionState } from './types/session'
+import { RawSpec, SessionState } from './types/session'
 import { specOrchestratorTerminalId } from './common/terminalIdentity'
 import {
   refreshKeepAwakeStateActionAtom,
@@ -127,7 +113,6 @@ import {
 import { registerDevErrorListeners } from './dev/registerDevErrorListeners'
 import { AgentCliMissingModal } from './components/agentBinary/AgentCliMissingModal'
 import type { SettingsCategory } from './types/settings'
-import type { AgentLaunchSlot } from './types/agentLaunch'
 import { SPLIT_GUTTER_SIZE } from './common/splitLayout'
 import { isNotificationPermissionGranted } from './utils/notificationPermission'
 import { sanitizeSplitSizes, areSizesEqual } from './utils/splitStorage'
@@ -178,12 +163,10 @@ function AppContent() {
   const refreshKeepAwakeState = useSetAtom(refreshKeepAwakeStateActionAtom)
   const registerKeepAwakeListener = useSetAtom(registerKeepAwakeEventListenerActionAtom)
   const refreshForge = useSetAtom(refreshForgeAtom)
-  const expectSession = useSetAtom(expectSessionActionAtom)
   const { isOnboardingOpen, completeOnboarding, closeOnboarding, openOnboarding } = useOnboarding()
-  const { fetchSessionForPrefill } = useSessionPrefill()
   const github = useGithubIntegrationContext()
   const toast = useOptionalToast()
-  const { beginSessionMutation, endSessionMutation, enqueuePendingStartup, allSessions } = useSessions()
+  const { beginSessionMutation, endSessionMutation, allSessions } = useSessions()
   const agentLifecycleStateRef = useRef(new Map<string, { state: 'spawned' | 'ready'; timestamp: number }>())
   const [devErrorToastsEnabled, setDevErrorToastsEnabled] = useState(false)
   const [attentionCounts, setAttentionCounts] = useState<Record<string, number>>({})
@@ -514,14 +497,9 @@ function AppContent() {
     }
   }, [toast])
 
-  // Get dynamic shortcut displays
-  const shortcuts = useMultipleShortcutDisplays([
-    KeyboardShortcutAction.NewSession,
-    KeyboardShortcutAction.NewSpec
-  ])
-
-  const [newSessionOpen, setNewSessionOpen] = useState(false)
-  // Phase 7 Wave D.1: + New Task is the primary creation surface in v2.
+  // Phase 8 W.2: NewSession + NewSpec collapsed onto NewTask. The
+  // shortcut display + state are single-axis now.
+  const shortcuts = useMultipleShortcutDisplays([KeyboardShortcutAction.NewTask])
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsCategory | undefined>(undefined)
@@ -537,7 +515,6 @@ function AppContent() {
   const [showHome, setShowHome] = useState(true)
   const [cliValidationError, setCliValidationError] = useState<string | null>(null)
   const [pendingActivePath, setPendingActivePath] = useState<string | null>(null)
-  const [startFromDraftName, setStartFromSpecName] = useState<string | null>(null)
   const [showPermissionPrompt, setShowPermissionPrompt] = useState(false)
   const [permissionDeniedPath, setPermissionDeniedPath] = useState<string | null>(null)
   const [permissionContext, setPermissionContext] = useState<'project' | 'session' | 'unknown'>('unknown')
@@ -552,8 +529,7 @@ function AppContent() {
   })
   const [isTerminatingGroup, setIsTerminatingGroup] = useState(false)
   const [isConvertingGroup, setIsConvertingGroup] = useState(false)
-  const [openAsDraft, setOpenAsSpec] = useState(false)
-  const [cachedPrompt, setCachedPrompt] = useState('')
+  // openAsDraft / setOpenAsSpec retired in Phase 8 W.2 (NewSpec gone).
   const [triggerOpenInApp, setTriggerOpenInApp] = useState<number>(0)
   const {
     proposal: setupScriptProposal,
@@ -589,10 +565,9 @@ function AppContent() {
   const { config: keyboardShortcutConfig } = useKeyboardShortcutsConfig()
   const platform = useMemo(() => detectPlatformSafe(), [])
   const isMac = platform === 'mac'
-  // Phase 8 W.2 retires NewSpec; both ⌘N and ⇧⌘N collapse onto NewTask.
-  // The button title displays this single shortcut.
-  const specShortcut = shortcuts[KeyboardShortcutAction.NewSpec] || (isMac ? '⇧⌘N' : 'Ctrl + Shift + N')
-  const preserveSelection = useSelectionPreserver()
+  // Phase 8 W.2: single NewTask shortcut display (Mod+N AND Mod+Shift+N
+  // both bind to it). Button title shows the canonical Mod+N variant.
+  const newTaskShortcut = shortcuts[KeyboardShortcutAction.NewTask] || (isMac ? '⌘N' : 'Ctrl + N')
   const pendingActivePathRef = useRef<string | null>(null)
   const openProjectPaths = useMemo(() => projectTabs.map(tab => tab.projectPath), [projectTabs])
   const clearPendingPath = useCallback((path?: string | null) => {
@@ -1580,27 +1555,16 @@ function AppContent() {
         document.activeElement?.tagName === 'TEXTAREA' ||
         document.activeElement?.getAttribute('contenteditable') === 'true'
 
-      if (!newSessionOpen && !cancelModalOpen && !isInputFocused && isShortcutForAction(e, KeyboardShortcutAction.NewSession, keyboardShortcutConfig, { platform })) {
+      // Phase 8 W.2: NewSession + NewSpec shortcuts collapsed onto a
+      // single NewTask binding. Both Mod+N and Mod+Shift+N route here.
+      if (!newTaskOpen && !cancelModalOpen && !isInputFocused && isShortcutForAction(e, KeyboardShortcutAction.NewTask, keyboardShortcutConfig, { platform })) {
         e.preventDefault()
-        if (shouldBlockSessionModal('new session shortcut')) {
+        if (shouldBlockSessionModal('new task shortcut')) {
           return
         }
-        logger.info('[App] New session shortcut triggered - opening new session modal (agent mode)')
+        logger.info('[App] New task shortcut triggered')
         previousFocusRef.current = document.activeElement
-        setOpenAsSpec(false)
-        setNewSessionOpen(true)
-        return
-      }
-
-      if (!newSessionOpen && !cancelModalOpen && !isInputFocused && isShortcutForAction(e, KeyboardShortcutAction.NewSpec, keyboardShortcutConfig, { platform })) {
-        e.preventDefault()
-        if (shouldBlockSessionModal('new spec shortcut')) {
-          return
-        }
-        logger.info('[App] New spec shortcut triggered - opening new session modal (spec creation)')
-        previousFocusRef.current = document.activeElement
-        setOpenAsSpec(true)
-        setNewSessionOpen(true)
+        setNewTaskOpen(true)
         return
       }
 
@@ -1635,19 +1599,8 @@ function AppContent() {
       }
     }
 
-    const handleGlobalNewSession = () => {
-      // Handle ⌘N from terminal (custom event)
-      if (!newSessionOpen && !cancelModalOpen) {
-        if (shouldBlockSessionModal('global new session shortcut')) {
-          return
-        }
-        logger.info('[App] Global new session shortcut triggered (agent mode)')
-        // Store current focus before opening modal
-        previousFocusRef.current = document.activeElement
-        setOpenAsSpec(false) // Explicitly set to false for global shortcut
-        setNewSessionOpen(true)
-      }
-    }
+    // Phase 8 W.2: GlobalNewSessionShortcut event retired; the terminal
+    // emits NewTaskRequest now (handled by the listener below).
 
     const handleOpenDiffView = () => {
       setDiffViewerState({ mode: 'session', filePath: null })
@@ -1659,7 +1612,6 @@ function AppContent() {
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    const cleanupGlobalNewSession = listenUiEvent(UiEvent.GlobalNewSessionShortcut, () => handleGlobalNewSession())
     const cleanupOpenDiffView = listenUiEvent(UiEvent.OpenDiffView, () => handleOpenDiffView())
     const cleanupOpenDiffFile = listenUiEvent(UiEvent.OpenDiffFile, detail => {
       const filePath = detail?.filePath || null
@@ -1669,106 +1621,33 @@ function AppContent() {
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
-      cleanupGlobalNewSession()
       cleanupOpenDiffView()
       cleanupOpenDiffFile()
     }
-  }, [newSessionOpen, cancelModalOpen, increaseFontSizes, decreaseFontSizes, resetFontSizes, keyboardShortcutConfig, platform, shouldBlockSessionModal, toggleLeftPanelCollapsed])
+  }, [newTaskOpen, cancelModalOpen, increaseFontSizes, decreaseFontSizes, resetFontSizes, keyboardShortcutConfig, platform, shouldBlockSessionModal, toggleLeftPanelCollapsed])
 
-  // Open NewSessionModal in spec creation mode when requested
+  // Phase 8 W.2: NewSpecRequest retired. The legacy spec-create event is
+  // gone; NewTaskRequest covers both former cases via the listener
+  // below.
+
+  // Phase 8 W.1/W.2: ConsolidateVersionGroup + TerminateVersionGroup
+  // listeners retired. The emitters (SessionVersionGroup) were deleted in
+  // W.1; consolidation as a top-level concept retires with the legacy
+  // session list. v2 multi-candidate consolidation lives inside
+  // TaskRunSlots (per-task, per-run).
+
+
+
+  // Phase 8 W.2: NewSessionRequest renamed to NewTaskRequest. Listener
+  // now opens the NewTaskModal (the v2 creation surface).
   useEffect(() => {
-    const cleanup = listenUiEvent(UiEvent.NewSpecRequest, () => {
-      if (shouldBlockSessionModal('new spec request event')) {
+    const cleanup = listenUiEvent(UiEvent.NewTaskRequest, () => {
+      if (shouldBlockSessionModal('new task request event')) {
         return
       }
-      logger.info('[App] schaltwerk:new-spec event received - opening modal for spec creation')
+      logger.info('[App] schaltwerk:new-task event received')
       previousFocusRef.current = document.activeElement
-      setOpenAsSpec(true)
-      setNewSessionOpen(true)
-    })
-    return cleanup
-  }, [shouldBlockSessionModal])
-
-  useEffect(() => {
-    return listenUiEvent(UiEvent.ConsolidateVersionGroup, (detail: ConsolidateVersionGroupDetail) => {
-      void (async () => {
-        const { baseName, baseBranch, versionGroupId, epicId: groupEpicId, sessions } = detail
-
-        const sessionList = sessions.map(s => {
-          const stats = s.diffStats
-          const statsStr = stats
-            ? `Files changed: ${stats.files_changed}, +${stats.additions} -${stats.deletions}`
-            : 'No diff stats available'
-          return `- ${s.name} (session_id: ${s.id}, branch: ${s.branch}, worktree: ${s.worktreePath})\n  ${statsStr}`
-        }).join('\n')
-
-        const prompts = await loadGenerationPrompts()
-        const prompt = renderGenerationPrompt(prompts.consolidation_prompt, { sessionList })
-
-        const [defaultFavorite, availablePresets] = await Promise.all([
-          invoke<ConsolidationDefaultFavorite | null>(
-            TauriCommands.SchaltwerkCoreGetConsolidationDefaultFavorite,
-          ).catch(() => null),
-          invoke<Array<{ id: string }>>(TauriCommands.GetAgentPresets).catch(() => [] as Array<{ id: string }>),
-        ])
-        const availablePresetIds = (availablePresets ?? []).map(p => p.id)
-        const favoriteDefaults = applyConsolidationDefaultFavorite(
-          {
-            agentType: defaultFavorite?.agentType ?? null,
-            presetId: defaultFavorite?.presetId ?? null,
-          },
-          { availablePresetIds },
-        )
-
-        emitUiEvent(UiEvent.NewSessionPrefillPending)
-        setNewSessionOpen(true)
-
-        const sourceIds = sessions.map(s => s.id)
-
-        requestAnimationFrame(() => {
-          emitUiEvent(UiEvent.NewSessionPrefill, {
-            name: `${baseName}-consolidation`,
-            taskContent: prompt,
-            baseBranch,
-            versionGroupId,
-            lockName: false,
-            isConsolidation: true,
-            consolidationRoundId: globalThis.crypto?.randomUUID?.() ?? `${baseName}-consolidation-round-${Date.now()}`,
-            consolidationRole: 'candidate',
-            consolidationConfirmationMode: 'confirm',
-            epicId: groupEpicId,
-            consolidationSourceIds: sourceIds,
-            ...favoriteDefaults,
-          })
-        })
-      })()
-    })
-  }, [])
-
-  useEffect(() => {
-    return listenUiEvent(UiEvent.TerminateVersionGroup, (detail: TerminateVersionGroupDetail) => {
-      if (!detail.sessions.length) return
-
-      setTerminateGroupModalState({
-        open: true,
-        baseName: detail.baseName,
-        sessions: detail.sessions,
-      })
-    })
-  }, [])
-
-
-
-  // Open NewSessionModal for new agent when requested
-  useEffect(() => {
-    const cleanup = listenUiEvent(UiEvent.NewSessionRequest, () => {
-      if (shouldBlockSessionModal('new session request event')) {
-        return
-      }
-      logger.info('[App] schaltwerk:new-session event received - opening modal in agent mode')
-      previousFocusRef.current = document.activeElement
-      setOpenAsSpec(false)
-      setNewSessionOpen(true)
+      setNewTaskOpen(true)
     })
     return cleanup
   }, [shouldBlockSessionModal])
@@ -1781,54 +1660,9 @@ function AppContent() {
     return cleanup
   }, [])
 
-  // Open Start Agent modal prefilled from an existing spec
-  useEffect(() => {
-    const cleanup = listenUiEvent(UiEvent.StartAgentFromSpec, (detail?: StartAgentFromSpecDetail) => {
-      logger.info('[App] Received start-agent-from-spec event:', detail)
-      const name = detail?.name
-      if (!name) {
-        logger.warn('[App] No name provided in start-agent-from-spec event')
-        return
-      }
-
-      if (shouldBlockSessionModal('start-agent-from-spec event')) {
-        return
-      }
-
-      // Store focus and open modal
-      previousFocusRef.current = document.activeElement
-
-      // Notify modal that prefill is coming
-      emitUiEvent(UiEvent.NewSessionPrefillPending)
-
-      // Fetch spec content first, then open modal with prefilled data
-      logger.info('[App] Fetching session data for prefill:', name)
-      void (async () => {
-        try {
-          const prefillData = await fetchSessionForPrefill(name)
-          logger.info('[App] Fetched prefill data:', prefillData)
-
-          // Open modal after data is ready
-          setNewSessionOpen(true)
-          setStartFromSpecName(name)
-
-          // Dispatch prefill event with fetched data
-          if (prefillData) {
-            // Use requestAnimationFrame to ensure modal is rendered before dispatching
-            requestAnimationFrame(() => {
-              logger.info('[App] Dispatching prefill event with data')
-              emitUiEvent(UiEvent.NewSessionPrefill, prefillData)
-            })
-          } else {
-            logger.warn('[App] No prefill data fetched for session:', name)
-          }
-        } catch (error) {
-          logger.error('[App] Failed to prefill start-agent-from-spec modal', error)
-        }
-      })()
-    })
-    return cleanup
-  }, [fetchSessionForPrefill, shouldBlockSessionModal])
+  // Phase 8 W.2: StartAgentFromSpec retired. v2 has no spec-with-agent
+  // distinction — drafts ARE tasks. The "start agent from existing spec"
+  // surface emitted from session card actions is gone with W.1.
 
 
   const cleanupSpecOrchestratorByName = useCallback(async (specName: string) => {
@@ -1900,355 +1734,30 @@ function AppContent() {
     setDiffViewerState(null)
   }
 
-  const closeNewSessionModal = () => {
-    logger.info('[App] NewSessionModal closing - resetting state')
-    setNewSessionOpen(false)
-    setOpenAsSpec(false)
-    setStartFromSpecName(null)
-    if (previousFocusRef.current && previousFocusRef.current instanceof HTMLElement) {
-      setTimeout(() => {
-        try {
-          (previousFocusRef.current as HTMLElement).focus()
-        } catch (error) {
-          logger.warn('[App] Failed to restore focus after NewSessionModal closed:', error)
-        }
-      }, 100)
-    }
-  }
-
-  const handleCreateSession = async (data: {
-    name: string
-    prompt?: string
-    baseBranch: string
-    customBranch?: string
-    useExistingBranch?: boolean
-    syncWithOrigin?: boolean
-    userEditedName?: boolean
-    isSpec?: boolean
-    draftContent?: string
-    versionCount?: number
-    agentType?: string
-    agentTypes?: string[]
-    agentSlots?: AgentLaunchSlot[]
-    autonomyEnabled?: boolean
-    issueNumber?: number
-    issueUrl?: string
-    prNumber?: number
-    prUrl?: string
-    epicId?: string | null
-    versionGroupId?: string
-    isConsolidation?: boolean
-    consolidationSourceIds?: string[]
-    consolidationRoundId?: string
-    consolidationRole?: 'candidate' | 'judge'
-    consolidationConfirmationMode?: 'confirm' | 'auto-promote'
-    }) => {
-    const shouldCloseOptimistically =
-      !data.isSpec &&
-      !startFromDraftName &&
-      !data.useExistingBranch &&
-      !data.customBranch
-
-    try {
-      if (shouldCloseOptimistically) {
-        closeNewSessionModal()
-      }
-      await preserveSelection(async () => {
-        if (data.isSpec) {
-          // Create spec session
-          await invoke(TauriCommands.SchaltwerkCoreCreateSpecSession, {
-            name: data.name,
-            specContent: data.draftContent || '',
-            agentType: data.agentType,
-            epicId: data.epicId ?? null,
-            issueNumber: data.issueNumber ?? null,
-            issueUrl: data.issueUrl ?? null,
-            prNumber: data.prNumber ?? null,
-            prUrl: data.prUrl ?? null,
-            userEditedName: data.userEditedName ?? false,
-          })
-          setNewSessionOpen(false)
-          setCachedPrompt('')
-
-          // Dispatch event for other components to know a spec was created
-          emitUiEvent(UiEvent.SpecCreated, { name: data.name })
-        } else {
-          // Create one or multiple sessions depending on versionCount, agentTypes, or agentSlots
-          const useAgentSlots = Boolean(data.agentSlots && data.agentSlots.length > 0)
-          const useAgentTypes = Boolean(data.agentTypes && data.agentTypes.length > 0)
-          const postCreateTasks: Array<Promise<void>> = []
-          if (startFromDraftName) {
-            await cleanupSpecOrchestratorByName(startFromDraftName)
-          }
-          const count = useAgentSlots
-            ? (data.agentSlots?.length ?? 1)
-            : useAgentTypes
-              ? (data.agentTypes?.length ?? 1)
-              : Math.max(1, Math.min(4, data.versionCount ?? 1))
-
-          logger.info('[App] Creating sessions with multi-agent data:', {
-            useAgentSlots,
-            useAgentTypes,
-            agentSlots: data.agentSlots,
-            agentTypes: data.agentTypes,
-            agentType: data.agentType,
-            count,
-            versionCount: data.versionCount
-          })
-
-          // When creating multiple versions, ensure consistent naming with _v1, _v2, etc.
-          const baseName = data.name
-          // Consider it auto-generated if the user didn't manually edit the name
-          const isAutoGenerated = !data.userEditedName
-
-          // Create all versions first
-          const createdSessions: Array<{ name: string; agentType: string | null | undefined }> = []
-          // Generate a stable group id for DB linkage
-          const versionGroupId = data.versionGroupId
-            ?? ((globalThis.crypto && 'randomUUID' in globalThis.crypto) ? (globalThis.crypto as Crypto & { randomUUID(): string }).randomUUID() : `${baseName}-${Date.now()}`)
-          for (let i = 1; i <= count; i++) {
-            // All versions get _v{N} suffix when creating multiple
-            const versionName = count === 1 ? baseName : `${baseName}_v${i}`
-            const agentSlotForVersion = useAgentSlots ? (data.agentSlots?.[i - 1] ?? null) : null
-            const agentTypeForVersion = agentSlotForVersion?.agentType ?? (useAgentTypes ? (data.agentTypes?.[i - 1] ?? null) : data.agentType)
-
-            logger.info(`[App] Creating version ${i}/${count}:`, {
-              versionName,
-              agentTypeForVersion,
-              fromSlots: useAgentSlots,
-              fromArray: useAgentTypes,
-              arrayIndex: i - 1,
-              arrayValue: data.agentTypes?.[i - 1],
-              slotValue: agentSlotForVersion,
-            })
-
-            if (!data.isSpec) {
-              try {
-                await enqueuePendingStartup(versionName, agentTypeForVersion ?? undefined)
-              } catch (enqueueError) {
-                logger.warn('[App] Failed to enqueue pending startup before creation:', enqueueError)
-              }
-            }
-
-            // For single sessions, use userEditedName flag as provided
-            // For multiple versions, don't mark as user-edited so they can be renamed as a group
-            const versionAutonomyEnabled = agentTypeForVersion === 'terminal'
-              ? false
-              : agentSlotForVersion?.autonomyEnabled ?? data.autonomyEnabled
-            const createdSession = await invoke<RawSession | null>(TauriCommands.SchaltwerkCoreCreateSession, {
-              name: versionName,
-              prompt: data.prompt || null,
-              baseBranch: data.baseBranch || null,
-              customBranch: data.customBranch || null,
-              useExistingBranch: data.useExistingBranch || null,
-              syncWithOrigin: data.syncWithOrigin || null,
-              userEditedName: count > 1 ? false : (data.userEditedName ?? false),
-              versionGroupId,
-              versionNumber: i,
-              epicId: data.epicId ?? null,
-              agentType: agentTypeForVersion,
-              autonomyEnabled: versionAutonomyEnabled,
-              issueNumber: data.issueNumber || null,
-              issueUrl: data.issueUrl || null,
-              prNumber: data.prNumber || null,
-              isConsolidation: data.isConsolidation || null,
-              consolidationSourceIds: data.consolidationSourceIds || null,
-              consolidationRoundId: data.consolidationRoundId || null,
-              consolidationRole: data.consolidationRole || null,
-              consolidationConfirmationMode: data.consolidationConfirmationMode || null,
-            })
-
-            const actualSessionName = createdSession?.name ?? versionName
-            createdSessions.push({ name: actualSessionName, agentType: agentTypeForVersion })
-            expectSession(actualSessionName)
-
-            if (data.prNumber && data.prUrl) {
-              postCreateTasks.push((async () => {
-                await invoke(TauriCommands.SchaltwerkCoreLinkSessionToPr, {
-                  name: actualSessionName,
-                  prNumber: data.prNumber,
-                  prUrl: data.prUrl,
-                })
-                logger.info(`[App] Auto-linked session ${actualSessionName} to PR #${data.prNumber}`)
-              })().catch((linkError) => {
-                logger.warn(`[App] Failed to auto-link session to PR:`, linkError)
-              }))
-            }
-
-            if (!data.isSpec && actualSessionName !== versionName) {
-              try {
-                await enqueuePendingStartup(actualSessionName, agentTypeForVersion ?? undefined)
-              } catch (enqueueError) {
-                logger.warn('[App] Failed to enqueue pending startup after name normalization:', enqueueError)
-              }
-            }
-          }
-
-          const actualNamesForLog = createdSessions.map(session => session.name)
-          logger.info(`[App] Created ${count} sessions: ${actualNamesForLog.join(', ')}`)
-
-          if (!shouldCloseOptimistically) {
-            closeNewSessionModal()
-          }
-          setCachedPrompt('')
-
-          // If we created multiple versions with an auto-generated base name, trigger group rename
-          if (count > 1 && isAutoGenerated && data.prompt) {
-            postCreateTasks.push((async () => {
-              logger.info(`[App] Attempting to rename version group with baseName: '${baseName}' and prompt: '${data.prompt}'`)
-              await invoke(TauriCommands.SchaltwerkCoreRenameVersionGroup, {
-                baseName,
-                prompt: data.prompt,
-                baseBranch: data.baseBranch || null,
-                versionGroupId,
-              })
-              logger.info(`[App] Successfully renamed version group: '${baseName}'`)
-            })().catch((err) => {
-              logger.error('Failed to rename version group:', err)
-            }))
-          }
-
-          // Dispatch event for other components to know a session was created
-          const firstCreatedName = createdSessions[0]?.name ?? data.name
-          emitUiEvent(UiEvent.SessionCreated, { name: firstCreatedName })
-
-          // If starting from a spec, delete the spec now that sessions are created
-          if (startFromDraftName) {
-            postCreateTasks.push((async () => {
-              await invoke(TauriCommands.SchaltwerkCoreArchiveSpecSession, { name: startFromDraftName })
-              logger.info('[App] Deleted spec after session creation:', startFromDraftName)
-            })().catch((e) => {
-              logger.warn('[App] Failed to delete spec after session creation:', e)
-            }))
-            setStartFromSpecName(null)
-          }
-
-          void Promise.allSettled(postCreateTasks)
-        }
-      })
-    } catch (error) {
-      const errorStr = JSON.stringify(error)
-      const isBranchValidation = errorStr.includes('Branch') || errorStr.includes('worktree')
-      if (isBranchValidation) {
-        logger.warn('Failed to create session (validation):', error)
-      } else {
-        logger.error('Failed to create session:', error)
-      }
-      if (shouldCloseOptimistically && toast) {
-        toast.pushToast({
-          tone: 'error',
-          title: 'Failed to create session',
-          description: getErrorMessage(error),
-        })
-      }
-      throw error
-    }
-  }
-
-  const handleContextualSessionCreate = useEffectEvent((detail: ContextualActionCreateSessionDetail) => {
-    logger.info('[App] Contextual action create session - opening modal with prefill:', detail)
-
-    if (shouldBlockSessionModal('contextual action create session')) {
+  // Phase 8 W.2: contextual create paths (forge issue/PR right-click →
+  // create) collapsed onto a single task-create flow. The legacy
+  // session/spec branches are gone; both kinds rebind to NewTaskModal.
+  // Deeper prefill (passing the issue body into NewTaskModal as the
+  // request_body) is W.5 §5.5 wiring; for now the contextual click just
+  // opens NewTaskModal and the user types their own request.
+  const handleContextualTaskCreate = useEffectEvent(() => {
+    if (shouldBlockSessionModal('contextual action create task')) {
       return
     }
-
-    const name = detail.contextType && detail.contextNumber
-      ? sanitizeName(
-          detail.contextType === 'pr'
-            ? `pr-${detail.contextNumber}-${detail.contextTitle ?? ''}`
-            : `${detail.contextNumber}-${detail.contextTitle ?? ''}`
-        ) || 'contextual-action'
-      : sanitizeName(detail.actionName) || 'contextual-action'
-
     previousFocusRef.current = document.activeElement
-    setStartFromSpecName(null)
-    emitUiEvent(UiEvent.NewSessionPrefillPending)
-    setCachedPrompt(detail.prompt)
-    setOpenAsSpec(false)
-    setNewSessionOpen(true)
-
-    requestAnimationFrame(() => {
-      emitUiEvent(UiEvent.NewSessionPrefill, {
-        name,
-        taskContent: detail.prompt,
-        lockName: true,
-        agentType: detail.agentType,
-        variantId: detail.variantId,
-        presetId: detail.presetId,
-        ...(detail.contextType === 'issue' && detail.contextNumber ? {
-          issueNumber: Number(detail.contextNumber),
-          issueUrl: detail.contextUrl,
-        } : {}),
-        ...(detail.contextType === 'pr' && detail.contextNumber ? {
-          prNumber: Number(detail.contextNumber),
-          prUrl: detail.contextUrl,
-        } : {}),
-      })
-    })
-  })
-
-  const handleContextualSpecCreate = useEffectEvent((detail: ContextualActionCreateSpecDetail) => {
-    logger.info('[App] Contextual action create spec - opening modal with prefill:', detail)
-
-    if (shouldBlockSessionModal('contextual action create spec')) {
-      return
-    }
-
-    const name = detail.contextType && detail.contextNumber
-      ? sanitizeName(
-          detail.contextType === 'pr'
-            ? `pr-${detail.contextNumber}-${detail.contextTitle ?? ''}`
-            : `${detail.contextNumber}-${detail.contextTitle ?? ''}`
-        ) || 'contextual-action'
-      : sanitizeName(detail.name) || 'contextual-action'
-
-    previousFocusRef.current = document.activeElement
-    setStartFromSpecName(null)
-    emitUiEvent(UiEvent.NewSessionPrefillPending)
-    setCachedPrompt(detail.prompt)
-    setOpenAsSpec(true)
-    setNewSessionOpen(true)
-
-    requestAnimationFrame(() => {
-      emitUiEvent(UiEvent.NewSessionPrefill, {
-        name,
-        taskContent: detail.prompt,
-        lockName: true,
-        ...(detail.contextType === 'issue' && detail.contextNumber ? {
-          issueNumber: Number(detail.contextNumber),
-          issueUrl: detail.contextUrl,
-        } : {}),
-        ...(detail.contextType === 'pr' && detail.contextNumber ? {
-          prNumber: Number(detail.contextNumber),
-          prUrl: detail.contextUrl,
-        } : {}),
-      })
-    })
-  })
-
-  const handleContextualSpecClarify = useEffectEvent((detail: ContextualActionCreateSpecDetail) => {
-    logger.info('[App] Contextual action spec-clarify - creating spec and starting clarification:', detail)
-    void runContextualSpecClarify({ detail }).catch(err => {
-      logger.error('[App] Contextual action spec-clarify failed:', err)
-      const description = err instanceof Error ? err.message : String(err)
-      toast?.pushToast({
-        tone: 'error',
-        title: 'Auto-clarify failed',
-        description: description || 'Spec was created but clarification could not start. Open it and click Clarify to retry.',
-      })
-    })
+    setNewTaskOpen(true)
   })
 
   useEffect(() => {
-    const sessionCleanup = listenUiEvent(UiEvent.ContextualActionCreateSession, handleContextualSessionCreate)
-    const specCleanup = listenUiEvent(UiEvent.ContextualActionCreateSpec, handleContextualSpecCreate)
-    const specClarifyCleanup = listenUiEvent(UiEvent.ContextualActionCreateSpecClarify, handleContextualSpecClarify)
+    const sessionCleanup = listenUiEvent(UiEvent.ContextualActionCreateSession, handleContextualTaskCreate)
+    const specCleanup = listenUiEvent(UiEvent.ContextualActionCreateSpec, handleContextualTaskCreate)
+    const specClarifyCleanup = listenUiEvent(UiEvent.ContextualActionCreateSpecClarify, handleContextualTaskCreate)
     return () => {
       sessionCleanup()
       specCleanup()
       specClarifyCleanup()
     }
-  }, [])
+  }, [handleContextualTaskCreate])
 
   const handleGoHome = useCallback(() => {
     setShowHome(true)
@@ -2589,7 +2098,7 @@ function AppContent() {
                           onMouseLeave={(e) => {
                             e.currentTarget.style.backgroundColor = 'rgba(var(--color-bg-elevated-rgb), 0.6)'
                           }}
-                          title={`+ New Task (${specShortcut})`}
+                          title={`+ New Task (${newTaskShortcut})`}
                         >
                           <span>+ New Task</span>
                           <span
@@ -2599,7 +2108,7 @@ function AppContent() {
                               color: 'var(--color-text-secondary)'
                             }}
                           >
-                            {specShortcut}
+                            {newTaskShortcut}
                           </span>
                         </button>
                       </div>
@@ -2650,16 +2159,8 @@ function AppContent() {
             </div>
           </div>
 
-           <NewSessionModal
-             open={newSessionOpen}
-             initialIsDraft={openAsDraft}
-             cachedPrompt={cachedPrompt}
-             onPromptChange={setCachedPrompt}
-             onClose={closeNewSessionModal}
-             onCreate={handleCreateSession}
-           />
-
-           {/* Phase 7 Wave D.1: + New Task primary creation surface. */}
+           {/* Phase 7 Wave D.1: + New Task primary creation surface.
+               Phase 8 W.2: NewSessionModal mount retired entirely. */}
            <NewTaskModal
              isOpen={newTaskOpen}
              onClose={() => setNewTaskOpen(false)}

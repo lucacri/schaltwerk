@@ -24,8 +24,9 @@ export enum KeyboardShortcutAction {
   ScrollTerminalToTop = 'scrollTerminalToTop',
   ScrollTerminalToBottom = 'scrollTerminalToBottom',
   InsertTerminalNewLine = 'insertTerminalNewLine',
-  NewSession = 'newSession',
-  NewSpec = 'newSpec',
+  // Phase 8 W.2: NewSession + NewSpec collapsed to a single NewTask
+  // action. Both Mod+N and Mod+Shift+N bind to it.
+  NewTask = 'newTask',
   CancelSession = 'cancelSession',
   ForceCancelSession = 'forceCancelSession',
   RefineSpec = 'refineSpec',
@@ -107,8 +108,7 @@ export const defaultShortcutConfig: KeyboardShortcutConfig = {
   [KeyboardShortcutAction.ScrollTerminalToTop]: createNormalizedBindings(['Mod+Shift+ArrowUp']),
   [KeyboardShortcutAction.ScrollTerminalToBottom]: createNormalizedBindings(['Mod+Shift+ArrowDown']),
   [KeyboardShortcutAction.InsertTerminalNewLine]: createNormalizedBindings(['Mod+Enter']),
-  [KeyboardShortcutAction.NewSession]: createNormalizedBindings(['Mod+N']),
-  [KeyboardShortcutAction.NewSpec]: createNormalizedBindings(['Mod+Shift+N']),
+  [KeyboardShortcutAction.NewTask]: createNormalizedBindings(['Mod+N', 'Mod+Shift+N']),
   [KeyboardShortcutAction.CancelSession]: createNormalizedBindings(['Mod+D']),
   [KeyboardShortcutAction.ForceCancelSession]: createNormalizedBindings(['Mod+Shift+D']),
   [KeyboardShortcutAction.RefineSpec]: createNormalizedBindings(['Mod+Shift+R']),

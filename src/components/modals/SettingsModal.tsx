@@ -59,7 +59,7 @@ import { loadContextualActionsAtom } from '../../store/atoms/contextualActions'
 import { setEnabledAgentsAtom } from '../../store/atoms/enabledAgents'
 import { useClaudeSession, type ConsolidationDefaultFavorite } from '../../hooks/useClaudeSession'
 import { useAgentPresets } from '../../hooks/useAgentPresets'
-import { agentDisplayName } from './newSession/favoriteOptions'
+import { agentDisplayName } from '../../common/agentDisplayName'
 
 const shortcutArraysEqual = (a: string[] = [], b: string[] = []) => {
     if (a.length !== b.length) return false

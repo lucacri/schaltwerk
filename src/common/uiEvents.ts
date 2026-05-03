@@ -20,8 +20,9 @@ export enum UiEvent {
   NewSessionPrefill = 'schaltwerk:new-session:prefill',
   NewSessionPrefillPending = 'schaltwerk:new-session:prefill-pending',
   NewSessionSetSpec = 'schaltwerk:new-session:set-spec',
-  NewSessionRequest = 'schaltwerk:new-session',
-  NewSpecRequest = 'schaltwerk:new-spec',
+  // Phase 8 W.2: collapsed from NewSessionRequest + NewSpecRequest +
+  // GlobalNewSessionShortcut. Listeners route to setNewTaskOpen.
+  NewTaskRequest = 'schaltwerk:new-task',
   SessionCreated = 'schaltwerk:session-created',
   SpecCreated = 'schaltwerk:spec-created',
   RetryAgentStart = 'schaltwerk:retry-agent-start',
@@ -35,7 +36,7 @@ export enum UiEvent {
   FontSizeChanged = 'font-size-changed',
   ThemeChanged = 'theme-changed',
   LanguageChanged = 'language-changed',
-  GlobalNewSessionShortcut = 'global-new-session-shortcut',
+  // GlobalNewSessionShortcut retired in Phase 8 W.2 — collapsed into NewTaskRequest.
   NoProjectError = 'schaltwerk:no-project-error',
   SpawnError = 'schaltwerk:spawn-error',
   NotGitError = 'schaltwerk:not-git-error',
@@ -301,8 +302,7 @@ export type UiEventPayloads = {
   [UiEvent.NewSessionPrefill]: NewSessionPrefillDetail | undefined
   [UiEvent.NewSessionPrefillPending]: undefined
   [UiEvent.NewSessionSetSpec]: undefined
-  [UiEvent.NewSessionRequest]: undefined
-  [UiEvent.NewSpecRequest]: undefined
+  [UiEvent.NewTaskRequest]: undefined
   [UiEvent.SessionCreated]: SessionCreatedDetail
   [UiEvent.SpecCreated]: SpecCreatedDetail
   [UiEvent.RetryAgentStart]: undefined
@@ -315,7 +315,7 @@ export type UiEventPayloads = {
   [UiEvent.FontSizeChanged]: FontSizeChangedDetail
   [UiEvent.ThemeChanged]: ThemeChangedDetail
   [UiEvent.LanguageChanged]: LanguageChangedDetail
-  [UiEvent.GlobalNewSessionShortcut]: undefined
+  // GlobalNewSessionShortcut retired in W.2 — see NewTaskRequest above.
   [UiEvent.NoProjectError]: TerminalErrorDetail
   [UiEvent.SpawnError]: TerminalErrorDetail
   [UiEvent.NotGitError]: TerminalErrorDetail

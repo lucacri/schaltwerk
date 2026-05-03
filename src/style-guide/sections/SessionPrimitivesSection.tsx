@@ -1,10 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Button, SectionHeader } from '../../components/ui'
 import { Dropdown } from '../../components/inputs/Dropdown'
 import { FavoriteCard } from '../../components/shared/FavoriteCard'
-import { EpicGroupHeader } from '../../components/sidebar/EpicGroupHeader'
 import { SessionCard } from '../../components/sidebar/SessionCard'
-import { CompactVersionRow } from '../../components/sidebar/CompactVersionRow'
 import { SessionCardActionsProvider, type SessionCardActions } from '../../contexts/SessionCardActionsContext'
 import type { EnrichedSession, Epic, SessionInfo } from '../../types/session'
 
@@ -81,11 +79,6 @@ const sessionCardSample: EnrichedSession = {
   terminals: [],
 }
 
-const compactVersionSample: EnrichedSession = {
-  info: baseSessionInfo,
-  terminals: [],
-}
-
 const noopSessionCardActions: SessionCardActions = {
   onSelect: () => {},
   onCancel: () => {},
@@ -134,26 +127,6 @@ function OverlayMenuPreview() {
   )
 }
 
-function EpicGroupHeaderPreview() {
-  const [collapsed, setCollapsed] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-
-  return (
-    <div className="w-full max-w-md">
-      <EpicGroupHeader
-        epic={sampleEpic}
-        collapsed={collapsed}
-        countLabel="3 sessions"
-        menuOpen={menuOpen}
-        onMenuOpenChange={setMenuOpen}
-        onToggleCollapsed={() => setCollapsed((current) => !current)}
-        onEdit={() => {}}
-        onDelete={() => {}}
-      />
-    </div>
-  )
-}
-
 function SessionCardPreview() {
   return (
     <div className="w-full max-w-xl">
@@ -164,27 +137,6 @@ function SessionCardPreview() {
           isSelected={false}
           hasFollowUpMessage={false}
           isRunning={false}
-          onHover={() => {}}
-        />
-      </SessionCardActionsProvider>
-    </div>
-  )
-}
-
-function CompactVersionRowPreview() {
-  const siblings = useMemo(() => [compactVersionSample.info], [])
-
-  return (
-    <div className="w-full max-w-xl pl-4">
-      <SessionCardActionsProvider actions={noopSessionCardActions}>
-        <CompactVersionRow
-          session={compactVersionSample}
-          index={1}
-          isSelected={false}
-          hasFollowUpMessage={false}
-          isRunning={false}
-          siblings={siblings}
-          hideTreeConnector
           onHover={() => {}}
         />
       </SessionCardActionsProvider>
@@ -234,21 +186,9 @@ export function SessionPrimitivesSection() {
             </ExampleSurface>
           </ComponentCard>
 
-          <ComponentCard title="EpicGroupHeader">
-            <ExampleSurface label="Collapsible Group" className="min-w-[360px]">
-              <EpicGroupHeaderPreview />
-            </ExampleSurface>
-          </ComponentCard>
-
           <ComponentCard title="SessionCard">
             <ExampleSurface label="Running Session" className="min-w-[420px] flex-1">
               <SessionCardPreview />
-            </ExampleSurface>
-          </ComponentCard>
-
-          <ComponentCard title="CompactVersionRow">
-            <ExampleSurface label="Grouped Version" className="min-w-[420px] flex-1">
-              <CompactVersionRowPreview />
             </ExampleSurface>
           </ComponentCard>
 

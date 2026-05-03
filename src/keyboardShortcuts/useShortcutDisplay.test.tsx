@@ -10,8 +10,7 @@ vi.mock('../contexts/KeyboardShortcutsContext', () => ({
   useKeyboardShortcutsConfig: () => ({
     config: {
       [KeyboardShortcutAction.FocusTerminal]: ['Mod+/'],
-      [KeyboardShortcutAction.NewSession]: ['Mod+N'],
-      [KeyboardShortcutAction.NewSpec]: ['Mod+Shift+N'],
+      [KeyboardShortcutAction.NewTask]: ['Mod+N', 'Mod+Shift+N'],
       [KeyboardShortcutAction.FocusClaude]: ['Mod+T'],
     },
     loading: false,
@@ -37,9 +36,9 @@ describe('useShortcutDisplay', () => {
     expect(result.current).toBe('⌘/')
   })
 
-  it('returns formatted shortcut with shift symbol', () => {
-    const { result } = renderHook(() => useShortcutDisplay(KeyboardShortcutAction.NewSpec))
-    expect(result.current).toBe('⌘⇧N')
+  it('returns first formatted shortcut when multiple bindings exist', () => {
+    const { result } = renderHook(() => useShortcutDisplay(KeyboardShortcutAction.NewTask))
+    expect(result.current).toBe('⌘N')
   })
 
   it('returns empty string for action with no binding', () => {
@@ -52,7 +51,7 @@ describe('useMultipleShortcutDisplays', () => {
   it('returns formatted shortcuts for multiple actions', () => {
     const actions = [
       KeyboardShortcutAction.FocusTerminal,
-      KeyboardShortcutAction.NewSession,
+      KeyboardShortcutAction.NewTask,
       KeyboardShortcutAction.FocusClaude
     ]
 
@@ -60,7 +59,7 @@ describe('useMultipleShortcutDisplays', () => {
 
     expect(result.current).toEqual({
       [KeyboardShortcutAction.FocusTerminal]: '⌘/',
-      [KeyboardShortcutAction.NewSession]: '⌘N',
+      [KeyboardShortcutAction.NewTask]: '⌘N',
       [KeyboardShortcutAction.FocusClaude]: '⌘T',
     })
   })

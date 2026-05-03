@@ -62,9 +62,9 @@ describe('StyleGuide', () => {
     expect(screen.getByRole('heading', { name: 'Color And Border Reference' })).toBeInTheDocument()
     expect(screen.getAllByText('FavoriteCard').length).toBeGreaterThan(0)
     expect(screen.getAllByText('SectionHeader').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('EpicGroupHeader').length).toBeGreaterThan(0)
     expect(screen.getAllByText('SessionCard').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('CompactVersionRow').length).toBeGreaterThan(0)
+    expect(screen.queryByText('EpicGroupHeader')).not.toBeInTheDocument()
+    expect(screen.queryByText('CompactVersionRow')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Open Overlay Menu Preview' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show ConfirmModal Preview' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show Link PR Preview' })).toBeInTheDocument()
@@ -187,7 +187,8 @@ describe('StyleGuide', () => {
     expect(section.getByText('⌘2')).toBeInTheDocument()
     expect(section.getByText('modified')).toBeInTheDocument()
     expect(section.getByText('Running Sessions')).toBeInTheDocument()
-    expect(section.getByTestId('epic-header-style-guide-contract')).toBeInTheDocument()
+    expect(section.queryByTestId('epic-header-style-guide-contract')).toBeNull()
+    expect(section.queryByTestId('compact-version-row')).toBeNull()
 
     const sessionCard = (sessionPrimitivesSection as HTMLElement).querySelector('[data-session-id="sidebar_refine"]')
     expect(sessionCard).not.toBeNull()
@@ -195,12 +196,6 @@ describe('StyleGuide', () => {
     expect(within(sessionCard as HTMLElement).getByText('1 dirty')).toBeInTheDocument()
     expect(within(sessionCard as HTMLElement).getByTestId('session-card-stat-ahead')).toHaveTextContent('2 ahead')
     expect(within(sessionCard as HTMLElement).getByTestId('session-card-stat-diff')).toHaveTextContent('4 files+28-6')
-
-    const compactVersionRow = section.getByTestId('compact-version-row')
-    expect(within(compactVersionRow).getByTestId('compact-row-version-index')).toHaveTextContent('v2')
-    expect(within(compactVersionRow).getByTestId('compact-row-agent-chip')).toHaveTextContent('claude')
-    expect(within(compactVersionRow).getByText('2 ahead')).toBeInTheDocument()
-    expect(within(compactVersionRow).queryByTestId('compact-row-status-ready')).toBeNull()
 
     await user.click(section.getByRole('button', { name: 'Open Overlay Menu Preview' }))
 
