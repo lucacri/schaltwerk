@@ -8,7 +8,7 @@
 
 Related docs:
 - `plans/2026-05-02-task-flow-v2-phase-8-smoke.md` — the smoke walk itself.
-- `plans/2026-04-29-task-flow-v2-phase-7-smoke.md` — Phase 7 §A items reused unchanged.
+- `plans/archive/2026-04-29-task-flow-v2-phase-7-smoke.md` — Phase 7 §A items reused unchanged (archived during the pre-smoke harden run).
 - `plans/2026-05-03-pre-smoke-test-stability.md` — pre-smoke harden context.
 - `plans/2026-05-03-pre-smoke-archive-verify.md` — verified archive-script command (referenced in §7).
 - Memory feedback: `feedback_tsc_incremental_cache_lies.md` (§1 cache-clear rationale), `feedback_build_before_commit.md`, `feedback_no_preexisting_excuse_taskflow.md`.
@@ -106,9 +106,8 @@ The Phase 7 + Phase 8 plan docs are now historical. Move them to `plans/archive/
    mkdir -p plans/archive
    ```
 
-2. **Archive the closed plan docs with `git mv`** so history stays linked to the new path:
+2. **Archive the closed plan docs with `git mv`** so history stays linked to the new path. (Note: the Phase 7 plan + smoke docs are already archived as part of the pre-smoke harden run; the commands below cover what's left after a green smoke walk.)
    ```bash
-   git mv plans/2026-04-29-task-flow-v2-phase-7-smoke.md plans/archive/
    # Phase 7 close-out doc — only if it exists; check first:
    [ -f plans/2026-04-29-task-flow-v2-phase-7-close-out.md ] && \
      git mv plans/2026-04-29-task-flow-v2-phase-7-close-out.md plans/archive/

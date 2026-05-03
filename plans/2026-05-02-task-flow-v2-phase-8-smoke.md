@@ -4,7 +4,7 @@ User-driven verification gate. Phase 8 retired the v1→v2 migration, the
 capture-as-task surface, and the kanban toggle, plus added cancel-cascade
 UX, confirm-stage trigger, the forge issue badge, the epic picker, and
 the TerminalGrid task-shape placeholder. This file pins the deltas;
-pre-Phase-8 items in `2026-04-29-task-flow-v2-phase-7-smoke.md` §A still
+pre-Phase-8 items in `archive/2026-04-29-task-flow-v2-phase-7-smoke.md` §A still
 apply where not contradicted here.
 
 Run against `bun run tauri:dev` with a throwaway project at `/tmp/v2-smoke`.
