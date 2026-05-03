@@ -11,6 +11,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { Provider, createStore } from 'jotai'
+import { allSessionsAtom } from '../../store/atoms/sessions'
+import type { EnrichedSession } from '../../types/session'
 
 vi.mock('../../hooks/useSelection', () => ({
     useSelection: () => ({
@@ -54,13 +56,33 @@ vi.mock('../modals/SwitchOrchestratorModal', () => ({
 
 import { Sidebar } from './Sidebar'
 
-function renderSidebar(isCollapsed = false) {
+function renderSidebar(isCollapsed = false, seed?: (store: ReturnType<typeof createStore>) => void) {
     const store = createStore()
+    seed?.(store)
     return render(
         <Provider store={store}>
             <Sidebar isCollapsed={isCollapsed} />
         </Provider>,
     )
+}
+
+function makeV1OnlySession(id: string): EnrichedSession {
+    return {
+        info: {
+            session_id: id,
+            branch: `v1/${id}`,
+            worktree_path: `/tmp/v1-${id}`,
+            base_branch: 'main',
+            status: 'active',
+            is_current: false,
+            session_type: 'worktree',
+            session_state: 'running',
+            ready_to_merge: false,
+            // No task_id — this is what makes it "v1-only".
+            task_id: null,
+        },
+        terminals: [],
+    }
 }
 
 describe('Sidebar DOM-order pin', () => {
@@ -119,5 +141,25 @@ describe('Sidebar DOM-order pin', () => {
         expect(screen.queryByTestId('sidebar-stage-sections-empty')).toBeNull()
         // Orchestrator entry stays visible in collapsed mode.
         expect(screen.getByTestId('orchestrator-entry')).toBeInTheDocument()
+    })
+
+    // Phase 8 W.5 GAP 4: v1-only sessions (running rows landed by an
+    // older Lucode build, never bound to a v2 task) are invisible on
+    // the v2 sidebar. The sidebar reads `tasksAtom` exclusively for its
+    // body; even if `allSessionsAtom` carries v1-only sessions on the
+    // wire, they never surface here.
+    it('does not surface v1-only sessions even when allSessionsAtom carries them', () => {
+        renderSidebar(false, (store) => {
+            store.set(allSessionsAtom, [
+                makeV1OnlySession('legacy-a'),
+                makeV1OnlySession('legacy-b'),
+            ])
+        })
+
+        // The empty-state placeholder renders because tasksAtom is empty,
+        // proving the sidebar ignores the seeded v1-only sessions.
+        expect(screen.getByTestId('sidebar-stage-sections-empty')).toBeInTheDocument()
+        expect(screen.queryByText('legacy-a')).toBeNull()
+        expect(screen.queryByText('legacy-b')).toBeNull()
     })
 })
