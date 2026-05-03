@@ -17,11 +17,15 @@
 // terminal-stage task (Done) without a cancellation shows nothing —
 // no progressing action, no cancel.
 
+import { useCallback, useState } from 'react'
 import type { Task, TaskStage } from '../../types/task'
 import { theme } from '../../common/theme'
 import { TaskRunRow } from './TaskRunRow'
 import { useTaskRowActions } from './hooks/useTaskRowActions'
 import { logger } from '../../utils/logger'
+import { useOptionalToast } from '../../common/toast/ToastProvider'
+import { ConfirmModal } from '../modals/ConfirmModal'
+import { isTaskFlowError, isSchaltError, getErrorMessage } from '../../types/errors'
 
 export interface TaskRowProps {
   task: Task
@@ -76,6 +80,13 @@ export function TaskRow({ task }: TaskRowProps) {
 
   const displayName = task.display_name ?? task.name
   const actions = useTaskRowActions()
+  const toast = useOptionalToast()
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [cancelInFlight, setCancelInFlight] = useState(false)
+
+  const activeRunCount = task.task_runs.filter(
+    (run) => run.cancelled_at === null && run.confirmed_at === null,
+  ).length
 
   const handleStageAction = () => {
     // Wave C.2 wires the Draft → Ready promotion. Stage runs
@@ -93,11 +104,52 @@ export function TaskRow({ task }: TaskRowProps) {
     }
   }
 
-  const handleCancel = () => {
-    void actions.cancelTask(task).catch((err) => {
-      logger.warn('[TaskRow] cancelTask failed', err)
-    })
+  const handleCancelClick = () => {
+    setShowCancelConfirm(true)
   }
+
+  const performCancel = useCallback(async () => {
+    setCancelInFlight(true)
+    try {
+      await actions.cancelTask(task)
+      setShowCancelConfirm(false)
+    } catch (err) {
+      logger.warn('[TaskRow] cancelTask failed', err)
+      // TaskCancelFailed surfaces partial-failure detail (which slot
+      // sessions failed to cancel) so the user can investigate and
+      // retry. All other error shapes get a generic toast with the
+      // message.
+      if (toast) {
+        const message = getErrorMessage(err)
+        if (
+          (isTaskFlowError(err) && err.type === 'TaskCancelFailed') ||
+          (isSchaltError(err) && err.type === 'TaskCancelFailed')
+        ) {
+          toast.pushToast({
+            tone: 'error',
+            title: 'Task cancel partially failed',
+            description: message,
+            durationMs: 0, // sticky — user must dismiss or Retry
+            action: {
+              label: 'Retry cancel',
+              onClick: () => {
+                void performCancel()
+              },
+            },
+          })
+        } else {
+          toast.pushToast({
+            tone: 'error',
+            title: 'Cancel task failed',
+            description: message,
+          })
+        }
+      }
+      setShowCancelConfirm(false)
+    } finally {
+      setCancelInFlight(false)
+    }
+  }, [actions, task, toast])
 
   const handleReopen = () => {
     void actions.reopenTask(task, 'draft').catch((err) => {
@@ -223,7 +275,7 @@ export function TaskRow({ task }: TaskRowProps) {
           type="button"
           data-testid="task-row-cancel"
           aria-label="Cancel task"
-          onClick={handleCancel}
+          onClick={handleCancelClick}
           className="shrink-0 inline-flex items-center gap-1.5 h-6 rounded border px-2"
           style={{
             fontSize: theme.fontSize.caption,
@@ -276,6 +328,38 @@ export function TaskRow({ task }: TaskRowProps) {
           ))}
         </div>
       )}
+
+      <ConfirmModal
+        open={showCancelConfirm}
+        title={<span>Cancel task &ldquo;{displayName}&rdquo;?</span>}
+        body={
+          <div data-testid="task-row-cancel-confirm-body" className="text-text-secondary">
+            <p>
+              Cancelling this task will also cancel all of its active runs and
+              their slot sessions. Worktrees will be removed.
+            </p>
+            {activeRunCount > 0 && (
+              <p
+                className="mt-2 font-medium"
+                style={{ color: 'var(--color-accent-amber-light)' }}
+                data-testid="task-row-cancel-confirm-active-count"
+              >
+                {activeRunCount === 1
+                  ? '1 active run will be cancelled.'
+                  : `${activeRunCount} active runs will be cancelled.`}
+              </p>
+            )}
+          </div>
+        }
+        confirmText="Cancel task"
+        cancelText="Keep task"
+        variant="danger"
+        loading={cancelInFlight}
+        onConfirm={() => {
+          void performCancel()
+        }}
+        onCancel={() => setShowCancelConfirm(false)}
+      />
     </article>
   )
 }
