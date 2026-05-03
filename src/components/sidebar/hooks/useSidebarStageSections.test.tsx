@@ -72,13 +72,19 @@ describe('useSidebarStageSections', () => {
     expect(result.current.isCollapsed('draft')).toBe(false)
   })
 
-  it('Cancelled section is collapsed by default to keep terminal noise out of the way', () => {
+  it('Done and Cancelled sections are collapsed by default to keep terminal noise out of the way', () => {
     const store = createStore()
     const { result } = renderHook(() => useSidebarStageSections(), {
       wrapper: withStore(store),
     })
+    expect(result.current.isCollapsed('done')).toBe(true)
     expect(result.current.isCollapsed('cancelled')).toBe(true)
     expect(result.current.isCollapsed('draft')).toBe(false)
+    expect(result.current.isCollapsed('ready')).toBe(false)
+    expect(result.current.isCollapsed('brainstormed')).toBe(false)
+    expect(result.current.isCollapsed('planned')).toBe(false)
+    expect(result.current.isCollapsed('implemented')).toBe(false)
+    expect(result.current.isCollapsed('pushed')).toBe(false)
   })
 
   it('reflects post-mount tasks-atom changes', () => {

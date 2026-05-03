@@ -144,6 +144,12 @@ vi.mock('../forge/ForgePrsTab', () => ({
   ForgePrsTab: () => <div data-testid="forge-prs-tab" />
 }))
 
+vi.mock('./TaskRightPane', () => ({
+  TaskRightPane: ({ taskId, projectPath }: { taskId: string; projectPath: string | null }) => (
+    <div data-testid="task-right-pane" data-task-id={taskId} data-project-path={projectPath ?? ''} />
+  ),
+}))
+
 function renderWithProject(ui: ReactElement, projectPath: string | null = '/tmp/project') {
   const store = createStore()
   store.set(projectPathAtom, projectPath)
@@ -706,5 +712,66 @@ describe('RightPanelTabs spec workspace isolation', () => {
 
     expect(screen.queryByTestId('spec-workspace-panel')).toBeNull()
     expect(screen.getByTestId('diff-panel')).toBeInTheDocument()
+  })
+})
+
+// Phase 8 W.5 — GAP 2 pin: task-shape selection dispatch
+describe('RightPanelTabs task-shape dispatch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSessions.length = 0
+  })
+
+  it('renders TaskRightPane (and not the session body) for kind="task" selections', () => {
+    renderWithProject(
+      <RightPanelTabs
+        selectionOverride={{ kind: 'task', taskId: 't-1', projectPath: '/tmp/project' }}
+      />,
+    )
+    expect(screen.getByTestId('task-right-pane')).toHaveAttribute('data-task-id', 't-1')
+    expect(screen.queryByTestId('right-panel-container')).toBeNull()
+    expect(screen.queryByTestId('diff-panel')).toBeNull()
+  })
+
+  it('renders TaskRightPane for kind="task-run" selections (run id is irrelevant to dispatch)', () => {
+    renderWithProject(
+      <RightPanelTabs
+        selectionOverride={{ kind: 'task-run', taskId: 't-2', runId: 'r-1', projectPath: '/tmp/project' }}
+      />,
+    )
+    expect(screen.getByTestId('task-right-pane')).toHaveAttribute('data-task-id', 't-2')
+    expect(screen.queryByTestId('right-panel-container')).toBeNull()
+  })
+
+  it('renders TaskRightPane for kind="task-slot" selections', () => {
+    renderWithProject(
+      <RightPanelTabs
+        selectionOverride={{
+          kind: 'task-slot',
+          taskId: 't-3',
+          runId: 'r-1',
+          slotKey: 'a',
+          payload: 's-99',
+          projectPath: '/tmp/project',
+        }}
+      />,
+    )
+    expect(screen.getByTestId('task-right-pane')).toHaveAttribute('data-task-id', 't-3')
+    expect(screen.queryByTestId('right-panel-container')).toBeNull()
+  })
+
+  it('falls through to the session body for kind="session" selections (no TaskRightPane)', () => {
+    mockSessions.push(createRunningSession({
+      session_id: 'test-session',
+      worktree_path: '/tmp/session-worktree',
+      branch: 'feature/test',
+    }))
+    renderWithProject(
+      <RightPanelTabs
+        selectionOverride={{ kind: 'session', payload: 'test-session', worktreePath: '/tmp/session-worktree' }}
+      />,
+    )
+    expect(screen.queryByTestId('task-right-pane')).toBeNull()
+    expect(screen.getByTestId('right-panel-container')).toBeInTheDocument()
   })
 })

@@ -6,9 +6,9 @@
 // now (Wave B.3 wires it through `useSidebarCollapsePersistence`-style
 // localStorage persistence once the sidebar uses this hook in anger).
 //
-// Cancelled section starts collapsed by default — terminal tasks are
-// noise unless the user explicitly looks for them. Stage sections
-// default expanded (matches v1's task-flow branch behavior).
+// Done and Cancelled sections start collapsed by default — terminal
+// tasks are noise unless the user explicitly looks for them. Other
+// stages default expanded.
 
 import { useCallback, useMemo, useState } from 'react'
 import { useAtomValue } from 'jotai'
@@ -34,7 +34,7 @@ const DEFAULT_COLLAPSE: Record<StageSectionKey, boolean> = {
   planned: false,
   implemented: false,
   pushed: false,
-  done: false,
+  done: true,
   cancelled: true,
 }
 

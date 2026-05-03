@@ -53,6 +53,7 @@ export function OrchestratorEntry({
                 aria-label={`${t.ariaLabels.selectOrchestrator} (⌘1)`}
                 aria-pressed={isSelected}
                 data-onboarding="orchestrator-entry"
+                data-testid="orchestrator-entry"
             >
                 <div className={clsx('flex items-center w-full', isCollapsed ? 'flex-col justify-center gap-1' : 'justify-between')}>
                     {!isCollapsed && (
