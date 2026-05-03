@@ -1,11 +1,11 @@
 ---
 title: The Orchestrator
-description: 'Your command center for managing multiple AI agents and complex workflows'
+description: 'Your singleton coordination surface for managing multiple AI agents and complex workflows'
 ---
 
-The orchestrator is a special terminal that runs directly in your primary repository branch (often `main`, but it can be a dedicated feature hub). It doesn’t create a worktree; instead it gives you a control room for coordinating agents and managing complex workflows.
+The orchestrator is a singleton non-task surface that runs directly in your primary repository branch (often `main`, but it can be a dedicated feature hub). It doesn’t create a worktree; instead it gives you a control room for coordinating agents and managing complex workflows.
 
-> Any commands you run in the orchestrator’s terminals modify that branch immediately. Use isolated sessions when you want a disposable sandbox.
+> Any commands you run in the orchestrator’s terminals modify that branch immediately. Use tasks when you want a disposable sandbox.
 
 ## What Makes the Orchestrator Special?
 
@@ -17,19 +17,19 @@ The orchestrator is a special terminal that runs directly in your primary reposi
   </Card>
 
   <Card title="Planning Hub" icon="lightbulb">
-    Create and manage multiple specs
+    Create and triage multiple tasks
 
-    Draft complex features before execution
+    Draft complex features before launching agents
   </Card>
 
   <Card title="Agent Coordination" icon="users">
     Launch multiple agents in parallel
 
-    Monitor progress across sessions
+    Monitor progress across tasks
   </Card>
 
   <Card title="MCP Automation" icon="bolt">
-    Programmatic session management
+    Programmatic task management
 
     External tool integration via REST API
   </Card>
@@ -37,104 +37,56 @@ The orchestrator is a special terminal that runs directly in your primary reposi
 
 ## Core Capabilities
 
-### 1. Plan and Create Specs
+### 1. Plan and Create Tasks
 
-Draft multiple specs for complex features:
+Draft multiple tasks for complex features:
 
 <Steps>
   <Step title="Open orchestrator">
     Press `⌘1` to switch to orchestrator
   </Step>
 
-  <Step title="Create specs">
-    Use `⌘⇧N` to create planning documents:
+  <Step title="Create tasks">
+    Use `⌘N` to create new tasks. The prompt becomes the task’s Spec artifact and includes:
     - Feature requirements
     - Implementation approach
     - Acceptance criteria
     - Dependencies
   </Step>
 
-  <Step title="Refine specs">
-    Press `⌘⇧R` on a spec to enter **Refine Mode**:
-
-    - Switches to the orchestrator session
-    - Opens the spec in the right panel for live preview
-    - Inserts spec reference in agent terminal (requires MCP enabled)
-    - Agent can read and update the spec iteratively
-
-    Add context, constraints, examples before launching agents
+  <Step title="Iterate on the Spec artifact">
+    Edit the task’s Spec artifact directly to refine context, constraints, and examples before stage runs begin.
   </Step>
 
-  <Step title="Organize specs">
-    Group related specs together
+  <Step title="Organize tasks">
+    Group related tasks together
 
     Plan parallel work streams
   </Step>
 </Steps>
 
-### Refine Mode: Iterative Spec Development
-
-<Info>
-  **Requires MCP:** The orchestrator agent must be able to read the spec and call `lucode_draft_update` with the explicit spec session name to edit it. Enable MCP in **Settings → Agent Configuration** for your agent (Claude Code, Codex, OpenCode, or Gemini).
-</Info>
-
-Refine Mode enables iterative spec development by switching to the orchestrator while keeping the spec visible for live updates:
-
-<Steps>
-  <Step title="Enter Refine Mode">
-    Select a spec in the sidebar and press `⌘⇧R`
-
-    **What happens:**
-    - Session switches to the orchestrator
-    - Spec opens in the right panel (live preview)
-    - Agent terminal receives spec reference (e.g., "Refine spec: my-feature (abc123)")
-  </Step>
-
-  <Step title="Iterative refinement">
-    The agent can now:
-    - Read the current spec content via MCP
-    - Ask clarifying questions
-    - Update the spec with `lucode_draft_update` using the spec session name from the refine prompt/reference
-    - Preview changes in real-time on the right panel
-
-    You watch the spec evolve in the right panel while collaborating with the agent in the terminal.
-  </Step>
-
-  <Step title="Exit Refine Mode">
-    Press `Esc` or switch to another session when done
-
-    The refined spec is ready to start with `⌘N`
-  </Step>
-</Steps>
-
-<Warning>
-  Without MCP enabled, the agent terminal receives the spec reference text but cannot read or update the spec. The agent will need manual copy-paste of spec content.
-</Warning>
-
 ### 2. Launch Agents in Parallel
 
-Start multiple agents working on different specs simultaneously:
+Start multiple agents working on different tasks simultaneously:
 
 <Tabs>
   <Tab title="Manual Launch">
-    1. Select first spec
-    2. Press `⌘N` to start session
-    3. Select next spec
-    4. Press `⌘N` to start another session
-    5. Switch between sessions with `⌘1-9`
+    1. Create the first task with `⌘N`
+    2. Create the next task with `⌘N`
+    3. Switch between tasks with `⌘1-9`
   </Tab>
 
   <Tab title="MCP Automation">
     ```javascript
     // Via MCP REST API or Claude
-    const specs = [
+    const tasks = [
       { name: 'auth-login', prompt: 'Implement login...' },
       { name: 'auth-register', prompt: 'Implement registration...' },
       { name: 'auth-reset', prompt: 'Implement password reset...' }
     ];
 
-    for (const spec of specs) {
-      await createSession(spec.name, spec.prompt);
+    for (const task of tasks) {
+      await createTask(task.name, task.prompt);
     }
     ```
   </Tab>
@@ -146,7 +98,7 @@ Check diffs, run tests, provide feedback:
 
 <AccordionGroup>
   <Accordion title="Inspect Changes">
-    - Switch to session with `⌘2-9`
+    - Switch to task with `⌘2-9`
     - View diffs in right panel
     - Check git status in bottom terminal
     - Review file changes
@@ -164,65 +116,57 @@ Check diffs, run tests, provide feedback:
     - Send instructions or corrections
     - Agent receives feedback and continues
   </Accordion>
-
-  <Accordion title="Mark Reviewed">
-    - Press `⌘R` when satisfied
-    - Session moves to Reviewed filter
-    - Ready for merge
-  </Accordion>
 </AccordionGroup>
+
+<!-- v2-todo: rewrite after smoke walk -->
 
 ### 4. Integrate Changes
 
-Merge approved sessions back to main branch:
+Merge approved tasks back to the base branch:
 
 <Steps>
-  <Step title="Filter reviewed sessions">
-    Click **Reviewed** tab to see approved sessions
-  </Step>
-
-  <Step title="Verify each session">
+  <Step title="Verify each task">
     - Tests pass
     - No merge conflicts
     - Changes are correct
   </Step>
 
   <Step title="Merge to main">
-    From session header actions:
+    From task header actions:
     - Create GitHub PR
     - Merge directly
     - Cherry-pick specific commits
   </Step>
 
   <Step title="Clean up">
-    After successful merge, press `⌘D` to cancel session
+    After successful merge, press `⌘D` to cancel the task
   </Step>
 </Steps>
 
 ### 5. Coordinate Workflows
 
-Chain tasks together for complex automation:
+Chain work together for complex automation:
 
 <CodeGroup>
 ```markdown Example: Feature Breakdown
 Orchestrator receives: "Build complete authentication system"
 
-1. Break into specs:
-   - Spec 1: User registration with email validation
-   - Spec 2: Login with JWT tokens
-   - Spec 3: Password reset via email
-   - Spec 4: Session management
+1. Break into tasks:
+   - Task 1: User registration with email validation
+   - Task 2: Login with JWT tokens
+   - Task 3: Password reset via email
+   - Task 4: Session management
 
-2. Launch agents on each spec in parallel
+2. Launch agents on each task in parallel
 
 3. Monitor progress:
-   - Check which sessions are complete
-   - Identify any blocked sessions
+   - Check which tasks are complete
+   - Identify any blocked tasks
    - Provide additional context if needed
 
 4. Review completed work:
    - Run integration tests
-   - Check for conflicts between sessions
+   - Check for conflicts between tasks
    - Verify all acceptance criteria met
 
 5. Integrate in order:
@@ -239,41 +183,41 @@ Orchestrator receives: "Fix all failing tests"
    - Parse output for failures
    - Group by module/component
 
-2. Create spec for each failure:
-   - Spec includes test output
+2. Create a task for each failure:
+   - Task’s Spec artifact includes test output
    - Relevant file paths
    - Error messages
 
 3. Assign agents to fix in parallel
 
 4. Collect results:
-   - Monitor which fixes are reviewed
+   - Monitor which fixes are ready
    - Run tests to verify fixes
    - Merge passing fixes
 
 5. Iterate if needed:
    - Re-run tests
-   - Create new specs for remaining failures
+   - Create new tasks for remaining failures
 ```
 </CodeGroup>
 
 ## Automated Workflows via MCP
 
-The orchestrator supports MCP (Model Context Protocol), enabling programmatic session management.
+The orchestrator supports MCP (Model Context Protocol), enabling programmatic task management.
 
 ### What MCP Enables
 
 <CardGroup cols={2}>
-  <Card title="Session Creation" icon="plus">
-    External tools create sessions via REST API
+  <Card title="Task Creation" icon="plus">
+    External tools create tasks via REST API
 
     No manual UI interaction needed
   </Card>
 
   <Card title="Status Monitoring" icon="chart-line">
-    Query session states programmatically
+    Query task stages programmatically
 
-    Track completion and review status
+    Track completion status
   </Card>
 
   <Card title="Workflow Automation" icon="gears">
@@ -313,7 +257,7 @@ Save and reuse complex orchestration patterns:
 [Describe the feature]
 
 ## Breakdown
-Create the following sessions:
+Create the following tasks:
 1. [Component 1] - [Description]
 2. [Component 2] - [Description]
 3. [Component 3] - [Description]
@@ -349,7 +293,7 @@ Create the following sessions:
 
 ## Terminal Layout
 
-The orchestrator has the same dual-terminal layout as regular sessions:
+The orchestrator has the same dual-terminal layout as a slot session:
 
 <Tabs>
   <Tab title="Top Terminal">
@@ -357,9 +301,9 @@ The orchestrator has the same dual-terminal layout as regular sessions:
       **Agent Terminal**
 
       Run AI assistants that can:
-      - Create and manage specs
-      - Launch sessions programmatically
-      - Monitor session progress
+      - Create and manage tasks
+      - Launch task work programmatically
+      - Monitor task progress
       - Coordinate multi-agent workflows
     </Card>
   </Tab>
@@ -381,17 +325,17 @@ The orchestrator has the same dual-terminal layout as regular sessions:
 
 <AccordionGroup>
   <Accordion title="Plan Before Launching">
-    - Draft all specs first
+    - Draft all task Spec artifacts first
     - Identify dependencies
     - Determine execution order
     - Consider resource constraints (don't run 20 agents at once)
   </Accordion>
 
-  <Accordion title="Name Sessions Clearly">
+  <Accordion title="Name Tasks Clearly">
     Use descriptive names that indicate:
-    - What the session does
+    - What the task does
     - Which component it affects
-    - Relationship to other sessions
+    - Relationship to other tasks
 
     Examples:
     - `auth-login-implementation`
@@ -400,16 +344,16 @@ The orchestrator has the same dual-terminal layout as regular sessions:
   </Accordion>
 
   <Accordion title="Monitor Resource Usage">
-    Each session creates 3 OS processes:
+    Each slot session creates 3 OS processes:
     - Shell process
     - Agent process
     - Terminal backend
 
-    Don't run too many sessions simultaneously
+    Don't run too many slot sessions simultaneously
   </Accordion>
 
   <Accordion title="Review Frequently">
-    Don't let reviewed sessions pile up:
+    Don't let tasks pile up at the merge stage:
     - Review daily if possible
     - Merge or provide feedback
     - Keep the pipeline moving
@@ -434,7 +378,7 @@ The orchestrator has the same dual-terminal layout as regular sessions:
   </Step>
 
   <Step title="Break into components">
-    Create specs for each component:
+    Create tasks for each component:
     - Backend API
     - Frontend UI
     - Database migrations
@@ -442,13 +386,13 @@ The orchestrator has the same dual-terminal layout as regular sessions:
   </Step>
 
   <Step title="Launch agents">
-    Start sessions for each component
+    Start each task
 
     Agents work in parallel
   </Step>
 
   <Step title="Monitor progress">
-    Check which sessions are complete
+    Check which tasks are complete
 
     Provide feedback as needed
   </Step>
@@ -473,8 +417,8 @@ The orchestrator has the same dual-terminal layout as regular sessions:
     Run test suite or review issue tracker
   </Step>
 
-  <Step title="Create bug specs">
-    One spec per bug with:
+  <Step title="Create bug tasks">
+    One task per bug with Spec artifact containing:
     - Reproduction steps
     - Expected behavior
     - Error messages
@@ -482,7 +426,7 @@ The orchestrator has the same dual-terminal layout as regular sessions:
   </Step>
 
   <Step title="Assign agents">
-    Start sessions for each bug
+    Start each task
 
     Agents investigate and fix
   </Step>
@@ -515,7 +459,7 @@ The orchestrator has the same dual-terminal layout as regular sessions:
     - Update tests
   </Step>
 
-  <Step title="Create specs for each step">
+  <Step title="Create a task for each step">
     Small, focused changes
 
     Each step maintains functionality
@@ -537,26 +481,17 @@ The orchestrator has the same dual-terminal layout as regular sessions:
 ## Tips and Tricks
 
 <CardGroup cols={2}>
-  <Card title="Use Filters Effectively" icon="filter">
-    - **Specs**: Planning queue
-    - **Running**: Active work
-    - **Reviewed**: Ready for merge
-
-    Switch between views with `⌘←/→`
-  </Card>
-
   <Card title="Leverage Keyboard Shortcuts" icon="keyboard">
     - `⌘1` - Back to orchestrator
-    - `⌘2-9` - Jump to sessions
+    - `⌘2-9` - Jump to a task
     - <code>⌥⇧`</code> / <code>⌥`</code> - Cycle through sidebar items (`⌘↑/↓` also works)
-    - `⌘⇧R` - Refine spec in orchestrator
-    - `⌘N` - Start selected spec
+    - `⌘N` - Create a new task
   </Card>
 
   <Card title="Keep Main Clean" icon="code-branch">
-    Orchestrator works on main branch
+    Orchestrator works on the primary branch
 
-    Don't make direct changes - use sessions
+    Don't make direct changes - use tasks
   </Card>
 
   <Card title="Document Decisions" icon="file-text">
@@ -567,22 +502,24 @@ The orchestrator has the same dual-terminal layout as regular sessions:
   </Card>
 </CardGroup>
 
+<!-- v2-todo: rewrite after smoke walk -->
+
 ## Limitations
 
 <Warning>
   **Be aware of these orchestrator limitations:**
 </Warning>
 
-- **No Worktree** - Orchestrator runs on main branch, not in isolation
-- **Resource Usage** - Each session consumes system resources (3 processes)
+- **No Worktree** - Orchestrator runs on the primary branch, not in isolation
+- **Resource Usage** - Each slot session consumes system resources (3 processes)
 - **Concurrent Agents** - Don't run too many agents simultaneously
-- **Manual Merge** - Merging sessions still requires manual review and approval
+- **Manual Merge** - Merging tasks still requires manual review and approval
 
 ## Next Steps
 
 <CardGroup cols={2}>
   <Card title="MCP Server Setup" icon="plug" href="/mcp/setup">
-    Set up programmatic session management
+    Set up programmatic task management
   </Card>
   <Card title="Using Lucode" icon="play" href="/guides/using-lucode">
     Learn the day-to-day workflow

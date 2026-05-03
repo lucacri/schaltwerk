@@ -3,31 +3,31 @@ title: Core Concepts Overview
 description: 'Map of key Lucode concepts and links to deeper dives'
 ---
 
-Lucode’s workflow revolves around sessions (isolated git worktrees), reusable specs, and the orchestrator that coordinates everything. Use this overview to jump into the detailed guides.
+Lucode’s workflow revolves around **tasks** (each with its own isolated git worktree and branch), the **stage runs** that move a task through its lifecycle, and the **orchestrator** singleton that lives in your primary branch for coordination work. Use this overview to jump into the detailed guides.
 
 ## Start Here
 
 <CardGroup cols={2}>
-  <Card title="Sessions & Specs" icon="diagram-project" href="/core-concepts/sessions-and-specs">
-    Understand how specs become sessions, how state transitions work, and how to recycle or archive work.
+  <Card title="Tasks & Stages" icon="diagram-project" href="/core-concepts/sessions-and-specs">
+    Understand how tasks move through stages, how Spec/Plan/Summary artifacts work, and how to recycle or archive work.
   </Card>
   <Card title="Worktrees & Terminals" icon="terminal" href="/core-concepts/worktrees-and-terminals">
-    Learn how PTY terminals behave, how to run commands, and how to keep worktrees tidy.
+    Learn how PTY terminals behave, how slot sessions spawn under a task, and how to keep worktrees tidy.
   </Card>
 </CardGroup>
 
 <Tip>
-  After reviewing the basics, check the [Advanced Workflows](/guides/advanced-workflows) guide to see how to orchestrate many agents in parallel.
+  After reviewing the basics, check the [Advanced Workflows](/guides/advanced-workflows) guide to see how to run agents in parallel.
 </Tip>
 
 ## Glossary
 
 <CardGroup cols={2}>
   <Card title="Claude Code" icon="robot">
-    CLI interface from Anthropic that runs in Lucode’s orchestrator terminal. When you start a Claude Code session, the top terminal launches the `claude` CLI.
+    CLI interface from Anthropic that runs in Lucode’s orchestrator terminal. When you start a Claude Code stage run, the top terminal launches the `claude` CLI.
   </Card>
   <Card title="GitHub Copilot" icon="robot">
-    GitHub’s Copilot CLI runs directly in the session terminal. Install it with `npm install -g @github/copilot`, trust the worktree once via `/cwd /trust`, and Lucode auto-sends your first prompt when the CLI finishes booting.
+    GitHub’s Copilot CLI runs directly in the slot session terminal. Install it with `npm install -g @github/copilot`, trust the worktree once via `/cwd /trust`, and Lucode auto-sends your first prompt when the CLI finishes booting.
   </Card>
   <Card title="Codex" icon="robot">
     Git-based AI agent from Stately used for repository automation. Configurable via Settings → Agent Configuration.
@@ -36,12 +36,12 @@ Lucode’s workflow revolves around sessions (isolated git worktrees), reusable 
     Open-source terminal agent. Behaves similarly to Claude Code but uses the `opencode` CLI.
   </Card>
   <Card title="Gemini" icon="robot">
-    Google’s Gemini CLI integration for code generation and refactors. Launches in the session terminal via the `gcloud` toolchain.
+    Google’s Gemini CLI integration for code generation and refactors. Launches in the slot session terminal via the `gcloud` toolchain.
   </Card>
   <Card title="Kilo Code" icon="robot">
     CLI for Kilo Code that allows planning, debugging, and coding from the terminal with various modes.
   </Card>
   <Card title="Factory Droid" icon="robot">
-    Automation-focused agent that executes scripts and CI tasks. Managed via the same session workflow.
+    Automation-focused agent that executes scripts and CI tasks. Managed via the same task workflow.
   </Card>
 </CardGroup>

@@ -1,6 +1,6 @@
 ---
 title: Keyboard Shortcuts
-description: 'Complete list of keyboard shortcuts for efficient session management'
+description: 'Complete list of keyboard shortcuts for efficient task management'
 ---
 
 <Info>
@@ -13,22 +13,18 @@ description: 'Complete list of keyboard shortcuts for efficient session manageme
 
 ## Quick Reference
 
+<!-- v2-todo: rewrite after smoke walk -->
+
 <Tabs>
-  <Tab title="Session Management">
+  <Tab title="Task Management">
     | Shortcut | Action | Description |
     |----------|--------|-------------|
-    | `⌘N` | Create Session | Start spec as running session |
-    | `⌘⇧N` | Create Spec | New markdown spec |
-    | `⌘⇧R` | Refine Spec | Open spec in orchestrator for refinement |
-    | `⌘R` | Mark Reviewed | Flag session as reviewed (optional) |
-    | `⌘⇧M` | Merge to Main | Merge running or reviewed session |
-    | `⌘⇧U` | Update from Parent | Pull parent branch and merge into session |
+    | `⌘N` | Create Task | Open the New Task dialog |
+    | `⌘⇧M` | Merge to Main | Merge a task’s branch |
+    | `⌘⇧U` | Update from Parent | Pull parent branch and merge into the task |
     | `⌘⇧P` | Create PR | Create GitHub pull request |
-    | `⌘S` | Convert to Spec | Pause session, keep notes |
-    | `⌘D` | Cancel Session | Remove worktree |
+    | `⌘D` | Cancel Task | Remove worktree |
     | `⌘⇧D` | Force Cancel | Force cancel without confirmation |
-    | `⌘B` | Promote Version | Promote best session version |
-    | `⌘Y` | Reset Session | Reset session or orchestrator |
     | `⌘P` | Switch Model | Open model selection dialog |
   </Tab>
 
@@ -36,15 +32,14 @@ description: 'Complete list of keyboard shortcuts for efficient session manageme
     | Shortcut | Action | Description |
     |----------|--------|-------------|
     | `⌘1` | Orchestrator | Jump to orchestrator |
-    | `⌘2–9` | Sessions 2-9 | Jump to specific session |
-    | `⌥⇧\`` / `⌥\`` | Cycle Sidebar Items | Move through the flattened sidebar list, including the orchestrator anchor, specs, agents, and version-group members |
+    | `⌘2–9` | Tasks 2-9 | Jump to specific task |
+    | `⌥⇧\`` / `⌥\`` | Cycle Sidebar Items | Move through the sidebar list (orchestrator + tasks) |
     | `⌘↑/↓` | Alternate Sidebar Cycle | Alternate binding for the same sidebar-item traversal |
-    | `⌘←/→` | Switch Filters | Switch between All/Specs/Running/Reviewed |
     | `⌘⇧1–9` | Switch to Project | Jump to project tab by index |
     | `` ⌘` `` | Cycle Next Project | Cycle to next project tab |
     | `` ⌘⇧` `` | Cycle Prev Project | Cycle to previous project tab |
-    | `⌘G` | Git Diff | Open diff viewer for current session |
-    | `⌘⇧O` | Open in App | Open project/session in configured app |
+    | `⌘G` | Git Diff | Open diff viewer for current task |
+    | `⌘⇧O` | Open in App | Open project/task in configured app |
   </Tab>
 
   <Tab title="Terminals">
@@ -88,19 +83,17 @@ description: 'Complete list of keyboard shortcuts for efficient session manageme
 ## Common Workflows
 
 <AccordionGroup>
-  <Accordion title="Review Running Sessions">
-    1. Switch to Running filter with `⌘←/→`
-    2. Navigate sessions with <code>⌥⇧`</code> / <code>⌥`</code> or `⌘↑/↓`
-    3. For each session:
+  <Accordion title="Review Tasks">
+    1. Navigate tasks with <code>⌥⇧`</code> / <code>⌥`</code> or `⌘↑/↓`
+    2. For each task:
        - `⌘G` to open git diff viewer
        - Add comments if needed
        - `⌘Enter` twice to accept and paste comments
   </Accordion>
 
-  <Accordion title="Review and Test Sessions">
-    1. Switch to Reviewed filter with `⌘←/→`
-    2. Navigate sessions with <code>⌥⇧`</code> / <code>⌥`</code> or `⌘↑/↓`
-    3. For each session:
+  <Accordion title="Test Tasks">
+    1. Navigate tasks with <code>⌥⇧`</code> / <code>⌥`</code> or `⌘↑/↓`
+    2. For each task:
        - `⌘T` to focus agent terminal (prompt agent to run tests)
        - OR `⌘/` to focus your terminal (test manually)
        - Review results before merging
@@ -110,8 +103,8 @@ description: 'Complete list of keyboard shortcuts for efficient session manageme
     Use `⌘⇧1–9` to jump between project tabs by index, or `` ⌘` ``/`` ⌘⇧` `` to cycle through them
   </Accordion>
 
-  <Accordion title="Quick Session Access">
-    Use `⌘1–9` for instant session switching instead of scrolling
+  <Accordion title="Quick Task Access">
+    Use `⌘1–9` for instant task switching instead of scrolling
   </Accordion>
 </AccordionGroup>
 

@@ -36,11 +36,11 @@ This guide covers common issues you might encounter and how to resolve them.
 
 </AccordionGroup>
 
-## Session Issues
+## Task & Slot Session Issues
 
 <AccordionGroup>
-  <Accordion title="Can't create new session">
-    **Symptom:** Error when trying to start a spec or create session
+  <Accordion title="Can't create new task or advance a stage">
+    **Symptom:** Error when trying to create a task or start a stage run
 
     **Possible Causes & Solutions:**
 
@@ -61,7 +61,7 @@ This guide covers common issues you might encounter and how to resolve them.
     **3. Worktree directory exists:**
     ```bash
     ls .lucode/worktrees/
-    # If session directory exists, cancel old session first
+    # If a stale task worktree directory exists, cancel the task first
     ```
 
     **4. Permission issues:**
@@ -73,8 +73,8 @@ This guide covers common issues you might encounter and how to resolve them.
     ```
   </Accordion>
 
-  <Accordion title="Session stuck in 'Creating' state">
-    **Symptom:** Session shows "Creating..." but never completes
+  <Accordion title="Task stuck in 'Creating' state">
+    **Symptom:** Task shows "Creating..." but never completes
 
     **Solution:**
     1. Check Lucode logs:
@@ -86,32 +86,32 @@ This guide covers common issues you might encounter and how to resolve them.
        - Git worktree creation failed
        - Disk space full
        - Permission denied
-    4. Try canceling and recreating the session
+    4. Try cancelling and recreating the task
   </Accordion>
 
   <Accordion title="Terminal won't start">
-    **Symptom:** Session created but terminals are blank or frozen
+    **Symptom:** Slot session opened but terminals are blank or frozen
 
     **Solution:**
     1. Check terminal permissions:
        - **System Settings → Privacy & Security → Developer Tools**
        - Add Terminal.app
     2. Restart Lucode
-    3. Try selecting the session again
+    3. Try selecting the task or slot session again
     4. Check logs for PTY errors:
        ```bash
        tail -f ~/Library/Application\ Support/lucode/logs/lucode-*.log | grep PTY
        ```
   </Accordion>
 
-  <Accordion title="Can't switch between sessions">
-    **Symptom:** Keyboard shortcuts don't work or sessions don't switch
+  <Accordion title="Can't switch between tasks">
+    **Symptom:** Keyboard shortcuts don't work or the active task doesn't change
 
     **Solution:**
     1. Check if another app is intercepting shortcuts:
        - **System Settings → Keyboard → Keyboard Shortcuts**
        - Look for conflicts with `⌘1-9`
-    2. Try clicking session in sidebar instead
+    2. Try clicking the task in the sidebar instead
     3. Restart Lucode
   </Accordion>
 </AccordionGroup>
@@ -187,8 +187,8 @@ This guide covers common issues you might encounter and how to resolve them.
     **Solution:**
     1. Check agent terminal - might be waiting for input
     2. Press `Ctrl+C` to interrupt
-    3. Click **Restart** in session toolbar
-    4. If persists, cancel session and create new one
+    3. Click **Restart** in the task / slot session toolbar
+    4. If persists, cancel the task and create a new one
   </Accordion>
 </AccordionGroup>
 
@@ -196,12 +196,12 @@ This guide covers common issues you might encounter and how to resolve them.
 
 <AccordionGroup>
   <Accordion title="Merge conflicts when merging to main">
-    **Symptom:** Can't merge session back to main due to conflicts
+    **Symptom:** Can't merge a task's branch back to main due to conflicts
 
     **Solution:**
-    1. **Option 1: Merge main into session first**
+    1. **Option 1: Merge main into the task worktree first**
        ```bash
-       cd .lucode/worktrees/session-name/
+       cd .lucode/worktrees/task-name/
        git fetch origin main
        git merge origin/main
        # Resolve conflicts
@@ -218,41 +218,41 @@ This guide covers common issues you might encounter and how to resolve them.
     3. **Option 3: Manual merge**
        - Copy changes you want
        - Apply manually to main branch
-       - Cancel session when done
+       - Cancel the task when done
   </Accordion>
 
   <Accordion title="Worktree directory already exists">
-    **Symptom:** Error: "worktree already exists" when creating session
+    **Symptom:** Error: "worktree already exists" when creating a task
 
     **Solution:**
     1. Check if worktree is actually in use:
        ```bash
        git worktree list
        ```
-    2. If session was cancelled but worktree remains:
+    2. If the task was cancelled but worktree remains:
        ```bash
-       git worktree remove .lucode/worktrees/session-name
+       git worktree remove .lucode/worktrees/task-name
        ```
     3. If worktree is locked:
        ```bash
-       git worktree remove --force .lucode/worktrees/session-name
+       git worktree remove --force .lucode/worktrees/task-name
        ```
-    4. Retry session creation
+    4. Retry creating the task
   </Accordion>
 
-  <Accordion title="Can't delete branch after canceling session">
-    **Symptom:** Session cancelled but branch still exists
+  <Accordion title="Can't delete branch after cancelling a task">
+    **Symptom:** Task cancelled but branch still exists
 
     **Solution:**
-    Cancelled sessions delete their local worktree and branch automatically. If a branch remains, it likely wasn't canceled cleanly. Remove it manually:
+    Cancelling a task deletes its worktree and branch automatically. If a branch remains, it likely wasn't cancelled cleanly. Remove it manually:
 
     ```bash
-    git branch -D lucode/session-name
+    git branch -D lucode/task-name
     ```
 
     To delete from remote (if pushed):
     ```bash
-    git push origin --delete lucode/session-name
+    git push origin --delete lucode/task-name
     ```
   </Accordion>
 </AccordionGroup>
@@ -265,10 +265,10 @@ This guide covers common issues you might encounter and how to resolve them.
 
     **Possible Causes & Solutions:**
 
-    **1. Too many sessions running:**
-    - Each session uses 3 OS processes
-    - Close unused sessions
-    - Don't run more than 5-10 sessions simultaneously
+    **1. Too many slot sessions running:**
+    - Each slot session uses 3 OS processes
+    - Close unused slot sessions
+    - Don't run more than 5-10 slot sessions simultaneously
 
     **2. Large worktrees:**
     - Big repositories take longer to create worktrees
@@ -422,10 +422,10 @@ tail -f ~/Library/Application\ Support/lucode/logs/lucode-*.log
 grep -i error ~/Library/Application\ Support/lucode/logs/lucode-*.log
 ```
 
-```bash Session-Specific Logs
-# Check terminal output in the session itself
-# Or look for session ID in main logs
-grep "session-name" ~/Library/Application\ Support/lucode/logs/*.log
+```bash Task-Specific Logs
+# Check terminal output in the task or slot session itself
+# Or look for task / session id in main logs
+grep "task-name" ~/Library/Application\ Support/lucode/logs/*.log
 ```
 </CodeGroup>
 
@@ -479,7 +479,7 @@ If you can't resolve an issue:
 
 <CardGroup cols={2}>
   <Card title="Regular Cleanup" icon="broom">
-    - Cancel merged sessions
+    - Cancel merged tasks
     - Remove old worktrees
     - Clean up database periodically
   </Card>
@@ -492,14 +492,14 @@ If you can't resolve an issue:
   </Card>
 
   <Card title="Backup Important Work" icon="floppy-disk">
-    - Commit work in sessions regularly
+    - Commit work in task worktrees regularly
     - Push branches to remote
-    - Don't rely on local-only sessions
+    - Don't rely on local-only tasks
   </Card>
 
   <Card title="Monitor Resources" icon="gauge">
-    - Don't run too many sessions
-    - Close unused sessions
+    - Don't run too many slot sessions
+    - Close unused slot sessions
     - Watch system resource usage
   </Card>
 </CardGroup>

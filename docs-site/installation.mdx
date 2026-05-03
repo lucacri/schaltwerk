@@ -136,7 +136,7 @@ description: 'Get Lucode running on your system'
 </Tabs>
 
 <Tip>
-  **Next step:** [Your First Session](/first-session) to create and run an agent
+  **Next step:** [Your First Task](/first-session) to create and run an agent
 </Tip>
 
 ## Local Build Notifications
@@ -171,13 +171,13 @@ description: 'Get Lucode running on your system'
 
     **Linux:** `~/.local/share/lucode/<project-name>/database.db`
 
-    Stores sessions, specs, and project-level environment variables
+    Stores tasks, task artifacts (Spec, Plan, Summary), slot sessions, and project-level environment variables
   </Accordion>
 
   <Accordion title="Git Worktrees">
-    **Location:** `<repo>/.lucode/worktrees/<session-name>/`
+    **Location:** `<repo>/.lucode/worktrees/<task-name>/`
 
-    Created for each running session and removed when you cancel (same on all platforms)
+    Each task owns a base worktree at this path. Stage runs spawn sub-worktree slot sessions underneath. Worktrees are removed when the task is cancelled (same on all platforms).
   </Accordion>
 
   <Accordion title="Logs">
@@ -364,8 +364,8 @@ Use `bun run test` (or `npm run test`) to run the full validation suite.
 
 ### What Permissions Does Lucode Need?
 
-- **File System Access**: To read and write session files
-- **Process Spawning**: To create terminal sessions (PTY)
+- **File System Access**: To read and write task worktrees and artifacts
+- **Process Spawning**: To create PTY terminal sessions
 - **Network Access**: Local API server on port 8547
 - **No Special Entitlements**: No camera, microphone, or contacts access
 

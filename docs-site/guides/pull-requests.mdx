@@ -1,13 +1,13 @@
 ---
 title: Pull Requests
-description: 'Create GitHub PRs from sessions, import PR context, and work with review comments'
+description: 'Create GitHub PRs from tasks, import PR context, and work with review comments'
 ---
 
 Lucode integrates with GitHub (via the `gh` CLI) so you can:
 
-- Start a session from an existing PR (imports description + conversation comments and checks out the PR branch)
-- Create a GitHub PR from a running/reviewed session (`⌘⇧P`)
-- Link sessions to PRs to fetch review comments and jump to GitHub quickly
+- Start a task from an existing PR (imports description + conversation comments and checks out the PR branch)
+- Create a GitHub PR from a task (`⌘⇧P`)
+- Link tasks to PRs to fetch review comments and jump to GitHub quickly
 
 ## Setup GitHub Integration
 
@@ -41,14 +41,14 @@ Lucode integrates with GitHub (via the `gh` CLI) so you can:
   PR automation uses `git push origin …` and `gh pr create`, so your repo needs a Git remote named `origin` and your GitHub account needs push access.
 </Info>
 
-## Start a Session From a GitHub PR
+## Start a Task From a GitHub PR
 
 Use this when you want an agent to work with real PR context (description + discussion), or to continue work on the PR branch.
 
-![New session modal with GitHub Issue / GitHub PR prompt options](/images/start-from-github-issue-or-pr.png)
+![New task modal with GitHub Issue / GitHub PR prompt options](/images/start-from-github-issue-or-pr.png)
 
 <Steps>
-  <Step title="Open New Session">
+  <Step title="Open New Task">
     Press `⌘N` and choose **GitHub PR** as the prompt source.
   </Step>
 
@@ -59,8 +59,8 @@ Use this when you want an agent to work with real PR context (description + disc
     - PR conversation comments (the main discussion thread)
   </Step>
 
-  <Step title="Session starts on the PR branch">
-    The session uses the PR’s head branch name and syncs with `origin` so you’re working on the same branch GitHub shows for the PR.
+  <Step title="Task base worktree starts on the PR branch">
+    The task's base worktree uses the PR’s head branch name and syncs with `origin` so you’re working on the same branch GitHub shows for the PR.
   </Step>
 </Steps>
 
@@ -68,13 +68,13 @@ Use this when you want an agent to work with real PR context (description + disc
   Review comments (inline comments attached to specific lines) are fetched separately via the **review comments** tools described below.
 </Info>
 
-## Create a Pull Request From a Session
+## Create a Pull Request From a Task
 
-You can create PRs from both **Running** and **Reviewed** sessions.
+You can create PRs from a task once it has commits to push.
 
 <Steps>
   <Step title="Open the PR dialog">
-    Press `⌘⇧P` (or click the GitHub icon on the session card).
+    Press `⌘⇧P` (or click the GitHub icon on the task card).
   </Step>
 
   <Step title="Review options and confirm">
@@ -90,7 +90,7 @@ You can create PRs from both **Running** and **Reviewed** sessions.
   - Creates a single commit for the PR (includes uncommitted changes)
   - Best when you want a clean, one-commit PR
 - **Use existing commits**
-  - Keeps the session’s commit history intact
+  - Keeps the task’s commit history intact
   - If you have uncommitted changes, Lucode adds one extra commit for them on the PR branch
 
 ### Default Title, Body, and Base Branch
@@ -98,24 +98,24 @@ You can create PRs from both **Running** and **Reviewed** sessions.
 When the dialog opens, Lucode pre-fills:
 
 - **PR title**
-  - If the session has exactly one commit: uses that commit summary
-  - Otherwise: uses a title derived from the session name
+  - If the task has exactly one commit: uses that commit summary
+  - Otherwise: uses a title derived from the task name
 - **PR description**
-  - If the session has commits: a bullet list of commit summaries
-  - Otherwise: the session’s initial prompt text
+  - If the task has commits: a bullet list of commit summaries
+  - Otherwise: the task’s initial prompt text
 - **Base branch**
-  - Defaults to the session parent branch (override any time)
+  - Defaults to the task’s parent branch (override any time)
 
 ### Custom PR Branch Name
 
-By default, Lucode uses the session branch as the PR head branch. Enable **Use custom PR branch name** to push the PR to a different branch instead (useful for avoiding conflicts or keeping the session branch untouched).
+By default, Lucode uses the task’s branch as the PR head branch. Enable **Use custom PR branch name** to push the PR to a different branch instead (useful for avoiding conflicts or keeping the task branch untouched).
 
 ### Auto-Cancel After PR
 
-Enable **Auto-cancel after PR** to automatically cancel the session after the PR is created (worktree cleanup).
+Enable **Auto-cancel after PR** to automatically cancel the task after the PR is created (worktree cleanup).
 
 <Warning>
-  Cancellation removes the session worktree and is destructive. Only enable auto-cancel if you’re confident you won’t need the local session worktree anymore.
+  Cancellation removes the task’s worktree and is destructive. Only enable auto-cancel if you’re confident you won’t need the local task worktree anymore.
 </Warning>
 
 ## Branch Conflicts and Guardrails
@@ -131,36 +131,36 @@ Lucode blocks PR creation in a few common “this will likely fail” cases:
 - **Uncommitted changes conflict with pushed branch**
   - If the branch is already on the remote and your worktree is dirty, Lucode requires you to either commit/push first or use a custom PR branch name.
 
-## Link a Session to a PR (and Unlink)
+## Link a Task to a PR (and Unlink)
 
-Linked PRs show up on session/diff actions and unlock review-comment tooling.
+Linked PRs show up on task/diff actions and unlock review-comment tooling.
 
 <Steps>
   <Step title="Link PR">
-    Open the session diff view and click **Link PR**, then search/select a PR from the connected repository.
+    Open the task’s diff view and click **Link PR**, then search/select a PR from the connected repository.
   </Step>
 
   <Step title="Unlink PR (optional)">
-    If a session is linked to the wrong PR, unlink it from the same header actions.
+    If a task is linked to the wrong PR, unlink it from the same header actions.
   </Step>
 </Steps>
 
 <Tip>
-  Sessions created from a GitHub PR prompt are already linked to that PR automatically.
+  Tasks created from a GitHub PR prompt are already linked to that PR automatically.
 </Tip>
 
 ## Fetch PR Review Comments
 
-When a session is linked to a PR, Lucode can fetch GitHub **review comments** (inline comments on files/lines):
+When a task is linked to a PR, Lucode can fetch GitHub **review comments** (inline comments on files/lines):
 
 - **Send to terminal** from the diff header actions (great for “fix these review comments” loops)
-- **Copy to clipboard** from the Reviewed session actions (quickly paste into a spec, Slack, or an external tool)
+- **Copy to clipboard** from the task’s actions (quickly paste into the task’s Spec artifact, Slack, or an external tool)
 
 Lucode groups comments by file, preserves line locations when available, and includes replies in the thread.
 
 ## MCP: Let an Agent Open the PR Modal
 
-If you have MCP enabled, agents can request that Lucode open the PR modal for a session:
+If you have MCP enabled, agents can request that Lucode open the PR modal for a task:
 
 - Tool: `lucode_create_pr`
 - Behavior: triggers the **Create Pull Request** modal in the UI with suggested values
@@ -170,11 +170,11 @@ Example tool input:
 
 ```json
 {
-  "session_name": "my-session",
+  "session_name": "my-task",
   "pr_title": "Fix auth redirect on logout",
   "pr_body": "Summary…",
   "base_branch": "main",
-  "pr_branch_name": "pr/my-session",
+  "pr_branch_name": "pr/my-task",
   "mode": "squash"
 }
 ```

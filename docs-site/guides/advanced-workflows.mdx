@@ -1,9 +1,9 @@
 ---
 title: Advanced Workflows
-description: 'Playbooks for orchestrating multiple agents, recycling specs, and keeping worktrees lean'
+description: 'Playbooks for orchestrating multiple agents, recycling tasks, and keeping worktrees lean'
 ---
 
-When orchestrating multiple agents you get the best results by laying a shared contract first, then letting specialists branch off in parallel. Think of it like traditional engineering: define the API surface and domain seams before frontend, backend, and data teams sprint ahead. The playbooks below help you sequence that work so sessions stay short-lived, merge conflicts stay rare, and every agent knows the rules of the codebase.
+When orchestrating multiple agents you get the best results by laying a shared contract first, then letting specialists branch off in parallel. Think of it like traditional engineering: define the API surface and domain seams before frontend, backend, and data teams sprint ahead. The playbooks below help you sequence that work so tasks stay short-lived, merge conflicts stay rare, and every agent knows the rules of the codebase.
 
 ## Scaffold → Swarm → Stabilize
 
@@ -13,70 +13,70 @@ The dashed bands illustrate how the scaffolding phase isolates concerns: first e
 
 <Steps>
   <Step title="Scaffold in the orchestrator">
-    Use a spec (often owned by the orchestrator session) to define project inputs/outputs and CLI affordances. Document how to run tests, builds, lint, and seed data; verify each command headlessly in the orchestrator terminals; and capture everything in an `AGENTS.md` so every future agent starts with the same contract.
+    Use a task (often coordinated from the orchestrator) to define project inputs/outputs and CLI affordances. Document how to run tests, builds, lint, and seed data; verify each command headlessly in the orchestrator terminals; and capture everything in an `AGENTS.md` so every future agent starts with the same contract.
   </Step>
 
   <Step title="Bootstrap the walking skeleton">
-    Launch an initial agent session to commit the scaffolding: repository layout, shared config, domain models, controller/service shells, and automation hooks. This follows the walking skeleton approach: ship a minimal end-to-end slice that proves the pipeline works so every downstream spec depends on clear interfaces instead of volatile files.
+    Launch an initial task to commit the scaffolding: repository layout, shared config, domain models, controller/service shells, and automation hooks. This follows the walking skeleton approach: ship a minimal end-to-end slice that proves the pipeline works so every downstream task depends on clear interfaces instead of volatile files.
   </Step>
 
   <Step title="Swarm on features">
-    Break work into focused specs (for example, "Billing webhook handler", "Settings sidebar UI", "Analytics ingestion job") and run agents in parallel. Because the skeleton already expresses the shared contracts, each session can focus on its slice without churn in upstream files.
+    Break work into focused tasks (for example, "Billing webhook handler", "Settings sidebar UI", "Analytics ingestion job") and run agents in parallel. Because the skeleton already expresses the shared contracts, each task can focus on its slice without churn in upstream files.
   </Step>
 
   <Step title="Stabilize and integrate">
-    Use the second terminal pane for tests and linting, review diffs, and mark sessions reviewed. Merge with `⌘⇧M` or open a PR once everything is green. Short-lived worktrees keep disk usage in check and allow rapid iteration.
+    Use the second terminal pane for tests and linting, review diffs, and merge with `⌘⇧M` or open a PR once everything is green. Short-lived task worktrees keep disk usage in check and allow rapid iteration.
   </Step>
 
   <Step title="Recycle unfinished ideas">
-    If a concept needs more thought, convert the session back into a spec (`⌘S`). The session worktree and branch are deleted (uncommitted changes vanish), but the spec (and notes) returns to the backlog for another attempt—ready to relaunch with new context.
+    If a concept needs more thought, cancel the task; its archived Spec artifact stays so you can launch a fresh task with new context later.
   </Step>
 </Steps>
 
-![Diagram showing the swarm phase: orchestrator/main branches into separate agent sessions (Email Generation, PDF Generation, Frontend) that each work in isolated worktrees.](/images/swarm.png)
+![Diagram showing the swarm phase: orchestrator/main branches into separate agent tasks (Email Generation, PDF Generation, Frontend) that each work in isolated worktrees.](/images/swarm.png)
 
-As soon as the walking skeleton lands, branch from that commit (whether it lives on `main` or a feature branch) and launch agents for each missing capability. Every session owns its worktree, so it can install dependencies, run tests, and iterate on its feature without stepping on the others. Once a slice is green and reviewed, merge it back, recycle any unfinished specs, and keep the swarm moving.
+As soon as the walking skeleton lands, branch from that commit (whether it lives on `main` or a feature branch) and launch agents for each missing capability. Every task owns its worktree, so it can install dependencies, run tests, and iterate on its feature without stepping on the others. Once a slice is green and reviewed, merge it back, recycle any unfinished tasks, and keep the swarm moving.
 
 ## Integrate, Review, Repeat
 
-After each agent session delivers a passing feature—unit tests green, manual QA satisfied, review notes resolved—choose the merge strategy that fits your flow:
+After each task delivers a passing feature—unit tests green, manual QA satisfied, review notes resolved—choose the merge strategy that fits your flow:
 
 - **Pull request (`⌘⇧P`)** for collaborative review, or
 - **Direct merge (`⌘⇧M`)** when you want to squash the worktree back into the skeleton branch yourself.
 
-Resolving conflicts centrally keeps history clean: pull the branch into the orchestrator (or the original skeleton branch), fix any mismatches there, then mark the session reviewed and integrated. Work through the Reviewed column until it’s empty; each completion frees disk space because the session’s worktree can be cancelled.
+Resolving conflicts centrally keeps history clean: pull the branch into the orchestrator (or the original skeleton branch), fix any mismatches there, then merge. Work through tasks until they’re cleared; each completion frees disk space because the task’s worktree can be cancelled.
 
-Need hands-on edits? Press **Open** (`⌘⇧O`) on the session card, jump to your preferred IDE, and patch the worktree manually—agents and humans can collaborate on the same isolated branch. If a feature proves too complex, convert it back into a spec (`⌘S`) so you can revisit later without carrying half-finished code.
+Need hands-on edits? Press **Open** (`⌘⇧O`) on the task card, jump to your preferred IDE, and patch the worktree manually—agents and humans can collaborate on the same isolated branch. If a feature proves too complex, cancel the task and create a fresh one with a clearer Spec artifact later.
 
-Once the integrations land, inspect the product and backlog. Any new bugs, refactors, or missing tests go straight into fresh specs so you can swarm again—treating the agents like a full squad of engineers you direct through specs, reviews, and tests to hit the exact quality bar you expect.
+Once the integrations land, inspect the product and backlog. Any new bugs, refactors, or missing tests go straight into fresh tasks so you can swarm again—treating the agents like a full squad of engineers you direct through tasks, reviews, and tests to hit the exact quality bar you expect.
 
 ## Continuous Maintenance Loop
 
 ![Diagram showing merge and repeat workflow: multiple feature branches (email, PDF, frontend) converge into the orchestrator/main branch, which then fans out into new maintenance branches (fix UTF-8, add unit tests, refactor frontend).](/images/merge_and_repeat.png)
 
-After integrating the first wave of feature sessions into main, you can immediately branch new maintenance specs for bug fixes, regression tests, or refactors—keeping the cycle moving without bloating a single worktree.
+After integrating the first wave of feature tasks into main, you can immediately create new maintenance tasks for bug fixes, regression tests, or refactors—keeping the cycle moving without bloating a single worktree.
 
 <Steps>
-  <Step title="Collect fixes as specs">
-    Log production bugs, refactors, and TODOs as lightweight specs so they remain ready-to-run cards in the backlog.
+  <Step title="Collect fixes as tasks">
+    Log production bugs, refactors, and TODOs as lightweight tasks so they remain ready-to-run cards in the backlog.
   </Step>
 
   <Step title="Launch focused agents">
-    Start one session per fix (e.g., "Resolve UTF-8 parsing bug", "Tighten PDF export pipeline", "Rename legacy API module").
+    Start one task per fix (e.g., "Resolve UTF-8 parsing bug", "Tighten PDF export pipeline", "Rename legacy API module").
   </Step>
 
   <Step title="Validate locally">
-    Reproduce issues, run targeted tests in the second terminal, and annotate findings directly in the spec or session notes.
+    Reproduce issues, run targeted tests in the second terminal, and annotate findings directly in the task’s Spec artifact.
   </Step>
 
   <Step title="Review, merge, recycle">
-    Approve the diff, mark the session reviewed, then merge or open a PR. Convert anything unresolved back into specs to revisit later.
+    Approve the diff, then merge or open a PR. Cancel anything unresolved and create a fresh task with new context to revisit later.
   </Step>
 </Steps>
 
-## Multi-Agent Sessions
+## Multi-Agent Tasks
 
-Run multiple agents on the same task to compare approaches or pick the best result.
+Run multiple agents on the same problem to compare approaches or pick the best result.
 
 <Tabs>
   <Tab title="Same Agent, Multiple Versions">
@@ -86,11 +86,11 @@ Run multiple agents on the same task to compare approaches or pick the best resu
 
     <Steps>
       <Step title="Select version count">
-        In the New Session dialog, click the version dropdown and choose **2 versions**, **3 versions**, or **4 versions**
+        In the New Task dialog, click the version dropdown and choose **2 versions**, **3 versions**, or **4 versions**
       </Step>
 
       <Step title="All versions start together">
-        Lucode creates linked sessions (e.g., `my_task`, `my_task_v2`) each running the same agent in its own worktree
+        Lucode creates linked tasks (e.g., `my_task`, `my_task_v2`) each running the same agent in its own worktree
       </Step>
 
       <Step title="Compare and choose">
@@ -100,13 +100,13 @@ Run multiple agents on the same task to compare approaches or pick the best resu
   </Tab>
 
   <Tab title="Different Agents">
-    Run different agents (e.g., Claude + Codex) on the same task to compare their approaches.
+    Run different agents (e.g., Claude + Codex) on the same problem to compare their approaches.
 
     ![Multi-agent setup showing agent selection with checkboxes and instance count selectors](/images/multiple-agent-versions.png)
 
     <Steps>
       <Step title="Open multi-agent mode">
-        In the New Session dialog, click the version dropdown and select **Use Multiple Agents**
+        In the New Task dialog, click the version dropdown and select **Use Multiple Agents**
       </Step>
 
       <Step title="Configure agents">
@@ -114,7 +114,7 @@ Run multiple agents on the same task to compare approaches or pick the best resu
       </Step>
 
       <Step title="All agents start together">
-        Lucode creates linked sessions each running its configured agent in its own worktree with the same prompt
+        Lucode creates linked tasks each running its configured agent in its own worktree with the same prompt
       </Step>
 
       <Step title="Compare and choose">
@@ -127,35 +127,35 @@ Run multiple agents on the same task to compare approaches or pick the best resu
 ## Parallel Development Tips
 
 <Steps>
-  <Step title="Create multiple sessions">
-    Spin up separate sessions for each initiative (e.g., `⌘N` → "Add authentication", `⌘N` → "Fix checkout bug", `⌘N` → "Refactor database layer").
+  <Step title="Create multiple tasks">
+    Spin up separate tasks for each initiative (e.g., `⌘N` → "Add authentication", `⌘N` → "Fix checkout bug", `⌘N` → "Refactor database layer").
   </Step>
 
   <Step title="Switch deliberately">
-    Use `⌘1-9` to jump between sessions or <code>⌥⇧`</code> / <code>⌥`</code> (`⌘↑/↓` also works) to cycle within the current filter.
+    Use `⌘1-9` to jump between tasks or <code>⌥⇧`</code> / <code>⌥`</code> (`⌘↑/↓` also works) to cycle through sidebar items.
   </Step>
 
   <Step title="Monitor all at once">
-    Each agent runs inside its own worktree, so you can review diffs and test results independently without conflicts.
+    Each agent runs inside its own task worktree, so you can review diffs and test results independently without conflicts.
   </Step>
 </Steps>
 
-## Spec Management Patterns
+## Task Management Patterns
 
 <Steps>
   <Step title="Draft with intent">
-    Use `⌘⇧N` to capture requirements, architecture decisions, and acceptance criteria before launching a session.
+    Use `⌘N` to capture requirements, architecture decisions, and acceptance criteria as the task’s Spec artifact before stage runs begin.
   </Step>
 
   <Step title="Refine centrally">
-    Iterate on specs in the orchestrator, and document expectations in `AGENTS.md` or the spec itself.
+    Iterate on the Spec artifact in the orchestrator, and document expectations in `AGENTS.md` or the artifact itself.
   </Step>
 
-  <Step title="Convert, reset, repeat">
-    Start sessions with `⌘N`, and whenever results miss the mark, press `⌘S` to discard the worktree while keeping the spec for another run.
+  <Step title="Cancel and recreate when needed">
+    Whenever results miss the mark, cancel the task. Its archived artifacts stay available so you can spin up a fresh task with sharper context.
   </Step>
 
   <Step title="Capture insights when agents stall">
-    If an agent uncovers new requirements or research but can’t finish the implementation, ask it (via MCP) to open a fresh spec populated with the new context—or have it emit a markdown summary you paste into a spec yourself. Restarting from a clean spec keeps the knowledge while giving the next agent a deterministic starting point.
+    If an agent uncovers new requirements or research but can’t finish the implementation, ask it (via MCP) to create a fresh task with that new context—or have it emit a markdown summary you paste into a new task yourself. Restarting from a clean task keeps the knowledge while giving the next agent a deterministic starting point.
   </Step>
 </Steps>

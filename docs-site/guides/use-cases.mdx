@@ -17,20 +17,20 @@ Discover how Lucode solves real development challenges with isolated AI agents a
   **With Lucode:**
 
   <Steps>
-    <Step title="Create specs">
+    <Step title="Create tasks">
       ```markdown
-      Spec 1: User Registration
+      Task 1: User Registration
       - Email/password validation
       - Hash passwords with bcrypt
       - Store in database
       - Send confirmation email
 
-      Spec 2: Login System
+      Task 2: Login System
       - JWT token generation
       - Session management
       - Token refresh mechanism
 
-      Spec 3: Password Reset
+      Task 3: Password Reset
       - Reset token generation
       - Email reset link
       - Secure token validation
@@ -42,13 +42,13 @@ Discover how Lucode solves real development challenges with isolated AI agents a
       - Claude Code works on registration
       - OpenCode handles login
       - Codex implements password reset
-      - All in isolated worktrees
+      - All in isolated task worktrees
     </Step>
 
     <Step title="Work in parallel">
       - No conflicts between agents
-      - Each has own git branch
-      - Switch between sessions to monitor
+      - Each task has its own git branch
+      - Switch between tasks to monitor
     </Step>
 
     <Step title="Review and integrate">
@@ -82,12 +82,12 @@ Discover how Lucode solves real development challenges with isolated AI agents a
       ```
     </Step>
 
-    <Step title="Create specs">
-      Create one spec per bug with test output, stack trace, and affected files
+    <Step title="Create tasks">
+      Create one task per bug with test output, stack trace, and affected files in the Spec artifact
     </Step>
 
     <Step title="Assign agents">
-      Start sessions for each bug:
+      Start a task for each bug:
       - `fix-auth-login` → Claude Code
       - `fix-api-users` → Codex
       - `fix-ui-profile` → OpenCode
@@ -96,14 +96,14 @@ Discover how Lucode solves real development challenges with isolated AI agents a
 
     <Step title="Verify fixes">
       ```bash
-      # In each session's bottom terminal
+      # In each task's bottom terminal
       bun run test -- auth/login.test.ts
       # Verify specific test passes
       ```
     </Step>
 
     <Step title="Merge passing fixes">
-      - Mark sessions as reviewed after tests pass
+      - Verify each task’s fix once tests pass
       - Merge fixes one by one
       - Re-run full suite after each merge
     </Step>
@@ -122,7 +122,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
   **With Lucode:**
 
   <Steps>
-    <Step title="Create refactoring spec">
+    <Step title="Create a refactoring task">
       ```markdown
       # Refactor Payment Module
 
@@ -147,8 +147,8 @@ Discover how Lucode solves real development challenges with isolated AI agents a
       ```
     </Step>
 
-    <Step title="Start refactoring session">
-      Agent works in isolated worktree, can't break main branch
+    <Step title="Start the refactoring task">
+      Agent works in the task’s isolated worktree, can't break main branch
     </Step>
 
     <Step title="Incremental approach">
@@ -183,7 +183,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
       - Inspect every file in diff view
       - Verify no functionality changed
       - Check performance metrics
-      - Mark as reviewed only when confident
+      - Merge only when confident
     </Step>
   </Steps>
 
@@ -200,7 +200,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
   **With Lucode:**
 
   <Steps>
-    <Step title="Create identical specs">
+    <Step title="Create identical task descriptions">
       ```markdown
       # Implement Caching Layer
 
@@ -220,9 +220,9 @@ Discover how Lucode solves real development challenges with isolated AI agents a
     </Step>
 
     <Step title="Launch multiple agents">
-      - Session 1: Claude Code → Redis-based cache
-      - Session 2: Codex → In-memory LRU cache
-      - Session 3: OpenCode → Memcached-based cache
+      - Task 1: Claude Code → Redis-based cache
+      - Task 2: Codex → In-memory LRU cache
+      - Task 3: OpenCode → Memcached-based cache
     </Step>
 
     <Step title="Compare implementations">
@@ -264,7 +264,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
 
     <Step title="Benchmark all three">
       ```bash
-      # Run benchmarks in each session
+      # Run benchmarks in each task
       bun run benchmark -- cache
 
       # Compare results
@@ -277,7 +277,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
     <Step title="Choose winner">
       Pick LRU approach (fastest, simplest, meets requirements)
 
-      Merge that session, cancel others
+      Merge that task, cancel others
     </Step>
   </Steps>
 
@@ -294,18 +294,18 @@ Discover how Lucode solves real development challenges with isolated AI agents a
   **With Lucode:**
 
   <Steps>
-    <Step title="Create exploration specs">
+    <Step title="Create exploration tasks">
       ```markdown
-      Spec 1: React + TailwindCSS
-      Spec 2: Vue + Bootstrap
-      Spec 3: Svelte + Custom CSS
+      Task 1: React + TailwindCSS
+      Task 2: Vue + Bootstrap
+      Task 3: Svelte + Custom CSS
       ```
     </Step>
 
     <Step title="Rapid prototyping">
       - Each agent builds same feature in different framework
-      - No setup overhead (automatic worktrees)
-      - Switch between sessions to compare
+      - No setup overhead (automatic task worktrees)
+      - Switch between tasks to compare
     </Step>
 
     <Step title="Quick evaluation">
@@ -317,8 +317,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
 
     <Step title="Decide and cleanup">
       - Merge chosen approach
-      - Convert others to specs for documentation
-      - Or cancel if not needed
+      - Cancel the other tasks (their archived Spec artifacts remain)
     </Step>
   </Steps>
 
@@ -335,7 +334,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
   **With Lucode:**
 
   <Steps>
-    <Step title="Create review session via MCP">
+    <Step title="Create a review task via MCP">
       ```javascript
       await fetch('http://localhost:8547/api/sessions', {
         method: 'POST',
@@ -383,7 +382,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
 
 ## Automated Issue Triage
 
-<Accordion title="Convert GitHub issues to sessions automatically">
+<Accordion title="Convert GitHub issues to tasks automatically">
   **Scenario:** New issues are filed daily, need to be triaged and assigned.
 
   **Without Lucode:** Manually create branches, assign developers, track progress.
@@ -398,8 +397,8 @@ Discover how Lucode solves real development challenges with isolated AI agents a
         const issue = req.body.issue;
 
         if (issue.labels.includes('bug')) {
-          // Create session for bug fix
-          await createLucodeSession({
+          // Create task for bug fix
+          await createLucodeTask({
             name: `fix-issue-${issue.number}`,
             prompt: `Fix: ${issue.title}\n\n${issue.body}\n\nReported by: ${issue.user.login}`,
             agent_type: 'claude'
@@ -411,9 +410,9 @@ Discover how Lucode solves real development challenges with isolated AI agents a
       ```
     </Step>
 
-    <Step title="Auto-create sessions">
+    <Step title="Auto-create tasks">
       - Webhook receives new issue
-      - Creates Lucode session automatically
+      - Creates Lucode task automatically
       - Agent starts investigating
     </Step>
 
@@ -431,7 +430,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
     </Step>
   </Steps>
 
-  **Result:** Issues automatically converted to actionable sessions, faster response time.
+  **Result:** Issues automatically converted to actionable tasks, faster response time.
 </Accordion>
 
 ## Documentation Generation
@@ -444,7 +443,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
   **With Lucode:**
 
   <Steps>
-    <Step title="Create doc update spec">
+    <Step title="Create a doc update task">
       ```markdown
       # Update API Documentation
 
@@ -503,10 +502,10 @@ Discover how Lucode solves real development challenges with isolated AI agents a
       ```
     </Step>
 
-    <Step title="Create optimization specs">
-      - Spec 1: Optimize API response time
-      - Spec 2: Optimize frontend rendering
-      - Spec 3: Optimize image loading
+    <Step title="Create optimization tasks">
+      - Task 1: Optimize API response time
+      - Task 2: Optimize frontend rendering
+      - Task 3: Optimize image loading
     </Step>
 
     <Step title="Parallel optimization">
@@ -517,13 +516,13 @@ Discover how Lucode solves real development challenges with isolated AI agents a
 
     <Step title="Benchmark improvements">
       ```bash
-      # Session 1: API optimization
+      # Task 1: API optimization
       API response time: 80ms (6x improvement)
 
-      # Session 2: Frontend optimization
+      # Task 2: Frontend optimization
       Frontend render: 200ms (4x improvement)
 
-      # Session 3: Image optimization
+      # Task 3: Image optimization
       Image loading: 300ms (4x improvement)
       ```
     </Step>
@@ -558,8 +557,8 @@ Discover how Lucode solves real development challenges with isolated AI agents a
       ```
     </Step>
 
-    <Step title="Create test specs">
-      One spec per low-coverage file:
+    <Step title="Create test tasks">
+      One task per low-coverage file:
       ```markdown
       # Add Tests for auth/login.ts
 
@@ -583,7 +582,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
 
     <Step title="Verify coverage">
       ```bash
-      # After merging all test sessions
+      # After merging all test tasks
       bun run coverage
       # Total coverage: 87% ✓
       ```
@@ -621,11 +620,11 @@ Discover how Lucode solves real development challenges with isolated AI agents a
       ```
     </Step>
 
-    <Step title="Create sessions per phase">
-      - Session 1: Migrate utilities
-      - Session 2: Migrate components (depends on Session 1)
-      - Session 3: Migrate business logic (depends on Session 2)
-      - Session 4: Migrate entry points (depends on Session 3)
+    <Step title="Create tasks per phase">
+      - Task 1: Migrate utilities
+      - Task 2: Migrate components (depends on Task 1)
+      - Task 3: Migrate business logic (depends on Task 2)
+      - Task 4: Migrate entry points (depends on Task 3)
     </Step>
 
     <Step title="Incremental migration">
@@ -657,13 +656,13 @@ Discover how Lucode solves real development challenges with isolated AI agents a
   </Card>
 
   <Card title="Name Clearly" icon="tag">
-    Use descriptive session names
+    Use descriptive task names
 
-    `fix-login-bug` not `session1`
+    `fix-login-bug` not `task1`
   </Card>
 
   <Card title="Test Everything" icon="flask">
-    Run tests in each session before merging
+    Run tests in each task before merging
 
     Catch issues early
   </Card>
@@ -677,7 +676,7 @@ Discover how Lucode solves real development challenges with isolated AI agents a
   <Card title="Iterate Quickly" icon="arrows-rotate">
     Fast feedback loops
 
-    Don't let sessions pile up
+    Don't let tasks pile up
   </Card>
 
   <Card title="Document Workflows" icon="book">

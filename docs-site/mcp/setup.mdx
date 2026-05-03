@@ -1,9 +1,9 @@
 ---
 title: MCP Server Setup
-description: 'Enable the bundled Lucode MCP server so AI agents can manage sessions'
+description: 'Enable the bundled Lucode MCP server so AI agents can manage tasks'
 ---
 
-Lucode ships with a prebuilt Model Context Protocol (MCP) server. In most cases you only need to **toggle it on in Settings** so your AI agent (Claude Code, Codex, OpenCode, or Gemini) can control sessions. Node.js is **not required** unless you plan to rebuild the server from source.
+Lucode ships with a prebuilt Model Context Protocol (MCP) server. In most cases you only need to **toggle it on in Settings** so your AI agent (Claude Code, Codex, OpenCode, or Gemini) can control tasks. Node.js is **not required** unless you plan to rebuild the server from source.
 
 <Info>
   MCP automation works while Lucode is running and the project is open. Make sure the relevant agent CLI (Claude Code, Codex, OpenCode, or Gemini) is installed and authenticated before enabling MCP.
@@ -33,7 +33,7 @@ Lucode ships with a prebuilt Model Context Protocol (MCP) server. In most cases 
   </Step>
 
   <Step title="Verify">
-    In your agent (e.g., Claude Code) run a query such as “List my Lucode sessions.” You should see the active sessions from this project.
+    In your agent (e.g., Claude Code) run a query such as “List my Lucode tasks.” You should see the active tasks from this project.
   </Step>
 </Steps>
 
@@ -88,18 +88,18 @@ Restart OpenCode after enabling MCP so it reloads `opencode.json`.
 Once MCP is enabled, agents can call these tools:
 
 <CardGroup cols={2}>
-  <Card title="Create Sessions" icon="plus">
-    `lucode_create` — Create new specs or running sessions
+  <Card title="Create Tasks" icon="plus">
+    `lucode_create` — Create new tasks with a Spec artifact as the request body
   </Card>
-  <Card title="List Sessions" icon="list">
-    `lucode_list` — Retrieve sessions with status info
+  <Card title="List Tasks" icon="list">
+    `lucode_list` — Retrieve tasks with status info
   </Card>
-  <Card title="Browse Specs" icon="document">
-    `lucode_spec_list` — See spec names, sizes, and timestamps<br />
-    `lucode_spec_read` — Fetch full markdown for a single spec
+  <Card title="Browse Spec Artifacts" icon="document">
+    `lucode_spec_list` — See task names, Spec sizes, and timestamps<br />
+    `lucode_spec_read` — Fetch full markdown for a single task’s Spec artifact
   </Card>
-  <Card title="Cancel Sessions" icon="trash">
-    `lucode_cancel` — Remove sessions after they merge (deletes worktree & branch; spec moves to Archives)
+  <Card title="Cancel Tasks" icon="trash">
+    `lucode_cancel` — Cancel a task after it merges (deletes worktree & branch; the task’s artifacts move to Archives)
   </Card>
   <Card title="Setup Scripts" icon="bolt">
     `lucode_get_setup_script` to read the current worktree bootstrap script, `lucode_set_setup_script` to replace it after confirming which untracked config to copy.
@@ -117,9 +117,9 @@ Once MCP is enabled, agents can call these tools:
 </Warning>
 
 **Critical Rules:**
-- ✅ Canceling after merge is routine cleanup—it deletes the session worktree/branch and reclaims disk while keeping the spec in Archives
-- ❌ Canceling before merge or without tests risks losing uncommitted work; use `lucode_pause` if you’re unsure
-- ⚠️ `lucode_cancel` (and the UI’s cancel action) removes the session worktree & branch immediately. Any uncommitted changes vanish. The spec content is archived in **Settings → Archives** for recovery.
+- ✅ Cancelling after merge is routine cleanup—it deletes the task worktree/branch and reclaims disk while keeping the task’s artifacts in Archives
+- ❌ Cancelling before merge or without tests risks losing uncommitted work
+- ⚠️ `lucode_cancel` (and the UI’s cancel action) removes the task worktree & branch immediately. Any uncommitted changes vanish. The task’s Spec/Plan/Summary artifacts are archived in **Settings → Archives** for recovery.
 
 ---
 

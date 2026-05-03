@@ -1,9 +1,9 @@
 ---
-title: Your First Session
-description: 'Create and run your first AI agent in Lucode'
+title: Your First Task
+description: 'Create your first task and run an AI agent in Lucode'
 ---
 
-Once you've installed Lucode, it's time to create your first session.
+Once you've installed Lucode, it's time to create your first task.
 
 ## Open Your Repository
 
@@ -41,20 +41,20 @@ Once you've installed Lucode, it's time to create your first session.
   **Alternative:** Click **New Project** to create a new empty Git repository
 </Tip>
 
-## Create a Session
+## Create a Task
 
-Sessions are where AI agents work. Each session runs in its own isolated [git worktree](https://git-scm.com/docs/git-worktree) with its own branch.
+Tasks are the unit of work in Lucode. Each task owns its own isolated [git worktree](https://git-scm.com/docs/git-worktree) with its own branch, and stage runs spawn slot sessions where agents do focused work.
 
 <Steps>
   <Step title="Press ⌘N">
-    This opens the **New Session** dialog
+    This opens the **New Task** dialog
 
-    ![Start new agent dialog showing agent name field, initial prompt tabs, base branch selection, agent dropdown, model selector, and permission settings](/images/new-agent-modal.png)
+    ![Start new agent dialog showing task name field, initial prompt tabs, base branch selection, agent dropdown, model selector, and permission settings](/images/new-agent-modal.png)
   </Step>
 
   <Step title="Enter a task description">
     Choose your prompt source:
-    - **Custom prompt** — Write your own task description
+    - **Custom prompt** — Write your own task description (becomes the task’s Spec artifact)
     - **GitHub issue** — Import an issue with its description, labels, and comments
     - **GitHub PR** — Import a PR with its context and discussion
 
@@ -82,25 +82,27 @@ Sessions are where AI agents work. Each session runs in its own isolated [git wo
   </Step>
 
   <Step title="Choose base branch">
-    Select which branch the session should start from (usually `main` or `develop`)
+    Select which branch the task should branch from (usually `main` or `develop`)
   </Step>
 
   <Step title="Press ⌘Enter to start">
     Lucode will:
-    1. Create a new git branch named `lucode/<session-name>`
-    2. Create an isolated [git worktree](https://git-scm.com/docs/git-worktree) at `.lucode/worktrees/<session-name>/`
-    3. Spawn two terminals (agent terminal on top, your shell below)
+    1. Create a new git branch named `lucode/<task-name>`
+    2. Create an isolated [git worktree](https://git-scm.com/docs/git-worktree) at `.lucode/worktrees/<task-name>/`
+    3. Spawn two terminals (agent terminal on top, your shell below) for the first slot session
     4. Start the agent with your task description
 
-    ![Full Lucode interface showing sidebar with sessions, agent terminal on top displaying code analysis, and shell terminal below](/images/lucode-agent-view.png)
+    ![Full Lucode interface showing sidebar with tasks, agent terminal on top displaying code analysis, and shell terminal below](/images/lucode-agent-view.png)
   </Step>
 </Steps>
 
 ## Watch Your Agent Work
 
-The agent appears in the sidebar and starts working immediately.
+The task appears in the sidebar and starts working immediately.
 
-![Session card showing 'tooltip-duplicate-fix' with Idle status, filter tabs for Specs/Running/Reviewed, and action buttons including code view, refresh, mark reviewed, archive, and cancel](/images/session-card-and-filter.png)
+<!-- v2-todo: rewrite after smoke walk -->
+
+![Task card showing 'tooltip-duplicate-fix' with Idle status and action buttons including code view, refresh, archive, and cancel](/images/session-card-and-filter.png)
 
 <AccordionGroup>
   <Accordion title="Top Terminal (Agent)">
@@ -113,7 +115,7 @@ The agent appears in the sidebar and starts working immediately.
   </Accordion>
 
   <Accordion title="Bottom Terminal (Your Shell)">
-    Your personal shell in the session's worktree. Use it to:
+    Your personal shell in the slot session’s working directory. Use it to:
     - Run tests manually
     - Inspect changes with `git diff`
     - Execute build commands
@@ -166,26 +168,7 @@ Once the agent is done (or you want to check progress):
   </Step>
 </Steps>
 
-## Mark as Reviewed
-
-When you're satisfied with the changes:
-
-<Steps>
-  <Step title="Press ⌘R">
-    This marks the session as **Reviewed**
-
-    The session moves to the "Reviewed" filter in the sidebar
-
-    ![Reviewed session card with green checkmark, showing GitHub PR button, merge button, refresh button, and cancel button](/images/pr-merge-reviewed-sessions.png)
-  </Step>
-
-  <Step title="Session is ready for merge">
-    You can now:
-    - **Merge to main** with `⌘⇧M`
-    - **Create a PR** with `⌘⇧P`
-    - Continue working on it (edit files, run more commands)
-  </Step>
-</Steps>
+<!-- v2-todo: rewrite after smoke walk -->
 
 ## Merge or Create PR
 
@@ -195,7 +178,7 @@ When you're satisfied with the changes:
 
     Lucode will:
     1. Switch to the base branch
-    2. Merge the session branch
+    2. Merge the task branch
     3. Push changes (if configured)
 
     <Warning>Only use direct merge if you're working solo or on trusted changes</Warning>
@@ -218,11 +201,11 @@ When you're satisfied with the changes:
 
 ## Clean Up
 
-After merging, clean up the session:
+After merging, clean up the task:
 
 <Steps>
   <Step title="Press ⌘D">
-    Cancels the session and removes the worktree
+    Cancels the task and removes the worktree
 
     <Warning>This is destructive! Only cancel after successfully merging.</Warning>
   </Step>
@@ -231,10 +214,6 @@ After merging, clean up the session:
     Lucode will ask for confirmation before removing the worktree
   </Step>
 </Steps>
-
-<Tip>
-  Want to keep the plan but scrap the current run? Press **`⌘S`** to convert the session back to a spec—this deletes the session worktree and branch (uncommitted changes are lost) while preserving the markdown so you can relaunch later.
-</Tip>
 
 ## Next Steps
 
@@ -249,6 +228,6 @@ After merging, clean up the session:
     Configure agents, environment variables, and run mode
   </Card>
   <Card title="Core Concepts" icon="book" href="/core-concepts/sessions-and-specs">
-    Understand sessions, specs, and the orchestrator
+    Understand tasks, stages, artifacts, and the orchestrator
   </Card>
 </CardGroup>

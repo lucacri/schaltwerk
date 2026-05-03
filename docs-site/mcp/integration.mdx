@@ -1,9 +1,9 @@
 ---
 title: MCP Integration
-description: 'Automate session management with the Model Context Protocol REST API'
+description: 'Automate task management with the Model Context Protocol REST API'
 ---
 
-Lucode ships with a Model Context Protocol (MCP) server so AI assistants (Claude, Codex, OpenCode, Factory Droid, etc.) can automate session management.
+Lucode ships with a Model Context Protocol (MCP) server so AI assistants (Claude, Codex, OpenCode, Factory Droid, etc.) can automate task management.
 
 <Info>
   The MCP server binary is bundled with the app—most users simply enable it in Settings. Node.js is only required if you intend to rebuild the server source.
@@ -111,23 +111,23 @@ OpenCode supports both project-local `opencode.json` and global `~/.config/openc
 
 ## What Can Agents Do?
 
-Once set up, your AI agent can use these MCP tools to automate session management:
+Once set up, your AI agent can use these MCP tools to automate task management:
 
 <CardGroup cols={2}>
-  <Card title="Create Sessions" icon="plus">
-    Agent can create new specs or sessions directly in Lucode
+  <Card title="Create Tasks" icon="plus">
+    Agent can create new tasks directly in Lucode
   </Card>
 
-  <Card title="Update Specs" icon="pen">
-    Modify existing spec content before starting work
+  <Card title="Update Spec Artifacts" icon="pen">
+    Modify a task’s Spec artifact before stage runs begin
   </Card>
 
-  <Card title="Start Work" icon="play">
-    Convert specs to running sessions with worktrees
+  <Card title="Advance Stages" icon="play">
+    Drive a task forward through its stage lifecycle
   </Card>
 
   <Card title="Check Status" icon="list">
-    Query all sessions and their current state
+    Query all tasks and their current stage
   </Card>
 
   <Card title="Open PR Modal" icon="code-compare">
@@ -140,7 +140,7 @@ Once set up, your AI agent can use these MCP tools to automate session managemen
 
 ## Pull Requests via MCP
 
-Agents can request that Lucode open the **Create Pull Request** dialog for a running/reviewed session:
+Agents can request that Lucode open the **Create Pull Request** dialog for a task:
 
 - Tool: `lucode_create_pr`
 - Result: Lucode opens the PR modal with suggested values
@@ -148,11 +148,11 @@ Agents can request that Lucode open the **Create Pull Request** dialog for a run
 
 ```json
 {
-  "session_name": "my-session",
+  "session_name": "my-task",
   "pr_title": "Add caching to search endpoint",
   "pr_body": "Summary…",
   "base_branch": "main",
-  "pr_branch_name": "pr/my-session",
+  "pr_branch_name": "pr/my-task",
   "mode": "squash"
 }
 ```
@@ -164,12 +164,12 @@ Agents can request that Lucode open the **Create Pull Request** dialog for a run
 - **Write full script:** Send the complete updated script (with shebang) via `lucode_set_setup_script`. The script runs once per new worktree with `WORKTREE_PATH`, `REPO_PATH`, `SESSION_NAME`, and `BRANCH_NAME` env vars.
 - **UI safeguard:** When edited in the app, Lucode prompts before saving. MCP changes rely on the agent following the read/confirm/write flow above.
 
-## Spec Discovery API
+## Spec Artifact Discovery API
 
-Agents can inspect specs without crawling the full session list. Use the following MCP tools when you need to review planning docs before starting work:
+Agents can inspect tasks’ Spec artifacts without crawling the full task list. Use the following MCP tools when you need to review a task’s request body before kicking off work:
 
-- `lucode_spec_list` — returns an array of spec summaries `{ session_id, display_name?, content_length, updated_at }`
-- `lucode_spec_read` — fetches the full markdown plus metadata for a given spec
+- `lucode_spec_list` — returns an array of Spec-artifact summaries `{ session_id, display_name?, content_length, updated_at }`
+- `lucode_spec_read` — fetches the full markdown plus metadata for a given task’s Spec artifact
 
 Developing against the REST API directly? The MCP bridge proxies two lightweight endpoints:
 
@@ -204,25 +204,25 @@ GET /api/specs/{session_id}
 }
 ```
 
-Both endpoints diff against the same backing data the desktop app uses, so you always see the latest spec content without hitting git. Response sizes are bounded by the spec markdown itself; `content_length` is counted in Unicode code points so agents can paginate or highlight accurately.
+Both endpoints diff against the same backing data the desktop app uses, so you always see the latest Spec-artifact content without hitting git. Response sizes are bounded by the Spec markdown itself; `content_length` is counted in Unicode code points so agents can paginate or highlight accurately.
 
 ## How It Works
 
 <Steps>
-  <Step title="Agent receives task">
+  <Step title="Agent receives a request">
     You give your agent a coding task
   </Step>
 
-  <Step title="Agent creates session">
-    Agent uses MCP to create a Lucode session with the task description
+  <Step title="Agent creates a task">
+    Agent uses MCP to create a Lucode task with the description as the Spec artifact
   </Step>
 
   <Step title="Lucode updates">
-    New session appears in your sidebar automatically
+    The new task appears in your sidebar automatically
   </Step>
 
   <Step title="You review">
-    Check the session, test the code, and merge when ready
+    Check the task, test the code, and merge when ready
   </Step>
 </Steps>
 
@@ -230,10 +230,10 @@ Both endpoints diff against the same backing data the desktop app uses, so you a
 
 <AccordionGroup>
   <Accordion title="Task Breakdown">
-    Break down a large feature into multiple parallel sessions:
+    Break down a large feature into multiple parallel tasks:
 
-    - Agent creates multiple specs for different components
-    - Each spec becomes a separate session
+    - Agent creates multiple tasks for different components
+    - Each task gets its own worktree and stage flow
     - Work on all parts simultaneously
     - Review and merge independently
   </Accordion>
@@ -242,8 +242,8 @@ Both endpoints diff against the same backing data the desktop app uses, so you a
     Let your agent help with code reviews:
 
     - Agent analyzes pull requests
-    - Creates Lucode session with review notes
-    - You see the session appear in sidebar
+    - Creates a Lucode task with review notes as the Spec artifact
+    - You see the task appear in the sidebar
     - Review agent's feedback and suggestions
   </Accordion>
 
@@ -251,8 +251,8 @@ Both endpoints diff against the same backing data the desktop app uses, so you a
     Coordinate multiple AI agents:
 
     - Orchestrator agent breaks down work
-    - Creates sessions for implementation agents
-    - Monitors progress across all sessions
+    - Creates tasks for implementation agents
+    - Monitors progress across all tasks
     - Collects results when ready
   </Accordion>
 </AccordionGroup>
@@ -260,7 +260,7 @@ Both endpoints diff against the same backing data the desktop app uses, so you a
 ## Troubleshooting
 
 <AccordionGroup>
-  <Accordion title="Sessions not appearing">
+  <Accordion title="Tasks not appearing">
     Make sure Lucode is running and your project is open. The MCP server only works when Lucode is active.
   </Accordion>
 

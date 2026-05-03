@@ -3,7 +3,7 @@ title: Agent Setup
 description: 'Configure agent binaries, environment variables, setup scripts, and run mode'
 ---
 
-Configure each agent from **Settings → Agent Configuration** before you launch sessions. Open Settings by clicking the gear icon in the top bar.
+Configure each agent from **Settings → Agent Configuration** before you launch tasks. Open Settings by clicking the gear icon in the top bar.
 
 > Commands in this guide use `bun`. Swap to npm equivalents (`npm run …`, `npm install`, etc.) if that's your default toolchain.
 
@@ -31,7 +31,7 @@ Configure each agent from **Settings → Agent Configuration** before you launch
     - Worktree setup scripts
     - Project environment variables
     - Run scripts
-    - Session state
+    - Tasks, task artifacts, and slot session state
   </Accordion>
 </AccordionGroup>
 
@@ -63,7 +63,7 @@ Configure each agent from **Settings → Agent Configuration** before you launch
 ### Terminal-Only Mode
 
 <Info>
-  Terminal mode opens a session with just your default system shell - no AI agent is started automatically.
+  Terminal mode opens a slot session with just your default system shell - no AI agent is started automatically.
 </Info>
 
 **Use Cases:**
@@ -73,7 +73,7 @@ Configure each agent from **Settings → Agent Configuration** before you launch
 - Manual code exploration
 
 **How It Works:**
-- Creates an isolated Git worktree (same as other sessions)
+- Runs in a slot session under the task's base worktree (same as other slot sessions)
 - Opens top terminal with your default shell (`$SHELL`)
 - No agent binary required
 - Initial prompt is not pasted automatically
@@ -173,7 +173,7 @@ Arguments are parsed with shell-style quoting:
 
 CLI arguments are appended:
 - Every time the top terminal starts
-- When you trigger a restart from the session toolbar
+- When you trigger a restart from the slot session toolbar
 - After the setup script completes
 
 ## Set Agent Environment Variables
@@ -209,7 +209,7 @@ MODEL_OVERRIDE=gpt-4
 
 ## Project Defaults
 
-Open **Settings → Run & Environment** to configure shared defaults for every session.
+Open **Settings → Run & Environment** to configure shared defaults for every task.
 
 ### Worktree Setup Script
 
@@ -330,9 +330,9 @@ Define a command to execute with `⌘E` in the bottom terminal.
        - Set agent-specific environment variables
   </Step>
 
-  <Step title="Test with a session">
-    1. Create a test spec
-    2. Start session (`⌘N`)
+  <Step title="Test with a task">
+    1. Create a test task
+    2. Start a stage run (e.g., advance from Draft) so a slot session spawns
     3. Verify setup script runs successfully
     4. Check agent launches with correct configuration
   </Step>
@@ -345,7 +345,7 @@ Define a command to execute with `⌘E` in the bottom terminal.
 </Steps>
 
 <Check>
-  Once configured, every new session will automatically use these settings!
+  Once configured, every new slot session will automatically use these settings!
 </Check>
 
 ## Troubleshooting
@@ -408,7 +408,7 @@ Define a command to execute with `⌘E` in the bottom terminal.
     3. Select the agent tab (Claude Code, Codex, etc.)
     4. Click **Refresh Binary** to auto-detect new version
     5. Or manually select the correct binary path
-    6. Return to active sessions and restart the agent
+    6. Return to active tasks and restart the agent
 
     **Note:** Binary paths are cached per agent. Always refresh after system upgrades.
   </Accordion>

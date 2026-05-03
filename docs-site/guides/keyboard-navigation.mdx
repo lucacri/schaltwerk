@@ -3,9 +3,11 @@ title: Keyboard Navigation
 description: 'Navigate Lucode entirely from the keyboard'
 ---
 
-Lucode is designed for keyboard-first workflows. You can manage multiple agents across multiple sessions without lifting your fingers from the keyboard.
+Lucode is designed for keyboard-first workflows. You can manage multiple agents across multiple tasks without lifting your fingers from the keyboard.
 
-![Keyboard navigation overview showing shortcuts for projects, filters, sessions, and terminal tabs](/images/keyboard-navigation.png)
+![Keyboard navigation overview showing shortcuts for projects, sidebar items, and terminal tabs](/images/keyboard-navigation.png)
+
+<!-- v2-todo: rewrite after smoke walk -->
 
 ## Navigation Overview
 
@@ -14,10 +16,9 @@ Lucode is designed for keyboard-first workflows. You can manage multiple agents 
 | `Cmd+Shift+1-9` | Jump to project tab by index |
 | `` Cmd+` `` | Cycle to next project tab |
 | `` Cmd+Shift+` `` | Cycle to previous project tab |
-| `Cmd+←→` | Switch between filters (All/Specs/Running/Reviewed) |
-| `` Option+Shift+` `` / `` Option+` `` | Cycle through sidebar items in current filter |
+| `` Option+Shift+` `` / `` Option+` `` | Cycle through sidebar items |
 | `Cmd+↑↓` | Alternate sidebar-item cycle |
-| `Cmd+1-9` | Jump directly to a session (1 = orchestrator) |
+| `Cmd+1-9` | Jump directly to a task (1 = orchestrator) |
 | `Cmd+[ ]` | Switch terminal tabs (agent or shell, based on focus) |
 | `Cmd+T` | Focus top terminal (agent) |
 | `Cmd+/` | Focus bottom terminal (shell) |
@@ -41,42 +42,27 @@ Lucode uses a two-pane terminal layout:
 
 When focused on the top pane, `Cmd+[` and `Cmd+]` cycle through agent tabs. When focused on the bottom pane, they cycle through shell tabs. The same context-aware logic applies to `Cmd+Shift+A` and `Cmd+W`.
 
-## Multi-Session Workflow
+## Multi-Task Workflow
 
 Run multiple agents in parallel and review their work:
 
-```
-1. Cmd+Shift+N  →  Create spec for task A
-2. Cmd+N        →  Start session with Claude
-3. Cmd+Shift+N  →  Create spec for task B
-4. Cmd+N        →  Start session with Codex
-5. Option+Shift+` / Option+` →  Cycle between sidebar items to monitor progress
-6. Cmd+G        →  Review changes in each session
-7. Cmd+Shift+M  →  Merge completed work
-```
+<!-- v2-todo: rewrite after smoke walk -->
 
 ## Quick Review Workflow
 
-Review all running sessions without touching the mouse:
+Review running tasks without touching the mouse:
 
-```
-1. Cmd+→        →  Switch to Running filter
-2. Option+`    →  Select first sidebar item
-3. Cmd+G        →  Open diff viewer
-4. Cmd+Enter    →  Finish review (or add comments)
-5. Option+`    →  Next sidebar item
-6. Repeat
-```
+<!-- v2-todo: rewrite after smoke walk -->
 
 ## Multi-Project Workflow
 
 Working on frontend and backend simultaneously:
 
 ```
-1. Cmd+`       →  Switch to backend project
-2. Cmd+2        →  Jump to session 2
+1. Cmd+`        →  Switch to backend project
+2. Cmd+2        →  Jump to task 2
 3. Cmd+T        →  Check agent progress
-4. Cmd+Shift+` →  Switch back to frontend
+4. Cmd+Shift+`  →  Switch back to frontend
 ```
 
 ## Customization

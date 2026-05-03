@@ -1,11 +1,11 @@
 ---
 title: Introduction
-description: 'Lucode keeps every AI coding session in its own git worktree'
+description: 'Lucode runs every task in its own git worktree, with a stage-driven workflow'
 ---
 
 ## What is Lucode?
 
-Run multiple AI agents on the same codebase—safely. Each agent works in an isolated [git worktree](https://git-scm.com/docs/git-worktree), with its own branch, terminals, and state.
+Run multiple AI agents on the same codebase—safely. Lucode is organized around **tasks**: each task owns an isolated [git worktree](https://git-scm.com/docs/git-worktree) with its own branch, and stage runs spawn slot sessions where agents do focused work.
 
 <video
   controls
@@ -32,22 +32,24 @@ Run multiple AI agents on the same codebase—safely. Each agent works in an iso
     Select your git repository in Lucode
   </Step>
 
-  <Step title="Start an agent">
-    Press `⌘N` to create a new session:
-    - Enter a task description
+  <Step title="Create a task">
+    Press `⌘N` to create a new task:
+    - Enter a task description (this becomes the task’s Spec artifact)
     - Select your agent (GitHub Copilot, Claude Code, OpenCode, Codex, Gemini, Kilo Code, Qwen, Factory Droid, Amp, or Terminal Only)
     - Choose the base branch
     - Press `⌘Enter` to start
   </Step>
 
   <Step title="Watch it work">
-    The agent starts in the sidebar in its own isolated [git worktree](https://git-scm.com/docs/git-worktree) and branch. Monitor progress in the top terminal.
+    The task appears in the sidebar with its own isolated [git worktree](https://git-scm.com/docs/git-worktree) and branch. Stage runs spawn slot sessions where the agent works; monitor progress in the top terminal.
   </Step>
 
   <Step title="Review and merge">
-    When done, merge to main with `⌘⇧M` or create a PR with `⌘⇧P`. Optionally press `⌘R` to mark as reviewed first.
+    When done, merge to main with `⌘⇧M` or create a PR with `⌘⇧P`.
   </Step>
 </Steps>
+
+<!-- v2-todo: rewrite after smoke walk -->
 
 ## Get Started
 
@@ -60,11 +62,11 @@ Run multiple AI agents on the same codebase—safely. Each agent works in an iso
     Install Lucode on macOS, Windows, or Linux
   </Card>
   <Card
-    title="Your First Session"
+    title="Your First Task"
     icon="rocket"
     href="/first-session"
   >
-    Create and run your first agent
+    Create your first task and run an agent
   </Card>
   <Card
     title="Workflow"
@@ -78,18 +80,19 @@ Run multiple AI agents on the same codebase—safely. Each agent works in an iso
     icon="book"
     href="/core-concepts"
   >
-    Understand sessions, specs, and orchestrator
+    Understand tasks, stages, artifacts, and the orchestrator
   </Card>
 </CardGroup>
 
 ## Key Features
 
-- **Isolated Git Worktrees** - Each session gets its own branch and worktree
+- **Isolated Git Worktrees** - Each task owns a base worktree and branch; slot sessions run underneath
+- **Stage-Driven Flow** - Tasks move through stages (Draft → Ready → Brainstormed → Planned → Implemented → Pushed → Done) at your pace
 - **Dual Terminals** - Agent terminal on top, your shell below
-- **Spec-Driven** - Plan in markdown, then execute
-- **Orchestrator** - Coordinate multiple sessions from your primary branch (main or a feature hub)
+- **Spec / Plan / Summary Artifacts** - Each task carries its planning docs alongside the worktree
+- **Orchestrator** - A singleton non-task surface in your primary branch for coordination work
 - **Web Preview** - View localhost dev servers directly in the app with auto-detection and element inspection
-- **MCP API** - Automate session management via REST
+- **MCP API** - Automate task management via REST
 
 ## Platform Support
 

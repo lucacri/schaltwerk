@@ -8,17 +8,17 @@ Here are our recommendations for how to get the most out of Lucode.
 ## Core Principles
 
 <CardGroup cols={2}>
-  <Card title="One Session Per Feature" icon="layer-group">
-    Create a dedicated session for each feature or bugfix. Keep work isolated and manageable.
+  <Card title="One Task Per Feature" icon="layer-group">
+    Create a dedicated task for each feature or bugfix. Keep work isolated and manageable.
   </Card>
   <Card title="Review Before Merge" icon="magnifying-glass">
     Always review changes with `⌘G` and test before merging. Agents make mistakes.
   </Card>
   <Card title="Clean Up After Merge" icon="broom">
-    Cancel sessions with `⌘D` after successful merge to keep your workspace tidy.
+    Cancel tasks with `⌘D` after successful merge to keep your workspace tidy.
   </Card>
   <Card title="Use the Orchestrator" icon="chess-queen">
-    Plan and coordinate work in the orchestrator (`⌘1`) before creating sessions.
+    Plan and coordinate work in the orchestrator (`⌘1`) before creating tasks.
   </Card>
 </CardGroup>
 
@@ -26,44 +26,22 @@ Here are our recommendations for how to get the most out of Lucode.
 
 ### 1. Plan in the Orchestrator
 
-Press `⌘1` to switch to the orchestrator—a special session that stays on your main branch.
+Press `⌘1` to switch to the orchestrator—a singleton non-task surface that stays on your main branch.
 
-<Steps>
-  <Step title="Create a spec">
-    Press `⌘⇧N` to create a planning document:
-    - Break down the feature into tasks
-    - List requirements and constraints
-    - Document the architecture
+<!-- v2-todo: rewrite after smoke walk -->
 
-    ![Create new spec dialog with agent name field, 'Create as spec' checkbox checked, spec content textarea with user story, and Create Spec button](/images/create-spec.png)
-  </Step>
+### 2. Create Tasks
 
-  <Step title="Ask the orchestrator">
-    Use the orchestrator's agent terminal to:
-    - Get implementation suggestions
-    - Generate task breakdowns
-    - Plan the overall approach
-  </Step>
-
-  <Step title="Convert to sessions">
-    Once you have a plan, create individual sessions for each task
-
-    ![Spec management view showing multiple specs in sidebar with Run Agent and Copy buttons, markdown editor displaying spec content with goals, context, and requirements](/images/spec-management.png)
-  </Step>
-</Steps>
-
-### 2. Create Sessions
-
-For each feature or task:
+For each feature or piece of work:
 
 <Steps>
   <Step title="Press ⌘N">
-    Open the New Session dialog
+    Open the New Task dialog
   </Step>
 
   <Step title="Name it descriptively">
     Use names like:
-    - `feature-auth` not `session1`
+    - `feature-auth` not `task1`
     - `fix-typescript-errors` not `fixes`
     - `refactor-api-layer` not `refactor`
   </Step>
@@ -76,6 +54,8 @@ For each feature or task:
 
     **Bad:**
     > "Add auth"
+
+    The prompt becomes the task’s Spec artifact.
   </Step>
 
   <Step title="Select the right agent">
@@ -86,11 +66,11 @@ For each feature or task:
 </Steps>
 
 <Tip>
-  **Working on a complex feature?** Sessions branch from the orchestrator's current branch by default. To have multiple sessions branch from a feature branch instead of `main`:
+  **Working on a complex feature?** Tasks branch from the orchestrator's current branch by default. To have multiple tasks branch from a feature branch instead of `main`:
   - Switch the orchestrator to your feature branch (e.g., `git checkout feature/auth`), or
-  - Select the base branch in the New Session dialog
+  - Select the base branch in the New Task dialog
 
-  All sessions then merge back to that feature branch, keeping your work organized.
+  All tasks then merge back to that feature branch, keeping your work organized.
 </Tip>
 
 ### 3. Monitor Progress
@@ -163,21 +143,13 @@ For each feature or task:
   </Step>
 </Steps>
 
-### 5. Mark as Reviewed (Optional)
+### 5. Advance Stages
 
-<Steps>
-  <Step title="Press ⌘R">
-    Marks the session as reviewed
-  </Step>
-
-  <Step title="Session moves to Reviewed filter">
-    Use `⌘←/→` to switch between All/Specs/Running/Reviewed
-  </Step>
-</Steps>
+<!-- v2-todo: rewrite after smoke walk -->
 
 ### 6. Merge or PR
 
-You can merge from both **Running** and **Reviewed** sessions.
+You can merge a task once it has commits to push.
 
 <Tabs>
   <Tab title="Solo Developer">
@@ -190,7 +162,7 @@ You can merge from both **Running** and **Reviewed** sessions.
 
     ![Merge Session modal with Reapply commits selected](/images/merge-modal-reapply-commits.png)
 
-    Enable **Auto-cancel after merge** to automatically clean up the session.
+    Enable **Auto-cancel after merge** to automatically clean up the task.
   </Tab>
 
   <Tab title="Team Environment">
@@ -215,7 +187,7 @@ After successful merge:
 
 <Steps>
   <Step title="Press ⌘D">
-    Cancel the session and remove the worktree
+    Cancel the task and remove the worktree
   </Step>
 
   <Step title="Confirm deletion">
@@ -223,7 +195,7 @@ After successful merge:
   </Step>
 
   <Step title="Worktree is removed">
-    The isolated git worktree and branch are deleted
+    The task’s isolated git worktree and branch are deleted
   </Step>
 </Steps>
 
@@ -234,15 +206,10 @@ After successful merge:
 ## Navigation Tips
 
 <AccordionGroup>
-  <Accordion title="Quick Session Switching" defaultOpen>
+  <Accordion title="Quick Task Switching" defaultOpen>
     - `⌘1` - Orchestrator
-    - `⌘2-9` - Sessions 1-8
-    - <code>⌥⇧`</code> / <code>⌥`</code> - Cycle through sidebar items in the current filter (`⌘↑/↓` also works)
-  </Accordion>
-
-  <Accordion title="Filter Views" defaultOpen>
-    - `⌘←/→` - Switch between All/Specs/Running/Reviewed
-    - See exactly what you need when you need it
+    - `⌘2-9` - Tasks 1-8
+    - <code>⌥⇧`</code> / <code>⌥`</code> - Cycle through sidebar items (`⌘↑/↓` also works)
   </Accordion>
 
   <Accordion title="Multi-Project Workflows" defaultOpen>
@@ -258,59 +225,21 @@ After successful merge:
   </Accordion>
 </AccordionGroup>
 
+<!-- v2-todo: rewrite after smoke walk -->
+
 ## Common Patterns
 
-### Feature Development
-
-```
-1. ⌘1 (Orchestrator) → Plan the feature
-2. ⌘⇧N → Create spec with requirements
-3. ⌘N → Start session with detailed prompt
-4. ⌘T → Monitor agent progress
-5. ⌘G → Review changes
-6. ⌘E → Run tests
-7. ⌘R → Mark as reviewed
-8. ⌘⇧P → Create PR
-9. [After merge] ⌘D → Clean up
-```
-
-### Bug Fix
-
-```
-1. ⌘N → Create session: "Fix bug in X"
-2. ⌘/ → Reproduce the bug manually
-3. ⌘T → Let agent investigate and fix
-4. ⌘/ → Verify the fix works
-5. ⌘G → Review the changes
-6. ⌘R → Mark reviewed
-7. ⌘⇧M → Merge directly (if solo)
-8. ⌘D → Clean up
-```
-
-### Refactoring
-
-```
-1. ⌘1 → Discuss approach with orchestrator
-2. ⌘⇧N → Create spec documenting the refactor plan
-3. ⌘N → Start session with clear constraints
-4. ⌘T → Watch agent work
-5. ⌘E → Run test suite frequently
-6. ⌘G → Carefully review all changes
-7. ⌘/ → Run tests again manually
-8. ⌘R → Mark reviewed
-9. ⌘⇧P → Create PR for team review
-10. [After approval + merge] ⌘D → Clean up
-```
+<!-- v2-todo: rewrite after smoke walk -->
 
 ## Things to Avoid
 
 <Warning>
   **Don't:**
   - Merge without reviewing (`⌘G` first!)
-  - Cancel sessions before merging (use `⌘S` to recycle the spec—this deletes the session worktree/branch and loses uncommitted changes)
+  - Cancel tasks before merging (uncommitted changes are lost)
   - Create vague prompts like "fix it"
-  - Forget to run tests before marking reviewed
-  - Let sessions pile up—clean up after merging
+  - Forget to run tests before merging
+  - Let tasks pile up—clean up after merging
 </Warning>
 
 ## Next Steps
