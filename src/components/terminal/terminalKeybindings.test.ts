@@ -15,18 +15,12 @@ vi.mock('../../keyboardShortcuts/helpers', () => ({
 
 describe('terminalKeybindings', () => {
     describe('matchKeybinding', () => {
-        it('should match Cmd+Shift+N as NewSpec on Mac', () => {
-            const event = new KeyboardEvent('keydown', {
-                key: 'N',
-                metaKey: true,
-                shiftKey: true,
-            });
-            const result = matchKeybinding(event);
-            expect(result.matches).toBe(true);
-            expect(result.commandId).toBe(TerminalCommand.NewSpec);
-        });
-
-        it('should match Cmd+N as NewSession on Mac', () => {
+        // Phase 8 W.2/W.6 follow-through: NewSession + NewSpec collapsed
+        // into NewTask. Both shortcuts route to the same NewTaskModal.
+        // Mirrors smoke checklist §A.3 ("Open NewTask modal via either
+        // Mod+N or Mod+Shift+N from terminal-focused context"). If the
+        // collapse regresses, this test fails before the user walks.
+        it('should match Cmd+N as NewTask on Mac', () => {
             const event = new KeyboardEvent('keydown', {
                 key: 'N',
                 metaKey: true,
@@ -34,7 +28,33 @@ describe('terminalKeybindings', () => {
             });
             const result = matchKeybinding(event);
             expect(result.matches).toBe(true);
-            expect(result.commandId).toBe(TerminalCommand.NewSession);
+            expect(result.commandId).toBe(TerminalCommand.NewTask);
+        });
+
+        it('should match Cmd+Shift+N as NewTask on Mac (collapsed from NewSpec in W.2)', () => {
+            const event = new KeyboardEvent('keydown', {
+                key: 'N',
+                metaKey: true,
+                shiftKey: true,
+            });
+            const result = matchKeybinding(event);
+            expect(result.matches).toBe(true);
+            expect(result.commandId).toBe(TerminalCommand.NewTask);
+        });
+
+        it('should also match the lowercase n key for both shortcuts', () => {
+            const plain = new KeyboardEvent('keydown', {
+                key: 'n',
+                metaKey: true,
+                shiftKey: false,
+            });
+            const shifted = new KeyboardEvent('keydown', {
+                key: 'n',
+                metaKey: true,
+                shiftKey: true,
+            });
+            expect(matchKeybinding(plain).commandId).toBe(TerminalCommand.NewTask);
+            expect(matchKeybinding(shifted).commandId).toBe(TerminalCommand.NewTask);
         });
 
         it('should match Cmd+R as MarkReady on Mac', () => {
@@ -138,8 +158,7 @@ describe('terminalKeybindings', () => {
 
     describe('shouldSkipShell', () => {
         it('should return true for commands in skip list', () => {
-            expect(shouldSkipShell(TerminalCommand.NewSession)).toBe(true);
-            expect(shouldSkipShell(TerminalCommand.NewSpec)).toBe(true);
+            expect(shouldSkipShell(TerminalCommand.NewTask)).toBe(true);
             expect(shouldSkipShell(TerminalCommand.MarkReady)).toBe(true);
             expect(shouldSkipShell(TerminalCommand.Search)).toBe(true);
             expect(shouldSkipShell(TerminalCommand.NewLine)).toBe(true);

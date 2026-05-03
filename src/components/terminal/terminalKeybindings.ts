@@ -6,8 +6,11 @@ export interface KeyBindingMatch {
 }
 
 export const enum TerminalCommand {
-    NewSession = 'terminal.newSession',
-    NewSpec = 'terminal.newSpec',
+    // Phase 8 W.2/W.6 follow-through: NewSession + NewSpec collapsed into
+    // a single NewTask. Both Mod+N and Mod+Shift+N route here. Mirrors the
+    // KeyboardShortcutAction.NewTask collapse + Terminal.tsx's inline
+    // handler that emits UiEvent.NewTaskRequest.
+    NewTask = 'terminal.newTask',
     MarkReady = 'terminal.markReady',
     Search = 'terminal.search',
     NewLine = 'terminal.newLine',
@@ -18,8 +21,7 @@ export const enum TerminalCommand {
 }
 
 const COMMANDS_TO_SKIP_SHELL: TerminalCommand[] = [
-    TerminalCommand.NewSession,
-    TerminalCommand.NewSpec,
+    TerminalCommand.NewTask,
     TerminalCommand.MarkReady,
     TerminalCommand.Search,
     TerminalCommand.NewLine,
@@ -34,12 +36,11 @@ export function matchKeybinding(event: KeyboardEvent): KeyBindingMatch {
     const isMac = platform === 'mac';
     const modifierKey = isMac ? event.metaKey : event.ctrlKey;
 
-    if (modifierKey && event.shiftKey && (event.key === 'n' || event.key === 'N')) {
-        return { matches: true, commandId: TerminalCommand.NewSpec };
-    }
-
-    if (modifierKey && !event.shiftKey && (event.key === 'n' || event.key === 'N')) {
-        return { matches: true, commandId: TerminalCommand.NewSession };
+    // Phase 8: both Mod+N (was NewSession) and Mod+Shift+N (was NewSpec)
+    // collapse to a single NewTask command. The downstream handler opens
+    // NewTaskModal in either case.
+    if (modifierKey && (event.key === 'n' || event.key === 'N')) {
+        return { matches: true, commandId: TerminalCommand.NewTask };
     }
 
     if (modifierKey && (event.key === 'r' || event.key === 'R')) {
