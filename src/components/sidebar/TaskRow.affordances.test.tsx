@@ -217,3 +217,41 @@ describe('TaskRow affordance labels (visible text + aria)', () => {
     expect(reopen).toHaveAttribute('aria-label')
   })
 })
+
+// Phase 8 W.5 GAP 7: forge issue badge with null guard.
+describe('TaskRow forge issue badge', () => {
+  it('does NOT render the issue badge when issue_number is null', () => {
+    render(<TaskRow task={makeTask({ issue_number: null, issue_url: null })} />)
+    expect(screen.queryByTestId('task-row-issue-badge')).toBeNull()
+  })
+
+  it('does NOT render the issue badge when issue_number is undefined-shaped', () => {
+    // The wire field is `number | null`; tasks created from MCP/v2 paths
+    // always populate explicit nulls. Pin the absence either way.
+    const t = makeTask()
+    render(<TaskRow task={{ ...t, issue_number: null }} />)
+    expect(screen.queryByTestId('task-row-issue-badge')).toBeNull()
+  })
+
+  it('renders the issue badge as a link when issue_number AND issue_url are present', () => {
+    render(
+      <TaskRow
+        task={makeTask({ issue_number: 42, issue_url: 'https://example.com/i/42' })}
+      />,
+    )
+    const badge = screen.getByTestId('task-row-issue-badge')
+    expect(badge.tagName).toBe('A')
+    expect(badge).toHaveAttribute('href', 'https://example.com/i/42')
+    expect(badge).toHaveAttribute('target', '_blank')
+    expect(badge).toHaveTextContent('#42')
+    expect(badge).toHaveAttribute('aria-label', expect.stringContaining('#42'))
+  })
+
+  it('renders a non-link badge when issue_number is present but issue_url is null', () => {
+    render(<TaskRow task={makeTask({ issue_number: 7, issue_url: null })} />)
+    const badge = screen.getByTestId('task-row-issue-badge')
+    expect(badge.tagName).toBe('SPAN')
+    expect(badge).toHaveTextContent('#7')
+    expect(badge).not.toHaveAttribute('href')
+  })
+})

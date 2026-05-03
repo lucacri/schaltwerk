@@ -10,14 +10,17 @@
 // modal does NOT create orchestrator sessions. Spec creation is
 // implicit: a Draft task IS the spec-equivalent surface in v2.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useAtomValue } from 'jotai'
 import { ResizableModal } from '../shared/ResizableModal'
 import { Button, FormGroup, TextInput } from '../ui'
+import { Dropdown } from '../inputs/Dropdown'
 import { theme } from '../../common/theme'
 import { typography } from '../../common/typography'
 import { sanitizeName } from '../../utils/sanitizeName'
 import { createTask } from '../../services/taskService'
 import { logger } from '../../utils/logger'
+import { epicsAtom } from '../../store/atoms/epics'
 import type { Task } from '../../types/task'
 
 export interface NewTaskModalProps {
@@ -35,6 +38,7 @@ interface FormState {
   displayName: string
   requestBody: string
   baseBranch: string
+  epicId: string | null
 }
 
 const INITIAL: FormState = {
@@ -42,7 +46,10 @@ const INITIAL: FormState = {
   displayName: '',
   requestBody: '',
   baseBranch: '',
+  epicId: null,
 }
+
+const NO_EPIC_KEY = '__none__'
 
 export function NewTaskModal({
   isOpen,
@@ -53,6 +60,21 @@ export function NewTaskModal({
   const [form, setForm] = useState<FormState>(INITIAL)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [epicMenuOpen, setEpicMenuOpen] = useState(false)
+  const epics = useAtomValue(epicsAtom)
+
+  const epicOptions = useMemo(
+    () => [
+      { key: NO_EPIC_KEY, label: 'No epic' },
+      ...epics.map((epic) => ({ key: epic.id, label: epic.name })),
+    ],
+    [epics],
+  )
+
+  const selectedEpicLabel = useMemo(() => {
+    if (!form.epicId) return 'No epic'
+    return epics.find((epic) => epic.id === form.epicId)?.name ?? 'No epic'
+  }, [epics, form.epicId])
 
   useEffect(() => {
     if (isOpen) {
@@ -89,6 +111,7 @@ export function NewTaskModal({
             displayName: form.displayName.trim() || null,
             requestBody: form.requestBody,
             baseBranch: form.baseBranch.trim() || null,
+            epicId: form.epicId,
           },
           projectPath ?? null,
         )
@@ -176,6 +199,30 @@ export function NewTaskModal({
             placeholder="main"
             disabled={submitting}
           />
+        </FormGroup>
+
+        <FormGroup label="Epic" help="Optional grouping for related tasks.">
+          <Dropdown
+            open={epicMenuOpen}
+            onOpenChange={setEpicMenuOpen}
+            items={epicOptions}
+            onSelect={(key) => {
+              update('epicId', key === NO_EPIC_KEY ? null : key)
+              setEpicMenuOpen(false)
+            }}
+            menuTestId="new-task-modal-epic-menu"
+          >
+            {({ toggle }) => (
+              <Button
+                data-testid="new-task-modal-epic-trigger"
+                variant="secondary"
+                onClick={toggle}
+                disabled={submitting}
+              >
+                {selectedEpicLabel}
+              </Button>
+            )}
+          </Dropdown>
         </FormGroup>
 
         <FormGroup label="Request" help="Markdown describing what the task should do.">

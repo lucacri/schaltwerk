@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { Provider, createStore } from 'jotai'
+import type { ReactElement } from 'react'
 
 const createTask = vi.fn()
 
@@ -13,6 +15,11 @@ vi.mock('../../utils/logger', () => ({
 
 import { NewTaskModal } from './NewTaskModal'
 import type { Task } from '../../types/task'
+
+function renderWithStore(ui: ReactElement) {
+  const store = createStore()
+  return render(<Provider store={store}>{ui}</Provider>)
+}
 
 function makeTask(name: string): Task {
   return {
@@ -50,7 +57,7 @@ describe('NewTaskModal', () => {
   })
 
   it('does not render when isOpen is false', () => {
-    render(
+    renderWithStore(
       <NewTaskModal
         isOpen={false}
         onClose={() => {}}
@@ -60,7 +67,7 @@ describe('NewTaskModal', () => {
   })
 
   it('disables submit while the name is empty', () => {
-    render(<NewTaskModal isOpen onClose={() => {}} />)
+    renderWithStore(<NewTaskModal isOpen onClose={() => {}} />)
     const submit = screen.getByTestId('new-task-modal-submit')
     expect(submit).toBeDisabled()
   })
@@ -69,7 +76,7 @@ describe('NewTaskModal', () => {
     createTask.mockResolvedValue(makeTask('add-search-bar'))
     const onClose = vi.fn()
     const onCreated = vi.fn()
-    render(
+    renderWithStore(
       <NewTaskModal
         isOpen
         onClose={onClose}
@@ -96,6 +103,7 @@ describe('NewTaskModal', () => {
         name: 'add-search-bar',
         requestBody: 'Goal: search by branch name.',
         baseBranch: 'main',
+        epicId: null,
       }),
       '/tmp/proj',
     )
@@ -103,10 +111,16 @@ describe('NewTaskModal', () => {
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ name: 'add-search-bar' }))
   })
 
+  it('renders an epic picker that defaults to "No epic" and submits null when untouched', () => {
+    renderWithStore(<NewTaskModal isOpen onClose={() => {}} />)
+    const trigger = screen.getByTestId('new-task-modal-epic-trigger')
+    expect(trigger).toHaveTextContent('No epic')
+  })
+
   it('surfaces backend errors and keeps the form open', async () => {
     createTask.mockRejectedValue(new Error('backend exploded'))
     const onClose = vi.fn()
-    render(<NewTaskModal isOpen onClose={onClose} />)
+    renderWithStore(<NewTaskModal isOpen onClose={onClose} />)
 
     fireEvent.change(screen.getByTestId('new-task-modal-name'), {
       target: { value: 'oops' },
@@ -122,7 +136,7 @@ describe('NewTaskModal', () => {
   })
 
   it('rejects an empty name with a validation error', async () => {
-    render(<NewTaskModal isOpen onClose={() => {}} />)
+    renderWithStore(<NewTaskModal isOpen onClose={() => {}} />)
 
     fireEvent.change(screen.getByTestId('new-task-modal-name'), {
       target: { value: '   ' },

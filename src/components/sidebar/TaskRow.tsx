@@ -158,6 +158,46 @@ export function TaskRow({ task }: TaskRowProps) {
         </span>
       )}
 
+      {task.issue_number != null && (
+        task.issue_url ? (
+          <a
+            data-testid="task-row-issue-badge"
+            href={task.issue_url}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label={`Open issue #${task.issue_number} on the forge`}
+            className="shrink-0 rounded border px-1.5 py-[1px] hover:opacity-80"
+            style={{
+              fontSize: theme.fontSize.caption,
+              fontWeight: 600,
+              color: 'var(--color-accent-blue-light)',
+              backgroundColor: 'var(--color-accent-blue-bg)',
+              borderColor: 'var(--color-accent-blue-border)',
+              lineHeight: theme.lineHeight.compact,
+              textDecoration: 'none',
+            }}
+          >
+            #{task.issue_number}
+          </a>
+        ) : (
+          <span
+            data-testid="task-row-issue-badge"
+            aria-label={`Linked issue #${task.issue_number}`}
+            className="shrink-0 rounded border px-1.5 py-[1px]"
+            style={{
+              fontSize: theme.fontSize.caption,
+              fontWeight: 600,
+              color: 'var(--color-accent-blue-light)',
+              backgroundColor: 'var(--color-accent-blue-bg)',
+              borderColor: 'var(--color-accent-blue-border)',
+              lineHeight: theme.lineHeight.compact,
+            }}
+          >
+            #{task.issue_number}
+          </span>
+        )
+      )}
+
       {stageAction && (
         <button
           type="button"
