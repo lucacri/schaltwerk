@@ -535,8 +535,8 @@ pub async fn lucode_task_run_get(
         let mut run = TaskRunService::new(db)
             .get_run(&run_id)
             .map_err(|_| anyhow::anyhow!("task run '{run_id}' not found"))?;
-        let mut single = std::slice::from_mut(&mut run);
-        enrich_runs_with_derived_status(&mut single, db)?;
+        let single = std::slice::from_mut(&mut run);
+        enrich_runs_with_derived_status(single, db)?;
         Ok(run)
     })
     .await

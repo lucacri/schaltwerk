@@ -627,10 +627,9 @@ impl SessionMethods for Database {
         let conn = self.get_conn()?;
         let summaries = {
             let sql = format!(
-                "SELECT {} FROM sessions \
+                "SELECT {SESSION_SUMMARY_SELECT_COLUMNS} FROM sessions \
                  WHERE repository_path = ?1 \
                  ORDER BY ready_to_merge ASC, last_activity DESC",
-                SESSION_SUMMARY_SELECT_COLUMNS,
             );
             let mut stmt = conn.prepare(&sql)?;
             let rows = stmt
@@ -658,10 +657,9 @@ impl SessionMethods for Database {
         let conn = self.get_conn()?;
         let summaries = {
             let sql = format!(
-                "SELECT {} FROM sessions \
+                "SELECT {SESSION_SUMMARY_SELECT_COLUMNS} FROM sessions \
                  WHERE cancelled_at IS NULL \
                  ORDER BY ready_to_merge ASC, last_activity DESC",
-                SESSION_SUMMARY_SELECT_COLUMNS,
             );
             let mut stmt = conn.prepare(&sql)?;
 
@@ -769,10 +767,9 @@ impl SessionMethods for Database {
         let conn = self.get_conn()?;
         let summaries = {
             let sql = format!(
-                "SELECT {} FROM sessions \
+                "SELECT {SESSION_SUMMARY_SELECT_COLUMNS} FROM sessions \
                  WHERE repository_path = ?1 AND is_spec = ?2 \
                  ORDER BY ready_to_merge ASC, last_activity DESC",
-                SESSION_SUMMARY_SELECT_COLUMNS,
             );
             let mut stmt = conn.prepare(&sql)?;
 
