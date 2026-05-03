@@ -1065,56 +1065,15 @@ describe('SessionCard promoted badge', () => {
       })
     })
 
-    // Phase 7 Wave D.1.b — capture-as-task right-click affordance
-    it('shows "Capture as Task" only when onCaptureAsTask is wired and session is non-task-bound non-spec', () => {
-      const onCaptureAsTask = vi.fn()
-      renderCard({ onCaptureAsTask })
-      openMenu()
-      expect(
-        screen.getByRole('menuitem', { name: 'Capture as Task' }),
-      ).toBeInTheDocument()
-    })
-
-    it('hides "Capture as Task" when the session is already task-bound', () => {
-      const onCaptureAsTask = vi.fn()
-      const taskBoundSession: EnrichedSession = {
-        ...baseSession,
-        info: { ...baseInfo, task_id: 'task-1' },
-      }
-      renderCard({ onCaptureAsTask }, taskBoundSession)
+    // Phase 8 W.3: capture-as-task surface retired. The session card no
+    // longer offers any path for promoting a session into a task — tasks
+    // are the only top-level entity in the v2 model.
+    it('does not render a "Capture as Task" menuitem', () => {
+      renderCard({})
       openMenu()
       expect(
         screen.queryByRole('menuitem', { name: 'Capture as Task' }),
       ).toBeNull()
-    })
-
-    it('hides "Capture as Task" for spec sessions', () => {
-      const onCaptureAsTask = vi.fn()
-      const specSession: EnrichedSession = {
-        ...baseSession,
-        info: { ...baseInfo, session_state: 'spec', branch: '' },
-      }
-      renderCard({ onCaptureAsTask }, specSession)
-      openMenu()
-      expect(
-        screen.queryByRole('menuitem', { name: 'Capture as Task' }),
-      ).toBeNull()
-    })
-
-    it('hides "Capture as Task" when onCaptureAsTask is not provided (legacy callers)', () => {
-      renderCard({}) // no onCaptureAsTask
-      openMenu()
-      expect(
-        screen.queryByRole('menuitem', { name: 'Capture as Task' }),
-      ).toBeNull()
-    })
-
-    it('clicking "Capture as Task" invokes the handler with session_id', async () => {
-      const onCaptureAsTask = vi.fn()
-      renderCard({ onCaptureAsTask })
-      openMenu()
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Capture as Task' }))
-      await waitFor(() => expect(onCaptureAsTask).toHaveBeenCalledWith('s1'))
     })
   })
 })

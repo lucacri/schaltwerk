@@ -147,8 +147,6 @@ export const TauriCommands = {
   LucodeTaskDelete: 'lucode_task_delete',
   LucodeTaskCancel: 'lucode_task_cancel',
   LucodeTaskReopen: 'lucode_task_reopen',
-  LucodeTaskCaptureSession: 'lucode_task_capture_session',
-  LucodeTaskCaptureVersionGroup: 'lucode_task_capture_version_group',
   LucodeTaskSetStageConfig: 'lucode_task_set_stage_config',
   // Orchestration
   LucodeTaskPromoteToReady: 'lucode_task_promote_to_ready',

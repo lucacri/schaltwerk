@@ -1,19 +1,12 @@
 use crate::{get_core_handle_for_project_path, get_project_with_handle};
 use lucode::errors::SchaltError;
 use lucode::services::TaskFlowError;
-// v1's domains/legacy_import (importing legacy archived sessions into tasks) is
-// not ported to v2. Phase 1 ships only the v1→v2 task_runs schema migration in
-// infrastructure/database/migrations/v1_to_v2_task_runs.rs. The three
-// `lucode_legacy_sessions_*` Tauri commands are dropped accordingly; the v2
-// frontend can re-introduce them in a later phase if/when the import pathway
-// is needed.
-use lucode::domains::sessions::service::SessionManager;
 use lucode::domains::tasks::service::{
     ClarifyRunStarted, CreateTaskInput, MergeConflictDuringConfirm, PresetShape, PresetSlot,
     ProductionMerger, ProductionProvisioner, ProjectWorkflowDefault, StageAdvanceAfterMergeFailed,
     StageRunStarted, Task, TaskArtifactKind, TaskArtifactVersion, TaskCascadeCancelError,
-    TaskNotFoundError, TaskOrchestrator, TaskRun, TaskRunService, TaskService, TaskStage,
-    TaskStageConfig, TaskVariant,
+    TaskOrchestrator, TaskRun, TaskRunService, TaskService, TaskStage, TaskStageConfig,
+    TaskVariant,
 };
 use lucode::services::{
     TaskWithBodies, enrich_runs_with_derived_status, enrich_task_runs_with_derived_status,
@@ -23,12 +16,9 @@ use lucode::infrastructure::database::AppConfigMethods;
 use lucode::infrastructure::database::Database;
 use lucode::infrastructure::database::db_tasks::TaskMethods;
 use lucode::infrastructure::events::{SchaltEvent, TasksRefreshedPayload, emit_event};
-use lucode::services::Session;
 use serde::Deserialize;
 use std::path::Path;
 use std::str::FromStr;
-
-use crate::commands::schaltwerk_core::terminals;
 
 fn derive_repository_name(repo_path: &Path) -> String {
     repo_path
@@ -209,153 +199,6 @@ async fn with_core_handle<R>(
 ) -> Result<R, TaskFlowError> {
     let handle = get_core_handle_for_project_path(project_path).await?;
     op(&handle.db, &handle.repo_path).map_err(TaskFlowError::from)
-}
-
-fn preserved_content_for_session(
-    manager: &SessionManager,
-    session: &Session,
-) -> anyhow::Result<String> {
-    let (spec_content, initial_prompt) = manager.get_session_task_content(&session.name)?;
-
-    Ok(spec_content
-        .or(initial_prompt)
-        .unwrap_or_else(|| session.initial_prompt.clone().unwrap_or_default()))
-}
-
-fn find_task_for_session(
-    db: &Database,
-    repo_path: &Path,
-    session: &Session,
-) -> anyhow::Result<Option<Task>> {
-    let svc = TaskService::new(db);
-
-    if let Some(task_id) = session.task_id.as_deref() {
-        return match svc.get_task(task_id) {
-            Ok(task) => Ok(Some(task)),
-            Err(err) => {
-                if err.downcast_ref::<TaskNotFoundError>().is_some() {
-                    Ok(None)
-                } else {
-                    Err(err)
-                }
-            }
-        };
-    }
-
-    if let Ok(task) = db.get_task_by_name(repo_path, &session.name) {
-        return Ok(Some(task));
-    }
-
-    Ok(db
-        .list_tasks(repo_path)?
-        .into_iter()
-        .find(|task| task.task_host_session_id.as_deref() == Some(session.name.as_str())))
-}
-
-fn sync_task_metadata_from_session(
-    db: &Database,
-    task: &Task,
-    session: &Session,
-) -> anyhow::Result<()> {
-    if task.epic_id != session.epic_id {
-        db.set_task_epic_id(&task.id, session.epic_id.as_deref())?;
-    }
-
-    if task.issue_number != session.issue_number || task.issue_url != session.issue_url {
-        db.set_task_issue(&task.id, session.issue_number, session.issue_url.as_deref())?;
-    }
-
-    if task.pr_number != session.pr_number
-        || task.pr_url != session.pr_url
-        || task.pr_state.as_deref() != session.pr_state.as_ref().map(|state| state.as_str())
-    {
-        db.set_task_pr(
-            &task.id,
-            session.pr_number,
-            session.pr_url.as_deref(),
-            session.pr_state.as_ref().map(|state| state.as_str()),
-        )?;
-    }
-
-    Ok(())
-}
-
-fn draft_task_from_session(
-    db: &Database,
-    repo_path: &Path,
-    manager: &SessionManager,
-    session: &Session,
-    requested_name: Option<&str>,
-) -> anyhow::Result<Task> {
-    let repo_name = derive_repository_name(repo_path);
-    let svc = TaskService::new(db);
-    let preserved_content = preserved_content_for_session(manager, session)?;
-    let requested_body = session
-        .initial_prompt
-        .clone()
-        .unwrap_or_else(|| preserved_content.clone());
-
-    if let Some(existing) = find_task_for_session(db, repo_path, session)? {
-        if existing.request_body != requested_body {
-            db.set_task_request_body(&existing.id, &requested_body)?;
-        }
-
-        // Phase 4 Wave F: derived getter — fetches current Spec artifact body.
-        let existing_spec = existing.current_spec(db).map_err(TaskFlowError::from)?;
-        if !preserved_content.is_empty()
-            && existing_spec.as_deref() != Some(preserved_content.as_str())
-        {
-            svc.update_content(
-                &existing.id,
-                TaskArtifactKind::Spec,
-                &preserved_content,
-                None,
-                None,
-            )?;
-        }
-
-        if existing.task_host_session_id.as_deref() == Some(session.name.as_str()) {
-            db.set_task_host(
-                &existing.id,
-                None,
-                existing.task_branch.as_deref(),
-                existing.base_branch.as_deref(),
-            )?;
-        }
-
-        sync_task_metadata_from_session(db, &existing, session)?;
-        svc.reopen_task(&existing.id)?;
-        return svc.get_task(&existing.id);
-    }
-
-    let created = svc.create_task(CreateTaskInput {
-        name: requested_name.unwrap_or(&session.name),
-        display_name: session.display_name.as_deref(),
-        repository_path: repo_path,
-        repository_name: &repo_name,
-        request_body: &requested_body,
-        variant: TaskVariant::Regular,
-        epic_id: session.epic_id.as_deref(),
-        base_branch: Some(session.parent_branch.as_str()),
-        source_kind: None,
-        source_url: None,
-        issue_number: session.issue_number,
-        issue_url: session.issue_url.as_deref(),
-        pr_number: session.pr_number,
-        pr_url: session.pr_url.as_deref(),
-    })?;
-
-    if !preserved_content.is_empty() && preserved_content != requested_body {
-        svc.update_content(
-            &created.id,
-            TaskArtifactKind::Spec,
-            &preserved_content,
-            None,
-            None,
-        )?;
-    }
-
-    svc.get_task(&created.id)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -620,107 +463,6 @@ pub async fn lucode_task_cancel(
         project_path.as_deref(),
     )
     .await
-}
-
-#[tauri::command]
-pub async fn lucode_task_capture_session(
-    app: tauri::AppHandle,
-    session_name: String,
-    project_path: Option<String>,
-) -> Result<Task, TaskFlowError> {
-    let handle = get_core_handle_for_project_path(project_path.as_deref()).await?;
-    let manager = handle.session_manager();
-    let session = manager
-        .get_session(&session_name)
-        .map_err(|e| TaskFlowError::DatabaseError {
-            message: format!("failed to load session '{session_name}': {e}"),
-        })?;
-
-    if session.is_spec || session.cancelled_at.is_some() {
-        return Err(TaskFlowError::InvalidInput {
-            field: "session_name".to_string(),
-            message: format!("session '{session_name}' is not running"),
-        });
-    }
-
-    let task = draft_task_from_session(&handle.db, &handle.repo_path, &manager, &session, None)
-        .map_err(TaskFlowError::from)?;
-
-    terminals::close_session_terminals_if_any(&session_name).await;
-    manager
-        .fast_cancel_session(&session_name)
-        .await
-        .map_err(|e| TaskFlowError::DatabaseError {
-            message: format!("failed to cancel session '{session_name}': {e}"),
-        })?;
-    if let Err(err) = manager.cleanup_orphaned_worktrees() {
-        log::error!(
-            "lucode_task_capture_session: failed to clean orphaned worktrees after capturing session '{session_name}' (task id={task_id}, name='{task_name}'): {err}. Task was captured successfully but stale worktrees may remain in .lucode/worktrees/.",
-            task_id = task.id,
-            task_name = task.name
-        );
-    }
-
-    notify_task_mutation(&app, project_path.as_deref()).await;
-    Ok(task)
-}
-
-#[tauri::command]
-pub async fn lucode_task_capture_version_group(
-    app: tauri::AppHandle,
-    base_name: String,
-    session_names: Vec<String>,
-    project_path: Option<String>,
-) -> Result<Task, TaskFlowError> {
-    let handle = get_core_handle_for_project_path(project_path.as_deref()).await?;
-    let manager = handle.session_manager();
-
-    let mut running_sessions = Vec::new();
-    for session_name in &session_names {
-        let session = match manager.get_session(session_name) {
-            Ok(session) if !session.is_spec && session.cancelled_at.is_none() => session,
-            Ok(_) => continue,
-            Err(err) => {
-                log::warn!(
-                    "Skipping missing session '{session_name}' while capturing version group '{base_name}': {err}"
-                );
-                continue;
-            }
-        };
-        running_sessions.push(session);
-    }
-
-    let anchor = running_sessions
-        .first()
-        .cloned()
-        .ok_or_else(|| format!("no running sessions found for version group '{base_name}'"))?;
-
-    let task = draft_task_from_session(
-        &handle.db,
-        &handle.repo_path,
-        &manager,
-        &anchor,
-        Some(&base_name),
-    )
-    .map_err(TaskFlowError::from)?;
-
-    for session in &running_sessions {
-        terminals::close_session_terminals_if_any(&session.name).await;
-        manager
-            .fast_cancel_session(&session.name)
-            .await
-            .map_err(|e| format!("failed to cancel session '{}': {e}", session.name))?;
-    }
-    if let Err(err) = manager.cleanup_orphaned_worktrees() {
-        log::error!(
-            "lucode_task_capture_version_group: failed to clean orphaned worktrees after capturing version group '{base_name}' (task id={task_id}, name='{task_name}'): {err}. Task was captured successfully but stale worktrees may remain in .lucode/worktrees/.",
-            task_id = task.id,
-            task_name = task.name
-        );
-    }
-
-    notify_task_mutation(&app, project_path.as_deref()).await;
-    Ok(task)
 }
 
 #[tauri::command]
@@ -1688,122 +1430,6 @@ mod tests {
         let svc = TaskRunService::new(db);
         let err = svc.get_run("nope").unwrap_err().to_string();
         assert!(err.to_string().contains("task run not found"));
-    }
-
-    fn make_session_with_task_id(task_id: Option<&str>) -> Session {
-        Session {
-            id: "session-id".to_string(),
-            name: "session-name".to_string(),
-            display_name: None,
-            version_group_id: None,
-            version_number: None,
-            epic_id: None,
-            repository_path: PathBuf::from("/repo"),
-            repository_name: "repo".to_string(),
-            branch: "feature".to_string(),
-            parent_branch: "main".to_string(),
-            original_parent_branch: Some("main".to_string()),
-            worktree_path: PathBuf::from("/tmp/wt"),
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
-            last_activity: None,
-            initial_prompt: Some("the request".to_string()),
-            ready_to_merge: false,
-            original_agent_type: Some("claude".to_string()),
-            original_agent_model: None,
-            pending_name_generation: false,
-            was_auto_generated: false,
-            spec_content: None,
-            resume_allowed: true,
-            amp_thread_id: None,
-            issue_number: None,
-            issue_url: None,
-            pr_number: None,
-            pr_url: None,
-            pr_state: None,
-            is_consolidation: false,
-            consolidation_sources: None,
-            consolidation_round_id: None,
-            consolidation_role: None,
-            consolidation_report: None,
-            consolidation_report_source: None,
-            consolidation_base_session_id: None,
-            consolidation_recommended_session_id: None,
-            consolidation_confirmation_mode: None,
-            promotion_reason: None,
-            ci_autofix_enabled: false,
-            merged_at: None,
-            task_id: task_id.map(str::to_string),
-            task_stage: None,
-            task_run_id: None,
-            run_role: None,
-            slot_key: None,
-            exited_at: None,
-            exit_code: None,
-            first_idle_at: None,
-            is_spec: false,
-            cancelled_at: None,
-        }
-    }
-
-    #[test]
-    fn find_task_for_session_returns_none_when_task_id_points_to_missing_task() {
-        let testdb = mem_db();
-        let db = &*testdb;
-        let repo = PathBuf::from("/repo");
-        let session = make_session_with_task_id(Some("does-not-exist"));
-
-        let result = find_task_for_session(db, &repo, &session).expect("typed not-found maps to Ok");
-        assert!(
-            result.is_none(),
-            "missing task_id must yield Ok(None), not a duplicate-creating error swallow"
-        );
-    }
-
-    #[test]
-    fn find_task_for_session_propagates_non_not_found_db_errors() {
-        let testdb = mem_db();
-        let db = &*testdb;
-        let repo = PathBuf::from("/repo");
-        let session = make_session_with_task_id(Some("any-id"));
-
-        {
-            let conn = db.get_conn().expect("conn");
-            conn.execute("DROP TABLE tasks", [])
-                .expect("drop tasks table");
-        }
-
-        let err = find_task_for_session(db, &repo, &session)
-            .expect_err("DB errors must propagate so callers do not create duplicate tasks");
-        assert!(
-            err.downcast_ref::<TaskNotFoundError>().is_none(),
-            "real DB error must not be conflated with TaskNotFoundError"
-        );
-    }
-
-    #[test]
-    fn preserved_content_for_session_propagates_db_error() {
-        use lucode::domains::sessions::service::SessionManager as TestSessionManager;
-
-        let tmp = TempDir::new().expect("tempdir");
-        let repo_path = tmp.path().join("repo");
-        std::fs::create_dir_all(&repo_path).expect("repo dir");
-        let db = Database::new(Some(tmp.path().join("sessions.db"))).expect("db");
-
-        {
-            let conn = db.get_conn().expect("conn");
-            conn.execute("DROP TABLE sessions", [])
-                .expect("drop sessions table");
-        }
-
-        let manager = TestSessionManager::new(db, repo_path);
-        let session = make_session_with_task_id(None);
-
-        let result = preserved_content_for_session(&manager, &session);
-        assert!(
-            result.is_err(),
-            "DB errors must surface so capture flow aborts before destroying source session"
-        );
     }
 
     struct FakeProvisioner<'a> {

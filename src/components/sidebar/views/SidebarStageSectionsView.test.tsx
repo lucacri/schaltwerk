@@ -1,39 +1,11 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import { Provider, createStore } from 'jotai'
 import { ReactNode, createElement } from 'react'
 
-const captureSessionAsTask = vi.fn()
-vi.mock('../../../services/taskService', () => ({
-  captureSessionAsTask: (...args: unknown[]) => captureSessionAsTask(...args),
-}))
-vi.mock('../../../utils/logger', () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
-}))
-
 import { SidebarStageSectionsView } from './SidebarStageSectionsView'
 import { setTasksAtom } from '../../../store/atoms/tasks'
-import { allSessionsAtom } from '../../../store/atoms/sessions'
-import type { EnrichedSession } from '../../../types/session'
 import type { Task } from '../../../types/task'
-
-function makeSession(overrides: { id: string; taskId?: string | null; sessionState?: 'spec' | 'running' }): EnrichedSession {
-  return {
-    info: {
-      session_id: overrides.id,
-      branch: `lucode/${overrides.id}`,
-      worktree_path: `/tmp/wt-${overrides.id}`,
-      base_branch: 'main',
-      status: 'active',
-      is_current: false,
-      session_type: 'worktree',
-      session_state: overrides.sessionState ?? 'running',
-      ready_to_merge: false,
-      task_id: overrides.taskId ?? null,
-    },
-    terminals: [],
-  }
-}
 
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -72,10 +44,6 @@ function withStore(store: ReturnType<typeof createStore>) {
 }
 
 describe('SidebarStageSectionsView', () => {
-  beforeEach(() => {
-    captureSessionAsTask.mockReset()
-  })
-
   it('renders the empty-state placeholder when tasksAtom is empty', () => {
     const store = createStore()
     render(<SidebarStageSectionsView />, { wrapper: withStore(store) })
@@ -125,55 +93,12 @@ describe('SidebarStageSectionsView', () => {
     expect(readySection.textContent).not.toMatch(/killed/)
   })
 
-  // Phase 7 Wave D.1.b — bulk capture button gating + behavior
-  it('hides the bulk-capture button when no standalone non-task running sessions exist', () => {
+  // Phase 8 W.3: bulk-capture surface retired with the rest of the
+  // capture-as-task flows. The view no longer renders a button at all.
+  it('does not render a bulk-capture button regardless of standalone sessions', () => {
     const store = createStore()
-    store.set(allSessionsAtom, [
-      makeSession({ id: 'task-bound', taskId: 'task-1' }),
-    ])
+    store.set(setTasksAtom, [makeTask({ id: 'a', stage: 'draft' })])
     render(<SidebarStageSectionsView />, { wrapper: withStore(store) })
     expect(screen.queryByTestId('sidebar-bulk-capture-button')).toBeNull()
-  })
-
-  it('shows the bulk-capture button with the correct count when standalone sessions exist', () => {
-    const store = createStore()
-    store.set(allSessionsAtom, [
-      makeSession({ id: 'a' }),
-      makeSession({ id: 'b' }),
-      makeSession({ id: 'c' }),
-      makeSession({ id: 'task-bound', taskId: 'task-1' }),
-      makeSession({ id: 'a-spec', sessionState: 'spec' }),
-    ])
-    render(<SidebarStageSectionsView />, { wrapper: withStore(store) })
-    const button = screen.getByTestId('sidebar-bulk-capture-button')
-    expect(button.textContent).toMatch(/Capture 3 running sessions as tasks/i)
-  })
-
-  it('clicking bulk-capture invokes captureSessionAsTask once per eligible session', async () => {
-    captureSessionAsTask.mockResolvedValue({ id: 'task-x' })
-    const store = createStore()
-    store.set(allSessionsAtom, [
-      makeSession({ id: 'a' }),
-      makeSession({ id: 'b' }),
-      makeSession({ id: 'task-bound', taskId: 'task-1' }),
-    ])
-    render(<SidebarStageSectionsView />, { wrapper: withStore(store) })
-    fireEvent.click(screen.getByTestId('sidebar-bulk-capture-button'))
-    await waitFor(() => expect(captureSessionAsTask).toHaveBeenCalledTimes(2))
-    expect(captureSessionAsTask.mock.calls.map((c) => c[0])).toEqual(['a', 'b'])
-  })
-
-  it('continues with the next session when one capture fails (partial success)', async () => {
-    captureSessionAsTask
-      .mockRejectedValueOnce(new Error('first failed'))
-      .mockResolvedValueOnce({ id: 'task-y' })
-    const store = createStore()
-    store.set(allSessionsAtom, [
-      makeSession({ id: 'a' }),
-      makeSession({ id: 'b' }),
-    ])
-    render(<SidebarStageSectionsView />, { wrapper: withStore(store) })
-    fireEvent.click(screen.getByTestId('sidebar-bulk-capture-button'))
-    await waitFor(() => expect(captureSessionAsTask).toHaveBeenCalledTimes(2))
   })
 })

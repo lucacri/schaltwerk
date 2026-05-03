@@ -1788,8 +1788,6 @@ fn main() {
             commands::tasks::lucode_task_delete,
             commands::tasks::lucode_task_cancel,
             commands::tasks::lucode_task_reopen,
-            commands::tasks::lucode_task_capture_session,
-            commands::tasks::lucode_task_capture_version_group,
             commands::tasks::lucode_task_set_stage_config,
             commands::tasks::lucode_task_list_stage_configs,
             commands::tasks::lucode_task_run_list,

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } f
 import { createPortal } from "react-dom";
 import { clsx } from "clsx";
 import { useAtomValue } from "jotai";
-import { VscIssues, VscGitPullRequest, VscCopy, VscGitMerge, VscRepoForked, VscTrash } from "react-icons/vsc";
+import { VscIssues, VscGitPullRequest, VscCopy, VscGitMerge, VscTrash } from "react-icons/vsc";
 import { DropdownMenu, type DropdownMenuItem } from "../ui/DropdownMenu";
 import { writeClipboard } from "../../utils/clipboard";
 import { logger } from "../../utils/logger";
@@ -181,7 +181,6 @@ export const SessionCard = memo<SessionCardProps>(
       onReset, onSwitchModel,
       onCreatePullRequest, onCreateGitlabMr,
       onMerge, onQuickMerge, onRename, onLinkPr, onPostToForge,
-      onCaptureAsTask,
     } = useSessionCardActions()
 
     const { t } = useTranslation();
@@ -298,29 +297,6 @@ export const SessionCard = memo<SessionCardProps>(
 
       const hasUncommitted = (s.diff_stats?.files_changed ?? 0) > 0
 
-      // Phase 7 Wave D.1.b: capture-as-task is offered for live,
-      // non-task-bound sessions so cutover-day users can promote
-      // standalone work into the v2 task surface from the right-click
-      // menu. Hidden when:
-      //   - the session is already task-bound (s.task_id set on the
-      //     wire from Wave C.3),
-      //   - the session is a spec draft (sessionState === 'spec'),
-      //   - the session has been cancelled (handled implicitly: the
-      //     sidebar already filters cancelled sessions out of the
-      //     running list, so we don't render the menu for them).
-      // Eligibility check uses the wire fact field.
-      const isTaskBound = Boolean(s.task_id)
-      if (onCaptureAsTask && !isTaskBound && sessionState !== 'spec') {
-        items.push({ kind: 'separator', key: 'sep-capture' })
-        items.push({
-          kind: 'action',
-          key: 'capture-as-task',
-          label: 'Capture as Task',
-          icon: <VscRepoForked className="h-3.5 w-3.5" />,
-          onSelect: () => onCaptureAsTask(s.session_id),
-        })
-      }
-
       const destructive = sessionState === 'spec' && onDeleteSpec
         ? { key: 'delete-spec', label: 'Delete Spec', handler: () => onDeleteSpec?.(s.session_id) }
         : onCancel
@@ -340,7 +316,7 @@ export const SessionCard = memo<SessionCardProps>(
       }
 
       return items
-    }, [s.branch, s.display_name, s.session_id, s.diff_stats?.files_changed, sessionState, onCancel, onDeleteSpec, onCaptureAsTask])
+    }, [s.branch, s.display_name, s.session_id, s.diff_stats?.files_changed, sessionState, onCancel, onDeleteSpec])
 
     useEffect(() => {
       if (!canCollapse) {

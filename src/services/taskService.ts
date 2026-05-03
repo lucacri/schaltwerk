@@ -235,28 +235,6 @@ export function reopenTask(
   })
 }
 
-export function captureSessionAsTask(
-  sessionName: string,
-  projectPath?: string | null,
-): Promise<Task> {
-  return invoke<Task>(TauriCommands.LucodeTaskCaptureSession, {
-    sessionName,
-    projectPath: projectPath ?? null,
-  })
-}
-
-export function captureVersionGroupAsTask(
-  baseName: string,
-  sessionNames: string[],
-  projectPath?: string | null,
-): Promise<Task> {
-  return invoke<Task>(TauriCommands.LucodeTaskCaptureVersionGroup, {
-    baseName,
-    sessionNames,
-    projectPath: projectPath ?? null,
-  })
-}
-
 export function setTaskStageConfig(
   taskId: string,
   stage: TaskStage,
